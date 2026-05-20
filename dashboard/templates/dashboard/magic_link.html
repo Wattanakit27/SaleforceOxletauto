@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oxlet Dashboard - Login</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+</head>
+<body>
+  <div class="app" id="auth-container">
+    <div class="loading-container">
+      <div class="spin"></div>
+      <span style="font-size:13px">กำลังตรวจสอบสิทธิ์...</span>
+    </div>
+  </div>
+  <script>
+    (async function() {
+      const token = "{{ token|escapejs }}";
+      const container = document.getElementById('auth-container');
+      try {
+        const res = await fetch('/api/auth?token=' + encodeURIComponent(token));
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          container.innerHTML = `
+            <div style="text-align:center;padding-top:80px">
+              <div style="font-size:48px;margin-bottom:14px">🔒</div>
+              <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:6px">ไม่มีสิทธิ์เข้าถึง</div>
+              <div style="font-size:13px;color:var(--t2)">ลิงก์ไม่ถูกต้องหรือหมดอายุ — กรุณาติดต่อผู้ดูแลระบบ</div>
+            </div>`;
+          return;
+        }
+        // Set cookie
+        const cookieData = JSON.stringify({
+          id: data.id, user_id: data.user_id,
+          display_name: data.display_name,
+          nickname: data.nickname, position: data.position,
+        });
+        document.cookie = `oxlet_employee=${encodeURIComponent(cookieData)}; path=/; max-age=${30*24*60*60}; SameSite=Lax`;
+        window.location.replace('/dashboard/');
+      } catch {
+        container.innerHTML = `
+          <div style="text-align:center;padding-top:80px">
+            <div style="font-size:48px;margin-bottom:14px">🔒</div>
+            <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:6px">ไม่มีสิทธิ์เข้าถึง</div>
+            <div style="font-size:13px;color:var(--t2)">เกิดข้อผิดพลาด — กรุณาลองอีกครั้ง</div>
+          </div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

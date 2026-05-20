@@ -1,0 +1,231 @@
+{% load static %}<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard{% if seller %} — {{ seller }}{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+  <style>
+    .seller-page { max-width: 980px; margin: 0 auto; padding: 14px; }
+    .seller-hd { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--card); border-radius:14px; margin-bottom:14px; }
+    .seller-hd h1 { font-size:20px; font-weight:800; color:var(--t1); margin:0; }
+    .seller-hd .sub { font-size:12px; color:var(--t3); margin-top:2px; }
+    .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+    .stat { background:var(--card); border-radius:12px; padding:12px; text-align:center; }
+    .stat .lbl { font-size:11px; color:var(--t3); margin-bottom:4px; }
+    .stat .val { font-size:22px; font-weight:800; color:var(--t1); }
+    .stat .delta { font-size:11px; margin-top:2px; }
+    .stat.urgent .val { color:var(--red); }
+    .stat.good .val { color:var(--green); }
+    .section { background:var(--card); border-radius:14px; padding:14px; margin-bottom:14px; }
+    .section h2 { font-size:15px; font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+    .section h2 .count { font-size:12px; color:var(--t3); font-weight:500; }
+    .call-card { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:10px 12px; border:1px solid var(--bd); border-radius:10px; margin-bottom:8px; }
+    .call-card.must { border-color:var(--red); background:var(--red-bg); }
+    .call-card.ok { opacity:.65; }
+    .call-card .phone { font-size:15px; font-weight:700; color:var(--t1); font-family:monospace; }
+    .call-card .info { font-size:12px; color:var(--t2); margin-top:2px; }
+    .call-card .badge-col { display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+    .call-flag { font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; }
+    .call-flag.must { background:var(--red); color:#fff; }
+    .call-flag.ok { background:var(--green-bg); color:var(--green); }
+    .pipeline-row { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+    .pipe { padding:10px 6px; border-radius:10px; text-align:center; }
+    .pipe .pname { font-size:11px; color:#fff; opacity:.9; }
+    .pipe .pcount { font-size:18px; font-weight:800; color:#fff; }
+    .booking-tbl { width:100%; font-size:12px; border-collapse:collapse; }
+    .booking-tbl th { text-align:left; padding:6px 8px; color:var(--t3); font-weight:600; border-bottom:1px solid var(--bd); font-size:11px; }
+    .booking-tbl td { padding:8px; border-bottom:1px solid var(--bd); color:var(--t2); }
+    .booking-tbl tr:last-child td { border-bottom:none; }
+    .empty { text-align:center; padding:24px; color:var(--t3); font-size:13px; }
+    .err-wrap { text-align:center; padding-top:80px; }
+    .err-wrap .ico { font-size:48px; margin-bottom:14px; }
+    .err-wrap .ttl { font-size:18px; font-weight:700; color:var(--t1); margin-bottom:6px; }
+    .err-wrap .msg { font-size:13px; color:var(--t2); }
+    .dots-mini { display:inline-flex; gap:3px; align-items:center; }
+    .dot-mini { width:8px; height:8px; border-radius:50%; }
+    @media (max-width:600px) {
+      .stat-row { grid-template-columns:repeat(2,1fr); }
+      .pipeline-row { grid-template-columns:repeat(3,1fr); }
+      .call-card { grid-template-columns:1fr auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="seller-page">
+  {% if error %}
+  <div class="err-wrap">
+    <div class="ico">{% if seller %}⚠️{% else %}🔒{% endif %}</div>
+    <div class="ttl">{% if seller %}เกิดข้อผิดพลาด{% else %}ไม่มีสิทธิ์เข้าถึง{% endif %}</div>
+    <div class="msg">{{ error }}</div>
+  </div>
+  {% else %}
+  <div id="root"></div>
+  {% endif %}
+</div>
+
+{% if not error %}
+<script>
+  const D = {{ data_json|safe }};
+  const C = {{ constants_json|safe }};
+  const SELLER_NAME = "{{ seller|escapejs }}";
+
+  const h = (s) => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+  const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
+  const nc = (u) => Math.max(0, C.UPD_TGT - u);
+
+  function dotsMini(u) {
+    let html = '<span class="dots-mini">';
+    for (let i = 0; i < C.UPD_TGT; i++) {
+      let c = '#ccc';
+      if (i < u) {
+        if (u >= C.UPD_TGT) c = '#3B6D11';
+        else if (u >= 3) c = '#1D9E75';
+        else if (u >= 2) c = '#EF9F27';
+        else c = '#E24B4A';
+      }
+      html += `<span class="dot-mini" style="background:${c}"></span>`;
+    }
+    html += `<span style="font-size:10px;color:var(--t3);margin-left:4px">${u}/${C.UPD_TGT}</span></span>`;
+    return html;
+  }
+
+  function callFlagBadge(c) {
+    if (c.updateCount === 0) {
+      return '<span class="call-flag must">📞 ยังไม่โทร</span>';
+    }
+    if (c.updateCount < C.UPD_TGT) {
+      const left = nc(c.updateCount);
+      return `<span class="call-flag must">📞 โทรอีก ${left}</span>`;
+    }
+    return '<span class="call-flag ok">✓ ครบแล้ว</span>';
+  }
+
+  function render() {
+    const s = D.seller;
+    const t = D.today || { lead:0, follow:0, vacant:0 };
+    const follows = D.followCases || [];
+    const bookings = D.bookingCases || [];
+    const mustCall = D.mustCallCount || 0;
+    const teamId = s.team || '?';
+    const teamColor = (C.TEAM_COLORS || {})[teamId] || 'var(--t3)';
+    const teamName = (C.TEAM_NAMES || {})[teamId] || teamId;
+
+    // Pipeline (เฉพาะของเซลล์คนนี้)
+    const pipe = { 'จอง':0, 'รอเซ็นต์':0, 'รอผล':0, 'รอปล่อย':0, 'ปล่อย':0, 'รีเจ็ก':0 };
+    for (const b of bookings) {
+      if (pipe[b.status] !== undefined) pipe[b.status]++;
+    }
+
+    const targetPct = pct(s.done, s.target);
+
+    const html = `
+      <div class="seller-hd">
+        <div>
+          <h1>👋 ${h(SELLER_NAME)}</h1>
+          <div class="sub">ทีม ${h(teamName)} · เป้า ${s.target} คัน · อัปเดต ${h(D.meta.generatedAt||'').slice(0,16).replace('T',' ')}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${s.done}/${s.target}</div>
+          <div style="font-size:11px;color:var(--t3)">ปล่อย (${targetPct}%)</div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat ${mustCall > 0 ? 'urgent' : 'good'}">
+          <div class="lbl">📞 ต้องโทรวันนี้</div>
+          <div class="val">${mustCall}</div>
+          <div class="delta" style="color:${mustCall > 0 ? 'var(--red)' : 'var(--green)'}">${mustCall > 0 ? 'มีลูกค้ารอติดต่อ' : 'อัปเดตครบแล้ว'}</div>
+        </div>
+        <div class="stat">
+          <div class="lbl">Lead ปีนี้</div>
+          <div class="val">${s.lead}</div>
+          <div class="delta">วันนี้ +${t.lead}</div>
+        </div>
+        <div class="stat">
+          <div class="lbl">ติดตามทั้งหมด</div>
+          <div class="val">${s.follow}</div>
+          <div class="delta">ว่าง ${s.vacant} · จอง ${s.booking}</div>
+        </div>
+        <div class="stat good">
+          <div class="lbl">ปล่อยแล้ว</div>
+          <div class="val">${s.done}</div>
+          <div class="delta">${pct(s.done, s.target)}% ของเป้า</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📞 รายการต้องโทร <span class="count">(${follows.length} รายการ · ${mustCall} ยังไม่ครบ)</span></h2>
+        ${follows.length === 0
+          ? '<div class="empty">🎉 ไม่มีลูกค้าค้างติดตาม</div>'
+          : follows.map(c => `
+            <div class="call-card ${c.mustCall ? 'must' : 'ok'}">
+              <div>
+                <div class="phone">${h(c.phone)}</div>
+                <div class="info">
+                  ${h(c.car)} · ${h(c.channel)}${c.leadType ? ' · '+h(c.leadType) : ''}
+                </div>
+                <div class="info" style="margin-top:4px;color:var(--t3)">
+                  รับเข้า ${h(c.dateIn)}${c.timeIn ? ' '+h(c.timeIn) : ''} · สถานะ <b>${h(c.adminStatus)}</b>
+                  ${c.note && c.note !== '-' ? '<br>📝 '+h(c.note) : ''}
+                </div>
+              </div>
+              <div class="badge-col">
+                ${callFlagBadge(c)}
+                ${dotsMini(c.updateCount)}
+              </div>
+            </div>
+          `).join('')}
+      </div>
+
+      <div class="section">
+        <h2>📊 ไปป์ไลน์ของฉัน <span class="count">(${bookings.length} เคส)</span></h2>
+        <div class="pipeline-row">
+          ${C.STATUS_ORDER.map(st => `
+            <div class="pipe" style="background:${C.STATUS_COLOR[st] || '#888'}">
+              <div class="pname">${h(st)}</div>
+              <div class="pcount">${pipe[st] || 0}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🚗 เคสจอง <span class="count">(${bookings.length} เคส)</span></h2>
+        ${bookings.length === 0
+          ? '<div class="empty">ยังไม่มีเคสจองในปีนี้</div>'
+          : `
+          <table class="booking-tbl">
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>ลูกค้า</th>
+                <th>รถ</th>
+                <th>สถานะ</th>
+                <th style="text-align:right">ราคา</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `
+                <tr>
+                  <td>${h(b.date)}</td>
+                  <td><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:11px">${h(b.phone)}</div></td>
+                  <td>${h(b.car)} ${b.year ? '('+h(b.year)+')' : ''}</td>
+                  <td><span class="bdg" style="background:${C.STATUS_COLOR[b.status] || '#888'};color:#fff">${h(b.status)}</span>${b.isCash ? ' 💵' : ''}</td>
+                  <td style="text-align:right;font-family:monospace">${b.price ? Number(b.price).toLocaleString() : '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          `}
+      </div>
+    `;
+
+    document.getElementById('root').innerHTML = html;
+  }
+
+  render();
+</script>
+{% endif %}
+</body>
+</html>

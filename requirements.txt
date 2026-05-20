@@ -1,0 +1,4 @@
+Django>=4.2,<5.1
+google-auth>=2.20.0
+requests>=2.31.0
+python-dotenv>=1.0.0
