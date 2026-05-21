@@ -1,5 +1,6 @@
-# Secrets
-.env
+# Secrets — keep .env in this private repo on purpose.
+# ถ้า repo เปลี่ยนเป็น public วันไหน ให้ใส่ .env กลับเข้ามาที่ list นี้ทันที
+# .env
 .env.local
 .env.*.local
 *.pem
