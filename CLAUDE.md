@@ -8,135 +8,225 @@ Django web app แสดง dashboard ยอดขาย/ลีด/ไลฟ์ 
 **Google Sheets** (ไม่มี local DB — `DATABASES = {}` ใน [oxlet/settings.py](oxlet/settings.py))
 UI เป็น Thai-language, timezone Asia/Bangkok
 
+**Deploy: Vercel** (`@vercel/python` builder via [vercel.json](vercel.json))
+
 ## Stack
 
 - **Backend**: Django 4.2+ ([requirements.txt](requirements.txt))
-- **Data source**: Google Sheets API v4 (service account credentials ผ่าน env)
-- **Frontend**: Server-rendered template + vanilla JS (no React/Vue, no build step)
-- **Auth**: Magic link / per-seller token (ไม่มี Django user model)
+- **Data source**: Google Sheets API v4 (service account, **read+write** scope)
+- **Frontend**: Server-rendered template + vanilla JS + Chart.js (CDN) — no build step
+- **Auth**: Django signed-cookie session (admin) + magic link / per-seller token (sellers)
+- **Static**: WhiteNoise (in-Django static serving) + `WHITENOISE_USE_FINDERS=True` (no `collectstatic` needed)
+- **LINE Messaging API**: push Flex messages via env-stored Channel Access Token
+- **Cron**: External scheduler (cron-job.org) ยิงเข้า `/api/cron/tick` ทุก 1 นาที
 
 ## โครงสร้างไฟล์
 
 ```
 manage.py
+vercel.json              # Vercel build + cron config
+.env                     # secrets (committed in private repo)
 oxlet/
-  settings.py          # config, env vars, Google Sheets creds
-  urls.py              # include dashboard.urls
+  settings.py            # config, env vars, ALLOWED_HOSTS, WhiteNoise, session
+  urls.py
+  wsgi.py                # Vercel python entry point
 dashboard/
-  urls.py              # routes: /, /dashboard, /api/*, /u/<token>, /s/<token>
-  views.py             # มี 5 views: index, dashboard_page, api_dashboard, api_auth, magic_link, seller_dashboard
+  urls.py                # ดู URL routes ด้านล่าง
+  views.py               # views — dashboard, login, admin tools, cron endpoints
   services/
-    constants.py       # TEAMS, TARGETS, SELLER_MAP, STATUS_COLOR ฯลฯ
-    seller_tokens.py   # token 6-10 หลักของเซลล์แต่ละคน → ใช้กับ /s/<token>/
-    google_sheets.py   # auth + fetch (SHEET_CONFIG, *_COL classes สำหรับ column index)
-    fetch_dashboard.py # main aggregator: รวมข้อมูล 6 sheets → dict สำหรับ template
-    helpers.py         # pct/nc/urg/dots_html ฯลฯ
+    constants.py         # TEAMS, TARGETS (dynamic ผ่าน refresh_from_sheet)
+    seller_tokens.py     # token /s/<token>/ ของเซลล์แต่ละคน
+    google_sheets.py     # auth + read + write helpers (ensure_sheet_tab, write_sheet)
+    fetch_dashboard.py   # main aggregator: รวมข้อมูล 7 sheets → dict สำหรับ template
+    line_notify.py       # Flex builder + push + schedule loader
+    helpers.py
   templates/dashboard/
-    index.html         # หน้า dashboard หลัก (admin เห็นทั้งหมด, เซลล์เห็นเฉพาะตัวเอง)
-    magic_link.html    # /u/<token>/ — set cookie แล้ว redirect ไป /dashboard/
-    seller.html        # /s/<token>/ — หน้าส่วนตัวของเซลล์ พร้อม section "ต้องโทร"
-  static/dashboard/    # CSS + JS (ถ้ามี)
-  templatetags/
+    index.html           # หน้า dashboard หลัก (admin / ผู้บริหาร เห็นทั้งหมด, อื่นๆ เห็นเฉพาะตัวเอง)
+    login.html           # /login/ — admin login (user+password)
+    magic_link.html      # /u/<token>/ — set cookie แล้ว redirect ไป /dashboard/
+    seller.html          # /s/<token>/ — หน้าส่วนตัวของเซลล์ (filter+charts+KPI+lead detail modal)
+  static/dashboard/      # CSS + image (โลโก้บริษัท)
 ```
 
-## รันโปรเจกต์
+## รันโปรเจกต์ (Dev)
 
 ```powershell
-# Setup env (ครั้งแรก)
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-
-# ต้องมี .env ที่มี GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY
-# (private key คั่นบรรทัดด้วย \n หรือใส่ multiline ในเครื่องหมายคำพูด)
-
 python manage.py runserver
 ```
 
-ไม่ต้องรัน `migrate` — ไม่มี local DB
+ไม่ต้องรัน `migrate` — ไม่มี local DB. Session ใช้ signed-cookie backend
 
 ## URL Routes
 
-| URL | View | ใครเข้าได้ |
+### หน้าเว็บ
+
+| URL | View | สิทธิ์ |
 |---|---|---|
 | `/` | `index` | redirect → `/dashboard/` |
-| `/dashboard/` | `dashboard_page` | ทุกคน (filter ด้วย cookie `oxlet_employee`) |
-| `/api/dashboard` | `api_dashboard` | JSON ของ full dashboard data |
-| `/api/auth?token=` | `api_auth` | ตรวจ token กับ employees sheet → คืน user info |
-| `/u/<token>/` | `magic_link` | เข้าสู่ระบบผ่าน magic link (token = user_id จาก employees sheet) |
-| `/s/<token>/` | `seller_dashboard` | หน้าส่วนตัวของเซลล์ (token จาก `SELLER_TOKENS`) |
+| `/dashboard/` | `dashboard_page` | เปิดสาธารณะ — default = ผู้บริหาร, login admin ผ่านปุ่ม 🔐 |
+| `/login/` | `login_view` | GET = form, POST = ตรวจรหัส (user `admin` / pass จาก env) |
+| `/logout/` | `logout_view` | clear session → กลับ /dashboard/ |
+| `/u/<token>/` | `magic_link` | login เซลล์ผ่าน LINE user_id (จาก employees sheet) |
+| `/s/<token>/` | `seller_dashboard` | หน้าส่วนตัวของเซลล์ — token จาก [seller_tokens.py](dashboard/services/seller_tokens.py) |
 
-**ความแตกต่างของ `/u/` vs `/s/`**:
-- `/u/<token>/` — token มาจาก employees Google Sheet, ใช้ set cookie แล้ว redirect ไปหน้า dashboard เต็ม
-- `/s/<token>/` — token hardcode ใน [seller_tokens.py](dashboard/services/seller_tokens.py), แสดงหน้าส่วนตัวแบบ focused (call helper) ไม่ set cookie
+### API
+
+| URL | View | ใช้ทำอะไร |
+|---|---|---|
+| `/api/dashboard` | `api_dashboard` | JSON ของ full dashboard data |
+| `/api/auth?token=` | `api_auth` | ตรวจ LINE user_id กับ employees sheet |
+| `/api/admin/send_line` | `admin_send_line` | admin: GET=preview, POST=ส่ง Flex ทันที |
+| `/api/admin/seller_config` | `admin_seller_config` | admin: GET=อ่าน config, POST=บันทึก (เขียน sheet "ตั้งค่าเซลล์") |
+| `/api/admin/schedule_config` | `admin_schedule_config` | admin: GET=อ่านตาราง, POST=บันทึก (เขียน sheet "ตั้งเวลาส่ง") |
+| `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
+| `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — เช็คตาราง schedule + ส่งถ้าถึงเวลา (cron-job.org ยิงทุก 1 นาที) |
+
+## Roles (สิทธิ์ผู้ใช้)
+
+| Role | position | ทำได้ | UI badge |
+|------|---------|------|----------|
+| **Admin** | `admin` | เห็นทุกอย่าง + impersonate + ปุ่ม 📋 LINE ID / 📤 LINE Flex / 🎯 ตั้งเป้า | 👑 Admin (อำพัน) |
+| **ผู้บริหาร** | `executive` / `ผู้บริหาร` / `manager` / `exec` | เห็นทุกอย่าง + impersonate (ไม่มีเครื่องมือ admin) | 🎩 ผู้บริหาร (ม่วง) |
+| **เซลล์** | อื่นๆ | เห็นเฉพาะตัวเอง | 👤 ชื่อเล่น (น้ำเงิน) |
+
+**Login ทาง 2**:
+1. **Admin** — POST `/login/` ด้วย username/password (จาก env `OXLET_ADMIN_USER` / `OXLET_ADMIN_PASSWORD`)
+2. **เซลล์** — `/u/<token>/` ที่ token = LINE user_id, หรือ `/s/<token>/` ที่ token จาก seller_tokens.py
 
 ## Concepts สำคัญ
 
-### Sellers & Teams
-นิยามใน [constants.py](dashboard/services/constants.py):
-- ทีม A: โอ๊ต, เฟิร์ส, เจ, บอย, นั่ม, กอล์ฟ
-- ทีม B: นวล, เก้า, มด, มัท, อุ้ม, แซน
-- ทีม C: ใบตอง
-- `TARGETS` = เป้าจำนวนคันต่อเดือนของแต่ละคน
-- `SELLER_MAP` = normalize ชื่อที่สะกดต่างกัน (เช่น "เจเจ"→"เจ", "กลอฟ"→"กอล์ฟ")
-- **ใช้ `normalize_seller()` เสมอ** ก่อนเปรียบเทียบชื่อเซลล์จาก sheet
+### Sellers & Teams (Dynamic)
+- **เริ่มต้น (fallback)**: [constants.py](dashboard/services/constants.py) มี `TEAMS` + `TARGETS` hardcode
+- **Override (จริง)**: อ่านจาก Google Sheet tab **"ตั้งค่าเซลล์"** (cols: ชื่อเล่น | ทีม | เป้า)
+  - `fetch_dashboard_data()` เรียก `refresh_from_sheet()` ทุกครั้ง → mutate TEAMS/TARGETS/ALL_SELLERS/TEAM_ID in-place
+  - Sheet ว่าง/error → fallback ใช้ค่า hardcode
+- **Admin แก้ในระบบ**: ปุ่ม **🎯 ตั้งเป้า/ทีม** → inline edit table → POST เขียนทับ sheet
+- **เพิ่มเซลล์ใหม่**: แค่เพิ่มแถวใน sheet → ระบบ pickup auto (แต่ token ใน [seller_tokens.py](dashboard/services/seller_tokens.py) ต้องเพิ่มเองสำหรับ URL `/s/`)
+- **`SELLER_MAP`** = normalize ชื่อสะกดต่าง (เจเจ→เจ, กลอฟ→กอล์ฟ) — ใช้ผ่าน `normalize_seller()` เสมอ
 
 ### Lead Status
-- **Follow** (ต้องติดตาม): admin_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด"
-- **Vacant** (ว่าง): admin_status ว่างหรือเป็น "-"
-- **RJ types**: "RJ", "Hot RJ", "Hot RB" — แยกออกจาก lead ปกติในสถิติ
+- **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย"
+- **Vacant** (ว่าง): admin_status ว่างหรือ "-"
+- **RJ types**: "RJ", "Hot RJ", "Hot RB" — แยกออกจาก lead ปกติ
+- **Called proof**: `call_proof == "ส่งแล้ว"` = โทรแล้วมีหลักฐาน
 
 ### Update Count & "ต้องโทร"
 - `UPD_TGT = 4` — เป้าจำนวนครั้งที่ต้องอัปเดตต่อ lead 1 ราย
 - `nc(u) = max(0, UPD_TGT - u)` — เหลืออีกกี่ครั้งให้ครบ
 - `urg(u)` — urgency score (100 ถ้ายังไม่โทรเลย, +10 ต่อครั้งที่ขาด)
-- หน้า [/s/<token>/](dashboard/templates/dashboard/seller.html) ใช้ค่านี้ flag `mustCall`
 
 ### Date parsing
 [fetch_dashboard.py](dashboard/services/fetch_dashboard.py) มี `parse_date()` รองรับ:
 - Excel serial date (เลข 4-5 หลัก)
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
-- fallback dateutil
 
-## Google Sheets
+## Google Sheets (7 sheets)
 
-6 sheets ใน [SHEET_CONFIG](dashboard/services/google_sheets.py#L12):
-1. **leads** — รายการ lead ทั้งหมด (column map: `LEADS_COL`)
-2. **sales_reports** — รายงานยอดขาย/สถานะการจอง (`SALES_COL`)
-3. **bookings** — รายการจอง (`BOOKINGS_COL`)
-4. **live_sessions** — เซสชั่นไลฟ์ (`LIVE_COL`)
-5. **live_followups** — คลิป follow-up ของไลฟ์ (`FOLLOWUP_COL`)
-6. **employees** — ข้อมูลพนักงาน + user_id สำหรับ magic link (`EMPLOYEE_COL`)
+| sheet key | Spreadsheet | Tab | ใช้ |
+|-----------|-------------|-----|-----|
+| `leads` | `1s9FFPRV53U7pQTnBGSlkSFL8ygmRGRGYOAG1HakzgA0` | "รวม sheet" | รายการ lead ทั้งหมด |
+| `sales_reports` | `13_vFkHEZWRAzxZiJ1Uj-NPlzlZtptyXuIjdxkGqlg8Y` | "รวม sheet" | ยอดขาย/สถานะจอง |
+| `bookings` | `13jiQTOvcCvlKLGvjrb348_iRWoiMpumqqeEgOTkTgB0` | "รวม sheet" | รายการจอง |
+| `live_sessions` | `18Djos3lUJnoZ00gYEBuCCExwm1YknfIQrP-TIuUgjWU` | "รวม sheet" | เซสชั่นไลฟ์ |
+| `live_followups` | `18Djos3lUJnoZ00gYEBuCCExwm1YknfIQrP-TIuUgjWU` | "ติดตามไลฟ์สด" | คลิป follow-up |
+| `employees` | `1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A` | "เก็บข้อมูลพนักงาน..." | นิยามพนักงาน + LINE user_id |
+| `sellers_config` | (เดียวกับ employees) | **"ตั้งค่าเซลล์"** | เป้า/ทีม dynamic — admin แก้ผ่าน UI หรือ Sheet ตรงๆ |
+| `schedule_config` | (เดียวกับ employees) | **"ตั้งเวลาส่ง"** | ตารางเวลาส่ง LINE Flex อัตโนมัติ |
 
-**Column index hardcode** เป็น 0-based ใน class attributes — ถ้า sheet ขยับ column ต้องอัปเดตที่นี่
+**OAuth scope**: `https://www.googleapis.com/auth/spreadsheets` (read+write — เปลี่ยนมาจาก readonly เพราะ admin ต้องเขียน config)
 
-`cell(row, idx)` คืน string, `cell_num(row, idx)` คืน float (parse จาก string ที่มี comma) — ดู [google_sheets.py](dashboard/services/google_sheets.py)
+**Service account** ต้องมี Editor บน spreadsheet (เพื่อเขียน sheet sellers_config / schedule_config)
+
+**Helpers**:
+- `fetch_sheet(key)` — อ่าน
+- `ensure_sheet_tab(sid, tab)` — สร้าง tab ใหม่ถ้าไม่มี
+- `write_sheet(key, values)` — clear + write ทับทั้ง tab
+
+## LINE Integration
+
+### Channel Access Token
+ใส่ใน `.env`:
+```
+LINE_CHANNEL_ACCESS_TOKEN=xxx...
+CRON_SECRET=xxx...
+```
+ทั้ง 2 ตัวต้องตั้งบน Vercel environment variables ด้วย (`.env` ไม่ถูก push deploy)
+
+### Flex Messages
+[line_notify.py](dashboard/services/line_notify.py):
+- `build_seller_pipelines()` — group leads ของเดือนปัจจุบัน → called/notCalled/followUp/noStatus
+- `build_seller_flex(pipeline, base_url)` — สร้าง Flex JSON (header สี + 3 stat boxes + progress bar + rows + ปุ่ม `/s/<token>/`)
+- `push_line_message(uid, msgs, token)` — POST ไป LINE push endpoint
+- `load_schedules()` — อ่าน schedule sheet
+- `schedule_matches_now(sched)` — เช็คว่าตาราง match เวลา BKK ปัจจุบัน
+
+### Trigger 2 แบบ
+1. **Manual** — admin กดปุ่ม "📤 LINE Flex" → tab "ส่งทันที" → POST `/api/admin/send_line`
+2. **Auto** — cron-job.org ยิง `/api/cron/tick?secret=xxx` ทุก 1 นาที → `cron_tick` view เช็ค `load_schedules()` → ถ้า match ส่ง Flex
+
+### Schedule format (sheet "ตั้งเวลาส่ง")
+```
+เวลา (HH:MM) | วัน (* / 1-5 / 0,6) | เซลล์ (* / "โอ๊ต,เก้า") | test_target | enabled (TRUE/FALSE) | ป้ายชื่อ
+09:00        | 1-5                | *                       |             | TRUE                 | เช้าวันทำการ
+13:00        | *                  | *                       |             | TRUE                 | เที่ยง
+```
+- วัน: 0=อาทิตย์, 1=จันทร์, ..., 6=เสาร์
+- test_target ใส่ user_id = ส่งเข้า user นั้นแทน (test mode) / ว่าง = ส่งจริงไปทุกเซลล์
 
 ## Conventions
 
-- **ไม่มี Django models / migrations** — อย่าเพิ่มโดยไม่ปรึกษา (โปรเจกต์ตั้งใจไม่มี DB)
-- **ไม่ใช้ Django auth** — auth ทำผ่าน cookie `oxlet_employee` (JSON ใน client) หรือ token ใน URL
-- **Frontend = template + vanilla JS** — อย่าใส่ React/build pipeline เว้นแต่ user สั่ง
-- **ใช้ Thai สำหรับ user-facing text** (label, ข้อความ error) แต่ code/comment สั้นๆ ใช้ Eng ก็ได้
-- **Timezone**: ใช้ `bangkok_now()` จาก helpers/fetch_dashboard เสมอ ไม่ใช้ `datetime.now()` ดิบ
+- **ไม่มี Django models / migrations** — โปรเจกต์ตั้งใจไม่มี local DB
+- **ไม่ใช้ Django auth** — auth ผ่าน signed-cookie session + URL token
+- **Frontend = template + vanilla JS** — Chart.js ผ่าน CDN เท่านั้น, ไม่ใช้ React/build pipeline
+- **Thai สำหรับ user-facing text** (label, error)
+- **Timezone**: ใช้ `bangkok_now()` เสมอ ไม่ใช่ `datetime.now()` ดิบ
 - **Normalize seller name**: ใช้ `normalize_seller()` ทุกครั้งที่อ่านชื่อจาก sheet
+- **In-place mutation**: `refresh_from_sheet()` แก้ TEAMS/TARGETS ด้วย `.clear()` + `.update()` ไม่ reassign (กัน import binding หาย)
 
 ## งานที่เจอบ่อย
 
-### เพิ่ม/รีโทเทต token ของเซลล์
-แก้แค่ [dashboard/services/seller_tokens.py](dashboard/services/seller_tokens.py) — ไม่ต้อง migrate
-
-### เพิ่ม column ใหม่ใน sheet
-1. อัปเดต column index class ใน [google_sheets.py](dashboard/services/google_sheets.py)
-2. ใช้ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py)
-3. ถ้าจะแสดง — แก้ template
+### เปลี่ยนเป้าเซลล์
+1. Login admin → ปุ่ม **🎯 ตั้งเป้า/ทีม** → แก้เลข target → Save
+2. หรือแก้ใน Google Sheet tab "ตั้งค่าเซลล์" ตรงๆ → refresh dashboard
 
 ### เพิ่มเซลล์ใหม่
-1. เพิ่มชื่อใน `TEAMS` + `TARGETS` ที่ [constants.py](dashboard/services/constants.py)
-2. เพิ่ม token ใน [seller_tokens.py](dashboard/services/seller_tokens.py)
-3. (ถ้าจำเป็น) เพิ่ม alias ใน `SELLER_MAP`
+1. ปุ่ม **🎯 ตั้งเป้า/ทีม** → ➕ เพิ่ม → ใส่ ชื่อเล่น/ทีม/เป้า → Save
+2. ถ้าอยากให้เซลล์มี URL ส่วนตัว → เพิ่ม token ใน [seller_tokens.py](dashboard/services/seller_tokens.py) (commit + push)
+
+### ส่ง LINE Flex ทันที (manual)
+ปุ่ม **📤 LINE Flex** → tab "🚀 ส่งทันที" → เลือกเซลล์ + (optional: test mode + user_id) → 📤 ส่ง
+
+### ตั้งเวลาส่งอัตโนมัติ
+1. ปุ่ม **📤 LINE Flex** → tab "📅 ตารางเวลา" → ➕ เพิ่ม → ใส่เวลา/วัน/เซลล์/enabled → Save
+2. ครั้งแรกต้องตั้ง cron-job.org ยิง `https://<your-app>.vercel.app/api/cron/tick?secret=<CRON_SECRET>` ทุก 1 นาที (one-time setup)
 
 ### Debug ข้อมูลผิด
-- `/api/dashboard` คืน JSON เต็มของ aggregator → ดูค่าได้ทุกชั้น
+- `/api/dashboard` คืน JSON เต็มของ aggregator
+- `/api/admin/send_line` (admin login) → แสดง preview pipeline + `token_debug`
 - เช็คว่า `normalize_seller()` ครอบคลุมการสะกดในชีตหรือยัง
-- เช็ค Excel serial date vs "d/m/yy" — `parse_date()` จัดการทั้งคู่
+
+## Deploy บน Vercel
+
+1. **env vars บน Vercel dashboard** (Settings → Environment Variables) ใส่ทุกตัวจาก `.env`:
+   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `DEBUG=False`
+   - `OXLET_ADMIN_USER`, `OXLET_ADMIN_PASSWORD`
+   - `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`
+   - `ALLOWED_HOSTS=your-app.vercel.app`, `CSRF_TRUSTED_ORIGINS=https://your-app.vercel.app`
+
+2. **Use canonical URL** (`your-app.vercel.app`) ไม่ใช่ deployment-specific URL (`your-app-xxx.vercel.app`) — อันยาวมี Vercel Auth wall ป้องกันอยู่
+
+3. **cron-job.org** ตั้ง webhook URL = `https://your-app.vercel.app/api/cron/tick?secret=<CRON_SECRET>` schedule = `* * * * *` (ทุก 1 นาที)
+
+4. **Service account** ต้องมีสิทธิ์ **Editor** บน Google Spreadsheet (เพื่อเขียน config sheets)
+
+## Known issues / limitations
+
+- **Cold start ช้า** บน Vercel — request แรกหลังนิ่งนาน ~5-10s (pip install + Django boot + auth)
+- **Sheets API quota** — ทุก dashboard load = 7 reads ภายใน 1 invocation, ถ้าโหลดบ่อยมากอาจชน 60/min
+- **Schedule precision = 1 นาที** (ตาม cron interval)
+- **No deduplication** — ถ้า cron-job.org ยิง 2 ครั้งใน 1 นาที (rare) จะส่ง Flex 2 ครั้ง
+- **Vercel Hobby** = 1 cron job/วัน (ใช้ external cron-job.org แทน)
+- **เซลล์ใหม่** ที่เพิ่มผ่าน 🎯 ตั้งเป้า/ทีม จะใช้งานได้ทันที **ยกเว้น URL `/s/<token>/`** ที่ต้อง add token เองใน code

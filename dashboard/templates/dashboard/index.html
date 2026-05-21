@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Oxlet Dashboard</title>
   {% load static %}
+  <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
@@ -210,8 +212,7 @@
       // Admin-only: LINE tools
       if(isAdmin) {
         html += `<button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--green-mid);background:var(--green-bg);color:var(--green);cursor:pointer">📋 LINE ID</button>`;
-        html += `<button onclick="openLineSendPanel()" title="ส่ง LINE Flex Pipeline ของเดือนนี้ให้เซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer">📤 ส่ง Flex</button>`;
-        html += `<button onclick="openCronPanel()" title="ตั้งเวลาส่ง Flex อัตโนมัติ" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--purple-mid);background:var(--purple-bg);color:var(--purple);cursor:pointer">⏰ ตั้งเวลา</button>`;
+        html += `<button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer">📤 LINE Flex</button>`;
         html += `<button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--amber-mid);background:var(--amber-bg);color:var(--amber);cursor:pointer">🎯 ตั้งเป้า/ทีม</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
@@ -1160,25 +1161,70 @@
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
       const modal = document.createElement('div');
-      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:860px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
+      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:900px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
       modal.onclick = (e) => e.stopPropagation();
+
+      // Tabs: ส่งทันที / ตารางเวลา
       modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:15px;font-weight:700;color:var(--t1)">⏰ ตารางเวลาส่ง LINE Flex อัตโนมัติ</div>
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">📤 LINE Flex Manager</div>
         <button onclick="document.getElementById('cron-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button>
       </div>
-      <div id="sched-body" style="overflow-y:auto;padding:14px 16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด schedule...</div></div>`;
+      <div style="display:flex;border-bottom:.5px solid var(--bd);background:var(--bg2)">
+        <button class="lf-tab on" data-tab="now" onclick="__lfTab('now')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--blue);border-bottom:2px solid var(--blue)">🚀 ส่งทันที (One-time)</button>
+        <button class="lf-tab" data-tab="sched" onclick="__lfTab('sched')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent">📅 ตารางเวลา (Auto)</button>
+      </div>
+      <div id="lf-content" style="overflow-y:auto;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด...</div></div>`;
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
 
       try {
-        const res = await fetch('/api/admin/schedule_config', { credentials:'same-origin' });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'load failed');
-        __schedRows = (data.schedules || []).map(s => ({...s, sellers: (s.sellers||['*'])}));
-        drawSchedBody(modal, data);
-        drawSchedFooter(modal);
+        // โหลดทั้ง preview send + schedule
+        const [previewRes, schedRes] = await Promise.all([
+          fetch('/api/admin/send_line', { credentials:'same-origin' }),
+          fetch('/api/admin/schedule_config', { credentials:'same-origin' }),
+        ]);
+        const preview = await previewRes.json();
+        const sched = await schedRes.json();
+        if (preview.error) throw new Error(preview.error);
+        if (sched.error) throw new Error(sched.error);
+        modal.__lfPreview = preview;
+        modal.__lfSched = sched;
+        __schedRows = (sched.schedules || []).map(s => ({...s, sellers: (s.sellers||['*'])}));
+        if (__lsSelected.size === 0) {
+          (preview.sellers || []).forEach(s => {
+            if (s.has_user_id && (s.called + s.notCalled + s.followUp) > 0) __lsSelected.add(s.seller);
+          });
+        }
+        // Default tab = ส่งทันที
+        __lfTab('now');
       } catch (e) {
-        modal.querySelector('#sched-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+        modal.querySelector('#lf-content').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+      }
+    }
+
+    function __lfTab(tab) {
+      const modal = document.querySelector('#cron-overlay > div');
+      if (!modal) return;
+      // update tab buttons style
+      modal.querySelectorAll('.lf-tab').forEach(b => {
+        const on = b.getAttribute('data-tab') === tab;
+        b.style.color = on ? 'var(--blue)' : 'var(--t3)';
+        b.style.borderBottomColor = on ? 'var(--blue)' : 'transparent';
+      });
+      // ลบ footer เก่า (ทั้ง 2 tab มี footer ของตัวเอง)
+      const oldFooter = modal.querySelector('#ls-footer, #sched-footer');
+      if (oldFooter) oldFooter.remove();
+
+      const content = modal.querySelector('#lf-content');
+      content.style.padding = '14px 16px';
+
+      if (tab === 'now') {
+        content.innerHTML = `<div id="ls-body"></div>`;
+        renderLineSendBody(modal, modal.__lfPreview);
+      } else {
+        content.innerHTML = `<div id="sched-body"></div>`;
+        drawSchedBody(modal, modal.__lfSched);
+        drawSchedFooter(modal);
       }
     }
 
@@ -1356,40 +1402,7 @@
       }
     }
 
-    // ── LINE Flex Send Panel (admin only) ──
-    async function openLineSendPanel() {
-      if (!isAdmin) return;
-      const old = document.getElementById('line-send-overlay');
-      if (old) old.remove();
-      const overlay = document.createElement('div');
-      overlay.id = 'line-send-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      const modal = document.createElement('div');
-      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
-      modal.onclick = (e) => e.stopPropagation();
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-
-      modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:15px;font-weight:700;color:var(--t1)">📤 ส่ง LINE Flex Pipeline (เดือนนี้)</div>
-        <button onclick="document.getElementById('line-send-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
-      </div>
-      <div id="ls-body" style="overflow-y:auto;padding:14px 16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด pipeline...</div></div>`;
-
-      // โหลด preview
-      let preview;
-      try {
-        const res = await fetch('/api/admin/send_line', { credentials: 'same-origin' });
-        preview = await res.json();
-        if (!res.ok || preview.error) throw new Error(preview.error || 'load failed');
-      } catch (e) {
-        modal.querySelector('#ls-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
-        return;
-      }
-      renderLineSendBody(modal, preview);
-    }
-
+    // ── Send Flex render (used by tab "ส่งทันที" ใน LINE Flex Manager) ──
     let __lsTestMode = false;
     let __lsTestUid = '';
     let __lsSelected = new Set(); // selected seller names
@@ -1463,7 +1476,7 @@
       const b = document.getElementById('ls-count2'); if (b) b.textContent = __lsSelected.size;
     }
     function __lsSelectAll(on) {
-      const overlay = document.getElementById('line-send-overlay');
+      const overlay = document.getElementById('cron-overlay');
       if (!overlay) return;
       // ใช้ selector แคบเพื่อกัน Test mode checkbox โดน match ไปด้วย
       overlay.querySelectorAll('input[type=checkbox][onchange^="__lsToggle(\'"]').forEach(cb => {
