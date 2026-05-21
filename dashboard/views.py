@@ -161,6 +161,35 @@ def admin_send_line(request):
     )
 
     if request.method == "GET":
+        # Debug info ของ token (ไม่เผยค่าจริง — แสดงแค่ length + prefix/suffix)
+        raw_token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or ""
+        stripped = raw_token.strip()
+        token_info = {
+            "raw_length": len(raw_token),
+            "stripped_length": len(stripped),
+            "has_trailing_whitespace": raw_token != stripped,
+            "starts_with": stripped[:6] if stripped else "",
+            "ends_with": stripped[-6:] if stripped else "",
+            "has_token": bool(stripped),
+        }
+        # ทดสอบ token กับ LINE API
+        if stripped:
+            try:
+                import requests as _rq
+                r = _rq.get(
+                    "https://api.line.me/v2/bot/info",
+                    headers={"Authorization": f"Bearer {stripped}"},
+                    timeout=5,
+                )
+                token_info["line_api_status"] = r.status_code
+                if r.status_code != 200:
+                    token_info["line_api_error"] = r.text[:200]
+                else:
+                    import json as _j
+                    token_info["bot_name"] = _j.loads(r.text).get("displayName", "?")
+            except Exception as e:
+                token_info["line_api_error"] = str(e)
+
         try:
             pipelines = build_seller_pipelines()
             uid_map = get_nickname_to_user_id()
@@ -179,7 +208,8 @@ def admin_send_line(request):
             })
         return JsonResponse({
             "ok": True,
-            "has_token": bool((getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()),
+            "has_token": token_info["has_token"],
+            "token_debug": token_info,
             "sellers": result,
             "total_sellers": len(result),
         })
