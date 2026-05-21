@@ -1102,10 +1102,13 @@
     function __lsSelectAll(on) {
       const overlay = document.getElementById('line-send-overlay');
       if (!overlay) return;
-      overlay.querySelectorAll('input[type=checkbox][onchange^="__lsToggle"]').forEach(cb => {
+      // ใช้ selector แคบเพื่อกัน Test mode checkbox โดน match ไปด้วย
+      overlay.querySelectorAll('input[type=checkbox][onchange^="__lsToggle(\'"]').forEach(cb => {
         if (cb.disabled) return;
         cb.checked = on;
-        const name = cb.getAttribute('onchange').match(/'([^']+)'/)[1];
+        const m = (cb.getAttribute('onchange') || '').match(/'([^']+)'/);
+        if (!m) return;
+        const name = m[1];
         if (on) __lsSelected.add(name); else __lsSelected.delete(name);
       });
       const a = document.getElementById('ls-count'); if (a) a.textContent = __lsSelected.size;
