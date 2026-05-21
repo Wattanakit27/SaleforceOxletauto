@@ -8,7 +8,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
-ALLOWED_HOSTS = ["*"]
+
+# ALLOWED_HOSTS — รับจาก env var ถ้ามี (comma-separated), fallback "*" สำหรับ dev
+_hosts_env = os.getenv("ALLOWED_HOSTS", "").strip()
+if _hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = ["*"] if DEBUG else [".vercel.app", "localhost", "127.0.0.1"]
+
+# Vercel/proxy ส่ง HTTPS มาเป็น header X-Forwarded-Proto
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
+    "CSRF_TRUSTED_ORIGINS", "https://*.vercel.app"
+).split(",") if o.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",
@@ -18,6 +30,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise ต้องอยู่ทันทีหลัง SecurityMiddleware — serve static บน production
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -66,6 +80,13 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = []
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# WhiteNoise: หา static จาก app/static โดยตรง — ไม่ต้องรัน collectstatic บน Vercel
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
