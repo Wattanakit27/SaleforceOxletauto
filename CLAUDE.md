@@ -88,9 +88,11 @@ python manage.py runserver
 
 | Role | position | ทำได้ | UI badge |
 |------|---------|------|----------|
-| **Admin** | `admin` | เห็นทุกอย่าง + impersonate + ปุ่ม 📋 LINE ID / 📤 LINE Flex / 🎯 ตั้งเป้า | 👑 Admin (อำพัน) |
-| **ผู้บริหาร** | `executive` / `ผู้บริหาร` / `manager` / `exec` | เห็นทุกอย่าง + impersonate (ไม่มีเครื่องมือ admin) | 🎩 ผู้บริหาร (ม่วง) |
-| **เซลล์** | อื่นๆ | เห็นเฉพาะตัวเอง | 👤 ชื่อเล่น (น้ำเงิน) |
+| **Admin** | `admin` | เห็นทุกอย่าง + 🚗 Lead รถ + 📋 เคสจอง + impersonate + ปุ่ม 📋 LINE ID / 📤 LINE Flex / 🎯 ตั้งเป้า | 👑 Admin (อำพัน) |
+| **ผู้บริหาร** | `executive` / `ผู้บริหาร` / `manager` / `exec` | เห็นทุกอย่าง + 🚗 Lead รถ + 📋 เคสจอง + impersonate (ไม่มีเครื่องมือ admin) | 🎩 ผู้บริหาร (ม่วง) |
+| **เซลล์** | อื่นๆ | เห็นเฉพาะตัวเอง (ไม่เห็น Analytics tables) | 👤 ชื่อเล่น (น้ำเงิน) |
+
+ใน [index.html](dashboard/templates/dashboard/index.html) ตาราง Lead-by-Car และ Released-Cars ห่อด้วย `if (canViewAll)` — seller ทั่วไป (อ่านจาก `/s/<token>/` หรือ `/u/<token>/`) ไม่เห็น
 
 **Login ทาง 2**:
 1. **Admin** — POST `/login/` ด้วย username/password (จาก env `OXLET_ADMIN_USER` / `OXLET_ADMIN_PASSWORD`)
@@ -123,6 +125,34 @@ python manage.py runserver
 - Excel serial date (เลข 4-5 หลัก)
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
 
+### Deal Value (มูลค่าดีล)
+- ที่มา: คอลัมน์ `sale_price` (L=11) ใน sales_reports sheet
+- `fetch_dashboard_data()` คำนวณ 3 ตัวเลขให้ทุกระดับ:
+  - `dealValue` — sum(price) ของแถวที่ status = "ปล่อย"
+  - `pipelineValue` — sum(price) ของ จอง/รอเซ็นต์/รอผล/รอปล่อย (ยังไม่จบ ไม่นับรีเจ็ก/ปล่อย) — **เก็บใน data แต่ UI ไม่แสดงตามผู้ใช้ขอ**
+  - `avgDealValue` — เฉลี่ยต่อคัน
+- มีให้ใน: `summary`, `sellers[]`, `teams`, `monthlySummary[m]`, `monthlySummary[m].sellers[name]`, `monthlySummary[m].teams[tid]`
+- Daily breakdown: `dailyByMonth[m].dealValue[0..31]`, `dailyBySeller[name][m].dealValue[0..31]`
+- UI: KPI card 💰 ยอดปล่อย + Top มูลค่าดีล panel + ตารางรายเซลล์มีคอลัมน์ ฿ ปล่อย + Line chart (รายเดือน/รายวัน) + Overview Flex executive ส่ง deal value ทุกทีม
+- เพิ่ม `fmtBaht()` helper (JS) — แสดง `฿1.2M` / `฿850K` / `฿1,234` แบบกระชับ
+
+### Analytics tables (admin/exec only)
+ในหน้า dashboard หลัก มี 2 ตารางที่ guard ด้วย `if (canViewAll)` — เซลล์ทั่วไปไม่เห็น:
+
+1. **🚗 Lead รถรุ่นยอดนิยม** — top cars by lead count
+   - ใช้ **คอลัมน์ M เท่านั้น** (car_formula) — clean normalized names
+   - มี pagination ไป/กลับ (20 รุ่น/หน้า) + 🔍 search + checkbox "ซ่อน 'ไม่ระบุ'"
+   - กดที่แถวรถ → modal `openCarDetail(car)` แสดงเซลล์ที่รับเคสรถนั้น + จอง/ปล่อย/ยอดเงิน per seller
+   - Lead match = exact `leadCarSellerMonth[car][seller]`
+   - Booking match = substring case-insensitive ใน `b.car` (เพราะ lead car="Fortuner" แต่ booking car="Toyota Fortuner 2.4 V 2020")
+
+2. **📋 เคสจอง (filter ตามสถานะ)** — ดูเคสจริงทุกสถานะ
+   - Filter: สถานะ (ปล่อย default / ทุกสถานะ / จอง / รอเซ็นต์ / รอผล / รอปล่อย / รีเจ็ก), เซลล์, sort
+   - คอลัมน์ "เก่า" — แสดงอายุเคสเป็นวัน (เขียว ≤30 / เหลือง ≤90 / แดง >90)
+   - Sort: ล่าสุดก่อน / เก่าสุดก่อน / ราคามากสุด / เซลล์
+   - Pagination ไป/กลับ (50/หน้า)
+   - กดที่แถว → modal `openBookingDetail(idx)` แสดงทุกฟิลด์ + ไทม์ไลน์ + อายุเคส
+
 ## Google Sheets (7 sheets)
 
 | sheet key | Spreadsheet | Tab | ใช้ |
@@ -144,6 +174,23 @@ python manage.py runserver
 - `fetch_sheet(key)` — อ่าน
 - `ensure_sheet_tab(sid, tab)` — สร้าง tab ใหม่ถ้าไม่มี
 - `write_sheet(key, values)` — clear + write ทับทั้ง tab
+
+### Sheet column gotchas — ต้องระวัง
+
+**sales_reports** ([google_sheets.py](dashboard/services/google_sheets.py) `SALES_COL`):
+- `car_release_date = 22` (**W**) — ย้ายมาจาก V(21) ตอน sheet ปรับเดือน พ.ค. 2026
+  - V(21) ตอนนี้เป็นโน้ตข้อความ (เช่น "รับ 16/5") ไม่ใช่วันที่แล้ว
+  - มี `legacy_car_release_date = 21` เก็บไว้ fallback สำหรับข้อมูลเก่า
+  - `fetch_dashboard.py` เลือก W ก่อน, ถ้า parse ไม่ได้ ลอง V (legacy)
+- `status = 13` (N) — `"ปล่อย"` / `"จอง"` / `"รอเซ็นต์"` / `"รอผล"` / `"รอปล่อย"` / `"รีเจ็ก"` (+ `(ซื้อสด)` suffix)
+- `sale_price = 11` (L) — ราคาขาย (สำหรับ deal value)
+
+**leads** ([google_sheets.py](dashboard/services/google_sheets.py) `LEADS_COL`):
+- `sales_rep = 4` (**E**) — ชื่อเซลล์
+- `car_inquiry = 11` (L) — รถลูกค้าถาม (มีรายละเอียดเยอะ "Nissan Almera 1.2 E 2019")
+- `car_formula = 12` (**M**) — CAR / สูตร (normalized "Almera") — **ใช้ตัวนี้สำหรับ aggregation Lead-by-Car**
+- ใน Lead-by-Car table จับ M เท่านั้น (สะอาด ~67 รุ่น) — L มี ~2000 รุ่นเพราะข้อความไม่ normalized
+- ใน lead/booking detail modal ยังใช้ L ก่อน (มี detail) → fallback M
 
 ## LINE Integration
 
@@ -207,6 +254,12 @@ CRON_SECRET=xxx...
 - `/api/dashboard` คืน JSON เต็มของ aggregator
 - `/api/admin/send_line` (admin login) → แสดง preview pipeline + `token_debug`
 - เช็คว่า `normalize_seller()` ครอบคลุมการสะกดในชีตหรือยัง
+- **ยอด "ปิดได้" ไม่ตรง** → เช็คว่า sheet sales_reports คอลัมน์ปล่อยรถยังอยู่ที่ W(22) หรือถูกย้ายอีก (ดู section "Sheet column gotchas")
+- **มูลค่าดีลผิด** → เช็คคอลัมน์ L(11) `sale_price` มีข้อมูลครบไหม (`cell_num()` คืน 0 ถ้าว่าง/parse ไม่ได้)
+
+### เพิ่ม feature ใหม่
+**ทุกครั้งที่เพิ่ม/แก้ feature → ต้องอัพเดท CLAUDE.md ด้วย** (โดยเฉพาะ section URL routes, Sheet column gotchas, Roles, Concepts)
+- Commit รวมกับไฟล์ source เดียวกัน ห้ามแยก
 
 ## Deploy บน Vercel
 
