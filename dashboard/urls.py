@@ -8,4 +8,7 @@ urlpatterns = [
     path("api/auth", views.api_auth, name="api_auth"),
     path("u/<str:token>/", views.magic_link, name="magic_link"),
     path("s/<str:token>/", views.seller_dashboard, name="seller_dashboard"),
+    path("login/", views.login_view, name="login"),
+    path("logout/", views.logout_view, name="logout"),
+    path("api/admin/send_line", views.admin_send_line, name="admin_send_line"),
 ]

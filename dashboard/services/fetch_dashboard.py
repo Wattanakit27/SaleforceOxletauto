@@ -119,13 +119,25 @@ def fetch_dashboard_data() -> dict:
     weeks_elapsed = math.ceil(now.day / 7)
     clip_month_target = weeks_elapsed * 2
 
-    # userIdMap
+    # userIdMap + employee list (สำหรับ admin panel)
     user_id_map = {}
+    employee_list = []
     for row in employees:
         uid = cell(row, EM.user_id)
         nickname = cell(row, EM.nickname)
         if uid and nickname:
             user_id_map[uid] = nickname
+        if not uid:
+            continue
+        # ไม่ส่ง reply_token ออกไปเพราะเป็น sensitive (ใช้ตอบ LINE webhook)
+        employee_list.append({
+            "user_id": uid,
+            "display_name": cell(row, EM.display_name),
+            "picture_url": cell(row, EM.picture_url),
+            "group_id": cell(row, EM.group_id),
+            "nickname": nickname,
+            "position": cell(row, EM.position),
+        })
 
     # Filter leads
     year_leads = [r for r in raw_leads if is_this_year(cell(r, L.received_date))]
@@ -583,6 +595,7 @@ def fetch_dashboard_data() -> dict:
         "bookingCases": booking_cases,
         "liveActivity": live_activity,
         "userIdMap": user_id_map,
+        "employees": employee_list,
         "monthlySummary": monthly_summary,
         "dailyByMonth": daily_by_month,
         "dailyBySeller": daily_by_seller,

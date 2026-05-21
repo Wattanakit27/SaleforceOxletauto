@@ -1,0 +1,59 @@
+{% load static %}<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Oxlet Dashboard</title>
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; }
+    .login-box { background:var(--bg); border-radius:16px; padding:28px 26px; max-width:380px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+    .login-hd { text-align:center; margin-bottom:20px; }
+    .login-hd img { height:44px; margin-bottom:10px; }
+    .login-hd h1 { font-size:18px; font-weight:800; color:var(--t1); margin:0 0 4px; }
+    .login-hd .sub { font-size:12px; color:var(--t3); }
+    .field { margin-bottom:14px; }
+    .field label { display:block; font-size:11px; color:var(--t2); font-weight:600; margin-bottom:5px; }
+    .field input { width:100%; padding:10px 12px; border:.5px solid var(--bd2); border-radius:10px; background:var(--bg2); color:var(--t1); font-size:13px; outline:none; box-sizing:border-box; }
+    .field input:focus { border-color:var(--blue); }
+    .divider { display:flex; align-items:center; gap:8px; margin:14px 0; color:var(--t3); font-size:11px; }
+    .divider::before, .divider::after { content:''; flex:1; height:.5px; background:var(--bd); }
+    .btn-primary { width:100%; padding:10px; border-radius:10px; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:13px; cursor:pointer; }
+    .btn-primary:hover { filter:brightness(1.05); }
+    .err { background:var(--red-bg); color:var(--red); padding:8px 12px; border-radius:10px; font-size:12px; margin-bottom:14px; border:.5px solid var(--red-mid); }
+    .hint { font-size:11px; color:var(--t3); margin-top:14px; padding:10px 12px; background:var(--bg2); border-radius:10px; line-height:1.6; }
+    .hint code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:10px; }
+  </style>
+</head>
+<body>
+<div class="login-box">
+  <div class="login-hd">
+    <img src="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}" alt="Oxlet">
+    <h1>เข้าสู่ระบบ</h1>
+    <div class="sub">Oxlet Sales Dashboard</div>
+  </div>
+
+  {% if error %}<div class="err">⚠️ {{ error }}</div>{% endif %}
+
+  <form method="post" action="/login/">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
+    <div class="field">
+      <label>🔑 รหัสผ่าน Admin</label>
+      <input type="password" name="password" autocomplete="current-password" placeholder="กรอกรหัสผ่านสำหรับสิทธิ์ Admin">
+    </div>
+    <div class="divider">หรือ</div>
+    <div class="field">
+      <label>🆔 LINE user_id (สำหรับ ผู้บริหาร / เซลล์)</label>
+      <input type="text" name="token" autocomplete="off" placeholder="U xxxxxxxxxxxxxxxx">
+    </div>
+    <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
+  </form>
+
+  <div class="hint">
+    💡 <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่ admin ให้ <code>/s/&lt;token&gt;/</code> แทนการ login ที่นี่<br>
+    🔐 <b>Admin</b> ตั้งรหัสใน <code>.env</code> ที่ <code>OXLET_ADMIN_PASSWORD=xxxx</code>
+  </div>
+</div>
+</body>
+</html>

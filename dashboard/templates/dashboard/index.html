@@ -41,10 +41,22 @@
     // ── Data from server ──
     const D = {{ data_json|safe }};
     const C = {{ constants_json|safe }};
+    const SESSION_USER = {{ session_user_json|safe }};
     const LOGO_URL = "{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}";
 
     // ── Auth ──
+    // Backend ให้ default เป็น 'ผู้บริหาร' มาแล้วเมื่อยังไม่ login → frontend แค่อ่านค่า
     function getEmployee() {
+      if (SESSION_USER && SESSION_USER.position) {
+        return {
+          id: SESSION_USER.user_id || '',
+          user_id: SESSION_USER.user_id || '',
+          display_name: SESSION_USER.display_name || '',
+          nickname: SESSION_USER.nickname || '',
+          position: SESSION_USER.position || '',
+        };
+      }
+      // fallback: cookie จาก magic_link (สำหรับเซลล์ที่ใช้ลิงก์ส่วนตัว)
       try {
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {
@@ -54,11 +66,14 @@
           }
         }
       } catch {}
-      // Dev mode fallback
-      return { id:'dev', user_id:'dev', display_name:'Admin (Dev)', nickname:'admin', position:'admin' };
+      // ไม่ควรเกิด เพราะ backend ส่ง default executive มาแล้ว
+      return { id:'', user_id:'', display_name:'ผู้บริหาร', nickname:'ผู้บริหาร', position:'executive' };
     }
     const employee = getEmployee();
     const isAdmin = employee.position === 'admin';
+    // ผู้บริหาร — เห็นทุกอย่างเหมือน admin ปัจจุบัน + impersonate ได้ แต่ไม่มีเครื่องมือ admin-only (LINE, schedule ฯลฯ)
+    const isExecutive = ['executive','ผู้บริหาร','manager','exec'].includes((employee.position||'').toLowerCase()) || employee.position === 'ผู้บริหาร';
+    const canViewAll = isAdmin || isExecutive;
 
     // ── State ──
     let tab = new URLSearchParams(location.search).get('tab') || 'o';
@@ -77,7 +92,7 @@
     let bkSel = 'all';
     let bkStatus = 'all';
     let searchQ = '';
-    let impersonate = isAdmin ? localStorage.getItem('oxlet_impersonate') : null;
+    let impersonate = canViewAll ? localStorage.getItem('oxlet_impersonate') : null;
 
     // Validate impersonate
     if (impersonate) {
@@ -87,7 +102,7 @@
 
     // ── Filtered data ──
     function getFilteredData() {
-      const filterTo = !isAdmin ? employee.nickname : impersonate;
+      const filterTo = !canViewAll ? employee.nickname : impersonate;
       if (!filterTo) return D;
       return {
         ...D,
@@ -177,26 +192,42 @@
       html += `<img src="${LOGO_URL}" alt="Oxlet" style="height:28px;width:auto;display:block">`;
       html += `<span style="font-size:16px;font-weight:700;color:var(--t1)">Oxlet Dashboard</span>`;
       // Viewer badge
-      if(isAdmin) {
+      if(canViewAll) {
+        const roleLabel = isAdmin ? '👑 Admin' : '🎩 ผู้บริหาร';
+        const roleBg = isAdmin ? 'var(--amber-bg)' : 'var(--purple-bg)';
+        const roleFg = isAdmin ? 'var(--amber)' : 'var(--purple)';
+        const roleBd = isAdmin ? 'var(--amber-mid)' : 'var(--purple-mid)';
         if(impersonate) {
-          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง Admin" style="background:var(--purple-bg);color:var(--purple);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--purple-mid);cursor:pointer">👁️ ดูในฐานะ ${h(impersonate)} ✕</button>`;
+          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง${isAdmin?' Admin':'ผู้บริหาร'}" style="background:var(--purple-bg);color:var(--purple);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--purple-mid);cursor:pointer">👁️ ดูในฐานะ ${h(impersonate)} ✕</button>`;
         } else {
-          html += `<span style="background:var(--amber-bg);color:var(--amber);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--amber-mid)">👑 Admin (ทั้งหมด)</span>`;
+          html += `<span style="background:${roleBg};color:${roleFg};padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid ${roleBd}">${roleLabel} (ทั้งหมด)</span>`;
         }
       } else {
         html += `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--blue)">👤 ${h(employee.nickname)}</span>`;
       }
       html += `</div>`;
       html += `<div style="display:flex;align-items:center;gap:8px">`;
-      // Impersonate switcher
-      if(isAdmin && D.sellers) {
+      // Admin-only: LINE tools
+      if(isAdmin) {
+        html += `<button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--green-mid);background:var(--green-bg);color:var(--green);cursor:pointer">📋 LINE ID</button>`;
+        html += `<button onclick="openLineSendPanel()" title="ส่ง LINE Flex Pipeline ของเดือนนี้ให้เซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer">📤 ส่ง Flex</button>`;
+      }
+      // Impersonate switcher (admin + ผู้บริหาร)
+      if(canViewAll && D.sellers) {
         const allNames = D.sellers.map(s=>s.name);
+        const selfLabel = isAdmin ? '👑 Admin (ทั้งหมด)' : '🎩 ผู้บริหาร (ทั้งหมด)';
         html += `<select onchange="setImpersonate(this.value)" style="font-size:11px;padding:3px 9px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">`;
-        html += `<option value="" ${!impersonate?'selected':''}>👑 Admin (ทั้งหมด)</option>`;
+        html += `<option value="" ${!impersonate?'selected':''}>${selfLabel}</option>`;
         allNames.forEach(n => { html += `<option value="${h(n)}" ${impersonate===n?'selected':''}>👁️ ดูในฐานะ ${h(n)}</option>`; });
         html += `</select>`;
       }
       html += `<button onclick="location.reload()" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">🔄 รีเฟรช</button>`;
+      if (isAdmin) {
+        html += `<button onclick="if(confirm('ออกจากสิทธิ์ Admin? (จะกลับเป็นมุมมองผู้บริหาร)'))location.href='/logout/'" title="ออกจากสิทธิ์ Admin" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">🚪 ออก Admin</button>`;
+      } else if (canViewAll) {
+        // ผู้บริหาร (executive) — โชว์ปุ่ม ADMIN ให้ upgrade ได้
+        html += `<button onclick="openAdminLogin()" title="เข้าสู่ระบบในฐานะ Admin" style="font-size:11px;padding:4px 12px;border-radius:14px;border:.5px solid var(--amber);background:var(--amber-bg);color:var(--amber);cursor:pointer;font-weight:700">🔐 ADMIN</button>`;
+      }
       html += `</div></header>`;
 
       // Last fetch
@@ -235,7 +266,7 @@
       const ms = D.monthlySummary || {};
       const isDaily = dfMonth > 0;
       // เซลล์ที่ admin กำลังสวมมุมมอง หรือ เซลล์ตัวเองตอนไม่ใช่ admin
-      const focusSeller = !isAdmin ? employee.nickname : impersonate;
+      const focusSeller = !canViewAll ? employee.nickname : impersonate;
       let labels, leadNormal, leadRJ, bookings, dones;
 
       if (isDaily) {
@@ -414,7 +445,7 @@
       html += `</div>`;
 
       // Charts
-      const _focusName = (!isAdmin ? employee.nickname : impersonate);
+      const _focusName = (!canViewAll ? employee.nickname : impersonate);
       const _focusSuffix = _focusName ? ` · ${h(_focusName)}` : ``;
       const _chartPeriod = dfMonth > 0
         ? `รายวัน — เดือน${C.MONTHS_FULL[dfMonth-1]}`
@@ -885,6 +916,350 @@
     }
     function openCaseFromOverview(code, seller) {
       tab='s'; curS=seller; showCase=code; updateUrl(); render();
+    }
+
+    // ── Admin Login Modal ──
+    function getCsrfToken() {
+      const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+    function openAdminLogin() {
+      // ปิด modal เก่าถ้ามี
+      const old = document.getElementById('admin-login-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'admin-login-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = `
+        <div style="background:var(--bg);border-radius:16px;max-width:360px;width:100%;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:32px;margin-bottom:6px">🔐</div>
+            <div style="font-size:16px;font-weight:800;color:var(--t1)">เข้าสู่ระบบ Admin</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">เพื่อใช้เครื่องมือสำหรับผู้ดูแลระบบ</div>
+          </div>
+          <div id="admin-login-err" style="display:none;background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:10px;font-size:12px;margin-bottom:12px;border:.5px solid var(--red-mid)"></div>
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">ชื่อผู้ใช้</label>
+            <input id="admin-user" type="text" autocomplete="username" value="admin" style="width:100%;padding:10px 12px;border:.5px solid var(--bd2);border-radius:10px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">รหัสผ่าน</label>
+            <input id="admin-pass" type="password" autocomplete="current-password" placeholder="••••" style="width:100%;padding:10px 12px;border:.5px solid var(--bd2);border-radius:10px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('admin-login-overlay').remove()" style="flex:1;padding:10px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ยกเลิก</button>
+            <button id="admin-login-submit" onclick="submitAdminLogin()" style="flex:2;padding:10px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">เข้าสู่ระบบ</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const u = document.getElementById('admin-user');
+      const p = document.getElementById('admin-pass');
+      p.focus();
+      const onEnter = (e) => { if (e.key === 'Enter') submitAdminLogin(); };
+      u.addEventListener('keydown', onEnter);
+      p.addEventListener('keydown', onEnter);
+    }
+    async function submitAdminLogin() {
+      const u = document.getElementById('admin-user').value.trim();
+      const p = document.getElementById('admin-pass').value;
+      const btn = document.getElementById('admin-login-submit');
+      const errBox = document.getElementById('admin-login-err');
+      errBox.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+      try {
+        const fd = new FormData();
+        fd.append('username', u);
+        fd.append('password', p);
+        fd.append('next', '/dashboard/');
+        const res = await fetch('/login/', {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() },
+          credentials: 'same-origin',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          location.reload();
+          return;
+        }
+        errBox.textContent = '⚠️ ' + (data.error || 'เข้าสู่ระบบไม่สำเร็จ');
+        errBox.style.display = 'block';
+      } catch (e) {
+        errBox.textContent = '⚠️ เกิดข้อผิดพลาด: ' + e.message;
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+      }
+    }
+
+    // ── LINE Flex Send Panel (admin only) ──
+    async function openLineSendPanel() {
+      if (!isAdmin) return;
+      const old = document.getElementById('line-send-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'line-send-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      const modal = document.createElement('div');
+      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
+      modal.onclick = (e) => e.stopPropagation();
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">📤 ส่ง LINE Flex Pipeline (เดือนนี้)</div>
+        <button onclick="document.getElementById('line-send-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div id="ls-body" style="overflow-y:auto;padding:14px 16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด pipeline...</div></div>`;
+
+      // โหลด preview
+      let preview;
+      try {
+        const res = await fetch('/api/admin/send_line', { credentials: 'same-origin' });
+        preview = await res.json();
+        if (!res.ok || preview.error) throw new Error(preview.error || 'load failed');
+      } catch (e) {
+        modal.querySelector('#ls-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+        return;
+      }
+      renderLineSendBody(modal, preview);
+    }
+
+    let __lsTestMode = false;
+    let __lsTestUid = '';
+    let __lsSelected = new Set(); // selected seller names
+
+    function renderLineSendBody(modal, preview) {
+      const sellers = preview.sellers || [];
+      if (__lsSelected.size === 0) {
+        // โดย default: เลือกเฉพาะคนที่มี user_id และมีเคสในเดือนนี้
+        sellers.forEach(s => {
+          if (s.has_user_id && (s.called + s.notCalled + s.followUp) > 0) __lsSelected.add(s.seller);
+        });
+      }
+      const tokenWarn = preview.has_token ? '' :
+        `<div style="background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:10px;font-size:11px;margin-bottom:10px;border:.5px solid var(--red-mid)">⚠️ ยังไม่ได้ตั้ง <code>LINE_CHANNEL_ACCESS_TOKEN</code> ใน <code>.env</code> — ส่งจริงจะไม่ทำงาน</div>`;
+
+      let html = tokenWarn;
+      html += `<div style="background:var(--bg2);padding:10px 12px;border-radius:10px;font-size:11px;color:var(--t2);margin-bottom:10px;line-height:1.6">
+        📦 พบ <b>${sellers.length}</b> เซลล์มีข้อมูลเดือนนี้ · เลือก <b id="ls-count">${__lsSelected.size}</b> คน<br>
+        💡 ติ๊กถูกตามชื่อเพื่อเลือกผู้รับ · เซลล์ที่ไม่มี LINE user_id จะถูกข้าม
+      </div>`;
+      html += `<div style="display:flex;gap:8px;margin-bottom:10px">
+        <button onclick="__lsSelectAll(true)" style="font-size:11px;padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">เลือกทั้งหมด</button>
+        <button onclick="__lsSelectAll(false)" style="font-size:11px;padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างการเลือก</button>
+      </div>`;
+      html += `<table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:center;padding:6px 4px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd);width:32px"></th>
+          <th style="text-align:left;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)">เซลล์</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)">โทรแล้ว</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)">ยังไม่โทร</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)">ต้องตาม</th>
+          <th style="text-align:center;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)">UID</th>
+        </tr></thead><tbody>`;
+      sellers.forEach(s => {
+        const checked = __lsSelected.has(s.seller) ? 'checked' : '';
+        const dis = !s.has_user_id ? 'disabled title="ไม่มี LINE user_id ในชีต — ไม่สามารถส่งได้"' : '';
+        html += `<tr style="${!s.has_user_id?'opacity:.5;':''}">
+          <td style="text-align:center;padding:6px 4px;border-bottom:.5px solid var(--bd)"><input type="checkbox" ${checked} ${dis} onchange="__lsToggle('${h(s.seller)}',this.checked)" style="cursor:pointer"></td>
+          <td style="padding:8px;border-bottom:.5px solid var(--bd);color:var(--t1);font-weight:600">${h(s.seller)}</td>
+          <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--green)">${s.called}</td>
+          <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--red)">${s.notCalled}</td>
+          <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--amber)">${s.followUp}</td>
+          <td style="text-align:center;padding:8px;border-bottom:.5px solid var(--bd)">${s.has_user_id?'<span style="color:var(--green)">✓</span>':'<span style="color:var(--red)">✗</span>'}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      html += `<div style="margin-top:14px;padding:10px 12px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:10px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--amber);font-weight:600;cursor:pointer">
+          <input type="checkbox" ${__lsTestMode?'checked':''} onchange="__lsToggleTest(this.checked)"> 🧪 Test mode — ส่งทุก Flex ไปที่ user_id ที่กำหนด (ไม่ส่งจริงไปเซลล์)
+        </label>
+        <input id="ls-test-uid" type="text" value="${h(__lsTestUid)}" oninput="__lsTestUid=this.value" placeholder="U6bf1d72cf1d7e237c3a5c9848dde9bf4" style="display:${__lsTestMode?'block':'none'};margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px;outline:none;font-family:monospace;box-sizing:border-box">
+        <div id="ls-test-hint" style="display:${__lsTestMode?'block':'none'};margin-top:6px;font-size:10px;color:var(--amber)">💡 ถ้าไม่ติ๊กเซลล์ใดเลย → จะส่ง Flex ของ <b>ทุกเซลล์ที่มีข้อมูล</b> ไปที่ user_id นี้</div>
+      </div>`;
+      html += `<div id="ls-result" style="margin-top:12px"></div>`;
+      modal.querySelector('#ls-body').innerHTML = html;
+
+      // footer
+      let footer = modal.querySelector('#ls-footer');
+      if (!footer) {
+        footer = document.createElement('div');
+        footer.id = 'ls-footer';
+        footer.style.cssText = 'padding:12px 16px;border-top:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px';
+        modal.appendChild(footer);
+      }
+      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">ทั้งหมด: <b id="ls-count2">${__lsSelected.size}</b> คน</div>
+        <button id="ls-send-btn" onclick="__lsSend()" style="padding:9px 18px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">📤 ส่ง</button>`;
+    }
+    function __lsToggle(name, on) {
+      if (on) __lsSelected.add(name); else __lsSelected.delete(name);
+      const a = document.getElementById('ls-count'); if (a) a.textContent = __lsSelected.size;
+      const b = document.getElementById('ls-count2'); if (b) b.textContent = __lsSelected.size;
+    }
+    function __lsSelectAll(on) {
+      const overlay = document.getElementById('line-send-overlay');
+      if (!overlay) return;
+      overlay.querySelectorAll('input[type=checkbox][onchange^="__lsToggle"]').forEach(cb => {
+        if (cb.disabled) return;
+        cb.checked = on;
+        const name = cb.getAttribute('onchange').match(/'([^']+)'/)[1];
+        if (on) __lsSelected.add(name); else __lsSelected.delete(name);
+      });
+      const a = document.getElementById('ls-count'); if (a) a.textContent = __lsSelected.size;
+      const b = document.getElementById('ls-count2'); if (b) b.textContent = __lsSelected.size;
+    }
+    function __lsToggleTest(on) {
+      __lsTestMode = on;
+      const inp = document.getElementById('ls-test-uid');
+      if (inp) inp.style.display = on ? 'block' : 'none';
+      const hint = document.getElementById('ls-test-hint');
+      if (hint) hint.style.display = on ? 'block' : 'none';
+    }
+    async function __lsSend() {
+      const btn = document.getElementById('ls-send-btn');
+      const result = document.getElementById('ls-result');
+      // Test mode: ถ้าไม่เลือก → ส่งทุกเซลล์ไป test user_id
+      // Production: ต้องเลือกอย่างน้อย 1 คน
+      if (!__lsTestMode && __lsSelected.size === 0) {
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ กรุณาเลือกเซลล์อย่างน้อย 1 คน</div>`;
+        return;
+      }
+      if (__lsTestMode && !__lsTestUid.trim()) {
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ Test mode ต้องกรอก target user_id</div>`;
+        return;
+      }
+      const sellersToSend = __lsSelected.size > 0 ? Array.from(__lsSelected) : [];
+      const countLabel = sellersToSend.length > 0 ? `${sellersToSend.length} คน` : 'ทุกเซลล์ที่มีข้อมูล';
+      if (!confirm(`ยืนยันส่ง LINE Flex (${countLabel})?${__lsTestMode?' [Test mode → '+__lsTestUid.trim().slice(0,20)+'...]':''}`)) return;
+      btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+      result.innerHTML = `<div style="padding:10px;color:var(--t3);font-size:12px">⏳ กำลังส่ง...</div>`;
+      try {
+        const payload = {
+          test: __lsTestMode,
+          target_user_id: __lsTestMode ? __lsTestUid.trim() : '',
+        };
+        // ส่ง sellers filter เฉพาะตอนเลือก, ถ้าไม่ส่ง backend จะใช้ทุกเซลล์
+        if (sellersToSend.length > 0) payload.sellers = sellersToSend;
+        const res = await fetch('/api/admin/send_line', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ ${h(data.error || 'ส่งล้มเหลว')}</div>`;
+        } else {
+          const fail = (data.results || []).filter(r => !r.sent);
+          let html = `<div style="padding:10px 12px;background:var(--green-bg);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ ส่งสำเร็จ ${data.sent}/${data.count} ข้อความ</div>`;
+          if (fail.length) {
+            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border-radius:10px;font-size:11px;color:var(--red)"><b>ล้มเหลว ${fail.length}:</b><br>`;
+            fail.forEach(f => { html += `· ${h(f.seller)} — ${h(f.error || '?')}<br>`; });
+            html += `</div>`;
+          }
+          result.innerHTML = html;
+        }
+      } catch (e) {
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ ${h(e.message)}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '📤 ส่ง';
+      }
+    }
+
+    // ── LINE ID Panel (admin only) ──
+    let __empPanelFilter = '';
+    function openLineIdPanel() {
+      if (!isAdmin) return;
+      const overlay = document.createElement('div');
+      overlay.id = 'line-id-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      const modal = document.createElement('div');
+      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:760px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
+      modal.onclick = (e) => e.stopPropagation();
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      renderEmpPanel(modal);
+    }
+    function renderEmpPanel(modal) {
+      const emps = (D.employees || []).slice();
+      // จัดเรียง: admin > executive/ผู้บริหาร > เซลล์ > อื่นๆ
+      const rank = (p) => {
+        const x = (p||'').toLowerCase();
+        if (x === 'admin') return 0;
+        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return 1;
+        if (x === 'seller' || x === 'sale' || x === 'sales') return 2;
+        return 3;
+      };
+      emps.sort((a,b) => {
+        const r = rank(a.position) - rank(b.position);
+        if (r) return r;
+        return (a.nickname||'').localeCompare(b.nickname||'','th');
+      });
+      const q = __empPanelFilter.trim().toLowerCase();
+      const filtered = q ? emps.filter(e =>
+        (e.nickname||'').toLowerCase().includes(q) ||
+        (e.display_name||'').toLowerCase().includes(q) ||
+        (e.position||'').toLowerCase().includes(q) ||
+        (e.user_id||'').toLowerCase().includes(q)
+      ) : emps;
+
+      const posChip = (p) => {
+        const x = (p||'').toLowerCase();
+        if (x === 'admin') return `<span style="background:var(--amber-bg);color:var(--amber);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">👑 Admin</span>`;
+        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return `<span style="background:var(--purple-bg);color:var(--purple);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">🎩 ผู้บริหาร</span>`;
+        if (!p) return `<span style="background:var(--bg2);color:var(--t3);padding:1px 7px;border-radius:8px;font-size:10px">—</span>`;
+        return `<span style="background:var(--blue-bg);color:var(--blue);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600">${h(p)}</span>`;
+      };
+      const shortId = (id) => id ? (id.slice(0,8)+'…'+id.slice(-4)) : '—';
+
+      let body = `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:.5px solid var(--bd)">`;
+      body += `<div style="font-size:15px;font-weight:700;color:var(--t1)">👥 ข้อมูลพนักงาน <span style="font-size:11px;color:var(--t3);font-weight:400">(${emps.length} คน · แสดง ${filtered.length})</span></div>`;
+      body += `<button onclick="document.getElementById('line-id-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer;line-height:1">✕</button>`;
+      body += `</div>`;
+      body += `<div style="padding:10px 16px;border-bottom:.5px solid var(--bd)">`;
+      body += `<input id="emp-filter" type="text" placeholder="🔍 ค้นหา ชื่อเล่น / display name / ตำแหน่ง / user_id" value="${h(__empPanelFilter)}" style="width:100%;padding:7px 11px;border:.5px solid var(--bd2);border-radius:10px;background:var(--bg2);color:var(--t1);font-size:12px;outline:none">`;
+      body += `</div>`;
+      body += `<div style="overflow-y:auto;padding:8px 12px;flex:1">`;
+      if (filtered.length === 0) {
+        body += `<div style="text-align:center;padding:32px;color:var(--t3);font-size:13px">ไม่พบพนักงานที่ตรงกับคำค้น</div>`;
+      } else {
+        body += `<div style="display:flex;flex-direction:column;gap:8px">`;
+        filtered.forEach(e => {
+          const pic = e.picture_url && /^https?:/i.test(e.picture_url)
+            ? `<img src="${h(e.picture_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+            : '';
+          const initial = (e.nickname || e.display_name || '?').charAt(0);
+          const fallback = `<div style="${pic?'display:none;':''}width:42px;height:42px;border-radius:50%;background:var(--blue-bg);color:var(--blue);font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${h(initial)}</div>`;
+          body += `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:.5px solid var(--bd);border-radius:10px">`;
+          body += pic + fallback;
+          body += `<div style="flex:1;min-width:0">`;
+          body += `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:var(--t1)">${h(e.nickname||'—')}</span>${posChip(e.position)}</div>`;
+          body += `<div style="font-size:11px;color:var(--t2);margin-top:2px">${h(e.display_name||'—')}</div>`;
+          body += `<div style="font-size:10px;color:var(--t3);margin-top:3px;font-family:monospace;display:flex;gap:10px;flex-wrap:wrap">`;
+          body += `<span title="${h(e.user_id)}">UID: ${h(shortId(e.user_id))}</span>`;
+          if (e.group_id) body += `<span title="${h(e.group_id)}">GID: ${h(shortId(e.group_id))}</span>`;
+          body += `</div></div>`;
+          body += `<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">`;
+          body += `<button onclick="navigator.clipboard.writeText('${h(e.user_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 user_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">📋 user_id</button>`;
+          if (e.group_id) body += `<button onclick="navigator.clipboard.writeText('${h(e.group_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 group_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">📋 group_id</button>`;
+          body += `</div></div>`;
+        });
+        body += `</div>`;
+      }
+      body += `</div>`;
+      body += `<div style="padding:10px 16px;background:var(--amber-bg);color:var(--amber);font-size:11px;line-height:1.5;border-top:.5px solid var(--bd)">💡 ใช้ <code>user_id</code> สำหรับ <b>LINE Push Message</b> รายบุคคล · ใช้ <code>group_id</code> สำหรับยิงเข้ากลุ่ม</div>`;
+      modal.innerHTML = body;
+
+      const inp = modal.querySelector('#emp-filter');
+      if (inp) {
+        inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+        inp.oninput = (ev) => { __empPanelFilter = ev.target.value; renderEmpPanel(modal); };
+      }
     }
 
     // ── Init ──
