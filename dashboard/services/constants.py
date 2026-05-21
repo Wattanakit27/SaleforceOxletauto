@@ -17,6 +17,7 @@ def normalize_seller(name: str) -> str:
 
 
 # Teams & Targets
+# Default values (fallback ถ้าโหลด sheet "ตั้งค่าเซลล์" ไม่ได้)
 TEAMS = {
     "A": ["โอ๊ต", "เฟิร์ส", "เจ", "บอย", "นั่ม", "กอล์ฟ"],
     "B": ["นวล", "เก้า", "มด", "มัท", "อุ้ม", "แซน"],
@@ -35,6 +36,51 @@ TEAM_ID = {}
 for tid, members in TEAMS.items():
     for name in members:
         TEAM_ID[name] = tid
+
+
+def refresh_from_sheet() -> bool:
+    """อ่าน sheet "ตั้งค่าเซลล์" แล้ว mutate TEAMS/TARGETS/ALL_SELLERS/TEAM_ID in-place.
+
+    คืน True ถ้าโหลดสำเร็จ, False ถ้า sheet ไม่มีหรือ error (จะ fallback default).
+    Import google_sheets ใน function เพื่อกัน circular import.
+    """
+    try:
+        from .google_sheets import fetch_sheet, cell, cell_num, SELLER_CONFIG_COL as SC
+    except Exception:
+        return False
+    try:
+        rows = fetch_sheet("sellers_config")
+    except Exception:
+        return False
+
+    new_teams: dict[str, list[str]] = {}
+    new_targets: dict[str, int] = {}
+    for r in rows:
+        name = SELLER_MAP.get(cell(r, SC.nickname).strip(), cell(r, SC.nickname).strip())
+        if not name or name in ("ชื่อเล่น", "nickname", "Nickname"):
+            continue
+        team = cell(r, SC.team).strip().upper()
+        target = int(cell_num(r, SC.target) or 0)
+        if not team:
+            continue
+        new_teams.setdefault(team, []).append(name)
+        new_targets[name] = target
+
+    if not new_targets:
+        return False  # sheet ว่าง → fallback
+
+    # mutate in-place — โมดูลอื่นที่ import TEAMS/TARGETS แล้ว reference dict ตัวเดียวกัน เห็นค่าใหม่
+    TEAMS.clear()
+    TEAMS.update(new_teams)
+    TARGETS.clear()
+    TARGETS.update(new_targets)
+
+    ALL_SELLERS.clear()
+    ALL_SELLERS.extend(s for ms in TEAMS.values() for s in ms)
+
+    TEAM_ID.clear()
+    TEAM_ID.update({n: tid for tid, ms in TEAMS.items() for n in ms})
+    return True
 
 RJ_TYPES = ["RJ", "Hot RJ", "Hot RB"]
 

@@ -34,6 +34,14 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "เก็บข้อมูลพนักงาน กลุ่ม หลัก",
     },
+    "sellers_config": {
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "ตั้งค่าเซลล์",
+    },
+    "schedule_config": {
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "ตั้งเวลาส่ง",
+    },
 }
 
 # ── Column index maps (0-based) ──
@@ -73,6 +81,23 @@ class EMPLOYEE_COL:
     user_id = 0; display_name = 1; picture_url = 2; group_id = 3
     reply_token = 4; nickname = 5; position = 6
 
+class SELLER_CONFIG_COL:
+    # ตั้งค่าเซลล์ tab — admin แก้ใน Google Sheets ตรงๆ ได้
+    # Row format: ชื่อเล่น | ทีม (A/B/C) | เป้าต่อเดือน
+    nickname = 0
+    team = 1
+    target = 2
+
+class SCHEDULE_COL:
+    # ตั้งเวลาส่ง tab — ตารางเวลา trigger LINE Flex
+    # Row: เวลา (HH:MM) | วัน (* / 1-5 / 0,6) | เซลล์ (* / "โอ๊ต,เก้า") | test_target | enabled (TRUE/FALSE) | label
+    time = 0      # HH:MM (Bangkok time, 24-hour)
+    days = 1      # "*" ทุกวัน | "1-5" จันทร์-ศุกร์ | "0,6" เสาร์-อาทิตย์ | "1,3,5" เลือกเฉพาะ (0=อาทิตย์)
+    sellers = 2   # "*" ทุกเซลล์ | "โอ๊ต,เก้า,เจ" รายชื่อ
+    test_target = 3  # ว่าง = ส่งจริง, ใส่ user_id = test mode
+    enabled = 4   # TRUE/FALSE
+    label = 5     # ชื่อตาราง (สำหรับมนุษย์อ่าน)
+
 
 # ── Auth ──
 SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -88,11 +113,80 @@ def _get_credentials() -> Credentials:
     if _credentials is None or not _credentials.valid:
         _credentials = Credentials.from_service_account_info(
             {"client_email": email, "private_key": key, "token_uri": "https://oauth2.googleapis.com/token"},
-            scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+            # Full read+write scope — admin ตั้งเป้า/ทีมในระบบจะเขียนกลับ sheet ผ่าน scope นี้
+            scopes=["https://www.googleapis.com/auth/spreadsheets"],
         )
     if not _credentials.valid:
         _credentials.refresh(AuthRequest())
     return _credentials
+
+
+def ensure_sheet_tab(spreadsheet_id: str, tab_name: str) -> bool:
+    """ตรวจ tab ใน spreadsheet — ถ้าไม่มีให้สร้าง (ใช้ batchUpdate).
+    คืน True ถ้ามีอยู่/สร้างสำเร็จ.
+    """
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    headers = {"Authorization": f"Bearer {creds.token}"}
+
+    # อ่าน metadata ดูว่า tab มีอยู่ไหม
+    r = requests.get(
+        f"{SHEETS_API}/{spreadsheet_id}?fields=sheets.properties.title",
+        headers=headers, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"Sheets meta fetch failed: {r.status_code} {r.text}")
+    existing = [s["properties"]["title"] for s in r.json().get("sheets", [])]
+    if tab_name in existing:
+        return True
+
+    # สร้าง tab ใหม่
+    r = requests.post(
+        f"{SHEETS_API}/{spreadsheet_id}:batchUpdate",
+        headers={**headers, "Content-Type": "application/json"},
+        json={"requests": [{"addSheet": {"properties": {"title": tab_name}}}]},
+        timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"Cannot create tab '{tab_name}': {r.status_code} {r.text}")
+    return True
+
+
+def write_sheet(config_key: str, values: list[list]) -> None:
+    """เขียนทับ tab ทั้งหมดด้วย values (clear+write).
+    values = [[header_row], [row1], [row2], ...]
+    """
+    cfg = SHEET_CONFIG[config_key]
+    sid = cfg["spreadsheet_id"]
+    tab = cfg["sheet_name"]
+
+    ensure_sheet_tab(sid, tab)
+
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    headers = {"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"}
+
+    import urllib.parse
+    encoded = urllib.parse.quote(f"'{tab}'!A:Z")
+
+    # Clear ก่อน
+    r = requests.post(
+        f"{SHEETS_API}/{sid}/values/{encoded}:clear",
+        headers=headers, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"Clear failed: {r.status_code} {r.text}")
+
+    # Write ใหม่
+    encoded_a1 = urllib.parse.quote(f"'{tab}'!A1")
+    r = requests.put(
+        f"{SHEETS_API}/{sid}/values/{encoded_a1}?valueInputOption=USER_ENTERED",
+        headers=headers,
+        json={"values": values},
+        timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"Write failed: {r.status_code} {r.text}")
 
 
 # ── Fetch helpers ──

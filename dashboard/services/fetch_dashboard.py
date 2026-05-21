@@ -105,6 +105,11 @@ def get_month(date_str: str) -> int:
 
 # ── Main fetch function ──
 def fetch_dashboard_data() -> dict:
+    # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
+    # ถ้า sheet หายหรือ error → ใช้ default hardcode
+    from .constants import refresh_from_sheet
+    refresh_from_sheet()
+
     raw = fetch_all_sheets()
     raw_leads = raw["leads"]
     sales_reports = raw["sales_reports"]

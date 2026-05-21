@@ -9,5 +9,11 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "oxlet/wsgi.py" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/send_line",
+      "schedule": "0 2 * * *"
+    }
   ]
 }

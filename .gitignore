@@ -5,6 +5,7 @@
 .env.*.local
 *.pem
 *.key
+show_env.py  # helper สำหรับดู env values — local only
 
 # Python
 __pycache__/

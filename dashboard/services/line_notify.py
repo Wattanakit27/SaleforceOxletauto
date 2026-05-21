@@ -265,3 +265,78 @@ def get_nickname_to_user_id() -> dict[str, str]:
         if uid and nick:
             out[nick] = uid
     return out
+
+
+def _cell_truthy(v: str) -> bool:
+    """แปลง cell string เป็น bool — TRUE/yes/1/ใช่/ขึ้น เป็น True"""
+    return (v or "").strip().lower() in ("true", "yes", "1", "ใช่", "เปิด", "on")
+
+
+def load_schedules() -> list[dict]:
+    """อ่าน schedule_config sheet → list of dict
+    Fields: time(HH:MM), days(str), sellers(list or '*'), test_target, enabled(bool), label
+    """
+    from .google_sheets import fetch_sheet, cell, SCHEDULE_COL as SC
+    try:
+        rows = fetch_sheet("schedule_config")
+    except Exception:
+        return []
+
+    schedules = []
+    for r in rows:
+        time_str = cell(r, SC.time).strip()
+        if not time_str or ":" not in time_str:
+            continue
+        # validate + normalize HH:MM (sheet อาจเก็บ "9:00" ไม่มี leading zero)
+        try:
+            hh, mm = time_str.split(":", 1)
+            time_str = f"{int(hh):02d}:{int(mm):02d}"
+        except Exception:
+            continue
+        days = cell(r, SC.days).strip() or "*"
+        sellers_str = cell(r, SC.sellers).strip() or "*"
+        sellers_list = ["*"] if sellers_str == "*" else [s.strip() for s in sellers_str.split(",") if s.strip()]
+        schedules.append({
+            "time": time_str,
+            "days": days,
+            "sellers": sellers_list,
+            "test_target": cell(r, SC.test_target).strip(),
+            "enabled": _cell_truthy(cell(r, SC.enabled)),
+            "label": cell(r, SC.label).strip(),
+        })
+    return schedules
+
+
+def schedule_matches_now(sched: dict, now=None) -> bool:
+    """ตรวจว่า schedule ตรงกับเวลาปัจจุบัน (BKK) หรือเปล่า — match by HH:MM นาทีต่อนาที"""
+    from .fetch_dashboard import bangkok_now
+    n = now or bangkok_now()
+    if not sched.get("enabled"):
+        return False
+    # day match
+    days = sched.get("days") or "*"
+    if days != "*":
+        # Sunday=0 .. Saturday=6 (matches cron convention)
+        weekday = (n.weekday() + 1) % 7  # python: Mon=0 → ours: Mon=1, Sun=0
+        ok = False
+        for part in days.split(","):
+            part = part.strip()
+            if "-" in part:
+                a, b = part.split("-", 1)
+                try:
+                    if int(a) <= weekday <= int(b):
+                        ok = True; break
+                except ValueError:
+                    pass
+            else:
+                try:
+                    if int(part) == weekday:
+                        ok = True; break
+                except ValueError:
+                    pass
+        if not ok:
+            return False
+    # time match (HH:MM exact)
+    target = sched["time"]
+    current = f"{n.hour:02d}:{n.minute:02d}"
+    return target == current

@@ -5,49 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard{% if seller %} — {{ seller }}{% endif %}</title>
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    .seller-page { max-width: 980px; margin: 0 auto; padding: 14px; }
-    .seller-hd { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--bg); border-radius:14px; margin-bottom:14px; }
+    .seller-page { max-width: 1080px; margin: 0 auto; padding: 14px; }
+    .seller-hd { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--bg); border:.5px solid var(--bd); border-radius:14px; margin-bottom:10px; }
     .seller-hd h1 { font-size:20px; font-weight:800; color:var(--t1); margin:0; }
     .seller-hd .sub { font-size:12px; color:var(--t3); margin-top:2px; }
-    .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
-    .stat { background:var(--bg); border-radius:12px; padding:12px; text-align:center; }
-    .stat .lbl { font-size:11px; color:var(--t3); margin-bottom:4px; }
-    .stat .val { font-size:22px; font-weight:800; color:var(--t1); }
-    .stat .delta { font-size:11px; margin-top:2px; }
-    .stat.urgent .val { color:var(--red); }
-    .stat.good .val { color:var(--green); }
-    .section { background:var(--bg); border-radius:14px; padding:14px; margin-bottom:14px; }
-    .section h2 { font-size:15px; font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; gap:8px; }
-    .section h2 .count { font-size:12px; color:var(--t3); font-weight:500; }
-    .call-card { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:10px 12px; border:1px solid var(--bd); border-radius:10px; margin-bottom:8px; }
-    .call-card.must { border-color:var(--red); background:var(--red-bg); }
-    .call-card.ok { opacity:.65; }
-    .call-card .phone { font-size:15px; font-weight:700; color:var(--t1); font-family:monospace; }
-    .call-card .info { font-size:12px; color:var(--t2); margin-top:2px; }
-    .call-card .badge-col { display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
-    .call-flag { font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; }
-    .call-flag.must { background:var(--red); color:#fff; }
-    .call-flag.ok { background:var(--green-bg); color:var(--green); }
-    .pipeline-row { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
-    .pipe { padding:10px 6px; border-radius:10px; text-align:center; }
-    .pipe .pname { font-size:11px; color:#fff; opacity:.9; }
-    .pipe .pcount { font-size:18px; font-weight:800; color:#fff; }
-    .booking-tbl { width:100%; font-size:12px; border-collapse:collapse; }
-    .booking-tbl th { text-align:left; padding:6px 8px; color:var(--t3); font-weight:600; border-bottom:1px solid var(--bd); font-size:11px; }
-    .booking-tbl td { padding:8px; border-bottom:1px solid var(--bd); color:var(--t2); }
-    .booking-tbl tr:last-child td { border-bottom:none; }
+    .filter-bar { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:10px 12px; margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .filter-bar .lbl { font-size:11px; color:var(--t3); font-weight:600; margin-right:4px; }
+    .f-btn { font-size:11px; padding:4px 10px; border-radius:14px; border:.5px solid var(--bd2); background:var(--bg2); color:var(--t2); cursor:pointer; font-family:inherit; }
+    .f-btn.on { background:var(--blue); color:#fff; border-color:var(--blue); font-weight:600; }
+    .f-divider { width:1px; height:20px; background:var(--bd); margin:0 4px; }
+    .kgrid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-bottom:10px; }
+    .kpi-card { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:10px 11px; cursor:pointer; transition:transform .12s, box-shadow .12s; }
+    .kpi-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
+    .kpi-card.active { border-color:var(--blue); box-shadow:0 0 0 2px var(--blue-bg); }
+    .kpi-card .kl { font-size:10px; color:var(--t3); font-weight:500; margin-bottom:4px; line-height:1.3; }
+    .kpi-card .kv { font-size:22px; font-weight:800; line-height:1; }
+    .kpi-card .ks { font-size:10px; color:var(--t3); margin-top:3px; }
+    .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+    .cgrid > .chart-card:nth-child(3) { grid-column: span 2; }
+    .chart-card { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:12px; }
+    .chart-card .chart-title { font-size:12px; font-weight:700; color:var(--t1); margin-bottom:8px; }
+    .chart-card .chart-box { position:relative; height:220px; }
+    .section { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:13px; margin-bottom:10px; }
+    .section h2 { font-size:14px; font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+    .section h2 .count { font-size:11px; color:var(--t3); font-weight:500; }
+    .lead-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; padding:8px 10px; border:.5px solid var(--bd); border-radius:8px; margin-bottom:6px; font-size:12px; cursor:pointer; }
+    .lead-row.must { border-color:var(--red); background:var(--red-bg); }
+    .lead-row .code { font-weight:700; color:var(--blue); font-size:11px; }
+    .lead-row .phone { font-family:monospace; color:var(--t1); font-weight:600; }
+    .lead-row .info { font-size:10px; color:var(--t2); margin-top:2px; }
+    .lead-row .badge-col { display:flex; flex-direction:column; gap:3px; align-items:flex-end; min-width:80px; }
+    .badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap; }
+    .b-red { background:var(--red); color:#fff; }
+    .b-amber { background:var(--amber-bg); color:var(--amber); }
+    .b-green { background:var(--green-bg); color:var(--green); }
+    .b-gray { background:var(--bg2); color:var(--t3); }
+    .dots-mini { display:inline-flex; gap:2px; align-items:center; }
+    .dot-mini { width:7px; height:7px; border-radius:50%; }
     .empty { text-align:center; padding:24px; color:var(--t3); font-size:13px; }
     .err-wrap { text-align:center; padding-top:80px; }
     .err-wrap .ico { font-size:48px; margin-bottom:14px; }
     .err-wrap .ttl { font-size:18px; font-weight:700; color:var(--t1); margin-bottom:6px; }
-    .err-wrap .msg { font-size:13px; color:var(--t2); }
-    .dots-mini { display:inline-flex; gap:3px; align-items:center; }
-    .dot-mini { width:8px; height:8px; border-radius:50%; }
-    @media (max-width:600px) {
-      .stat-row { grid-template-columns:repeat(2,1fr); }
-      .pipeline-row { grid-template-columns:repeat(3,1fr); }
-      .call-card { grid-template-columns:1fr auto; }
+    @media (max-width:760px) {
+      .kgrid { grid-template-columns:repeat(3,1fr); }
+      .cgrid { grid-template-columns:1fr; }
+      .cgrid > .chart-card:nth-child(3) { grid-column: auto; }
+      .lead-row { grid-template-columns:1fr auto; }
+    }
+    @media (max-width:480px) {
+      .kgrid { grid-template-columns:repeat(2,1fr); }
     }
   </style>
 </head>
@@ -57,7 +65,7 @@
   <div class="err-wrap">
     <div class="ico">{% if seller %}⚠️{% else %}🔒{% endif %}</div>
     <div class="ttl">{% if seller %}เกิดข้อผิดพลาด{% else %}ไม่มีสิทธิ์เข้าถึง{% endif %}</div>
-    <div class="msg">{{ error }}</div>
+    <div style="font-size:13px;color:var(--t2)">{{ error }}</div>
   </div>
   {% else %}
   <div id="root"></div>
@@ -70,159 +78,392 @@
   const C = {{ constants_json|safe }};
   const SELLER_NAME = "{{ seller|escapejs }}";
 
+  // ── helpers ──
   const h = (s) => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
   const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
   const nc = (u) => Math.max(0, C.UPD_TGT - u);
 
+  // ── state ──
+  let fMonth = 0;   // 0=ทั้งปี, 1-12=เดือน
+  let fDay = 0;     // 0=ทั้งเดือน, 1-31=วันเฉพาะ, -1=วันนี้
+  let kpiFilter = 'all'; // ตัวกรอง list ด้านล่าง
+  const __charts = {};
+
+  // ── date utils ──
+  function parseSheetDate(s) {
+    if (!s || s === '-') return null;
+    const m = String(s).match(/^(\d+)\/(\d+)\/(\d+)/);
+    if (m) return { day: +m[1], month: +m[2], year: +m[3] };
+    return null;
+  }
+  function dateMatchesFilter(s) {
+    const d = parseSheetDate(s);
+    if (!d) return fMonth === 0 && fDay === 0;
+    if (fMonth > 0 && d.month !== fMonth) return false;
+    if (fDay === -1) {
+      const now = new Date();
+      return d.day === now.getDate() && d.month === (now.getMonth()+1);
+    }
+    if (fDay > 0 && d.day !== fDay) return false;
+    return true;
+  }
+
+  // ── KPI filters ──
+  const KPI_DEFS = [
+    { key: 'all',       label: 'หลีดที่รับ',       color: 'var(--t1)',     hint: 'ทั้งหมด',           test: l => true },
+    { key: 'called',    label: 'โทรแล้วมีหลักฐาน', color: 'var(--green)',  hint: 'callProof = ส่งแล้ว',  test: l => l.callProof === 'ส่งแล้ว' },
+    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0',     test: l => !l.updateCount },
+    { key: 'upd2',      label: 'อัพเดท ≥ 2 ครั้ง',  color: 'var(--amber)',  hint: 'updateCount ≥ 2',     test: l => l.updateCount >= 2 },
+    { key: 'updFull',   label: 'อัพเดทครบ',       color: 'var(--green-mid)', hint: `updateCount ≥ ${C.UPD_TGT}`, test: l => l.updateCount >= C.UPD_TGT },
+    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม', test: l => {
+        const s = (l.salesStatus||'').toLowerCase();
+        if (!s || s === '-') return false;
+        return ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
+      }},
+  ];
+
+  // ── ดึง leads ที่ผ่านการกรองช่วงเวลา ──
+  function leadsInRange() {
+    return (D.leads || []).filter(l => dateMatchesFilter(l.dateIn));
+  }
+  function bookingsInRange() {
+    return (D.bookingCases || []).filter(b => dateMatchesFilter(b.date));
+  }
+
+  // ── chart init ──
+  function destroyChart(id) {
+    if (__charts[id]) { __charts[id].destroy(); delete __charts[id]; }
+  }
+  function initCharts() {
+    if (typeof Chart === 'undefined') return;
+    const daily = D.daily || {};
+    const monthly = D.monthly || {};
+    const isDaily = fMonth > 0;
+    let labels, leadNormal, leadRJ, bookings, dones;
+
+    if (isDaily) {
+      const m = daily[fMonth] || daily[String(fMonth)] || { leads:[], leadRJ:[], bookings:[], dones:[] };
+      const yr = (D.meta && D.meta.year) || new Date().getFullYear();
+      const daysInMonth = new Date(yr, fMonth, 0).getDate();
+      labels = []; leadNormal=[]; leadRJ=[]; bookings=[]; dones=[];
+      for (let d=1; d<=daysInMonth; d++) {
+        labels.push(String(d));
+        leadNormal.push((m.leads||[])[d] || 0);
+        leadRJ.push((m.leadRJ||[])[d] || 0);
+        bookings.push((m.bookings||[])[d] || 0);
+        dones.push((m.dones||[])[d] || 0);
+      }
+    } else {
+      labels = C.MONTHS_SHORT;
+      leadNormal=[]; leadRJ=[]; bookings=[]; dones=[];
+      for (let m=1; m<=12; m++) {
+        const x = monthly[m] || monthly[String(m)] || {};
+        leadNormal.push(x.leadNormal || 0);
+        leadRJ.push(x.leadRJ || 0);
+        bookings.push(x.booking || 0);
+        dones.push(x.done || 0);
+      }
+    }
+
+    const cv1 = document.getElementById('chart-leads');
+    if (cv1) {
+      destroyChart('leads');
+      __charts.leads = new Chart(cv1, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: 'Lead ปกติ', data: leadNormal, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.15)', tension:.35, fill:true, pointRadius:isDaily?2:3 },
+          { label: 'RJ', data: leadRJ, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.1)', tension:.35, fill:true, pointRadius:isDaily?2:3 },
+        ]},
+        options: { responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:11,font:{size:10}}}},
+          scales:{y:{beginAtZero:true,ticks:{precision:0}}}
+        }
+      });
+    }
+
+    const cv2 = document.getElementById('chart-bd');
+    if (cv2) {
+      destroyChart('bd');
+      __charts.bd = new Chart(cv2, {
+        type: 'bar',
+        data: { labels, datasets: [
+          { label:'จอง', data:bookings, backgroundColor:'#f59e0b' },
+          { label:'ปล่อย', data:dones, backgroundColor:'#10b981' },
+        ]},
+        options: { responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:11,font:{size:10}}}},
+          scales:{y:{beginAtZero:true,ticks:{precision:0}}}
+        }
+      });
+    }
+
+    const cv3 = document.getElementById('chart-pipe');
+    if (cv3) {
+      destroyChart('pipe');
+      const order = C.STATUS_ORDER || ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย','รีเจ็ก'];
+      const pl = {}; order.forEach(k => pl[k] = 0);
+      bookingsInRange().forEach(b => { if (pl[b.status] !== undefined) pl[b.status]++; });
+      const counts = order.map(k => pl[k] || 0);
+      const colors = order.map(k => (C.STATUS_COLOR || {})[k] || '#888');
+      __charts.pipe = new Chart(cv3, {
+        type:'doughnut',
+        data:{ labels:order, datasets:[{ data:counts, backgroundColor:colors, borderWidth:0 }]},
+        options:{ responsive:true, maintainAspectRatio:false, cutout:'60%',
+          plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:10}}}},
+        }
+      });
+    }
+  }
+
+  // ── badges ──
+  function callBadge(l) {
+    if (l.callProof === 'ส่งแล้ว') return '<span class="badge b-green">✓ มีหลักฐาน</span>';
+    if (l.updateCount === 0) return '<span class="badge b-red">📞 ยังไม่โทร</span>';
+    if (l.updateCount < C.UPD_TGT) return `<span class="badge b-amber">📞 อีก ${nc(l.updateCount)}</span>`;
+    return '<span class="badge b-green">✓ ครบ</span>';
+  }
   function dotsMini(u) {
-    let html = '<span class="dots-mini">';
-    for (let i = 0; i < C.UPD_TGT; i++) {
+    let h = '<span class="dots-mini">';
+    for (let i=0; i<C.UPD_TGT; i++) {
       let c = '#ccc';
-      if (i < u) {
+      if (i<u) {
         if (u >= C.UPD_TGT) c = '#3B6D11';
         else if (u >= 3) c = '#1D9E75';
         else if (u >= 2) c = '#EF9F27';
         else c = '#E24B4A';
       }
-      html += `<span class="dot-mini" style="background:${c}"></span>`;
+      h += `<span class="dot-mini" style="background:${c}"></span>`;
     }
-    html += `<span style="font-size:10px;color:var(--t3);margin-left:4px">${u}/${C.UPD_TGT}</span></span>`;
-    return html;
+    h += `<span style="font-size:9px;color:var(--t3);margin-left:3px">${u}/${C.UPD_TGT}</span></span>`;
+    return h;
   }
 
-  function callFlagBadge(c) {
-    if (c.updateCount === 0) {
-      return '<span class="call-flag must">📞 ยังไม่โทร</span>';
-    }
-    if (c.updateCount < C.UPD_TGT) {
-      const left = nc(c.updateCount);
-      return `<span class="call-flag must">📞 โทรอีก ${left}</span>`;
-    }
-    return '<span class="call-flag ok">✓ ครบแล้ว</span>';
-  }
-
+  // ── render ──
   function render() {
     const s = D.seller;
-    const t = D.today || { lead:0, follow:0, vacant:0 };
-    const follows = D.followCases || [];
-    const bookings = D.bookingCases || [];
-    const mustCall = D.mustCallCount || 0;
     const teamId = s.team || '?';
-    const teamColor = (C.TEAM_COLORS || {})[teamId] || 'var(--t3)';
     const teamName = (C.TEAM_NAMES || {})[teamId] || teamId;
+    const allLeads = leadsInRange();
+    const bookings = bookingsInRange();
 
-    // Pipeline (เฉพาะของเซลล์คนนี้)
-    const pipe = { 'จอง':0, 'รอเซ็นต์':0, 'รอผล':0, 'รอปล่อย':0, 'ปล่อย':0, 'รีเจ็ก':0 };
-    for (const b of bookings) {
-      if (pipe[b.status] !== undefined) pipe[b.status]++;
-    }
+    // KPI counts
+    const kpiCounts = {};
+    KPI_DEFS.forEach(k => { kpiCounts[k.key] = allLeads.filter(k.test).length; });
+    // Booking สถานะ "ปล่อย"
+    const doneCount = bookings.filter(b => b.status === 'ปล่อย').length;
 
-    const targetPct = pct(s.done, s.target);
+    const periodLabel = (() => {
+      if (fDay === -1) return 'วันนี้';
+      const mm = fMonth > 0 ? `เดือน${(C.MONTHS_FULL||[])[fMonth-1] || fMonth}` : 'ทั้งปี';
+      const dd = fDay > 0 ? ` วันที่ ${fDay}` : '';
+      return `${mm}${dd}`;
+    })();
 
-    const html = `
+    let html = `
       <div class="seller-hd">
         <div>
           <h1>👋 ${h(SELLER_NAME)}</h1>
-          <div class="sub">ทีม ${h(teamName)} · เป้า ${s.target} คัน · อัปเดต ${h(D.meta.generatedAt||'').slice(0,16).replace('T',' ')}</div>
+          <div class="sub">ทีม ${h(teamName)} · เป้า ${s.target} คัน · ${h(periodLabel)}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:22px;font-weight:800;color:var(--green)">${s.done}/${s.target}</div>
-          <div style="font-size:11px;color:var(--t3)">ปล่อย (${targetPct}%)</div>
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${doneCount}/${s.target}</div>
+          <div style="font-size:11px;color:var(--t3)">ปล่อยในช่วงนี้</div>
         </div>
       </div>
 
-      <div class="stat-row">
-        <div class="stat ${mustCall > 0 ? 'urgent' : 'good'}">
-          <div class="lbl">📞 ต้องโทรวันนี้</div>
-          <div class="val">${mustCall}</div>
-          <div class="delta" style="color:${mustCall > 0 ? 'var(--red)' : 'var(--green)'}">${mustCall > 0 ? 'มีลูกค้ารอติดต่อ' : 'อัปเดตครบแล้ว'}</div>
+      <div class="filter-bar">
+        <span class="lbl">📅 เดือน:</span>
+        <button class="f-btn ${fMonth===0?'on':''}" onclick="setMonth(0)">ทั้งปี</button>
+        ${(C.MONTHS_SHORT||[]).map((m,i)=>`<button class="f-btn ${fMonth===i+1?'on':''}" onclick="setMonth(${i+1})">${m}</button>`).join('')}
+      </div>
+
+      <div class="filter-bar">
+        <span class="lbl">🗓️ วัน:</span>
+        <button class="f-btn ${fDay===0?'on':''}" onclick="setDay(0)">ทั้งเดือน</button>
+        <button class="f-btn ${fDay===-1?'on':''}" onclick="setDay(-1)">วันนี้</button>
+        <span class="f-divider"></span>
+        ${(()=>{ let h=''; for(let d=1;d<=31;d++){ h+=`<button class="f-btn ${fDay===d?'on':''}" onclick="setDay(${d})">${d}</button>`; } return h; })()}
+      </div>
+
+      <div class="kgrid">
+        ${KPI_DEFS.map(k => `
+          <div class="kpi-card ${kpiFilter===k.key?'active':''}" onclick="setKpi('${k.key}')">
+            <div class="kl">${k.label}</div>
+            <div class="kv" style="color:${k.color}">${kpiCounts[k.key]}</div>
+            <div class="ks">${k.hint}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="cgrid">
+        <div class="chart-card">
+          <div class="chart-title">📈 Lead ของฉัน (${h(periodLabel)})</div>
+          <div class="chart-box"><canvas id="chart-leads"></canvas></div>
         </div>
-        <div class="stat">
-          <div class="lbl">Lead ปีนี้</div>
-          <div class="val">${s.lead}</div>
-          <div class="delta">วันนี้ +${t.lead}</div>
+        <div class="chart-card">
+          <div class="chart-title">📊 จอง / ปล่อย</div>
+          <div class="chart-box"><canvas id="chart-bd"></canvas></div>
         </div>
-        <div class="stat">
-          <div class="lbl">ติดตามทั้งหมด</div>
-          <div class="val">${s.follow}</div>
-          <div class="delta">ว่าง ${s.vacant} · จอง ${s.booking}</div>
-        </div>
-        <div class="stat good">
-          <div class="lbl">ปล่อยแล้ว</div>
-          <div class="val">${s.done}</div>
-          <div class="delta">${pct(s.done, s.target)}% ของเป้า</div>
+        <div class="chart-card">
+          <div class="chart-title">🥯 สถานะดีล ${h(periodLabel)} (${bookings.length} เคส)</div>
+          <div class="chart-box"><canvas id="chart-pipe"></canvas></div>
         </div>
       </div>
 
-      <div class="section">
-        <h2>📞 รายการต้องโทร <span class="count">(${follows.length} รายการ · ${mustCall} ยังไม่ครบ)</span></h2>
-        ${follows.length === 0
-          ? '<div class="empty">🎉 ไม่มีลูกค้าค้างติดตาม</div>'
-          : follows.map(c => `
-            <div class="call-card ${c.mustCall ? 'must' : 'ok'}">
-              <div>
-                <div class="phone">${h(c.phone)}</div>
-                <div class="info">
-                  ${h(c.car)} · ${h(c.channel)}${c.leadType ? ' · '+h(c.leadType) : ''}
-                </div>
-                <div class="info" style="margin-top:4px;color:var(--t3)">
-                  รับเข้า ${h(c.dateIn)}${c.timeIn ? ' '+h(c.timeIn) : ''} · สถานะ <b>${h(c.adminStatus)}</b>
-                  ${c.note && c.note !== '-' ? '<br>📝 '+h(c.note) : ''}
-                </div>
-              </div>
-              <div class="badge-col">
-                ${callFlagBadge(c)}
-                ${dotsMini(c.updateCount)}
-              </div>
-            </div>
-          `).join('')}
-      </div>
-
-      <div class="section">
-        <h2>📊 ไปป์ไลน์ของฉัน <span class="count">(${bookings.length} เคส)</span></h2>
-        <div class="pipeline-row">
-          ${C.STATUS_ORDER.map(st => `
-            <div class="pipe" style="background:${C.STATUS_COLOR[st] || '#888'}">
-              <div class="pname">${h(st)}</div>
-              <div class="pcount">${pipe[st] || 0}</div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>🚗 เคสจอง <span class="count">(${bookings.length} เคส)</span></h2>
-        ${bookings.length === 0
-          ? '<div class="empty">ยังไม่มีเคสจองในปีนี้</div>'
-          : `
-          <table class="booking-tbl">
-            <thead>
-              <tr>
-                <th>วันที่</th>
-                <th>ลูกค้า</th>
-                <th>รถ</th>
-                <th>สถานะ</th>
-                <th style="text-align:right">ราคา</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${bookings.map(b => `
-                <tr>
-                  <td>${h(b.date)}</td>
-                  <td><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:11px">${h(b.phone)}</div></td>
-                  <td>${h(b.car)} ${b.year ? '('+h(b.year)+')' : ''}</td>
-                  <td><span class="bdg" style="background:${C.STATUS_COLOR[b.status] || '#888'};color:#fff">${h(b.status)}</span>${b.isCash ? ' 💵' : ''}</td>
-                  <td style="text-align:right;font-family:monospace">${b.price ? Number(b.price).toLocaleString() : '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          `}
-      </div>
+      ${renderLeadList(allLeads)}
+      ${renderBookingTable(bookings)}
     `;
 
     document.getElementById('root').innerHTML = html;
+    initCharts();
   }
+
+  function renderLeadList(allLeads) {
+    const def = KPI_DEFS.find(k => k.key === kpiFilter) || KPI_DEFS[0];
+    const filtered = allLeads.filter(def.test);
+    filtered.sort((a,b) => {
+      const sa = a.updateCount === 0 ? 100 : 0; const sb = b.updateCount === 0 ? 100 : 0;
+      if (sa !== sb) return sb - sa;
+      return a.updateCount - b.updateCount;
+    });
+
+    let html = `<div class="section"><h2>📋 ${h(def.label)} <span class="count">${filtered.length} เคส · กรอง: ${h(def.hint)} · คลิกเพื่อดูรายละเอียด</span></h2>`;
+    if (filtered.length === 0) {
+      html += `<div class="empty">ไม่มีเคสในเงื่อนไขนี้</div>`;
+    } else {
+      filtered.slice(0, 100).forEach(l => {
+        const mustCall = l.callProof !== 'ส่งแล้ว' && l.updateCount < C.UPD_TGT;
+        const safeCode = (l.code||'').replace(/'/g, "\\'");
+        html += `<div class="lead-row ${mustCall && kpiFilter!=='called'?'must':''}" onclick="openLeadDetail('${safeCode}')">
+          <div>
+            <div class="code">${h(l.code||'-')}</div>
+            <div class="info">${h(l.dateIn||'-')}${l.timeIn?' '+h(l.timeIn):''}</div>
+          </div>
+          <div>
+            <div class="phone">${h(l.phone||'-')}</div>
+            <div class="info">${h(l.car||'-')}${l.channel?' · '+h(l.channel):''}${l.leadType?' · '+h(l.leadType):''}</div>
+            ${l.note && l.note !== '-' ? `<div class="info" style="color:var(--t3);margin-top:2px">📝 ${h(l.note.slice(0,60))}</div>` : ''}
+          </div>
+          <div class="badge-col">
+            ${callBadge(l)}
+            ${l.salesStatus && l.salesStatus !== '-' ? `<span class="badge b-gray" title="sales_status">${h(l.salesStatus.slice(0,14))}</span>` : ''}
+            ${l.adminStatus && l.adminStatus !== '-' ? `<span class="badge b-gray" style="opacity:.6" title="admin_status">${h(l.adminStatus.slice(0,12))}</span>` : ''}
+          </div>
+          <div>${dotsMini(l.updateCount)}</div>
+        </div>`;
+      });
+      if (filtered.length > 100) {
+        html += `<div class="empty">+ อีก ${filtered.length - 100} เคส (แสดงสูงสุด 100)</div>`;
+      }
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  // ── Lead detail modal ──
+  function openLeadDetail(code) {
+    const l = (D.leads || []).find(x => x.code === code);
+    if (!l) return;
+    const old = document.getElementById('lead-detail-overlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'lead-detail-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    // helper: row หนึ่งของ field
+    const row = (label, value, opts={}) => {
+      if (!value || value === '-') return '';
+      const styleVal = opts.mono ? 'font-family:monospace;' : '';
+      const wrap = opts.wrap ? 'white-space:pre-wrap;word-break:break-word;' : '';
+      return `<div style="display:grid;grid-template-columns:110px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
+        <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
+        <div style="font-size:12px;color:var(--t1);${styleVal}${wrap}">${h(value)}</div>
+      </div>`;
+    };
+
+    const mustCall = l.callProof !== 'ส่งแล้ว' && l.updateCount < C.UPD_TGT;
+    const callIcon = l.callProof === 'ส่งแล้ว' ? '✅' : (l.updateCount === 0 ? '📵' : '📞');
+
+    const phoneClean = (l.phone||'').replace(/[^0-9+]/g, '');
+    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">📞 โทร ${h(l.phone)}</a>` : '';
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
+        <div style="background:${mustCall?'var(--red-bg)':'var(--blue-bg)'};padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div>
+            <div style="font-size:11px;color:var(--t3);font-weight:600">Code · รับเข้า ${h(l.dateIn||'-')}${l.timeIn?' '+h(l.timeIn):''}</div>
+            <div style="font-size:18px;font-weight:800;color:${mustCall?'var(--red)':'var(--blue)'}">${callIcon} ${h(l.code||'-')}</div>
+          </div>
+          <button onclick="document.getElementById('lead-detail-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
+        </div>
+
+        <div style="overflow-y:auto;padding:14px 16px;flex:1">
+          ${callLink ? `<div style="margin-bottom:12px;text-align:center">${callLink}</div>` : ''}
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            ${callBadge(l)}
+            <span class="badge b-gray">${dotsMini(l.updateCount)}</span>
+          </div>
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px;padding-top:4px">📞 การติดต่อ</div>
+          ${row('เบอร์โทร', l.phone, {mono:true})}
+          ${row('ช่องทาง', l.channel)}
+          ${row('ประเภท Lead', l.leadType)}
+          ${row('รถสนใจ', l.car)}
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📊 สถานะ</div>
+          ${row('Status เซลล์', l.salesStatus)}
+          ${row('Status แอดมิน', l.adminStatus)}
+          ${row('หลักฐานการโทร', l.callProof || '—')}
+          ${row('จำนวนอัพเดท', `${l.updateCount} / ${C.UPD_TGT} ครั้ง`)}
+          ${row('อัพเดทล่าสุด', l.lastUpdate)}
+
+          ${l.note && l.note !== '-' ? `
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📝 หมายเหตุ</div>
+            <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(l.note)}</div>
+          ` : ''}
+
+          ${l.profile ? `
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">👤 โปรไฟล์ลูกค้า</div>
+            <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(l.profile)}</div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+
+  function renderBookingTable(bookings) {
+    if (bookings.length === 0) return '';
+    let html = `<div class="section"><h2>🚗 เคสจอง <span class="count">${bookings.length} เคส</span></h2>`;
+    html += `<table style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">วันที่</th>
+        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ลูกค้า</th>
+        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">รถ</th>
+        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">สถานะ</th>
+        <th style="text-align:right;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ราคา</th>
+      </tr></thead><tbody>`;
+    bookings.forEach(b => {
+      const col = (C.STATUS_COLOR||{})[b.status] || '#888';
+      html += `<tr>
+        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.date)}</td>
+        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd)"><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:10px;color:var(--t3)">${h(b.phone)}</div></td>
+        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.car)}${b.year?` (${h(b.year)})`:''}</td>
+        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd)"><span class="badge" style="background:${col};color:#fff">${h(b.status)}</span>${b.isCash?' 💵':''}</td>
+        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);text-align:right;font-family:monospace">${b.price?Number(b.price).toLocaleString():'-'}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    return html;
+  }
+
+  // ── filter actions ──
+  function setMonth(m) { fMonth = m; if (m === 0) fDay = 0; render(); }
+  function setDay(d) { fDay = d; render(); }
+  function setKpi(k) { kpiFilter = k; render(); }
 
   render();
 </script>

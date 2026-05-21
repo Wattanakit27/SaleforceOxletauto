@@ -52,6 +52,10 @@ OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
+# Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
+# external cron service (cron-job.org, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
+CRON_SECRET = os.getenv("CRON_SECRET", "")
+
 ROOT_URLCONF = "oxlet.urls"
 
 TEMPLATES = [

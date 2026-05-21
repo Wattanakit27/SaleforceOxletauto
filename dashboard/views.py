@@ -144,6 +144,334 @@ def logout_view(request):
 
 
 @require_http_methods(["GET", "POST"])
+def admin_seller_config(request):
+    """Admin endpoint — ตั้งเป้า/ทีม
+    GET  → คืน config ปัจจุบัน
+    POST body: {"sellers":[{"name":"โอ๊ต","team":"A","target":8},...]}
+         → เขียนกลับ Google Sheet (tab "ตั้งค่าเซลล์", สร้าง tab ใหม่ถ้าไม่มี)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.constants import refresh_from_sheet, TEAMS, TARGETS
+    from .services.google_sheets import SHEET_CONFIG, write_sheet
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+        incoming = body.get("sellers") or []
+        if not isinstance(incoming, list):
+            return JsonResponse({"error": "sellers ต้องเป็น list"}, status=400)
+
+        # Validate + normalize
+        cleaned = []
+        seen_names = set()
+        for idx, s in enumerate(incoming):
+            name = str(s.get("name", "") or "").strip()
+            team = str(s.get("team", "") or "").strip().upper()
+            try:
+                target = int(s.get("target", 0) or 0)
+            except (ValueError, TypeError):
+                return JsonResponse({"error": f"แถวที่ {idx+1}: target ต้องเป็นจำนวนเต็ม"}, status=400)
+            if not name:
+                return JsonResponse({"error": f"แถวที่ {idx+1}: ชื่อเล่นว่าง"}, status=400)
+            if not team:
+                return JsonResponse({"error": f"แถวที่ {idx+1} ({name}): ทีมว่าง"}, status=400)
+            if target < 0:
+                return JsonResponse({"error": f"แถวที่ {idx+1} ({name}): เป้าต้อง ≥ 0"}, status=400)
+            if name in seen_names:
+                return JsonResponse({"error": f"ชื่อเล่นซ้ำ: {name}"}, status=400)
+            seen_names.add(name)
+            cleaned.append([name, team, target])
+
+        if not cleaned:
+            return JsonResponse({"error": "ต้องมีอย่างน้อย 1 เซลล์"}, status=400)
+
+        # เรียง by team, name แล้วใส่ header
+        cleaned.sort(key=lambda r: (r[1], r[0]))
+        values = [["ชื่อเล่น", "ทีม", "เป้า"]] + cleaned
+
+        try:
+            write_sheet("sellers_config", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+
+        # โหลด config ใหม่ทันทีให้ dashboard เห็นค่าใหม่
+        refresh_from_sheet()
+        return JsonResponse({"ok": True, "saved": len(cleaned)})
+
+    # GET
+    loaded_from_sheet = refresh_from_sheet()
+    cfg = SHEET_CONFIG.get("sellers_config", {})
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit"
+
+    sellers = []
+    for tid, members in sorted(TEAMS.items()):
+        for name in members:
+            sellers.append({
+                "name": name,
+                "team": tid,
+                "target": TARGETS.get(name, 0),
+            })
+    sellers.sort(key=lambda s: (s["team"], s["name"]))
+
+    return JsonResponse({
+        "ok": True,
+        "loaded_from_sheet": loaded_from_sheet,
+        "sheet_url": sheet_url,
+        "sheet_name": cfg.get("sheet_name", "ตั้งค่าเซลล์"),
+        "sellers": sellers,
+        "total_target": sum(s["target"] for s in sellers),
+        "team_count": len({s["team"] for s in sellers}),
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def admin_schedule_config(request):
+    """Admin endpoint — ตารางเวลาส่ง LINE Flex อัตโนมัติ
+    GET  → คืนรายการ schedule
+    POST body: {"schedules":[{"time":"09:00","days":"*","sellers":["*"],"test_target":"","enabled":true,"label":"เช้า"},...]}
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.google_sheets import SHEET_CONFIG, write_sheet
+    from .services.line_notify import load_schedules
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+        incoming = body.get("schedules") or []
+        if not isinstance(incoming, list):
+            return JsonResponse({"error": "schedules ต้องเป็น list"}, status=400)
+
+        cleaned = []
+        for idx, s in enumerate(incoming):
+            time_str = str(s.get("time", "") or "").strip()
+            if not time_str or ":" not in time_str:
+                return JsonResponse({"error": f"แถวที่ {idx+1}: เวลาต้องเป็น HH:MM"}, status=400)
+            try:
+                hh, mm = time_str.split(":", 1)
+                hh, mm = int(hh), int(mm)
+                if not (0 <= hh < 24 and 0 <= mm < 60):
+                    raise ValueError
+                time_str = f"{hh:02d}:{mm:02d}"
+            except Exception:
+                return JsonResponse({"error": f"แถวที่ {idx+1}: เวลา {time_str} ไม่ถูกต้อง"}, status=400)
+            days = str(s.get("days", "*") or "*").strip() or "*"
+            sellers_in = s.get("sellers") or ["*"]
+            if isinstance(sellers_in, list):
+                sellers_str = "*" if sellers_in == ["*"] else ",".join(str(x).strip() for x in sellers_in if str(x).strip())
+            else:
+                sellers_str = str(sellers_in).strip() or "*"
+            test_target = str(s.get("test_target", "") or "").strip()
+            enabled = "TRUE" if s.get("enabled") else "FALSE"
+            label = str(s.get("label", "") or "").strip()
+            cleaned.append([time_str, days, sellers_str or "*", test_target, enabled, label])
+
+        cleaned.sort(key=lambda r: r[0])
+        values = [["เวลา", "วัน", "เซลล์", "test_target", "เปิดใช้", "ป้ายชื่อ"]] + cleaned
+        try:
+            write_sheet("schedule_config", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+        return JsonResponse({"ok": True, "saved": len(cleaned)})
+
+    # GET
+    schedules = load_schedules()
+    cfg = SHEET_CONFIG.get("schedule_config", {})
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit"
+    return JsonResponse({
+        "ok": True,
+        "schedules": schedules,
+        "count": len(schedules),
+        "enabled_count": sum(1 for s in schedules if s.get("enabled")),
+        "sheet_url": sheet_url,
+        "sheet_name": cfg.get("sheet_name", "ตั้งเวลาส่ง"),
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def cron_tick(request):
+    """Public endpoint สำหรับ external cron ยิงเข้ามาทุกนาที (* * * * *)
+    อ่าน schedule sheet → ส่ง LINE Flex ตาม schedule ที่ match เวลาปัจจุบัน (BKK)
+    Auth: เหมือน cron_send_line (?secret=xxx, Authorization Bearer, X-Cron-Secret)
+    """
+    secret_setting = (getattr(settings, "CRON_SECRET", "") or "").strip()
+    if not secret_setting:
+        return JsonResponse({"error": "CRON_SECRET ยังไม่ได้ตั้งใน env"}, status=500)
+
+    auth_header = request.headers.get("Authorization", "")
+    bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    submitted = (
+        bearer
+        or request.GET.get("secret", "").strip()
+        or request.headers.get("X-Cron-Secret", "").strip()
+    )
+    if submitted != secret_setting:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not channel_token:
+        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
+
+    from .services.line_notify import (
+        load_schedules, schedule_matches_now,
+        build_seller_pipelines, build_seller_flex,
+        push_line_message, get_nickname_to_user_id,
+    )
+    from .services.fetch_dashboard import bangkok_now
+
+    now = bangkok_now()
+    schedules = load_schedules()
+    fired_schedules = [s for s in schedules if schedule_matches_now(s, now)]
+
+    if not fired_schedules:
+        return JsonResponse({
+            "ok": True, "fired": 0,
+            "now": f"{now.hour:02d}:{now.minute:02d}",
+            "total_schedules": len(schedules),
+        })
+
+    try:
+        pipelines = build_seller_pipelines()
+        uid_map = get_nickname_to_user_id()
+    except Exception as e:
+        return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
+
+    base_url = request.build_absolute_uri("/").rstrip("/")
+    all_results = []
+    for sched in fired_schedules:
+        seller_filter = set(sched["sellers"]) if sched["sellers"] != ["*"] else None
+        test_target = sched.get("test_target", "")
+        sched_results = []
+        for p in pipelines:
+            if seller_filter and p["seller"] not in seller_filter:
+                continue
+            target = test_target if test_target else uid_map.get(p["seller"], "")
+            if not target:
+                sched_results.append({"seller": p["seller"], "sent": False, "error": "no user_id"})
+                continue
+            try:
+                flex = build_seller_flex(p, base_url=base_url)
+                code, text = push_line_message(target, [flex], channel_token)
+                sched_results.append({
+                    "seller": p["seller"],
+                    "sent": code == 200,
+                    "error": None if code == 200 else f"LINE {code}: {text[:120]}",
+                })
+            except Exception as e:
+                sched_results.append({"seller": p["seller"], "sent": False, "error": str(e)})
+        all_results.append({
+            "schedule": {"time": sched["time"], "label": sched["label"]},
+            "sent": sum(1 for r in sched_results if r["sent"]),
+            "failed": sum(1 for r in sched_results if not r["sent"]),
+            "results": sched_results,
+        })
+
+    return JsonResponse({
+        "ok": True,
+        "now": f"{now.hour:02d}:{now.minute:02d}",
+        "fired": len(fired_schedules),
+        "results": all_results,
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def cron_send_line(request):
+    """Public endpoint สำหรับ external cron (cron-job.org / Vercel cron) ยิงเข้ามา
+
+    ป้องกันด้วย CRON_SECRET — ใครไม่มี secret ถูกต้องจะได้ 401
+    URL pattern: /api/cron/send_line?secret=xxx[&test=1&target=Uxxx&sellers=A,B]
+
+    Params:
+        secret    (required) — ตรงกับ env CRON_SECRET
+        test      (optional) — "1" = test mode (ใช้ target แทน user_id จริง)
+        target    (optional) — Test target user_id (ต้องมีถ้า test=1)
+        sellers   (optional) — comma-separated, default ทุกเซลล์
+    """
+    secret_setting = (getattr(settings, "CRON_SECRET", "") or "").strip()
+    if not secret_setting:
+        return JsonResponse({"error": "CRON_SECRET ยังไม่ได้ตั้งใน env"}, status=500)
+
+    # รองรับทั้ง 3 รูปแบบ:
+    # 1) Vercel cron auto: Authorization: Bearer <CRON_SECRET>
+    # 2) External cron (cron-job.org): ?secret=xxx
+    # 3) Custom header: X-Cron-Secret: xxx
+    auth_header = request.headers.get("Authorization", "")
+    bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    submitted = (
+        bearer
+        or request.GET.get("secret", "").strip()
+        or request.headers.get("X-Cron-Secret", "").strip()
+    )
+    if submitted != secret_setting:
+        return JsonResponse({"error": "Unauthorized — secret ไม่ถูกต้อง"}, status=401)
+
+    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not channel_token:
+        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
+
+    from .services.line_notify import (
+        build_seller_pipelines, build_seller_flex,
+        push_line_message, get_nickname_to_user_id,
+    )
+
+    test_mode = request.GET.get("test") in ("1", "true", "yes")
+    target_user_id = (request.GET.get("target") or "").strip()
+    only_sellers_raw = (request.GET.get("sellers") or "").strip()
+    only_sellers = [s.strip() for s in only_sellers_raw.split(",") if s.strip()] if only_sellers_raw else None
+
+    if test_mode and not target_user_id:
+        return JsonResponse({"error": "test=1 ต้องระบุ target ด้วย"}, status=400)
+
+    try:
+        pipelines = build_seller_pipelines()
+        uid_map = get_nickname_to_user_id()
+    except Exception as e:
+        return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
+
+    if only_sellers:
+        wanted = set(only_sellers)
+        pipelines = [p for p in pipelines if p["seller"] in wanted]
+
+    base_url = request.build_absolute_uri("/").rstrip("/")
+    results = []
+    for p in pipelines:
+        seller = p["seller"]
+        target = target_user_id if test_mode else uid_map.get(seller, "")
+        if not target:
+            results.append({"seller": seller, "sent": False, "error": "ไม่มี user_id"})
+            continue
+        try:
+            flex = build_seller_flex(p, base_url=base_url)
+            code, text = push_line_message(target, [flex], channel_token)
+            if code == 200:
+                results.append({"seller": seller, "sent": True})
+            else:
+                results.append({"seller": seller, "sent": False, "error": f"LINE {code}: {text[:120]}"})
+        except Exception as e:
+            results.append({"seller": seller, "sent": False, "error": str(e)})
+
+    sent_count = sum(1 for r in results if r["sent"])
+    return JsonResponse({
+        "ok": True,
+        "test_mode": test_mode,
+        "count": len(results),
+        "sent": sent_count,
+        "failed": len(results) - sent_count,
+        "results": results,
+    })
+
+
+@require_http_methods(["GET", "POST"])
 def admin_send_line(request):
     """Admin-only — ดู preview pipeline + ส่ง LINE Flex แจ้งเตือน
 
@@ -350,8 +678,6 @@ def seller_dashboard(request, token):
     })
 
     # ── จัดอันดับ "ต้องโทร" โดยความเร่งด่วน ──
-    # urgency: lead ที่ยังไม่ได้โทรเลย (updateCount=0) = สูงสุด
-    # ตามด้วยจำนวนครั้งที่ยังขาดให้ครบ UPD_TGT
     def call_priority(c):
         u = c.get("updateCount", 0)
         score = 100 if u == 0 else 0
@@ -366,13 +692,64 @@ def seller_dashboard(request, token):
 
     must_call_count = sum(1 for c in my_follows if c["mustCall"])
 
+    # ── ดึง lead ทั้งหมดของเซลล์ (รวมที่ไม่ได้เป็น follow) สำหรับ KPI + filter ──
+    from .services.google_sheets import fetch_sheet, cell, cell_num, LEADS_COL as L
+    from .services.constants import normalize_seller
+    from .services.fetch_dashboard import is_this_year
+    import re as _re
+
+    raw_leads = fetch_sheet("leads")
+    my_leads = []
+    for r in raw_leads:
+        if normalize_seller(cell(r, L.sales_rep)) != seller_name:
+            continue
+        date_str = cell(r, L.received_date)
+        if not is_this_year(date_str):
+            continue
+        note_raw = cell(r, L.fill_sheet_note) or ""
+        note = _re.sub(r"^\d{4,5}\s*", "", note_raw)
+        my_leads.append({
+            "code": cell(r, L.lead_code),
+            "phone": cell(r, L.phone),
+            "channel": cell(r, L.channel),
+            "leadType": cell(r, L.type),
+            "car": cell(r, L.car_inquiry) or cell(r, L.car_formula),
+            "dateIn": date_str,
+            "timeIn": cell(r, L.time),
+            "callProof": cell(r, L.call_proof),
+            "updateCount": int(cell_num(r, L.update_count)),
+            "adminStatus": cell(r, L.admin_status),
+            "salesStatus": cell(r, L.sales_status),
+            "lastUpdate": cell(r, L.last_updated_at),
+            "note": note,
+            "profile": cell(r, L.customer_profile),
+        })
+
+    # ── daily + monthly ของเซลล์คนนี้ (สำหรับ chart) ──
+    my_daily = data.get("dailyBySeller", {}).get(seller_name, {})
+    my_monthly = {}
+    for m_str, m_data in (data.get("monthlySummary") or {}).items():
+        ss = (m_data.get("sellers") or {}).get(seller_name) or {}
+        my_monthly[m_str] = {
+            "lead": ss.get("lead", 0),
+            "leadNormal": ss.get("leadNormal", 0),
+            "leadRJ": ss.get("leadRJ", 0),
+            "follow": ss.get("follow", 0),
+            "vacant": ss.get("vacant", 0),
+            "done": ss.get("done", 0),
+            "booking": ss.get("booking", 0),
+        }
+
     filtered = {
         "meta": data.get("meta", {}),
         "seller": my_seller,
         "today": today_my,
+        "leads": my_leads,
         "followCases": my_follows,
         "bookingCases": my_bookings,
         "mustCallCount": must_call_count,
+        "daily": my_daily,
+        "monthly": my_monthly,
     }
 
     constants = {
@@ -383,6 +760,7 @@ def seller_dashboard(request, token):
         "TEAM_NAMES": TEAM_NAMES,
         "LT_COLORS": LT_COLORS,
         "MONTHS_SHORT": MONTHS_SHORT,
+        "MONTHS_FULL": MONTHS_FULL,
     }
 
     return render(request, "dashboard/seller.html", {
