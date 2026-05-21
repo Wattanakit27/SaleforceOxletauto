@@ -1152,6 +1152,7 @@
     // ── Cron Schedule Panel (admin only) ──
     // ตั้งเวลาใน Sheet → external cron ยิงเข้า /api/cron/tick ทุกนาที → endpoint อ่าน sheet เช็คเวลา
     let __schedRows = [];
+    let __expandedSched = new Set(); // index ที่กางอยู่
     async function openCronPanel() {
       if (!isAdmin) return;
       const old = document.getElementById('cron-overlay');
@@ -1232,67 +1233,25 @@
       const baseUrl = location.origin;
       const tickUrl = `${baseUrl}/api/cron/tick?secret=YOUR_CRON_SECRET`;
 
-      let html = `<div style="padding:11px 13px;background:var(--blue-bg);border:.5px solid var(--blue);border-radius:10px;font-size:11px;color:var(--blue);margin-bottom:12px;line-height:1.7">
-        🔄 <b>วิธีทำงาน:</b> ตั้ง external cron (cron-job.org) ยิงเข้า URL ด้านล่าง <b>ทุก 1 นาที</b><br>
-        ระบบจะอ่านตารางนี้ → ส่งเฉพาะ schedule ที่เวลาตรงกับเวลาปัจจุบัน (Asia/Bangkok)<br>
-        <span style="font-size:10px;opacity:.8">(ไม่ใช้ <code>/api/cron/send_line</code> เดิม — ใช้ <code>/api/cron/tick</code> แทนสำหรับตารางนี้)</span>
+      let html = `<div style="padding:9px 12px;background:var(--blue-bg);border:.5px solid var(--blue);border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:12px;line-height:1.6">
+        🔄 ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ระบบจะเช็คตารางและส่งตรงเวลาเอง
       </div>`;
-
       html += `<div style="position:relative;margin-bottom:14px">
-        <input id="sched-tick-url" readonly value="${h(tickUrl)}" style="width:100%;padding:9px 70px 9px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:11px;font-family:monospace;outline:none;box-sizing:border-box">
-        <button onclick="navigator.clipboard.writeText(document.getElementById('sched-tick-url').value).then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 copy',1200)})" style="position:absolute;right:5px;top:5px;font-size:10px;padding:5px 10px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">📋 copy</button>
+        <input id="sched-tick-url" readonly value="${h(tickUrl)}" style="width:100%;padding:8px 70px 8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:10px;font-family:monospace;outline:none;box-sizing:border-box">
+        <button onclick="navigator.clipboard.writeText(document.getElementById('sched-tick-url').value).then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='📋',1200)})" style="position:absolute;right:5px;top:5px;font-size:10px;padding:5px 10px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">📋</button>
       </div>`;
 
-      // datalist for seller suggestions
-      const allSellers = (D.sellers || []).map(s => s.name);
-      html += `<datalist id="sched-sellers">${allSellers.map(s => `<option value="${h(s)}">`).join('')}</datalist>`;
+      // Render each schedule card
+      if (__schedRows.length === 0) {
+        html += `<div style="text-align:center;padding:24px;color:var(--t3);font-size:13px;border:.5px dashed var(--bd);border-radius:10px">ยังไม่มีตาราง — กดเพิ่มด้านล่าง</div>`;
+      } else {
+        __schedRows.forEach((s, i) => {
+          html += renderSchedCard(s, i);
+        });
+      }
+      html += `<button onclick="__schedAdd()" style="margin-top:10px;padding:9px 14px;border-radius:10px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">➕ เพิ่มตารางใหม่</button>`;
 
-      html += `<table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr>
-          <th style="text-align:center;padding:5px 4px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:32px">เปิด</th>
-          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:80px">เวลา</th>
-          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:100px">วัน</th>
-          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd)">เซลล์</th>
-          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:130px">test user_id</th>
-          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:110px">ป้ายชื่อ</th>
-          <th style="border-bottom:.5px solid var(--bd);width:32px"></th>
-        </tr></thead><tbody>
-          ${__schedRows.map((s, i) => `
-            <tr>
-              <td style="padding:5px 4px;border-bottom:.5px solid var(--bd);text-align:center"><input type="checkbox" ${s.enabled?'checked':''} onchange="__schedRows[${i}].enabled=this.checked" style="cursor:pointer"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input type="time" value="${h(s.time)}" oninput="__schedRows[${i}].time=this.value" style="width:100%;padding:6px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;font-family:monospace"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)">
-                <select onchange="__schedRows[${i}].days=this.value" style="width:100%;padding:6px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box">
-                  <option value="*" ${s.days==='*'?'selected':''}>ทุกวัน</option>
-                  <option value="1-5" ${s.days==='1-5'?'selected':''}>จ-ศ</option>
-                  <option value="0,6" ${s.days==='0,6'?'selected':''}>ส-อา</option>
-                  <option value="1" ${s.days==='1'?'selected':''}>จันทร์</option>
-                  <option value="5" ${s.days==='5'?'selected':''}>ศุกร์</option>
-                  ${!['*','1-5','0,6','1','5'].includes(s.days) ? `<option value="${h(s.days)}" selected>${h(s.days)}</option>` : ''}
-                </select>
-              </td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.sellers.join(','))}" oninput="__schedRows[${i}].sellers=this.value.split(',').map(x=>x.trim()).filter(Boolean)" list="sched-sellers" placeholder="* = ทุกคน" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value" placeholder="ว่าง = ส่งจริง" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:10px;outline:none;box-sizing:border-box;font-family:monospace"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.label||'')}" oninput="__schedRows[${i}].label=this.value" placeholder="หมายเหตุ" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><button onclick="__schedDel(${i})" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px">🗑️</button></td>
-            </tr>
-          `).join('')}
-        </tbody></table>`;
-      html += `<button onclick="__schedAdd()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">➕ เพิ่มตารางใหม่</button>`;
-
-      html += `<details style="margin-top:14px;padding:11px;background:var(--bg2);border-radius:8px;font-size:11px">
-        <summary style="cursor:pointer;font-weight:600;color:var(--t1)">📍 วิธีตั้ง cron-job.org (one-time setup)</summary>
-        <ol style="margin:8px 0 0 18px;color:var(--t2);line-height:1.7">
-          <li>สมัคร/login <a href="https://cron-job.org" target="_blank" style="color:var(--blue)">cron-job.org</a> (ฟรี)</li>
-          <li>"Create cronjob"</li>
-          <li>URL = ด้านบน (เปลี่ยน <code>YOUR_CRON_SECRET</code> เป็นค่าจริง)</li>
-          <li>Schedule: <b>Every 1 minute</b> (cron expression: <code>* * * * *</code>)</li>
-          <li>Timezone: ไม่จำเป็นต้องตั้ง — ระบบเช็คเวลา BKK จากตารางนี้เอง</li>
-          <li>Save → cron ยิงทุกนาที → endpoint อ่านตารางนี้ → ส่งเฉพาะที่ตรงเวลา</li>
-        </ol>
-      </details>`;
-
-      html += `<details style="margin-top:8px;padding:11px;background:var(--bg2);border-radius:8px;font-size:11px">
+      html += `<details style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px">
         <summary style="cursor:pointer;font-weight:600;color:var(--t1)">🧪 ทดสอบยิง tick endpoint ทันที</summary>
         <input id="sched-test-secret" type="password" placeholder="CRON_SECRET" style="margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box">
         <button onclick="__schedTestTick()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-weight:700;font-size:11px;cursor:pointer">🚀 ยิง tick</button>
@@ -1302,6 +1261,146 @@
       html += `<div id="sched-msg" style="margin-top:10px"></div>`;
       modal.querySelector('#sched-body').innerHTML = html;
       modal.__schedMeta = meta;
+    }
+
+    // ── helper: เปรียบเทียบ sellers list (handle '*' = all)
+    function __schedSellersDisplay(sellers, total) {
+      if (sellers.length === 0) return 'ไม่ส่งให้เซลล์';
+      if (sellers.includes('*') || sellers.length >= total) return `ทุกเซลล์ (${total})`;
+      if (sellers.length <= 3) return sellers.join(', ');
+      return `${sellers.slice(0,2).join(', ')} +${sellers.length-2}`;
+    }
+
+    function renderSchedCard(s, i) {
+      const isOpen = __expandedSched.has(i);
+      const sellersData = (D.sellers || []).filter(x => x.team !== 'ADMIN');
+      const allNames = sellersData.map(x => x.name);
+      const totalSellers = allNames.length;
+      // Normalize: ถ้า sellers === ['*'] แสดงเป็นทั้งหมด
+      const isAll = s.sellers.includes('*');
+      const checkedSet = isAll ? new Set(allNames) : new Set(s.sellers);
+
+      const daysLbl = ({'*':'ทุกวัน','1-5':'จ-ศ','0,6':'ส-อา','1':'จันทร์','5':'ศุกร์'})[s.days] || s.days;
+      const recCount = (isAll ? totalSellers : s.sellers.filter(x => x !== '*').length) + (s.include_executive ? 1 : 0);
+      const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + 🎩 ผู้บริหาร' : ''}`;
+      const modeDesc = s.test_target ? `🧪 test → ${s.test_target.slice(0,12)}...` : 'ส่งจริง';
+
+      let html = `<div style="border:.5px solid var(--bd);border-radius:10px;margin-bottom:8px;overflow:hidden;${s.enabled?'':'opacity:.6'}">`;
+
+      // Header (clickable to expand)
+      html += `<div style="display:grid;grid-template-columns:auto 70px auto 1fr auto auto;gap:8px;align-items:center;padding:10px 12px;background:var(--bg2);cursor:pointer" onclick="__schedExpand(${i})">
+        <label style="display:flex;align-items:center;cursor:pointer" onclick="event.stopPropagation()"><input type="checkbox" ${s.enabled?'checked':''} onchange="__schedRows[${i}].enabled=this.checked;__schedRedraw()" style="cursor:pointer"></label>
+        <span style="font-family:monospace;font-weight:700;color:var(--t1);font-size:13px">⏰ ${h(s.time)}</span>
+        <span style="font-size:11px;color:var(--t2);background:var(--bg);padding:2px 8px;border-radius:8px">${h(daysLbl)}</span>
+        <span style="font-size:12px;color:var(--t1);font-weight:600">${h(s.label||'-')}</span>
+        <span style="font-size:10px;color:var(--t3)">${recCount} ผู้รับ · ${modeDesc}</span>
+        <span style="font-size:14px;color:var(--t3)">${isOpen?'▲':'▼'}</span>
+      </div>`;
+
+      if (isOpen) {
+        // Expanded edit form
+        html += `<div style="padding:12px 14px;background:var(--bg)">`;
+
+        // Row 1: time, day, label
+        html += `<div style="display:grid;grid-template-columns:auto auto 1fr auto;gap:10px;margin-bottom:12px;align-items:center">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">⏰<input type="time" value="${h(s.time)}" oninput="__schedRows[${i}].time=this.value" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"></label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">📅<select onchange="__schedRows[${i}].days=this.value;__schedRedraw()" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px">
+            <option value="*" ${s.days==='*'?'selected':''}>ทุกวัน</option>
+            <option value="1-5" ${s.days==='1-5'?'selected':''}>จ-ศ</option>
+            <option value="0,6" ${s.days==='0,6'?'selected':''}>ส-อา</option>
+            <option value="1" ${s.days==='1'?'selected':''}>จันทร์</option>
+            <option value="5" ${s.days==='5'?'selected':''}>ศุกร์</option>
+            ${!['*','1-5','0,6','1','5'].includes(s.days) ? `<option value="${h(s.days)}" selected>${h(s.days)}</option>` : ''}
+          </select></label>
+          <input value="${h(s.label||'')}" oninput="__schedRows[${i}].label=this.value" placeholder="ป้ายชื่อ (เช่น เช้าวันทำการ)" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2);cursor:pointer"><input type="checkbox" ${s.enabled?'checked':''} onchange="__schedRows[${i}].enabled=this.checked;__schedRedraw()">เปิด</label>
+        </div>`;
+
+        // Section: 👥 ผู้รับ — checkboxes by team
+        html += `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:12px;font-weight:700;color:var(--t1)">👥 ผู้รับ Flex รายเซลล์</div>
+            <div style="display:flex;gap:4px">
+              <button onclick="__schedSetAllSellers(${i},true)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">เลือกทั้งหมด</button>
+              <button onclick="__schedSetAllSellers(${i},false)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้าง</button>
+            </div>
+          </div>`;
+
+        // Group by team
+        const teamGroups = {};
+        sellersData.forEach(x => { (teamGroups[x.team] = teamGroups[x.team] || []).push(x); });
+        const teamColors = C.TEAM_COLORS || {};
+
+        Object.keys(teamGroups).sort().forEach(tid => {
+          const color = teamColors[tid] || 'var(--t3)';
+          html += `<div style="margin-bottom:6px;padding:8px 10px;background:var(--bg2);border-radius:8px;border-left:3px solid ${color}">
+            <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:4px">ทีม ${h(tid)} (${teamGroups[tid].length} คน)</div>
+            <div style="display:flex;gap:4px 10px;flex-wrap:wrap">`;
+          teamGroups[tid].forEach(seller => {
+            const isChecked = checkedSet.has(seller.name);
+            html += `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t1);cursor:pointer;padding:3px 7px;border-radius:6px;background:${isChecked?'var(--blue-bg)':'transparent'}">
+              <input type="checkbox" ${isChecked?'checked':''} onchange="__schedToggleSeller(${i},'${h(seller.name)}',this.checked)">${h(seller.name)}
+            </label>`;
+          });
+          html += `</div></div>`;
+        });
+
+        // Executive toggle
+        const execChecked = !!s.include_executive;
+        html += `<div style="margin-top:6px;padding:9px 11px;background:${execChecked?'var(--purple-bg)':'var(--bg2)'};border-radius:8px;border:.5px solid ${execChecked?'var(--purple-mid)':'var(--bd)'}">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" ${execChecked?'checked':''} onchange="__schedRows[${i}].include_executive=this.checked;__schedRedraw()">
+            <span style="font-size:12px;font-weight:700;color:${execChecked?'var(--purple)':'var(--t1)'}">🎩 ผู้บริหาร — รับ Overview Flex (สรุปยอดรวมทีม)</span>
+          </label>
+          <div style="font-size:10px;color:var(--t3);margin-top:3px;margin-left:24px;font-family:monospace">user_id (จาก env): ดู EXECUTIVE_USER_IDS</div>
+        </div>`;
+
+        html += `</div>`; // close ผู้รับ section
+
+        // Test mode field
+        html += `<div style="margin-top:10px;padding:9px 11px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:8px">
+          <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">🧪 Test mode — ถ้ามีค่า: ทุก Flex จะส่งไปที่ user_id นี้แทน (ไม่ส่งจริง)</label>
+          <input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value;__schedRedraw()" placeholder="ว่าง = ส่งจริง / ใส่ U... = test ส่งให้ตัวเอง" style="width:100%;padding:7px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box;font-family:monospace">
+        </div>`;
+
+        // Delete + collapse
+        html += `<div style="display:flex;justify-content:space-between;margin-top:12px">
+          <button onclick="__schedDel(${i})" style="padding:6px 12px;border-radius:6px;border:.5px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-size:11px;font-weight:600">🗑️ ลบตารางนี้</button>
+          <button onclick="__schedExpand(${i})" style="padding:6px 12px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;font-size:11px">▲ ยุบ</button>
+        </div>`;
+
+        html += `</div>`; // close expanded
+      }
+
+      html += `</div>`; // close card
+      return html;
+    }
+
+    function __schedRedraw() {
+      const modal = document.querySelector('#cron-overlay > div');
+      if (modal && modal.__schedMeta) drawSchedBody(modal, modal.__schedMeta);
+    }
+    function __schedExpand(i) {
+      if (__expandedSched.has(i)) __expandedSched.delete(i);
+      else __expandedSched.add(i);
+      __schedRedraw();
+    }
+    function __schedSetAllSellers(i, on) {
+      const allNames = (D.sellers || []).filter(x => x.team !== 'ADMIN').map(x => x.name);
+      __schedRows[i].sellers = on ? allNames.slice() : [];
+      __schedRedraw();
+    }
+    function __schedToggleSeller(i, name, on) {
+      const arr = __schedRows[i].sellers;
+      // Expand '*' to explicit if currently '*'
+      const expanded = arr.includes('*')
+        ? (D.sellers || []).filter(x => x.team !== 'ADMIN').map(x => x.name)
+        : arr.slice();
+      const idx = expanded.indexOf(name);
+      if (on && idx === -1) expanded.push(name);
+      else if (!on && idx !== -1) expanded.splice(idx, 1);
+      __schedRows[i].sellers = expanded;
+      __schedRedraw();
     }
 
     function drawSchedFooter(modal) {
@@ -1320,15 +1419,22 @@
     }
 
     function __schedAdd() {
-      __schedRows.push({ time:'09:00', days:'*', sellers:['*'], test_target:'', enabled:true, label:'' });
-      const modal = document.querySelector('#cron-overlay > div');
-      if (modal && modal.__schedMeta) drawSchedBody(modal, modal.__schedMeta);
+      const newIdx = __schedRows.length;
+      __schedRows.push({ time:'09:00', days:'*', sellers:['*'], test_target:'', enabled:true, label:'', include_executive:false });
+      __expandedSched.add(newIdx); // auto-expand new row
+      __schedRedraw();
     }
     function __schedDel(i) {
       if (!confirm(`ลบตาราง ${__schedRows[i]?.time || ''} ${__schedRows[i]?.label || ''}?`)) return;
       __schedRows.splice(i, 1);
-      const modal = document.querySelector('#cron-overlay > div');
-      if (modal && modal.__schedMeta) drawSchedBody(modal, modal.__schedMeta);
+      // Re-index expanded set
+      const newSet = new Set();
+      __expandedSched.forEach(idx => {
+        if (idx < i) newSet.add(idx);
+        else if (idx > i) newSet.add(idx - 1);
+      });
+      __expandedSched = newSet;
+      __schedRedraw();
     }
     async function __schedSave() {
       const btn = document.getElementById('sched-save-btn');

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import requests
 
-from .constants import normalize_seller
+from .constants import normalize_seller, MONTHS_FULL
 from .fetch_dashboard import bangkok_now, parse_date
 from .google_sheets import (
     cell, cell_num, fetch_sheet,
@@ -108,6 +108,7 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
     now = bangkok_now()
     # weekday(): จันทร์=0, อาทิตย์=6 → แมปกลับเป็น อาทิตย์=0..เสาร์=6
     dow = (now.weekday() + 1) % 7
+    month_th = MONTHS_FULL[now.month - 1] if 1 <= now.month <= 12 else f"เดือน {now.month}"
     date_label = f"{DAYS_TH[dow]} {now.day}/{now.month}/{str(now.year + 543)[-2:]}"
 
     total = len(called) + len(not_called)
@@ -217,13 +218,13 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
 
     return {
         "type": "flex",
-        "altText": f"📊 Pipeline วันนี้ — {seller} | โทรแล้ว {len(called)} · ยังไม่โทร {len(not_called)} · ต้องตาม {len(follow_up)}",
+        "altText": f"📊 Pipeline เดือน{month_th} — {seller} | โทรแล้ว {len(called)} · ยังไม่โทร {len(not_called)} · ต้องตาม {len(follow_up)}",
         "contents": {
             "type": "bubble", "size": "mega",
             "header": {
                 "type": "box", "layout": "vertical", "backgroundColor": "#0055aa", "paddingAll": "16px",
                 "contents": [
-                    {"type": "text", "text": "Pipeline วันนี้", "size": "xs", "color": "#93c5fd"},
+                    {"type": "text", "text": f"Pipeline เดือน{month_th}", "size": "xs", "color": "#93c5fd"},
                     {"type": "text", "text": seller, "size": "xl", "color": "#ffffff", "weight": "bold"},
                     {"type": "text", "text": date_label, "size": "xs", "color": "#bfdbfe", "margin": "xs"},
                 ],
@@ -235,6 +236,186 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
                     "type": "button",
                     "action": {"type": "uri", "label": "ดูเคสติดตาม", "uri": seller_url},
                     "style": "primary", "color": "#0055aa", "height": "sm",
+                }],
+            },
+        },
+    }
+
+
+def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = "") -> dict:
+    """สร้าง Overview Flex สำหรับ ผู้บริหาร — สรุปยอดรวมทีมในเดือนปัจจุบัน
+
+    pipelines: ผลจาก build_seller_pipelines() (current month, all sellers)
+    full_data: ผลจาก fetch_dashboard_data() — ต้องการ sellers, teams, summary, monthlySummary
+    """
+    now = bangkok_now()
+    dow = (now.weekday() + 1) % 7
+    month_th = MONTHS_FULL[now.month - 1] if 1 <= now.month <= 12 else f"เดือน {now.month}"
+    date_label = f"{DAYS_TH[dow]} {now.day}/{now.month}/{str(now.year + 543)[-2:]} {now.hour:02d}:{now.minute:02d} น."
+
+    sellers_yearly = full_data.get("sellers", []) or []
+    summary = full_data.get("summary", {}) or {}
+    monthly_summary = full_data.get("monthlySummary", {}) or {}
+    # ms = ข้อมูลของเดือนปัจจุบันเท่านั้น (year aggregate ใช้แค่ fallback ถ้า monthly ขาด)
+    ms = monthly_summary.get(now.month) or monthly_summary.get(str(now.month)) or {}
+    ms_teams = ms.get("teams", {}) or {}
+    ms_sellers = ms.get("sellers", {}) or {}
+
+    # ── ทุกตัวเลขเป็น "เดือนปัจจุบัน" ──
+    total_leads = ms.get("totalLeads", 0) or 0
+    total_bookings = ms.get("totalBookings", 0) or 0
+    total_dones = ms.get("totalDone", 0) or 0
+    # เป้ารายเดือน — TARGETS ใน constants เป็นเป้าต่อเดือนอยู่แล้ว
+    total_target = summary.get("totalTarget", 0) or 0
+    close_pct = round(total_dones / total_target * 100) if total_target > 0 else 0
+    bar_pct = min(close_pct, 100)
+
+    # Total not called จาก pipelines (current month) — pipelines มาจาก build_seller_pipelines ที่ filter เดือนแล้ว
+    total_not_called = sum(len(p.get("notCalled", [])) for p in pipelines)
+    total_must_call = total_not_called
+
+    # Top 3 by done — ใช้ของเดือนปัจจุบัน (ms_sellers[name].done)
+    seller_done_month = []
+    for s in sellers_yearly:
+        name = s.get("name", "")
+        if s.get("team") == "ADMIN":
+            continue
+        m_done = (ms_sellers.get(name) or {}).get("done", 0) or 0
+        seller_done_month.append({"name": name, "done": m_done})
+    top3 = sorted(seller_done_month, key=lambda x: -x["done"])[:3]
+    medals = ["🥇", "🥈", "🥉"]
+
+    # ── helpers สร้าง block ใน Flex ──
+    def stat_box(label: str, value: int, color: str, bg: str) -> dict:
+        return {
+            "type": "box", "layout": "vertical", "flex": 1,
+            "backgroundColor": bg, "cornerRadius": "8px", "paddingAll": "10px",
+            "contents": [
+                {"type": "text", "text": f"{value:,}", "size": "xxl", "color": color,
+                 "weight": "bold", "align": "center"},
+                {"type": "text", "text": label, "size": "xxs", "color": "#6b7280", "align": "center"},
+            ],
+        }
+
+    def progress_bar(fill: int, empty: int) -> dict:
+        contents = []
+        if fill > 0:
+            contents.append({"type": "box", "layout": "vertical", "flex": fill, "height": "6px",
+                             "backgroundColor": "#10b981", "cornerRadius": "4px", "contents": []})
+        if empty > 0:
+            contents.append({"type": "box", "layout": "vertical", "flex": empty, "height": "6px",
+                             "backgroundColor": "#e5e7eb", "cornerRadius": "4px", "contents": []})
+        return {"type": "box", "layout": "horizontal", "margin": "sm", "spacing": "none", "contents": contents}
+
+    # Team rows — ใช้ข้อมูลของเดือนปัจจุบันจาก ms_teams (ms_teams[tid] มี lead/follow/vacant/done/booking)
+    # เป้าทีมเอามาจาก full_data.teams (เพราะ ms_teams ไม่มี target — เป้ารายเดือนตรงๆ)
+    teams_yearly = full_data.get("teams", {}) or {}
+    team_emojis = {"A": "🟧", "B": "🟩", "C": "🟪"}
+    team_rows = []
+    for tid in sorted([t for t in ms_teams.keys() if t != "ADMIN"]):
+        t_m = ms_teams.get(tid) or {}
+        t_y = teams_yearly.get(tid) or {}
+        t_lead = t_m.get("lead", 0) or 0
+        t_book = t_m.get("booking", 0) or 0
+        t_done = t_m.get("done", 0) or 0
+        t_target = t_y.get("target", 0) or 0  # เป้าต่อเดือนของทีม (sum TARGETS ของสมาชิกทีม)
+        t_pct = round(t_done / t_target * 100) if t_target > 0 else 0
+        team_rows.append({
+            "type": "box", "layout": "horizontal", "margin": "xs",
+            "contents": [
+                {"type": "text", "text": f"{team_emojis.get(tid, '⬜')} {tid}",
+                 "size": "xs", "color": "#1f2937", "weight": "bold", "flex": 2},
+                {"type": "text", "text": f"Lead {t_lead:,}", "size": "xxs", "color": "#6b7280", "flex": 3},
+                {"type": "text", "text": f"จอง {t_book}", "size": "xxs", "color": "#f59e0b", "flex": 2},
+                {"type": "text", "text": f"ปิด {t_done}/{t_target}", "size": "xxs", "color": "#10b981", "flex": 3},
+                {"type": "text", "text": f"{t_pct}%", "size": "xxs", "color": "#374151",
+                 "weight": "bold", "flex": 1, "align": "end"},
+            ],
+        })
+
+    # Top 3 rows
+    top_rows = []
+    for i, s in enumerate(top3):
+        top_rows.append({
+            "type": "box", "layout": "horizontal", "margin": "xs",
+            "contents": [
+                {"type": "text", "text": f"{medals[i]} {s.get('name','-')}",
+                 "size": "xs", "color": "#1f2937", "weight": "bold", "flex": 3},
+                {"type": "text", "text": f"{s.get('done',0)} คัน",
+                 "size": "xs", "color": "#10b981", "weight": "bold", "flex": 2, "align": "end"},
+            ],
+        })
+    if not top_rows:
+        top_rows.append({"type": "text", "text": "ยังไม่มีข้อมูล",
+                         "size": "xs", "color": "#9ca3af", "align": "center"})
+
+    body = [
+        # 3 stat boxes
+        {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+            stat_box("Lead", total_leads, "#1f2937", "#f3f4f6"),
+            stat_box("จอง", total_bookings, "#f59e0b", "#fffbeb"),
+            stat_box("ปล่อย", total_dones, "#10b981", "#f0fdf4"),
+        ]},
+        # Close rate
+        {"type": "box", "layout": "horizontal", "margin": "lg", "contents": [
+            {"type": "text", "text": "🎯 อัตราปิด", "size": "xs", "color": "#1f2937", "weight": "bold", "flex": 3},
+            {"type": "text", "text": f"{close_pct}% ({total_dones}/{total_target})",
+             "size": "xs", "color": "#10b981", "weight": "bold", "flex": 2, "align": "end"},
+        ]},
+        progress_bar(bar_pct, 100 - bar_pct),
+        {"type": "separator", "margin": "lg"},
+        # Team breakdown
+        {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+            {"type": "box", "layout": "vertical", "width": "3px", "backgroundColor": "#3b82f6",
+             "cornerRadius": "2px", "margin": "none", "contents": []},
+            {"type": "text", "text": " 👥 แยกทีม", "size": "xs", "color": "#374151",
+             "weight": "bold", "margin": "sm"},
+        ]},
+    ] + team_rows + [
+        {"type": "separator", "margin": "lg"},
+        # Top 3
+        {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+            {"type": "box", "layout": "vertical", "width": "3px", "backgroundColor": "#f59e0b",
+             "cornerRadius": "2px", "margin": "none", "contents": []},
+            {"type": "text", "text": " 🏆 Top 3 ปิดมากสุด", "size": "xs", "color": "#374151",
+             "weight": "bold", "margin": "sm"},
+        ]},
+    ] + top_rows + [
+        {"type": "separator", "margin": "lg"},
+        # Must call warning
+        {"type": "box", "layout": "horizontal", "margin": "md",
+         "backgroundColor": "#fef2f2", "cornerRadius": "6px", "paddingAll": "8px",
+         "contents": [
+            {"type": "text", "text": "⚠️ ยังไม่โทร", "size": "xs", "color": "#ef4444",
+             "weight": "bold", "flex": 3},
+            {"type": "text", "text": f"{total_must_call} เคส", "size": "xs",
+             "color": "#ef4444", "weight": "bold", "flex": 2, "align": "end"},
+         ]},
+    ]
+
+    dashboard_url = f"{base_url}/dashboard/" if base_url else "/dashboard/"
+
+    return {
+        "type": "flex",
+        "altText": f"🎩 ภาพรวมทีม เดือน{month_th} | Lead {total_leads:,} จอง {total_bookings} ปิด {total_dones}/{total_target} ({close_pct}%)",
+        "contents": {
+            "type": "bubble", "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "backgroundColor": "#7c3aed", "paddingAll": "16px",
+                "contents": [
+                    {"type": "text", "text": f"🎩 ภาพรวมทีม · เดือน{month_th}", "size": "xs", "color": "#ddd6fe"},
+                    {"type": "text", "text": "Executive Overview", "size": "xl", "color": "#ffffff", "weight": "bold"},
+                    {"type": "text", "text": date_label, "size": "xs", "color": "#c4b5fd", "margin": "xs"},
+                ],
+            },
+            "body": {"type": "box", "layout": "vertical", "paddingAll": "14px", "contents": body},
+            "footer": {
+                "type": "box", "layout": "vertical", "paddingAll": "10px",
+                "contents": [{
+                    "type": "button",
+                    "action": {"type": "uri", "label": "📊 ดู Dashboard เต็ม", "uri": dashboard_url},
+                    "style": "primary", "color": "#7c3aed", "height": "sm",
                 }],
             },
         },
@@ -303,6 +484,7 @@ def load_schedules() -> list[dict]:
             "test_target": cell(r, SC.test_target).strip(),
             "enabled": _cell_truthy(cell(r, SC.enabled)),
             "label": cell(r, SC.label).strip(),
+            "include_executive": _cell_truthy(cell(r, SC.include_executive)),
         })
     return schedules
 

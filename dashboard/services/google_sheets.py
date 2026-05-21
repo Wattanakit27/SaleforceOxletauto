@@ -90,13 +90,14 @@ class SELLER_CONFIG_COL:
 
 class SCHEDULE_COL:
     # ตั้งเวลาส่ง tab — ตารางเวลา trigger LINE Flex
-    # Row: เวลา (HH:MM) | วัน (* / 1-5 / 0,6) | เซลล์ (* / "โอ๊ต,เก้า") | test_target | enabled (TRUE/FALSE) | label
+    # Row: เวลา | วัน | เซลล์ | test_target | enabled | label | include_executive
     time = 0      # HH:MM (Bangkok time, 24-hour)
     days = 1      # "*" ทุกวัน | "1-5" จันทร์-ศุกร์ | "0,6" เสาร์-อาทิตย์ | "1,3,5" เลือกเฉพาะ (0=อาทิตย์)
-    sellers = 2   # "*" ทุกเซลล์ | "โอ๊ต,เก้า,เจ" รายชื่อ
+    sellers = 2   # "*" ทุกเซลล์ | "โอ๊ต,เก้า,เจ" รายชื่อ | "" ไม่ส่งให้เซลล์
     test_target = 3  # ว่าง = ส่งจริง, ใส่ user_id = test mode
     enabled = 4   # TRUE/FALSE
     label = 5     # ชื่อตาราง (สำหรับมนุษย์อ่าน)
+    include_executive = 6  # TRUE/FALSE — ส่ง Overview Flex ให้ผู้บริหารด้วยไหม
 
 
 # ── Auth ──

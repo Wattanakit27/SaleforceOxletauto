@@ -84,6 +84,15 @@ def refresh_from_sheet() -> bool:
 
 RJ_TYPES = ["RJ", "Hot RJ", "Hot RB"]
 
+# Executive LINE user_ids — รับ Overview Flex (สรุปยอดรวมทีม)
+# เปลี่ยนได้ผ่าน env var EXECUTIVE_USER_IDS (comma-separated)
+import os as _os
+EXECUTIVE_USER_IDS = [
+    uid.strip() for uid in (
+        _os.getenv("EXECUTIVE_USER_IDS", "U1cb2b916b062d2ef42c6800d21165083") or ""
+    ).split(",") if uid.strip()
+]
+
 STATUS_COLOR = {
     "จอง": "#f59e0b",
     "รอเซ็นต์": "#3b82f6",

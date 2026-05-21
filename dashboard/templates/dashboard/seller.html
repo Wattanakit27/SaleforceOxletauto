@@ -88,7 +88,9 @@
   // ── state ──
   let fMonth = 0;   // 0=ทั้งปี, 1-12=เดือน
   let fDay = 0;     // 0=ทั้งเดือน, 1-31=วันเฉพาะ, -1=วันนี้
-  let kpiFilter = 'all'; // ตัวกรอง list ด้านล่าง
+  let kpiFilter = 'all'; // ตัวกรอง list ด้านล่าง (เฉพาะ tab leads)
+  let viewMode = 'leads'; // 'leads' | 'bookings' — สลับ list ด้านล่าง
+  let bookStatusFilter = 'all'; // 'all' | จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก
   const __charts = {};
 
   // ── date utils ──
@@ -312,8 +314,12 @@
         </div>
       </div>
 
-      ${renderLeadList(allLeads)}
-      ${renderBookingTable(bookings)}
+      <div style="display:flex;gap:6px;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:10px">
+        <button onclick="setViewMode('leads')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='leads'?'var(--blue)':'transparent'};color:${viewMode==='leads'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">📋 รายการ Lead <span style="opacity:.85;font-weight:400">(${allLeads.length})</span></button>
+        <button onclick="setViewMode('bookings')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='bookings'?'var(--blue)':'transparent'};color:${viewMode==='bookings'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">🚗 เคสจอง <span style="opacity:.85;font-weight:400">(${bookings.length})</span></button>
+      </div>
+
+      ${viewMode === 'leads' ? renderLeadList(allLeads) : renderBookingSection(bookings)}
     `;
 
     document.getElementById('root').innerHTML = html;
@@ -437,35 +443,136 @@
     document.body.appendChild(overlay);
   }
 
-  function renderBookingTable(bookings) {
-    if (bookings.length === 0) return '';
-    let html = `<div class="section"><h2>🚗 เคสจอง <span class="count">${bookings.length} เคส</span></h2>`;
-    html += `<table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr>
-        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">วันที่</th>
-        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ลูกค้า</th>
-        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">รถ</th>
-        <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">สถานะ</th>
-        <th style="text-align:right;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ราคา</th>
-      </tr></thead><tbody>`;
-    bookings.forEach(b => {
-      const col = (C.STATUS_COLOR||{})[b.status] || '#888';
-      html += `<tr>
-        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.date)}</td>
-        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd)"><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:10px;color:var(--t3)">${h(b.phone)}</div></td>
-        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.car)}${b.year?` (${h(b.year)})`:''}</td>
-        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd)"><span class="badge" style="background:${col};color:#fff">${h(b.status)}</span>${b.isCash?' 💵':''}</td>
-        <td style="padding:7px 6px;border-bottom:.5px solid var(--bd);text-align:right;font-family:monospace">${b.price?Number(b.price).toLocaleString():'-'}</td>
-      </tr>`;
-    });
-    html += `</tbody></table></div>`;
+  function renderBookingSection(bookings) {
+    // Status filter chips
+    const order = C.STATUS_ORDER || ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย','รีเจ็ก'];
+    const statusCounts = { all: bookings.length };
+    order.forEach(s => statusCounts[s] = 0);
+    bookings.forEach(b => { if (statusCounts[b.status] !== undefined) statusCounts[b.status]++; });
+
+    const filtered = bookStatusFilter === 'all'
+      ? bookings
+      : bookings.filter(b => b.status === bookStatusFilter);
+
+    let html = `<div class="section">
+      <h2>🚗 เคสจอง <span class="count">${filtered.length} / ${bookings.length} เคส · คลิกเพื่อดูรายละเอียด</span></h2>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="f-btn ${bookStatusFilter==='all'?'on':''}" onclick="setBookStatus('all')">ทั้งหมด (${statusCounts.all})</button>
+        ${order.map(s => {
+          const c = (C.STATUS_COLOR||{})[s] || '#888';
+          const on = bookStatusFilter === s;
+          return `<button class="f-btn" onclick="setBookStatus('${h(s)}')" style="${on?`background:${c};color:#fff;border-color:${c};font-weight:600`:''}">${h(s)} (${statusCounts[s]||0})</button>`;
+        }).join('')}
+      </div>`;
+
+    if (filtered.length === 0) {
+      html += `<div class="empty">ไม่มีเคสในสถานะนี้</div>`;
+    } else {
+      html += `<table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">วันที่</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ลูกค้า</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">รถ</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">สถานะ</th>
+          <th style="text-align:right;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ราคา</th>
+        </tr></thead><tbody>`;
+      filtered.forEach((b, idx) => {
+        const col = (C.STATUS_COLOR||{})[b.status] || '#888';
+        const origIdx = bookings.indexOf(b);
+        html += `<tr onclick="openBookingDetail(${origIdx})" style="cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.date)}</td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:10px;color:var(--t3)">${h(b.phone)}</div></td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.car)}${b.year?` (${h(b.year)})`:''}</td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><span class="badge" style="background:${col};color:#fff">${h(b.status)}</span>${b.isCash?' 💵':''}</td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);text-align:right;font-family:monospace">${b.price?Number(b.price).toLocaleString():'-'}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
     return html;
+  }
+
+  // ── Booking detail modal ──
+  function openBookingDetail(idx) {
+    const allBookings = bookingsInRange();
+    const b = allBookings[idx];
+    if (!b) return;
+    const old = document.getElementById('book-detail-overlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'book-detail-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    const row = (label, value, opts={}) => {
+      if (value == null || value === '' || value === '-') return '';
+      const styleVal = opts.mono ? 'font-family:monospace;' : '';
+      const wrap = opts.wrap ? 'white-space:pre-wrap;word-break:break-word;' : '';
+      return `<div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
+        <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
+        <div style="font-size:12px;color:var(--t1);${styleVal}${wrap}">${typeof value === 'number' ? value.toLocaleString() : h(value)}</div>
+      </div>`;
+    };
+
+    const statusColor = (C.STATUS_COLOR||{})[b.status] || '#888';
+    const phoneClean = (b.phone||'').replace(/[^0-9+]/g, '');
+    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">📞 โทร ${h(b.phone)}</a>` : '';
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
+        <div style="background:${statusColor};padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div>
+            <div style="font-size:11px;color:#fff;opacity:.85;font-weight:600">เคสจอง · ${h(b.date||'-')}</div>
+            <div style="font-size:18px;font-weight:800;color:#fff">${h(b.customer||'-')}</div>
+            <div style="font-size:11px;color:#fff;opacity:.9;margin-top:2px">สถานะ: <b>${h(b.status||'-')}</b>${b.isCash?' · 💵 ซื้อสด':''}</div>
+          </div>
+          <button onclick="document.getElementById('book-detail-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:#fff;cursor:pointer;line-height:1;opacity:.9">✕</button>
+        </div>
+
+        <div style="overflow-y:auto;padding:14px 16px;flex:1">
+          ${callLink ? `<div style="margin-bottom:12px;text-align:center">${callLink}</div>` : ''}
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px">👤 ลูกค้า</div>
+          ${row('ชื่อลูกค้า', b.customer)}
+          ${row('เบอร์โทร', b.phone, {mono:true})}
+          ${row('Lead Code', b.leadCode, {mono:true})}
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">🚗 รถ</div>
+          ${row('รถ', b.car)}
+          ${row('ปีรถ', b.year)}
+          ${row('ทะเบียน', b.plate)}
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">💰 ราคา / การจ่าย</div>
+          ${row('ราคาขาย', b.price)}
+          ${row('เงินจอง', b.deposit)}
+          ${row('ไฟแนนซ์', b.finance)}
+          ${row('เกรด', b.grade)}
+
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📅 ไทม์ไลน์</div>
+          ${row('วันที่จอง', b.date)}
+          ${row('วันที่เซ็นต์', b.signDate)}
+          ${row('วันที่รู้ผล', b.resultDate)}
+          ${row('เอกสารครบ', b.docsDate)}
+          ${row('วันที่ปล่อยรถ', b.releaseDate)}
+
+          ${b.note && b.note !== '-' ? `
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📝 หมายเหตุ</div>
+            <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(b.note)}</div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
   }
 
   // ── filter actions ──
   function setMonth(m) { fMonth = m; if (m === 0) fDay = 0; render(); }
   function setDay(d) { fDay = d; render(); }
-  function setKpi(k) { kpiFilter = k; render(); }
+  function setKpi(k) { kpiFilter = k; viewMode = 'leads'; render(); }
+  function setViewMode(m) { viewMode = m; render(); }
+  function setBookStatus(s) { bookStatusFilter = s; render(); }
 
   render();
 </script>
