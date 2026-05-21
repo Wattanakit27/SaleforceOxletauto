@@ -180,6 +180,12 @@ def fetch_dashboard_data() -> dict:
         if not status:
             continue
         is_cash = "(ซื้อสด)" in status
+        # วันที่ปล่อยรถ: ใช้ W (car_release_date) เป็นหลัก, ถ้าว่าง/parse ไม่ได้ ลอง V (legacy)
+        new_release = cell(r, S.car_release_date)
+        legacy_release = cell(r, S.legacy_car_release_date)
+        chosen_release = new_release if (new_release and parse_date(new_release)) else (
+            legacy_release if parse_date(legacy_release) else new_release
+        )
         booking_cases.append({
             "seller": seller,
             "status": status.replace(" (ซื้อสด)", "").strip(),
@@ -196,7 +202,7 @@ def fetch_dashboard_data() -> dict:
             "signDate": cell(r, S.sign_date),
             "resultDate": cell(r, S.result_date),
             "docsDate": cell(r, S.doc_complete_date),
-            "releaseDate": cell(r, S.car_release_date),
+            "releaseDate": chosen_release,
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -240,10 +246,18 @@ def fetch_dashboard_data() -> dict:
     # Summary
     lead_normal = len([r for r in year_leads if cell(r, L.type) not in RJ_TYPES])
     lead_rj = len([r for r in year_leads if cell(r, L.type) in RJ_TYPES])
-    total_done = len([b for b in booking_cases if b["status"] == "ปล่อย"])
+    done_cases = [b for b in booking_cases if b["status"] == "ปล่อย"]
+    total_done = len(done_cases)
     total_target = sum(TARGETS.values())
     total_follow = len([r for r in year_leads if is_follow(cell(r, L.admin_status))])
     total_vacant = len([r for r in year_leads if is_vacant(cell(r, L.admin_status))])
+    # Deal Value — ยอดปล่อยรถ (sum of sale_price for status=ปล่อย)
+    total_deal_value = sum(b["price"] for b in done_cases)
+    # Pipeline value — มูลค่าดีลที่ยังอยู่ใน pipeline (จอง/รอเซ็นต์/รอผล/รอปล่อย — ไม่รวมรีเจ็ก/ปล่อย)
+    pipeline_value = sum(
+        b["price"] for b in booking_cases
+        if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+    )
 
     summary = {
         "totalLeads": len(year_leads),
@@ -254,6 +268,9 @@ def fetch_dashboard_data() -> dict:
         "totalDone": total_done,
         "totalTarget": total_target,
         "totalBookings": len(year_jongs),
+        "totalDealValue": total_deal_value,
+        "pipelineValue": pipeline_value,
+        "avgDealValue": (total_deal_value / total_done) if total_done else 0,
     }
 
     # Pipeline
@@ -271,9 +288,14 @@ def fetch_dashboard_data() -> dict:
     for name in ALL_SELLERS:
         sl = [r for r in year_leads if normalize_seller(cell(r, L.sales_rep)) == name]
         sb = [b for b in booking_cases if b["seller"] == name]
+        sb_done = [b for b in sb if b["status"] == "ปล่อย"]
         follow = len([r for r in sl if is_follow(cell(r, L.admin_status))])
         vacant = len([r for r in sl if is_vacant(cell(r, L.admin_status))])
-        done = len([b for b in sb if b["status"] == "ปล่อย"])
+        done = len(sb_done)
+        deal_value = sum(b["price"] for b in sb_done)
+        pipeline_val = sum(
+            b["price"] for b in sb if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+        )
         lead_types = {}
         for r in sl:
             t = cell(r, L.type) or "ไม่ระบุ"
@@ -293,6 +315,9 @@ def fetch_dashboard_data() -> dict:
             "liveInbox": live_inbox_map.get(name, 0),
             "liveLead": live_lead_map.get(name, 0),
             "leadTypes": lead_types,
+            "dealValue": deal_value,
+            "pipelineValue": pipeline_val,
+            "avgDealValue": (deal_value / done) if done else 0,
         }
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
@@ -302,7 +327,13 @@ def fetch_dashboard_data() -> dict:
     if admin_leads:
         admin_follow = len([r for r in admin_leads if is_follow(cell(r, L.admin_status))])
         admin_vacant = len([r for r in admin_leads if is_vacant(cell(r, L.admin_status))])
-        admin_done = len([b for b in booking_cases if b["seller"] == "ADMIN" and b["status"] == "ปล่อย"])
+        admin_sb = [b for b in booking_cases if b["seller"] == "ADMIN"]
+        admin_done_b = [b for b in admin_sb if b["status"] == "ปล่อย"]
+        admin_done = len(admin_done_b)
+        admin_deal_value = sum(b["price"] for b in admin_done_b)
+        admin_pipeline_val = sum(
+            b["price"] for b in admin_sb if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+        )
         admin_booking = len([j for j in year_jongs if j["seller"] == "ADMIN"])
         admin_types = {}
         for r in admin_leads:
@@ -316,6 +347,9 @@ def fetch_dashboard_data() -> dict:
             "live": 0, "clip": 0, "clipTarget": 0,
             "liveInbox": 0, "liveLead": 0,
             "leadTypes": admin_types,
+            "dealValue": admin_deal_value,
+            "pipelineValue": admin_pipeline_val,
+            "avgDealValue": (admin_deal_value / admin_done) if admin_done else 0,
         })
 
     # Teams
@@ -333,6 +367,8 @@ def fetch_dashboard_data() -> dict:
             "live": sum(s["live"] for s in ms),
             "clip": sum(s["clip"] for s in ms),
             "clipTarget": len(members) * clip_month_target,
+            "dealValue": sum(s.get("dealValue", 0) for s in ms),
+            "pipelineValue": sum(s.get("pipelineValue", 0) for s in ms),
         }
 
     # Follow Cases
@@ -453,27 +489,41 @@ def fetch_dashboard_data() -> dict:
         for j in m_jongs:
             m_jong_by_seller[j["seller"]] = m_jong_by_seller.get(j["seller"], 0) + 1
 
+        # Pipeline value ของเดือนนี้ — รวมจาก m_bookings (ใช้วันที่จอง = b["date"])
+        m_pipeline_value = sum(
+            b["price"] for b in m_bookings
+            if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+        )
+        m_deal_value = sum(b["price"] for b in m_done)
+
         m_sellers = {}
         for name in ALL_SELLERS:
             sl2 = [r for r in m_leads if normalize_seller(cell(r, L.sales_rep)) == name]
-            sb_done = [b for b in m_done if b["seller"] == name]
+            sb_done2 = [b for b in m_done if b["seller"] == name]
+            sb_pipe2 = [b for b in m_bookings if b["seller"] == name and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")]
+            n_done2 = len(sb_done2)
+            dv2 = sum(b["price"] for b in sb_done2)
             m_sellers[name] = {
                 "lead": len(sl2),
                 "leadNormal": len([r for r in sl2 if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in sl2 if cell(r, L.type) in RJ_TYPES]),
                 "follow": len([r for r in sl2 if is_follow(cell(r, L.admin_status))]),
                 "vacant": len([r for r in sl2 if is_vacant(cell(r, L.admin_status))]),
-                "done": len(sb_done),
+                "done": n_done2,
                 "booking": m_jong_by_seller.get(name, 0),
+                "dealValue": dv2,
+                "pipelineValue": sum(b["price"] for b in sb_pipe2),
+                "avgDealValue": (dv2 / n_done2) if n_done2 else 0,
             }
 
         m_teams = {}
         for tid, members in TEAMS.items():
-            ts = {"lead": 0, "follow": 0, "vacant": 0, "done": 0, "booking": 0}
+            ts = {"lead": 0, "follow": 0, "vacant": 0, "done": 0, "booking": 0,
+                  "dealValue": 0, "pipelineValue": 0}
             for n in members:
-                s2 = m_sellers.get(n, {"lead": 0, "follow": 0, "vacant": 0, "done": 0, "booking": 0})
+                s2 = m_sellers.get(n, {})
                 for k in ts:
-                    ts[k] += s2[k]
+                    ts[k] += s2.get(k, 0)
             m_teams[tid] = ts
 
         monthly_summary[m] = {
@@ -484,10 +534,47 @@ def fetch_dashboard_data() -> dict:
             "totalVacant": m_vacant,
             "totalDone": len(m_done),
             "totalBookings": len(m_jongs),
+            "totalDealValue": m_deal_value,
+            "pipelineValue": m_pipeline_value,
+            "avgDealValue": (m_deal_value / len(m_done)) if m_done else 0,
             "pipeline": m_pipeline,
             "sellers": m_sellers,
             "teams": m_teams,
         }
+
+    # ── Lead รถรุ่นไหน (อันดับ) — แยกตามเดือน + รวมปี ──
+    # ใช้ "CAR / สูตร" (column M, car_formula) เท่านั้น — สะอาดและ normalize แล้ว
+    # โครงสร้าง: {0: {car: count}, 1: {...}, ..., 12: {...}}  (0 = ทั้งปี)
+    def _normalize_car(s: str) -> str:
+        v = (s or "").strip()
+        if not v or v == "-":
+            return "ไม่ระบุ"
+        # รวม "ไม่ระบุ" / "ไม่ระบุรถ" / "ไม่ระบุรุ่นรถ" → "ไม่ระบุ"
+        if "ไม่ระบุ" in v:
+            return "ไม่ระบุ"
+        return v
+
+    lead_cars_by_month: dict[int, dict[str, int]] = {m: {} for m in range(0, 13)}
+    # Lead breakdown per car ต่อเซลล์ (สำหรับ modal เมื่อกดที่รถใน table)
+    # โครงสร้าง: {car: {seller: {"total": N, "byMonth": [0]*13}}}
+    lead_car_seller_month: dict[str, dict[str, dict]] = {}
+    for r in year_leads:
+        car = _normalize_car(cell(r, L.car_formula))
+        m = get_month(cell(r, L.received_date))
+        lead_cars_by_month[0][car] = lead_cars_by_month[0].get(car, 0) + 1
+        if 1 <= m <= 12:
+            lead_cars_by_month[m][car] = lead_cars_by_month[m].get(car, 0) + 1
+
+        seller = normalize_seller(cell(r, L.sales_rep))
+        if not seller or seller == "ADMIN":
+            continue
+        if car not in lead_car_seller_month:
+            lead_car_seller_month[car] = {}
+        if seller not in lead_car_seller_month[car]:
+            lead_car_seller_month[car][seller] = {"total": 0, "byMonth": [0] * 13}
+        lead_car_seller_month[car][seller]["total"] += 1
+        if 1 <= m <= 12:
+            lead_car_seller_month[car][seller]["byMonth"][m] += 1
 
     # Daily breakdown ภายในแต่ละเดือน — ใช้ตอน user เลือกเดือนเฉพาะแล้วกราฟต้องสลับเป็นรายวัน
     def _parse_day(date_str):
@@ -510,6 +597,7 @@ def fetch_dashboard_data() -> dict:
             "leadRJ": [0] * 32,
             "bookings": [0] * 32,
             "dones": [0] * 32,
+            "dealValue": [0] * 32,
         }
         for m in range(1, 13)
     }
@@ -537,6 +625,7 @@ def fetch_dashboard_data() -> dict:
             continue
         mm, dd = md
         daily_by_month[mm]["dones"][dd] += 1
+        daily_by_month[mm]["dealValue"][dd] += b["price"] or 0
 
     # Daily-by-month แยกตามเซลล์ — ใช้ตอน admin impersonate เซลล์คนใดคนหนึ่ง
     daily_by_seller = {
@@ -546,6 +635,7 @@ def fetch_dashboard_data() -> dict:
                 "leadRJ": [0] * 32,
                 "bookings": [0] * 32,
                 "dones": [0] * 32,
+                "dealValue": [0] * 32,
             }
             for m in range(1, 13)
         }
@@ -582,6 +672,7 @@ def fetch_dashboard_data() -> dict:
         if b["seller"] not in daily_by_seller:
             continue
         daily_by_seller[b["seller"]][mm]["dones"][dd] += 1
+        daily_by_seller[b["seller"]][mm]["dealValue"][dd] += b["price"] or 0
 
     return {
         "meta": {
@@ -604,4 +695,6 @@ def fetch_dashboard_data() -> dict:
         "monthlySummary": monthly_summary,
         "dailyByMonth": daily_by_month,
         "dailyBySeller": daily_by_seller,
+        "leadCarsByMonth": lead_cars_by_month,
+        "leadCarSellerMonth": lead_car_seller_month,
     }

@@ -265,10 +265,24 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
     total_leads = ms.get("totalLeads", 0) or 0
     total_bookings = ms.get("totalBookings", 0) or 0
     total_dones = ms.get("totalDone", 0) or 0
+    total_deal_value = ms.get("totalDealValue", 0) or 0
+    pipeline_value = ms.get("pipelineValue", 0) or 0
+    avg_deal_value = (total_deal_value / total_dones) if total_dones else 0
     # เป้ารายเดือน — TARGETS ใน constants เป็นเป้าต่อเดือนอยู่แล้ว
     total_target = summary.get("totalTarget", 0) or 0
     close_pct = round(total_dones / total_target * 100) if total_target > 0 else 0
     bar_pct = min(close_pct, 100)
+
+    def fmt_baht(n: float) -> str:
+        """฿ แบบกระชับ: ≥1M → ฿1.20M / ≥1K → ฿850K / อื่นๆ → ฿1,234"""
+        v = float(n or 0)
+        if v >= 1_000_000:
+            return f"฿{v/1_000_000:.2f}M" if v < 10_000_000 else f"฿{v/1_000_000:.1f}M"
+        if v >= 100_000:
+            return f"฿{round(v/1000):,}K"
+        if v >= 1000:
+            return f"฿{v/1000:.1f}K"
+        return f"฿{round(v):,}"
 
     # Total not called จาก pipelines (current month) — pipelines มาจาก build_seller_pipelines ที่ filter เดือนแล้ว
     total_not_called = sum(len(p.get("notCalled", [])) for p in pipelines)
@@ -307,7 +321,7 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
                              "backgroundColor": "#e5e7eb", "cornerRadius": "4px", "contents": []})
         return {"type": "box", "layout": "horizontal", "margin": "sm", "spacing": "none", "contents": contents}
 
-    # Team rows — ใช้ข้อมูลของเดือนปัจจุบันจาก ms_teams (ms_teams[tid] มี lead/follow/vacant/done/booking)
+    # Team rows — ใช้ข้อมูลของเดือนปัจจุบันจาก ms_teams (ms_teams[tid] มี lead/follow/vacant/done/booking/dealValue)
     # เป้าทีมเอามาจาก full_data.teams (เพราะ ms_teams ไม่มี target — เป้ารายเดือนตรงๆ)
     teams_yearly = full_data.get("teams", {}) or {}
     team_emojis = {"A": "🟧", "B": "🟩", "C": "🟪"}
@@ -318,10 +332,12 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
         t_lead = t_m.get("lead", 0) or 0
         t_book = t_m.get("booking", 0) or 0
         t_done = t_m.get("done", 0) or 0
+        t_dv   = t_m.get("dealValue", 0) or 0
         t_target = t_y.get("target", 0) or 0  # เป้าต่อเดือนของทีม (sum TARGETS ของสมาชิกทีม)
         t_pct = round(t_done / t_target * 100) if t_target > 0 else 0
+        # แถวที่ 1: lead/จอง/ปิด/%
         team_rows.append({
-            "type": "box", "layout": "horizontal", "margin": "xs",
+            "type": "box", "layout": "horizontal", "margin": "md",
             "contents": [
                 {"type": "text", "text": f"{team_emojis.get(tid, '⬜')} {tid}",
                  "size": "xs", "color": "#1f2937", "weight": "bold", "flex": 2},
@@ -330,6 +346,15 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
                 {"type": "text", "text": f"ปิด {t_done}/{t_target}", "size": "xxs", "color": "#10b981", "flex": 3},
                 {"type": "text", "text": f"{t_pct}%", "size": "xxs", "color": "#374151",
                  "weight": "bold", "flex": 1, "align": "end"},
+            ],
+        })
+        # แถวที่ 2: 💰 ยอดปล่อย ของทีม
+        team_rows.append({
+            "type": "box", "layout": "horizontal", "margin": "xs",
+            "contents": [
+                {"type": "text", "text": " ", "size": "xxs", "flex": 2},
+                {"type": "text", "text": f"💰 ยอดปล่อย {fmt_baht(t_dv)}",
+                 "size": "xxs", "color": "#059669", "weight": "bold", "flex": 9},
             ],
         })
 
@@ -355,6 +380,29 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
             stat_box("Lead", total_leads, "#1f2937", "#f3f4f6"),
             stat_box("จอง", total_bookings, "#f59e0b", "#fffbeb"),
             stat_box("ปล่อย", total_dones, "#10b981", "#f0fdf4"),
+        ]},
+        # 💰 มูลค่าดีลรวม — ยอดปล่อย + Pipeline
+        {"type": "box", "layout": "horizontal", "margin": "md", "spacing": "sm", "contents": [
+            {"type": "box", "layout": "vertical", "flex": 1,
+             "backgroundColor": "#ecfdf5", "cornerRadius": "8px", "paddingAll": "10px",
+             "contents": [
+                {"type": "text", "text": fmt_baht(total_deal_value), "size": "lg",
+                 "color": "#059669", "weight": "bold", "align": "center"},
+                {"type": "text", "text": "💰 ยอดปล่อย", "size": "xxs", "color": "#6b7280", "align": "center"},
+                {"type": "text",
+                 "text": f"เฉลี่ย {fmt_baht(avg_deal_value)}/คัน" if total_dones else "ยังไม่มีปล่อย",
+                 "size": "xxs", "color": "#9ca3af", "align": "center"},
+             ]},
+            {"type": "box", "layout": "vertical", "flex": 1,
+             "backgroundColor": "#fffbeb", "cornerRadius": "8px", "paddingAll": "10px",
+             "contents": [
+                {"type": "text", "text": fmt_baht(pipeline_value), "size": "lg",
+                 "color": "#d97706", "weight": "bold", "align": "center"},
+                {"type": "text", "text": "⏳ มูลค่า Pipeline", "size": "xxs",
+                 "color": "#6b7280", "align": "center"},
+                {"type": "text", "text": "จอง+รอเซ็นต์/ผล/ปล่อย",
+                 "size": "xxs", "color": "#9ca3af", "align": "center"},
+             ]},
         ]},
         # Close rate
         {"type": "box", "layout": "horizontal", "margin": "lg", "contents": [
@@ -397,7 +445,7 @@ def build_overview_flex(pipelines: list[dict], full_data: dict, base_url: str = 
 
     return {
         "type": "flex",
-        "altText": f"🎩 ภาพรวมทีม เดือน{month_th} | Lead {total_leads:,} จอง {total_bookings} ปิด {total_dones}/{total_target} ({close_pct}%)",
+        "altText": f"🎩 ภาพรวมทีม เดือน{month_th} | Lead {total_leads:,} จอง {total_bookings} ปิด {total_dones}/{total_target} · 💰 {fmt_baht(total_deal_value)}",
         "contents": {
             "type": "bubble", "size": "mega",
             "header": {

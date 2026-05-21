@@ -62,7 +62,11 @@ class SALES_COL:
     car_year = 9; license_plate = 10; sale_price = 11; deposit_amount = 12
     status = 13; sign_date = 14; finance_main = 15; finance_backup = 16
     grade = 17; doc_complete_date = 18; result_date = 19; note = 20
-    car_release_date = 21
+    # วันที่ปล่อยรถ — ย้ายจาก V(21) → W(22) ในรอบปรับ sheet เดือน พ.ค. 2026
+    # ของเดิม V(21) ตอนนี้กลายเป็นโน้ตข้อความ (เช่น "รับ 16/5")
+    # ใช้ W เป็นหลัก, เก็บ legacy_car_release_date ไว้ fallback ข้อมูลเก่า
+    car_release_date = 22
+    legacy_car_release_date = 21
 
 class BOOKINGS_COL:
     no = 0; date = 1; sales_rep = 2; channel = 3; seller_input = 4

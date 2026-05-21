@@ -11,11 +11,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
-    .cgrid > .chart-card:nth-child(3) { grid-column: span 2; }
+    .cgrid > .chart-card.span2 { grid-column: span 2; }
     .chart-card .chart-box { position:relative; height:240px; }
+    .chart-card.span2 .chart-box { height:260px; }
     @media (max-width:760px) {
       .cgrid { grid-template-columns:1fr; }
-      .cgrid > .chart-card:nth-child(3) { grid-column: auto; }
+      .cgrid > .chart-card.span2 { grid-column: auto; }
       .chart-card .chart-box { height:220px; }
     }
   </style>
@@ -94,6 +95,16 @@
     let bkSel = 'all';
     let bkStatus = 'all';
     let searchQ = '';
+    // Lead-by-car + Released-cars state (admin/exec only)
+    let leadCarHideUnknown = true;
+    let leadCarQuery = '';
+    let leadCarPage = 1;
+    const LEAD_CAR_PAGE_SIZE = 20;
+    let releasedSort = 'date';  // 'date' | 'price' | 'seller' | 'age'
+    let releasedSeller = 'all';
+    let releasedStatus = 'ปล่อย';  // 'ปล่อย' | 'all' | 'จอง' | 'รอเซ็นต์' | 'รอผล' | 'รอปล่อย' | 'รีเจ็ก'
+    let releasedPage = 1;
+    const RELEASED_PAGE_SIZE = 50;
     let impersonate = canViewAll ? localStorage.getItem('oxlet_impersonate') : null;
 
     // Validate impersonate
@@ -155,6 +166,14 @@
     };
     const fmtNum = (n) => Number(n||0).toLocaleString();
     const fmtPrice = (n) => '฿'+Number(n||0).toLocaleString();
+    // ฿ แบบกระชับ: ≥1M → "฿1.2M", ≥1K → "฿850K", ที่เหลือ → "฿1,234"
+    const fmtBaht = (n) => {
+      const v = Number(n||0);
+      if (v >= 1000000) return '฿' + (v/1000000).toFixed(v >= 10000000 ? 1 : 2) + 'M';
+      if (v >= 100000)  return '฿' + Math.round(v/1000) + 'K';
+      if (v >= 1000)    return '฿' + (v/1000).toFixed(1) + 'K';
+      return '฿' + Math.round(v).toLocaleString();
+    };
 
     // ── URL sync ──
     function updateUrl() {
@@ -270,28 +289,29 @@
       const isDaily = dfMonth > 0;
       // เซลล์ที่ admin กำลังสวมมุมมอง หรือ เซลล์ตัวเองตอนไม่ใช่ admin
       const focusSeller = !canViewAll ? employee.nickname : impersonate;
-      let labels, leadNormal, leadRJ, bookings, dones;
+      let labels, leadNormal, leadRJ, bookings, dones, dealValue;
 
       if (isDaily) {
         // รายวันของเดือนที่เลือก
         const dailySrc = focusSeller
           ? ((D.dailyBySeller || {})[focusSeller] || {})
           : (D.dailyByMonth || {});
-        const daily = dailySrc[dfMonth] || { leads:[], leadRJ:[], bookings:[], dones:[] };
+        const daily = dailySrc[dfMonth] || { leads:[], leadRJ:[], bookings:[], dones:[], dealValue:[] };
         const yr = (D.meta && D.meta.year) || new Date().getFullYear();
         const daysInMonth = new Date(yr, dfMonth, 0).getDate();
-        labels = []; leadNormal = []; leadRJ = []; bookings = []; dones = [];
+        labels = []; leadNormal = []; leadRJ = []; bookings = []; dones = []; dealValue = [];
         for (let d = 1; d <= daysInMonth; d++) {
           labels.push(String(d));
           leadNormal.push((daily.leads || [])[d] || 0);
           leadRJ.push((daily.leadRJ || [])[d] || 0);
           bookings.push((daily.bookings || [])[d] || 0);
           dones.push((daily.dones || [])[d] || 0);
+          dealValue.push((daily.dealValue || [])[d] || 0);
         }
       } else {
         // รายเดือนทั้งปี
         labels = C.MONTHS_SHORT;
-        leadNormal = []; leadRJ = []; bookings = []; dones = [];
+        leadNormal = []; leadRJ = []; bookings = []; dones = []; dealValue = [];
         for (let m = 1; m <= 12; m++) {
           const x = ms[m] || {};
           if (focusSeller) {
@@ -300,11 +320,13 @@
             leadRJ.push(ss.leadRJ || 0);
             bookings.push(ss.booking || 0);
             dones.push(ss.done || 0);
+            dealValue.push(ss.dealValue || 0);
           } else {
             leadNormal.push(x.leadNormal || 0);
             leadRJ.push(x.leadRJ || 0);
             bookings.push(x.totalBookings || 0);
             dones.push(x.totalDone || 0);
+            dealValue.push(x.totalDealValue || 0);
           }
         }
       }
@@ -392,6 +414,48 @@
           }
         });
       }
+
+      // 4) Line — 💰 ยอดปล่อย (Deal Value)
+      const cv4 = document.getElementById('chart-deal-value');
+      if (cv4) {
+        destroyChart('dealValue');
+        const totalDV = dealValue.reduce((a,b)=>a+b,0);
+        __charts.dealValue = new Chart(cv4, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'ยอดปล่อย (฿)', data: dealValue,
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5,150,105,.15)',
+                tension: .35, fill: true,
+                pointRadius: isDaily ? 2 : 4,
+                pointBackgroundColor: '#059669',
+                borderWidth: 2.4,
+              },
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => '฿' + Number(ctx.parsed.y||0).toLocaleString(),
+                  footer: () => totalDV > 0 ? 'รวม ' + fmtBaht(totalDV) : '',
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { callback: (v) => fmtBaht(v) },
+              },
+            },
+          }
+        });
+      }
     }
 
     // ── Date filter bar ──
@@ -421,13 +485,19 @@
         ? "วันที่ "+new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short'})
         : dfMonth>0 ? "เดือน"+MF[dfMonth] : "ทั้งปี "+new Date().getFullYear();
 
+      // Deal Value — รวมยอดปล่อยรถ (฿) ของ ช่วงที่กรอง
+      const dvDeal = ms ? (ms.totalDealValue||0) : (D.summary.totalDealValue||0);
+      const dvDone = ms ? (ms.totalDone||0) : (D.summary.totalDone||0);
+      const dvAvg  = dvDone ? Math.round(dvDeal/dvDone) : 0;
+
       const kpis = [
-        {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:sm.totalLeads||0,s:"รายการ",c:"var(--t1)"},
-        {l:"ติดตามอยู่",v:sm.totalFollow||0,s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%",c:"var(--blue)"},
-        {l:"จองแล้ว",v:ms?ms.totalBookings:D.summary.totalBookings,s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%",c:"var(--green)"},
-        {l:"ปิดได้",v:ms?ms.totalDone:D.summary.totalDone,s:pct(ms?ms.totalDone:D.summary.totalDone,D.summary.totalTarget)+"%  ของเป้า",c:"var(--green-mid)"},
-        {l:"เป้าหมาย",v:D.summary.totalTarget,s:"เคส/เดือน",c:"var(--amber)"},
-        {l:"RJ",v:ms?ms.leadRJ:D.summary.leadRJ,s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ",c:"var(--red)"},
+        {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:fmtNum(sm.totalLeads||0),s:"รายการ",c:"var(--t1)"},
+        {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%",c:"var(--blue)"},
+        {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%",c:"var(--green)"},
+        {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,D.summary.totalTarget)+"%  ของเป้า",c:"var(--green-mid)"},
+        {l:"💰 ยอดปล่อย",v:fmtBaht(dvDeal),s:dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย",c:"var(--green-mid)"},
+        {l:"เป้าหมาย",v:fmtNum(D.summary.totalTarget),s:"เคส/เดือน",c:"var(--amber)"},
+        {l:"RJ",v:fmtNum(ms?ms.leadRJ:D.summary.leadRJ),s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ",c:"var(--red)"},
       ];
       const pipeColors = {"รอเซ็นต์":"var(--blue)","รอผล":"var(--amber)","รอปล่อย":"var(--amber)","ปล่อย":"var(--green-mid)","รีเจ็ก":"var(--red)","จอง":"var(--green)"};
 
@@ -440,10 +510,10 @@
       html += `<button class="sbtn${curMode==='today'?' on':''}" onclick="curMode='today';render()">วันนี้</button>`;
       html += `<span style="font-size:11px;color:var(--t3)">${modeLabel}</span></div>`;
 
-      // KPI Grid
+      // KPI Grid — k.v ถูก pre-format มาแล้ว (string)
       html += `<div class="kgrid">`;
       kpis.forEach(k => {
-        html += `<div class="kpi"><div class="kl">${k.l}</div><div class="kv" style="color:${k.c}">${fmtNum(k.v)}</div><div class="ks">${k.s}</div></div>`;
+        html += `<div class="kpi"><div class="kl">${k.l}</div><div class="kv" style="color:${k.c}">${k.v}</div><div class="ks">${k.s}</div></div>`;
       });
       html += `</div>`;
 
@@ -457,7 +527,8 @@
       html += `<div class="cgrid">`;
       html += `<div class="card chart-card"><div class="card-title">📈 ยอด Lead ${_chartPeriod}${_focusSuffix}</div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
       html += `<div class="card chart-card"><div class="card-title">📊 ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}</div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
-      html += `<div class="card chart-card"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})</div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">💰 ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}</div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})</div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
       html += `</div>`;
 
       // Pipeline
@@ -473,6 +544,7 @@
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
         const tBooking=mt?mt.booking:t.booking, tDone=mt?mt.done:t.done;
+        const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
         const conv=pct(tBooking,tLead), tPct=pct(tDone,t.target);
         const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
         html += `<div class="team-card ${tid}">`;
@@ -486,6 +558,10 @@
         html += `<div><div style="font-size:10px;color:var(--t3)">ปิด/เป้า</div><div style="font-size:15px;font-weight:600;color:${tDone>=t.target?'var(--green)':'var(--amber)'}">${tDone}/${t.target}</div></div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
         html += `</div>`;
+        // Deal Value row
+        html += `<div style="margin-bottom:6px;padding:6px 8px;background:var(--green-bg);border-radius:6px;text-align:center">`;
+        html += `<div style="font-size:10px;color:var(--t3)">💰 ยอดปล่อย</div><div style="font-size:14px;font-weight:700;color:var(--green-mid)">${fmtBaht(tDealValue)}</div>`;
+        html += `</div>`;
         // Progress bars
         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
         html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">เป้าจบ ${t.done}/${t.target}</span><span style="color:${C.TEAM_COLORS[tid]}">${tPct}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(tPct,100)}%;background:${C.TEAM_COLORS[tid]}"></div></div></div>`;
@@ -494,37 +570,50 @@
       });
       html += `</div>`;
 
-      // Seller table
+      // Seller table — เพิ่มมูลค่าดีล (฿ ปล่อย)
+      const _sval = (s, key) => {
+        const msd = ms?.sellers?.[s.name];
+        return msd ? (msd[key]||0) : (s[key]||0);
+      };
       let ss = [...sellers];
       if(msort==='booking') ss.sort((a,b)=>b.booking-a.booking);
       else if(msort==='diligent') ss.sort((a,b)=>(dilMap[b.name]?.tot||0)-(dilMap[a.name]?.tot||0));
       else if(msort==='done') ss.sort((a,b)=>b.done-a.done);
+      else if(msort==='dealValue') ss.sort((a,b)=>_sval(b,'dealValue')-_sval(a,'dealValue'));
       else ss.sort((a,b)=>b.lead-a.lead);
 
       html += `<div class="card">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
       html += `<div class="card-title" style="margin:0">สรุปรายเซลล์</div>`;
-      html += `<select onchange="msort=this.value;render()"><option value="lead" ${msort==='lead'?'selected':''}>Lead มากสุด</option><option value="booking" ${msort==='booking'?'selected':''}>จองสูงสุด</option><option value="diligent" ${msort==='diligent'?'selected':''}>ติดตามมาก</option><option value="done" ${msort==='done'?'selected':''}>ปิดมากสุด</option></select></div>`;
-      html += `<div class="shdr"><span>เซลล์</span><span style="text-align:right">Lead</span><span style="text-align:right">ติดตาม</span><span style="text-align:right">จอง</span><span style="text-align:right">ปิด</span><span style="text-align:right">คลิป</span><span style="text-align:right">ไลฟ์</span><span>Conv%</span></div>`;
+      html += `<select onchange="msort=this.value;render()"><option value="lead" ${msort==='lead'?'selected':''}>Lead มากสุด</option><option value="booking" ${msort==='booking'?'selected':''}>จองสูงสุด</option><option value="diligent" ${msort==='diligent'?'selected':''}>ติดตามมาก</option><option value="done" ${msort==='done'?'selected':''}>ปิดมากสุด</option><option value="dealValue" ${msort==='dealValue'?'selected':''}>฿ ปล่อยสูงสุด</option></select></div>`;
+      html += `<div class="shdr" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr"><span>เซลล์</span><span style="text-align:right">Lead</span><span style="text-align:right">ติดตาม</span><span style="text-align:right">จอง</span><span style="text-align:right">ปิด</span><span style="text-align:right">฿ ปล่อย</span><span style="text-align:right">คลิป</span><span style="text-align:right">ไลฟ์</span><span>Conv%</span></div>`;
       ss.forEach(s => {
         const msd = ms?.sellers?.[s.name];
         const sLead=msd?msd.lead:s.lead, sFollow=msd?msd.follow:s.follow, sBooking=msd?msd.booking:s.booking, sDone=msd?msd.done:s.done;
+        const sDealVal = msd ? (msd.dealValue||0) : (s.dealValue||0);
         const conv=pct(sBooking,sLead), cPct2=pct(s.clip,s.clipTarget||1);
         const tC=conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)';
         const tBg=conv>=8?'var(--green-bg)':conv>=4?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
-        html += `<div class="srow" onclick="switchToSeller('${h(s.name)}')">`;
+        html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" onclick="switchToSeller('${h(s.name)}')">`;
         html += `<span style="font-weight:600">${h(s.name)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span></span>`;
         html += `<span style="text-align:right">${sLead}</span>`;
         html += `<span style="text-align:right;color:var(--blue)">${sFollow}</span>`;
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
+        html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
         html += `<span style="text-align:right;color:${cPct2>=100?'var(--green)':'var(--amber)'}">${s.clip}/${s.clipTarget}</span>`;
         html += `<span style="text-align:right;color:${s.live>0?'var(--blue)':'var(--t3)'}">${s.live}</span>`;
         html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(cPct2,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
+
+      // ── Admin/Executive only sections: Lead by Car + Released Cars ──
+      if (canViewAll) {
+        html += renderLeadCarsTable();
+        html += renderReleasedCarsTable();
+      }
 
       // Follow cases section
       html += renderFollowCasesSection();
@@ -533,6 +622,12 @@
       const nu = {};
       (FD.followCases||[]).filter(l=>l.updateCount===0 && ir(l.dateIn)).forEach(l=>{nu[l.seller]=(nu[l.seller]||0)+1;});
       const topBook = [...sellers].sort((a,b)=>b.booking-a.booking).slice(0,6);
+      // Top มูลค่าดีล (฿ ปล่อย) — ใช้ค่าตาม ms ถ้ามี filter เดือน
+      const topDealValue = [...sellers]
+        .map(s => ({...s, _dv: _sval(s, 'dealValue'), _done: _sval(s, 'done')}))
+        .filter(s => s._dv > 0)
+        .sort((a,b)=>b._dv - a._dv)
+        .slice(0,6);
       const medals = ['🥇','🥈','🥉','4.','5.','6.'];
       const dilEntries = Object.entries(dilMap).map(([n,d])=>({n,avg:d.cnt?Math.round((d.tot/d.cnt)*10)/10:0,high:d.high})).sort((a,b)=>b.avg-a.avg).slice(0,6);
 
@@ -545,23 +640,399 @@
         html += `<div class="prow" onclick="switchToSeller('${h(name)}')"><span style="font-weight:500">${h(name)}</span><span style="color:var(--red);font-weight:500">${count} เคส</span></div>`;
       });
       html += `</div>`;
+      // Top มูลค่าดีล (ใหม่)
+      html += `<div class="card" style="margin:0"><div class="card-title">💰 Top มูลค่าดีล</div>`;
+      if(topDealValue.length===0) html += `<span style="font-size:12px;color:var(--t3)">ยังไม่มีดีลปล่อย</span>`;
+      topDealValue.forEach((s,i)=>{
+        html += `<div class="prow" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${medals[i]} ${h(s.name)}</span><span style="color:var(--green-mid);font-weight:600">${fmtBaht(s._dv)} <span style="color:var(--t3);font-weight:400;font-size:10px">· ${s._done} คัน</span></span></div>`;
+      });
+      html += `</div>`;
       // Top booking
       html += `<div class="card" style="margin:0"><div class="card-title">🏆 Top จอง</div>`;
       topBook.forEach((s,i)=>{
         html += `<div class="prow" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${medals[i]} ${h(s.name)}</span><span style="color:var(--green);font-weight:500">${s.booking} จอง · ${pct(s.booking,s.lead)}%</span></div>`;
       });
-      html += `</div>`;
-      // Diligent
-      html += `<div class="card" style="margin:0"><div class="card-title">🔁 ติดตามมาก</div>`;
+      html += `</div></div>`;
+      // Diligent (เป็นแถวเดียวใหม่ใต้ 3-col)
+      html += `<div class="card"><div class="card-title">🔁 ติดตามมาก</div>`;
       dilEntries.forEach(d=>{
         html += `<div class="dilrow" onclick="switchToSeller('${h(d.n)}')" style="cursor:pointer"><span style="font-size:12px;font-weight:500;min-width:44px">${h(d.n)}</span><div class="dilbar"><div class="dilfill" style="width:${Math.min((d.avg/C.UPD_TGT)*100,100)}%;background:var(--blue)"></div></div><span style="font-size:11px;color:var(--blue);font-weight:600;min-width:26px;text-align:right">${d.avg}x</span><span style="font-size:10px;color:var(--amber)">🔥${d.high}</span></div>`;
       });
-      html += `</div></div>`;
+      html += `</div>`;
 
       // Hot cases
       html += renderHotCases(sellerNames);
 
       return html;
+    }
+
+    // ── Lead by Car Model (admin/executive only) ──
+    function renderLeadCarsTable() {
+      const monthKey = dfMonth > 0 ? dfMonth : 0;  // 0 = ทั้งปี
+      const src = (D.leadCarsByMonth || {})[monthKey]
+               || (D.leadCarsByMonth || {})[String(monthKey)]
+               || {};
+      let entries = Object.entries(src).map(([car, cnt]) => ({car, cnt}));
+      if (leadCarHideUnknown) {
+        entries = entries.filter(e => e.car !== 'ไม่ระบุ');
+      }
+      if (leadCarQuery.trim()) {
+        const q = leadCarQuery.trim().toLowerCase();
+        entries = entries.filter(e => e.car.toLowerCase().includes(q));
+      }
+      entries.sort((a,b) => b.cnt - a.cnt);
+      const totalLead = entries.reduce((a,e)=>a+e.cnt,0);
+      // Pagination
+      const totalPages = Math.max(1, Math.ceil(entries.length / LEAD_CAR_PAGE_SIZE));
+      if (leadCarPage > totalPages) leadCarPage = totalPages;
+      if (leadCarPage < 1) leadCarPage = 1;
+      const startIdx = (leadCarPage - 1) * LEAD_CAR_PAGE_SIZE;
+      const top = entries.slice(startIdx, startIdx + LEAD_CAR_PAGE_SIZE);
+      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+
+      let html = `<div class="card">`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
+      html += `<div class="card-title" style="margin:0">🚗 Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${periodLbl} · ${entries.length} รุ่น · ${totalLead} เคส)</span></div>`;
+      html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">`;
+      html += `<input type="text" placeholder="🔍 ค้นหา..." value="${h(leadCarQuery)}" oninput="leadCarQuery=this.value;leadCarPage=1;render()" style="padding:4px 8px;border:.5px solid var(--bd);border-radius:6px;font-size:11px;width:120px;background:var(--bg)">`;
+      html += `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t2);cursor:pointer"><input type="checkbox" ${leadCarHideUnknown?'checked':''} onchange="leadCarHideUnknown=this.checked;leadCarPage=1;render()"> ซ่อน 'ไม่ระบุ'</label>`;
+      html += `</div></div>`;
+
+      if (top.length === 0) {
+        html += `<div style="text-align:center;color:var(--t3);padding:18px;font-size:12px">ไม่มีข้อมูล</div>`;
+      } else {
+        html += `<div class="shdr" style="grid-template-columns:.5fr 4fr 1fr 1fr 2fr"><span>#</span><span>รถรุ่น</span><span style="text-align:right">Lead</span><span style="text-align:right">%</span><span>สัดส่วน</span></div>`;
+        const maxCnt = entries[0].cnt;  // base scale = อันดับ 1 ของผลกรอง
+        top.forEach((e, i) => {
+          const pctVal = totalLead > 0 ? Math.round(e.cnt/totalLead*1000)/10 : 0;
+          const barW = Math.round(e.cnt/maxCnt*100);
+          const safeCar = String(e.car).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+          const rank = startIdx + i + 1;
+          html += `<div class="srow" style="grid-template-columns:.5fr 4fr 1fr 1fr 2fr;cursor:pointer" onclick="openCarDetail('${safeCar}')" title="คลิกดูเซลล์ที่รับเคสรถนี้">`;
+          html += `<span style="color:var(--t3);font-size:11px">${rank}</span>`;
+          html += `<span style="font-weight:500;color:var(--blue)">🚗 ${h(e.car).slice(0,60)}</span>`;
+          html += `<span style="text-align:right;font-weight:600;color:var(--blue)">${e.cnt}</span>`;
+          html += `<span style="text-align:right;color:var(--t3);font-size:11px">${pctVal}%</span>`;
+          html += `<div><div class="pbr"><div class="pbf" style="width:${barW}%;background:var(--blue)"></div></div></div>`;
+          html += `</div>`;
+        });
+        // Pagination controls — ไป/กลับ
+        if (totalPages > 1) {
+          const prevDis = leadCarPage <= 1;
+          const nextDis = leadCarPage >= totalPages;
+          html += `<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0 4px">`;
+          html += `<button onclick="leadCarPage=Math.max(1,leadCarPage-1);render()" ${prevDis?'disabled':''} style="padding:5px 14px;border-radius:8px;border:.5px solid var(--bd2);background:${prevDis?'var(--bg2)':'var(--bg)'};color:${prevDis?'var(--t3)':'var(--t1)'};font-size:12px;cursor:${prevDis?'not-allowed':'pointer'};font-weight:600">← กลับ</button>`;
+          html += `<span style="font-size:12px;color:var(--t2);font-weight:600">หน้า ${leadCarPage}/${totalPages} <span style="font-size:10px;color:var(--t3);font-weight:400">· อันดับ ${startIdx+1}-${Math.min(startIdx+LEAD_CAR_PAGE_SIZE, entries.length)} จาก ${entries.length}</span></span>`;
+          html += `<button onclick="leadCarPage=Math.min(${totalPages},leadCarPage+1);render()" ${nextDis?'disabled':''} style="padding:5px 14px;border-radius:8px;border:.5px solid var(--bd2);background:${nextDis?'var(--bg2)':'var(--bg)'};color:${nextDis?'var(--t3)':'var(--t1)'};font-size:12px;cursor:${nextDis?'not-allowed':'pointer'};font-weight:600">ไป →</button>`;
+          html += `</div>`;
+        }
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    // ── Released Cars list (admin/executive only) ──
+    function renderReleasedCarsTable() {
+      // ใส่ index จาก D.bookingCases เพื่อใช้เปิด detail modal
+      const indexed = (D.bookingCases || []).map((b, i) => ({...b, _idx: i}));
+      // กรองตาม status (default = 'ปล่อย' / all = ทุกสถานะ)
+      let base = releasedStatus === 'all' ? indexed : indexed.filter(b => b.status === releasedStatus);
+      // กรองตามเดือนที่เลือก (ใช้ releaseDate, fallback date)
+      let cars = base.filter(b => {
+        if (dfMonth <= 0) return true;
+        const useDate = b.releaseDate || b.date || '';
+        const parts = useDate.split('/');
+        return parts.length >= 2 && parseInt(parts[1]) === dfMonth;
+      });
+      // กรอง seller dropdown
+      if (releasedSeller !== 'all') {
+        cars = cars.filter(b => b.seller === releasedSeller);
+      }
+      // เรียง
+      const parseDmy = (s) => {
+        if (!s) return 0;
+        const p = String(s).split('/');
+        if (p.length < 3) return 0;
+        let y = parseInt(p[2]);
+        if (y < 100) y += 2000;
+        if (y > 2500) y -= 543;
+        return y*10000 + (parseInt(p[1])||0)*100 + (parseInt(p[0])||0);
+      };
+      const ageDays = (dateStr) => {
+        const p = String(dateStr||'').split('/');
+        if (p.length < 3) return null;
+        let y = parseInt(p[2]); if (y<100) y+=2000; if (y>2500) y-=543;
+        const d = new Date(y, (parseInt(p[1])||1)-1, parseInt(p[0])||1);
+        return isNaN(d) ? null : Math.floor((Date.now() - d.getTime())/86400000);
+      };
+      if (releasedSort === 'price') cars.sort((a,b) => (b.price||0) - (a.price||0));
+      else if (releasedSort === 'seller') cars.sort((a,b) => (a.seller||'').localeCompare(b.seller||''));
+      else if (releasedSort === 'age') cars.sort((a,b) => parseDmy(a.releaseDate||a.date) - parseDmy(b.releaseDate||b.date));
+      else cars.sort((a,b) => parseDmy(b.releaseDate||b.date) - parseDmy(a.releaseDate||a.date));
+
+      const totalPrice = cars.reduce((a,b)=>a+(b.price||0),0);
+      const sellerNames = Array.from(new Set(base.map(b=>b.seller).filter(Boolean))).sort();
+      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+      const statusLbl = releasedStatus === 'all' ? 'ทุกสถานะ' : releasedStatus;
+      const titleEmoji = releasedStatus === 'ปล่อย' ? '🏁' : releasedStatus === 'all' ? '📋' : '🟡';
+
+      // Pagination
+      const totalPages = Math.max(1, Math.ceil(cars.length / RELEASED_PAGE_SIZE));
+      if (releasedPage > totalPages) releasedPage = totalPages;
+      if (releasedPage < 1) releasedPage = 1;
+      const startIdx = (releasedPage - 1) * RELEASED_PAGE_SIZE;
+      const pageCars = cars.slice(startIdx, startIdx + RELEASED_PAGE_SIZE);
+
+      let html = `<div class="card">`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
+      html += `<div class="card-title" style="margin:0">${titleEmoji} เคสจอง · <span style="color:var(--blue)">${h(statusLbl)}</span> <span style="font-size:11px;font-weight:400;color:var(--t3)">(${periodLbl} · ${cars.length} คัน${releasedStatus==='ปล่อย'?` · ${fmtBaht(totalPrice)}`:''})</span></div>`;
+      html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">`;
+      // Status filter — ปล่อย default + ทุกสถานะ + แต่ละ status
+      const statuses = ['ปล่อย','all','จอง','รอเซ็นต์','รอผล','รอปล่อย','รีเจ็ก'];
+      html += `<select onchange="releasedStatus=this.value;releasedPage=1;render()" style="font-size:11px">`;
+      statuses.forEach(st => {
+        const lbl = st === 'all' ? 'ทุกสถานะ' : st;
+        html += `<option value="${st}" ${releasedStatus===st?'selected':''}>${lbl}</option>`;
+      });
+      html += `</select>`;
+      html += `<select onchange="releasedSeller=this.value;releasedPage=1;render()" style="font-size:11px"><option value="all" ${releasedSeller==='all'?'selected':''}>ทุกเซลล์</option>`;
+      sellerNames.forEach(n => { html += `<option value="${h(n)}" ${releasedSeller===n?'selected':''}>${h(n)}</option>`; });
+      html += `</select>`;
+      html += `<select onchange="releasedSort=this.value;render()" style="font-size:11px"><option value="date" ${releasedSort==='date'?'selected':''}>ล่าสุดก่อน</option><option value="age" ${releasedSort==='age'?'selected':''}>เก่าสุดก่อน</option><option value="price" ${releasedSort==='price'?'selected':''}>ราคามากสุด</option><option value="seller" ${releasedSort==='seller'?'selected':''}>เซลล์</option></select>`;
+      html += `</div></div>`;
+
+      if (cars.length === 0) {
+        html += `<div style="text-align:center;color:var(--t3);padding:18px;font-size:12px">ไม่มีเคสในช่วงนี้</div>`;
+      } else {
+        html += `<div class="shdr" style="grid-template-columns:.85fr .7fr .8fr 2fr .85fr .9fr"><span>วันที่</span><span>เก่า</span><span>เซลล์</span><span>รถ</span><span>ทะเบียน</span><span style="text-align:right">ราคา</span></div>`;
+        html += `<div>`;
+        pageCars.forEach(b => {
+          const carLbl = (b.car||'-') + (b.year ? ` (${b.year})` : '');
+          const dispDate = b.releaseDate || b.date || '-';
+          const ageN = ageDays(dispDate);
+          const ageBadge = ageN == null ? '-' : (ageN > 90 ? `<span style="color:var(--red);font-weight:600">${ageN}d</span>` : ageN > 30 ? `<span style="color:var(--amber);font-weight:600">${ageN}d</span>` : `<span style="color:var(--green-mid);font-weight:600">${ageN}d</span>`);
+          const teamCol = C.TEAM_COLORS[(D.sellers||[]).find(s=>s.name===b.seller)?.team]||'var(--t1)';
+          const stColor = (C.STATUS_COLOR||{})[b.status] || '#888';
+          html += `<div class="srow" style="grid-template-columns:.85fr .7fr .8fr 2fr .85fr .9fr;cursor:pointer" onclick="openBookingDetail(${b._idx})">`;
+          html += `<span style="font-size:11px;color:var(--t2)">${h(dispDate)}${releasedStatus==='all'?`<br><span style='display:inline-block;padding:1px 5px;border-radius:6px;background:${stColor};color:#fff;font-size:9px;margin-top:2px'>${h(b.status)}</span>`:''}</span>`;
+          html += `<span style="font-size:11px">${ageBadge}</span>`;
+          html += `<span style="font-weight:600;color:${teamCol}">${h(b.seller||'-')}</span>`;
+          html += `<span style="font-size:12px">${h(carLbl).slice(0,60)}</span>`;
+          html += `<span style="font-size:11px;color:var(--t3)">${h(b.plate||'-')}</span>`;
+          html += `<span style="text-align:right;font-weight:600;color:${b.status==='ปล่อย'?'var(--green-mid)':'var(--t2)'}">${fmtBaht(b.price||0)}</span>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+        // Pagination controls — ไป/กลับ
+        if (totalPages > 1) {
+          const prevDis = releasedPage <= 1;
+          const nextDis = releasedPage >= totalPages;
+          html += `<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0 4px;border-top:.5px solid var(--bd);margin-top:6px">`;
+          html += `<button onclick="releasedPage=Math.max(1,releasedPage-1);render()" ${prevDis?'disabled':''} style="padding:5px 14px;border-radius:8px;border:.5px solid var(--bd2);background:${prevDis?'var(--bg2)':'var(--bg)'};color:${prevDis?'var(--t3)':'var(--t1)'};font-size:12px;cursor:${prevDis?'not-allowed':'pointer'};font-weight:600">← กลับ</button>`;
+          html += `<span style="font-size:12px;color:var(--t2);font-weight:600">หน้า ${releasedPage}/${totalPages} <span style="font-size:10px;color:var(--t3);font-weight:400">· แสดง ${startIdx+1}-${Math.min(startIdx+RELEASED_PAGE_SIZE, cars.length)} จาก ${cars.length}</span></span>`;
+          html += `<button onclick="releasedPage=Math.min(${totalPages},releasedPage+1);render()" ${nextDis?'disabled':''} style="padding:5px 14px;border-radius:8px;border:.5px solid var(--bd2);background:${nextDis?'var(--bg2)':'var(--bg)'};color:${nextDis?'var(--t3)':'var(--t1)'};font-size:12px;cursor:${nextDis?'not-allowed':'pointer'};font-weight:600">ไป →</button>`;
+          html += `</div>`;
+        }
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    // ── Booking Detail Modal — กดที่แถวรถที่ปล่อย / รถจอง แล้วเปิด ──
+    function openBookingDetail(idx) {
+      const b = (D.bookingCases || [])[idx];
+      if (!b) return;
+      const old = document.getElementById('book-detail-overlay');
+      if (old) old.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'book-detail-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      const row = (label, value, opts={}) => {
+        if (value == null || value === '' || value === '-') return '';
+        const mono = opts.mono ? 'font-family:monospace;' : '';
+        const wrap = opts.wrap ? 'white-space:pre-wrap;word-break:break-word;' : '';
+        const disp = (typeof value === 'number') ? value.toLocaleString() : h(value);
+        return `<div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
+          <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
+          <div style="font-size:12px;color:var(--t1);${mono}${wrap}">${disp}</div>
+        </div>`;
+      };
+
+      const statusColor = (C.STATUS_COLOR||{})[b.status] || '#888';
+      const phoneClean = (b.phone||'').replace(/[^0-9+]/g, '');
+      const callLink = phoneClean
+        ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">📞 โทร ${h(b.phone)}</a>` : '';
+
+      // คำนวณ "เก่ากี่วันแล้ว" — เทียบจากวันที่จอง/ปล่อย ใกล้สุดที่ parse ได้ กับวันนี้
+      const parseDmy = (s) => {
+        const p = String(s||'').split('/');
+        if (p.length < 3) return null;
+        let y = parseInt(p[2]);
+        if (y < 100) y += 2000;
+        if (y > 2500) y -= 543;
+        const d = new Date(y, (parseInt(p[1])||1)-1, parseInt(p[0])||1);
+        return isNaN(d) ? null : d;
+      };
+      const ageDays = (dateStr) => {
+        const d = parseDmy(dateStr);
+        if (!d) return null;
+        return Math.floor((Date.now() - d.getTime()) / 86400000);
+      };
+      const bookAge = ageDays(b.date);
+      const releaseAge = ageDays(b.releaseDate);
+      const ageBadge = (n, lbl) => {
+        if (n == null) return '';
+        const col = n > 90 ? 'var(--red)' : n > 30 ? 'var(--amber)' : 'var(--green-mid)';
+        return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;font-size:10px;font-weight:600;margin-left:6px">${lbl} ${n} วันก่อน</span>`;
+      };
+
+      overlay.innerHTML = `
+        <div style="background:var(--bg);border-radius:14px;max-width:600px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
+          <div style="background:${statusColor};padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div>
+              <div style="font-size:11px;color:#fff;opacity:.85;font-weight:600">เคสจอง · ${h(b.date||'-')} ${ageBadge(bookAge, 'จอง')}</div>
+              <div style="font-size:18px;font-weight:800;color:#fff">${h(b.customer||'-')}</div>
+              <div style="font-size:11px;color:#fff;opacity:.9;margin-top:2px">
+                สถานะ: <b>${h(b.status||'-')}</b>${b.isCash?' · 💵 ซื้อสด':''}
+                ${b.status==='ปล่อย' ? ageBadge(releaseAge, '· ปล่อย') : ''}
+              </div>
+            </div>
+            <button onclick="document.getElementById('book-detail-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:#fff;cursor:pointer;line-height:1;opacity:.9">✕</button>
+          </div>
+
+          <div style="overflow-y:auto;padding:14px 16px;flex:1">
+            ${callLink ? `<div style="margin-bottom:12px;text-align:center">${callLink}</div>` : ''}
+
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px">👤 ลูกค้า</div>
+            ${row('ชื่อลูกค้า', b.customer)}
+            ${row('เบอร์โทร', b.phone, {mono:true})}
+            ${row('Lead Code', b.leadCode, {mono:true})}
+            ${row('เซลล์', b.seller)}
+
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">🚗 รถ</div>
+            ${row('รถ', b.car)}
+            ${row('ปีรถ', b.year)}
+            ${row('ทะเบียน', b.plate)}
+
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">💰 ราคา / การจ่าย</div>
+            ${row('ราคาขาย', b.price)}
+            ${row('เงินจอง', b.deposit)}
+            ${row('ไฟแนนซ์', b.finance)}
+            ${row('เกรด', b.grade)}
+
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📅 ไทม์ไลน์</div>
+            ${row('วันที่จอง', b.date)}
+            ${row('วันที่เซ็นต์', b.signDate)}
+            ${row('วันที่รู้ผล', b.resultDate)}
+            ${row('เอกสารครบ', b.docsDate)}
+            ${row('วันที่ปล่อยรถ', b.releaseDate)}
+
+            ${b.note && b.note !== '-' ? `
+              <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📝 หมายเหตุ</div>
+              <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(b.note)}</div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // ── Car Detail Modal — กดที่รถใน Lead car table แล้วเปิด ──
+    function openCarDetail(car) {
+      // ปิด modal เก่า
+      const old = document.getElementById('car-detail-overlay');
+      if (old) old.remove();
+
+      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+      const carLower = String(car).toLowerCase();
+
+      // ── Lead per seller (จาก leadCarSellerMonth — exact match key) ──
+      const leadMap = (D.leadCarSellerMonth || {})[car] || {};
+
+      // ── Booking + ปล่อย per seller (substring match จาก bookingCases) ──
+      const bookSellerMap = {};  // seller → {booked, done, dealValue}
+      (D.bookingCases || []).forEach(b => {
+        if (!b.car || !b.seller) return;
+        if (!b.car.toLowerCase().includes(carLower)) return;
+        // กรองเดือน (ถ้าตั้ง filter)
+        if (dfMonth > 0) {
+          const useDate = b.releaseDate || b.date || '';
+          const p = String(useDate).split('/');
+          if (p.length < 2 || parseInt(p[1]) !== dfMonth) return;
+        }
+        if (!bookSellerMap[b.seller]) bookSellerMap[b.seller] = {booked:0, done:0, dealValue:0};
+        const ent = bookSellerMap[b.seller];
+        if (['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'].includes(b.status)) {
+          ent.booked++;
+          if (b.status === 'ปล่อย') {
+            ent.done++;
+            ent.dealValue += b.price || 0;
+          }
+        }
+      });
+
+      // ── รวม seller จากทั้ง 2 แหล่ง ──
+      const allSellers = new Set([...Object.keys(leadMap), ...Object.keys(bookSellerMap)]);
+      const rows = Array.from(allSellers).map(seller => {
+        const lm = leadMap[seller] || {total:0, byMonth:[]};
+        const leadCount = dfMonth > 0 ? (lm.byMonth?.[dfMonth] || 0) : (lm.total || 0);
+        const bm = bookSellerMap[seller] || {booked:0, done:0, dealValue:0};
+        const sellerObj = (D.sellers || []).find(s => s.name === seller);
+        const team = sellerObj?.team || '?';
+        const convPct = leadCount > 0 ? Math.round(bm.booked/leadCount*1000)/10 : 0;
+        return {seller, team, lead:leadCount, booked:bm.booked, done:bm.done, dealValue:bm.dealValue, convPct};
+      }).filter(r => r.lead > 0 || r.booked > 0).sort((a,b) => b.lead - a.lead || b.done - a.done);
+
+      const sumLead = rows.reduce((a,r)=>a+r.lead,0);
+      const sumBook = rows.reduce((a,r)=>a+r.booked,0);
+      const sumDone = rows.reduce((a,r)=>a+r.done,0);
+      const sumDeal = rows.reduce((a,r)=>a+r.dealValue,0);
+
+      const overlay = document.createElement('div');
+      overlay.id = 'car-detail-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      let inner = `<div style="background:var(--bg);border-radius:16px;max-width:780px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
+      inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap">`;
+      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียดรถ · ${h(periodLbl)}</div><div style="font-size:18px;font-weight:800;color:var(--blue)">🚗 ${h(car)}</div></div>`;
+      inner += `<button onclick="document.getElementById('car-detail-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
+      inner += `</div>`;
+
+      // Summary stat cards
+      inner += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">`;
+      inner += `<div style="background:var(--blue-bg);border-radius:10px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3)">รับ Lead</div><div style="font-size:18px;font-weight:800;color:var(--blue)">${sumLead}</div></div>`;
+      inner += `<div style="background:var(--amber-bg);border-radius:10px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:18px;font-weight:800;color:var(--amber)">${sumBook}</div></div>`;
+      inner += `<div style="background:var(--green-bg);border-radius:10px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปล่อย</div><div style="font-size:18px;font-weight:800;color:var(--green-mid)">${sumDone}</div></div>`;
+      inner += `<div style="background:var(--green-bg);border-radius:10px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3)">ยอดปล่อย</div><div style="font-size:15px;font-weight:800;color:var(--green-mid)">${fmtBaht(sumDeal)}</div></div>`;
+      inner += `</div>`;
+
+      if (rows.length === 0) {
+        inner += `<div style="text-align:center;color:var(--t3);padding:24px;font-size:13px">ไม่มีข้อมูลในช่วงนี้</div>`;
+      } else {
+        inner += `<div style="font-size:11px;color:var(--t3);margin-bottom:6px">จำนวน Lead / จอง / ปล่อย / ยอดปล่อย แยกตามเซลล์</div>`;
+        inner += `<div class="shdr" style="grid-template-columns:1.4fr .8fr .7fr .7fr 1fr 1fr"><span>เซลล์</span><span style="text-align:right">Lead</span><span style="text-align:right">จอง</span><span style="text-align:right">ปล่อย</span><span style="text-align:right">Conv%</span><span style="text-align:right">฿ ปล่อย</span></div>`;
+        inner += `<div style="max-height:380px;overflow-y:auto">`;
+        rows.forEach(r => {
+          const tCol = C.TEAM_COLORS[r.team] || 'var(--t3)';
+          inner += `<div class="srow" style="grid-template-columns:1.4fr .8fr .7fr .7fr 1fr 1fr;cursor:pointer" onclick="document.getElementById('car-detail-overlay').remove();switchToSeller('${h(r.seller)}')">`;
+          inner += `<span style="font-weight:600">${h(r.seller)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${tCol};color:#fff;margin-left:4px">${r.team}</span></span>`;
+          inner += `<span style="text-align:right;color:var(--blue);font-weight:600">${r.lead}</span>`;
+          inner += `<span style="text-align:right;color:var(--amber)">${r.booked||'-'}</span>`;
+          inner += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${r.done||'-'}</span>`;
+          inner += `<span style="text-align:right;color:var(--t3);font-size:11px">${r.lead>0?r.convPct+'%':'-'}</span>`;
+          inner += `<span style="text-align:right;color:var(--green-mid)">${r.dealValue>0?fmtBaht(r.dealValue):'-'}</span>`;
+          inner += `</div>`;
+        });
+        inner += `</div>`;
+      }
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">💡 Lead นับจากชื่อรถใน lead sheet · จอง/ปล่อย นับจากรายการจองที่รุ่นรถมีคำว่า "${h(car)}" (case-insensitive)</div>`;
+      inner += `</div>`;
+      overlay.innerHTML = inner;
+      document.body.appendChild(overlay);
     }
 
     // ── Follow cases section ──
@@ -764,6 +1235,7 @@
         {l:"ว่าง",v:sd.vacant||0,c:"var(--t3)"},
         {l:"จอง",v:sd.booking||0,c:"var(--green)"},
         {l:"ปิด/เป้า",v:(sd.done||0)+'/'+(sd.target||0),c:(sd.done||0)>=(sd.target||1)?'var(--green)':'var(--amber)'},
+        {l:"💰 ยอดปล่อย",v:fmtBaht(sd.dealValue||0),c:"var(--green-mid)"},
         {l:"ยังไม่โทร",v:noU,c:noU>10?'var(--red)':'var(--amber)'},
       ];
       html += `<div class="kgrid" style="margin-bottom:10px">`;

@@ -26,10 +26,11 @@
     .kpi-card .kv { font-size:22px; font-weight:800; line-height:1; }
     .kpi-card .ks { font-size:10px; color:var(--t3); margin-top:3px; }
     .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
-    .cgrid > .chart-card:nth-child(3) { grid-column: span 2; }
+    .cgrid > .chart-card.span2 { grid-column: span 2; }
     .chart-card { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:12px; }
     .chart-card .chart-title { font-size:12px; font-weight:700; color:var(--t1); margin-bottom:8px; }
     .chart-card .chart-box { position:relative; height:220px; }
+    .chart-card.span2 .chart-box { height:240px; }
     .section { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:13px; margin-bottom:10px; }
     .section h2 { font-size:14px; font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; }
     .section h2 .count { font-size:11px; color:var(--t3); font-weight:500; }
@@ -53,7 +54,7 @@
     @media (max-width:760px) {
       .kgrid { grid-template-columns:repeat(3,1fr); }
       .cgrid { grid-template-columns:1fr; }
-      .cgrid > .chart-card:nth-child(3) { grid-column: auto; }
+      .cgrid > .chart-card.span2 { grid-column: auto; }
       .lead-row { grid-template-columns:1fr auto; }
     }
     @media (max-width:480px) {
@@ -138,34 +139,45 @@
   function destroyChart(id) {
     if (__charts[id]) { __charts[id].destroy(); delete __charts[id]; }
   }
+  // ฿ แบบกระชับ (shared by KPI + chart axis)
+  const fmtBahtChart = (n) => {
+    const v = Number(n||0);
+    if (v >= 1000000) return '฿' + (v/1000000).toFixed(v >= 10000000 ? 1 : 2) + 'M';
+    if (v >= 100000)  return '฿' + Math.round(v/1000) + 'K';
+    if (v >= 1000)    return '฿' + (v/1000).toFixed(1) + 'K';
+    return '฿' + Math.round(v).toLocaleString();
+  };
+
   function initCharts() {
     if (typeof Chart === 'undefined') return;
     const daily = D.daily || {};
     const monthly = D.monthly || {};
     const isDaily = fMonth > 0;
-    let labels, leadNormal, leadRJ, bookings, dones;
+    let labels, leadNormal, leadRJ, bookings, dones, dealValue;
 
     if (isDaily) {
-      const m = daily[fMonth] || daily[String(fMonth)] || { leads:[], leadRJ:[], bookings:[], dones:[] };
+      const m = daily[fMonth] || daily[String(fMonth)] || { leads:[], leadRJ:[], bookings:[], dones:[], dealValue:[] };
       const yr = (D.meta && D.meta.year) || new Date().getFullYear();
       const daysInMonth = new Date(yr, fMonth, 0).getDate();
-      labels = []; leadNormal=[]; leadRJ=[]; bookings=[]; dones=[];
+      labels = []; leadNormal=[]; leadRJ=[]; bookings=[]; dones=[]; dealValue=[];
       for (let d=1; d<=daysInMonth; d++) {
         labels.push(String(d));
         leadNormal.push((m.leads||[])[d] || 0);
         leadRJ.push((m.leadRJ||[])[d] || 0);
         bookings.push((m.bookings||[])[d] || 0);
         dones.push((m.dones||[])[d] || 0);
+        dealValue.push((m.dealValue||[])[d] || 0);
       }
     } else {
       labels = C.MONTHS_SHORT;
-      leadNormal=[]; leadRJ=[]; bookings=[]; dones=[];
+      leadNormal=[]; leadRJ=[]; bookings=[]; dones=[]; dealValue=[];
       for (let m=1; m<=12; m++) {
         const x = monthly[m] || monthly[String(m)] || {};
         leadNormal.push(x.leadNormal || 0);
         leadRJ.push(x.leadRJ || 0);
         bookings.push(x.booking || 0);
         dones.push(x.done || 0);
+        dealValue.push(x.dealValue || 0);
       }
     }
 
@@ -217,6 +229,43 @@
         }
       });
     }
+
+    // 4) Line — 💰 ยอดปล่อย (Deal Value)
+    const cv4 = document.getElementById('chart-deal-value');
+    if (cv4) {
+      destroyChart('dealValue');
+      const totalDV = dealValue.reduce((a,b)=>a+b,0);
+      __charts.dealValue = new Chart(cv4, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'ยอดปล่อย (฿)', data: dealValue,
+            borderColor: '#059669',
+            backgroundColor: 'rgba(5,150,105,.15)',
+            tension: .35, fill: true,
+            pointRadius: isDaily ? 2 : 4,
+            pointBackgroundColor: '#059669',
+            borderWidth: 2.4,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => '฿' + Number(ctx.parsed.y||0).toLocaleString(),
+                footer: () => totalDV > 0 ? 'รวม ' + fmtBahtChart(totalDV) : '',
+              },
+            },
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { callback: (v) => fmtBahtChart(v) } },
+          },
+        }
+      });
+    }
   }
 
   // ── badges ──
@@ -253,8 +302,10 @@
     // KPI counts
     const kpiCounts = {};
     KPI_DEFS.forEach(k => { kpiCounts[k.key] = allLeads.filter(k.test).length; });
-    // Booking สถานะ "ปล่อย"
-    const doneCount = bookings.filter(b => b.status === 'ปล่อย').length;
+    // Booking สถานะ "ปล่อย" — รวมยอดเงินด้วย
+    const doneBookings = bookings.filter(b => b.status === 'ปล่อย');
+    const doneCount = doneBookings.length;
+    const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
 
     const periodLabel = (() => {
       if (fDay === -1) return 'วันนี้';
@@ -262,6 +313,15 @@
       const dd = fDay > 0 ? ` วันที่ ${fDay}` : '';
       return `${mm}${dd}`;
     })();
+
+    // ฿ แบบกระชับ
+    const fmtBaht = (n) => {
+      const v = Number(n||0);
+      if (v >= 1000000) return '฿' + (v/1000000).toFixed(v >= 10000000 ? 1 : 2) + 'M';
+      if (v >= 100000)  return '฿' + Math.round(v/1000) + 'K';
+      if (v >= 1000)    return '฿' + (v/1000).toFixed(1) + 'K';
+      return '฿' + Math.round(v).toLocaleString();
+    };
 
     let html = `
       <div class="seller-hd">
@@ -272,6 +332,14 @@
         <div style="text-align:right">
           <div style="font-size:22px;font-weight:800;color:var(--green)">${doneCount}/${s.target}</div>
           <div style="font-size:11px;color:var(--t3)">ปล่อยในช่วงนี้</div>
+        </div>
+      </div>
+
+      <div class="kgrid" style="margin-bottom:10px">
+        <div class="kpi-card" style="cursor:default">
+          <div class="kl">💰 ยอดปล่อย ${h(periodLabel)}</div>
+          <div class="kv" style="color:var(--green-mid)">${fmtBaht(dealValueRange)}</div>
+          <div class="ks">${doneCount ? 'เฉลี่ย '+fmtBaht(dealValueRange/doneCount)+'/คัน' : 'ยังไม่มีปล่อย'}</div>
         </div>
       </div>
 
@@ -308,7 +376,11 @@
           <div class="chart-title">📊 จอง / ปล่อย</div>
           <div class="chart-box"><canvas id="chart-bd"></canvas></div>
         </div>
-        <div class="chart-card">
+        <div class="chart-card span2">
+          <div class="chart-title">💰 ยอดปล่อย (Deal Value) ${h(periodLabel)} · รวม ${fmtBahtChart(dealValueRange)}</div>
+          <div class="chart-box"><canvas id="chart-deal-value"></canvas></div>
+        </div>
+        <div class="chart-card span2">
           <div class="chart-title">🥯 สถานะดีล ${h(periodLabel)} (${bookings.length} เคส)</div>
           <div class="chart-box"><canvas id="chart-pipe"></canvas></div>
         </div>

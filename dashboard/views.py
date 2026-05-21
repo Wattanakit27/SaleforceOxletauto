@@ -774,6 +774,7 @@ def seller_dashboard(request, token):
             "vacant": ss.get("vacant", 0),
             "done": ss.get("done", 0),
             "booking": ss.get("booking", 0),
+            "dealValue": ss.get("dealValue", 0),
         }
 
     filtered = {
