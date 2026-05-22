@@ -353,6 +353,10 @@
     const doneBookings = bookings.filter(b => b.status === 'ปล่อย');
     const doneCount = doneBookings.length;
     const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
+    // เคสในมือ — รวมเคสที่ยังต้องดูแล: ติดตาม + จอง + ปล่อย (filter ตาม period)
+    const followCount = kpiCounts['follow'] || 0;
+    const bookingCount = bookings.filter(b => b.status === 'จอง').length;
+    const inHandTotal = followCount + bookingCount + doneCount;
 
     const periodLabel = (() => {
       if (fDateFrom || fDateTo) {
@@ -391,6 +395,11 @@
           <div class="kl">💰 ยอดปล่อย ${h(periodLabel)}</div>
           <div class="kv" style="color:var(--green-mid)">${fmtBaht(dealValueRange)}</div>
           <div class="ks">${doneCount ? 'เฉลี่ย '+fmtBaht(dealValueRange/doneCount)+'/คัน' : 'ยังไม่มีปล่อย'}</div>
+        </div>
+        <div class="kpi-card" style="cursor:default">
+          <div class="kl">🎯 เคสในมือ ${h(periodLabel)}</div>
+          <div class="kv" style="color:var(--blue)">${inHandTotal}</div>
+          <div class="ks">ติดตาม ${followCount} · จอง ${bookingCount} · ปล่อย ${doneCount}</div>
         </div>
       </div>
 
