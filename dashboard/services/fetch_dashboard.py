@@ -589,6 +589,33 @@ def fetch_dashboard_data() -> dict:
                 "leadTypes": m_lead_types,
             }
 
+        # ── เพิ่ม "❓ ไม่ระบุ" ใน m_sellers — กัน sum รายเซลล์ไม่ตรง totalDone ตอน user filter เดือน ──
+        m_orphan_leads_rows = [
+            r for r in m_leads if normalize_seller(cell(r, L.sales_rep)) not in known_names
+        ]
+        m_orphan_done_b = [b for b in m_done if b["seller"] not in known_names]
+        m_orphan_pipe_b = [
+            b for b in m_bookings
+            if b["seller"] not in known_names and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+        ]
+        m_orphan_booking = sum(1 for j in m_jongs if j["seller"] not in known_names)
+        m_orphan_done_n = len(m_orphan_done_b)
+        m_orphan_dv = sum(b["price"] for b in m_orphan_done_b)
+        if m_orphan_leads_rows or m_orphan_done_b or m_orphan_booking:
+            m_sellers["❓ ไม่ระบุ"] = {
+                "lead": len(m_orphan_leads_rows),
+                "leadNormal": len([r for r in m_orphan_leads_rows if cell(r, L.type) not in RJ_TYPES]),
+                "leadRJ": len([r for r in m_orphan_leads_rows if cell(r, L.type) in RJ_TYPES]),
+                "follow": len([r for r in m_orphan_leads_rows if is_follow(cell(r, L.admin_status))]),
+                "vacant": len([r for r in m_orphan_leads_rows if is_vacant(cell(r, L.admin_status))]),
+                "done": m_orphan_done_n,
+                "booking": m_orphan_booking,
+                "dealValue": m_orphan_dv,
+                "pipelineValue": sum(b["price"] for b in m_orphan_pipe_b),
+                "avgDealValue": (m_orphan_dv / m_orphan_done_n) if m_orphan_done_n else 0,
+                "leadTypes": {},
+            }
+
         m_teams = {}
         for tid, members in TEAMS.items():
             ts = {"lead": 0, "follow": 0, "vacant": 0, "done": 0, "booking": 0,
