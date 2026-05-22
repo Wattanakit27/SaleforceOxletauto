@@ -21,12 +21,14 @@ BKK = ZoneInfo("Asia/Bangkok")
 
 # ── Follow status keywords ──
 FOLLOW_KEYWORDS = ["ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด"]
-# คำที่อยู่ใน admin_status แล้วต้องข้าม (ไม่นับเป็น follow / vacant) — sync กับ line_notify.SKIP_STATUS
+# คำที่ทำให้เคส "จบแล้ว" — ใช้กรองเฉพาะ "ต้องโทร/ติดตามต่อ" (เคสยังอยู่ใน list ปกติ + นับ stat ปกติ)
+# sync กับ line_notify.SKIP_STATUS — admin ใส่คำเหล่านี้เพื่อบอกว่าไม่ต้องตามต่อ
 SKIP_STATUS = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 
 
 def is_skipped(status: str) -> bool:
-    """เคสที่ถือว่า 'จบแล้ว' — ไม่ควรอยู่ใน follow/vacant ของเซลล์"""
+    """เคสที่ถือว่า 'จบแล้ว' — ใช้สำหรับ exclude จากการแจ้งเตือนติดตาม
+    (เคสยังนับใน stat รวม + แสดงใน list ปกติ — แค่ไม่ remind)"""
     if not status:
         return False
     low = status.lower()
@@ -34,17 +36,18 @@ def is_skipped(status: str) -> bool:
 
 
 def is_follow(status: str) -> bool:
+    """ตรวจว่า status เข้าข่าย 'ต้องตามต่อ' — ใช้สำหรับสร้าง follow_cases / KPI 'ต้องโทรต่อ'
+    เคส skipped (จบ/คืน/ยกเลิก/จ่ายใหม่) → ไม่นับเป็น follow แม้มีคำว่า 'ติดตาม'"""
     if not status:
         return False
     if is_skipped(status):
-        return False  # เคสคืน/ยกเลิก/จ่ายใหม่ → ไม่นับเป็น follow แม้มีคำว่า "ติดตาม"
+        return False
     lower = status.lower()
     return any(kw in lower for kw in FOLLOW_KEYWORDS)
 
 
 def is_vacant(status: str) -> bool:
-    if status and is_skipped(status):
-        return False  # เคสจบแล้ว → ไม่นับว่าง
+    """ตรวจว่า admin_status ยังว่าง — ใช้สำหรับ KPI 'ว่าง' (เคสที่ admin ยังไม่ assign สถานะ)"""
     return not status or status in ("-", "")
 
 

@@ -152,13 +152,22 @@
   }
 
   // ── KPI filters ──
+  // เคสที่ admin_status มีคำว่า "จบ/ส่งมอบ/คืนเคส/คืน/ยกเลิก/ไม่สนใจ/dead/จ่ายใหม่"
+  // → ยังนับใน 'หลีดที่รับ'/'โทรแล้วมีหลักฐาน'/'อัพเดท...' (เพื่อเก็บประวัติ stat เดือนเก่า)
+  // → แต่ไม่ขึ้นใน 'ยังไม่โทร' + 'ต้องโทรต่อ' (เพราะ admin บอกว่าเคสจบแล้ว ไม่ต้อง remind)
+  const SKIP_KEYWORDS = ['จบ','ส่งมอบ','คืนเคส','คืน','ยกเลิก','ไม่สนใจ','dead','จ่ายใหม่'];
+  const isSkipped = (l) => {
+    const s = (l.adminStatus||'').toLowerCase();
+    return s && SKIP_KEYWORDS.some(k => s.includes(k.toLowerCase()));
+  };
   const KPI_DEFS = [
     { key: 'all',       label: 'หลีดที่รับ',       color: 'var(--t1)',     hint: 'ทั้งหมด',           test: l => true },
     { key: 'called',    label: 'โทรแล้วมีหลักฐาน', color: 'var(--green)',  hint: 'callProof = ส่งแล้ว',  test: l => l.callProof === 'ส่งแล้ว' },
-    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0',     test: l => !l.updateCount },
+    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสจบ)', test: l => !l.updateCount && !isSkipped(l) },
     { key: 'upd2',      label: 'อัพเดท ≥ 2 ครั้ง',  color: 'var(--amber)',  hint: 'updateCount ≥ 2',     test: l => l.updateCount >= 2 },
     { key: 'updFull',   label: 'อัพเดทครบ',       color: 'var(--green-mid)', hint: `updateCount ≥ ${C.UPD_TGT}`, test: l => l.updateCount >= C.UPD_TGT },
-    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม', test: l => {
+    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสจบ)', test: l => {
+        if (isSkipped(l)) return false;
         const s = (l.salesStatus||'').toLowerCase();
         if (!s || s === '-') return false;
         return ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
@@ -387,7 +396,8 @@
 
       ${(() => {
         // ── 🔔 แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
-        const curMonthLeads = leadsInCurrentMonth();
+        // exclude เคส skipped (จบ/คืน/ยกเลิก/จ่ายใหม่) — เซลล์ไม่ต้องตามต่อ
+        const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l));
         const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
         const curFollow = curMonthLeads.filter(l => {
           const s = (l.salesStatus||'').toLowerCase();

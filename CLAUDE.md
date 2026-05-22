@@ -111,10 +111,11 @@ python manage.py runserver
 - **`SELLER_MAP`** = normalize ชื่อสะกดต่าง (เจเจ→เจ, กลอฟ→กอล์ฟ) — ใช้ผ่าน `normalize_seller()` เสมอ
 
 ### Lead Status
-- **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย" — **และไม่มี** คำใน SKIP_STATUS
-- **Vacant** (ว่าง): admin_status ว่างหรือ "-" — **และไม่มี** SKIP_STATUS
-- **Skipped** (เคสจบแล้ว — ไม่นับเป็น follow/vacant): admin_status มีคำว่า "จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่" — ดู `is_skipped()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py). Sync กับ `SKIP_STATUS` ใน [line_notify.py](dashboard/services/line_notify.py)
-  - หน้า /s/<token>/ (seller_dashboard view) **ตัดเคส skipped ออกจาก `my_leads`** เลย — เซลล์ไม่ต้องเห็นเคสจบแล้วในรายการติดตาม
+- **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย" — **และไม่มี** SKIP_STATUS
+- **Vacant** (ว่าง): admin_status ว่างหรือ "-"
+- **Skipped** (เคสจบแล้ว — ไม่ remind ติดตามอีก แต่ **ยังนับ stat ปกติ**): admin_status มีคำว่า "จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่" — ดู `is_skipped()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py). Sync กับ `SKIP_STATUS` ใน [line_notify.py](dashboard/services/line_notify.py)
+  - **เคสยังอยู่ใน `my_leads` / lists / KPI 'หลีดที่รับ'/'โทรแล้ว'/'อัพเดท...'** เพื่อเก็บประวัติ stat (ดูเดือนเก่าใช้ไปกี่เคสได้)
+  - **ตัดออกจาก**: `is_follow()` → ลดทุก KPI "ติดตาม" (admin dashboard, seller view), `follow_cases` list, seller.html KPI "ยังไม่โทร" + "ต้องโทรต่อ" (frontend ใช้ `isSkipped(l)` check + `SKIP_KEYWORDS`), banner แจ้งเตือนเดือนนี้
 - **RJ types**: "RJ", "Hot RJ", "Hot RB" — แยกออกจาก lead ปกติ
 - **Called proof**: `call_proof == "ส่งแล้ว"` = โทรแล้วมีหลักฐาน
 
