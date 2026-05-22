@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from .google_sheets import (
     fetch_all_sheets, cell, cell_num,
-    LEADS_COL as L, SALES_COL as S, BOOKINGS_COL as B,
+    LEADS_COL as L, SALES_COL as S,
     LIVE_COL as LV, FOLLOWUP_COL as FU, EMPLOYEE_COL as EM,
 )
 from .constants import (
@@ -130,7 +130,7 @@ def fetch_dashboard_data() -> dict:
     raw = fetch_all_sheets()
     raw_leads = raw["leads"]
     sales_reports = raw["sales_reports"]
-    raw_bookings = raw["bookings"]
+    # bookings sheet ไม่ใช้แล้ว — เปลี่ยนมานับ "จอง" จาก leads sheet (admin/sales_status มี "จอง")
     live_sessions = raw["live_sessions"]
     live_followups = raw["live_followups"]
     employees = raw["employees"]
@@ -165,19 +165,26 @@ def fetch_dashboard_data() -> dict:
     year_leads = [r for r in raw_leads if is_this_year(cell(r, L.received_date))]
     today_leads = [r for r in raw_leads if is_today(cell(r, L.received_date))]
 
-    # Jongs from bookings sheet
-    jongs = []
-    for r in raw_bookings:
-        date_str = cell(r, B.date)
-        if not re.match(r"^\d+/\d+/\d{2,4}$", date_str):
+    # Jongs — นับจาก leads sheet (admin_status / sales_status มีคำว่า "จอง")
+    # status อื่นๆ (รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก) จะนับจาก sales_reports (booking_cases ด้านล่าง)
+    # exclude เคส skipped (จบ/คืน/ยกเลิก/จ่ายใหม่)
+    def has_booking_status(row) -> bool:
+        admin_st = cell(row, L.admin_status)
+        sales_st = cell(row, L.sales_status)
+        if is_skipped(admin_st) or is_skipped(sales_st):
+            return False
+        return "จอง" in (admin_st or "") or "จอง" in (sales_st or "")
+
+    year_jongs = []
+    for r in year_leads:
+        if not has_booking_status(r):
             continue
-        seller = normalize_seller(cell(r, B.sales_rep))
-        if not seller or seller in ("เซลล์", "DATE"):
-            continue
-        if seller.startswith("รวม") or seller.startswith("**"):
-            continue
-        jongs.append({"seller": seller, "date": date_str, "code": cell(r, B.code)})
-    year_jongs = [j for j in jongs if is_this_year(j["date"])]
+        seller = normalize_seller(cell(r, L.sales_rep))
+        year_jongs.append({
+            "seller": seller or "",  # อาจว่างได้ → orphan
+            "date": cell(r, L.received_date),
+            "code": cell(r, L.lead_code),
+        })
 
     # BookingCases from sales_reports
     booking_cases = []

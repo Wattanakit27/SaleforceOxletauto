@@ -362,8 +362,14 @@
     const doneCount = doneBookings.length;
     const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
     // เคสในมือ — รวมเคสที่ยังต้องดูแล: ติดตาม + จอง + ปล่อย (filter ตาม period)
+    // "จอง" นับจาก leads (admin/sales_status มี "จอง") — ส่วน "ปล่อย" จาก sales_reports (booking_cases)
     const followCount = kpiCounts['follow'] || 0;
-    const bookingCount = bookings.filter(b => b.status === 'จอง').length;
+    const bookingCount = allLeads.filter(l => {
+      if (isSkipped(l)) return false;
+      const admin = l.adminStatus || '';
+      const sales = l.salesStatus || '';
+      return admin.includes('จอง') || sales.includes('จอง');
+    }).length;
     const inHandTotal = followCount + bookingCount + doneCount;
 
     const periodLabel = (() => {
