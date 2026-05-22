@@ -126,16 +126,17 @@ python manage.py runserver
 - Excel serial date (เลข 4-5 หลัก)
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
 
-### Date filter (กรองเดือน)
+### Date filter (กรองเดือน / ช่วงวัน)
 - **UI**: `<input type="month">` (HTML5 native picker) แทนปุ่ม 12 เดือน → ไม่ต้องไปแก้โค้ดเวลามีเดือนใหม่
 - **State**:
   - `index.html` ใช้ `dfMonth` (0=ทั้งปี, -1=วันนี้, 1-12=เดือน) + `setDfFromInput(v)` parse "YYYY-MM" → setDf(month)
-  - `seller.html` ใช้ `fMonth` + `setMonthFromInput(v)` แบบเดียวกัน
+  - `seller.html` ใช้ `fMonth` (เดือน) + `fDateFrom`/`fDateTo` (ช่วงวัน, "YYYY-MM-DD") — mutually exclusive (เลือก month → ล้าง range, เลือก range → ล้าง month). UI มี 2 แถว: เดือน + ช่วงวัน
 - **Year**: ยังเป็น single-year (`is_this_year` filter ใน backend) — ถ้าผู้ใช้เลือกเดือนของปีอื่นใน picker จะใช้แค่ส่วน month
 - **KPI rendering** (seller view ใน index.html):
   - `dfMonth > 0` → ใช้ `D.monthlySummary[dfMonth].sellers[name]` (overlay บน `sdYear` เพื่อคง target/team)
   - `dfMonth = 0` → ใช้ `D.sellers[]` (รายปี)
   - `m_sellers` ต้องมี field ครบ (lead/follow/vacant/booking/done/dealValue/leadTypes/...) — ดู `fetch_dashboard.py` `m_sellers[]` block
+- **🔔 Banner แจ้งเตือนเดือนปัจจุบัน** (seller.html, เหนือ filter bar) — แสดง "ยังไม่โทร X เคส / ต้องตามต่อ Y เคส" ของเดือนปัจจุบัน **ไม่ขึ้นกับ filter** (เพื่อ remind เซลล์เสมอ). ใช้ helper `leadsInCurrentMonth()` ดึงข้อมูลจาก `D.leads` filter ด้วยเดือนของ `new Date()`
 
 ### MoM (Month-over-Month) Comparison
 - JS helper ใน [index.html](dashboard/templates/dashboard/index.html): `getMoM(month, key)` คืน `{cur, prev, delta, pct, isUp}` + `momBadge(mom, invert, fmt)` สร้าง HTML badge `↗ +12.5%`

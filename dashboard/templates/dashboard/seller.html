@@ -87,11 +87,15 @@
   const nc = (u) => Math.max(0, C.UPD_TGT - u);
 
   // ── state ──
-  let fMonth = 0;   // 0=ทั้งปี, 1-12=เดือน
-  let fDay = 0;     // 0=ทั้งเดือน, 1-31=วันเฉพาะ, -1=วันนี้
-  let kpiFilter = 'all'; // ตัวกรอง list ด้านล่าง (เฉพาะ tab leads)
-  let viewMode = 'leads'; // 'leads' | 'bookings' — สลับ list ด้านล่าง
-  let bookStatusFilter = 'all'; // 'all' | จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก
+  // Filter mode: month (เลือกเดือน) | range (เลือกช่วงวัน) | today | all
+  // เลือก month → reset range; เลือก range → reset month (mutually exclusive)
+  let fMonth = 0;          // 0=ทั้งปี/range/today, 1-12=เดือน
+  let fDay = 0;            // 0=ทั้งเดือน/range, -1=วันนี้ (เก็บไว้ backward compat — UI ลบปุ่ม 1-31 ออก)
+  let fDateFrom = '';      // 'YYYY-MM-DD' — ใช้คู่กับ fDateTo
+  let fDateTo = '';        // 'YYYY-MM-DD'
+  let kpiFilter = 'all';
+  let viewMode = 'leads';
+  let bookStatusFilter = 'all';
   const __charts = {};
 
   // ── date utils ──
@@ -101,16 +105,50 @@
     if (m) return { day: +m[1], month: +m[2], year: +m[3] };
     return null;
   }
+  // คืน normalized JS Date จาก sheet date (รองรับ พ.ศ./yy/yyyy)
+  function sheetDateToJS(d) {
+    if (!d) return null;
+    let y = d.year;
+    if (y < 100) y += 2000;
+    if (y > 2500) y -= 543;
+    return new Date(y, d.month - 1, d.day);
+  }
   function dateMatchesFilter(s) {
     const d = parseSheetDate(s);
-    if (!d) return fMonth === 0 && fDay === 0;
+    if (!d) return !fDateFrom && !fDateTo && fMonth === 0 && fDay === 0;
+
+    // Range mode — ถ้ามี fDateFrom หรือ fDateTo (override month + day)
+    if (fDateFrom || fDateTo) {
+      const ld = sheetDateToJS(d);
+      if (!ld) return false;
+      if (fDateFrom) {
+        const from = new Date(fDateFrom + 'T00:00:00');
+        if (ld < from) return false;
+      }
+      if (fDateTo) {
+        const to = new Date(fDateTo + 'T23:59:59');
+        if (ld > to) return false;
+      }
+      return true;
+    }
+
+    // Month/day mode (legacy)
     if (fMonth > 0 && d.month !== fMonth) return false;
     if (fDay === -1) {
       const now = new Date();
       return d.day === now.getDate() && d.month === (now.getMonth()+1);
     }
-    if (fDay > 0 && d.day !== fDay) return false;
     return true;
+  }
+
+  // ── เดือนปัจจุบัน (สำหรับ banner แจ้งเตือน — ไม่ขึ้นกับ filter) ──
+  function leadsInCurrentMonth() {
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    return (D.leads || []).filter(l => {
+      const d = parseSheetDate(l.dateIn);
+      return d && d.month === curMonth;
+    });
   }
 
   // ── KPI filters ──
@@ -308,10 +346,14 @@
     const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
 
     const periodLabel = (() => {
+      if (fDateFrom || fDateTo) {
+        const f = fDateFrom || '...';
+        const t = fDateTo || '...';
+        return `${f} ถึง ${t}`;
+      }
       if (fDay === -1) return 'วันนี้';
       const mm = fMonth > 0 ? `เดือน${(C.MONTHS_FULL||[])[fMonth-1] || fMonth}` : 'ทั้งปี';
-      const dd = fDay > 0 ? ` วันที่ ${fDay}` : '';
-      return `${mm}${dd}`;
+      return mm;
     })();
 
     // ฿ แบบกระชับ
@@ -343,19 +385,39 @@
         </div>
       </div>
 
+      ${(() => {
+        // ── 🔔 แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
+        const curMonthLeads = leadsInCurrentMonth();
+        const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
+        const curFollow = curMonthLeads.filter(l => {
+          const s = (l.salesStatus||'').toLowerCase();
+          return s && s !== '-' && ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
+        }).length;
+        const curMonthName = (C.MONTHS_FULL||[])[new Date().getMonth()] || '';
+        if (curNotCalled === 0 && curFollow === 0) return '';
+        return `
+        <div style="background:var(--amber-bg,#fff7e6);border:.5px solid var(--amber,#ef9f27);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:18px">🔔</span>
+          <span style="font-size:12px;font-weight:600;color:var(--t1)">แจ้งเตือนเดือน${h(curMonthName)}:</span>
+          ${curNotCalled>0 ? `<span style="font-size:12px;color:var(--red);font-weight:600">📞 ยังไม่โทร <b>${curNotCalled}</b> เคส</span>` : ''}
+          ${curFollow>0 ? `<span style="font-size:12px;color:var(--blue);font-weight:600">📋 ต้องตามต่อ <b>${curFollow}</b> เคส</span>` : ''}
+        </div>`;
+      })()}
+
       <div class="filter-bar">
         <span class="lbl">📅 เดือน:</span>
-        <button class="f-btn ${fMonth===0?'on':''}" onclick="setMonth(0)">ทั้งปี</button>
+        <button class="f-btn ${fMonth===0 && !fDateFrom && !fDateTo && fDay===0 ?'on':''}" onclick="resetFilter()">ทั้งปี</button>
+        <button class="f-btn ${fDay===-1?'on':''}" onclick="setDay(-1)">วันนี้</button>
         <input type="month" value="${fMonth>0 ? `${new Date().getFullYear()}-${String(fMonth).padStart(2,'0')}` : ''}" onchange="setMonthFromInput(this.value)" title="เลือกเดือน (ปี ${new Date().getFullYear()})" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
         ${fMonth>0 ? `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${(C.MONTHS_FULL||[])[fMonth-1]||''}</span>` : ''}
       </div>
 
       <div class="filter-bar">
-        <span class="lbl">🗓️ วัน:</span>
-        <button class="f-btn ${fDay===0?'on':''}" onclick="setDay(0)">ทั้งเดือน</button>
-        <button class="f-btn ${fDay===-1?'on':''}" onclick="setDay(-1)">วันนี้</button>
-        <span class="f-divider"></span>
-        ${(()=>{ let h=''; for(let d=1;d<=31;d++){ h+=`<button class="f-btn ${fDay===d?'on':''}" onclick="setDay(${d})">${d}</button>`; } return h; })()}
+        <span class="lbl">🗓️ ช่วงวัน:</span>
+        <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+        <span style="font-size:11px;color:var(--t3)">ถึง</span>
+        <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+        ${(fDateFrom||fDateTo) ? `<button class="f-btn" onclick="clearDateRange()" style="background:var(--red-bg,#fee);color:var(--red)">✕ ล้าง</button>` : ''}
       </div>
 
       <div class="kgrid">
@@ -641,13 +703,36 @@
   }
 
   // ── filter actions ──
-  function setMonth(m) { fMonth = m; if (m === 0) fDay = 0; render(); }
+  function setMonth(m) {
+    fMonth = m;
+    if (m === 0) fDay = 0;
+    // เลือก month → ล้าง date range (mutually exclusive)
+    if (m > 0) { fDateFrom = ''; fDateTo = ''; }
+    render();
+  }
   function setMonthFromInput(v) {
     if (!v) { setMonth(0); return; }
     const mo = parseInt(v.split('-')[1] || '0');
     if (mo >= 1 && mo <= 12) setMonth(mo);
   }
-  function setDay(d) { fDay = d; render(); }
+  function setDay(d) {
+    fDay = d;
+    if (d !== 0) { fDateFrom = ''; fDateTo = ''; }  // วันนี้ override range
+    render();
+  }
+  function setDateFrom(v) {
+    fDateFrom = v || '';
+    // เลือก date range → ล้าง month + day (mutually exclusive)
+    if (fDateFrom) { fMonth = 0; fDay = 0; }
+    render();
+  }
+  function setDateTo(v) {
+    fDateTo = v || '';
+    if (fDateTo) { fMonth = 0; fDay = 0; }
+    render();
+  }
+  function clearDateRange() { fDateFrom = ''; fDateTo = ''; render(); }
+  function resetFilter() { fMonth = 0; fDay = 0; fDateFrom = ''; fDateTo = ''; render(); }
   function setKpi(k) { kpiFilter = k; viewMode = 'leads'; render(); }
   function setViewMode(m) { viewMode = m; render(); }
   function setBookStatus(s) { bookStatusFilter = s; render(); }
