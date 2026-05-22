@@ -178,8 +178,16 @@
   function leadsInRange() {
     return (D.leads || []).filter(l => dateMatchesFilter(l.dateIn));
   }
+  // ปล่อย → filter ตาม releaseDate (วันปล่อย); statuses อื่น → filter ตาม date (วันจอง)
+  // เคสจองเดือน A แต่ปล่อยเดือน B ต้องนับเข้าเดือน B
   function bookingsInRange() {
-    return (D.bookingCases || []).filter(b => dateMatchesFilter(b.date));
+    return (D.bookingCases || []).filter(b => {
+      if (b.status === 'ปล่อย') {
+        const rd = (b.releaseDate && b.releaseDate !== '-') ? b.releaseDate : b.date;
+        return dateMatchesFilter(rd);
+      }
+      return dateMatchesFilter(b.date);
+    });
   }
 
   // ── chart init ──
@@ -349,7 +357,7 @@
     // KPI counts
     const kpiCounts = {};
     KPI_DEFS.forEach(k => { kpiCounts[k.key] = allLeads.filter(k.test).length; });
-    // Booking สถานะ "ปล่อย" — รวมยอดเงินด้วย
+    // Booking สถานะ "ปล่อย" — bookings ผ่าน bookingsInRange() ที่ filter "ปล่อย" ด้วย releaseDate แล้ว
     const doneBookings = bookings.filter(b => b.status === 'ปล่อย');
     const doneCount = doneBookings.length;
     const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
