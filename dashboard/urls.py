@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/admin/send_line", views.admin_send_line, name="admin_send_line"),
     path("api/admin/seller_config", views.admin_seller_config, name="admin_seller_config"),
     path("api/admin/schedule_config", views.admin_schedule_config, name="admin_schedule_config"),
+    path("api/admin/diagnostics", views.admin_diagnostics, name="admin_diagnostics"),
     path("api/cron/send_line", views.cron_send_line, name="cron_send_line"),
     path("api/cron/tick", views.cron_tick, name="cron_tick"),
 ]

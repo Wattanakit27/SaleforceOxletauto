@@ -507,6 +507,171 @@ def cron_send_line(request):
     })
 
 
+@require_GET
+def admin_diagnostics(request):
+    """Admin-only — สรุปการกรองข้อมูล + เคสที่หลุดจาก dashboard
+
+    Returns:
+        leads: total / thisYear / prevYear / noDate / badDate (+ examples)
+        sales: total / kept / dropNoSeq / dropNoStatus / statusBreakdown (+ examples)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.google_sheets import (
+        fetch_sheet, fetch_leads_dedup, get_leads_dedup_stats, cell,
+        LEADS_COL as L, SALES_COL as S,
+    )
+    from .services.fetch_dashboard import parse_date, bangkok_now
+
+    try:
+        leads = fetch_leads_dedup()  # union monthly tabs + dedupe (latest wins)
+        dedup_stats = get_leads_dedup_stats()
+        sales = fetch_sheet("sales_reports")
+    except Exception as e:
+        return JsonResponse({"error": f"fetch sheet ล้มเหลว: {e}"}, status=500)
+
+    cur_year = bangkok_now().year
+
+    # ── Leads diagnostic ──
+    lead_total = len(leads)
+    lead_this_year = 0
+    lead_prev_year = 0
+    lead_no_date = 0
+    lead_bad_date = 0
+    bad_date_examples = []
+    no_date_with_data = []  # leads ที่ไม่มีวันที่ แต่มีข้อมูลอื่น (อาจเป็นเคสที่ user ลืมกรอกวันที่)
+
+    for r in leads:
+        date_str = cell(r, L.received_date)
+        if not date_str:
+            # ดูว่ามีข้อมูลอื่นมั้ย
+            has_other = bool(cell(r, L.phone) or cell(r, L.lead_code)
+                             or cell(r, L.sales_rep) or cell(r, L.car_inquiry)
+                             or cell(r, L.car_formula))
+            if has_other:
+                if len(no_date_with_data) < 10:
+                    no_date_with_data.append({
+                        "code": cell(r, L.lead_code) or "-",
+                        "seller": cell(r, L.sales_rep) or "-",
+                        "phone": cell(r, L.phone) or "-",
+                        "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
+                    })
+            lead_no_date += 1
+            continue
+        d = parse_date(date_str)
+        if not d:
+            lead_bad_date += 1
+            if len(bad_date_examples) < 10:
+                bad_date_examples.append({
+                    "code": cell(r, L.lead_code) or "-",
+                    "seller": cell(r, L.sales_rep) or "-",
+                    "phone": cell(r, L.phone) or "-",
+                    "rawDate": date_str,
+                })
+            continue
+        if d.year == cur_year:
+            lead_this_year += 1
+        else:
+            lead_prev_year += 1
+
+    # ── Sales reports diagnostic ──
+    sales_total = len(sales)
+    sales_kept = 0
+    sales_drop_no_seq = 0
+    sales_drop_invalid_seq = 0
+    sales_drop_no_status = 0
+    no_status_examples = []
+    invalid_seq_examples = []
+    from collections import Counter
+    status_breakdown = Counter()
+
+    for r in sales:
+        seq = cell(r, S.order_num)
+        if not seq or seq == "ลำดับ":
+            sales_drop_no_seq += 1
+            continue
+        try:
+            int(seq)
+        except ValueError:
+            sales_drop_invalid_seq += 1
+            if len(invalid_seq_examples) < 5:
+                invalid_seq_examples.append({
+                    "seq": seq,
+                    "seller": cell(r, S.sales_rep) or "-",
+                    "customer": cell(r, S.customer_name) or "-",
+                })
+            continue
+        status = cell(r, S.status)
+        if not status:
+            sales_drop_no_status += 1
+            if len(no_status_examples) < 10:
+                no_status_examples.append({
+                    "seq": seq,
+                    "seller": cell(r, S.sales_rep) or "-",
+                    "customer": cell(r, S.customer_name) or "-",
+                    "date": cell(r, S.date) or "-",
+                    "car": cell(r, S.car_detail) or "-",
+                })
+            continue
+        # Clean status (strip (ซื้อสด))
+        clean = status.replace(" (ซื้อสด)", "").strip()
+        status_breakdown[clean] += 1
+        sales_kept += 1
+
+    # ── เคส "รอปล่อย" detail (admin อาจสับสนกับ "ปล่อย") ──
+    waiting_release_cases = []
+    for r in sales:
+        seq = cell(r, S.order_num)
+        if not seq or seq == "ลำดับ":
+            continue
+        try:
+            int(seq)
+        except ValueError:
+            continue
+        status = cell(r, S.status)
+        clean = status.replace(" (ซื้อสด)", "").strip()
+        if clean == "รอปล่อย":
+            waiting_release_cases.append({
+                "seller": cell(r, S.sales_rep) or "-",
+                "customer": cell(r, S.customer_name) or "-",
+                "car": cell(r, S.car_detail) or "-",
+                "date": cell(r, S.date) or "-",
+                "price": cell(r, S.sale_price) or "-",
+            })
+            if len(waiting_release_cases) >= 50:
+                break
+
+    return JsonResponse({
+        "ok": True,
+        "generatedAt": bangkok_now().isoformat(),
+        "leads": {
+            "total": lead_total,
+            "thisYear": lead_this_year,
+            "prevYear": lead_prev_year,
+            "noDate": lead_no_date,
+            "badDate": lead_bad_date,
+            "badDateExamples": bad_date_examples,
+            "noDateWithData": no_date_with_data,
+            "dedup": dedup_stats,
+        },
+        "sales": {
+            "total": sales_total,
+            "kept": sales_kept,
+            "dropNoSeq": sales_drop_no_seq,
+            "dropInvalidSeq": sales_drop_invalid_seq,
+            "dropNoStatus": sales_drop_no_status,
+            "noStatusExamples": no_status_examples,
+            "invalidSeqExamples": invalid_seq_examples,
+            "statusBreakdown": dict(status_breakdown),
+            "waitingReleaseCases": waiting_release_cases,
+            "waitingReleaseTotal": status_breakdown.get("รอปล่อย", 0),
+        },
+        "currentYear": cur_year,
+    }, json_dumps_params={"ensure_ascii": False})
+
+
 @require_http_methods(["GET", "POST"])
 def admin_send_line(request):
     """Admin-only — ดู preview pipeline + ส่ง LINE Flex แจ้งเตือน
@@ -729,12 +894,12 @@ def seller_dashboard(request, token):
     must_call_count = sum(1 for c in my_follows if c["mustCall"])
 
     # ── ดึง lead ทั้งหมดของเซลล์ (รวมที่ไม่ได้เป็น follow) สำหรับ KPI + filter ──
-    from .services.google_sheets import fetch_sheet, cell, cell_num, LEADS_COL as L
+    from .services.google_sheets import fetch_leads_dedup, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
     from .services.fetch_dashboard import is_this_year
     import re as _re
 
-    raw_leads = fetch_sheet("leads")
+    raw_leads = fetch_leads_dedup()  # union monthly tabs + dedupe (latest wins)
     my_leads = []
     for r in raw_leads:
         if normalize_seller(cell(r, L.sales_rep)) != seller_name:

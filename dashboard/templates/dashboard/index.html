@@ -166,6 +166,41 @@
     };
     const fmtNum = (n) => Number(n||0).toLocaleString();
     const fmtPrice = (n) => '฿'+Number(n||0).toLocaleString();
+
+    // ── MoM helper: ดึงค่า metric ของเดือน m เทียบกับเดือน m-1 ──
+    // คืน {cur, prev, delta, pct, isUp} หรือ null ถ้าเปรียบเทียบไม่ได้
+    function getMoM(month, key) {
+      if (!month || month < 2 || month > 12) return null;
+      const ms = D.monthlySummary || {};
+      const curMs  = ms[month] || ms[String(month)] || {};
+      const prevMs = ms[month-1] || ms[String(month-1)] || {};
+      const cur  = Number(curMs[key] || 0);
+      const prev = Number(prevMs[key] || 0);
+      if (cur === 0 && prev === 0) return null;
+      const delta = cur - prev;
+      const pct = prev > 0
+        ? Math.round((delta/prev) * 1000) / 10
+        : (cur > 0 ? 999 : 0);  // 999 = "ใหม่" (เดือนก่อนเป็น 0)
+      return {cur, prev, delta, pct, isUp: delta >= 0};
+    }
+    // คืน HTML badge ของ MoM — ใส่ใน subtitle ของ KPI card
+    // invert=true ถ้า metric ที่ "ลด = ดี" (เช่น RJ, ติดตามค้าง)
+    function momBadge(mom, invert=false, fmt) {
+      if (!mom) return '';
+      fmt = fmt || ((n) => Number(n).toLocaleString());
+      // 999 = ใหม่ทั้งหมด (prev=0)
+      if (mom.pct === 999) {
+        return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);padding:1px 5px;border-radius:8px;margin-left:4px" title="เดือนก่อน 0 → ใหม่ทั้งหมด">✨ ใหม่</span>`;
+      }
+      // ลด = ดี (RJ): invert color
+      const goodTrend = invert ? !mom.isUp : mom.isUp;
+      const col = mom.pct === 0 ? 'var(--t3)' : goodTrend ? 'var(--green)' : 'var(--red)';
+      const bg  = mom.pct === 0 ? 'var(--bg2)' : goodTrend ? 'var(--green-bg)' : 'var(--red-bg)';
+      const arrow = mom.delta > 0 ? '↗' : mom.delta < 0 ? '↘' : '→';
+      const sign = mom.delta > 0 ? '+' : '';
+      return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:${col};background:${bg};padding:1px 5px;border-radius:8px;margin-left:4px" title="เดือนก่อน ${fmt(mom.prev)} → เดือนนี้ ${fmt(mom.cur)}">${arrow} ${sign}${mom.pct}%</span>`;
+    }
+
     // ฿ แบบกระชับ: ≥1M → "฿1.2M", ≥1K → "฿850K", ที่เหลือ → "฿1,234"
     const fmtBaht = (n) => {
       const v = Number(n||0);
@@ -233,6 +268,7 @@
         html += `<button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--green-mid);background:var(--green-bg);color:var(--green);cursor:pointer">📋 LINE ID</button>`;
         html += `<button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer">📤 LINE Flex</button>`;
         html += `<button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--amber-mid);background:var(--amber-bg);color:var(--amber);cursor:pointer">🎯 ตั้งเป้า/ทีม</button>`;
+        html += `<button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล / เคสที่หาย" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--purple-mid);background:var(--purple-bg,#f3e8ff);color:var(--purple-mid,#7c3aed);cursor:pointer">🔍 Log ข้อมูล</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
       if(canViewAll && D.sellers) {
@@ -460,14 +496,15 @@
 
     // ── Date filter bar ──
     function renderDateFilterBar() {
-      const presets = [{id:0,l:'ทั้งหมด'},{id:-1,l:'วันนี้'}];
-      C.MONTHS_SHORT.forEach((m,i)=>presets.push({id:i+1,l:m}));
       const dfCount = dfMonth!==0 ? (FD.followCases||[]).filter(l=>ir(l.dateIn)).length : 0;
+      const yr = new Date().getFullYear();
+      const monthStr = dfMonth > 0 ? `${yr}-${String(dfMonth).padStart(2,'0')}` : '';
       let html = `<div class="df-bar"><span class="df-label">📅 กรองวันที่รับเคส:</span>`;
-      presets.forEach(p => {
-        html += `<button class="df-btn${dfMonth===p.id?' on':''}" onclick="setDf(${p.id})">${p.l}</button>`;
-      });
-      if(dfMonth!==0) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">ในช่วงนี้: ${dfCount} เคส</span>`;
+      html += `<button class="df-btn${dfMonth===0?' on':''}" onclick="setDf(0)">ทั้งหมด</button>`;
+      html += `<button class="df-btn${dfMonth===-1?' on':''}" onclick="setDf(-1)">วันนี้</button>`;
+      html += `<input type="month" value="${monthStr}" onchange="setDfFromInput(this.value)" title="เลือกเดือน (ปี ${yr})" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">`;
+      if(dfMonth>0) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${C.MONTHS_FULL[dfMonth-1]} · ${dfCount} เคส</span>`;
+      else if(dfMonth===-1) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${dfCount} เคส</span>`;
       html += `</div>`;
       return html;
     }
@@ -490,14 +527,22 @@
       const dvDone = ms ? (ms.totalDone||0) : (D.summary.totalDone||0);
       const dvAvg  = dvDone ? Math.round(dvDeal/dvDone) : 0;
 
+      // ── MoM (Month-over-Month) — แสดงเฉพาะเมื่อกรองเดือนเฉพาะและไม่ใช่ "วันนี้" ──
+      const momActive = dfMonth > 0 && !isToday && dfMonth >= 2;
+      const m_lead    = momActive ? getMoM(dfMonth, 'totalLeads')     : null;
+      const m_follow  = momActive ? getMoM(dfMonth, 'totalFollow')    : null;
+      const m_book    = momActive ? getMoM(dfMonth, 'totalBookings')  : null;
+      const m_done    = momActive ? getMoM(dfMonth, 'totalDone')      : null;
+      const m_deal    = momActive ? getMoM(dfMonth, 'totalDealValue') : null;
+      const m_rj      = momActive ? getMoM(dfMonth, 'leadRJ')         : null;
       const kpis = [
-        {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:fmtNum(sm.totalLeads||0),s:"รายการ",c:"var(--t1)"},
-        {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%",c:"var(--blue)"},
-        {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%",c:"var(--green)"},
-        {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,D.summary.totalTarget)+"%  ของเป้า",c:"var(--green-mid)"},
-        {l:"💰 ยอดปล่อย",v:fmtBaht(dvDeal),s:dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย",c:"var(--green-mid)"},
+        {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads"},
+        {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow"},
+        {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%"+momBadge(m_book),c:"var(--green)",mk:"totalBookings"},
+        {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,D.summary.totalTarget)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone"},
+        {l:"💰 ยอดปล่อย",v:fmtBaht(dvDeal),s:(dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย")+momBadge(m_deal, false, fmtBaht),c:"var(--green-mid)",mk:"totalDealValue"},
         {l:"เป้าหมาย",v:fmtNum(D.summary.totalTarget),s:"เคส/เดือน",c:"var(--amber)"},
-        {l:"RJ",v:fmtNum(ms?ms.leadRJ:D.summary.leadRJ),s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ",c:"var(--red)"},
+        {l:"RJ",v:fmtNum(ms?ms.leadRJ:D.summary.leadRJ),s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ"+momBadge(m_rj, true),c:"var(--red)",mk:"leadRJ"},
       ];
       const pipeColors = {"รอเซ็นต์":"var(--blue)","รอผล":"var(--amber)","รอปล่อย":"var(--amber)","ปล่อย":"var(--green-mid)","รีเจ็ก":"var(--red)","จอง":"var(--green)"};
 
@@ -510,10 +555,20 @@
       html += `<button class="sbtn${curMode==='today'?' on':''}" onclick="curMode='today';render()">วันนี้</button>`;
       html += `<span style="font-size:11px;color:var(--t3)">${modeLabel}</span></div>`;
 
-      // KPI Grid — k.v ถูก pre-format มาแล้ว (string)
+      // MoM hint (ถ้ามี)
+      if (momActive) {
+        const curMonthName = C.MONTHS_FULL[dfMonth-1] || '';
+        const prevFull = C.MONTHS_FULL[dfMonth-2] || '';
+        html += `<div style="font-size:11px;color:var(--t3);margin-bottom:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;display:inline-block">📊 % คือเทียบ <b style="color:var(--t1)">${curMonthName}</b> vs <b style="color:var(--t1)">${prevFull}</b></div>`;
+      }
+
+      // KPI Grid — k.v ถูก pre-format มาแล้ว, k.mk = metric key (กดได้ถ้ามี)
       html += `<div class="kgrid">`;
       kpis.forEach(k => {
-        html += `<div class="kpi"><div class="kl">${k.l}</div><div class="kv" style="color:${k.c}">${k.v}</div><div class="ks">${k.s}</div></div>`;
+        const clickAttr = k.mk
+          ? ` onclick="openMetricDetail('${k.mk}')" style="cursor:pointer" title="คลิกดูรายละเอียด + trend 12 เดือน"`
+          : '';
+        html += `<div class="kpi"${clickAttr}><div class="kl">${k.l}${k.mk?' <span style=\"font-size:9px;color:var(--t3);font-weight:400\">↗ ดูเพิ่ม</span>':''}</div><div class="kv" style="color:${k.c}">${k.v}</div><div class="ks">${k.s}</div></div>`;
       });
       html += `</div>`;
 
@@ -539,6 +594,20 @@
       html += `</div></div>`;
 
       // Teams
+      // MoM per-team helper
+      function teamMoM(tid, key) {
+        if (!momActive) return null;
+        const ms_ = D.monthlySummary || {};
+        const cur  = ((ms_[dfMonth]   || ms_[String(dfMonth)]   || {}).teams || {})[tid] || {};
+        const prev = ((ms_[dfMonth-1] || ms_[String(dfMonth-1)] || {}).teams || {})[tid] || {};
+        const c = Number(cur[key] || 0);
+        const p = Number(prev[key] || 0);
+        if (c === 0 && p === 0) return null;
+        const delta = c - p;
+        const pctv = p > 0 ? Math.round((delta/p)*1000)/10 : (c > 0 ? 999 : 0);
+        return {cur:c, prev:p, delta, pct:pctv, isUp: delta >= 0};
+      }
+
       html += `<div class="card"><div class="card-title">👥 แยกตามทีม</div>`;
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
@@ -547,20 +616,26 @@
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
         const conv=pct(tBooking,tLead), tPct=pct(tDone,t.target);
         const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
+        // MoM
+        const t_mLead = teamMoM(tid, 'lead');
+        const t_mDone = teamMoM(tid, 'done');
+        const t_mBook = teamMoM(tid, 'booking');
+        const t_mDeal = teamMoM(tid, 'dealValue');
+
         html += `<div class="team-card ${tid}">`;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">`;
         html += `<span style="font-size:13px;font-weight:700;color:${C.TEAM_COLORS[tid]}">${C.TEAM_NAMES[tid]}</span>`;
         html += `<span style="font-size:11px;color:var(--t2)">${t.members.join(' · ')}</span></div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;text-align:center">`;
-        html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLead}</div></div>`;
+        html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLead}</div>${momBadge(t_mLead)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
-        html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div></div>`;
-        html += `<div><div style="font-size:10px;color:var(--t3)">ปิด/เป้า</div><div style="font-size:15px;font-weight:600;color:${tDone>=t.target?'var(--green)':'var(--amber)'}">${tDone}/${t.target}</div></div>`;
+        html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div>${momBadge(t_mBook)}</div>`;
+        html += `<div><div style="font-size:10px;color:var(--t3)">ปิด/เป้า</div><div style="font-size:15px;font-weight:600;color:${tDone>=t.target?'var(--green)':'var(--amber)'}">${tDone}/${t.target}</div>${momBadge(t_mDone)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
         html += `</div>`;
         // Deal Value row
         html += `<div style="margin-bottom:6px;padding:6px 8px;background:var(--green-bg);border-radius:6px;text-align:center">`;
-        html += `<div style="font-size:10px;color:var(--t3)">💰 ยอดปล่อย</div><div style="font-size:14px;font-weight:700;color:var(--green-mid)">${fmtBaht(tDealValue)}</div>`;
+        html += `<div style="font-size:10px;color:var(--t3)">💰 ยอดปล่อย</div><div style="font-size:14px;font-weight:700;color:var(--green-mid)">${fmtBaht(tDealValue)} ${momBadge(t_mDeal, false, fmtBaht)}</div>`;
         html += `</div>`;
         // Progress bars
         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
@@ -836,6 +911,130 @@
       }
       html += `</div>`;
       return html;
+    }
+
+    // ── KPI Detail Modal — กดที่ KPI card เพื่อดู trend 12 เดือน + breakdown ──
+    function openMetricDetail(metricKey) {
+      const cfg = {
+        'totalLeads':     {label:'Lead',         emoji:'📩', color:'#374151', invert:false, fmt:fmtNum},
+        'totalFollow':    {label:'ติดตามอยู่',    emoji:'📞', color:'#3b82f6', invert:true,  fmt:fmtNum},
+        'totalBookings':  {label:'จองแล้ว',       emoji:'📋', color:'#10b981', invert:false, fmt:fmtNum},
+        'totalDone':      {label:'ปิดได้',        emoji:'🏁', color:'#059669', invert:false, fmt:fmtNum},
+        'totalDealValue': {label:'ยอดปล่อย',     emoji:'💰', color:'#059669', invert:false, fmt:fmtBaht},
+        'leadRJ':         {label:'RJ',           emoji:'🚫', color:'#ef4444', invert:true,  fmt:fmtNum},
+      }[metricKey];
+      if (!cfg) return;
+      const old = document.getElementById('metric-detail-overlay');
+      if (old) old.remove();
+
+      const ms = D.monthlySummary || {};
+      // ดึง 12 เดือนทั้งปี
+      const monthData = [];
+      let maxVal = 0;
+      for (let m = 1; m <= 12; m++) {
+        const v = Number((ms[m] || ms[String(m)] || {})[metricKey] || 0);
+        monthData.push({m, v});
+        if (v > maxVal) maxVal = v;
+      }
+      const totalYear = monthData.reduce((a,e)=>a+e.v,0);
+      const curMonth = (D.meta && D.meta.month) || (new Date().getMonth()+1);
+      const focusMonth = dfMonth > 0 ? dfMonth : curMonth;
+      const focusVal = monthData[focusMonth-1].v;
+      const prevVal  = focusMonth > 1 ? monthData[focusMonth-2].v : 0;
+      const delta = focusVal - prevVal;
+      const deltaPct = prevVal > 0 ? Math.round(delta/prevVal*1000)/10 : (focusVal>0 ? 999 : 0);
+      const goodTrend = cfg.invert ? delta <= 0 : delta >= 0;
+      const deltaCol = deltaPct === 0 ? 'var(--t3)' : goodTrend ? 'var(--green)' : 'var(--red)';
+
+      // Team breakdown (เดือน focus)
+      const teamData = ((ms[focusMonth] || ms[String(focusMonth)] || {}).teams) || {};
+      const teamRows = Object.entries(teamData)
+        .filter(([tid]) => tid !== 'ADMIN')
+        .map(([tid, t]) => {
+          const teamKey = {
+            'totalLeads':'lead', 'totalFollow':'follow', 'totalBookings':'booking',
+            'totalDone':'done', 'totalDealValue':'dealValue', 'leadRJ':null
+          }[metricKey];
+          const v = teamKey ? Number(t[teamKey] || 0) : 0;
+          return {tid, v};
+        })
+        .filter(r => r.v > 0 || metricKey === 'leadRJ');
+
+      // RJ ไม่มีใน team breakdown → ข้าม
+      const showTeamSection = metricKey !== 'leadRJ' && teamRows.length > 0;
+      const teamTotal = teamRows.reduce((a,r)=>a+r.v,0);
+
+      const overlay = document.createElement('div');
+      overlay.id = 'metric-detail-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      let inner = `<div style="background:var(--bg);border-radius:16px;max-width:680px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
+      // Header
+      inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">`;
+      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียด · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
+      inner += `<div style="font-size:18px;font-weight:800;color:${cfg.color}">${cfg.emoji} ${cfg.label}</div></div>`;
+      inner += `<button onclick="document.getElementById('metric-detail-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
+      inner += `</div>`;
+
+      // Big number + comparisons
+      inner += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">`;
+      inner += `<div style="background:${cfg.color}1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${C.MONTHS_FULL[focusMonth-1]}</div><div style="font-size:22px;font-weight:800;color:${cfg.color}">${cfg.fmt(focusVal)}</div></div>`;
+      inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${focusMonth > 1 ? C.MONTHS_FULL[focusMonth-2] : '-'}</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${focusMonth > 1 ? cfg.fmt(prevVal) : '-'}</div></div>`;
+      if (deltaPct === 999) {
+        inner += `<div style="background:var(--blue-bg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">MoM</div><div style="font-size:18px;font-weight:800;color:var(--blue)">✨ ใหม่</div></div>`;
+      } else {
+        const arrow = delta > 0 ? '↗' : delta < 0 ? '↘' : '→';
+        const sign = delta > 0 ? '+' : '';
+        inner += `<div style="background:${deltaCol}1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">MoM</div><div style="font-size:18px;font-weight:800;color:${deltaCol}">${arrow} ${sign}${deltaPct}%</div><div style="font-size:10px;color:var(--t3)">${sign}${cfg.fmt(Math.abs(delta))}</div></div>`;
+      }
+      inner += `</div>`;
+
+      // 12-month bar trend
+      inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">📈 Trend ทั้งปี · รวม ${cfg.fmt(totalYear)}</div>`;
+      inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">`;
+      inner += `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:120px">`;
+      monthData.forEach(({m, v}) => {
+        const ratio = maxVal > 0 ? v/maxVal : 0;
+        const h = Math.max(2, Math.round(ratio * 100));
+        const isCur = m === focusMonth;
+        const bg = isCur ? cfg.color : (cfg.color + '66');
+        inner += `<div title="${C.MONTHS_FULL[m-1]}: ${cfg.fmt(v)}" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer" onclick="document.getElementById('metric-detail-overlay').remove();setDf(${m});render()">`;
+        inner += `<div style="font-size:9px;color:var(--t3);margin-bottom:2px;${isCur?'font-weight:700;color:'+cfg.color:''}">${v>0?cfg.fmt(v).replace('฿',''):''}</div>`;
+        inner += `<div style="width:100%;background:${bg};border-radius:3px 3px 0 0;height:${h}%"></div>`;
+        inner += `</div>`;
+      });
+      inner += `</div>`;
+      // Month labels
+      inner += `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:6px">`;
+      monthData.forEach(({m}) => {
+        const isCur = m === focusMonth;
+        inner += `<div style="font-size:10px;text-align:center;color:${isCur?cfg.color:'var(--t3)'};font-weight:${isCur?700:400}">${C.MONTHS_SHORT[m-1]}</div>`;
+      });
+      inner += `</div>`;
+      inner += `</div>`;
+
+      // Team breakdown
+      if (showTeamSection) {
+        inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">👥 แยกตามทีม · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
+        inner += `<div style="background:var(--bg2);border-radius:10px;padding:10px">`;
+        teamRows.sort((a,b)=>b.v-a.v).forEach(r => {
+          const ratio = teamTotal > 0 ? r.v/teamTotal : 0;
+          const teamCol = C.TEAM_COLORS[r.tid] || 'var(--t3)';
+          const teamName = C.TEAM_NAMES[r.tid] || r.tid;
+          inner += `<div style="display:grid;grid-template-columns:80px 1fr 80px 50px;gap:8px;align-items:center;padding:5px 0">`;
+          inner += `<span style="font-size:12px;font-weight:700;color:${teamCol}">${h(teamName)}</span>`;
+          inner += `<div style="height:14px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;width:${ratio*100}%;background:${teamCol}"></div></div>`;
+          inner += `<span style="font-size:12px;font-weight:600;text-align:right">${cfg.fmt(r.v)}</span>`;
+          inner += `<span style="font-size:11px;color:var(--t3);text-align:right">${Math.round(ratio*1000)/10}%</span>`;
+          inner += `</div>`;
+        });
+        inner += `</div>`;
+      }
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px">💡 คลิกที่แท่งกราฟ trend → กรองไปเดือนนั้น</div>`;
+      inner += `</div>`;
+      overlay.innerHTML = inner;
+      document.body.appendChild(overlay);
     }
 
     // ── Booking Detail Modal — กดที่แถวรถที่ปล่อย / รถจอง แล้วเปิด ──
@@ -1203,8 +1402,11 @@
     function renderSeller(sellers, sellerNames, dilMap) {
       const effectiveCurS = curS || (sellers[0]?.name??'');
       if(!curS && effectiveCurS) curS = effectiveCurS;
-      const sd = sellers.find(s=>s.name===effectiveCurS) || {};
-      const isAdminTeam = sd.team==='ADMIN';
+      const sdYear = sellers.find(s=>s.name===effectiveCurS) || {};
+      // ถ้ามี filter เดือน → ใช้ค่ารายเดือนจาก monthlySummary (overlay บน sdYear เพื่อคง target/team)
+      const sdMonth = (dfMonth > 0 && D.monthlySummary?.[dfMonth]?.sellers?.[effectiveCurS]) || null;
+      const sd = sdMonth ? {...sdYear, ...sdMonth} : sdYear;
+      const isAdminTeam = sdYear.team==='ADMIN';
       const cases = (FD.followCases||[]).filter(l=>l.seller===effectiveCurS && ir(l.dateIn));
       const noU = cases.filter(l=>l.updateCount===0).length;
       const hot = cases.filter(l=>l.updateCount>=3).length;
@@ -1223,7 +1425,8 @@
       html += `<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap">`;
       html += `<button class="bbtn" onclick="switchTab('o')">← กลับ</button>`;
       html += `<div class="av">${effectiveCurS.charAt(0)}</div>`;
-      html += `<div style="flex:1"><div style="font-size:15px;font-weight:700">${h(effectiveCurS)}</div><div style="font-size:11px;color:var(--t2)">${sd.lead||0} Lead · ว่าง ${sd.vacant||0} · จอง ${sd.booking||0} · ทีม ${sd.team||'?'}</div></div>`;
+      const sellerPeriodLbl = dfMonth>0 ? `${C.MONTHS_FULL[dfMonth-1]}` : (dfMonth===-1 ? 'วันนี้' : 'ทั้งปี');
+      html += `<div style="flex:1"><div style="font-size:15px;font-weight:700">${h(effectiveCurS)} <span style="font-size:11px;color:var(--t3);font-weight:500">· ${sellerPeriodLbl}</span></div><div style="font-size:11px;color:var(--t2)">${sd.lead||0} Lead · ว่าง ${sd.vacant||0} · จอง ${sd.booking||0} · ทีม ${sdYear.team||'?'}</div></div>`;
       html += `<select onchange="curS=this.value;showCase=null;curF='all';lfPage=1;updateUrl();render()">`;
       sellerNames.forEach(n=>{html+=`<option value="${h(n)}" ${effectiveCurS===n?'selected':''}>${h(n)}</option>`;});
       html += `</select></div>`;
@@ -1378,6 +1581,12 @@
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     function setDf(preset) { dfMonth=preset; lfPage=1; render(); }
+    function setDfFromInput(v) {
+      if (!v) { setDf(0); return; }
+      // v format: "YYYY-MM" — ใช้แค่ month (ระบบ filter ปีปัจจุบันใน backend แล้ว)
+      const mo = parseInt(v.split('-')[1] || '0');
+      if (mo >= 1 && mo <= 12) setDf(mo);
+    }
     function setImpersonate(name) {
       impersonate = name||null;
       if(name) localStorage.setItem('oxlet_impersonate',name);
@@ -1469,6 +1678,139 @@
     }
 
     // ── Seller Config Panel (admin only) — ตั้งเป้า + จัดทีม ผ่าน Google Sheet ──
+    // ── 🔍 Diagnostics Panel (admin only) — ดู log การกรองข้อมูล + เคสที่หาย ──
+    async function openDiagnosticsPanel() {
+      const old = document.getElementById('diag-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'diag-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = `<div style="background:var(--bg);border-radius:16px;max-width:900px;width:100%;padding:24px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลด...</div></div>`;
+      document.body.appendChild(overlay);
+
+      let data;
+      try {
+        const r = await fetch('/api/admin/diagnostics', {credentials:'same-origin'});
+        data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'fetch failed');
+      } catch (e) {
+        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">❌ ${h(String(e))}</div>`;
+        return;
+      }
+
+      const L = data.leads, S = data.sales;
+
+      let html = `<div style="background:var(--bg);border-radius:16px;max-width:900px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
+      // Header
+      html += `<div style="padding:18px 22px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">`;
+      html += `<div><div style="font-size:11px;color:var(--t3)">Admin Diagnostics · ${h(new Date(data.generatedAt).toLocaleString('th-TH'))}</div><div style="font-size:18px;font-weight:800;color:var(--t1)">🔍 Log การกรองข้อมูล</div></div>`;
+      html += `<div style="display:flex;gap:6px">`;
+      html += `<button onclick="openDiagnosticsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">🔄 รีเฟรช</button>`;
+      html += `<button onclick="document.getElementById('diag-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
+      html += `</div></div>`;
+
+      html += `<div style="overflow-y:auto;padding:18px 22px;flex:1">`;
+
+      // ── Leads section ──
+      html += `<div style="margin-bottom:18px">`;
+      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">📩 Leads — ${L.total.toLocaleString()} แถว</div>`;
+      html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">`;
+      html += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปีนี้ (${data.currentYear})</div><div style="font-size:18px;font-weight:800;color:var(--green)">${L.thisYear.toLocaleString()}</div><div style="font-size:9px;color:var(--t3)">ขึ้น dashboard</div></div>`;
+      html += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปีก่อน</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${L.prevYear.toLocaleString()}</div><div style="font-size:9px;color:var(--t3)">ถูกตัดออก (intentional)</div></div>`;
+      const badDateCol = L.badDate > 0 ? 'var(--red)' : 'var(--t3)';
+      html += `<div style="background:${L.badDate>0?'var(--red-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">วันที่พัง</div><div style="font-size:18px;font-weight:800;color:${badDateCol}">${L.badDate}</div><div style="font-size:9px;color:var(--t3)">⚠️ หายจาก dashboard</div></div>`;
+      const noDataCol = L.noDateWithData.length > 0 ? 'var(--amber)' : 'var(--t3)';
+      html += `<div style="background:${L.noDateWithData.length>0?'var(--amber-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ไม่มีวันที่ แต่มีข้อมูล</div><div style="font-size:18px;font-weight:800;color:${noDataCol}">${L.noDateWithData.length}</div><div style="font-size:9px;color:var(--t3)">${L.noDateWithData.length>0?'⚠️ ตรวจ':'OK'}</div></div>`;
+      html += `</div>`;
+
+      // เคสวันที่พัง
+      if (L.badDateExamples.length > 0) {
+        html += `<div style="margin-top:12px;padding:12px;background:var(--red-bg);border-radius:10px;border-left:3px solid var(--red)">`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ Lead ที่วันที่ parse ไม่ได้ — แก้ใน Google Sheet (column A)</div>`;
+        html += `<div class="shdr" style="grid-template-columns:1fr 1fr 1fr 1.5fr;font-size:10px;padding:4px 0"><span>Code</span><span>เซลล์</span><span>เบอร์</span><span>วันที่ที่กรอกมา</span></div>`;
+        L.badDateExamples.forEach(e => {
+          html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid var(--red-mid,#fecaca)"><span style="font-family:monospace">${h(e.code)}</span><span>${h(e.seller)}</span><span style="font-family:monospace">${h(e.phone)}</span><span style="font-family:monospace;color:var(--red)">${h(e.rawDate)}</span></div>`;
+        });
+        html += `</div>`;
+      }
+
+      // เคสไม่มีวันที่ แต่มีข้อมูล
+      if (L.noDateWithData.length > 0) {
+        html += `<div style="margin-top:12px;padding:12px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber)">`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ Lead ที่ลืมกรอกวันที่ (${L.noDateWithData.length} เคส) — กรอก column A ใน Google Sheet</div>`;
+        html += `<div class="shdr" style="grid-template-columns:1fr 1fr 1.2fr 1.5fr;font-size:10px;padding:4px 0"><span>Code</span><span>เซลล์</span><span>เบอร์</span><span>รถ</span></div>`;
+        L.noDateWithData.forEach(e => {
+          html += `<div style="display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid #fde68a"><span style="font-family:monospace">${h(e.code)}</span><span>${h(e.seller)}</span><span style="font-family:monospace">${h(e.phone)}</span><span>${h(e.car)}</span></div>`;
+        });
+        html += `</div>`;
+      }
+      html += `</div>`;
+
+      // ── Sales section ──
+      html += `<div style="margin-bottom:18px">`;
+      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">🛒 Sales Reports — ${S.total} แถว</div>`;
+      html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">`;
+      html += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">เคสที่นับ</div><div style="font-size:18px;font-weight:800;color:var(--green)">${S.kept}</div></div>`;
+      html += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ลำดับว่าง/header</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${S.dropNoSeq}</div><div style="font-size:9px;color:var(--t3)">ปกติ — header rows</div></div>`;
+      const noStCol = S.dropNoStatus > 0 ? 'var(--amber)' : 'var(--t3)';
+      html += `<div style="background:${S.dropNoStatus>0?'var(--amber-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">สถานะว่าง (N)</div><div style="font-size:18px;font-weight:800;color:${noStCol}">${S.dropNoStatus}</div><div style="font-size:9px;color:var(--t3)">${S.dropNoStatus>0?'⚠️ ตรวจ':'OK'}</div></div>`;
+      const badSeqCol = S.dropInvalidSeq > 0 ? 'var(--red)' : 'var(--t3)';
+      html += `<div style="background:${S.dropInvalidSeq>0?'var(--red-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ลำดับไม่ใช่เลข</div><div style="font-size:18px;font-weight:800;color:${badSeqCol}">${S.dropInvalidSeq}</div></div>`;
+      html += `</div>`;
+
+      // Status breakdown
+      html += `<div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:10px">`;
+      html += `<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">📊 แจกแจงสถานะ</div>`;
+      html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px">`;
+      Object.entries(S.statusBreakdown).sort((a,b)=>b[1]-a[1]).forEach(([st,n]) => {
+        const col = (C.STATUS_COLOR||{})[st] || 'var(--t3)';
+        html += `<div style="padding:6px 10px;background:var(--bg);border-radius:6px;border-left:3px solid ${col};display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--t1)">${h(st)}</span><span style="font-size:13px;font-weight:700;color:${col}">${n}</span></div>`;
+      });
+      html += `</div></div>`;
+
+      // เคสไม่มีสถานะ
+      if (S.noStatusExamples.length > 0) {
+        html += `<div style="margin-top:12px;padding:12px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber)">`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ เคสที่ลืมใส่สถานะ (${S.dropNoStatus} เคส) — กรอก column N ใน Google Sheet</div>`;
+        html += `<div class="shdr" style="grid-template-columns:.4fr 1fr 1.4fr .8fr 1.4fr;font-size:10px"><span>#</span><span>เซลล์</span><span>ลูกค้า</span><span>วันที่</span><span>รถ</span></div>`;
+        S.noStatusExamples.forEach(e => {
+          html += `<div style="display:grid;grid-template-columns:.4fr 1fr 1.4fr .8fr 1.4fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid #fde68a"><span>${h(e.seq)}</span><span>${h(e.seller)}</span><span>${h(e.customer)}</span><span style="font-family:monospace">${h(e.date)}</span><span>${h(e.car)}</span></div>`;
+        });
+        html += `</div>`;
+      }
+
+      // "รอปล่อย" cases (อาจสับสนกับ "ปล่อย")
+      if (S.waitingReleaseTotal > 0) {
+        html += `<div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:10px;border-left:3px solid var(--amber)">`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">💡 เคส "รอปล่อย" — ${S.waitingReleaseTotal} เคส (ไม่นับเป็น "ปิดได้" เพราะยังไม่ปล่อย)</div>`;
+        html += `<div style="font-size:10px;color:var(--t3);margin-bottom:6px">เปลี่ยนเป็น "ปล่อย" เมื่อปล่อยจริงแล้ว → จะมาขึ้น "ปิดได้" + "💰 ยอดปล่อย"</div>`;
+        html += `<div class="shdr" style="grid-template-columns:.9fr 1.4fr 1.6fr .8fr .8fr;font-size:10px"><span>เซลล์</span><span>ลูกค้า</span><span>รถ</span><span>วันที่</span><span style="text-align:right">ราคา</span></div>`;
+        html += `<div style="max-height:180px;overflow-y:auto">`;
+        S.waitingReleaseCases.slice(0,30).forEach(e => {
+          html += `<div style="display:grid;grid-template-columns:.9fr 1.4fr 1.6fr .8fr .8fr;gap:6px;padding:3px 0;font-size:11px"><span>${h(e.seller)}</span><span>${h(e.customer).slice(0,18)}</span><span>${h(e.car).slice(0,28)}</span><span style="font-family:monospace">${h(e.date)}</span><span style="text-align:right;font-family:monospace">${h(e.price)}</span></div>`;
+        });
+        if (S.waitingReleaseCases.length > 30) {
+          html += `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+ อีก ${S.waitingReleaseCases.length - 30} เคส</div>`;
+        }
+        html += `</div></div>`;
+      }
+      html += `</div>`;
+
+      // Footer note
+      html += `<div style="margin-top:18px;padding:12px;background:var(--blue-bg);border-radius:10px;border-left:3px solid var(--blue)">`;
+      html += `<div style="font-size:11px;color:var(--blue);font-weight:700;margin-bottom:4px">📝 หมายเหตุ</div>`;
+      html += `<div style="font-size:11px;color:var(--t2);line-height:1.6">`;
+      html += `• ระบบ <b>ไม่มี cache</b> ดึงสดจาก Google Sheets ทุกครั้งที่ refresh page<br>`;
+      html += `• "ปีก่อน" ${L.prevYear} เคสถูกตัดออกตั้งใจ (filter <code>is_this_year</code>)<br>`;
+      html += `• "ลำดับว่าง/header" ${S.dropNoSeq} เคสเป็น header row ของ sheet ปกติ<br>`;
+      html += `• ⚠️ <b>วันที่พัง / ไม่มีสถานะ</b> = ต้องไปแก้ใน Google Sheet ตามตัวอย่างด้านบน`;
+      html += `</div></div>`;
+
+      html += `</div></div>`;
+      overlay.innerHTML = html;
+    }
+
     async function openSellerConfigPanel() {
       if (!isAdmin) return;
       const old = document.getElementById('sconfig-overlay');

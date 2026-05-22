@@ -346,7 +346,8 @@
       <div class="filter-bar">
         <span class="lbl">📅 เดือน:</span>
         <button class="f-btn ${fMonth===0?'on':''}" onclick="setMonth(0)">ทั้งปี</button>
-        ${(C.MONTHS_SHORT||[]).map((m,i)=>`<button class="f-btn ${fMonth===i+1?'on':''}" onclick="setMonth(${i+1})">${m}</button>`).join('')}
+        <input type="month" value="${fMonth>0 ? `${new Date().getFullYear()}-${String(fMonth).padStart(2,'0')}` : ''}" onchange="setMonthFromInput(this.value)" title="เลือกเดือน (ปี ${new Date().getFullYear()})" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+        ${fMonth>0 ? `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${(C.MONTHS_FULL||[])[fMonth-1]||''}</span>` : ''}
       </div>
 
       <div class="filter-bar">
@@ -641,6 +642,11 @@
 
   // ── filter actions ──
   function setMonth(m) { fMonth = m; if (m === 0) fDay = 0; render(); }
+  function setMonthFromInput(v) {
+    if (!v) { setMonth(0); return; }
+    const mo = parseInt(v.split('-')[1] || '0');
+    if (mo >= 1 && mo <= 12) setMonth(mo);
+  }
   function setDay(d) { fDay = d; render(); }
   function setKpi(k) { kpiFilter = k; viewMode = 'leads'; render(); }
   function setViewMode(m) { viewMode = m; render(); }

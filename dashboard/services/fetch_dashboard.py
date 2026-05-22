@@ -503,6 +503,12 @@ def fetch_dashboard_data() -> dict:
             sb_pipe2 = [b for b in m_bookings if b["seller"] == name and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")]
             n_done2 = len(sb_done2)
             dv2 = sum(b["price"] for b in sb_done2)
+            # Lead types breakdown ของเดือน — สำหรับการ์ด "🏷️ ประเภท Lead" ใน seller view
+            m_lead_types: dict[str, int] = {}
+            for r in sl2:
+                t = cell(r, L.type)
+                if t:
+                    m_lead_types[t] = m_lead_types.get(t, 0) + 1
             m_sellers[name] = {
                 "lead": len(sl2),
                 "leadNormal": len([r for r in sl2 if cell(r, L.type) not in RJ_TYPES]),
@@ -514,6 +520,7 @@ def fetch_dashboard_data() -> dict:
                 "dealValue": dv2,
                 "pipelineValue": sum(b["price"] for b in sb_pipe2),
                 "avgDealValue": (dv2 / n_done2) if n_done2 else 0,
+                "leadTypes": m_lead_types,
             }
 
         m_teams = {}

@@ -81,6 +81,7 @@ python manage.py runserver
 | `/api/admin/send_line` | `admin_send_line` | admin: GET=preview, POST=ส่ง Flex ทันที |
 | `/api/admin/seller_config` | `admin_seller_config` | admin: GET=อ่าน config, POST=บันทึก (เขียน sheet "ตั้งค่าเซลล์") |
 | `/api/admin/schedule_config` | `admin_schedule_config` | admin: GET=อ่านตาราง, POST=บันทึก (เขียน sheet "ตั้งเวลาส่ง") |
+| `/api/admin/diagnostics` | `admin_diagnostics` | admin: ตรวจ log การกรองข้อมูล (เคสที่หาย, วันที่พัง, สถานะว่าง, "รอปล่อย" cases) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — เช็คตาราง schedule + ส่งถ้าถึงเวลา (cron-job.org ยิงทุก 1 นาที) |
 
@@ -124,6 +125,28 @@ python manage.py runserver
 [fetch_dashboard.py](dashboard/services/fetch_dashboard.py) มี `parse_date()` รองรับ:
 - Excel serial date (เลข 4-5 หลัก)
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
+
+### Date filter (กรองเดือน)
+- **UI**: `<input type="month">` (HTML5 native picker) แทนปุ่ม 12 เดือน → ไม่ต้องไปแก้โค้ดเวลามีเดือนใหม่
+- **State**:
+  - `index.html` ใช้ `dfMonth` (0=ทั้งปี, -1=วันนี้, 1-12=เดือน) + `setDfFromInput(v)` parse "YYYY-MM" → setDf(month)
+  - `seller.html` ใช้ `fMonth` + `setMonthFromInput(v)` แบบเดียวกัน
+- **Year**: ยังเป็น single-year (`is_this_year` filter ใน backend) — ถ้าผู้ใช้เลือกเดือนของปีอื่นใน picker จะใช้แค่ส่วน month
+- **KPI rendering** (seller view ใน index.html):
+  - `dfMonth > 0` → ใช้ `D.monthlySummary[dfMonth].sellers[name]` (overlay บน `sdYear` เพื่อคง target/team)
+  - `dfMonth = 0` → ใช้ `D.sellers[]` (รายปี)
+  - `m_sellers` ต้องมี field ครบ (lead/follow/vacant/booking/done/dealValue/leadTypes/...) — ดู `fetch_dashboard.py` `m_sellers[]` block
+
+### MoM (Month-over-Month) Comparison
+- JS helper ใน [index.html](dashboard/templates/dashboard/index.html): `getMoM(month, key)` คืน `{cur, prev, delta, pct, isUp}` + `momBadge(mom, invert, fmt)` สร้าง HTML badge `↗ +12.5%`
+- **เปิดใช้เมื่อ** กดเลือกเดือนเฉพาะ (`dfMonth > 0`) และ `dfMonth >= 2` (เดือน 1 ไม่มีเดือนก่อน)
+- เปรียบเทียบ: `monthlySummary[dfMonth].XXX` vs `monthlySummary[dfMonth-1].XXX`
+- `invert=true` สำหรับ metric ที่ "ลด = ดี" (RJ, ติดตามค้าง) — สลับสี green/red
+- Special case: `pct === 999` เมื่อเดือนก่อน 0 และเดือนนี้ > 0 → แสดง "✨ ใหม่" badge สีน้ำเงิน
+- แสดงที่ไหน:
+  - KPI cards หน้า dashboard หลัก (Lead, ติดตาม, จอง, ปิดได้, 💰 ยอดปล่อย, RJ)
+  - Team breakdown card (Lead/จอง/ปิด/ยอดปล่อย ของแต่ละทีม)
+  - หัวขึ้น hint "📊 % คือเทียบ พ.ค. vs เม.ย." เมื่อ MoM active
 
 ### Deal Value (มูลค่าดีล)
 - ที่มา: คอลัมน์ `sale_price` (L=11) ใน sales_reports sheet
@@ -171,7 +194,9 @@ python manage.py runserver
 **Service account** ต้องมี Editor บน spreadsheet (เพื่อเขียน sheet sellers_config / schedule_config)
 
 **Helpers**:
-- `fetch_sheet(key)` — อ่าน
+- `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG (ใช้กับทุก sheet ยกเว้น leads)
+- `fetch_leads_dedup()` — **ใช้แทน `fetch_sheet("leads")`** — อ่าน monthly tabs ทุก tab (ม.ค.–ธ.ค. 69) แล้ว union/dedupe by `Code` (column D=3, case-insensitive + trim) ผ่าน helper `_dedupe_leads_by_code()` เพราะเคสถูก "ยกมา" จาก tab เดือนเก่าไป tab เดือนใหม่ + admin อัพเดทเฉพาะใน tab ล่าสุด — **แถวที่ปรากฏหลังสุดชนะ** (ลำดับ: ม.ค. → ธ.ค., ภายใน tab เดียวกัน = แถวล่างสุด); ถ้าไม่มี monthly tab → fallback ใช้ `fetch_sheet("leads")` แต่ยัง dedup ด้วย helper ตัวเดียวกัน. Code ว่าง = ไม่ dedup (ถือเป็นเคสแยก)
+- `get_leads_dedup_stats()` — คืน `{input_rows, output_rows, duplicates_removed, no_code}` ของการ dedup ครั้งล่าสุด — ใช้ใน `/api/admin/diagnostics` เพื่อให้ admin มองเห็นว่าตัดซ้ำไปกี่แถว (field `leads.dedup` ใน JSON response)
 - `ensure_sheet_tab(sid, tab)` — สร้าง tab ใหม่ถ้าไม่มี
 - `write_sheet(key, values)` — clear + write ทับทั้ง tab
 
@@ -251,11 +276,15 @@ CRON_SECRET=xxx...
 2. ครั้งแรกต้องตั้ง cron-job.org ยิง `https://<your-app>.vercel.app/api/cron/tick?secret=<CRON_SECRET>` ทุก 1 นาที (one-time setup)
 
 ### Debug ข้อมูลผิด
+- **ปุ่ม 🔍 Log ข้อมูล** ใน admin header → เปิด modal โชว์เคสที่หาย (วันที่พัง, สถานะว่าง, "รอปล่อย" ที่อาจสับสนกับ "ปล่อย") + status breakdown
+- `/api/admin/diagnostics` (admin only) → JSON ของข้อมูลด้านบน
 - `/api/dashboard` คืน JSON เต็มของ aggregator
 - `/api/admin/send_line` (admin login) → แสดง preview pipeline + `token_debug`
 - เช็คว่า `normalize_seller()` ครอบคลุมการสะกดในชีตหรือยัง
 - **ยอด "ปิดได้" ไม่ตรง** → เช็คว่า sheet sales_reports คอลัมน์ปล่อยรถยังอยู่ที่ W(22) หรือถูกย้ายอีก (ดู section "Sheet column gotchas")
 - **มูลค่าดีลผิด** → เช็คคอลัมน์ L(11) `sale_price` มีข้อมูลครบไหม (`cell_num()` คืน 0 ถ้าว่าง/parse ไม่ได้)
+- **เคสหาย / อัพเดทแล้วไม่ขึ้น** → กดปุ่ม 🔍 Log ข้อมูล (admin only) จะเห็น breakdown ว่าทำไมเคสไม่ขึ้น
+- **เคสมีใน "พฤษภาคม 69" ครบแล้วแต่ dashboard ยังโชว์ค่าเก่า** → "รวม sheet" pull ข้อมูลจาก tab เก่ากว่า. ใช้ `fetch_leads_dedup()` แล้ว — มันรวมทุก monthly tab + เลือกแถวล่าสุดอัตโนมัติ (ดู `fetch_leads_dedup` ใน [google_sheets.py](dashboard/services/google_sheets.py))
 
 ### เพิ่ม feature ใหม่
 **ทุกครั้งที่เพิ่ม/แก้ feature → ต้องอัพเดท CLAUDE.md ด้วย** (โดยเฉพาะ section URL routes, Sheet column gotchas, Roles, Concepts)
