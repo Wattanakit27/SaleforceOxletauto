@@ -896,7 +896,7 @@ def seller_dashboard(request, token):
     # ── ดึง lead ทั้งหมดของเซลล์ (รวมที่ไม่ได้เป็น follow) สำหรับ KPI + filter ──
     from .services.google_sheets import fetch_leads_dedup, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
-    from .services.fetch_dashboard import is_this_year
+    from .services.fetch_dashboard import is_this_year, is_skipped
     import re as _re
 
     raw_leads = fetch_leads_dedup()  # union monthly tabs + dedupe (latest wins)
@@ -906,6 +906,9 @@ def seller_dashboard(request, token):
             continue
         date_str = cell(r, L.received_date)
         if not is_this_year(date_str):
+            continue
+        # ตัดเคสที่จบแล้ว (คืนเคส / ยกเลิก / จ่ายใหม่ / ส่งมอบ ฯลฯ) — เซลล์ไม่ต้องตามต่อ
+        if is_skipped(cell(r, L.admin_status)):
             continue
         note_raw = cell(r, L.fill_sheet_note) or ""
         note = _re.sub(r"^\d{4,5}\s*", "", note_raw)

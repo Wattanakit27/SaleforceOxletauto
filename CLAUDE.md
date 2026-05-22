@@ -111,8 +111,10 @@ python manage.py runserver
 - **`SELLER_MAP`** = normalize ชื่อสะกดต่าง (เจเจ→เจ, กลอฟ→กอล์ฟ) — ใช้ผ่าน `normalize_seller()` เสมอ
 
 ### Lead Status
-- **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย"
-- **Vacant** (ว่าง): admin_status ว่างหรือ "-"
+- **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย" — **และไม่มี** คำใน SKIP_STATUS
+- **Vacant** (ว่าง): admin_status ว่างหรือ "-" — **และไม่มี** SKIP_STATUS
+- **Skipped** (เคสจบแล้ว — ไม่นับเป็น follow/vacant): admin_status มีคำว่า "จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่" — ดู `is_skipped()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py). Sync กับ `SKIP_STATUS` ใน [line_notify.py](dashboard/services/line_notify.py)
+  - หน้า /s/<token>/ (seller_dashboard view) **ตัดเคส skipped ออกจาก `my_leads`** เลย — เซลล์ไม่ต้องเห็นเคสจบแล้วในรายการติดตาม
 - **RJ types**: "RJ", "Hot RJ", "Hot RB" — แยกออกจาก lead ปกติ
 - **Called proof**: `call_proof == "ส่งแล้ว"` = โทรแล้วมีหลักฐาน
 
