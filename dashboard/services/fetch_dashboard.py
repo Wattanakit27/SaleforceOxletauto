@@ -339,28 +339,31 @@ def fetch_dashboard_data() -> dict:
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
 
-    # ── 🚫 Unknown/Orphan seller — เคสใน booking_cases ที่ seller ไม่อยู่ใน ALL_SELLERS หรือ ADMIN
-    # เกิดเมื่อ: เซลล์ลาออก/ชื่อสะกดแปลก/normalize_seller ไม่ map → เคสตกหายไม่ขึ้นในรายบุคคล
-    # → รวมเข้า virtual seller "❓ ไม่ระบุ" + เก็บรายชื่อต้นฉบับใน unknown_seller_names (สำหรับ admin debug)
+    # ── 🚫 Unknown/Orphan seller — เคสที่ seller ไม่อยู่ใน ALL_SELLERS หรือ ADMIN
+    # เกิดเมื่อ: เซลล์ลาออก / สะกดแปลก / normalize_seller ไม่ map / seller_cell ว่าง /
+    # ใช้คำเช่น "หน้าร้าน" "ออนไลน์" ฯลฯ → เคสตกหายไม่ขึ้นในรายบุคคล
+    # → รวมเข้า virtual seller "❓ ไม่ระบุ" + เก็บรายชื่อต้นฉบับใน unknownSellerNames (สำหรับ admin debug)
     known_names = set(ALL_SELLERS) | {"ADMIN"}
-    orphan_bookings = [b for b in booking_cases if b["seller"] and b["seller"] not in known_names]
+    # ไม่ใช้ short-circuit "and" — รวมเคส seller ว่าง ("") ด้วย เพราะถือว่า orphan เหมือนกัน
+    orphan_bookings = [b for b in booking_cases if b["seller"] not in known_names]
     orphan_leads_rows = [
         r for r in year_leads
-        if (s := normalize_seller(cell(r, L.sales_rep))) and s not in known_names
+        if normalize_seller(cell(r, L.sales_rep)) not in known_names
     ]
     if orphan_bookings or orphan_leads_rows:
         orphan_done_b = [b for b in orphan_bookings if b["status"] == "ปล่อย"]
         orphan_done = len(orphan_done_b)
         orphan_deal_value = sum(b["price"] for b in orphan_done_b)
-        orphan_booking = len([j for j in year_jongs if j["seller"] and j["seller"] not in known_names])
+        orphan_booking = len([j for j in year_jongs if j["seller"] not in known_names])
         orphan_pipeline_val = sum(
             b["price"] for b in orphan_bookings
             if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
         )
+        # ชื่อต้นฉบับ — แทนค่าว่างด้วย "(ว่าง)" ให้ admin เห็น
         orphan_names = sorted({
-            b["seller"] for b in orphan_bookings if b["seller"]
+            (b["seller"] or "(ว่าง)") for b in orphan_bookings
         } | {
-            normalize_seller(cell(r, L.sales_rep)) for r in orphan_leads_rows
+            (normalize_seller(cell(r, L.sales_rep)) or "(ว่าง)") for r in orphan_leads_rows
         })
         sellers.append({
             "name": "❓ ไม่ระบุ", "team": "?",
