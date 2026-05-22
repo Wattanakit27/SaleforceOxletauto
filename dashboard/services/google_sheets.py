@@ -280,69 +280,73 @@ def _dedupe_leads_by_code(rows: list[list[str]]) -> list[list[str]]:
 
 
 def fetch_leads_dedup() -> list[list[str]]:
-    """อ่าน leads จาก monthly tabs (เช่น "มกราคม 69", "พฤษภาคม 69") แล้วรวมเอา
-    Dedup by Code (column D=3): tab เดือนล่าสุดชนะ + ภายใน tab เดียวกัน แถวล่างชนะ —
-    เคสที่ "ยกมา" จาก tab เก่า ระบบจะใช้ข้อมูลจาก tab ล่าสุดที่มี code ตัวเดียวกัน
+    """รวมข้อมูล leads จาก "รวม sheet" + monthly tabs (เช่น "มกราคม 69", "พฤษภาคม 69")
+    แล้ว dedup by Code (column D=3, case-insensitive + trimmed).
 
-    Fallback: ถ้าหา monthly tabs ไม่เจอ → ใช้ "รวม sheet" (เดิม) แต่ dedup ด้วย
+    ลำดับ overwrite (แถวหลังสุดชนะ):
+      1. "รวม sheet" (base) — มีข้อมูลทั้งหมดสำรอง
+      2. Monthly tabs ม.ค. → ธ.ค. — ทับด้วย row ที่อาจ update ใหม่กว่า
+      3. ภายใน tab เดียวกัน — แถวล่างสุดชนะ
+
+    Failsafe: ถ้า monthly tabs fetch ไม่ได้/ว่าง → ยังมีข้อมูลจาก "รวม sheet" เป็น fallback
     """
     import urllib.parse
 
-    creds = _get_credentials()
-    creds.refresh(AuthRequest())
-    headers_auth = {"Authorization": f"Bearer {creds.token}"}
-
-    sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
-
-    # 1) อ่านรายการ tab ทั้งหมดใน leads spreadsheet
+    # 1) Base: "รวม sheet" — ข้อมูล primary ที่ระบบใช้มาก่อน
     try:
+        base_rows = fetch_sheet("leads")
+    except Exception:
+        base_rows = []
+
+    # 2) ดึง monthly tabs (best-effort — ถ้าไม่ได้ก็ skip)
+    monthly_rows: list[list[str]] = []
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        headers_auth = {"Authorization": f"Bearer {creds.token}"}
+        sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+
         meta = requests.get(
             f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
             headers=headers_auth, timeout=15,
         ).json()
         all_tabs = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+        monthly_tabs: list[tuple[int, str]] = []
+        for tab in all_tabs:
+            for idx, m in enumerate(_THAI_MONTHS):
+                if tab.startswith(m + " "):
+                    monthly_tabs.append((idx, tab))
+                    break
+        monthly_tabs.sort()  # ม.ค. (idx=0) → ธ.ค. (idx=11)
+
+        def _fetch_tab(tab: str) -> list[list[str]]:
+            encoded = urllib.parse.quote(f"'{tab}'")
+            url = f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE"
+            r = requests.get(url, headers=headers_auth, timeout=30)
+            if r.status_code != 200:
+                return []
+            return r.json().get("values", [])[1:]  # skip header
+
+        tab_rows: dict[str, list[list[str]]] = {}
+        if monthly_tabs:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+                futs = {ex.submit(_fetch_tab, tab): tab for _, tab in monthly_tabs}
+                for fut in concurrent.futures.as_completed(futs):
+                    tab = futs[fut]
+                    try:
+                        tab_rows[tab] = fut.result()
+                    except Exception:
+                        tab_rows[tab] = []
+
+        for _, tab in monthly_tabs:
+            monthly_rows.extend(tab_rows.get(tab, []))
     except Exception:
-        return _dedupe_leads_by_code(fetch_sheet("leads"))
+        monthly_rows = []  # graceful — ใช้แค่ base_rows
 
-    # 2) กรองเฉพาะ tab รายเดือน — match prefix Thai month name + " "
-    #    เก็บลำดับเดือนไว้เพื่อเรียง (ม.ค. แรก → ธ.ค. สุดท้าย → ตัวสุดท้ายชนะ)
-    monthly_tabs: list[tuple[int, str]] = []
-    for tab in all_tabs:
-        for idx, m in enumerate(_THAI_MONTHS):
-            if tab.startswith(m + " "):
-                monthly_tabs.append((idx, tab))
-                break
-
-    if not monthly_tabs:
-        return _dedupe_leads_by_code(fetch_sheet("leads"))
-
-    monthly_tabs.sort()  # ม.ค. (idx=0) → ธ.ค. (idx=11)
-
-    # 3) Fetch แต่ละ tab parallel
-    def _fetch_tab(tab: str) -> list[list[str]]:
-        encoded = urllib.parse.quote(f"'{tab}'")
-        url = f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE"
-        r = requests.get(url, headers=headers_auth, timeout=30)
-        if r.status_code != 200:
-            return []
-        return r.json().get("values", [])[1:]  # skip header
-
-    tab_rows: dict[str, list[list[str]]] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
-        futs = {ex.submit(_fetch_tab, tab): tab for _, tab in monthly_tabs}
-        for fut in concurrent.futures.as_completed(futs):
-            tab = futs[fut]
-            try:
-                tab_rows[tab] = fut.result()
-            except Exception:
-                tab_rows[tab] = []
-
-    # 4) เรียงแถวตามลำดับ tab (ม.ค. → ธ.ค.) แล้วใน tab เดียวกันเรียงตามลำดับเดิม
-    #    → แถวหลังสุดในลำดับนี้ = "ล่าสุด" → dedup ให้ตัวล่างชนะ
-    ordered_rows: list[list[str]] = []
-    for _, tab in monthly_tabs:
-        ordered_rows.extend(tab_rows.get(tab, []))
-
+    # 3) Merge — base + monthly (monthly ทับ base ถ้า code ซ้ำ)
+    #    Failsafe: ถ้า monthly_rows ว่าง → base_rows ยังครบ → ระบบไม่พัง
+    ordered_rows = base_rows + monthly_rows
     return _dedupe_leads_by_code(ordered_rows)
 
 

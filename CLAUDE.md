@@ -195,7 +195,7 @@ python manage.py runserver
 
 **Helpers**:
 - `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG (ใช้กับทุก sheet ยกเว้น leads)
-- `fetch_leads_dedup()` — **ใช้แทน `fetch_sheet("leads")`** — อ่าน monthly tabs ทุก tab (ม.ค.–ธ.ค. 69) แล้ว union/dedupe by `Code` (column D=3, case-insensitive + trim) ผ่าน helper `_dedupe_leads_by_code()` เพราะเคสถูก "ยกมา" จาก tab เดือนเก่าไป tab เดือนใหม่ + admin อัพเดทเฉพาะใน tab ล่าสุด — **แถวที่ปรากฏหลังสุดชนะ** (ลำดับ: ม.ค. → ธ.ค., ภายใน tab เดียวกัน = แถวล่างสุด); ถ้าไม่มี monthly tab → fallback ใช้ `fetch_sheet("leads")` แต่ยัง dedup ด้วย helper ตัวเดียวกัน. Code ว่าง = ไม่ dedup (ถือเป็นเคสแยก)
+- `fetch_leads_dedup()` — **ใช้แทน `fetch_sheet("leads")`** — รวม "รวม sheet" (base) + monthly tabs (ม.ค.–ธ.ค. 69) แล้ว dedup by `Code` (column D=3, case-insensitive + trim) ผ่าน helper `_dedupe_leads_by_code()` — **แถวที่ปรากฏหลังสุดชนะ** (ลำดับ overwrite: รวม sheet → ม.ค. → ธ.ค., ภายใน tab เดียวกัน = แถวล่างสุด). **Failsafe**: ถ้า monthly tabs fetch ไม่ได้/ว่าง (permission, ชื่อ tab ไม่ตรง pattern `เดือน + " "`, error) → ยังมีข้อมูลจาก "รวม sheet" เป็น base — ระบบไม่พัง. Code ว่าง = ไม่ dedup (ถือเป็นเคสแยก)
 - `get_leads_dedup_stats()` — คืน `{input_rows, output_rows, duplicates_removed, no_code}` ของการ dedup ครั้งล่าสุด — ใช้ใน `/api/admin/diagnostics` เพื่อให้ admin มองเห็นว่าตัดซ้ำไปกี่แถว (field `leads.dedup` ใน JSON response)
 - `ensure_sheet_tab(sid, tab)` — สร้าง tab ใหม่ถ้าไม่มี
 - `write_sheet(key, values)` — clear + write ทับทั้ง tab
