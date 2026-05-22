@@ -339,6 +339,45 @@ def fetch_dashboard_data() -> dict:
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
 
+    # ── 🚫 Unknown/Orphan seller — เคสใน booking_cases ที่ seller ไม่อยู่ใน ALL_SELLERS หรือ ADMIN
+    # เกิดเมื่อ: เซลล์ลาออก/ชื่อสะกดแปลก/normalize_seller ไม่ map → เคสตกหายไม่ขึ้นในรายบุคคล
+    # → รวมเข้า virtual seller "❓ ไม่ระบุ" + เก็บรายชื่อต้นฉบับใน unknown_seller_names (สำหรับ admin debug)
+    known_names = set(ALL_SELLERS) | {"ADMIN"}
+    orphan_bookings = [b for b in booking_cases if b["seller"] and b["seller"] not in known_names]
+    orphan_leads_rows = [
+        r for r in year_leads
+        if (s := normalize_seller(cell(r, L.sales_rep))) and s not in known_names
+    ]
+    if orphan_bookings or orphan_leads_rows:
+        orphan_done_b = [b for b in orphan_bookings if b["status"] == "ปล่อย"]
+        orphan_done = len(orphan_done_b)
+        orphan_deal_value = sum(b["price"] for b in orphan_done_b)
+        orphan_booking = len([j for j in year_jongs if j["seller"] and j["seller"] not in known_names])
+        orphan_pipeline_val = sum(
+            b["price"] for b in orphan_bookings
+            if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+        )
+        orphan_names = sorted({
+            b["seller"] for b in orphan_bookings if b["seller"]
+        } | {
+            normalize_seller(cell(r, L.sales_rep)) for r in orphan_leads_rows
+        })
+        sellers.append({
+            "name": "❓ ไม่ระบุ", "team": "?",
+            "lead": len(orphan_leads_rows),
+            "follow": len([r for r in orphan_leads_rows if is_follow(cell(r, L.admin_status))]),
+            "vacant": len([r for r in orphan_leads_rows if is_vacant(cell(r, L.admin_status))]),
+            "done": orphan_done,
+            "target": 0, "booking": orphan_booking,
+            "live": 0, "clip": 0, "clipTarget": 0,
+            "liveInbox": 0, "liveLead": 0,
+            "leadTypes": {},
+            "dealValue": orphan_deal_value,
+            "pipelineValue": orphan_pipeline_val,
+            "avgDealValue": (orphan_deal_value / orphan_done) if orphan_done else 0,
+            "unknownSellerNames": orphan_names,  # รายชื่อต้นฉบับสำหรับ admin debug
+        })
+
     # ADMIN seller
     admin_leads = [r for r in year_leads if normalize_seller(cell(r, L.sales_rep)) == "ADMIN"]
     if admin_leads:

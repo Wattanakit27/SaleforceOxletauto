@@ -670,7 +670,12 @@
         const tC=conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)';
         const tBg=conv>=8?'var(--green-bg)':conv>=4?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
-        html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" onclick="switchToSeller('${h(s.name)}')">`;
+        // Virtual "❓ ไม่ระบุ" row — เคสที่ seller ไม่อยู่ใน ALL_SELLERS → กดเพื่อดูรายชื่อต้นฉบับ
+        const isUnknown = s.name === '❓ ไม่ระบุ';
+        const rowClick = isUnknown
+          ? `onclick="alert('🔍 เซลล์ใน sheet ที่ไม่ตรงกับ ALL_SELLERS:\\n\\n' + (${JSON.stringify(s.unknownSellerNames||[])}).join('\\n') + '\\n\\n💡 เพิ่มชื่อใน sheet ตั้งค่าเซลล์ หรือใส่ใน normalize_seller() ให้ map ชื่อนี้')" style="background:var(--amber-bg);cursor:help"`
+          : `onclick="switchToSeller('${h(s.name)}')"`;
+        html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" ${rowClick}>`;
         html += `<span style="font-weight:600">${h(s.name)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span></span>`;
         html += `<span style="text-align:right">${sLead}</span>`;
         html += `<span style="text-align:right;color:var(--blue)">${sFollow}</span>`;
