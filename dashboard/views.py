@@ -620,6 +620,38 @@ def admin_diagnostics(request):
         status_breakdown[clean] += 1
         sales_kept += 1
 
+    # ── 🔍 Released breakdown — แจกแจง "ปล่อย" ทุกเคสตามเซลล์ (debug ว่าเคสหายอยู่ตรงไหน) ──
+    from .services.constants import normalize_seller, ALL_SELLERS
+    released_by_seller_raw = {}     # ชื่อ raw จาก sheet (ก่อน normalize)
+    released_by_seller_norm = {}    # ชื่อหลัง normalize_seller()
+    released_total = 0
+    known_set = set(ALL_SELLERS) | {"ADMIN"}
+    for r in sales:
+        seq = cell(r, S.order_num)
+        if not seq or seq == "ลำดับ":
+            continue
+        try:
+            int(seq)
+        except ValueError:
+            continue
+        status = cell(r, S.status)
+        if not status:
+            continue
+        clean = status.replace(" (ซื้อสด)", "").strip()
+        if clean != "ปล่อย":
+            continue
+        released_total += 1
+        seller_raw = cell(r, S.sales_rep).strip()
+        seller_clean = seller_raw.replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
+        seller_norm = normalize_seller(seller_clean) or "(ว่าง)"
+        released_by_seller_raw[seller_raw or "(ว่าง)"] = released_by_seller_raw.get(seller_raw or "(ว่าง)", 0) + 1
+        released_by_seller_norm[seller_norm] = released_by_seller_norm.get(seller_norm, 0) + 1
+    # แยก: เซลล์ที่อยู่ใน ALL_SELLERS vs เซลล์ที่ไม่อยู่ (orphan)
+    released_known = {k: v for k, v in released_by_seller_norm.items() if k in known_set}
+    released_orphan = {k: v for k, v in released_by_seller_norm.items() if k not in known_set}
+    released_known_sum = sum(released_known.values())
+    released_orphan_sum = sum(released_orphan.values())
+
     # ── เคส "รอปล่อย" detail (admin อาจสับสนกับ "ปล่อย") ──
     waiting_release_cases = []
     for r in sales:
@@ -667,6 +699,16 @@ def admin_diagnostics(request):
             "statusBreakdown": dict(status_breakdown),
             "waitingReleaseCases": waiting_release_cases,
             "waitingReleaseTotal": status_breakdown.get("รอปล่อย", 0),
+        },
+        "released": {
+            "total": released_total,
+            "knownSum": released_known_sum,        # sum ของเซลล์ที่อยู่ใน ALL_SELLERS
+            "orphanSum": released_orphan_sum,      # sum ของเซลล์ที่ไม่อยู่ (เป็น orphan)
+            "gap": released_total - released_known_sum - released_orphan_sum,
+            "bySellerNormalized": dict(sorted(released_by_seller_norm.items(), key=lambda x: -x[1])),
+            "bySellerRaw": dict(sorted(released_by_seller_raw.items(), key=lambda x: -x[1])),
+            "knownSellers": dict(sorted(released_known.items(), key=lambda x: -x[1])),
+            "orphanSellers": dict(sorted(released_orphan.items(), key=lambda x: -x[1])),
         },
         "currentYear": cur_year,
     }, json_dumps_params={"ensure_ascii": False})
