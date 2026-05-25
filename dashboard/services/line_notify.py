@@ -213,8 +213,11 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
         body.extend(follow_rows)
 
     # ปุ่ม footer ลิงก์ไปหน้าส่วนตัวของเซลล์ (/s/<token>/)
+    # ถ้าเซลล์ใหม่ยังไม่มี token ใน seller_tokens.py → ส่งไป /login/ (ไม่ใช่ /dashboard/)
+    # เพราะ /dashboard/ default = ผู้บริหาร = เซลล์เห็นข้อมูลทุกคน (ไม่ปลอดภัย)
+    # admin ต้องเพิ่ม token ใน seller_tokens.py สำหรับเซลล์ใหม่
     token = SELLER_TOKENS.get(seller)
-    seller_url = f"{base_url}/s/{token}/" if token else f"{base_url}/dashboard/"
+    seller_url = f"{base_url}/s/{token}/" if token else f"{base_url}/login/"
 
     return {
         "type": "flex",
