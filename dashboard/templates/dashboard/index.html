@@ -235,6 +235,13 @@
     const root = document.getElementById('dashboard-root');
 
     function render() {
+      // เก็บ focus + cursor ก่อน rebuild DOM — ไม่งั้น input search/edit ที่กำลังพิมพ์อยู่จะ lose focus
+      // (ทุก oninput="...;render()" จะ rebuild root.innerHTML ทำให้ element ใหม่ไม่มี focus)
+      const __active = document.activeElement;
+      const __activeId = __active && __active.id ? __active.id : null;
+      const __activeSelStart = (__active && 'selectionStart' in __active) ? __active.selectionStart : null;
+      const __activeSelEnd = (__active && 'selectionEnd' in __active) ? __active.selectionEnd : null;
+
       FD = getFilteredData();
       const sellers = FD.sellers || [];
       const sellerNames = sellers.map(s=>s.name);
@@ -312,6 +319,17 @@
 
       root.innerHTML = html;
       if(tab==='o') initCharts();
+
+      // คืน focus + cursor ให้ input ที่กำลังพิมพ์ก่อน rebuild — กัน bug "ลบได้ทีละตัวต้องคลิกใหม่"
+      if (__activeId) {
+        const el = document.getElementById(__activeId);
+        if (el) {
+          el.focus();
+          if (__activeSelStart != null && 'setSelectionRange' in el) {
+            try { el.setSelectionRange(__activeSelStart, __activeSelEnd ?? __activeSelStart); } catch (_) {}
+          }
+        }
+      }
     }
 
     // ── Charts (Chart.js) ──
@@ -774,7 +792,7 @@
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
       html += `<div class="card-title" style="margin:0">🚗 Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${periodLbl} · ${entries.length} รุ่น · ${totalLead} เคส)</span></div>`;
       html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">`;
-      html += `<input type="text" placeholder="🔍 ค้นหา..." value="${h(leadCarQuery)}" oninput="leadCarQuery=this.value;leadCarPage=1;render()" style="padding:4px 8px;border:.5px solid var(--bd);border-radius:6px;font-size:11px;width:120px;background:var(--bg)">`;
+      html += `<input id="lead-car-search" type="text" placeholder="🔍 ค้นหา..." value="${h(leadCarQuery)}" oninput="leadCarQuery=this.value;leadCarPage=1;render()" style="padding:4px 8px;border:.5px solid var(--bd);border-radius:6px;font-size:11px;width:120px;background:var(--bg)">`;
       html += `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t2);cursor:pointer"><input type="checkbox" ${leadCarHideUnknown?'checked':''} onchange="leadCarHideUnknown=this.checked;leadCarPage=1;render()"> ซ่อน 'ไม่ระบุ'</label>`;
       html += `</div></div>`;
 
@@ -1671,7 +1689,7 @@
 
       // Search & sort
       html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">`;
-      html += `<input type="text" placeholder="ค้นหา code / รถ / หมายเหตุ..." style="flex:1;min-width:130px" value="${h(searchQ)}" oninput="searchQ=this.value;lfPage=1;render()">`;
+      html += `<input id="lf-search" type="text" placeholder="ค้นหา code / รถ / หมายเหตุ..." style="flex:1;min-width:130px" value="${h(searchQ)}" oninput="searchQ=this.value;lfPage=1;render()">`;
       html += `<div style="display:flex;gap:3px;flex-wrap:wrap">`;
       [{s:'urgent',l:'เร่งด่วน'},{s:'upd-asc',l:'อัพน้อย'},{s:'upd-desc',l:'ติดตามมาก'},{s:'date',l:'ล่าสุด'}].forEach(b=>{
         html += `<button class="sbtn${curSo===b.s?' on':''}" onclick="curSo='${b.s}';lfPage=1;render()">${b.l}</button>`;
@@ -2125,7 +2143,7 @@
           ${__scRows.map((s,i) => `
             <tr>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.name)}" oninput="__scRows[${i}].name=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input list="sc-teams" value="${h(s.team)}" oninput="__scRows[${i}].team=this.value.toUpperCase();this.value=__scRows[${i}].team" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:center;font-weight:700"></td>
+              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input list="sc-teams" value="${h(s.team)}" oninput="__scRows[${i}].team=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:center;font-weight:700;text-transform:uppercase"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input type="number" min="0" value="${s.target}" oninput="__scRows[${i}].target=parseInt(this.value)||0;__scUpdateTotal()" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:right"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><button onclick="__scDeleteRow(${i})" title="ลบเซลล์นี้" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px">🗑️</button></td>
             </tr>
@@ -2175,13 +2193,14 @@
     async function __scSave() {
       const btn = document.getElementById('sc-save-btn');
       const msg = document.getElementById('sc-msg');
-      // basic validation
+      // normalize + validate
       for (let i = 0; i < __scRows.length; i++) {
         const r = __scRows[i];
+        r.team = (r.team || '').trim().toUpperCase();  // uppercase ตอน save (กัน cursor jump ระหว่างพิมพ์)
         if (!r.name || !r.name.trim()) {
           msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ แถวที่ ${i+1}: ชื่อว่าง</div>`; return;
         }
-        if (!r.team || !r.team.trim()) {
+        if (!r.team) {
           msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(r.name)}: ยังไม่ได้ใส่ทีม</div>`; return;
         }
       }
@@ -2419,7 +2438,7 @@
         // Test mode field
         html += `<div style="margin-top:10px;padding:9px 11px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:8px">
           <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">🧪 Test mode — ถ้ามีค่า: ทุก Flex จะส่งไปที่ user_id นี้แทน (ไม่ส่งจริง)</label>
-          <input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value;__schedRedraw()" placeholder="ว่าง = ส่งจริง / ใส่ U... = test ส่งให้ตัวเอง" style="width:100%;padding:7px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box;font-family:monospace">
+          <input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value" placeholder="ว่าง = ส่งจริง / ใส่ U... = test ส่งให้ตัวเอง" style="width:100%;padding:7px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box;font-family:monospace">
         </div>`;
 
         // Delete + collapse

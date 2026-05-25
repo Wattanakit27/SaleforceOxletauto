@@ -93,7 +93,7 @@
   let fDay = 0;            // 0=ทั้งเดือน/range, -1=วันนี้ (เก็บไว้ backward compat — UI ลบปุ่ม 1-31 ออก)
   let fDateFrom = '';      // 'YYYY-MM-DD' — ใช้คู่กับ fDateTo
   let fDateTo = '';        // 'YYYY-MM-DD'
-  let kpiFilter = 'all';
+  let kpiFilter = 'inHand';
   let viewMode = 'leads';
   let bookStatusFilter = 'all';
   const __charts = {};
@@ -159,6 +159,7 @@
   //   "ต้องโทรต่อ" = ภาพรวมที่เซลล์สนใจที่สุด (status-based, คนละมิติกับ "โทรกี่ครั้ง")
   // CALL_FILTERS (filter chip row ด้านล่าง) — drill-down ตามจำนวนครั้งที่โทร (disjoint)
   const SKIP_KEYWORDS = ['จบ','ส่งมอบ','คืนเคส','คืน','ยกเลิก','ไม่สนใจ','dead','จ่ายใหม่'];
+  const FOLLOW_KEYWORDS = ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'];
   const isSkipped = (l) => {
     const a = (l.adminStatus||'').toLowerCase();
     const s = (l.salesStatus||'').toLowerCase();
@@ -167,15 +168,27 @@
       return (a && a.includes(kw)) || (s && s.includes(kw));
     });
   };
+  // "เคสในมือ" = เคสที่ยังต้องดูแล (ติดตาม + จอง + ปล่อย) ไม่นับเคสปิด (คืน/ยกเลิก/จ่ายใหม่)
+  const isInHand = (l) => {
+    if (isSkipped(l)) return false;
+    const a = (l.adminStatus||'').toLowerCase();
+    const s = (l.salesStatus||'').toLowerCase();
+    // ติดตาม
+    if (s && s !== '-' && FOLLOW_KEYWORDS.some(k => s.includes(k))) return true;
+    // จอง / ปล่อย
+    if (a.includes('จอง') || s.includes('จอง')) return true;
+    if (a.includes('ปล่อย') || s.includes('ปล่อย')) return true;
+    return false;
+  };
   const KPI_DEFS = [
-    { key: 'all',       label: 'หลีดที่รับ',       color: 'var(--t1)',     hint: 'ทั้งหมด',           test: l => true },
+    { key: 'inHand',    label: 'เคสในมือ',         color: 'var(--blue)',   hint: 'ติดตาม + จอง + ปล่อย (ไม่นับปิด)', test: isInHand },
     { key: 'called',    label: 'โทรแล้วมีหลักฐาน', color: 'var(--green)',  hint: 'callProof = ส่งแล้ว',  test: l => l.callProof === 'ส่งแล้ว' },
     { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสปิด)', test: l => !l.updateCount && !isSkipped(l) },
     { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสปิด)', test: l => {
         if (isSkipped(l)) return false;
         const s = (l.salesStatus||'').toLowerCase();
         if (!s || s === '-') return false;
-        return ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
+        return FOLLOW_KEYWORDS.some(k => s.includes(k));
       }},
   ];
   // Disjoint breakdown ตามจำนวนครั้งที่โทร — chip row ใต้ KPI
@@ -376,16 +389,20 @@
     const doneBookings = bookings.filter(b => b.status === 'ปล่อย');
     const doneCount = doneBookings.length;
     const dealValueRange = doneBookings.reduce((a,b)=>a+(Number(b.price)||0),0);
-    // เคสในมือ — รวมเคสที่ยังต้องดูแล: ติดตาม + จอง + ปล่อย (filter ตาม period)
-    // "จอง" นับจาก leads (admin/sales_status มี "จอง") — ส่วน "ปล่อย" จาก sales_reports (booking_cases)
-    const followCount = kpiCounts['follow'] || 0;
-    const bookingCount = allLeads.filter(l => {
-      if (isSkipped(l)) return false;
-      const admin = l.adminStatus || '';
-      const sales = l.salesStatus || '';
-      return admin.includes('จอง') || sales.includes('จอง');
-    }).length;
-    const inHandTotal = followCount + bookingCount + doneCount;
+
+    // เคสในมือ breakdown — จาก leads ที่ผ่าน isInHand (mutual exclusive bucket)
+    // priority: ปล่อย > จอง > ติดตาม → sum = kpiCounts['inHand']
+    let h_follow = 0, h_booking = 0, h_released = 0;
+    allLeads.filter(isInHand).forEach(l => {
+      const a = (l.adminStatus||'').toLowerCase();
+      const s = (l.salesStatus||'').toLowerCase();
+      if (a.includes('ปล่อย') || s.includes('ปล่อย')) h_released++;
+      else if (a.includes('จอง') || s.includes('จอง')) h_booking++;
+      else h_follow++;
+    });
+    const followCount = h_follow;
+    const bookingCount = h_booking;
+    const inHandTotal = kpiCounts['inHand'] || 0;
 
     const periodLabel = (() => {
       if (fDateFrom || fDateTo) {
@@ -419,16 +436,11 @@
         </div>
       </div>
 
-      <div class="kgrid" style="margin-bottom:10px">
+      <div class="kgrid" style="margin-bottom:10px;grid-template-columns:1fr">
         <div class="kpi-card" style="cursor:default">
           <div class="kl">💰 ยอดปล่อย ${h(periodLabel)}</div>
           <div class="kv" style="color:var(--green-mid)">${fmtBaht(dealValueRange)}</div>
-          <div class="ks">${doneCount ? 'เฉลี่ย '+fmtBaht(dealValueRange/doneCount)+'/คัน' : 'ยังไม่มีปล่อย'}</div>
-        </div>
-        <div class="kpi-card" style="cursor:default">
-          <div class="kl">🎯 เคสในมือ ${h(periodLabel)}</div>
-          <div class="kv" style="color:var(--blue)">${inHandTotal}</div>
-          <div class="ks">ติดตาม ${followCount} · จอง ${bookingCount} · ปล่อย ${doneCount}</div>
+          <div class="ks">${doneCount ? 'เฉลี่ย '+fmtBaht(dealValueRange/doneCount)+'/คัน · ' + doneCount + ' คัน' : 'ยังไม่มีปล่อย'}</div>
         </div>
       </div>
 
@@ -469,13 +481,18 @@
       </div>
 
       <div class="kgrid" style="grid-template-columns:repeat(4,1fr)">
-        ${KPI_DEFS.map(k => `
+        ${KPI_DEFS.map(k => {
+          // เคสในมือ → override hint ให้แสดง breakdown (ใช้ตัวเลขจาก leads sheet ให้ sum ตรงกับ count)
+          const hint = k.key === 'inHand'
+            ? `ติดตาม ${h_follow} · จอง ${h_booking} · ปล่อย ${h_released}`
+            : k.hint;
+          return `
           <div class="kpi-card ${kpiFilter===k.key?'active':''}" onclick="setKpi('${k.key}')">
             <div class="kl">${k.label}</div>
             <div class="kv" style="color:${k.color}">${kpiCounts[k.key]}</div>
-            <div class="ks">${k.hint}</div>
+            <div class="ks">${hint}</div>
           </div>
-        `).join('')}
+        `;}).join('')}
       </div>
 
       <div class="filter-bar" style="margin-bottom:10px">
