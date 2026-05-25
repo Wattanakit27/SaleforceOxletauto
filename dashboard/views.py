@@ -47,10 +47,9 @@ DEFAULT_EXECUTIVE_USER = {
 @ensure_csrf_cookie
 @require_GET
 def dashboard_page(request):
-    """Main dashboard — เปิดให้ทุกคนเข้าได้ default เป็นมุมมอง 'ผู้บริหาร'.
-    Admin ต้องกดปุ่ม ADMIN แล้ว login จึงจะได้สิทธิ์ admin (session).
-    ใช้ @ensure_csrf_cookie เพื่อให้ csrftoken cookie ถูก set ตั้งแต่หน้าแรก
-    (ปุ่ม ADMIN ใช้ค่านี้ส่ง AJAX login).
+    """Main dashboard — เปิดสาธารณะ default = 'ผู้บริหาร' (ช่วงทดสอบ).
+    TODO: เมื่อพร้อมเปิด production ให้เปลี่ยนเป็น require login (HttpResponseRedirect("/login/"))
+    Admin ต้องกดปุ่ม Admin login เพื่อได้สิทธิ์เต็ม.
     """
     user = _session_user(request) or DEFAULT_EXECUTIVE_USER
 
@@ -112,7 +111,9 @@ def login_view(request):
     next_url = request.POST.get("next", "/dashboard/")
     username = (request.POST.get("username") or "").strip()
     password = (request.POST.get("password") or "").strip()
+    line_token = (request.POST.get("token") or "").strip()
 
+    # ทาง 1: Admin login (ชื่อ + รหัสผ่าน)
     admin_user = (getattr(settings, "OXLET_ADMIN_USER", "admin") or "admin").strip()
     admin_pw = (getattr(settings, "OXLET_ADMIN_PASSWORD", "") or "").strip()
 
@@ -128,7 +129,37 @@ def login_view(request):
             return JsonResponse({"ok": True, "next": next_url})
         return HttpResponseRedirect(next_url)
 
-    error = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" if (username or password) else "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"
+    # ทาง 2: LINE user_id (ผู้บริหาร/เซลล์) → ตรวจ employees sheet + set session
+    if line_token:
+        try:
+            employees = fetch_sheet("employees")
+            for r in employees:
+                if cell(r, EM.user_id) == line_token:
+                    position = (cell(r, EM.position) or "").strip().lower()
+                    nickname = cell(r, EM.nickname)
+                    display = cell(r, EM.display_name)
+                    request.session["oxlet_user"] = {
+                        "user_id": line_token,
+                        "nickname": nickname,
+                        "display_name": display,
+                        "position": position or "seller",
+                    }
+                    request.session.set_expiry(60 * 60 * 24 * 30)
+                    # เซลล์ทั่วไป → /s/<user_id>/, ผู้บริหาร → /dashboard/
+                    if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
+                        target = next_url if next_url != "/dashboard/" else "/dashboard/"
+                    else:
+                        target = f"/s/{line_token}/"
+                    if is_ajax:
+                        return JsonResponse({"ok": True, "next": target})
+                    return HttpResponseRedirect(target)
+        except Exception as e:
+            err = f"ตรวจ user_id ล้มเหลว: {e}"
+            if is_ajax:
+                return JsonResponse({"ok": False, "error": err}, status=500)
+            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
+
+    error = "ข้อมูลไม่ถูกต้อง" if (username or password or line_token) else "กรุณากรอกข้อมูล"
     if is_ajax:
         return JsonResponse({"ok": False, "error": error}, status=401)
     return render(request, "dashboard/login.html", {"next": next_url, "error": error})
@@ -136,7 +167,7 @@ def login_view(request):
 
 @require_GET
 def logout_view(request):
-    """ออกจากระบบ admin — กลับสู่มุมมอง 'ผู้บริหาร' (default)."""
+    """ออกจากระบบ — กลับสู่มุมมอง 'ผู้บริหาร' (default ช่วงทดสอบ)"""
     request.session.flush()
     resp = HttpResponseRedirect("/dashboard/")
     resp.delete_cookie("oxlet_employee")
@@ -156,6 +187,7 @@ def admin_seller_config(request):
 
     from .services.constants import refresh_from_sheet, TEAMS, TARGETS
     from .services.google_sheets import SHEET_CONFIG, write_sheet
+    from .services.line_notify import get_nickname_to_user_id
 
     if request.method == "POST":
         try:
@@ -204,10 +236,15 @@ def admin_seller_config(request):
         refresh_from_sheet()
         return JsonResponse({"ok": True, "saved": len(cleaned)})
 
-    # GET
+    # GET — ส่ง user_id (จาก employees sheet) แทน token เพื่อให้ admin เห็น URL ส่วนตัวของเซลล์ใน UI
     loaded_from_sheet = refresh_from_sheet()
     cfg = SHEET_CONFIG.get("sellers_config", {})
     sheet_url = f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit"
+
+    try:
+        uid_map = get_nickname_to_user_id()
+    except Exception:
+        uid_map = {}
 
     sellers = []
     for tid, members in sorted(TEAMS.items()):
@@ -216,6 +253,7 @@ def admin_seller_config(request):
                 "name": name,
                 "team": tid,
                 "target": TARGETS.get(name, 0),
+                "user_id": uid_map.get(name, ""),  # LINE user_id = URL /s/<user_id>/
             })
     sellers.sort(key=lambda s: (s["team"], s["name"]))
 

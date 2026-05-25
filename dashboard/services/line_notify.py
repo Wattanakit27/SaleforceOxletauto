@@ -213,10 +213,12 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
         body.extend(follow_rows)
 
     # ปุ่ม footer ลิงก์ไปหน้าส่วนตัวของเซลล์ (/s/<token>/)
-    # ถ้าเซลล์ใหม่ยังไม่มี token ใน seller_tokens.py → ส่งไป /login/ (ไม่ใช่ /dashboard/)
-    # เพราะ /dashboard/ default = ผู้บริหาร = เซลล์เห็นข้อมูลทุกคน (ไม่ปลอดภัย)
-    # admin ต้องเพิ่ม token ใน seller_tokens.py สำหรับเซลล์ใหม่
-    token = SELLER_TOKENS.get(seller)
+    # ลำดับการเลือก token (ใช้ตัวแรกที่เจอ):
+    #   1. LINE user_id ของเซลล์ (จาก employees sheet) — primary
+    #   2. SELLER_TOKENS legacy (เซลล์เก่า 13 คนก่อนเปลี่ยนระบบ)
+    #   3. fallback /login/ (เซลล์ไม่อยู่ใน employees + ไม่มี legacy token)
+    user_id = get_nickname_to_user_id().get(seller, "")
+    token = user_id or SELLER_TOKENS.get(seller, "")
     seller_url = f"{base_url}/s/{token}/" if token else f"{base_url}/login/"
 
     return {
@@ -488,7 +490,9 @@ def push_line_message(user_id: str, messages: list[dict], channel_token: str, ti
 
 
 def get_nickname_to_user_id() -> dict[str, str]:
-    """อ่าน employees sheet → คืน dict {nickname: line_user_id}."""
+    """อ่าน employees sheet → คืน dict {nickname: line_user_id}.
+    ใส่ทั้ง raw และ normalized key เพื่อให้ lookup ได้ทั้งสองแบบ
+    (sheet อาจมี 'เจเจ' แต่ระบบ normalize เป็น 'เจ')"""
     employees = fetch_sheet("employees")
     out: dict[str, str] = {}
     for r in employees:
@@ -496,6 +500,9 @@ def get_nickname_to_user_id() -> dict[str, str]:
         nick = cell(r, EM.nickname)
         if uid and nick:
             out[nick] = uid
+            normalized = normalize_seller(nick)
+            if normalized and normalized != nick:
+                out[normalized] = uid
     return out
 
 

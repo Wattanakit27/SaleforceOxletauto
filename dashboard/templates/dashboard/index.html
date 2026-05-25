@@ -719,13 +719,16 @@
         const tC=conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)';
         const tBg=conv>=8?'var(--green-bg)':conv>=4?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
-        // Virtual "❓ ไม่ระบุ" row — เคสที่ seller ไม่อยู่ใน ALL_SELLERS → กดเพื่อดูรายชื่อต้นฉบับ
-        const isUnknown = s.name === '❓ ไม่ระบุ';
-        const rowClick = isUnknown
-          ? `onclick="alert('🔍 เซลล์ใน sheet ที่ไม่ตรงกับ ALL_SELLERS:\\n\\n' + (${JSON.stringify(s.unknownSellerNames||[])}).join('\\n') + '\\n\\nหมายเหตุ:เพิ่มชื่อใน sheet ตั้งค่าเซลล์ หรือใส่ใน normalize_seller() ให้ map ชื่อนี้')" style="background:var(--amber-bg);cursor:help"`
+        // Inactive seller (เซลล์เก่าที่ไม่อยู่ใน config) — แสดงเป็น row read-only มี style ต่าง
+        const isInactive = s.inactive === true || s.team === 'INACTIVE';
+        const rowClick = isInactive
+          ? `style="background:var(--bg2);cursor:default;opacity:.75" title="เซลล์เก่า (ไม่อยู่ใน config) — ข้อมูลย้อนหลัง"`
           : `onclick="switchToSeller('${h(s.name)}')"`;
+        const teamBadge = isInactive
+          ? `<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:var(--t3);color:#fff;margin-left:2px">เก่า</span>`
+          : `<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span>`;
         html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" ${rowClick}>`;
-        html += `<span style="font-weight:600">${h(s.name)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span></span>`;
+        html += `<span style="font-weight:600">${h(s.name)}${teamBadge}</span>`;
         html += `<span style="text-align:right">${sLead}</span>`;
         html += `<span style="text-align:right;color:var(--blue)">${sFollow}</span>`;
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
@@ -2168,17 +2171,25 @@
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd)">ชื่อเล่น</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:70px">ทีม</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:90px">เป้า/เดือน</th>
+          <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:170px">URL ส่วนตัว</th>
           <th style="border-bottom:.5px solid var(--bd);width:32px"></th>
         </tr></thead>
         <tbody>
-          ${__scRows.map((s,i) => `
+          ${__scRows.map((s,i) => {
+            const uid = s.user_id || '';
+            const url = uid ? `${location.origin}/s/${uid}/` : '';
+            const urlCell = uid
+              ? `<div style="display:flex;align-items:center;gap:4px"><code style="flex:1;font-size:10px;background:var(--bg2);padding:4px 6px;border-radius:5px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(url)}">/s/${h(uid.slice(0,10))}...</code><button onclick="navigator.clipboard.writeText('${h(url)}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='copy',1200)})" style="font-size:9px;padding:3px 7px;border-radius:5px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer;white-space:nowrap">copy</button></div>`
+              : `<span style="font-size:10px;color:var(--amber);font-style:italic">ยังไม่มี LINE user_id</span>`;
+            return `
             <tr>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.name)}" oninput="__scRows[${i}].name=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input list="sc-teams" value="${h(s.team)}" oninput="__scRows[${i}].team=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:center;font-weight:700;text-transform:uppercase"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input type="number" min="0" value="${s.target}" oninput="__scRows[${i}].target=parseInt(this.value)||0;__scUpdateTotal()" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:right"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><button onclick="__scDeleteRow(${i})" title="ลบเซลล์นี้" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px">🗑️</button></td>
+              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)">${urlCell}</td>
+              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><button onclick="__scDeleteRow(${i})" title="ลบเซลล์นี้" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px">ลบ</button></td>
             </tr>
-          `).join('')}
+          `;}).join('')}
         </tbody>
       </table>`;
 

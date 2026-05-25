@@ -5,10 +5,16 @@ LIVE_TGT = 4
 PAGE_SIZE = 15
 
 # Seller name normalization
+# - alias ของเซลล์ปัจจุบัน (ชื่อสะกดต่างใน sheet → ชื่อมาตรฐานใน config)
+# - alias ของเซลล์เก่า (รวม Ice→ไอซ์, ตาต้า→ต้า เพื่อไม่ให้ตัวเลขกระจาย)
 SELLER_MAP = {
     "เจเจ": "เจ",
     "กลอฟ": "กอล์ฟ",
     "แซนด์": "แซน",
+    "Ice": "ไอซ์",
+    "ICE": "ไอซ์",
+    "ice": "ไอซ์",
+    "ตาต้า": "ต้า",
 }
 
 
@@ -43,6 +49,9 @@ def refresh_from_sheet() -> bool:
 
     คืน True ถ้าโหลดสำเร็จ, False ถ้า sheet ไม่มีหรือ error (จะ fallback default).
     Import google_sheets ใน function เพื่อกัน circular import.
+
+    หมายเหตุ: ไม่ load tokens จาก sheet แล้ว — seller URL ใช้ LINE user_id จาก employees sheet
+    (ดู seller_tokens.seller_from_token() ที่ fall back ไปอ่าน employees)
     """
     try:
         from .google_sheets import fetch_sheet, cell, cell_num, SELLER_CONFIG_COL as SC

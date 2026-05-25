@@ -346,46 +346,56 @@ def fetch_dashboard_data() -> dict:
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
 
-    # ── 🚫 Unknown/Orphan seller — เคสที่ seller ไม่อยู่ใน ALL_SELLERS หรือ ADMIN
+    # ── 🚫 Orphan sellers — เซลล์ที่ไม่อยู่ใน config ปัจจุบัน (ส่วนใหญ่คือเซลล์เก่าที่ลาออก)
     # เกิดเมื่อ: เซลล์ลาออก / สะกดแปลก / normalize_seller ไม่ map / seller_cell ว่าง /
     # ใช้คำเช่น "หน้าร้าน" "ออนไลน์" ฯลฯ → เคสตกหายไม่ขึ้นในรายบุคคล
-    # → รวมเข้า virtual seller "❓ ไม่ระบุ" + เก็บรายชื่อต้นฉบับใน unknownSellerNames (สำหรับ admin debug)
+    # → สร้าง row ต่อชื่อ (ไม่รวม) เพื่อให้ admin เห็น breakdown ของเซลล์เก่า
     known_names = set(ALL_SELLERS) | {"ADMIN"}
-    # ไม่ใช้ short-circuit "and" — รวมเคส seller ว่าง ("") ด้วย เพราะถือว่า orphan เหมือนกัน
-    orphan_bookings = [b for b in booking_cases if b["seller"] not in known_names]
-    orphan_leads_rows = [
-        r for r in year_leads
-        if normalize_seller(cell(r, L.sales_rep)) not in known_names
-    ]
-    if orphan_bookings or orphan_leads_rows:
-        orphan_done_b = [b for b in orphan_bookings if b["status"] == "ปล่อย"]
-        orphan_done = len(orphan_done_b)
-        orphan_deal_value = sum(b["price"] for b in orphan_done_b)
-        orphan_booking = len([j for j in year_jongs if j["seller"] not in known_names])
-        orphan_pipeline_val = sum(
-            b["price"] for b in orphan_bookings
+    # Group orphan rows by normalized seller name
+    orphan_groups: dict[str, dict] = {}
+    for r in year_leads:
+        s = normalize_seller(cell(r, L.sales_rep)) or "(ว่าง)"
+        if s in known_names:
+            continue
+        g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
+        g["leads"].append(r)
+    for b in booking_cases:
+        s = b["seller"] or "(ว่าง)"
+        if s in known_names:
+            continue
+        g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
+        g["bookings"].append(b)
+        if b["status"] == "ปล่อย":
+            g["dones"].append(b)
+    for j in year_jongs:
+        s = j["seller"] or "(ว่าง)"
+        if s in known_names:
+            continue
+        g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
+        g["jongs"].append(j)
+
+    # เพิ่ม row ต่อชื่อเซลล์เก่า (sort by lead count desc)
+    for name, g in sorted(orphan_groups.items(), key=lambda x: -len(x[1]["leads"])):
+        n_done = len(g["dones"])
+        deal_value = sum(b["price"] for b in g["dones"])
+        pipeline_val = sum(
+            b["price"] for b in g["bookings"]
             if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
         )
-        # ชื่อต้นฉบับ — แทนค่าว่างด้วย "(ว่าง)" ให้ admin เห็น
-        orphan_names = sorted({
-            (b["seller"] or "(ว่าง)") for b in orphan_bookings
-        } | {
-            (normalize_seller(cell(r, L.sales_rep)) or "(ว่าง)") for r in orphan_leads_rows
-        })
         sellers.append({
-            "name": "❓ ไม่ระบุ", "team": "?",
-            "lead": len(orphan_leads_rows),
-            "follow": len([r for r in orphan_leads_rows if is_follow(cell(r, L.admin_status))]),
-            "vacant": len([r for r in orphan_leads_rows if is_vacant(cell(r, L.admin_status))]),
-            "done": orphan_done,
-            "target": 0, "booking": orphan_booking,
+            "name": name, "team": "INACTIVE",  # team = INACTIVE → frontend แสดงเป็น "เซลล์เก่า"
+            "lead": len(g["leads"]),
+            "follow": len([r for r in g["leads"] if is_follow(cell(r, L.admin_status))]),
+            "vacant": len([r for r in g["leads"] if is_vacant(cell(r, L.admin_status))]),
+            "done": n_done,
+            "target": 0, "booking": len(g["jongs"]),
             "live": 0, "clip": 0, "clipTarget": 0,
             "liveInbox": 0, "liveLead": 0,
             "leadTypes": {},
-            "dealValue": orphan_deal_value,
-            "pipelineValue": orphan_pipeline_val,
-            "avgDealValue": (orphan_deal_value / orphan_done) if orphan_done else 0,
-            "unknownSellerNames": orphan_names,  # รายชื่อต้นฉบับสำหรับ admin debug
+            "dealValue": deal_value,
+            "pipelineValue": pipeline_val,
+            "avgDealValue": (deal_value / n_done) if n_done else 0,
+            "inactive": True,  # ใช้สำหรับ frontend แยก style
         })
 
     # ADMIN seller
@@ -589,31 +599,51 @@ def fetch_dashboard_data() -> dict:
                 "leadTypes": m_lead_types,
             }
 
-        # ── เพิ่ม "❓ ไม่ระบุ" ใน m_sellers — กัน sum รายเซลล์ไม่ตรง totalDone ตอน user filter เดือน ──
-        m_orphan_leads_rows = [
-            r for r in m_leads if normalize_seller(cell(r, L.sales_rep)) not in known_names
-        ]
-        m_orphan_done_b = [b for b in m_done if b["seller"] not in known_names]
-        m_orphan_pipe_b = [
-            b for b in m_bookings
-            if b["seller"] not in known_names and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
-        ]
-        m_orphan_booking = sum(1 for j in m_jongs if j["seller"] not in known_names)
-        m_orphan_done_n = len(m_orphan_done_b)
-        m_orphan_dv = sum(b["price"] for b in m_orphan_done_b)
-        if m_orphan_leads_rows or m_orphan_done_b or m_orphan_booking:
-            m_sellers["❓ ไม่ระบุ"] = {
-                "lead": len(m_orphan_leads_rows),
-                "leadNormal": len([r for r in m_orphan_leads_rows if cell(r, L.type) not in RJ_TYPES]),
-                "leadRJ": len([r for r in m_orphan_leads_rows if cell(r, L.type) in RJ_TYPES]),
-                "follow": len([r for r in m_orphan_leads_rows if is_follow(cell(r, L.admin_status))]),
-                "vacant": len([r for r in m_orphan_leads_rows if is_vacant(cell(r, L.admin_status))]),
-                "done": m_orphan_done_n,
-                "booking": m_orphan_booking,
-                "dealValue": m_orphan_dv,
-                "pipelineValue": sum(b["price"] for b in m_orphan_pipe_b),
-                "avgDealValue": (m_orphan_dv / m_orphan_done_n) if m_orphan_done_n else 0,
+        # ── เพิ่ม orphan sellers ต่อเดือน — split per name (เซลล์เก่าแต่ละคน) ──
+        m_orphan_groups: dict[str, dict] = {}
+        for r in m_leads:
+            s = normalize_seller(cell(r, L.sales_rep)) or "(ว่าง)"
+            if s in known_names:
+                continue
+            g = m_orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": 0})
+            g["leads"].append(r)
+        for b in m_bookings:
+            s = b["seller"] or "(ว่าง)"
+            if s in known_names:
+                continue
+            g = m_orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": 0})
+            g["bookings"].append(b)
+        for b in m_done:
+            s = b["seller"] or "(ว่าง)"
+            if s in known_names:
+                continue
+            g = m_orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": 0})
+            g["dones"].append(b)
+        for j in m_jongs:
+            s = j["seller"] or "(ว่าง)"
+            if s in known_names:
+                continue
+            g = m_orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": 0})
+            g["jongs"] += 1
+
+        for orphan_name, g in m_orphan_groups.items():
+            n_done = len(g["dones"])
+            dv = sum(b["price"] for b in g["dones"])
+            pipe_b = [b for b in g["bookings"]
+                      if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")]
+            m_sellers[orphan_name] = {
+                "lead": len(g["leads"]),
+                "leadNormal": len([r for r in g["leads"] if cell(r, L.type) not in RJ_TYPES]),
+                "leadRJ": len([r for r in g["leads"] if cell(r, L.type) in RJ_TYPES]),
+                "follow": len([r for r in g["leads"] if is_follow(cell(r, L.admin_status))]),
+                "vacant": len([r for r in g["leads"] if is_vacant(cell(r, L.admin_status))]),
+                "done": n_done,
+                "booking": g["jongs"],
+                "dealValue": dv,
+                "pipelineValue": sum(b["price"] for b in pipe_b),
+                "avgDealValue": (dv / n_done) if n_done else 0,
                 "leadTypes": {},
+                "inactive": True,
             }
 
         m_teams = {}

@@ -120,6 +120,7 @@ class EMPLOYEE_COL:
 class SELLER_CONFIG_COL:
     # ตั้งค่าเซลล์ tab — admin แก้ใน Google Sheets ตรงๆ ได้
     # Row format: ชื่อเล่น | ทีม (A/B/C) | เป้าต่อเดือน
+    # หมายเหตุ: ไม่มี column token แล้ว — URL ส่วนตัวเซลล์ใช้ LINE user_id (จาก employees sheet)
     nickname = 0
     team = 1
     target = 2
