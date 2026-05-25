@@ -1,12 +1,44 @@
 """Google Sheets API — ported from lib/google-sheets.ts"""
 import asyncio
 import concurrent.futures
+import time
 from typing import Any
 
 import requests
 from google.auth.transport.requests import Request as AuthRequest
 from google.oauth2.service_account import Credentials
 from django.conf import settings
+
+
+# ── In-memory cache สำหรับ Sheet reads ──
+# ลด API quota hits — TTL 60s ก็พอดี (data ไม่ได้ update วินาทีต่อวินาที)
+# Module-level dict → persist ใน warm Vercel instance (cold start จะ reset)
+# Invalidate ด้วย invalidate_cache(key) ตอน write_sheet (ดู write_sheet ด้านล่าง)
+_CACHE_TTL = 60  # seconds
+_CACHE: dict[str, tuple[float, Any]] = {}  # key → (timestamp, data)
+
+
+def _cache_get(key: str):
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    ts, data = entry
+    if time.time() - ts > _CACHE_TTL:
+        _CACHE.pop(key, None)
+        return None
+    return data
+
+
+def _cache_set(key: str, data):
+    _CACHE[key] = (time.time(), data)
+
+
+def invalidate_cache(key: str | None = None):
+    """ล้าง cache — ถ้าใส่ key = ล้างแค่ key นั้น, None = ล้างทั้งหมด"""
+    if key is None:
+        _CACHE.clear()
+    else:
+        _CACHE.pop(key, None)
 
 # ── Config: Sheet IDs & tab names ──
 SHEET_CONFIG = {
@@ -193,6 +225,9 @@ def write_sheet(config_key: str, values: list[list]) -> None:
     if r.status_code != 200:
         raise Exception(f"Write failed: {r.status_code} {r.text}")
 
+    # Invalidate cache สำหรับ key ที่เพิ่งเขียน (กัน user เห็นค่าเก่า)
+    invalidate_cache(f"sheet:{config_key}")
+
 
 # ── Fetch helpers ──
 def cell(row: list[str], index: int) -> str:
@@ -215,7 +250,14 @@ def cell_bool(row: list[str], index: int) -> bool:
 
 
 def fetch_sheet(config_key: str) -> list[list[str]]:
-    """Fetch a single sheet → list of row arrays (skip header)."""
+    """Fetch a single sheet → list of row arrays (skip header).
+    Cache TTL 60s — ลด API quota hits (Vercel warm instance memory)
+    """
+    cache_key = f"sheet:{config_key}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     creds = _get_credentials()
     creds.refresh(AuthRequest())
     token = creds.token
@@ -233,7 +275,9 @@ def fetch_sheet(config_key: str) -> list[list[str]]:
 
     data = resp.json()
     rows = data.get("values", [])
-    return rows[1:]  # skip header
+    result = rows[1:]  # skip header
+    _cache_set(cache_key, result)
+    return result
 
 
 # Thai month name → 1-based index (ใช้สำหรับเรียง tab รายเดือนใน leads spreadsheet)
@@ -354,16 +398,18 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
     """อ่าน leads จาก monthly tabs (มกราคม-ธันวาคม 69) แต่ละแถวเก็บเฉพาะ
     ที่ "วันที่ใน column ตรงกับเดือนของ tab" — ตัดเคสที่ admin เอามาใส่ผิด tab ออก.
 
+    Cache TTL 60s — ลด API hits (1 meta + 5 tabs = 6 reads/call, แพงสุด)
+
     ใช้แทน fetch_leads_dedup ใน seller_dashboard เพื่อให้ตัวเลขตรงกับการนับ
     raw rows ในแต่ละ monthly tab (= ที่ admin คาดหวัง).
 
     Failsafe: ถ้า monthly tabs fetch ไม่ได้/ว่าง → fall back ไป fetch_sheet("leads")
-
-    ตัวอย่าง พ.ค. 2026:
-      - tab "พฤษภาคม 69" raw = 3,101 แถว
-      - filter เฉพาะ date.month = 5 → 2,585 แถว (ตัด 516 แถวที่ admin เอาเคสเดือนก่อนมาใส่ tab พ.ค.)
-      - ไม่ dedup (= ที่ admin นับใน sheet)
     """
+    cache_key = "leads_month_tabs"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     import urllib.parse
 
     try:
@@ -419,6 +465,7 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
                 d = parse_date(date_cell)
                 if d and d.month == m_int:
                     all_rows.append(row)
+        _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:
         # graceful fallback — อย่างน้อยมีข้อมูลจาก "รวม sheet"
