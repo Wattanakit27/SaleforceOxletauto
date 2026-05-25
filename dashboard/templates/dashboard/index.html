@@ -10,14 +10,45 @@
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
+    /* Mobile safety — ป้องกัน horizontal scroll + KPI grid overflow */
+    * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; max-width: 100vw; }
+    .app { max-width: 100vw; }
+
     .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
     .cgrid > .chart-card.span2 { grid-column: span 2; }
     .chart-card .chart-box { position:relative; height:240px; }
     .chart-card.span2 .chart-box { height:260px; }
+
+    /* KPI grid + card content — bullet-proof responsive */
+    .kgrid > * { min-width: 0; }
+    .kpi .kl, .kpi .ks { word-break: break-word; line-height: 1.4; }
+    .kpi .kv { line-height: 1; word-break: break-word; }
+
+    /* Tables ที่อาจกว้างเกิน mobile — wrap ด้วย overflow scroll */
+    .card table, .booking-card table { width: 100%; }
+
     @media (max-width:760px) {
       .cgrid { grid-template-columns:1fr; }
       .cgrid > .chart-card.span2 { grid-column: auto; }
       .chart-card .chart-box { height:220px; }
+      .card { padding: 12px 11px; }
+      .card-title { font-size: 12px; }
+      /* booking + lead-by-car tables → scroll horizontal */
+      .card table { display: block; overflow-x: auto; white-space: nowrap; }
+      .shdr, .srow { font-size: 11px; gap: 4px; padding: 6px 5px; }
+      .lfhdr, .lfrow { font-size: 11px; }
+      .hlhdr, .hlrow { font-size: 10px; gap: 4px; padding: 5px 4px; }
+      /* sort/search inputs ที่ shrink ได้ */
+      input[type="text"], select { font-size: 12px; padding: 5px 8px; }
+    }
+    @media (max-width:420px) {
+      .kpi .kv { font-size: 18px; }
+      .kpi .kl { font-size: 10px; }
+      .kpi .ks { font-size: 9.5px; }
+      .pipe-num { font-size: 17px; }
+      .pipe-lbl { font-size: 9.5px; }
+      .card { padding: 11px 9px; }
     }
   </style>
 </head>
@@ -190,7 +221,7 @@
       fmt = fmt || ((n) => Number(n).toLocaleString());
       // 999 = ใหม่ทั้งหมด (prev=0)
       if (mom.pct === 999) {
-        return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);padding:1px 5px;border-radius:8px;margin-left:4px" title="เดือนก่อน 0 → ใหม่ทั้งหมด">✨ ใหม่</span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);padding:1px 5px;border-radius:8px;margin-left:4px" title="เดือนก่อน 0 → ใหม่ทั้งหมด">ใหม่</span>`;
       }
       // ลด = ดี (RJ): invert color
       const goodTrend = invert ? !mom.isUp : mom.isUp;
@@ -256,7 +287,7 @@
       html += `<span style="font-size:16px;font-weight:700;color:var(--t1)">Oxlet Dashboard</span>`;
       // Viewer badge
       if(canViewAll) {
-        const roleLabel = isAdmin ? '👑 Admin' : '🎩 ผู้บริหาร';
+        const roleLabel = isAdmin ? 'Admin' : 'ผู้บริหาร';
         const roleBg = isAdmin ? 'var(--amber-bg)' : 'var(--purple-bg)';
         const roleFg = isAdmin ? 'var(--amber)' : 'var(--purple)';
         const roleBd = isAdmin ? 'var(--amber-mid)' : 'var(--purple-mid)';
@@ -266,7 +297,7 @@
           html += `<span style="background:${roleBg};color:${roleFg};padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid ${roleBd}">${roleLabel} (ทั้งหมด)</span>`;
         }
       } else {
-        html += `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--blue)">👤 ${h(employee.nickname)}</span>`;
+        html += `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--blue)">${h(employee.nickname)}</span>`;
       }
       html += `</div>`;
       html += `<div style="display:flex;align-items:center;gap:8px">`;
@@ -274,13 +305,13 @@
       if(isAdmin) {
         html += `<button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--green-mid);background:var(--green-bg);color:var(--green);cursor:pointer">📋 LINE ID</button>`;
         html += `<button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer">📤 LINE Flex</button>`;
-        html += `<button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--amber-mid);background:var(--amber-bg);color:var(--amber);cursor:pointer">🎯 ตั้งเป้า/ทีม</button>`;
+        html += `<button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--amber-mid);background:var(--amber-bg);color:var(--amber);cursor:pointer">ตั้งเป้า/ทีม</button>`;
         html += `<button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล / เคสที่หาย" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--purple-mid);background:var(--purple-bg,#f3e8ff);color:var(--purple-mid,#7c3aed);cursor:pointer">🔍 Log ข้อมูล</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
       if(canViewAll && D.sellers) {
         const allNames = D.sellers.map(s=>s.name);
-        const selfLabel = isAdmin ? '👑 Admin (ทั้งหมด)' : '🎩 ผู้บริหาร (ทั้งหมด)';
+        const selfLabel = isAdmin ? 'Admin (ทั้งหมด)' : 'ผู้บริหาร (ทั้งหมด)';
         html += `<select onchange="setImpersonate(this.value)" style="font-size:11px;padding:3px 9px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">`;
         html += `<option value="" ${!impersonate?'selected':''}>${selfLabel}</option>`;
         allNames.forEach(n => { html += `<option value="${h(n)}" ${impersonate===n?'selected':''}>👁️ ดูในฐานะ ${h(n)}</option>`; });
@@ -303,7 +334,7 @@
 
       // Tabs
       html += `<div style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:10px">`;
-      [{id:'o',l:'📊 ภาพรวม'},{id:'a',l:'🎬 กิจกรรม'},{id:'b',l:'📋 จอง'},{id:'s',l:'👤 เซลล์'}].forEach(t => {
+      [{id:'o',l:'📊 ภาพรวม'},{id:'a',l:'กิจกรรม'},{id:'b',l:'📋 จอง'},{id:'s',l:'เซลล์'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${t.l}</button>`;
       });
       html += `</div>`;
@@ -626,7 +657,7 @@
         return {cur:c, prev:p, delta, pct:pctv, isUp: delta >= 0};
       }
 
-      html += `<div class="card"><div class="card-title">👥 แยกตามทีม</div>`;
+      html += `<div class="card"><div class="card-title">แยกตามทีม</div>`;
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
@@ -691,7 +722,7 @@
         // Virtual "❓ ไม่ระบุ" row — เคสที่ seller ไม่อยู่ใน ALL_SELLERS → กดเพื่อดูรายชื่อต้นฉบับ
         const isUnknown = s.name === '❓ ไม่ระบุ';
         const rowClick = isUnknown
-          ? `onclick="alert('🔍 เซลล์ใน sheet ที่ไม่ตรงกับ ALL_SELLERS:\\n\\n' + (${JSON.stringify(s.unknownSellerNames||[])}).join('\\n') + '\\n\\n💡 เพิ่มชื่อใน sheet ตั้งค่าเซลล์ หรือใส่ใน normalize_seller() ให้ map ชื่อนี้')" style="background:var(--amber-bg);cursor:help"`
+          ? `onclick="alert('🔍 เซลล์ใน sheet ที่ไม่ตรงกับ ALL_SELLERS:\\n\\n' + (${JSON.stringify(s.unknownSellerNames||[])}).join('\\n') + '\\n\\nหมายเหตุ:เพิ่มชื่อใน sheet ตั้งค่าเซลล์ หรือใส่ใน normalize_seller() ให้ map ชื่อนี้')" style="background:var(--amber-bg);cursor:help"`
           : `onclick="switchToSeller('${h(s.name)}')"`;
         html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" ${rowClick}>`;
         html += `<span style="font-weight:600">${h(s.name)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span></span>`;
@@ -1005,7 +1036,7 @@
       inner += `<div style="background:${cfg.color}1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${C.MONTHS_FULL[focusMonth-1]}</div><div style="font-size:22px;font-weight:800;color:${cfg.color}">${cfg.fmt(focusVal)}</div></div>`;
       inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${focusMonth > 1 ? C.MONTHS_FULL[focusMonth-2] : '-'}</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${focusMonth > 1 ? cfg.fmt(prevVal) : '-'}</div></div>`;
       if (deltaPct === 999) {
-        inner += `<div style="background:var(--blue-bg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">MoM</div><div style="font-size:18px;font-weight:800;color:var(--blue)">✨ ใหม่</div></div>`;
+        inner += `<div style="background:var(--blue-bg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">MoM</div><div style="font-size:18px;font-weight:800;color:var(--blue)">ใหม่</div></div>`;
       } else {
         const arrow = delta > 0 ? '↗' : delta < 0 ? '↘' : '→';
         const sign = delta > 0 ? '+' : '';
@@ -1039,7 +1070,7 @@
 
       // Team breakdown
       if (showTeamSection) {
-        inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">👥 แยกตามทีม · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
+        inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">แยกตามทีม · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
         inner += `<div style="background:var(--bg2);border-radius:10px;padding:10px">`;
         teamRows.sort((a,b)=>b.v-a.v).forEach(r => {
           const ratio = teamTotal > 0 ? r.v/teamTotal : 0;
@@ -1054,7 +1085,7 @@
         });
         inner += `</div>`;
       }
-      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px">💡 คลิกที่แท่งกราฟ trend → กรองไปเดือนนั้น</div>`;
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px">หมายเหตุ:คลิกที่แท่งกราฟ trend → กรองไปเดือนนั้น</div>`;
       inner += `</div>`;
       overlay.innerHTML = inner;
       document.body.appendChild(overlay);
@@ -1128,7 +1159,7 @@
           <div style="overflow-y:auto;padding:14px 16px;flex:1">
             ${callLink ? `<div style="margin-bottom:12px;text-align:center">${callLink}</div>` : ''}
 
-            <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px">👤 ลูกค้า</div>
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px">ลูกค้า</div>
             ${row('ชื่อลูกค้า', b.customer)}
             ${row('เบอร์โทร', b.phone, {mono:true})}
             ${row('Lead Code', b.leadCode, {mono:true})}
@@ -1251,7 +1282,7 @@
         });
         inner += `</div>`;
       }
-      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">💡 Lead นับจากชื่อรถใน lead sheet · จอง/ปล่อย นับจากรายการจองที่รุ่นรถมีคำว่า "${h(car)}" (case-insensitive)</div>`;
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">หมายเหตุ:Lead นับจากชื่อรถใน lead sheet · จอง/ปล่อย นับจากรายการจองที่รุ่นรถมีคำว่า "${h(car)}" (case-insensitive)</div>`;
       inner += `</div>`;
       overlay.innerHTML = inner;
       document.body.appendChild(overlay);
@@ -1304,7 +1335,7 @@
 
       let inner = `<div style="background:var(--bg);border-radius:14px;max-width:760px;width:100%;max-height:85vh;overflow-y:auto;padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.35)">`;
       inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">`;
-      inner += `<div><div style="font-size:11px;color:var(--t3)">${h(periodLbl)} · กดที่เซลล์เพื่อดูรายละเอียด</div><div style="font-size:18px;font-weight:800;color:${teamColor}">🏁 ${h(teamName)} — ปิดได้ ${totalDone}/${totalTarget}</div></div>`;
+      inner += `<div><div style="font-size:11px;color:var(--t3)">${h(periodLbl)} · กดที่เซลล์เพื่อดูรายละเอียด</div><div style="font-size:18px;font-weight:800;color:${teamColor}">${h(teamName)} — ปิดได้ ${totalDone}/${totalTarget}</div></div>`;
       inner += `<button onclick="document.getElementById('team-done-overlay').remove()" style="background:var(--bg2);border:.5px solid var(--bd2);color:var(--t2);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">✕ ปิด</button>`;
       inner += `</div>`;
 
@@ -1317,7 +1348,7 @@
       inner += `</div>`;
 
       // ตารางเซลล์
-      inner += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">👤 สมาชิกทีม</div>`;
+      inner += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">สมาชิกทีม</div>`;
       inner += `<div style="display:grid;grid-template-columns:1.4fr .6fr .8fr 1fr;gap:6px;padding:6px 8px;font-size:10px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)"><span>เซลล์</span><span style="text-align:right">ปล่อย/เป้า</span><span style="text-align:right">% เป้า</span><span style="text-align:right">💰 ยอดปล่อย</span></div>`;
       sellerStats.forEach(s => {
         const sPct = s.target > 0 ? Math.round(s.done/s.target*100) : 0;
@@ -1333,7 +1364,7 @@
 
       // รายการเคสปล่อยจริง (จาก booking_cases)
       if (releasedCases.length > 0) {
-        inner += `<div><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">🚚 รายการเคสปล่อยจริง — ${releasedCases.length} เคส</div>`;
+        inner += `<div><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">รายการเคสปล่อยจริง — ${releasedCases.length} เคส</div>`;
         inner += `<div style="max-height:280px;overflow-y:auto;border:.5px solid var(--bd);border-radius:8px">`;
         inner += `<div style="display:grid;grid-template-columns:.7fr 1fr 1.4fr .8fr .8fr;gap:6px;padding:6px 10px;font-size:10px;color:var(--t3);font-weight:600;background:var(--bg2);border-bottom:.5px solid var(--bd);position:sticky;top:0"><span>เซลล์</span><span>ลูกค้า</span><span>รถ</span><span>วันปล่อย</span><span style="text-align:right">ราคา</span></div>`;
         releasedCases.forEach(b => {
@@ -1350,7 +1381,7 @@
         inner += `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px">ยังไม่มีเคสปล่อยใน${h(periodLbl)}</div>`;
       }
 
-      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">💡 รายการเคสปล่อยจาก sales_reports · กดที่ชื่อเซลล์เพื่อดู dashboard ส่วนตัว</div>`;
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">หมายเหตุ:รายการเคสปล่อยจาก sales_reports · กดที่ชื่อเซลล์เพื่อดู dashboard ส่วนตัว</div>`;
       inner += `</div>`;
       overlay.innerHTML = inner;
       document.body.appendChild(overlay);
@@ -1441,7 +1472,7 @@
         inner += `<div style="padding:24px;text-align:center;color:var(--t3);font-size:13px">${h(emptyMsg)}</div>`;
       }
 
-      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">💡 รายการจาก sales_reports (รายงานฝ่ายขาย) · กรอง: ${h(titleStatus)} · period: ${h(periodLbl)}</div>`;
+      inner += `<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">หมายเหตุ:รายการจาก sales_reports (รายงานฝ่ายขาย) · กรอง: ${h(titleStatus)} · period: ${h(periodLbl)}</div>`;
       inner += `</div>`;
       overlay.innerHTML = inner;
       document.body.appendChild(overlay);
@@ -1482,7 +1513,7 @@
       rows.sort((a,b)=>b.updateCount-a.updateCount);
 
       let html = `<div class="card" style="margin-top:0"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0">🔥 Hot Cases ≥2 อัพเดท</div>`;
+      html += `<div class="card-title" style="margin:0">Hot Cases ≥2 อัพเดท</div>`;
       html += `<select onchange="hsel=this.value;render()"><option value="all">ทุกเซลล์</option>`;
       (sellerNames||[]).forEach(n=>{html+=`<option value="${h(n)}" ${hsel===n?'selected':''}>${h(n)}</option>`;});
       html += `</select></div>`;
@@ -1528,7 +1559,7 @@
       });
       html += `</div>`;
       // Clips
-      html += `<div class="card" style="margin:0"><div class="card-title">🎬 คลิป TikTok</div>`;
+      html += `<div class="card" style="margin:0"><div class="card-title">คลิป TikTok</div>`;
       html += `<div class="act-hdr"><span>เซลล์</span><span>คลิป/เป้า</span><span style="text-align:right">สถานะ</span></div>`;
       [...sellers].sort((a,b)=>(b.clip/Math.max(b.clipTarget,1))-(a.clip/Math.max(a.clipTarget,1))).forEach(s=>{
         const ok=s.clip>=(s.clipTarget||1); const p=s.clipTarget>0?Math.min((s.clip/s.clipTarget)*100,100):0;
@@ -1759,7 +1790,7 @@
         {l:'📋 Status',v:l.adminStatus||'-',c:'var(--t1)'},
         {l:'📅 รับเคส',v:l.dateIn+(l.timeIn?' '+l.timeIn:''),c:'var(--t2)'},
       ];
-      if(l.profile&&!empty(l.profile)) infoRows.push({l:'👤 Profile',v:l.profile,c:'var(--t2)'});
+      if(l.profile&&!empty(l.profile)) infoRows.push({l:'Profile',v:l.profile,c:'var(--t2)'});
       const history = parseNoteHistory(l.note||'');
 
       let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">`;
@@ -1999,7 +2030,7 @@
       // "รอปล่อย" cases (อาจสับสนกับ "ปล่อย")
       if (S.waitingReleaseTotal > 0) {
         html += `<div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:10px;border-left:3px solid var(--amber)">`;
-        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">💡 เคส "รอปล่อย" — ${S.waitingReleaseTotal} เคส (ไม่นับเป็น "ปิดได้" เพราะยังไม่ปล่อย)</div>`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">หมายเหตุ:เคส "รอปล่อย" — ${S.waitingReleaseTotal} เคส (ไม่นับเป็น "ปิดได้" เพราะยังไม่ปล่อย)</div>`;
         html += `<div style="font-size:10px;color:var(--t3);margin-bottom:6px">เปลี่ยนเป็น "ปล่อย" เมื่อปล่อยจริงแล้ว → จะมาขึ้น "ปิดได้" + "💰 ยอดปล่อย"</div>`;
         html += `<div class="shdr" style="grid-template-columns:.9fr 1.4fr 1.6fr .8fr .8fr;font-size:10px"><span>เซลล์</span><span>ลูกค้า</span><span>รถ</span><span>วันที่</span><span style="text-align:right">ราคา</span></div>`;
         html += `<div style="max-height:180px;overflow-y:auto">`;
@@ -2013,12 +2044,12 @@
       }
       html += `</div>`;
 
-      // ── 🚚 Released breakdown — แจกแจง "ปล่อย" ทุกเคสตามเซลล์ (debug ว่าเคสหายอยู่ตรงไหน) ──
+      // ── Released breakdown — แจกแจง "ปล่อย" ทุกเคสตามเซลล์ (debug ว่าเคสหายอยู่ตรงไหน) ──
       const R = data.released;
       if (R) {
         const gapColor = R.gap === 0 ? 'var(--green)' : 'var(--red)';
         html += `<div style="margin-bottom:18px">`;
-        html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">🚚 ปล่อย — ${R.total} เคส</div>`;
+        html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">ปล่อย — ${R.total} เคส</div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">`;
         html += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">นับเข้าเซลล์ใน ALL_SELLERS</div><div style="font-size:18px;font-weight:800;color:var(--green)">${R.knownSum}</div></div>`;
         html += `<div style="background:${R.orphanSum>0?'var(--amber-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">เซลล์ orphan ('❓ ไม่ระบุ')</div><div style="font-size:18px;font-weight:800;color:${R.orphanSum>0?'var(--amber)':'var(--t3)'}">${R.orphanSum}</div></div>`;
@@ -2040,7 +2071,7 @@
         if (orphanEntries.length > 0) {
           html += `<div style="padding:10px;background:var(--amber-bg);border-radius:8px;border-left:3px solid var(--amber);margin-bottom:8px">`;
           html += `<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ เซลล์ที่ไม่อยู่ใน ALL_SELLERS (orphan) — ${R.orphanSum} เคส</div>`;
-          html += `<div style="font-size:10px;color:var(--t3);margin-bottom:6px">💡 ใส่ชื่อเหล่านี้ใน sheet "ตั้งค่าเซลล์" หรือเปิด normalize_seller() map ให้</div>`;
+          html += `<div style="font-size:10px;color:var(--t3);margin-bottom:6px">หมายเหตุ:ใส่ชื่อเหล่านี้ใน sheet "ตั้งค่าเซลล์" หรือเปิด normalize_seller() map ให้</div>`;
           orphanEntries.forEach(([name,n]) => {
             html += `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg);border-radius:6px;margin-bottom:3px"><span style="font-size:11px;color:var(--t1);font-weight:600">${h(name)}</span><span style="font-size:12px;font-weight:700;color:var(--amber)">${n}</span></div>`;
           });
@@ -2086,7 +2117,7 @@
       modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
       modal.onclick = (e) => e.stopPropagation();
       modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:15px;font-weight:700;color:var(--t1)">🎯 ตั้งเป้าและจัดทีมเซลล์</div>
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">ตั้งเป้าและจัดทีมเซลล์</div>
         <button onclick="document.getElementById('sconfig-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button>
       </div>
       <div id="sc-body" style="overflow-y:auto;padding:16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด config...</div></div>`;
@@ -2360,7 +2391,7 @@
 
       const daysLbl = ({'*':'ทุกวัน','1-5':'จ-ศ','0,6':'ส-อา','1':'จันทร์','5':'ศุกร์'})[s.days] || s.days;
       const recCount = (isAll ? totalSellers : s.sellers.filter(x => x !== '*').length) + (s.include_executive ? 1 : 0);
-      const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + 🎩 ผู้บริหาร' : ''}`;
+      const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + ผู้บริหาร' : ''}`;
       const modeDesc = s.test_target ? `🧪 test → ${s.test_target.slice(0,12)}...` : 'ส่งจริง';
 
       let html = `<div style="border:.5px solid var(--bd);border-radius:10px;margin-bottom:8px;overflow:hidden;${s.enabled?'':'opacity:.6'}">`;
@@ -2394,10 +2425,10 @@
           <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2);cursor:pointer"><input type="checkbox" ${s.enabled?'checked':''} onchange="__schedRows[${i}].enabled=this.checked;__schedRedraw()">เปิด</label>
         </div>`;
 
-        // Section: 👥 ผู้รับ — checkboxes by team
+        // Section: ผู้รับ — checkboxes by team
         html += `<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-size:12px;font-weight:700;color:var(--t1)">👥 ผู้รับ Flex รายเซลล์</div>
+            <div style="font-size:12px;font-weight:700;color:var(--t1)">ผู้รับ Flex รายเซลล์</div>
             <div style="display:flex;gap:4px">
               <button onclick="__schedSetAllSellers(${i},true)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">เลือกทั้งหมด</button>
               <button onclick="__schedSetAllSellers(${i},false)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้าง</button>
@@ -2428,7 +2459,7 @@
         html += `<div style="margin-top:6px;padding:9px 11px;background:${execChecked?'var(--purple-bg)':'var(--bg2)'};border-radius:8px;border:.5px solid ${execChecked?'var(--purple-mid)':'var(--bd)'}">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" ${execChecked?'checked':''} onchange="__schedRows[${i}].include_executive=this.checked;__schedRedraw()">
-            <span style="font-size:12px;font-weight:700;color:${execChecked?'var(--purple)':'var(--t1)'}">🎩 ผู้บริหาร — รับ Overview Flex (สรุปยอดรวมทีม)</span>
+            <span style="font-size:12px;font-weight:700;color:${execChecked?'var(--purple)':'var(--t1)'}">ผู้บริหาร — รับ Overview Flex (สรุปยอดรวมทีม)</span>
           </label>
           <div style="font-size:10px;color:var(--t3);margin-top:3px;margin-left:24px;font-family:monospace">user_id (จาก env): ดู EXECUTIVE_USER_IDS</div>
         </div>`;
@@ -2605,7 +2636,7 @@
       let html = tokenWarn;
       html += `<div style="background:var(--bg2);padding:10px 12px;border-radius:10px;font-size:11px;color:var(--t2);margin-bottom:10px;line-height:1.6">
         📦 พบ <b>${sellers.length}</b> เซลล์มีข้อมูลเดือนนี้ · เลือก <b id="ls-count">${__lsSelected.size}</b> คน<br>
-        💡 ติ๊กถูกตามชื่อเพื่อเลือกผู้รับ · เซลล์ที่ไม่มี LINE user_id จะถูกข้าม
+        หมายเหตุ:ติ๊กถูกตามชื่อเพื่อเลือกผู้รับ · เซลล์ที่ไม่มี LINE user_id จะถูกข้าม
       </div>`;
       html += `<div style="display:flex;gap:8px;margin-bottom:10px">
         <button onclick="__lsSelectAll(true)" style="font-size:11px;padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">เลือกทั้งหมด</button>
@@ -2638,7 +2669,7 @@
           <input type="checkbox" ${__lsTestMode?'checked':''} onchange="__lsToggleTest(this.checked)"> 🧪 Test mode — ส่งทุก Flex ไปที่ user_id ที่กำหนด (ไม่ส่งจริงไปเซลล์)
         </label>
         <input id="ls-test-uid" type="text" value="${h(__lsTestUid)}" oninput="__lsTestUid=this.value" placeholder="U6bf1d72cf1d7e237c3a5c9848dde9bf4" style="display:${__lsTestMode?'block':'none'};margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px;outline:none;font-family:monospace;box-sizing:border-box">
-        <div id="ls-test-hint" style="display:${__lsTestMode?'block':'none'};margin-top:6px;font-size:10px;color:var(--amber)">💡 ถ้าไม่ติ๊กเซลล์ใดเลย → จะส่ง Flex ของ <b>ทุกเซลล์ที่มีข้อมูล</b> ไปที่ user_id นี้</div>
+        <div id="ls-test-hint" style="display:${__lsTestMode?'block':'none'};margin-top:6px;font-size:10px;color:var(--amber)">หมายเหตุ:ถ้าไม่ติ๊กเซลล์ใดเลย → จะส่ง Flex ของ <b>ทุกเซลล์ที่มีข้อมูล</b> ไปที่ user_id นี้</div>
       </div>`;
       html += `<div id="ls-result" style="margin-top:12px"></div>`;
       modal.querySelector('#ls-body').innerHTML = html;
@@ -2790,15 +2821,15 @@
 
       const posChip = (p) => {
         const x = (p||'').toLowerCase();
-        if (x === 'admin') return `<span style="background:var(--amber-bg);color:var(--amber);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">👑 Admin</span>`;
-        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return `<span style="background:var(--purple-bg);color:var(--purple);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">🎩 ผู้บริหาร</span>`;
+        if (x === 'admin') return `<span style="background:var(--amber-bg);color:var(--amber);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">Admin</span>`;
+        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return `<span style="background:var(--purple-bg);color:var(--purple);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">ผู้บริหาร</span>`;
         if (!p) return `<span style="background:var(--bg2);color:var(--t3);padding:1px 7px;border-radius:8px;font-size:10px">—</span>`;
         return `<span style="background:var(--blue-bg);color:var(--blue);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600">${h(p)}</span>`;
       };
       const shortId = (id) => id ? (id.slice(0,8)+'…'+id.slice(-4)) : '—';
 
       let body = `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:.5px solid var(--bd)">`;
-      body += `<div style="font-size:15px;font-weight:700;color:var(--t1)">👥 ข้อมูลพนักงาน <span style="font-size:11px;color:var(--t3);font-weight:400">(${emps.length} คน · แสดง ${filtered.length})</span></div>`;
+      body += `<div style="font-size:15px;font-weight:700;color:var(--t1)">ข้อมูลพนักงาน <span style="font-size:11px;color:var(--t3);font-weight:400">(${emps.length} คน · แสดง ${filtered.length})</span></div>`;
       body += `<button onclick="document.getElementById('line-id-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer;line-height:1">✕</button>`;
       body += `</div>`;
       body += `<div style="padding:10px 16px;border-bottom:.5px solid var(--bd)">`;
@@ -2832,7 +2863,7 @@
         body += `</div>`;
       }
       body += `</div>`;
-      body += `<div style="padding:10px 16px;background:var(--amber-bg);color:var(--amber);font-size:11px;line-height:1.5;border-top:.5px solid var(--bd)">💡 ใช้ <code>user_id</code> สำหรับ <b>LINE Push Message</b> รายบุคคล · ใช้ <code>group_id</code> สำหรับยิงเข้ากลุ่ม</div>`;
+      body += `<div style="padding:10px 16px;background:var(--amber-bg);color:var(--amber);font-size:11px;line-height:1.5;border-top:.5px solid var(--bd)">หมายเหตุ:ใช้ <code>user_id</code> สำหรับ <b>LINE Push Message</b> รายบุคคล · ใช้ <code>group_id</code> สำหรับยิงเข้ากลุ่ม</div>`;
       modal.innerHTML = body;
 
       const inp = modal.querySelector('#emp-filter');

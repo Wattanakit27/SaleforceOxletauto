@@ -35,26 +35,26 @@
     <div class="sub">Oxlet Sales Dashboard</div>
   </div>
 
-  {% if error %}<div class="err">⚠️ {{ error }}</div>{% endif %}
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
   <form method="post" action="/login/">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
     <div class="field">
-      <label>🔑 รหัสผ่าน Admin</label>
+      <label>รหัสผ่าน Admin</label>
       <input type="password" name="password" autocomplete="current-password" placeholder="กรอกรหัสผ่านสำหรับสิทธิ์ Admin">
     </div>
     <div class="divider">หรือ</div>
     <div class="field">
-      <label>🆔 LINE user_id (สำหรับ ผู้บริหาร / เซลล์)</label>
+      <label>LINE user_id (สำหรับ ผู้บริหาร / เซลล์)</label>
       <input type="text" name="token" autocomplete="off" placeholder="U xxxxxxxxxxxxxxxx">
     </div>
     <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
   </form>
 
   <div class="hint">
-    💡 <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่ admin ให้ <code>/s/&lt;token&gt;/</code> แทนการ login ที่นี่<br>
-    🔐 <b>Admin</b> ตั้งรหัสใน <code>.env</code> ที่ <code>OXLET_ADMIN_PASSWORD=xxxx</code>
+    <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่ admin ให้ <code>/s/&lt;token&gt;/</code> แทนการ login ที่นี่<br>
+    <b>Admin</b> ตั้งรหัสใน <code>.env</code> ที่ <code>OXLET_ADMIN_PASSWORD=xxxx</code>
   </div>
 </div>
 </body>
