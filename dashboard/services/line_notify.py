@@ -14,7 +14,7 @@ import requests
 from .constants import normalize_seller, MONTHS_FULL
 from .fetch_dashboard import bangkok_now, parse_date
 from .google_sheets import (
-    cell, cell_num, fetch_sheet, fetch_leads_dedup,
+    cell, cell_num, fetch_sheet, fetch_leads_by_month_tabs,
     EMPLOYEE_COL as EM, LEADS_COL as L,
 )
 from .seller_tokens import SELLER_TOKENS
@@ -46,7 +46,7 @@ def build_seller_pipelines(target_month: int | None = None, target_year: int | N
     if target_year is None:
         target_year = now.year
 
-    raw_leads = fetch_leads_dedup()  # union monthly tabs + dedupe (latest wins)
+    raw_leads = fetch_leads_by_month_tabs()  # monthly tabs only, filter date matches tab
     grouped: dict[str, dict] = {}
 
     for row in raw_leads:

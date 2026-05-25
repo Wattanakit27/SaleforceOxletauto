@@ -935,15 +935,19 @@ def seller_dashboard(request, token):
 
     must_call_count = sum(1 for c in my_follows if c["mustCall"])
 
-    # ── ดึง lead ทั้งหมดของเซลล์ (รวมที่ไม่ได้เป็น follow) สำหรับ KPI + filter ──
-    # เคสที่ admin_status = "คืนเคส/จ่ายใหม่/ยกเลิก" ยังอยู่ใน list (เพื่อให้นับ stat รวมเดือนเก่าได้)
-    # แต่ใน frontend (seller.html) จะถูก exclude จาก KPI 'ต้องโทรต่อ' + 'ยังไม่โทร' โดยใช้ adminStatus check
-    from .services.google_sheets import fetch_leads_dedup, cell, cell_num, LEADS_COL as L
+    # ── ดึง lead ของเซลล์คนนี้ — แสดงทุกเคส (รวม คืนเคส/ยกเลิก/จ่ายใหม่) ──
+    # เคส junk ยังโผล่ใน lead list + นับใน KPI "หลีดที่รับ"/"โทรแล้ว"/"อัพเดท..."
+    # (frontend seller.html ตัด junk ออกจากแค่ KPI "ยังไม่โทร" + "ต้องโทรต่อ" + banner)
+    #
+    # ใช้ fetch_leads_by_month_tabs — อ่านจาก monthly tab โดยตรง + filter ให้แต่ละ row
+    # อยู่ใน tab ของเดือนตัวเองจริง. เลขจะตรงกับการนับใน Google Sheet (~2,585 เคส พ.ค. 2026)
+    # ที่ admin คาดหวัง — ตรงข้ามกับ fetch_sheet("leads")/fetch_leads_dedup ที่มี dup + orphan
+    from .services.google_sheets import fetch_leads_by_month_tabs, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
     from .services.fetch_dashboard import is_this_year
     import re as _re
 
-    raw_leads = fetch_leads_dedup()  # union monthly tabs + dedupe (latest wins)
+    raw_leads = fetch_leads_by_month_tabs()  # monthly tabs only, filter date matches tab month
     my_leads = []
     for r in raw_leads:
         if normalize_seller(cell(r, L.sales_rep)) != seller_name:
@@ -970,7 +974,7 @@ def seller_dashboard(request, token):
             "profile": cell(r, L.customer_profile),
         })
 
-    # ── daily + monthly ของเซลล์คนนี้ (สำหรับ chart) ──
+    # ── daily + monthly ของเซลล์คนนี้ (ใช้ตัวจาก aggregator ตรงๆ — รวม junk) ──
     my_daily = data.get("dailyBySeller", {}).get(seller_name, {})
     my_monthly = {}
     for m_str, m_data in (data.get("monthlySummary") or {}).items():

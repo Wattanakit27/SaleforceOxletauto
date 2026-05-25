@@ -152,27 +152,42 @@
   }
 
   // ── KPI filters ──
-  // เคสที่ admin_status มีคำว่า "จบ/ส่งมอบ/คืนเคส/คืน/ยกเลิก/ไม่สนใจ/dead/จ่ายใหม่"
-  // → ยังนับใน 'หลีดที่รับ'/'โทรแล้วมีหลักฐาน'/'อัพเดท...' (เพื่อเก็บประวัติ stat เดือนเก่า)
-  // → แต่ไม่ขึ้นใน 'ยังไม่โทร' + 'ต้องโทรต่อ' (เพราะ admin บอกว่าเคสจบแล้ว ไม่ต้อง remind)
+  // D.leads รวม junk (คืนเคส/ยกเลิก/จ่ายใหม่/จบ/ส่งมอบ/ไม่สนใจ/dead) ครบ — เซลล์เห็นทั้งหมด
+  // แต่ KPI "ยังไม่โทร" + "ต้องโทรต่อ" + banner ตัด junk ออก เพราะไม่ควรเตือนให้โทรเคสที่ admin ปิดแล้ว
+  //
+  // KPI cards (ภาพรวมหลัก) — clickable filter ของ lead list
+  //   "ต้องโทรต่อ" = ภาพรวมที่เซลล์สนใจที่สุด (status-based, คนละมิติกับ "โทรกี่ครั้ง")
+  // CALL_FILTERS (filter chip row ด้านล่าง) — drill-down ตามจำนวนครั้งที่โทร (disjoint)
   const SKIP_KEYWORDS = ['จบ','ส่งมอบ','คืนเคส','คืน','ยกเลิก','ไม่สนใจ','dead','จ่ายใหม่'];
   const isSkipped = (l) => {
-    const s = (l.adminStatus||'').toLowerCase();
-    return s && SKIP_KEYWORDS.some(k => s.includes(k.toLowerCase()));
+    const a = (l.adminStatus||'').toLowerCase();
+    const s = (l.salesStatus||'').toLowerCase();
+    return SKIP_KEYWORDS.some(k => {
+      const kw = k.toLowerCase();
+      return (a && a.includes(kw)) || (s && s.includes(kw));
+    });
   };
   const KPI_DEFS = [
     { key: 'all',       label: 'หลีดที่รับ',       color: 'var(--t1)',     hint: 'ทั้งหมด',           test: l => true },
     { key: 'called',    label: 'โทรแล้วมีหลักฐาน', color: 'var(--green)',  hint: 'callProof = ส่งแล้ว',  test: l => l.callProof === 'ส่งแล้ว' },
-    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสจบ)', test: l => !l.updateCount && !isSkipped(l) },
-    { key: 'upd2',      label: 'อัพเดท ≥ 2 ครั้ง',  color: 'var(--amber)',  hint: 'updateCount ≥ 2',     test: l => l.updateCount >= 2 },
-    { key: 'updFull',   label: 'อัพเดทครบ',       color: 'var(--green-mid)', hint: `updateCount ≥ ${C.UPD_TGT}`, test: l => l.updateCount >= C.UPD_TGT },
-    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสจบ)', test: l => {
+    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสปิด)', test: l => !l.updateCount && !isSkipped(l) },
+    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสปิด)', test: l => {
         if (isSkipped(l)) return false;
         const s = (l.salesStatus||'').toLowerCase();
         if (!s || s === '-') return false;
         return ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
       }},
   ];
+  // Disjoint breakdown ตามจำนวนครั้งที่โทร — chip row ใต้ KPI
+  const CALL_FILTERS = [
+    { key: 'c0',    label: 'ยังไม่โทร', color: 'var(--red)',       test: l => l.updateCount === 0 },
+    { key: 'c1',    label: '1 ครั้ง',   color: 'var(--amber)',     test: l => l.updateCount === 1 },
+    { key: 'c2',    label: '2 ครั้ง',   color: 'var(--amber)',     test: l => l.updateCount === 2 },
+    { key: 'c3',    label: '3 ครั้ง',   color: 'var(--green-mid)', test: l => l.updateCount === 3 },
+    { key: 'cFull', label: `ครบ ${C.UPD_TGT}+`, color: 'var(--green)', test: l => l.updateCount >= C.UPD_TGT },
+  ];
+  const ALL_FILTERS = [...KPI_DEFS, ...CALL_FILTERS];
+  const findFilter = (key) => ALL_FILTERS.find(f => f.key === key) || KPI_DEFS[0];
 
   // ── ดึง leads ที่ผ่านการกรองช่วงเวลา ──
   function leadsInRange() {
@@ -354,9 +369,9 @@
     const allLeads = leadsInRange();
     const bookings = bookingsInRange();
 
-    // KPI counts
+    // KPI + filter chip counts
     const kpiCounts = {};
-    KPI_DEFS.forEach(k => { kpiCounts[k.key] = allLeads.filter(k.test).length; });
+    ALL_FILTERS.forEach(k => { kpiCounts[k.key] = allLeads.filter(k.test).length; });
     // Booking สถานะ "ปล่อย" — bookings ผ่าน bookingsInRange() ที่ filter "ปล่อย" ด้วย releaseDate แล้ว
     const doneBookings = bookings.filter(b => b.status === 'ปล่อย');
     const doneCount = doneBookings.length;
@@ -419,7 +434,7 @@
 
       ${(() => {
         // ── 🔔 แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
-        // exclude เคส skipped (จบ/คืน/ยกเลิก/จ่ายใหม่) — เซลล์ไม่ต้องตามต่อ
+        // exclude junk (คืน/ยกเลิก/จ่ายใหม่/...) — ไม่ remind ให้โทรเคสที่ admin ปิดแล้ว
         const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l));
         const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
         const curFollow = curMonthLeads.filter(l => {
@@ -453,7 +468,7 @@
         ${(fDateFrom||fDateTo) ? `<button class="f-btn" onclick="clearDateRange()" style="background:var(--red-bg,#fee);color:var(--red)">✕ ล้าง</button>` : ''}
       </div>
 
-      <div class="kgrid">
+      <div class="kgrid" style="grid-template-columns:repeat(4,1fr)">
         ${KPI_DEFS.map(k => `
           <div class="kpi-card ${kpiFilter===k.key?'active':''}" onclick="setKpi('${k.key}')">
             <div class="kl">${k.label}</div>
@@ -461,6 +476,14 @@
             <div class="ks">${k.hint}</div>
           </div>
         `).join('')}
+      </div>
+
+      <div class="filter-bar" style="margin-bottom:10px">
+        <span class="lbl">🔍 จำนวนครั้งที่โทร:</span>
+        ${CALL_FILTERS.map(k => {
+          const on = kpiFilter === k.key;
+          return `<button class="f-btn ${on?'on':''}" onclick="setKpi('${k.key}')" style="${on?`background:${k.color};color:#fff;border-color:${k.color};font-weight:600`:''}">${h(k.label)} <b>${kpiCounts[k.key]}</b></button>`;
+        }).join('')}
       </div>
 
       <div class="cgrid">
@@ -495,7 +518,7 @@
   }
 
   function renderLeadList(allLeads) {
-    const def = KPI_DEFS.find(k => k.key === kpiFilter) || KPI_DEFS[0];
+    const def = findFilter(kpiFilter);
     const filtered = allLeads.filter(def.test);
     filtered.sort((a,b) => {
       const sa = a.updateCount === 0 ? 100 : 0; const sb = b.updateCount === 0 ? 100 : 0;
@@ -503,7 +526,8 @@
       return a.updateCount - b.updateCount;
     });
 
-    let html = `<div class="section"><h2>📋 ${h(def.label)} <span class="count">${filtered.length} เคส · กรอง: ${h(def.hint)} · คลิกเพื่อดูรายละเอียด</span></h2>`;
+    const hintText = def.hint || `updateCount = ${def.label}`;
+    let html = `<div class="section"><h2>📋 ${h(def.label)} <span class="count">${filtered.length} เคส · กรอง: ${h(hintText)} · คลิกเพื่อดูรายละเอียด</span></h2>`;
     if (filtered.length === 0) {
       html += `<div class="empty">ไม่มีเคสในเงื่อนไขนี้</div>`;
     } else {

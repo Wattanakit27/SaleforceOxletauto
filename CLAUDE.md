@@ -119,9 +119,11 @@ python manage.py runserver
 ### Lead Status
 - **Follow** (ต้องติดตาม): admin_status / sales_status มีคำว่า "ติดตาม", "รอตอบ", "รอลูกค้า", "โทรไม่รับ", "ผิดนัด", "นัดหมาย" — **และไม่มี** SKIP_STATUS
 - **Vacant** (ว่าง): admin_status ว่างหรือ "-"
-- **Skipped** (เคสจบแล้ว — ไม่ remind ติดตามอีก แต่ **ยังนับ stat ปกติ**): admin_status มีคำว่า "จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่" — ดู `is_skipped()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py). Sync กับ `SKIP_STATUS` ใน [line_notify.py](dashboard/services/line_notify.py)
-  - **เคสยังอยู่ใน `my_leads` / lists / KPI 'หลีดที่รับ'/'โทรแล้ว'/'อัพเดท...'** เพื่อเก็บประวัติ stat (ดูเดือนเก่าใช้ไปกี่เคสได้)
-  - **ตัดออกจาก**: `is_follow()` → ลดทุก KPI "ติดตาม" (admin dashboard, seller view), `follow_cases` list, seller.html KPI "ยังไม่โทร" + "ต้องโทรต่อ" (frontend ใช้ `isSkipped(l)` check + `SKIP_KEYWORDS`), banner แจ้งเตือนเดือนนี้
+- **Skipped / Junk** (เคสปิดแล้ว): admin_status หรือ sales_status มีคำว่า "จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่" — ดู `is_skipped()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py). Sync กับ `SKIP_STATUS` ใน [line_notify.py](dashboard/services/line_notify.py)
+  - **หมายเหตุสำคัญ**: junk เดือนนี้ ~50% ของ leads (คืนเคส 684 / จ่ายใหม่ 335 / ยกเลิก 289). ถ้าตัดออกหมด lead หายไปครึ่งหนึ่ง → ดูภาพรวมไม่ออก. ดังนั้นนโยบายคือ **แสดงเสมอ แค่ไม่เตือนให้โทร**
+  - **หน้าเซลล์ `/s/<token>/`** — **เคส junk โผล่ครบ** ใน `my_leads`, lead list, KPI "หลีดที่รับ"/"โทรแล้ว"/"อัพเดท...", chart daily/monthly. **ตัด junk ออกจาก** KPI "ยังไม่โทร" + "ต้องโทรต่อ" + เคสในมือ + banner แจ้งเตือน (frontend ใช้ `SKIP_KEYWORDS` + `isSkipped(l)` check) — เพราะไม่ควร remind ให้โทรเคสที่ admin ปิดแล้ว
+  - **หน้า admin/exec `/dashboard/`** — junk อยู่ในตัวเลขรวม. `is_follow()` → exclude จาก KPI "ติดตาม" + `follow_cases` list
+  - **LINE Flex แจ้งเตือน** — `build_seller_pipelines()` ใช้ `SKIP_STATUS` filter junk ออกก่อน push (ไม่ remind ผ่าน LINE)
 - **RJ types**: "RJ", "Hot RJ", "Hot RB" — แยกออกจาก lead ปกติ
 - **Called proof**: `call_proof == "ส่งแล้ว"` = โทรแล้วมีหลักฐาน
 
@@ -129,6 +131,13 @@ python manage.py runserver
 - `UPD_TGT = 4` — เป้าจำนวนครั้งที่ต้องอัปเดตต่อ lead 1 ราย
 - `nc(u) = max(0, UPD_TGT - u)` — เหลืออีกกี่ครั้งให้ครบ
 - `urg(u)` — urgency score (100 ถ้ายังไม่โทรเลย, +10 ต่อครั้งที่ขาด)
+
+### Seller page KPI structure (`seller.html`)
+หน้าเซลล์ (`/s/<token>/`) แบ่ง KPI เป็น 2 zones — ตัวเลขใหญ่ = ภาพรวม, chip = filter ลึกลง:
+- **KPI cards (4 cards หลัก)** ใน `KPI_DEFS`: `all` หลีดที่รับ · `called` โทรแล้วมีหลักฐาน · `notCalled` ยังไม่โทร · `follow` ต้องโทรต่อ (status-based)
+- **Filter chips ใต้ KPI** ใน `CALL_FILTERS` (disjoint by exact updateCount): `c0` ยังไม่โทร · `c1` 1 ครั้ง · `c2` 2 ครั้ง · `c3` 3 ครั้ง · `cFull` ครบ ${UPD_TGT}+
+- ทั้ง 2 zones กดได้ → set `kpiFilter` → filter `lead list` ด้านล่าง (mutually exclusive — กดอันใหม่ override อันเดิม)
+- ALL_FILTERS = [...KPI_DEFS, ...CALL_FILTERS] รวมไว้สำหรับ `findFilter(key)` lookup
 
 ### Date parsing
 [fetch_dashboard.py](dashboard/services/fetch_dashboard.py) มี `parse_date()` รองรับ:
@@ -204,8 +213,12 @@ python manage.py runserver
 **Service account** ต้องมี Editor บน spreadsheet (เพื่อเขียน sheet sellers_config / schedule_config)
 
 **Helpers**:
-- `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG (ใช้กับทุก sheet ยกเว้น leads)
-- `fetch_leads_dedup()` — **ใช้แทน `fetch_sheet("leads")`** — รวม "รวม sheet" (base) + monthly tabs (ม.ค.–ธ.ค. 69) แล้ว dedup by `Code` (column D=3, case-insensitive + trim) ผ่าน helper `_dedupe_leads_by_code()` — **แถวที่ปรากฏหลังสุดชนะ** (ลำดับ overwrite: รวม sheet → ม.ค. → ธ.ค., ภายใน tab เดียวกัน = แถวล่างสุด). **Failsafe**: ถ้า monthly tabs fetch ไม่ได้/ว่าง (permission, ชื่อ tab ไม่ตรง pattern `เดือน + " "`, error) → ยังมีข้อมูลจาก "รวม sheet" เป็น base — ระบบไม่พัง. Code ว่าง = ไม่ dedup (ถือเป็นเคสแยก)
+- `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG.
+- `fetch_leads_by_month_tabs()` — **default สำหรับทุก dashboard** — อ่านจาก monthly tabs (ม.ค.-ธ.ค. 69) **filter ให้แต่ละ row อยู่ใน tab ของเดือนตรงกับวันที่ใน column** (ตัดแถวที่ admin เอามาใส่ผิด tab ออก). ไม่ dedup. ตรงกับการนับ raw ใน Google Sheet ที่ admin คาดหวัง. **ใช้ใน**: `fetch_all_sheets()` (main dashboard), `seller_dashboard`, `line_notify.build_seller_pipelines()`
+  - ตัวอย่าง พ.ค. 2026: tab "พฤษภาคม 69" raw=3,101 → filter date=พ.ค. → **2,585 เคส** (ตัด 516 เคสที่ admin เอาเคสเม.ย./มี.ค./ก.พ. มาใส่ tab พ.ค. ออก)
+  - **ทำไมไม่ใช้ dedup**: `fetch_leads_dedup` ทำให้ lead เดือนนี้หาย ~30 เคส (2,552 vs 2,582) เพราะ code ซ้ำ + monthly tab override ทำ code "ย้ายเดือน". `fetch_sheet("leads")` ก็ inflated +83 จาก dup ภายใน 'รวม sheet' + orphan codes
+  - Failsafe: ถ้า monthly tabs fetch ไม่ได้/ว่าง → fall back ไป `fetch_sheet("leads")`
+- `fetch_leads_dedup()` — **ใช้แค่ใน `admin_diagnostics`** (debug page เพื่อดู dedup behavior). รวม "รวม sheet" + monthly tabs แล้ว dedup by `Code` — แถวที่ปรากฏหลังสุดชนะ. ไม่ใช้ใน user-facing dashboard อีกแล้ว.
 - `get_leads_dedup_stats()` — คืน `{input_rows, output_rows, duplicates_removed, no_code}` ของการ dedup ครั้งล่าสุด — ใช้ใน `/api/admin/diagnostics` เพื่อให้ admin มองเห็นว่าตัดซ้ำไปกี่แถว (field `leads.dedup` ใน JSON response)
 - `ensure_sheet_tab(sid, tab)` — สร้าง tab ใหม่ถ้าไม่มี
 - `write_sheet(key, values)` — clear + write ทับทั้ง tab

@@ -350,18 +350,93 @@ def fetch_leads_dedup() -> list[list[str]]:
     return _dedupe_leads_by_code(ordered_rows)
 
 
+def fetch_leads_by_month_tabs() -> list[list[str]]:
+    """อ่าน leads จาก monthly tabs (มกราคม-ธันวาคม 69) แต่ละแถวเก็บเฉพาะ
+    ที่ "วันที่ใน column ตรงกับเดือนของ tab" — ตัดเคสที่ admin เอามาใส่ผิด tab ออก.
+
+    ใช้แทน fetch_leads_dedup ใน seller_dashboard เพื่อให้ตัวเลขตรงกับการนับ
+    raw rows ในแต่ละ monthly tab (= ที่ admin คาดหวัง).
+
+    Failsafe: ถ้า monthly tabs fetch ไม่ได้/ว่าง → fall back ไป fetch_sheet("leads")
+
+    ตัวอย่าง พ.ค. 2026:
+      - tab "พฤษภาคม 69" raw = 3,101 แถว
+      - filter เฉพาะ date.month = 5 → 2,585 แถว (ตัด 516 แถวที่ admin เอาเคสเดือนก่อนมาใส่ tab พ.ค.)
+      - ไม่ dedup (= ที่ admin นับใน sheet)
+    """
+    import urllib.parse
+
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        headers_auth = {"Authorization": f"Bearer {creds.token}"}
+        sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+
+        meta = requests.get(
+            f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+            headers=headers_auth, timeout=15,
+        ).json()
+        all_tabs = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+        monthly_tabs: list[tuple[int, str]] = []
+        for tab in all_tabs:
+            for idx, m in enumerate(_THAI_MONTHS):
+                if tab.startswith(m + " "):
+                    monthly_tabs.append((idx + 1, tab))  # idx+1 = 1-12
+                    break
+
+        if not monthly_tabs:
+            # ไม่มี monthly tab → fall back
+            return fetch_sheet("leads")
+
+        def _fetch_tab(tab: str) -> list[list[str]]:
+            encoded = urllib.parse.quote(f"'{tab}'")
+            url = f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE"
+            r = requests.get(url, headers=headers_auth, timeout=30)
+            return r.json().get("values", [])[1:] if r.status_code == 200 else []
+
+        # Fetch all tabs in parallel
+        tab_rows: dict[str, tuple[int, list[list[str]]]] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            futs = {ex.submit(_fetch_tab, tab): (m_int, tab) for m_int, tab in monthly_tabs}
+            for fut in concurrent.futures.as_completed(futs):
+                m_int, tab = futs[fut]
+                try:
+                    tab_rows[tab] = (m_int, fut.result())
+                except Exception:
+                    tab_rows[tab] = (m_int, [])
+
+        # ดึง parse_date จาก fetch_dashboard (avoid circular import — late import)
+        from .fetch_dashboard import parse_date
+
+        all_rows: list[list[str]] = []
+        for m_int, tab in monthly_tabs:
+            _, rows = tab_rows.get(tab, (m_int, []))
+            for row in rows:
+                date_cell = row[3] if len(row) > 0 else ""  # column 0 = received_date (LEADS_COL.received_date)
+                # Note: LEADS_COL.received_date = 0
+                date_cell = cell(row, LEADS_COL.received_date)
+                d = parse_date(date_cell)
+                if d and d.month == m_int:
+                    all_rows.append(row)
+        return all_rows
+    except Exception:
+        # graceful fallback — อย่างน้อยมีข้อมูลจาก "รวม sheet"
+        return fetch_sheet("leads")
+
+
 def fetch_all_sheets() -> dict[str, list[list[str]]]:
     """Fetch all 6 sheets in parallel using threads.
 
-    Leads ใช้ fetch_leads_dedup (union monthly tabs + dedupe by Code)
-    เพราะ "รวม sheet" อาจเก็บข้อมูลจาก tab เก่ากว่าทำให้ update ไม่ขึ้น
+    Leads ใช้ fetch_leads_by_month_tabs (อ่าน monthly tab + filter date ตรง tab month)
+    เพื่อให้ตัวเลขตรงกับการนับ raw rows ใน Google Sheet ที่ admin คาดหวัง.
     """
     other_keys = ["sales_reports", "bookings", "live_sessions", "live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(fetch_sheet, k): k for k in other_keys}
-        futures[executor.submit(fetch_leads_dedup)] = "leads"
+        futures[executor.submit(fetch_leads_by_month_tabs)] = "leads"
         for future in concurrent.futures.as_completed(futures):
             key = futures[future]
             results[key] = future.result()
