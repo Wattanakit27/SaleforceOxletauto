@@ -13,7 +13,6 @@ from .services.google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
 from .services.constants import (
     UPD_TGT, PAGE_SIZE, STATUS_COLOR, STATUS_ORDER,
     TEAM_COLORS, TEAM_NAMES, LT_COLORS, MONTHS_SHORT, MONTHS_FULL,
-    TEAM_ID, TARGETS,
 )
 from .services.helpers import pct, nc, urg, nocar, empty, dots_html, urg_badge_html
 from .services.seller_tokens import seller_from_token
@@ -43,13 +42,21 @@ DEFAULT_EXECUTIVE_USER = {
     "position": "executive",
 }
 
+# Default user สำหรับช่วงทดสอบ — ปิด login ใน /admin/ ด้วย
+# TODO: production → เปลี่ยน admin_page ให้ require_admin จริงๆ
+DEFAULT_ADMIN_USER = {
+    "user_id": "test-admin",
+    "nickname": "admin",
+    "display_name": "Admin (Test)",
+    "position": "admin",
+}
+
 
 @ensure_csrf_cookie
 @require_GET
 def dashboard_page(request):
     """Main dashboard — เปิดสาธารณะ default = 'ผู้บริหาร' (ช่วงทดสอบ).
-    TODO: เมื่อพร้อมเปิด production ให้เปลี่ยนเป็น require login (HttpResponseRedirect("/login/"))
-    Admin ต้องกดปุ่ม Admin login เพื่อได้สิทธิ์เต็ม.
+    TODO: production → เปลี่ยนเป็น `if not user: return HttpResponseRedirect("/login/?next=/dashboard/")`
     """
     user = _session_user(request) or DEFAULT_EXECUTIVE_USER
 
@@ -91,6 +98,44 @@ def api_dashboard(request):
         return JsonResponse(data, json_dumps_params={"ensure_ascii": False, "default": str})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@ensure_csrf_cookie
+@require_GET
+def admin_page(request):
+    """/admin/ — alias ของ /dashboard/ ใช้ template เดียวกัน (index.html)
+    ช่วงทดสอบ: ไม่ require login → default เป็น admin
+    TODO: production → uncomment block ด้านล่างเพื่อบังคับ admin login
+    """
+    user = _session_user(request) or DEFAULT_ADMIN_USER
+    # production:
+    # if not user or user.get("position") != "admin":
+    #     return HttpResponseRedirect("/login/?next=/admin/")
+
+    try:
+        data = fetch_dashboard_data()
+    except Exception as e:
+        return render(request, "dashboard/index.html", {
+            "error": str(e),
+            "data_json": "null",
+            "constants_json": "{}",
+            "session_user_json": json.dumps(user),
+        })
+
+    constants = {
+        "UPD_TGT": UPD_TGT, "PAGE_SIZE": PAGE_SIZE,
+        "STATUS_COLOR": STATUS_COLOR, "STATUS_ORDER": STATUS_ORDER,
+        "TEAM_COLORS": TEAM_COLORS, "TEAM_NAMES": TEAM_NAMES,
+        "LT_COLORS": LT_COLORS, "MONTHS_SHORT": MONTHS_SHORT, "MONTHS_FULL": MONTHS_FULL,
+    }
+
+    return render(request, "dashboard/index.html", {
+        "data_json": json.dumps(data, ensure_ascii=False, default=str),
+        "constants_json": json.dumps(constants, ensure_ascii=False),
+        "session_user_json": json.dumps(user),
+        "error": None,
+        "is_admin_page": True,  # frontend ใช้ flag นี้ตัดสินใจ UI
+    })
 
 
 @require_http_methods(["GET", "POST"])
@@ -545,6 +590,37 @@ def cron_send_line(request):
     })
 
 
+@require_http_methods(["POST"])
+def admin_export_leadscore(request):
+    """Admin endpoint — เขียน Diligence Score รายเซลล์ลง sheet 'leadscore'
+    POST body (optional): {"month": 5, "year": 2026}
+    ถ้าไม่ระบุ ใช้เดือนปัจจุบัน
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        body = {}
+
+    month = body.get("month")
+    year = body.get("year")
+    try:
+        month = int(month) if month else None
+        year = int(year) if year else None
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "month/year ต้องเป็นจำนวนเต็ม"}, status=400)
+
+    try:
+        from .services.fetch_dashboard import export_leadscore_to_sheet
+        result = export_leadscore_to_sheet(month, year)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({"error": f"export ล้มเหลว: {e}"}, status=500)
+
+
 @require_GET
 def admin_diagnostics(request):
     """Admin-only — สรุปการกรองข้อมูล + เคสที่หลุดจาก dashboard
@@ -918,8 +994,12 @@ def magic_link(request, token):
 def seller_dashboard(request, token):
     """หน้าส่วนตัวของเซลล์ — /s/<token>/
 
-    Token เป็นเลข 6-10 หลักสุ่ม (ดู services/seller_tokens.py).
-    เซลล์เห็นเฉพาะข้อมูลของตัวเอง พร้อมรายการลูกค้าที่ "ต้องโทร".
+    Token: รับ 2 แบบ
+      1. SELLER_TOKENS legacy (เซลล์เก่า 13 คน)
+      2. LINE user_id จาก employees sheet (เซลล์ใหม่)
+
+    Data isolation: ใช้ fetch_seller_stats() ที่ส่งเฉพาะข้อมูลของเซลล์คนนี้
+    → ไม่ใส่ data ของเซลล์อื่นใน JSON (กันแอบเปิด DevTools ดู)
     """
     seller_name = seller_from_token(token)
     if not seller_name:
@@ -930,8 +1010,11 @@ def seller_dashboard(request, token):
             "constants_json": "{}",
         }, status=404)
 
+    from .services.fetch_dashboard import fetch_seller_stats
+
     try:
-        data = fetch_dashboard_data()
+        # ดึงเฉพาะข้อมูลของเซลล์คนนี้ — ไม่มีของเซลล์อื่นใน response
+        data = fetch_seller_stats(seller_name)
     except Exception as e:
         return render(request, "dashboard/seller.html", {
             "error": str(e),
@@ -940,24 +1023,6 @@ def seller_dashboard(request, token):
             "constants_json": "{}",
         })
 
-    # ── กรองข้อมูลเฉพาะของเซลล์คนนี้ ──
-    my_seller = next(
-        (s for s in data.get("sellers", []) if s["name"] == seller_name),
-        {
-            "name": seller_name,
-            "team": TEAM_ID.get(seller_name, "?"),
-            "lead": 0, "follow": 0, "vacant": 0, "done": 0,
-            "target": TARGETS.get(seller_name, 0),
-            "booking": 0, "live": 0, "clip": 0, "clipTarget": 0,
-            "liveInbox": 0, "liveLead": 0, "leadTypes": {},
-        },
-    )
-    my_follows = [c for c in data.get("followCases", []) if c["seller"] == seller_name]
-    my_bookings = [b for b in data.get("bookingCases", []) if b["seller"] == seller_name]
-    today_my = data.get("today", {}).get("bySeller", {}).get(seller_name, {
-        "lead": 0, "follow": 0, "vacant": 0,
-    })
-
     # ── จัดอันดับ "ต้องโทร" โดยความเร่งด่วน ──
     def call_priority(c):
         u = c.get("updateCount", 0)
@@ -965,27 +1030,22 @@ def seller_dashboard(request, token):
         score += max(0, UPD_TGT - u) * 10
         return score
 
+    my_follows = data.get("followCases", [])
     for c in my_follows:
         u = c.get("updateCount", 0)
         c["mustCall"] = u == 0 or u < UPD_TGT
         c["callScore"] = call_priority(c)
     my_follows.sort(key=lambda c: c["callScore"], reverse=True)
-
     must_call_count = sum(1 for c in my_follows if c["mustCall"])
 
-    # ── ดึง lead ของเซลล์คนนี้ — แสดงทุกเคส (รวม คืนเคส/ยกเลิก/จ่ายใหม่) ──
-    # เคส junk ยังโผล่ใน lead list + นับใน KPI "หลีดที่รับ"/"โทรแล้ว"/"อัพเดท..."
-    # (frontend seller.html ตัด junk ออกจากแค่ KPI "ยังไม่โทร" + "ต้องโทรต่อ" + banner)
-    #
-    # ใช้ fetch_leads_by_month_tabs — อ่านจาก monthly tab โดยตรง + filter ให้แต่ละ row
-    # อยู่ใน tab ของเดือนตัวเองจริง. เลขจะตรงกับการนับใน Google Sheet (~2,585 เคส พ.ค. 2026)
-    # ที่ admin คาดหวัง — ตรงข้ามกับ fetch_sheet("leads")/fetch_leads_dedup ที่มี dup + orphan
+    # ── ดึง lead list (รวม junk) — ใช้ fetch_leads_by_month_tabs (cached)
+    # เลขตรงกับการนับ raw rows ใน Google Sheet
     from .services.google_sheets import fetch_leads_by_month_tabs, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
     from .services.fetch_dashboard import is_this_year
     import re as _re
 
-    raw_leads = fetch_leads_by_month_tabs()  # monthly tabs only, filter date matches tab month
+    raw_leads = fetch_leads_by_month_tabs()
     my_leads = []
     for r in raw_leads:
         if normalize_seller(cell(r, L.sales_rep)) != seller_name:
@@ -1012,32 +1072,16 @@ def seller_dashboard(request, token):
             "profile": cell(r, L.customer_profile),
         })
 
-    # ── daily + monthly ของเซลล์คนนี้ (ใช้ตัวจาก aggregator ตรงๆ — รวม junk) ──
-    my_daily = data.get("dailyBySeller", {}).get(seller_name, {})
-    my_monthly = {}
-    for m_str, m_data in (data.get("monthlySummary") or {}).items():
-        ss = (m_data.get("sellers") or {}).get(seller_name) or {}
-        my_monthly[m_str] = {
-            "lead": ss.get("lead", 0),
-            "leadNormal": ss.get("leadNormal", 0),
-            "leadRJ": ss.get("leadRJ", 0),
-            "follow": ss.get("follow", 0),
-            "vacant": ss.get("vacant", 0),
-            "done": ss.get("done", 0),
-            "booking": ss.get("booking", 0),
-            "dealValue": ss.get("dealValue", 0),
-        }
-
     filtered = {
-        "meta": data.get("meta", {}),
-        "seller": my_seller,
-        "today": today_my,
+        "meta": data["meta"],
+        "seller": data["seller"],
+        "today": data["today"],
         "leads": my_leads,
         "followCases": my_follows,
-        "bookingCases": my_bookings,
+        "bookingCases": data["bookingCases"],
         "mustCallCount": must_call_count,
-        "daily": my_daily,
-        "monthly": my_monthly,
+        "daily": data["daily"],
+        "monthly": data["monthly"],
     }
 
     constants = {

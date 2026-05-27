@@ -74,6 +74,10 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "ตั้งเวลาส่ง",
     },
+    "leadscore": {
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "leadscore",
+    },
 }
 
 # ── Column index maps (0-based) ──

@@ -828,3 +828,389 @@ def fetch_dashboard_data() -> dict:
         "leadCarsByMonth": lead_cars_by_month,
         "leadCarSellerMonth": lead_car_seller_month,
     }
+
+
+# ── Diligence Score ── port จาก JS (index.html buildDilMap + diligenceScore)
+SCORE_JONG = 50
+SCORE_DONE = 100
+RJ_WEIGHT = 0.5
+JONG_STATUSES = ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+
+
+def diligence_score_for_calls(update_count: int, is_rj: bool) -> int:
+    """คะแนนความขยันจากการโทร — ปกติ: 1=10, 2=15, 3+=5/ครั้ง; RJ: × 0.5"""
+    u = max(0, int(update_count or 0))
+    if u == 0:
+        return 0
+    if u == 1:
+        base = 10
+    elif u == 2:
+        base = 25                      # 10 + 15
+    else:
+        base = 25 + (u - 2) * 5         # 10 + 15 + (u-2)*5
+    return round(base * RJ_WEIGHT) if is_rj else base
+
+
+def compute_diligence_scores(target_month: int | None = None,
+                             target_year: int | None = None) -> list[dict]:
+    """คำนวณ Diligence Score รายเซลล์ของเดือนที่เลือก
+    คืน list ของ dict — 1 entry ต่อเซลล์ พร้อม breakdown ครบ
+
+    Args:
+        target_month: เดือน 1-12, None = เดือนปัจจุบัน
+        target_year: ปี ค.ศ., None = ปีปัจจุบัน
+
+    Returns: [{name, team, score, cnt, cntNormal, cntRJ, totUpdates, jongs, dones,
+              scoreCall, scoreCallNormal, scoreCallRJ, scoreJong, scoreDone,
+              avg, high, target}, ...]
+    """
+    from .constants import refresh_from_sheet, TEAMS, TEAM_ID, TARGETS, ALL_SELLERS, RJ_TYPES
+    refresh_from_sheet()
+
+    now = bangkok_now()
+    m = target_month if target_month else now.month
+    y = target_year if target_year else now.year
+
+    # ดึง raw data
+    data = fetch_dashboard_data()
+    follow_cases = data.get("followCases", [])
+    booking_cases = data.get("bookingCases", [])
+    monthly = data.get("monthlySummary", {})
+
+    rj_set = set(RJ_TYPES)
+    score_map: dict[str, dict] = {}
+
+    def _ensure(name: str) -> dict:
+        if name not in score_map:
+            score_map[name] = {
+                "name": name,
+                "team": TEAM_ID.get(name, ""),
+                "target": TARGETS.get(name, 0),
+                "score": 0, "cnt": 0, "cntNormal": 0, "cntRJ": 0,
+                "totUpdates": 0, "totNormal": 0, "totRJ": 0,
+                "jongs": 0, "dones": 0,
+                "scoreCall": 0, "scoreCallNormal": 0, "scoreCallRJ": 0,
+                "scoreJong": 0, "scoreDone": 0,
+                "high": 0,
+            }
+        return score_map[name]
+
+    # ── ส่วน 1: คะแนนจากการโทร (followCases ใน month) ──
+    for l in follow_cases:
+        d = parse_date(l.get("dateIn", ""))
+        if not d or d.year != y or d.month != m:
+            continue
+        e = _ensure(l["seller"])
+        upd = int(l.get("updateCount", 0))
+        is_rj = l.get("leadType") in rj_set
+        e["totUpdates"] += upd
+        if is_rj:
+            e["cntRJ"] += 1
+            e["totRJ"] += upd
+        else:
+            e["cntNormal"] += 1
+            e["totNormal"] += upd
+        e["cnt"] += 1
+        if upd >= 3:
+            e["high"] += 1
+        sc = diligence_score_for_calls(upd, is_rj)
+        if is_rj:
+            e["scoreCallRJ"] += sc
+        else:
+            e["scoreCallNormal"] += sc
+        e["scoreCall"] += sc
+        e["score"] += sc
+
+    # ── ส่วน 2: คะแนนจอง/ปล่อย จาก monthlySummary[m].sellers[name] ──
+    m_sellers = (monthly.get(m) or monthly.get(str(m)) or {}).get("sellers", {})
+    for name, sd in m_sellers.items():
+        if name not in ALL_SELLERS and name != "ADMIN":
+            continue  # skip orphan/inactive
+        jongs = int(sd.get("booking", 0))
+        dones = int(sd.get("done", 0))
+        if jongs > 0 or dones > 0:
+            e = _ensure(name)
+            e["jongs"] = jongs
+            e["dones"] = dones
+            e["scoreJong"] = jongs * SCORE_JONG
+            e["scoreDone"] = dones * SCORE_DONE
+            e["score"] += e["scoreJong"] + e["scoreDone"]
+
+    # avg per case
+    for e in score_map.values():
+        e["avg"] = round(e["totUpdates"] / e["cnt"], 2) if e["cnt"] else 0
+
+    # เซลล์ที่ active แต่ไม่มี data ในเดือนนั้น → ใส่ entry ว่างไว้
+    for name in ALL_SELLERS:
+        if name not in score_map:
+            _ensure(name)
+
+    # Sort by score desc
+    out = sorted(score_map.values(), key=lambda x: -x["score"])
+    return out
+
+
+def export_leadscore_to_sheet(target_month: int | None = None,
+                              target_year: int | None = None) -> dict:
+    """เขียน Diligence Score ลง sheet 'leadscore' (clear + write)
+    คืน dict {ok, rows_written, month, year}
+    """
+    from .google_sheets import write_sheet
+
+    now = bangkok_now()
+    m = target_month if target_month else now.month
+    y = target_year if target_year else now.year
+    scores = compute_diligence_scores(m, y)
+
+    month_name = MONTHS_FULL_TH[m - 1] if 1 <= m <= 12 else f"เดือน {m}"
+    generated_at = now.isoformat(timespec="seconds")
+
+    header = [
+        "เซลล์", "ทีม", "Score รวม",
+        "เคสรับ", "ปกติ", "RJ",
+        "จำนวนโทรรวม", "เฉลี่ย/เคส", "🔥 3+",
+        "จอง", "ปล่อย",
+        "คะแนนโทร (Normal)", "คะแนนโทร (RJ)", "คะแนนจอง", "คะแนนปล่อย",
+        "เป้า/เดือน", "เดือน", "ปี", "อัพเดทเมื่อ",
+    ]
+    rows = [header]
+    for e in scores:
+        rows.append([
+            e["name"], e["team"], e["score"],
+            e["cnt"], e["cntNormal"], e["cntRJ"],
+            e["totUpdates"], e["avg"], e["high"],
+            e["jongs"], e["dones"],
+            e["scoreCallNormal"], e["scoreCallRJ"], e["scoreJong"], e["scoreDone"],
+            e["target"], month_name, y, generated_at,
+        ])
+
+    write_sheet("leadscore", rows)
+    return {"ok": True, "rows_written": len(scores), "month": m, "year": y, "month_name": month_name}
+
+
+# Thai months — ใช้ใน export_leadscore_to_sheet
+MONTHS_FULL_TH = [
+    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+]
+
+
+# Alias สำหรับ /admin/ และ /dashboard/ — same data
+fetch_global_stats = fetch_dashboard_data
+
+
+def fetch_seller_stats(seller_name: str) -> dict:
+    """ดึง data เฉพาะของเซลล์คนเดียว — ใช้ใน /s/<token>/
+
+    Goals:
+    - Performance: ไม่ aggregate ทุกเซลล์ (skip teams/leadCarsByMonth/dailyBySeller)
+    - Data isolation: JSON ส่งไป frontend มีเฉพาะข้อมูลของเซลล์คนนี้
+      (กันเซลล์เปิด DevTools แล้วเห็นข้อมูลเพื่อน)
+    - Quota: ใช้ fetch_all_sheets() ที่มี cache 60s → ครั้งแรกใช้ quota
+      เท่ากับ global, ครั้งต่อมาภายใน 60s ใช้ 0 API calls
+
+    Returns: dict shape เหมือนที่ seller.html ใช้ — meta/seller/today/leads/
+    followCases/bookingCases/mustCallCount/daily/monthly
+    """
+    from .constants import refresh_from_sheet, TEAM_ID, TARGETS
+
+    refresh_from_sheet()
+    raw = fetch_all_sheets()
+    raw_leads = raw["leads"]
+    sales_reports = raw["sales_reports"]
+
+    now = bangkok_now()
+    year_full = now.year
+
+    # ── 1) Filter ก่อนทุกอย่าง — ลด work ทันที ──
+    my_year_leads = [
+        r for r in raw_leads
+        if is_this_year(cell(r, L.received_date))
+        and normalize_seller(cell(r, L.sales_rep)) == seller_name
+    ]
+    my_today_leads = [
+        r for r in my_year_leads
+        if is_today(cell(r, L.received_date))
+    ]
+
+    # ── 2) Booking cases ของเซลล์ (จาก sales_reports) ──
+    my_booking_cases = []
+    for r in sales_reports:
+        seller_raw = cell(r, S.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
+        if normalize_seller(seller_raw) != seller_name:
+            continue
+        seq = cell(r, S.order_num)
+        if not seq or seq == "ลำดับ":
+            continue
+        try:
+            int(seq)
+        except ValueError:
+            continue
+        status = cell(r, S.status)
+        if not status:
+            continue
+        is_cash = "(ซื้อสด)" in status
+        new_release = cell(r, S.car_release_date)
+        legacy_release = cell(r, S.legacy_car_release_date)
+        chosen_release = new_release if (new_release and parse_date(new_release)) else (
+            legacy_release if parse_date(legacy_release) else new_release
+        )
+        my_booking_cases.append({
+            "seller": seller_name,
+            "status": status.replace(" (ซื้อสด)", "").strip(),
+            "isCash": is_cash,
+            "customer": cell(r, S.customer_name),
+            "phone": cell(r, S.phone),
+            "car": cell(r, S.car_detail),
+            "year": cell(r, S.car_year),
+            "plate": cell(r, S.license_plate),
+            "price": cell_num(r, S.sale_price),
+            "deposit": cell_num(r, S.deposit_amount),
+            "leadCode": cell(r, S.lead_code),
+            "date": cell(r, S.date),
+            "signDate": cell(r, S.sign_date),
+            "resultDate": cell(r, S.result_date),
+            "docsDate": cell(r, S.doc_complete_date),
+            "releaseDate": chosen_release,
+            "finance": cell(r, S.finance_main),
+            "grade": cell(r, S.grade),
+            "note": cell(r, S.note),
+        })
+
+    # ── 3) Year jongs ของเซลล์ (จาก leads, status มี "จอง") ──
+    my_year_jongs = []
+    for r in my_year_leads:
+        admin_st = cell(r, L.admin_status)
+        sales_st = cell(r, L.sales_status)
+        if is_skipped(admin_st) or is_skipped(sales_st):
+            continue
+        if "จอง" in (admin_st or "") or "จอง" in (sales_st or ""):
+            my_year_jongs.append({
+                "date": cell(r, L.received_date),
+                "code": cell(r, L.lead_code),
+            })
+
+    # ── 4) Follow cases ของเซลล์ ──
+    my_follow_cases = []
+    for r in my_year_leads:
+        if not is_follow(cell(r, L.admin_status)):
+            continue
+        note_raw = cell(r, L.fill_sheet_note) or "-"
+        note = re.sub(r"^\d{4,5}\s*", "", note_raw) or "-"
+        my_follow_cases.append({
+            "code": cell(r, L.lead_code) or "-",
+            "seller": seller_name,
+            "phone": cell(r, L.phone) or "-",
+            "channel": cell(r, L.channel) or "-",
+            "leadType": cell(r, L.type),
+            "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
+            "adminStatus": cell(r, L.admin_status) or "ติดตาม",
+            "callProof": cell(r, L.call_proof) or "-",
+            "profile": cell(r, L.customer_profile) or "",
+            "dateIn": cell(r, L.received_date) or "-",
+            "timeIn": cell(r, L.time),
+            "note": note,
+            "lastUpdate": cell(r, L.last_updated_at) or "-",
+            "updateCount": int(cell_num(r, L.update_count)),
+        })
+
+    # ── 5) Today summary (เฉพาะเซลล์) ──
+    my_today = {
+        "lead": len(my_today_leads),
+        "follow": len([r for r in my_today_leads if is_follow(cell(r, L.admin_status))]),
+        "vacant": len([r for r in my_today_leads if is_vacant(cell(r, L.admin_status))]),
+    }
+
+    # ── 6) Monthly summary (เฉพาะเซลล์, 12 เดือน) ──
+    def get_done_month(b: dict) -> int:
+        rd = b.get("releaseDate")
+        if rd:
+            d = parse_date(rd)
+            if d:
+                return d.month
+        return get_month(b["date"])
+
+    my_monthly = {}
+    for m in range(1, 13):
+        m_leads = [r for r in my_year_leads if get_month(cell(r, L.received_date)) == m]
+        m_jongs = [j for j in my_year_jongs if get_month(j["date"]) == m]
+        m_done = [b for b in my_booking_cases if b["status"] == "ปล่อย" and get_done_month(b) == m]
+        n_done = len(m_done)
+        dv = sum(b["price"] for b in m_done)
+        my_monthly[m] = {
+            "lead": len(m_leads),
+            "leadNormal": len([r for r in m_leads if cell(r, L.type) not in RJ_TYPES]),
+            "leadRJ": len([r for r in m_leads if cell(r, L.type) in RJ_TYPES]),
+            "follow": len([r for r in m_leads if is_follow(cell(r, L.admin_status))]),
+            "vacant": len([r for r in m_leads if is_vacant(cell(r, L.admin_status))]),
+            "done": n_done,
+            "booking": len(m_jongs),
+            "dealValue": dv,
+        }
+
+    # ── 7) Daily breakdown (เฉพาะเซลล์, 12 เดือน × 32 วัน) ──
+    def _parse_day(date_str: str):
+        d = parse_date(date_str)
+        return (d.month, d.day) if d else None
+
+    my_daily = {
+        m: {"leads": [0]*32, "leadRJ": [0]*32, "bookings": [0]*32, "dones": [0]*32, "dealValue": [0]*32}
+        for m in range(1, 13)
+    }
+    for r in my_year_leads:
+        md = _parse_day(cell(r, L.received_date))
+        if not md:
+            continue
+        mm, dd = md
+        bucket = "leadRJ" if cell(r, L.type) in RJ_TYPES else "leads"
+        my_daily[mm][bucket][dd] += 1
+    for j in my_year_jongs:
+        md = _parse_day(j["date"])
+        if not md:
+            continue
+        mm, dd = md
+        my_daily[mm]["bookings"][dd] += 1
+    for b in my_booking_cases:
+        if b["status"] != "ปล่อย":
+            continue
+        rd = b.get("releaseDate") or b.get("date")
+        md = _parse_day(rd)
+        if not md:
+            continue
+        mm, dd = md
+        my_daily[mm]["dones"][dd] += 1
+        my_daily[mm]["dealValue"][dd] += b["price"] or 0
+
+    # ── 8) Year-level seller card (lead/follow/vacant/done/booking/dealValue) ──
+    n_done_year = sum(1 for b in my_booking_cases if b["status"] == "ปล่อย")
+    dv_year = sum(b["price"] for b in my_booking_cases if b["status"] == "ปล่อย")
+    my_seller = {
+        "name": seller_name,
+        "team": TEAM_ID.get(seller_name, "?"),
+        "target": TARGETS.get(seller_name, 0),
+        "lead": len(my_year_leads),
+        "follow": len([r for r in my_year_leads if is_follow(cell(r, L.admin_status))]),
+        "vacant": len([r for r in my_year_leads if is_vacant(cell(r, L.admin_status))]),
+        "done": n_done_year,
+        "booking": len(my_year_jongs),
+        "dealValue": dv_year,
+        "live": 0, "clip": 0, "clipTarget": 0,
+        "liveInbox": 0, "liveLead": 0,
+        "leadTypes": {},
+    }
+
+    return {
+        "meta": {
+            "generatedAt": now.isoformat(),
+            "month": now.month,
+            "year": year_full,
+        },
+        "seller": my_seller,
+        "today": my_today,
+        "bookingCases": my_booking_cases,
+        "followCases": my_follow_cases,
+        "daily": my_daily,
+        "monthly": my_monthly,
+        # NOTE: ไม่ส่ง sellers[]/teams/leadCarsByMonth/userIdMap/employees ไป
+        # → frontend ไม่มีข้อมูลเซลล์อื่นๆ ให้แอบดูใน DevTools
+    }
