@@ -78,6 +78,10 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "leadscore",
     },
+    "lead_score_config": {
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "เกณฑ์คะแนน lead",
+    },
 }
 
 # ── Column index maps (0-based) ──
@@ -429,11 +433,33 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
         ).json()
         all_tabs = [s["properties"]["title"] for s in meta.get("sheets", [])]
 
-        monthly_tabs: list[tuple[int, str]] = []
+        # Parse tab names + skip future months (กรณีมีการสร้าง tab ไว้ล่วงหน้าหลายปี)
+        # Format: "{ชื่อเดือน} {ปีพ.ศ.2digit}" เช่น "พฤษภาคม 69"
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("Asia/Bangkok"))
+        cur_year_2digit = (now.year + 543) % 100  # 2026 → 69
+        cur_month = now.month
+
+        monthly_tabs: list[tuple[int, str]] = []  # (month 1-12, tab name)
+        future_skipped = 0
         for tab in all_tabs:
             for idx, m in enumerate(_THAI_MONTHS):
                 if tab.startswith(m + " "):
-                    monthly_tabs.append((idx + 1, tab))  # idx+1 = 1-12
+                    # ดึง year part หลังชื่อเดือน
+                    year_str = tab[len(m) + 1:].strip()
+                    try:
+                        tab_year = int(year_str)
+                    except ValueError:
+                        # ปีไม่ใช่ตัวเลข — เก็บไว้ก่อน (backward compat)
+                        monthly_tabs.append((idx + 1, tab))
+                        break
+                    tab_month = idx + 1
+                    # Skip tab ที่อยู่ในอนาคต (ลด API calls + เร็วขึ้น)
+                    if tab_year > cur_year_2digit or (tab_year == cur_year_2digit and tab_month > cur_month):
+                        future_skipped += 1
+                        break
+                    monthly_tabs.append((tab_month, tab))
                     break
 
         if not monthly_tabs:
@@ -464,12 +490,19 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
         for m_int, tab in monthly_tabs:
             _, rows = tab_rows.get(tab, (m_int, []))
             for row in rows:
-                date_cell = row[3] if len(row) > 0 else ""  # column 0 = received_date (LEADS_COL.received_date)
-                # Note: LEADS_COL.received_date = 0
                 date_cell = cell(row, LEADS_COL.received_date)
                 d = parse_date(date_cell)
-                if d and d.month == m_int:
-                    all_rows.append(row)
+                if not (d and d.month == m_int):
+                    continue
+                # ตัด lead ที่มาจากไลฟ์สดออก (column H = channel ขึ้นต้นด้วย "LIVE")
+                # เช่น "LIVE Facebook", "LIVE Tiktok / ช่องหลัก" — ไม่ใช่ lead จากการหาเอง
+                if cell(row, LEADS_COL.channel).strip().upper().startswith("LIVE"):
+                    continue
+                # ตัด lead type RJ / Hot RJ / Hot RB ออก (คุณภาพต่ำ — ไม่นับ)
+                _t = cell(row, LEADS_COL.type).strip().upper().replace(" ", "")
+                if _t in ("RJ", "HOTRJ", "HOTRB"):
+                    continue
+                all_rows.append(row)
         _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:

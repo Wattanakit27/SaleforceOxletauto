@@ -104,7 +104,7 @@
   // ── state ──
   // Filter mode: month (เลือกเดือน) | range (เลือกช่วงวัน) | today | all
   // เลือก month → reset range; เลือก range → reset month (mutually exclusive)
-  let fMonth = 0;          // 0=ทั้งปี/range/today, 1-12=เดือน
+  let fMonth = new Date().getMonth() + 1;   // default = เดือนปัจจุบัน (0=ทั้งปี, 1-12=เดือน)
   let fDay = 0;            // 0=ทั้งเดือน/range, -1=วันนี้ (เก็บไว้ backward compat — UI ลบปุ่ม 1-31 ออก)
   let fDateFrom = '';      // 'YYYY-MM-DD' — ใช้คู่กับ fDateTo
   let fDateTo = '';        // 'YYYY-MM-DD'
@@ -158,6 +158,58 @@
     return true;
   }
 
+  // ── Helpers สำหรับ Action Hint / Stale Cases / Funnel ──
+  // คืนจำนวนวันจาก dateStr (sheet format) ถึงวันนี้ (null ถ้า parse ไม่ได้)
+  function daysSinceSheetDate(dateStr) {
+    const p = parseSheetDate(dateStr);
+    const d = sheetDateToJS(p);
+    if (!d) return null;
+    return Math.floor((new Date() - d) / 86400000);
+  }
+
+  // วันที่ห่างจาก lastUpdate (อาจมีเวลาตามหลัง) — null ถ้าไม่มี
+  function daysSinceLastUpdate(lead) {
+    const lu = lead.lastUpdate;
+    if (!lu || lu === '-') return null;
+    // ตัดเวลาออกถ้ามี
+    const dateOnly = String(lu).split(' ')[0];
+    return daysSinceSheetDate(dateOnly);
+  }
+
+  // ── Action Hint: บอกเซลล์ว่าทำอะไรต่อกับเคสนี้ ──
+  // อิงจาก status เป็นหลัก → fallback ตามอายุ lead
+  function getActionHint(lead) {
+    const a = (lead.adminStatus||'').toLowerCase();
+    const s = (lead.salesStatus||'').toLowerCase();
+    const combined = a + ' ' + s;
+    const daysOld = daysSinceSheetDate(lead.dateIn);
+
+    // ── Stage-based hints (specific status wins) ──
+    if (combined.includes('รอปล่อย'))  return {icon:'🚗', text:'นัดวันรับรถ', color:'var(--green)'};
+    if (combined.includes('รอผล'))      return {icon:'🏦', text:'เช็คผลกับธนาคาร', color:'var(--amber)'};
+    if (combined.includes('รอเซ็น'))    return {icon:'✍️', text:'นัดวันเซ็นเอกสาร', color:'var(--amber)'};
+    if (combined.includes('จอง'))       return {icon:'📝', text:'ตามเอกสารให้ครบ', color:'var(--amber)'};
+    if (combined.includes('โทรไม่รับ')) return {icon:'📅', text:'ลองโทรช่วง 16-19 น.', color:'var(--red)'};
+    if (combined.includes('ผิดนัด'))    return {icon:'⏰', text:'นัดเวลาใหม่ + ยืนยัน', color:'var(--red)'};
+    if (combined.includes('นัดหมาย'))   return {icon:'📌', text:'ยืนยันนัดก่อน 1 ชม.', color:'var(--blue)'};
+    if (combined.includes('รอตอบ') || combined.includes('รอลูกค้า')) {
+      return {icon:'💬', text:'ส่ง LINE ติดตามผล', color:'var(--blue)'};
+    }
+    if (combined.includes('ติดตาม'))    return {icon:'📞', text:'โทรตามต่อ', color:'var(--blue)'};
+
+    // ── Fallback: ยังไม่โทร → ดูตามอายุ lead ──
+    if (!lead.updateCount) {
+      if (daysOld === null)    return {icon:'📞', text:'โทรเลย', color:'var(--blue)'};
+      if (daysOld <= 1)        return {icon:'🔥', text:'โทรเลย — lead ใหม่!', color:'var(--red)'};
+      if (daysOld <= 3)        return {icon:'⚡', text:`เร่งโทร (${daysOld} วันแล้ว)`, color:'var(--amber)'};
+      if (daysOld <= 7)        return {icon:'⚠️', text:`${daysOld} วันแล้ว — เร่งติดต่อ`, color:'var(--red)'};
+      return {icon:'❄️', text:`${daysOld} วัน — เคสกำลังจะหลุดมือ`, color:'var(--red)'};
+    }
+
+    // โทรไปแล้วแต่ไม่มี status เด่นชัด
+    return {icon:'📞', text:'อัพเดทเคสล่าสุด', color:'var(--blue)'};
+  }
+
   // ── เดือนปัจจุบัน (สำหรับ banner แจ้งเตือน — ไม่ขึ้นกับ filter) ──
   function leadsInCurrentMonth() {
     const now = new Date();
@@ -185,6 +237,13 @@
       return (a && a.includes(kw)) || (s && s.includes(kw));
     });
   };
+  // "จอง / ปล่อย" = เคสที่จัดการแล้ว (ไม่ต้องเตือนให้โทรตามอีก)
+  // เช็คทั้ง admin_status และ sales_status — บางเคส admin=จอง แต่ sales=ติดตาม
+  const isBooked = (l) => {
+    const a = (l.adminStatus||'').toLowerCase();
+    const s = (l.salesStatus||'').toLowerCase();
+    return a.includes('จอง') || s.includes('จอง') || a.includes('ปล่อย') || s.includes('ปล่อย');
+  };
   // "เคสในมือ" = เคสที่ยังต้องดูแล (ติดตาม + จอง + ปล่อย) ไม่นับเคสปิด (คืน/ยกเลิก/จ่ายใหม่)
   const isInHand = (l) => {
     if (isSkipped(l)) return false;
@@ -200,9 +259,10 @@
   const KPI_DEFS = [
     { key: 'inHand',    label: 'เคสในมือ',         color: 'var(--blue)',   hint: 'ติดตาม + จอง + ปล่อย (ไม่นับปิด)', test: isInHand },
     { key: 'called',    label: 'โทรแล้วมีหลักฐาน', color: 'var(--green)',  hint: 'callProof = ส่งแล้ว',  test: l => l.callProof === 'ส่งแล้ว' },
-    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสปิด)', test: l => !l.updateCount && !isSkipped(l) },
-    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสปิด)', test: l => {
+    { key: 'notCalled', label: 'ยังไม่โทร',       color: 'var(--red)',    hint: 'updateCount = 0 (ไม่รวมเคสปิด/จอง/ปล่อย)', test: l => !l.updateCount && !isSkipped(l) && !isBooked(l) },
+    { key: 'follow',    label: 'ต้องโทรต่อ',      color: 'var(--blue)',   hint: 'sales_status = ติดตาม (ไม่รวมเคสปิด/จอง/ปล่อย)', test: l => {
         if (isSkipped(l)) return false;
+        if (isBooked(l)) return false;   // จองแล้ว = ไม่ต้องเตือนโทร
         const s = (l.salesStatus||'').toLowerCase();
         if (!s || s === '-') return false;
         return FOLLOW_KEYWORDS.some(k => s.includes(k));
@@ -492,8 +552,8 @@
 
       ${(() => {
         // ── 🔔 แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
-        // exclude junk (คืน/ยกเลิก/จ่ายใหม่/...) — ไม่ remind ให้โทรเคสที่ admin ปิดแล้ว
-        const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l));
+        // exclude junk (คืน/ยกเลิก/จ่ายใหม่/...) + จอง/ปล่อย — ไม่ remind เคสที่จัดการแล้ว
+        const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l) && !isBooked(l));
         const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
         const curFollow = curMonthLeads.filter(l => {
           const s = (l.salesStatus||'').toLowerCase();
@@ -548,6 +608,137 @@
         }).join('')}
       </div>
 
+      ${(() => {
+        // ── ⚠️ เคสค้าง — ยังไม่โทรเกิน 7 วัน ──
+        // นับเฉพาะ: เคสที่ยังไม่โทร (updateCount=0) — ไม่ว่ามี/ไม่มีสถานะติดตาม
+        // ตัดออก: junk · จอง · ปล่อย (เพราะจัดการไปแล้ว)
+        const staleCases = allLeads
+          .filter(l => {
+            if (isSkipped(l)) return false;            // ตัด junk
+            const a = (l.adminStatus||'').toLowerCase();
+            const s = (l.salesStatus||'').toLowerCase();
+            if (a.includes('จอง') || s.includes('จอง')) return false;     // ตัดจอง
+            if (a.includes('ปล่อย') || s.includes('ปล่อย')) return false; // ตัดปล่อย
+            if (l.updateCount > 0) return false;       // นับเฉพาะที่ยังไม่โทร
+            const opened = daysSinceSheetDate(l.dateIn);
+            if (opened === null) return false;
+            l._staleDays = opened;
+            return opened > 7;
+          })
+          .sort((a, b) => (b._staleDays||0) - (a._staleDays||0));
+
+        if (staleCases.length === 0) return '';
+
+        const showTop = staleCases.slice(0, 5);
+        const rest = staleCases.slice(5);
+        const rowHtml = (l) => {
+          const car = h(l.car || '-');
+          const phone = h(l.phone || '-');
+          const code = h(l.code || '-');
+          const days = l._staleDays;
+          const hasStatus = (l.adminStatus && l.adminStatus !== '-') || (l.salesStatus && l.salesStatus !== '-');
+          const lastInfo = hasStatus ? `มีสถานะแต่ยังไม่โทร · รับมา ${days} วัน` : `ยังไม่มีสถานะ · รับมา ${days} วัน`;
+          return `
+            <div style="background:var(--bg);border-radius:6px;padding:7px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="openLeadDetail('${code}')">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:600;color:var(--t1)">${car}</div>
+                <div style="font-size:10.5px;color:var(--t3)">${code} · ${phone} · ${lastInfo}</div>
+              </div>
+              <div style="background:var(--red);color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;flex-shrink:0">${days}d</div>
+            </div>
+          `;
+        };
+        return `
+        <div style="background:var(--red-bg,#fee);border:.5px solid var(--red-mid,#fca);border-left:3px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+            <div style="font-size:13px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:6px">
+              ⚠️ เคสค้าง — ยังไม่โทรเกิน 7 วัน <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">${staleCases.length}</span>
+            </div>
+            <div style="font-size:10.5px;color:var(--t3)">เรียงจากค้างนานสุด — คลิกดูรายละเอียด</div>
+          </div>
+          <div style="display:grid;gap:5px">
+          ${showTop.map(rowHtml).join('')}
+          </div>
+          ${rest.length > 0 ? `
+            <details style="margin-top:6px">
+              <summary style="font-size:11px;color:var(--red);cursor:pointer;padding:4px 0;font-weight:600;text-align:center">+ ดูอีก ${rest.length} เคส</summary>
+              <div style="display:grid;gap:5px;margin-top:5px">${rest.map(rowHtml).join('')}</div>
+            </details>
+          ` : ''}
+        </div>
+        `;
+      })()}
+
+      ${(() => {
+        // ── 🎯 Lead Score Priority — โทรเคสไหนก่อน ──
+        // filter: ยังต้องตาม (!isSkipped + !isBooked) + มีคะแนน
+        // จอง/ปล่อยแล้ว = จัดการแล้ว ไม่ต้องเตือนให้โทร
+        // sort: คะแนนสูงสุดก่อน (hot → warm → cold)
+        const priorityLeads = allLeads
+          .filter(l => !isSkipped(l) && !isBooked(l) && (l.leadScore !== undefined && l.leadScore !== null))
+          .sort((a,b) => (b.leadScore||0) - (a.leadScore||0))
+          .slice(0, 10);
+
+        if (priorityLeads.length === 0) {
+          return '';
+        }
+
+        const tierColor = (t) => {
+          if (!t) return 'var(--t3)';
+          if (t.includes('hot'))  return 'var(--red)';
+          if (t.includes('warm')) return 'var(--amber)';
+          return 'var(--blue)';
+        };
+        const tierBg = (t) => {
+          if (!t) return 'var(--bg2)';
+          if (t.includes('hot'))  return 'var(--red-bg,#fee)';
+          if (t.includes('warm')) return 'var(--amber-bg,#fff7e6)';
+          return 'var(--blue-bg,#e7f0fd)';
+        };
+
+        return `
+        <div class="section" style="margin-bottom:14px">
+          <h2 style="display:flex;align-items:center;gap:6px">🎯 โทรเคสไหนก่อน <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(Top ${priorityLeads.length})</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);color:var(--t2);font-size:11px;font-weight:700;cursor:help;border:.5px solid var(--bd2);margin-left:4px" onclick="showLeadScoreHelp()" title="ดูสูตร Lead Score">?</span>
+          </h2>
+          <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เรียงเคสที่ยังต้องตามตาม Lead Score (สด/ประเภท/ช่อง/engagement) — เคสที่คะแนนสูงสุดควรโทรก่อน</div>
+          <div style="display:grid;grid-template-columns:1fr;gap:8px">
+          ${priorityLeads.map((l, i) => {
+            const tier = l.leadTier || '❄cold';
+            const score = l.leadScore || 0;
+            const car = h(l.car || '-');
+            const phone = h(l.phone || '-');
+            const code = h(l.code || '-');
+            const updates = l.updateCount || 0;
+            const breakdownStr = (l.scoreBreakdown||[])
+              .map(b => `${h(b[0])} (${b[1]>0?'+':''}${b[1]})`)
+              .join(' · ');
+            const action = getActionHint(l);
+            return `
+              <div style="background:${tierBg(tier)};border:.5px solid var(--bd);border-left:3px solid ${tierColor(tier)};border-radius:8px;padding:10px 12px;cursor:pointer" onclick="openLeadDetail('${code}')">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13px;font-weight:700;color:var(--t1)">#${i+1} · ${car}</div>
+                    <div style="font-size:11px;color:var(--t3);margin-top:1px">${code} · ${phone} · โทรไปแล้ว ${updates} ครั้ง</div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-size:18px;font-weight:800;color:${tierColor(tier)}">${score}</div>
+                    <div style="font-size:10px;color:${tierColor(tier)};font-weight:600">${h(tier)}</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 9px;background:var(--bg);border-radius:6px;border-left:2px solid ${action.color}">
+                  <span style="font-size:14px">${action.icon}</span>
+                  <span style="font-size:11.5px;font-weight:600;color:${action.color}">ขั้นถัดไป: ${h(action.text)}</span>
+                </div>
+                ${breakdownStr ? `<div style="font-size:10px;color:var(--t3);line-height:1.4;margin-top:4px;border-top:.5px dashed var(--bd);padding-top:4px">${breakdownStr}</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+          </div>
+        </div>
+        `;
+      })()}
+
       <div class="cgrid">
         <div class="chart-card">
           <div class="chart-title">Lead ของฉัน — ${h(periodLabel)}</div>
@@ -566,6 +757,102 @@
           <div class="chart-box"><canvas id="chart-pipe"></canvas></div>
         </div>
       </div>
+
+      ${(() => {
+        // ── 🔻 My Pipeline Funnel — เห็นว่าเคสหายไปตรงไหน ──
+        // 4 stage: รับ → ตาม (มี updateCount≥1) → จอง → ปล่อย
+        // ใช้ allLeads (in range) + bookings (in range) ที่คำนวณไว้แล้ว
+        const received = allLeads.filter(l => !isSkipped(l)).length;
+        const called   = allLeads.filter(l => !isSkipped(l) && l.updateCount > 0).length;
+        const booked   = allLeads.filter(l => {
+          if (isSkipped(l)) return false;
+          const a = (l.adminStatus||'').toLowerCase();
+          const s = (l.salesStatus||'').toLowerCase();
+          return a.includes('จอง') || s.includes('จอง') || a.includes('ปล่อย') || s.includes('ปล่อย');
+        }).length;
+        const released = doneCount;  // จาก bookings (status=ปล่อย)
+
+        if (received === 0) return '';
+
+        // % conversion
+        const callRate    = received > 0 ? Math.round((called / received) * 100) : 0;
+        const bookRate    = called > 0 ? Math.round((booked / called) * 100) : 0;
+        const releaseRate = booked > 0 ? Math.round((released / booked) * 100) : 0;
+
+        // ความกว้าง bar — based on received as 100%
+        const widthOf = (n) => received > 0 ? Math.max(8, (n / received) * 100) : 0;
+
+        // สี + คำแนะนำ insight สำหรับ rate ต่ำๆ
+        const rateColor = (r, good, ok) => r >= good ? 'var(--green)' : r >= ok ? 'var(--amber)' : 'var(--red)';
+        const insights = [];
+        if (received >= 10 && callRate < 70) insights.push(`📞 โทรไม่ครบ — ตามแค่ ${callRate}% ของที่รับมา`);
+        if (called >= 10 && bookRate < 15)   insights.push(`🔄 จองยาก — ${bookRate}% จากที่ตาม (ทีมเฉลี่ย ~20%)`);
+        if (booked >= 5 && releaseRate < 50) insights.push(`🚗 ปิดดีลยาก — ${releaseRate}% ของจองได้ปล่อย`);
+
+        return `
+        <div class="section" style="margin-bottom:14px">
+          <h2 style="display:flex;align-items:center;gap:6px">🔻 Pipeline ของคุณ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
+          <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เห็นว่าเคสหายไปตรง stage ไหน → ช่วยรู้ว่าควรพัฒนาตรงไหน (รับเยอะแต่ตามไม่ครบ? ตามได้แต่จองไม่ลง?)</div>
+
+          <div style="display:grid;gap:6px;margin-bottom:10px">
+
+            <!-- Stage 1: รับ -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
+                <span style="color:var(--t2);font-weight:600">📋 รับเข้ามา</span>
+                <span style="font-weight:700;color:var(--t1)">${received} เคส</span>
+              </div>
+              <div style="height:22px;background:var(--blue);border-radius:5px;width:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">100%</div>
+            </div>
+
+            <!-- arrow + % -->
+            <div style="text-align:center;font-size:10.5px;color:${rateColor(callRate, 80, 60)};font-weight:600;padding:1px 0">▼ ${callRate}% โทร</div>
+
+            <!-- Stage 2: โทรตาม -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
+                <span style="color:var(--t2);font-weight:600">📞 โทรตามแล้ว</span>
+                <span style="font-weight:700;color:var(--t1)">${called} เคส</span>
+              </div>
+              <div style="height:22px;background:var(--amber);border-radius:5px;width:${widthOf(called)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((called/received)*100)}%</div>
+            </div>
+
+            <div style="text-align:center;font-size:10.5px;color:${rateColor(bookRate, 25, 15)};font-weight:600;padding:1px 0">▼ ${bookRate}% จองได้</div>
+
+            <!-- Stage 3: จอง -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
+                <span style="color:var(--t2);font-weight:600">📝 จอง</span>
+                <span style="font-weight:700;color:var(--t1)">${booked} เคส</span>
+              </div>
+              <div style="height:22px;background:var(--green);border-radius:5px;width:${widthOf(booked)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((booked/received)*100)}%</div>
+            </div>
+
+            <div style="text-align:center;font-size:10.5px;color:${rateColor(releaseRate, 70, 40)};font-weight:600;padding:1px 0">▼ ${releaseRate}% ปิดดีล</div>
+
+            <!-- Stage 4: ปล่อย -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
+                <span style="color:var(--t2);font-weight:600">🚗 ปล่อยรถ</span>
+                <span style="font-weight:700;color:var(--t1)">${released} เคส</span>
+              </div>
+              <div style="height:22px;background:#3a8a3a;border-radius:5px;width:${widthOf(released)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${received>0?Math.round((released/received)*100):0}%</div>
+            </div>
+          </div>
+
+          ${insights.length > 0 ? `
+            <div style="background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:6px;padding:9px 12px;font-size:11.5px;line-height:1.7;color:var(--t1)">
+              <div style="font-weight:700;color:var(--amber);margin-bottom:3px">💡 สังเกตได้</div>
+              ${insights.map(i => `<div>• ${h(i)}</div>`).join('')}
+            </div>
+          ` : `
+            <div style="background:var(--bg2);border-radius:6px;padding:9px 12px;font-size:11px;color:var(--t2);text-align:center">
+              ${received < 10 ? 'รับเคสน้อย — sample ยังเล็กไป รอข้อมูลครบก่อน' : '✅ funnel ดูสมดุล — pipeline ของคุณเคลื่อนได้ดี'}
+            </div>
+          `}
+        </div>
+        `;
+      })()}
 
       <div style="display:flex;gap:6px;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:10px">
         <button onclick="setViewMode('leads')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='leads'?'var(--blue)':'transparent'};color:${viewMode==='leads'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">รายการ Lead <span style="opacity:.85;font-weight:400">(${allLeads.length})</span></button>
@@ -897,6 +1184,59 @@
   function setBookStatus(s) { bookStatusFilter = s; render(); }
   function setStatusFilter(v) { statusFilter = v; viewMode = 'leads'; render(); }
   function setSortOrder(v) { sortOrder = v; render(); }
+
+  // ── Modal: อธิบายสูตร Lead Score ──
+  function showLeadScoreHelp() {
+    const old = document.getElementById('leadscore-help-overlay');
+    if (old) old.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'leadscore-help-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div style="background:var(--bg);border-radius:14px;max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">🎯 Lead Score — สูตรคำนวณ</h3>
+          <button onclick="document.getElementById('leadscore-help-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div style="padding:14px 18px;overflow-y:auto;flex:1;font-size:12px;line-height:1.7;color:var(--t1)">
+          <p style="margin:0 0 10px"><b>Lead Score คือคะแนนคุณภาพของแต่ละ lead</b> บอกว่า "เคสนี้น่าปิดแค่ไหน" — ใช้ priority ว่าโทรอันไหนก่อน</p>
+
+          <div style="margin:10px 0;padding:10px 12px;background:var(--bg2);border-radius:8px">
+            <b style="color:var(--blue)">คิดจาก 6 ส่วน:</b>
+            <ul style="margin:6px 0 0 18px;padding:0;font-size:11.5px">
+              <li><b>ความใหม่ (Freshness)</b> — ≤3 วัน +20, เย็น -5</li>
+              <li><b>ประเภท (Type)</b> — Normal +50, RJ +15</li>
+              <li><b>รถ (Car)</b> — รุ่นยอดนิยม +20, ราคาสูง +10</li>
+              <li><b>ประวัติ (History)</b> — เคยยกเลิก -5</li>
+              <li><b>ช่องทาง (Channel)</b> — Walk-in +15, TikTok +10</li>
+              <li><b>Engagement</b> — ลูกค้าตอบ +25, โทรไม่รับ -10</li>
+            </ul>
+          </div>
+
+          <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--red-bg,#fee);border-radius:8px;text-align:center">
+              <div style="font-size:14px;font-weight:700;color:var(--red)">🔥 hot</div>
+              <div style="font-size:10px;color:var(--t3)">≥ 80 คะแนน</div>
+            </div>
+            <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--amber-bg,#fff7e6);border-radius:8px;text-align:center">
+              <div style="font-size:14px;font-weight:700;color:var(--amber)">🌡 warm</div>
+              <div style="font-size:10px;color:var(--t3)">50-79 คะแนน</div>
+            </div>
+            <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--blue-bg,#e7f0fd);border-radius:8px;text-align:center">
+              <div style="font-size:14px;font-weight:700;color:var(--blue)">❄ cold</div>
+              <div style="font-size:10px;color:var(--t3)">&lt; 50 คะแนน</div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;padding:10px 12px;background:var(--blue-bg);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.6">
+            <b style="color:var(--blue)">หมายเหตุ:</b> เกณฑ์ + คะแนนปรับได้ที่ Google Sheet tab "เกณฑ์คะแนน lead" (admin เท่านั้น)
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
 
   render();
 </script>

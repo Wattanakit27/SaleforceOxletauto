@@ -1046,6 +1046,16 @@ def seller_dashboard(request, token):
     import re as _re
 
     raw_leads = fetch_leads_by_month_tabs()
+
+    # ── Lead Score context: โหลด config + maps ครั้งเดียวสำหรับ batch ──
+    from .services.fetch_dashboard import prepare_lead_score_context, compute_lead_score
+    from .services.google_sheets import fetch_sheet
+    try:
+        sales_rows = fetch_sheet("sales_reports")
+    except Exception:
+        sales_rows = []
+    score_ctx = prepare_lead_score_context(raw_leads, sales_rows)
+
     my_leads = []
     for r in raw_leads:
         if normalize_seller(cell(r, L.sales_rep)) != seller_name:
@@ -1055,6 +1065,15 @@ def seller_dashboard(request, token):
             continue
         note_raw = cell(r, L.fill_sheet_note) or ""
         note = _re.sub(r"^\d{4,5}\s*", "", note_raw)
+        # คำนวณ Lead Score ต่อเคส
+        try:
+            ls = compute_lead_score(
+                r, score_ctx["cfg"],
+                score_ctx["cancelled"], score_ctx["done"],
+                score_ctx["top_cars"],
+            )
+        except Exception:
+            ls = {"score": 0, "tier": "❄cold", "breakdown": []}
         my_leads.append({
             "code": cell(r, L.lead_code),
             "phone": cell(r, L.phone),
@@ -1070,6 +1089,9 @@ def seller_dashboard(request, token):
             "lastUpdate": cell(r, L.last_updated_at),
             "note": note,
             "profile": cell(r, L.customer_profile),
+            "leadScore": ls["score"],
+            "leadTier": ls["tier"],
+            "scoreBreakdown": ls["breakdown"],
         })
 
     filtered = {

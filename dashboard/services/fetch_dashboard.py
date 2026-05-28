@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from .google_sheets import (
     fetch_all_sheets, cell, cell_num,
-    LEADS_COL as L, SALES_COL as S,
+    LEADS_COL as L, SALES_COL as S, BOOKINGS_COL as B,
     LIVE_COL as LV, FOLLOWUP_COL as FU, EMPLOYEE_COL as EM,
 )
 from .constants import (
@@ -49,6 +49,27 @@ def is_follow(status: str) -> bool:
 def is_vacant(status: str) -> bool:
     """ตรวจว่า admin_status ยังว่าง — ใช้สำหรับ KPI 'ว่าง' (เคสที่ admin ยังไม่ assign สถานะ)"""
     return not status or status in ("-", "")
+
+
+def activity_stats(rows: list) -> dict:
+    """คำนวณ stats สำหรับตารางคะแนน 100 แต้ม จาก lead rows ของเซลล์คนหนึ่ง:
+    - updateSum: รวมจำนวนอัพเดททุกเคส (ปริมาณติดตาม)
+    - proofCount: จำนวนเคสที่มีหลักฐานการโทร (call_proof = 'ส่งแล้ว')
+    - returnCount: จำนวนเคสคืน (admin/sales_status มี 'คืน')
+    - cancelCount: จำนวนเคสลูกค้ายกเลิก (มี 'ยกเลิก')
+    """
+    upd_sum = proof = ret = cancel = 0
+    for r in rows:
+        upd_sum += int(cell_num(r, L.update_count))
+        if cell(r, L.call_proof) == "ส่งแล้ว":
+            proof += 1
+        combined = f"{cell(r, L.admin_status)} {cell(r, L.sales_status)}"
+        if "คืน" in combined:
+            ret += 1
+        if "ยกเลิก" in combined:
+            cancel += 1
+    return {"updateSum": upd_sum, "proofCount": proof,
+            "returnCount": ret, "cancelCount": cancel}
 
 
 # ── Date helpers ──
@@ -130,7 +151,7 @@ def fetch_dashboard_data() -> dict:
     raw = fetch_all_sheets()
     raw_leads = raw["leads"]
     sales_reports = raw["sales_reports"]
-    # bookings sheet ไม่ใช้แล้ว — เปลี่ยนมานับ "จอง" จาก leads sheet (admin/sales_status มี "จอง")
+    raw_bookings = raw["bookings"]   # ← นับ "จอง" จาก sheet นี้ (source of truth)
     live_sessions = raw["live_sessions"]
     live_followups = raw["live_followups"]
     employees = raw["employees"]
@@ -165,28 +186,47 @@ def fetch_dashboard_data() -> dict:
     year_leads = [r for r in raw_leads if is_this_year(cell(r, L.received_date))]
     today_leads = [r for r in raw_leads if is_today(cell(r, L.received_date))]
 
-    # Jongs — นับจาก leads sheet (admin_status / sales_status มีคำว่า "จอง")
-    # status อื่นๆ (รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก) จะนับจาก sales_reports (booking_cases ด้านล่าง)
-    # exclude เคส skipped (จบ/คืน/ยกเลิก/จ่ายใหม่)
-    def has_booking_status(row) -> bool:
-        admin_st = cell(row, L.admin_status)
-        sales_st = cell(row, L.sales_status)
-        if is_skipped(admin_st) or is_skipped(sales_st):
-            return False
-        return "จอง" in (admin_st or "") or "จอง" in (sales_st or "")
-
+    # Jongs — นับจาก bookings sheet (source of truth)
+    # ผู้ใช้ต้องการให้ตัวเลขตรงกับ bookings spreadsheet ที่ admin บันทึก
+    # status อื่น (รอเซ็น/รอผล/รอปล่อย/ปล่อย/รีเจ็ก) ยังนับจาก sales_reports (booking_cases ด้านล่าง)
     year_jongs = []
-    for r in year_leads:
-        if not has_booking_status(r):
+    for r in raw_bookings:
+        date_str = cell(r, B.date)
+        if not is_this_year(date_str):
             continue
-        seller = normalize_seller(cell(r, L.sales_rep))
+        # skip header / non-data rows
+        no_val = cell(r, B.no)
+        if not no_val or no_val in ("ลำดับ", "no", "No"):
+            continue
+        seller_raw = cell(r, B.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
+        seller = normalize_seller(seller_raw)
         year_jongs.append({
-            "seller": seller or "",  # อาจว่างได้ → orphan
-            "date": cell(r, L.received_date),
-            "code": cell(r, L.lead_code),
+            "seller": seller or "",  # อาจว่าง → orphan
+            "date": date_str,
+            "code": cell(r, B.code),
         })
 
     # BookingCases from sales_reports
+    # สร้าง map leadCode → received_date (ล่าสุด) เพื่อใช้คำนวณ Velocity Phase 1
+    # ถ้า code ซ้ำ (admin เปิดเคสใหม่ใช้ code เดิม) → เลือกวันที่ล่าสุด
+    # ไม่งั้นจะคำนวณ velocity ผิด (lead จาก ก.พ. แต่จองจริง พ.ค. = 94 วัน)
+    lead_received_map = {}
+    for r in year_leads:
+        code = cell(r, L.lead_code).strip()
+        if not code:
+            continue
+        new_date_str = cell(r, L.received_date)
+        new_d = parse_date(new_date_str)
+        if not new_d:
+            continue
+        existing = lead_received_map.get(code)
+        if not existing:
+            lead_received_map[code] = new_date_str
+        else:
+            existing_d = parse_date(existing)
+            if not existing_d or new_d > existing_d:
+                lead_received_map[code] = new_date_str
+
     booking_cases = []
     for r in sales_reports:
         seller_cell = cell(r, S.sales_rep)
@@ -210,10 +250,13 @@ def fetch_dashboard_data() -> dict:
         chosen_release = new_release if (new_release and parse_date(new_release)) else (
             legacy_release if parse_date(legacy_release) else new_release
         )
+        lead_code = cell(r, S.lead_code).strip()
+        channel_val = cell(r, S.channel)
         booking_cases.append({
             "seller": seller,
             "status": status.replace(" (ซื้อสด)", "").strip(),
             "isCash": is_cash,
+            "channel": channel_val,
             "customer": cell(r, S.customer_name),
             "phone": cell(r, S.phone),
             "car": cell(r, S.car_detail),
@@ -221,7 +264,8 @@ def fetch_dashboard_data() -> dict:
             "plate": cell(r, S.license_plate),
             "price": cell_num(r, S.sale_price),
             "deposit": cell_num(r, S.deposit_amount),
-            "leadCode": cell(r, S.lead_code),
+            "leadCode": lead_code,
+            "leadDate": lead_received_map.get(lead_code, ""),  # วันรับหลีดเดิม (Velocity Phase 1)
             "date": cell(r, S.date),
             "signDate": cell(r, S.sign_date),
             "resultDate": cell(r, S.result_date),
@@ -315,6 +359,14 @@ def fetch_dashboard_data() -> dict:
         sb_done = [b for b in sb if b["status"] == "ปล่อย"]
         follow = len([r for r in sl if is_follow(cell(r, L.admin_status))])
         vacant = len([r for r in sl if is_vacant(cell(r, L.admin_status))])
+        # ยังไม่อัพเดท = update_count == 0 และไม่ใช่ junk
+        not_called = 0
+        for r in sl:
+            if int(cell_num(r, L.update_count)) > 0:
+                continue
+            if is_skipped(cell(r, L.admin_status)) or is_skipped(cell(r, L.sales_status)):
+                continue
+            not_called += 1
         done = len(sb_done)
         deal_value = sum(b["price"] for b in sb_done)
         pipeline_val = sum(
@@ -324,12 +376,14 @@ def fetch_dashboard_data() -> dict:
         for r in sl:
             t = cell(r, L.type) or "ไม่ระบุ"
             lead_types[t] = lead_types.get(t, 0) + 1
+        astats = activity_stats(sl)   # updateSum / proofCount / returnCount / cancelCount
         s_data = {
             "name": name,
             "team": TEAM_ID.get(name, "?"),
             "lead": len(sl),
             "follow": follow,
             "vacant": vacant,
+            "notCalled": not_called,
             "done": done,
             "target": TARGETS.get(name, 0),
             "booking": jong_by_seller.get(name, 0),
@@ -342,6 +396,11 @@ def fetch_dashboard_data() -> dict:
             "dealValue": deal_value,
             "pipelineValue": pipeline_val,
             "avgDealValue": (deal_value / done) if done else 0,
+            # สำหรับตารางคะแนน 100 แต้ม
+            "updateSum": astats["updateSum"],
+            "proofCount": astats["proofCount"],
+            "returnCount": astats["returnCount"],
+            "cancelCount": astats["cancelCount"],
         }
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
@@ -410,11 +469,19 @@ def fetch_dashboard_data() -> dict:
         admin_pipeline_val = sum(
             b["price"] for b in admin_sb if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
         )
+        # ADMIN booking: bookings sheet ไม่มี ADMIN → นับจอง จาก leads sheet (admin/sales_status มี "จอง")
         admin_booking = len([j for j in year_jongs if j["seller"] == "ADMIN"])
+        if admin_booking == 0:
+            admin_booking = len([
+                r for r in admin_leads
+                if not (is_skipped(cell(r, L.admin_status)) or is_skipped(cell(r, L.sales_status)))
+                and ("จอง" in (cell(r, L.admin_status) or "") or "จอง" in (cell(r, L.sales_status) or ""))
+            ])
         admin_types = {}
         for r in admin_leads:
             t = cell(r, L.type) or "ไม่ระบุ"
             admin_types[t] = admin_types.get(t, 0) + 1
+        admin_astats = activity_stats(admin_leads)
         sellers.append({
             "name": "ADMIN", "team": "ADMIN",
             "lead": len(admin_leads), "follow": admin_follow,
@@ -426,6 +493,10 @@ def fetch_dashboard_data() -> dict:
             "dealValue": admin_deal_value,
             "pipelineValue": admin_pipeline_val,
             "avgDealValue": (admin_deal_value / admin_done) if admin_done else 0,
+            "updateSum": admin_astats["updateSum"],
+            "proofCount": admin_astats["proofCount"],
+            "returnCount": admin_astats["returnCount"],
+            "cancelCount": admin_astats["cancelCount"],
         })
 
     # Teams
@@ -472,6 +543,53 @@ def fetch_dashboard_data() -> dict:
             "note": note,
             "lastUpdate": cell(r, L.last_updated_at) or "-",
             "updateCount": int(cell_num(r, L.update_count)),
+        })
+
+    # ── Not Called Cases — เคสที่ updateCount=0 และไม่ใช่ junk (ใช้ใน 🔴 modal) ──
+    not_called_cases = []
+    for r in year_leads:
+        if int(cell_num(r, L.update_count)) > 0:
+            continue
+        admin_st = cell(r, L.admin_status)
+        sales_st = cell(r, L.sales_status)
+        if is_skipped(admin_st) or is_skipped(sales_st):
+            continue
+        seller = normalize_seller(cell(r, L.sales_rep)) or "-"
+        if seller == "-":
+            continue
+        not_called_cases.append({
+            "code": cell(r, L.lead_code) or "-",
+            "seller": seller,
+            "phone": cell(r, L.phone) or "-",
+            "leadType": cell(r, L.type),
+            "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
+            "channel": cell(r, L.channel) or "-",
+            "dateIn": cell(r, L.received_date) or "-",
+            "adminStatus": admin_st or "-",
+        })
+
+    # ── Booking (จอง) cases — จาก bookings sheet สำหรับ 🏆 modal ──
+    jong_cases = []
+    for r in raw_bookings:
+        date_str = cell(r, B.date)
+        if not is_this_year(date_str):
+            continue
+        no_val = cell(r, B.no)
+        if not no_val or no_val in ("ลำดับ", "no", "No"):
+            continue
+        seller_raw = cell(r, B.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
+        seller = normalize_seller(seller_raw) or "-"
+        if seller == "-":
+            continue
+        jong_cases.append({
+            "code": cell(r, B.code) or "-",
+            "seller": seller,
+            "date": date_str,
+            "channel": cell(r, B.channel) or "-",
+            "car": cell(r, B.car) or cell(r, B.car_formula) or "-",
+            "customer": cell(r, B.customer_name) or "-",
+            "plate": cell(r, B.plate) or "-",
+            "amount": cell_num(r, B.booking_amount),
         })
 
     # Today summary
@@ -585,18 +703,33 @@ def fetch_dashboard_data() -> dict:
                 t = cell(r, L.type)
                 if t:
                     m_lead_types[t] = m_lead_types.get(t, 0) + 1
+            # ยังไม่อัพเดท = update_count == 0 และไม่ใช่เคส junk (จบ/คืน/ยกเลิก/จ่ายใหม่)
+            m_not_called = 0
+            for r in sl2:
+                if int(cell_num(r, L.update_count)) > 0:
+                    continue
+                if is_skipped(cell(r, L.admin_status)) or is_skipped(cell(r, L.sales_status)):
+                    continue
+                m_not_called += 1
+            m_astats = activity_stats(sl2)
             m_sellers[name] = {
                 "lead": len(sl2),
                 "leadNormal": len([r for r in sl2 if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in sl2 if cell(r, L.type) in RJ_TYPES]),
                 "follow": len([r for r in sl2 if is_follow(cell(r, L.admin_status))]),
                 "vacant": len([r for r in sl2 if is_vacant(cell(r, L.admin_status))]),
+                "notCalled": m_not_called,
                 "done": n_done2,
                 "booking": m_jong_by_seller.get(name, 0),
                 "dealValue": dv2,
                 "pipelineValue": sum(b["price"] for b in sb_pipe2),
                 "avgDealValue": (dv2 / n_done2) if n_done2 else 0,
                 "leadTypes": m_lead_types,
+                # ตารางคะแนน 100 แต้ม
+                "updateSum": m_astats["updateSum"],
+                "proofCount": m_astats["proofCount"],
+                "returnCount": m_astats["returnCount"],
+                "cancelCount": m_astats["cancelCount"],
             }
 
         # ── เพิ่ม orphan sellers ต่อเดือน — split per name (เซลล์เก่าแต่ละคน) ──
@@ -631,6 +764,15 @@ def fetch_dashboard_data() -> dict:
             dv = sum(b["price"] for b in g["dones"])
             pipe_b = [b for b in g["bookings"]
                       if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")]
+            o_astats = activity_stats(g["leads"])
+            # จอง: bookings sheet (g["jongs"]) — ถ้า 0 (เช่น ADMIN) นับจาก leads status
+            o_booking = g["jongs"]
+            if o_booking == 0:
+                o_booking = len([
+                    r for r in g["leads"]
+                    if not (is_skipped(cell(r, L.admin_status)) or is_skipped(cell(r, L.sales_status)))
+                    and ("จอง" in (cell(r, L.admin_status) or "") or "จอง" in (cell(r, L.sales_status) or ""))
+                ])
             m_sellers[orphan_name] = {
                 "lead": len(g["leads"]),
                 "leadNormal": len([r for r in g["leads"] if cell(r, L.type) not in RJ_TYPES]),
@@ -638,12 +780,48 @@ def fetch_dashboard_data() -> dict:
                 "follow": len([r for r in g["leads"] if is_follow(cell(r, L.admin_status))]),
                 "vacant": len([r for r in g["leads"] if is_vacant(cell(r, L.admin_status))]),
                 "done": n_done,
-                "booking": g["jongs"],
+                "booking": o_booking,
                 "dealValue": dv,
                 "pipelineValue": sum(b["price"] for b in pipe_b),
                 "avgDealValue": (dv / n_done) if n_done else 0,
                 "leadTypes": {},
                 "inactive": True,
+                "updateSum": o_astats["updateSum"],
+                "proofCount": o_astats["proofCount"],
+                "returnCount": o_astats["returnCount"],
+                "cancelCount": o_astats["cancelCount"],
+            }
+
+        # ── ADMIN (monthly) — orphan handling ข้าม ADMIN ผ่าน known_names จึงต้องเพิ่มเอง ──
+        m_admin_leads = [r for r in m_leads if normalize_seller(cell(r, L.sales_rep)) == "ADMIN"]
+        if m_admin_leads:
+            m_admin_done = [b for b in m_done if b["seller"] == "ADMIN"]
+            m_admin_dv = sum(b["price"] for b in m_admin_done)
+            # จอง: bookings sheet → ถ้า 0 นับจาก leads status
+            m_admin_booking = m_jong_by_seller.get("ADMIN", 0)
+            if m_admin_booking == 0:
+                m_admin_booking = len([
+                    r for r in m_admin_leads
+                    if not (is_skipped(cell(r, L.admin_status)) or is_skipped(cell(r, L.sales_status)))
+                    and ("จอง" in (cell(r, L.admin_status) or "") or "จอง" in (cell(r, L.sales_status) or ""))
+                ])
+            m_admin_astats = activity_stats(m_admin_leads)
+            m_sellers["ADMIN"] = {
+                "lead": len(m_admin_leads),
+                "leadNormal": len([r for r in m_admin_leads if cell(r, L.type) not in RJ_TYPES]),
+                "leadRJ": len([r for r in m_admin_leads if cell(r, L.type) in RJ_TYPES]),
+                "follow": len([r for r in m_admin_leads if is_follow(cell(r, L.admin_status))]),
+                "vacant": len([r for r in m_admin_leads if is_vacant(cell(r, L.admin_status))]),
+                "done": len(m_admin_done),
+                "booking": m_admin_booking,
+                "dealValue": m_admin_dv,
+                "pipelineValue": 0,
+                "avgDealValue": (m_admin_dv / len(m_admin_done)) if m_admin_done else 0,
+                "leadTypes": {},
+                "updateSum": m_admin_astats["updateSum"],
+                "proofCount": m_admin_astats["proofCount"],
+                "returnCount": m_admin_astats["returnCount"],
+                "cancelCount": m_admin_astats["cancelCount"],
             }
 
         m_teams = {}
@@ -818,6 +996,8 @@ def fetch_dashboard_data() -> dict:
         "teams": teams,
         "sellers": sellers,
         "followCases": follow_cases,
+        "notCalledCases": not_called_cases,   # 🔴 ยังไม่อัพเดท modal
+        "jongCases": jong_cases,              # 🏆 Top จอง modal
         "bookingCases": booking_cases,
         "liveActivity": live_activity,
         "userIdMap": user_id_map,
@@ -1018,6 +1198,7 @@ def fetch_seller_stats(seller_name: str) -> dict:
     raw = fetch_all_sheets()
     raw_leads = raw["leads"]
     sales_reports = raw["sales_reports"]
+    raw_bookings = raw["bookings"]   # ← นับ "จอง" จาก bookings sheet (source of truth)
 
     now = bangkok_now()
     year_full = now.year
@@ -1034,6 +1215,25 @@ def fetch_seller_stats(seller_name: str) -> dict:
     ]
 
     # ── 2) Booking cases ของเซลล์ (จาก sales_reports) ──
+    # map leadCode → received_date (ล่าสุด) สำหรับ Velocity Phase 1
+    # ถ้า code ซ้ำ → เลือกวันรับล่าสุด (ไม่งั้น velocity เพี้ยน)
+    my_lead_received_map = {}
+    for r in my_year_leads:
+        code = cell(r, L.lead_code).strip()
+        if not code:
+            continue
+        new_date_str = cell(r, L.received_date)
+        new_d = parse_date(new_date_str)
+        if not new_d:
+            continue
+        existing = my_lead_received_map.get(code)
+        if not existing:
+            my_lead_received_map[code] = new_date_str
+        else:
+            existing_d = parse_date(existing)
+            if not existing_d or new_d > existing_d:
+                my_lead_received_map[code] = new_date_str
+
     my_booking_cases = []
     for r in sales_reports:
         seller_raw = cell(r, S.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
@@ -1055,10 +1255,13 @@ def fetch_seller_stats(seller_name: str) -> dict:
         chosen_release = new_release if (new_release and parse_date(new_release)) else (
             legacy_release if parse_date(legacy_release) else new_release
         )
+        lead_code = cell(r, S.lead_code).strip()
+        channel_val = cell(r, S.channel)
         my_booking_cases.append({
             "seller": seller_name,
             "status": status.replace(" (ซื้อสด)", "").strip(),
             "isCash": is_cash,
+            "channel": channel_val,
             "customer": cell(r, S.customer_name),
             "phone": cell(r, S.phone),
             "car": cell(r, S.car_detail),
@@ -1066,7 +1269,8 @@ def fetch_seller_stats(seller_name: str) -> dict:
             "plate": cell(r, S.license_plate),
             "price": cell_num(r, S.sale_price),
             "deposit": cell_num(r, S.deposit_amount),
-            "leadCode": cell(r, S.lead_code),
+            "leadCode": lead_code,
+            "leadDate": my_lead_received_map.get(lead_code, ""),  # วันรับหลีดเดิม (Velocity Phase 1)
             "date": cell(r, S.date),
             "signDate": cell(r, S.sign_date),
             "resultDate": cell(r, S.result_date),
@@ -1077,18 +1281,22 @@ def fetch_seller_stats(seller_name: str) -> dict:
             "note": cell(r, S.note),
         })
 
-    # ── 3) Year jongs ของเซลล์ (จาก leads, status มี "จอง") ──
+    # ── 3) Year jongs ของเซลล์ (จาก bookings sheet — source of truth) ──
     my_year_jongs = []
-    for r in my_year_leads:
-        admin_st = cell(r, L.admin_status)
-        sales_st = cell(r, L.sales_status)
-        if is_skipped(admin_st) or is_skipped(sales_st):
+    for r in raw_bookings:
+        date_str = cell(r, B.date)
+        if not is_this_year(date_str):
             continue
-        if "จอง" in (admin_st or "") or "จอง" in (sales_st or ""):
-            my_year_jongs.append({
-                "date": cell(r, L.received_date),
-                "code": cell(r, L.lead_code),
-            })
+        no_val = cell(r, B.no)
+        if not no_val or no_val in ("ลำดับ", "no", "No"):
+            continue
+        seller_raw = cell(r, B.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip()
+        if normalize_seller(seller_raw) != seller_name:
+            continue
+        my_year_jongs.append({
+            "date": date_str,
+            "code": cell(r, B.code),
+        })
 
     # ── 4) Follow cases ของเซลล์ ──
     my_follow_cases = []
@@ -1113,6 +1321,15 @@ def fetch_seller_stats(seller_name: str) -> dict:
             "lastUpdate": cell(r, L.last_updated_at) or "-",
             "updateCount": int(cell_num(r, L.update_count)),
         })
+
+    # ── 4.5) Lead Score — เติมคะแนนคุณภาพ lead ต่อเคส (priority "โทรเคสไหนก่อน") ──
+    try:
+        attach_lead_scores(my_follow_cases, my_year_leads, sales_reports)
+    except Exception:
+        for c in my_follow_cases:
+            c.setdefault("leadScore", 0)
+            c.setdefault("leadTier", "❄cold")
+            c.setdefault("scoreBreakdown", [])
 
     # ── 5) Today summary (เฉพาะเซลล์) ──
     my_today = {
@@ -1211,6 +1428,257 @@ def fetch_seller_stats(seller_name: str) -> dict:
         "followCases": my_follow_cases,
         "daily": my_daily,
         "monthly": my_monthly,
+        "leadScoreEnabled": True,
         # NOTE: ไม่ส่ง sellers[]/teams/leadCarsByMonth/userIdMap/employees ไป
         # → frontend ไม่มีข้อมูลเซลล์อื่นๆ ให้แอบดูใน DevTools
     }
+
+
+# ════════════════════════════════════════════════════════════════
+# Lead Score — คำนวณคะแนนคุณภาพของแต่ละ lead
+# ════════════════════════════════════════════════════════════════
+# อ่านเกณฑ์จาก sheet "เกณฑ์คะแนน lead" (tab ใน employees spreadsheet)
+# Admin แก้คะแนนใน sheet ได้ตลอด — ระบบ pickup ทุก 60s (cache TTL)
+#
+# คะแนนสะท้อน "ลูกค้าคนนี้น่าปิดแค่ไหน" — ไม่เกี่ยวกับเซลล์
+# เซลล์ใช้คะแนนนี้ priority "วันนี้โทรเคสไหนก่อน"
+# ════════════════════════════════════════════════════════════════
+
+# Default config — ใช้ตอน sheet ว่างหรืออ่านไม่ได้
+_LEAD_SCORE_DEFAULTS: dict[str, int] = {
+    "Lead ใหม่ (≤3 วัน)": 20,
+    "Lead ปานกลาง (4-7 วัน)": 10,
+    "Lead เก่า (8-14 วัน)": 0,
+    "Lead เย็น (>14 วัน)": -5,
+    "ประเภท: Normal": 50,
+    "ประเภท: Hot RB": 30,
+    "ประเภท: Hot RJ": 25,
+    "ประเภท: RJ": 15,
+    "รุ่นรถยอดนิยม (top 20)": 20,
+    "ราคารถสูง (≥500,000)": 10,
+    "ราคารถปานกลาง (200-500k)": 5,
+    "เคยจองแล้วยกเลิก": -5,
+    "เคยจอง+ปล่อยสำเร็จ": -10,
+    "มาจาก Facebook Ads": 5,
+    "มาจาก TikTok / ไลฟ์สด": 10,
+    "มาจาก Walk-in / โทรมา": 15,
+    "ลูกค้าตอบไลน์/โทรกลับ": 25,
+    "ลูกค้าทักก่อน (inbox)": 15,
+    "โทรไม่รับเกิน 3 ครั้ง": -10,
+}
+
+
+def load_lead_score_config() -> dict[str, int]:
+    """อ่าน config จาก sheet → dict {name: score} เฉพาะที่ enabled=TRUE.
+    ถ้าอ่านไม่ได้/ว่าง → fallback _LEAD_SCORE_DEFAULTS.
+    """
+    try:
+        from .google_sheets import fetch_sheet
+        rows = fetch_sheet("lead_score_config")
+    except Exception:
+        return dict(_LEAD_SCORE_DEFAULTS)
+
+    cfg: dict[str, int] = {}
+    for r in rows:
+        if len(r) < 4:
+            continue
+        name = (r[0] or "").strip()
+        if not name or name == "ชื่อเกณฑ์":
+            continue
+        enabled = (r[3] or "").strip().upper()
+        if enabled not in ("TRUE", "T", "YES", "1", "ใช่"):
+            continue
+        try:
+            score = int(float((r[2] or "0").strip()))
+        except (ValueError, TypeError):
+            continue
+        cfg[name] = score
+
+    return cfg if cfg else dict(_LEAD_SCORE_DEFAULTS)
+
+
+def _build_lead_history_maps(sales_reports: list) -> tuple[set, set]:
+    """สร้าง set ของ lead_code ที่เคยยกเลิก / เคยปล่อยสำเร็จ.
+    ใช้สำหรับ Lead Score history component.
+    """
+    cancelled = set()
+    done = set()
+    for r in sales_reports:
+        code = cell(r, S.lead_code).strip()
+        if not code:
+            continue
+        status = cell(r, S.status).lower()
+        if any(k in status for k in ("ยกเลิก", "คืน", "รีเจ็ก")):
+            cancelled.add(code)
+        elif "ปล่อย" in status:
+            done.add(code)
+    return cancelled, done
+
+
+def _build_top_cars_set(raw_leads: list, top_n: int = 20) -> set:
+    """หา top N รุ่นรถยอดนิยม (จาก car_formula column M)."""
+    counts: dict[str, int] = {}
+    for r in raw_leads:
+        car = cell(r, L.car_formula).strip()
+        if not car or car == "ไม่ระบุ":
+            continue
+        counts[car] = counts.get(car, 0) + 1
+    return set([c for c, _ in sorted(counts.items(), key=lambda x: -x[1])[:top_n]])
+
+
+def compute_lead_score(lead_row: list,
+                       cfg: dict[str, int],
+                       cancelled_codes: set,
+                       done_codes: set,
+                       top_cars: set,
+                       price_lookup: dict[str, float] | None = None) -> dict:
+    """คำนวณ Lead Score ของ lead 1 ราย.
+
+    Returns:
+        {
+          "score": int,
+          "tier": "🔥hot" | "🌡warm" | "❄cold",
+          "breakdown": [(name, points), ...]
+        }
+    """
+    breakdown: list[tuple[str, int]] = []
+
+    def _apply(name: str):
+        if name in cfg and cfg[name] != 0:
+            breakdown.append((name, cfg[name]))
+
+    # 1) Freshness — จากวันที่รับ
+    received = cell(lead_row, L.received_date)
+    d = parse_date(received)
+    if d:
+        days_old = (bangkok_now().date() - d).days
+        if days_old <= 3:
+            _apply("Lead ใหม่ (≤3 วัน)")
+        elif days_old <= 7:
+            _apply("Lead ปานกลาง (4-7 วัน)")
+        elif days_old <= 14:
+            _apply("Lead เก่า (8-14 วัน)")
+        else:
+            _apply("Lead เย็น (>14 วัน)")
+
+    # 2) Type
+    lead_type = cell(lead_row, L.type).strip()
+    if lead_type == "Hot RB":
+        _apply("ประเภท: Hot RB")
+    elif lead_type == "Hot RJ":
+        _apply("ประเภท: Hot RJ")
+    elif lead_type == "RJ":
+        _apply("ประเภท: RJ")
+    else:
+        _apply("ประเภท: Normal")
+
+    # 3) Car popularity + price
+    car = cell(lead_row, L.car_formula).strip()
+    if car and car in top_cars:
+        _apply("รุ่นรถยอดนิยม (top 20)")
+    if price_lookup and car in price_lookup:
+        p = price_lookup[car]
+        if p >= 500_000:
+            _apply("ราคารถสูง (≥500,000)")
+        elif p >= 200_000:
+            _apply("ราคารถปานกลาง (200-500k)")
+
+    # 4) History — code เคยอยู่ใน sales_reports หรือไม่
+    code = cell(lead_row, L.lead_code).strip()
+    if code:
+        if code in done_codes:
+            _apply("เคยจอง+ปล่อยสำเร็จ")
+        elif code in cancelled_codes:
+            _apply("เคยจองแล้วยกเลิก")
+
+    # 5) Channel
+    channel = cell(lead_row, L.channel).lower()
+    if "facebook" in channel or "fb" in channel:
+        _apply("มาจาก Facebook Ads")
+    elif "tiktok" in channel or "ไลฟ์" in channel or "live" in channel:
+        _apply("มาจาก TikTok / ไลฟ์สด")
+    elif "walk" in channel or "โทร" in channel or "inbox" in channel:
+        _apply("มาจาก Walk-in / โทรมา")
+
+    # 6) Engagement — based on call_proof + admin_status + update_count
+    update_count = int(cell_num(lead_row, L.update_count))
+    admin_st = cell(lead_row, L.admin_status).lower()
+    sales_st = cell(lead_row, L.sales_status).lower()
+    call_proof = cell(lead_row, L.call_proof)
+    combined_st = f"{admin_st} {sales_st}"
+
+    # ลูกค้าตอบ — มี keyword positive
+    if any(k in combined_st for k in ("ตอบกลับ", "นัด", "สนใจ", "รอลูกค้า")) and call_proof == "ส่งแล้ว":
+        _apply("ลูกค้าตอบไลน์/โทรกลับ")
+    elif "inbox" in channel and update_count >= 1:
+        _apply("ลูกค้าทักก่อน (inbox)")
+
+    # โทรไม่รับเกิน 3 ครั้ง
+    if update_count >= 3 and ("ไม่รับ" in combined_st or "ผิดนัด" in combined_st):
+        _apply("โทรไม่รับเกิน 3 ครั้ง")
+
+    # ── สรุป ──
+    total = sum(pts for _, pts in breakdown)
+    if total >= 80:
+        tier = "🔥hot"
+    elif total >= 50:
+        tier = "🌡warm"
+    else:
+        tier = "❄cold"
+
+    return {"score": total, "tier": tier, "breakdown": breakdown}
+
+
+def prepare_lead_score_context(raw_leads: list, sales_reports: list) -> dict:
+    """โหลด config + สร้าง lookup maps สำหรับการคำนวณ Lead Score แบบ batch.
+    เรียก 1 ครั้งต่อ request → ใช้ซ้ำได้กับหลาย rows.
+    """
+    cfg = load_lead_score_config()
+    cancelled, done = _build_lead_history_maps(sales_reports)
+    top_cars = _build_top_cars_set(raw_leads, top_n=20)
+    return {
+        "cfg": cfg,
+        "cancelled": cancelled,
+        "done": done,
+        "top_cars": top_cars,
+    }
+
+
+def attach_lead_scores(follow_cases: list[dict],
+                       my_year_leads: list,
+                       sales_reports: list) -> list[dict]:
+    """เติม field 'leadScore' + 'leadTier' + 'scoreBreakdown' ในแต่ละ follow_case.
+
+    Args:
+        follow_cases: list ของ dict ที่มี field 'code'
+        my_year_leads: raw lead rows ของเซลล์ (ใช้หา row ตาม code)
+        sales_reports: raw sales rows (ใช้สร้าง history maps)
+
+    Returns:
+        follow_cases เดิม + field ใหม่
+    """
+    cfg = load_lead_score_config()
+    cancelled, done = _build_lead_history_maps(sales_reports)
+    top_cars = _build_top_cars_set(my_year_leads, top_n=20)
+
+    # Index leads by code สำหรับ lookup เร็ว
+    leads_by_code: dict[str, list] = {}
+    for r in my_year_leads:
+        code = cell(r, L.lead_code).strip()
+        if code:
+            leads_by_code[code] = r
+
+    for case in follow_cases:
+        code = case.get("code", "").strip()
+        row = leads_by_code.get(code)
+        if not row:
+            case["leadScore"] = 0
+            case["leadTier"] = "❄cold"
+            case["scoreBreakdown"] = []
+            continue
+        result = compute_lead_score(row, cfg, cancelled, done, top_cars)
+        case["leadScore"] = result["score"]
+        case["leadTier"] = result["tier"]
+        case["scoreBreakdown"] = result["breakdown"]
+
+    return follow_cases

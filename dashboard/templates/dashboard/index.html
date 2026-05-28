@@ -198,6 +198,7 @@
     let bkSel = 'all';
     let bkStatus = 'all';
     let dilSort = 'score';  // 'score' | 'cnt' | 'avg' | 'high' | 'tot' — sort การ์ดติดตามมาก (default = Diligence Score)
+    let leadPerDay = null;  // lead ต่อวัน (null = auto คำนวณจากสถิติ · เลข = ผู้ใช้ตั้งเอง)
     let searchQ = '';
     // Lead-by-car + Released-cars state (admin/exec only)
     let leadCarHideUnknown = true;
@@ -354,8 +355,48 @@
         high:0, score:0, jongs:0, dones:0,
         scoreCall:0, scoreCallNormal:0, scoreCallRJ:0,
         scoreJong:0, scoreDone:0,
+        // Distribution ตามจำนวนครั้งที่โทร — สำหรับ breakdown ใน modal
+        // callBuckets[updateCount] = {nNormal, nRJ, score}
+        callBuckets: {},
+        // Velocity Phase 1: รับหลีด → จอง (avg days)
+        // เก็บเฉพาะเคสที่มี leadDate + date ทั้งคู่
+        velP1Sum:0, velP1Count:0,
+        // Velocity Phase 2: จอง → ปล่อย (avg days, status=ปล่อย เท่านั้น)
+        velP2Sum:0, velP2Count:0,
       };
       return m[name];
+    }
+
+    // ── Helpers สำหรับ Velocity ──
+    // parse "d/m/yy" → Date object (รองรับ พ.ศ. → ค.ศ.)
+    function _parseDmy(ds) {
+      if (!ds || ds === '-') return null;
+      // Excel serial
+      if (/^\d{4,5}$/.test(ds)) {
+        const serial = parseInt(ds, 10);
+        if (serial > 1000 && serial < 100000) {
+          // Excel epoch = 1899-12-30
+          return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+        }
+      }
+      const p = ds.split('/');
+      if (p.length < 3) return null;
+      let d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
+      if (isNaN(d) || isNaN(mo) || isNaN(y)) return null;
+      if (y < 100) y += 2000;       // 25 → 2025
+      if (y > 2500) y -= 543;       // 2569 → 2026
+      return new Date(y, mo - 1, d);
+    }
+    // คืนจำนวนวันระหว่าง 2 dates (a → b) ; null ถ้า parse ไม่ได้
+    function _daysBetween(a, b) {
+      const da = _parseDmy(a), db = _parseDmy(b);
+      if (!da || !db) return null;
+      return Math.round((db - da) / 86400000);
+    }
+    // ดึง datestr ออกจาก lastUpdate field (อาจมีเวลาตามหลัง)
+    function _dateOnly(s) {
+      if (!s || s === '-') return s;
+      return String(s).split(' ')[0];
     }
 
     function buildDilMap() {
@@ -376,6 +417,12 @@
         else      e.scoreCallNormal += sc;
         e.scoreCall += sc;
         e.score += sc;
+        // เก็บ distribution ตามจำนวนครั้งที่โทร (สำหรับ breakdown ใน modal)
+        const uc = l.updateCount || 0;
+        if (!e.callBuckets[uc]) e.callBuckets[uc] = {nNormal:0, nRJ:0, score:0};
+        const bk = e.callBuckets[uc];
+        if (isRJ) bk.nRJ++; else bk.nNormal++;
+        bk.score += sc;
       });
       // ส่วนที่ 2: คะแนนจากการจอง + ปล่อย
       // ใช้ ms.sellers[name].booking + .done จาก backend monthlySummary
@@ -396,7 +443,273 @@
           e.score += e.scoreJong + e.scoreDone;
         }
       });
+      // ส่วนที่ 3: Pipeline Velocity — แยก 2 phase
+      //   Phase 1: รับหลีด (leadDate) → จอง (date)
+      //   Phase 2: จอง (date) → ปล่อย (releaseDate, status=ปล่อย เท่านั้น)
+      //   ตัด walk-in (จองหน้าร้าน) — ไม่มี lead flow จริง → inflate velocity
+      (FD.bookingCases || []).forEach(b => {
+        if (_isWalkIn(b.channel)) return;  // ข้าม walk-in
+        // Phase 1: leadDate → date (วันจอง)
+        if (b.leadDate && b.date && b.leadDate !== '-' && b.date !== '-') {
+          if (ir(b.date)) {
+            const d1 = _daysBetween(b.leadDate, b.date);
+            if (d1 !== null && d1 >= 0 && d1 <= 365) {
+              const e1 = _ensureDilEntry(m, b.seller);
+              e1.velP1Sum += d1;
+              e1.velP1Count++;
+            }
+          }
+        }
+        // Phase 2: date (จอง) → releaseDate (ปล่อย) — เฉพาะ status=ปล่อย
+        if (b.status === 'ปล่อย') {
+          const startDate = b.date;
+          const endDate = b.releaseDate && b.releaseDate !== '-' ? b.releaseDate : null;
+          if (startDate && endDate && ir(endDate)) {
+            const d2 = _daysBetween(startDate, endDate);
+            if (d2 !== null && d2 >= 0 && d2 <= 365) {
+              const e2 = _ensureDilEntry(m, b.seller);
+              e2.velP2Sum += d2;
+              e2.velP2Count++;
+            }
+          }
+        }
+      });
       return m;
+    }
+
+    // ── Walk-in detector: จองหน้าร้าน / walk-in / WI ──
+    function _isWalkIn(channel) {
+      if (!channel) return false;
+      const c = String(channel).toLowerCase();
+      return c.includes('หน้าร้าน') || c.includes('walk') || c === 'wi';
+    }
+
+    // ── หาเคสที่ contribute ใน velocity (สำหรับ modal) ──
+    function _getVelocityCases(sellerName, phase) {
+      const out = [];
+      (FD.bookingCases || []).forEach(b => {
+        if (b.seller !== sellerName) return;
+        if (_isWalkIn(b.channel)) return;
+        if (phase === 1) {
+          if (!b.leadDate || !b.date || b.leadDate === '-' || b.date === '-') return;
+          if (!ir(b.date)) return;
+          const days = _daysBetween(b.leadDate, b.date);
+          if (days === null || days < 0 || days > 365) return;
+          out.push({ ...b, _days: days, _start: b.leadDate, _end: b.date, _phase: 1 });
+        } else {
+          if (b.status !== 'ปล่อย') return;
+          const endDate = b.releaseDate && b.releaseDate !== '-' ? b.releaseDate : null;
+          if (!b.date || !endDate) return;
+          if (!ir(endDate)) return;
+          const days = _daysBetween(b.date, endDate);
+          if (days === null || days < 0 || days > 365) return;
+          out.push({ ...b, _days: days, _start: b.date, _end: endDate, _phase: 2 });
+        }
+      });
+      out.sort((a, b) => b._days - a._days);   // ช้าสุดก่อน
+      return out;
+    }
+
+    // ── Generic case-list modal ──
+    function _showCaseListModal({title, subtitle, headers, rows, footer}) {
+      const old = document.getElementById('case-list-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'case-list-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      const headerHtml = headers.map(h2 => `<th style="padding:8px 9px;text-align:${h2.align||'left'};font-weight:600;font-size:10.5px">${h(h2.label)}</th>`).join('');
+      const rowsHtml = rows.length === 0
+        ? `<tr><td colspan="${headers.length}" style="padding:18px;text-align:center;color:var(--t3);font-size:12px">ไม่มีเคสในช่วงที่เลือก</td></tr>`
+        : rows.join('');
+      overlay.innerHTML = `
+        <div style="background:var(--bg);border-radius:14px;max-width:720px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;background:var(--blue-bg)">
+            <div>
+              <div style="font-size:11px;color:var(--blue);font-weight:600">${h(subtitle||'')}</div>
+              <div style="font-size:15px;font-weight:700;color:var(--t1);margin-top:2px">${title}</div>
+            </div>
+            <button onclick="document.getElementById('case-list-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
+          </div>
+          <div style="overflow-y:auto;flex:1">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr style="background:var(--bg2);color:var(--t3);position:sticky;top:0">${headerHtml}</tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+          ${footer ? `<div style="padding:10px 16px;border-top:.5px solid var(--bd);background:var(--bg2);font-size:10.5px;color:var(--t3);line-height:1.5">${footer}</div>` : ''}
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // ── Modal: เคส "ยังไม่อัพเดท" ของเซลล์คนหนึ่ง ──
+    function showNotCalledCases(sellerName) {
+      const all = (D.notCalledCases || []).filter(c => c.seller === sellerName && ir(c.dateIn));
+      all.sort((a, b) => {
+        // เก่าสุดก่อน → เร่งโทรก่อน
+        const da = _parseDmy(a.dateIn), db = _parseDmy(b.dateIn);
+        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      });
+      const rows = all.map(c => {
+        const isRJ = RJ_TYPES_SET.has(c.leadType);
+        const typeColor = isRJ ? 'var(--red)' : 'var(--t2)';
+        return `
+          <tr style="border-top:.5px solid var(--bd)">
+            <td style="padding:7px 9px;font-size:11px">
+              <div style="font-weight:600;color:var(--t1)">${h(c.car||'-')}</div>
+              <div style="font-size:10px;color:var(--t3)">${h(c.code||'-')} · ${h(c.phone||'-')}</div>
+            </td>
+            <td style="padding:7px 9px;font-size:11px;color:${typeColor}">${h(c.leadType||'-')}</td>
+            <td style="padding:7px 9px;font-size:11px;color:var(--t2)">${h(c.channel||'-')}</td>
+            <td style="padding:7px 9px;font-size:11px;text-align:right;color:var(--t2)">${h(c.dateIn||'-')}</td>
+          </tr>
+        `;
+      });
+      _showCaseListModal({
+        title: `🔴 ยังไม่อัพเดท · ${h(sellerName)}`,
+        subtitle: `${all.length} เคส — เรียงจากเคสที่รับมานานสุดก่อน`,
+        headers: [
+          {label: 'ลูกค้า / รถ'},
+          {label: 'ประเภท'},
+          {label: 'ช่อง'},
+          {label: 'วันที่รับ', align: 'right'},
+        ],
+        rows,
+        footer: `<b>updateCount = 0</b> · ไม่นับ junk (จบ/คืน/ยกเลิก/จ่ายใหม่)`,
+      });
+    }
+
+    // ── Modal: เคส "ปล่อย" ของเซลล์ (Top มูลค่าดีล) ──
+    function showSellerReleases(sellerName) {
+      const all = (FD.bookingCases || []).filter(b => {
+        if (b.seller !== sellerName) return;
+        if (b.status !== 'ปล่อย') return;
+        const rd = b.releaseDate && b.releaseDate !== '-' ? b.releaseDate : b.date;
+        return ir(rd);
+      });
+      all.sort((a, b) => (b.price||0) - (a.price||0));
+      const totalValue = all.reduce((sum, c) => sum + (Number(c.price)||0), 0);
+      const rows = all.map(c => `
+        <tr style="border-top:.5px solid var(--bd)">
+          <td style="padding:7px 9px;font-size:11px">
+            <div style="font-weight:600;color:var(--t1)">${h(c.customer||c.car||'-')}</div>
+            <div style="font-size:10px;color:var(--t3)">${h(c.car||'')} · ${h(c.plate||'')}</div>
+          </td>
+          <td style="padding:7px 9px;font-size:11px;text-align:right;color:var(--t2)">${h(c.date||'-')}</td>
+          <td style="padding:7px 9px;font-size:11px;text-align:right;color:var(--green-mid)">${h(c.releaseDate||'-')}</td>
+          <td style="padding:7px 9px;font-size:12px;font-weight:700;text-align:right;color:var(--green-mid)">${fmtBaht(c.price||0)}</td>
+        </tr>
+      `);
+      _showCaseListModal({
+        title: `💰 Top มูลค่าดีล · ${h(sellerName)}`,
+        subtitle: `${all.length} คัน · รวม ${fmtBaht(totalValue)}`,
+        headers: [
+          {label: 'ลูกค้า / รถ'},
+          {label: 'วันจอง', align: 'right'},
+          {label: 'วันปล่อย', align: 'right'},
+          {label: 'ราคา', align: 'right'},
+        ],
+        rows,
+        footer: `เรียงจาก ราคา มาก → น้อย · เฉพาะ status = ปล่อย`,
+      });
+    }
+
+    // ── Modal: เคส "จอง" ของเซลล์ (Top จอง) ──
+    function showSellerJongs(sellerName) {
+      const all = (D.jongCases || []).filter(c => c.seller === sellerName && ir(c.date));
+      all.sort((a, b) => {
+        const da = _parseDmy(a.date), db = _parseDmy(b.date);
+        return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);  // ใหม่สุดก่อน
+      });
+      const totalAmount = all.reduce((sum, c) => sum + (Number(c.amount)||0), 0);
+      const rows = all.map(c => `
+        <tr style="border-top:.5px solid var(--bd)">
+          <td style="padding:7px 9px;font-size:11px">
+            <div style="font-weight:600;color:var(--t1)">${h(c.customer||c.car||'-')}</div>
+            <div style="font-size:10px;color:var(--t3)">${h(c.car||'')} · ${h(c.plate||'')}</div>
+          </td>
+          <td style="padding:7px 9px;font-size:11px;color:var(--t2)">${h(c.channel||'-')}</td>
+          <td style="padding:7px 9px;font-size:11px;text-align:right;color:var(--t2)">${h(c.date||'-')}</td>
+          <td style="padding:7px 9px;font-size:11px;text-align:right;color:${c.amount>0?'var(--amber)':'var(--t3)'}">${c.amount>0?fmtBaht(c.amount):'-'}</td>
+        </tr>
+      `);
+      _showCaseListModal({
+        title: `🏆 Top จอง · ${h(sellerName)}`,
+        subtitle: `${all.length} เคสจอง · รวมมัดจำ ${fmtBaht(totalAmount)}`,
+        headers: [
+          {label: 'ลูกค้า / รถ'},
+          {label: 'ช่อง'},
+          {label: 'วันจอง', align: 'right'},
+          {label: 'มัดจำ', align: 'right'},
+        ],
+        rows,
+        footer: `จาก bookings sheet · เรียงจากใหม่สุดก่อน`,
+      });
+    }
+
+    // ── Modal: รายชื่อเคสที่ contribute ใน velocity ──
+    function showVelocityCases(sellerName, phase) {
+      const old = document.getElementById('velocity-cases-overlay');
+      if (old) old.remove();
+      const cases = _getVelocityCases(sellerName, phase);
+      const phaseLabel = phase === 1 ? 'รับหลีด → จอง' : 'จอง → ปล่อย';
+      const startLabel = phase === 1 ? 'วันรับเคส' : 'วันจอง';
+      const endLabel   = phase === 1 ? 'วันจอง'    : 'วันปล่อย';
+      const avg = cases.length > 0 ? (cases.reduce((a,c)=>a+c._days,0) / cases.length).toFixed(1) : 0;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'velocity-cases-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+      const rowsHtml = cases.length === 0
+        ? `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--t3);font-size:12px">ไม่มีเคสในช่วงที่เลือก (อาจตัด walk-in ออกแล้ว)</td></tr>`
+        : cases.map(c => {
+          const dayClr = c._days <= (phase===1?7:14) ? 'var(--green)' : c._days <= (phase===1?21:30) ? 'var(--amber)' : 'var(--red)';
+          return `
+            <tr style="border-top:.5px solid var(--bd)">
+              <td style="padding:7px 9px;font-size:11px">
+                <div style="font-weight:600;color:var(--t1)">${h(c.customer || c.car || '-')}</div>
+                <div style="font-size:10px;color:var(--t3)">${h(c.car || '')} ${c.leadCode ? '· '+h(c.leadCode) : ''}</div>
+              </td>
+              <td style="padding:7px 9px;font-size:11px;text-align:right">${h(c._start)}</td>
+              <td style="padding:7px 9px;font-size:11px;text-align:right">${h(c._end)}</td>
+              <td style="padding:7px 9px;font-size:13px;font-weight:700;text-align:right;color:${dayClr}">${c._days}d</td>
+              <td style="padding:7px 9px;font-size:10px;color:var(--t3);text-align:right">${h(c.status || '-')}</td>
+            </tr>
+          `;
+        }).join('');
+
+      overlay.innerHTML = `
+        <div style="background:var(--bg);border-radius:14px;max-width:680px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;background:var(--blue-bg)">
+            <div>
+              <div style="font-size:11px;color:var(--blue);font-weight:600">${h(phaseLabel)} · ${h(sellerName)}</div>
+              <div style="font-size:14px;font-weight:700;color:var(--t1);margin-top:2px">${cases.length} เคส · เฉลี่ย <b style="color:var(--blue)">${avg} วัน</b></div>
+            </div>
+            <button onclick="document.getElementById('velocity-cases-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
+          </div>
+          <div style="overflow-y:auto;flex:1">
+            <table style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr style="background:var(--bg2);color:var(--t3);position:sticky;top:0">
+                  <th style="padding:8px 9px;text-align:left;font-weight:600;font-size:10.5px">ลูกค้า / รถ</th>
+                  <th style="padding:8px 9px;text-align:right;font-weight:600;font-size:10.5px">${h(startLabel)}</th>
+                  <th style="padding:8px 9px;text-align:right;font-weight:600;font-size:10.5px">${h(endLabel)}</th>
+                  <th style="padding:8px 9px;text-align:right;font-weight:600;font-size:10.5px">วัน</th>
+                  <th style="padding:8px 9px;text-align:right;font-weight:600;font-size:10.5px">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+          <div style="padding:10px 16px;border-top:.5px solid var(--bd);background:var(--bg2);font-size:10.5px;color:var(--t3);line-height:1.5">
+            ตัด <b>จองหน้าร้าน (walk-in)</b> ออกแล้ว — ไม่มี lead flow จริง · เรียงจากเคสที่ใช้เวลานานสุดก่อน
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
     }
 
     // ── Modal: แสดงวิธีคำนวณ Score ของเซลล์คนเดียว ──
@@ -414,11 +727,31 @@
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px';
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
+      // Velocity 2 phases
+      const v1Avg = d.velP1Count > 0 ? Math.round((d.velP1Sum/d.velP1Count)*10)/10 : null;
+      const v2Avg = d.velP2Count > 0 ? Math.round((d.velP2Sum/d.velP2Count)*10)/10 : null;
+
+      // ── Breakdown ตามจำนวนครั้งที่โทร — สร้างแถวเรียงจากน้อยไปมาก ──
+      const _bk = d.callBuckets || {};
+      const _bkKeys = Object.keys(_bk).map(Number).sort((a,b)=>a-b);
+      const _callRows = _bkKeys.map(uc => {
+        const b = _bk[uc];
+        const n = b.nNormal + b.nRJ;
+        const rjPart = b.nRJ > 0 ? ` <span style="color:var(--red);font-size:9.5px">(RJ ${b.nRJ})</span>` : '';
+        const sumUpd = uc * n;  // รวมอัพเดทของกลุ่มนี้ = จำนวนครั้ง × จำนวนเคส
+        const label = uc === 0 ? 'ยังไม่โทร' : `โทร ${uc} ครั้ง`;
+        return `<tr>
+          <td style="padding:6px 9px;border-bottom:.5px solid var(--bd)">${label}</td>
+          <td style="padding:6px 9px;border-bottom:.5px solid var(--bd);text-align:right">${n}${rjPart}</td>
+          <td style="padding:6px 9px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--blue);font-weight:700">${sumUpd}</td>
+        </tr>`;
+      }).join('');
+
       overlay.innerHTML = `
         <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
           <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;background:var(--blue-bg)">
             <div>
-              <div style="font-size:11px;color:var(--blue);font-weight:600">วิธีคำนวณ Diligence Score · ${h(periodLabel)}</div>
+              <div style="font-size:11px;color:var(--blue);font-weight:600">Sales Performance · ${h(periodLabel)}</div>
               <div style="font-size:18px;font-weight:800;color:var(--t1);margin-top:2px">${h(name)} <span style="color:var(--blue)">— ${fmtNum(d.score)} คะแนน</span></div>
             </div>
             <button onclick="document.getElementById('seller-score-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
@@ -426,68 +759,64 @@
 
           <div style="padding:14px 18px;overflow-y:auto;flex:1">
 
-            <!-- 1. คะแนนการโทร -->
+            <!-- 2 มิติของคะแนน (Activity + Sales) -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+              <div style="padding:12px 10px;background:var(--blue-bg);border-radius:8px;text-align:center">
+                <div style="font-size:11px;color:var(--blue);font-weight:600">📞 Activity (เฉลี่ย/เคส)</div>
+                <div style="font-size:22px;font-weight:800;color:var(--blue);margin-top:2px">${d.cnt > 0 ? Math.round((d.tot/d.cnt)*10)/10 : 0}</div>
+                <div style="font-size:10px;color:var(--t3)">รวมอัพเดท ${fmtNum(d.tot)} ÷ ${d.cnt} เคส</div>
+              </div>
+              <div style="padding:12px 10px;background:var(--green-bg,#e6f9ed);border-radius:8px;text-align:center">
+                <div style="font-size:11px;color:var(--green);font-weight:600">💰 Sales</div>
+                <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:2px">${fmtNum(d.scoreJong + d.scoreDone)}</div>
+                <div style="font-size:10px;color:var(--t3)">จอง ${d.jongs} (+${fmtNum(d.scoreJong)}) · ปล่อย ${d.dones} (+${fmtNum(d.scoreDone)})</div>
+              </div>
+            </div>
+
+            <!-- Pipeline Velocity 2 Phases -->
+            <div style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="padding:10px 12px;background:var(--bg2);border-radius:8px">
+                <div style="font-size:11px;color:var(--t3);font-weight:600">รับ → จอง</div>
+                <div style="font-size:18px;font-weight:700;color:${v1Avg===null?'var(--t3)':v1Avg<=7?'var(--green)':v1Avg<=21?'var(--amber)':'var(--red)'};margin-top:2px">${v1Avg===null?'-':v1Avg+' วัน'}</div>
+                <div style="font-size:10px;color:var(--t3)">${d.velP1Count > 0 ? `เฉลี่ย ${d.velP1Count} เคส` : 'ไม่มีข้อมูล'}</div>
+              </div>
+              <div style="padding:10px 12px;background:var(--bg2);border-radius:8px">
+                <div style="font-size:11px;color:var(--t3);font-weight:600">จอง → ปล่อย</div>
+                <div style="font-size:18px;font-weight:700;color:${v2Avg===null?'var(--t3)':v2Avg<=14?'var(--green)':v2Avg<=30?'var(--amber)':'var(--red)'};margin-top:2px">${v2Avg===null?'-':v2Avg+' วัน'}</div>
+                <div style="font-size:10px;color:var(--t3)">${d.velP2Count > 0 ? `เฉลี่ย ${d.velP2Count} เคส` : 'ไม่มีข้อมูล'}</div>
+              </div>
+            </div>
+
+            <!-- 1. รายละเอียด Activity — แยกตามจำนวนครั้งที่โทร -->
             <div style="margin-bottom:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:6px">การติดตาม (โทรอัพเดท)</div>
+              <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">📞 รายละเอียด Activity</div>
+              <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px">รับผิดชอบ <b style="color:var(--t1)">${d.cnt}</b> เคสติดตาม · อัพเดทรวม <b style="color:var(--t1)">${d.tot}</b> ครั้ง — แยกตามว่าโทรกี่ครั้ง</div>
               <table style="width:100%;border-collapse:collapse;font-size:11px">
                 <thead>
                   <tr style="background:var(--bg2);color:var(--t3)">
-                    <th style="padding:7px 9px;text-align:left;font-weight:600">ประเภท</th>
-                    <th style="padding:7px 9px;text-align:right;font-weight:600">เคส</th>
-                    <th style="padding:7px 9px;text-align:right;font-weight:600">รวมโทร</th>
-                    <th style="padding:7px 9px;text-align:right;font-weight:600">คะแนน</th>
+                    <th style="padding:6px 9px;text-align:left;font-weight:600">โทรกี่ครั้ง</th>
+                    <th style="padding:6px 9px;text-align:right;font-weight:600">กี่เคส</th>
+                    <th style="padding:6px 9px;text-align:right;font-weight:600">รวมอัพเดท</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd)">ปกติ</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right">${d.cntNormal}</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right">${d.totNormal}</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--blue);font-weight:700">+${d.scoreCallNormal}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);color:var(--red)">RJ (× 0.5)</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red)">${d.cntRJ}</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red)">${d.totRJ}</td>
-                    <td style="padding:7px 9px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red);font-weight:700">+${d.scoreCallRJ}</td>
-                  </tr>
+                  ${_callRows || `<tr><td colspan="3" style="padding:10px;text-align:center;color:var(--t3)">ไม่มีเคสติดตาม</td></tr>`}
                   <tr style="background:var(--bg2)">
-                    <td style="padding:7px 9px;font-weight:600">รวม</td>
-                    <td style="padding:7px 9px;text-align:right;font-weight:600">${d.cnt}</td>
-                    <td style="padding:7px 9px;text-align:right;font-weight:600">${d.tot}</td>
-                    <td style="padding:7px 9px;text-align:right;color:var(--blue);font-weight:700">+${d.scoreCall}</td>
+                    <td style="padding:7px 9px;font-weight:700">รวม</td>
+                    <td style="padding:7px 9px;text-align:right;font-weight:700">${d.cnt} เคส</td>
+                    <td style="padding:7px 9px;text-align:right;color:var(--blue);font-weight:800">${d.tot}</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-
-            <!-- 2. จอง -->
-            <div style="margin-bottom:14px;padding:11px 13px;background:var(--amber-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--amber)">จอง (Pipeline)</div>
-                <div style="font-size:10.5px;color:var(--t3);margin-top:1px">เคสที่จอง/รอเซ็น/รอผล/รอปล่อย</div>
-              </div>
-              <div style="text-align:right">
-                <div style="font-size:11px;color:var(--t2)">${d.jongs} เคส × 50</div>
-                <div style="font-size:16px;font-weight:700;color:var(--amber)">+${d.scoreJong}</div>
-              </div>
-            </div>
-
-            <!-- 3. ปล่อย -->
-            <div style="margin-bottom:14px;padding:11px 13px;background:var(--green-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--green)">ปล่อยรถ</div>
-                <div style="font-size:10.5px;color:var(--t3);margin-top:1px">เคสที่ปิดดีลเสร็จเรียบร้อย</div>
-              </div>
-              <div style="text-align:right">
-                <div style="font-size:11px;color:var(--t2)">${d.dones} เคส × 100</div>
-                <div style="font-size:16px;font-weight:700;color:var(--green)">+${d.scoreDone}</div>
-              </div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5;text-align:center">เฉลี่ย <b style="color:var(--blue)">${d.cnt>0?Math.round((d.tot/d.cnt)*10)/10:0}</b> ครั้ง/เคส (รวมอัพเดท ${d.tot} ÷ ${d.cnt} เคส)</div>
             </div>
 
             <!-- รวมทั้งหมด -->
             <div style="padding:12px 14px;background:var(--blue);color:#fff;border-radius:10px;display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:13px;font-weight:700">รวม Diligence Score</div>
+              <div>
+                <div style="font-size:13px;font-weight:700">Total Sales Performance</div>
+                <div style="font-size:10px;opacity:.85;margin-top:1px">Activity + Pipeline + Outcome</div>
+              </div>
               <div style="font-size:22px;font-weight:800">${fmtNum(d.score)}</div>
             </div>
 
@@ -511,40 +840,54 @@
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px';
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
       overlay.innerHTML = `
-        <div style="background:var(--bg);border-radius:14px;max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
+        <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
           <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-            <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">Diligence Score — สูตรคำนวณ</h3>
+            <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">วิธีอ่านคะแนนเซลล์</h3>
             <button onclick="document.getElementById('score-help-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
           </div>
           <div style="padding:14px 18px;overflow-y:auto;flex:1">
-            <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
+
+            <!-- หัวข้อ -->
+            <div style="padding:11px 13px;background:var(--blue-bg);border-radius:8px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--t1)">
+              คะแนนเต็ม <b>100</b> จาก 6 ด้าน · แต่ละด้านคิดแบบ <b>เทียบกับคนเก่งสุดในทีม</b> (Max Normalization)<br>
+              <span style="font-size:10.5px;color:var(--t3)">เช่น จบ: คนจบมากสุดได้เต็ม 35 · คนอื่นได้ตามสัดส่วน</span>
+            </div>
+
+            <!-- ตาราง 6 ด้าน -->
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px">
               <thead>
-                <tr style="background:var(--bg2);color:var(--t2)">
-                  <th style="padding:9px 11px;text-align:left;font-weight:600;font-size:11px">เหตุการณ์</th>
-                  <th style="padding:9px 11px;text-align:right;font-weight:600;font-size:11px">คะแนน (ปกติ)</th>
-                  <th style="padding:9px 11px;text-align:right;font-weight:600;font-size:11px;color:var(--red)">RJ (×0.5)</th>
-                  <th style="padding:9px 11px;text-align:left;font-weight:600;font-size:11px">เพื่อ</th>
+                <tr style="background:var(--bg2);color:var(--t3)">
+                  <th style="padding:6px 8px;text-align:left;font-weight:600">ด้าน</th>
+                  <th style="padding:6px 8px;text-align:center;font-weight:600">เต็ม</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600">วิธีคิด</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td style="padding:8px 11px;border-bottom:.5px solid var(--bd)">โทรครั้งที่ 1</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--blue);font-weight:700">+10</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red)">+5</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);color:var(--t3);font-size:11px">Coverage</td></tr>
-                <tr><td style="padding:8px 11px;border-bottom:.5px solid var(--bd)">โทรครั้งที่ 2</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--blue);font-weight:700">+15</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red)">+8</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);color:var(--t3);font-size:11px">Persistence (สำคัญสุดต่อ closing)</td></tr>
-                <tr><td style="padding:8px 11px;border-bottom:.5px solid var(--bd)">โทรครั้งที่ 3+</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--blue);font-weight:700">+5 / ครั้ง</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--red)">+3</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);color:var(--t3);font-size:11px">Consistency</td></tr>
-                <tr><td style="padding:8px 11px;border-bottom:.5px solid var(--bd)">จอง / รอเซ็น / รอผล / รอปล่อย</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);text-align:right;color:var(--amber);font-weight:700" colspan="2">+50 / เคส</td><td style="padding:8px 11px;border-bottom:.5px solid var(--bd);color:var(--t3);font-size:11px">เริ่มดีลแล้ว (ไม่หัก RJ)</td></tr>
-                <tr><td style="padding:8px 11px">ปล่อยรถ</td><td style="padding:8px 11px;text-align:right;color:var(--green);font-weight:700" colspan="2">+100 / เคส</td><td style="padding:8px 11px;color:var(--t3);font-size:11px">ปิดดีล! เป้าหมายสูงสุด</td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green-mid);font-weight:700">จบ</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">35</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จบเรา ÷ จบมากสุด × 35 <span style="color:var(--t3)">(รายได้จริง)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green);font-weight:700">จอง</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จองเรา ÷ จองมากสุด × 20</td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--purple);font-weight:700">ปริม</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">12</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เคสเรา ÷ เคสมากสุด × 12 <span style="color:var(--t3)">(โหลดงาน)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">ขยัน</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">12</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เฉลี่ยอัพเดท/เคส ÷ มากสุด × 12 <span style="color:var(--t3)">(ใช้เฉลี่ย ไม่ใช่ผลรวม)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--amber);font-weight:700">คุณภ</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">15</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(1 − คืน%เรา ÷ คืน%มากสุด) × 15 <span style="color:var(--red)">กลับด้าน!</span></td></tr>
+                <tr><td style="padding:6px 8px;color:var(--t2);font-weight:700">หลักฐ</td><td style="padding:6px 8px;text-align:center;font-weight:700">6</td><td style="padding:6px 8px;color:var(--t2)">% ส่งหลักฐานโทร ÷ 100 × 6 <span style="color:var(--t3)">(compliance)</span></td></tr>
               </tbody>
             </table>
-            <div style="padding:10px 12px;background:var(--red-bg,#fee);border:.5px solid var(--red-mid,#fca);border-radius:8px;font-size:11px;line-height:1.6;color:var(--t1);margin-bottom:10px">
-              <b style="color:var(--red)">RJ = เคสไม่ค่อยดี</b> (Hot RJ / Hot RB / RJ) — คุณภาพ lead ต่ำ ปิดยาก<br>
-              → ได้คะแนน <b>ครึ่งหนึ่ง</b> ของเคสปกติ เพื่อให้แฟร์กับคนที่รับเคสปกติ
+
+            <!-- คุณภ กลับด้าน -->
+            <div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.6;margin-bottom:10px">
+              <b style="color:var(--amber)">⚠️ คุณภ (คืนเคส) กลับด้าน:</b> คืนเคส = ยิ่งน้อยยิ่งดี<br>
+              <span style="color:var(--t3)">คนคืนน้อยสุด = ได้ 15 เต็ม · คนคืนมากสุด = ได้ 0 · ใช้สูตร (1 − สัดส่วน) เพื่อให้คนคืนน้อยได้คะแนนสูง</span>
             </div>
-            <div style="padding:11px 13px;background:var(--blue-bg);border-radius:8px;font-size:11px;line-height:1.6;color:var(--t1)">
-              <b style="color:var(--blue)">ตัวอย่าง 1</b> — เคสปกติ โทร 4 ครั้ง + จอง + ปล่อย<br>
-              = 10 + 15 + 5 + 5 + 50 + 100 = <b>185 คะแนน</b><br><br>
-              <b style="color:var(--blue)">ตัวอย่าง 2</b> — เคส RJ โทร 4 ครั้ง + จอง + ปล่อย<br>
-              = 5 + 8 + 3 + 3 + 50 + 100 = <b>169 คะแนน</b><br><br>
-              <b style="color:var(--blue)">หลักการ</b>: แฟร์ทั้งคนรับเคสน้อยปิดได้ + คนรับเยอะติดตามครบ + คนรับเคสคุณภาพดี
+
+            <!-- ตัวอย่าง บอย -->
+            <div style="padding:11px 13px;background:var(--blue-bg);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.7">
+              <b style="color:var(--blue)">ตัวอย่าง บอย (จบสูงสุด 5 คัน):</b><br>
+              <span style="font-family:monospace;font-size:10.5px;color:var(--t2)">จบ 35.0 + จอง 20.0 + ขยัน 6.4<br>+ หลักฐ 5.8 + ปริม 12.0 + คุณภ 8.3<br>= <b style="color:var(--blue)">87.5 คะแนน</b></span>
             </div>
+
+            <div style="margin-top:10px;font-size:10px;color:var(--t3);line-height:1.5">
+              <b>ทำไม "จบ" น้ำหนักสูงสุด (35):</b> เพราะจบ = รายได้จริง · จอง (20) อาจล่ม · ขยัน/ปริม (12) วัดความพยายาม · คุณภ (15) วัดคุณภาพ lead · หลักฐ (6) แค่ compliance พื้นฐาน
+            </div>
+
           </div>
         </div>
       `;
@@ -631,11 +974,12 @@
       html += `<div style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px">`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
-        'a': 'ตารางไลฟ์สด + คลิป TikTok ของแต่ละเซลล์',
         'b': 'เคสจอง/ปล่อย ทุกสถานะ พร้อมราคา + อายุเคส',
         's': 'เลือกเซลล์คนใดคนหนึ่ง → ดู dashboard ส่วนตัว',
       };
-      [{id:'o',l:'ภาพรวม'},{id:'a',l:'กิจกรรม'},{id:'b',l:'จอง'},{id:'s',l:'เซลล์'}].forEach(t => {
+      // ตัด tab 'a' (กิจกรรม/ไลฟ์สด) ออก
+      if (tab === 'a') tab = 'o';
+      [{id:'o',l:'ภาพรวม'},{id:'b',l:'จอง'},{id:'s',l:'เซลล์'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${t.l}</button>`;
       });
       html += `</div>`;
@@ -888,13 +1232,13 @@
       const m_rj      = momActive ? getMoM(dfMonth, 'leadRJ')         : null;
       // KPI tooltips — อธิบายว่าแต่ละตัวคืออะไร นับยังไง
       const TIP = {
-        lead:    "Lead ที่รับเข้ามาทั้งหมดในช่วงนี้ (รวม Normal + RJ)\\nนับจาก leads sheet · กรองตามวันที่รับเคส",
-        follow:  "เคสที่ admin_status = ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย\\nไม่นับเคสปิดแล้ว (junk: คืน/ยกเลิก/จ่ายใหม่)\\n% = ติดตาม ÷ Lead",
-        book:    "เคสที่ admin/sales_status มีคำว่า 'จอง' (ไม่นับ junk)\\nนับจาก leads sheet\\nConv = จอง ÷ Lead × 100",
-        done:    "เคสที่ปล่อยรถสำเร็จ (status = ปล่อย ใน sales_reports)\\nนับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง\\n% = ปิดได้ ÷ เป้ารวมทุกเซลล์",
-        deal:    "รวมเงินจาก sale_price ของเคสที่ปล่อยรถ (sales_reports)\\nเฉลี่ย = รวม ÷ จำนวนคันปล่อย",
-        target:  "เป้าหมายรวมของทุกเซลล์ในเดือนนี้\\nกำหนดใน sheet 'ตั้งค่าเซลล์' column เป้า",
-        rj:      "RJ Leads (Hot RJ / Hot RB / RJ) — เคสคุณภาพต่ำ\\nลูกค้าไม่ค่อยจริงจัง ปิดยาก\\nเดือนไหน RJ พุ่ง = อาจมีปัญหา channel/source",
+        lead:    "Lead ที่รับเข้ามาทั้งหมดในช่วงนี้ (รวม Normal + RJ)\nนับจาก leads sheet · กรองตามวันที่รับเคส",
+        follow:  "เคสที่ admin_status = ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย\nไม่นับเคสปิดแล้ว (junk: คืน/ยกเลิก/จ่ายใหม่)\n% = ติดตาม ÷ Lead",
+        book:    "เคสที่ admin/sales_status มีคำว่า 'จอง' (ไม่นับ junk)\nนับจาก leads sheet\nConv = จอง ÷ Lead × 100",
+        done:    "เคสที่ปล่อยรถสำเร็จ (status = ปล่อย ใน sales_reports)\nนับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง\n% = ปิดได้ ÷ เป้ารวมทุกเซลล์",
+        deal:    "รวมเงินจาก sale_price ของเคสที่ปล่อยรถ (sales_reports)\nเฉลี่ย = รวม ÷ จำนวนคันปล่อย",
+        target:  "เป้าหมายรวมของทุกเซลล์ในเดือนนี้\nกำหนดใน sheet 'ตั้งค่าเซลล์' column เป้า",
+        rj:      "RJ Leads (Hot RJ / Hot RB / RJ) — เคสคุณภาพต่ำ\nลูกค้าไม่ค่อยจริงจัง ปิดยาก\nเดือนไหน RJ พุ่ง = อาจมีปัญหา channel/source",
       };
       const kpis = [
         {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
@@ -942,14 +1286,14 @@
         : `รายเดือน (ทั้งปี)`;
       const _pipePeriod = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : `ทั้งปี`;
       html += `<div class="cgrid">`;
-      html += `<div class="card chart-card"><div class="card-title">📈 ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\\nแยก 2 เส้น: Lead ปกติ + RJ\\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
-      html += `<div class="card chart-card"><div class="card-title">📊 ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
-      html += `<div class="card chart-card span2"><div class="card-title">💰 ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}<span class="info-tip" tabindex="0" data-tip="เงินที่เข้าจริงรายเดือน (หรือรายวัน)\\nรวมจาก sale_price ของเคส status = ปล่อย\\nดูว่าเดือนไหน peak/ตก">?</span></div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
-      html += `<div class="card chart-card span2"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})<span class="info-tip" tabindex="0" data-tip="โดนัทกราฟแสดงสัดส่วนเคสในแต่ละสถานะ\\nสีไหนใหญ่ = bottleneck (เช่น รอเซ็น เยอะ = เร่งเอกสาร)">?</span></div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
+      html += `<div class="card chart-card"><div class="card-title">📈 ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\nแยก 2 เส้น: Lead ปกติ + RJ\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
+      html += `<div class="card chart-card"><div class="card-title">📊 ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">💰 ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}<span class="info-tip" tabindex="0" data-tip="เงินที่เข้าจริงรายเดือน (หรือรายวัน)\nรวมจาก sale_price ของเคส status = ปล่อย\nดูว่าเดือนไหน peak/ตก">?</span></div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})<span class="info-tip" tabindex="0" data-tip="โดนัทกราฟแสดงสัดส่วนเคสในแต่ละสถานะ\nสีไหนใหญ่ = bottleneck (เช่น รอเซ็น เยอะ = เร่งเอกสาร)">?</span></div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
       html += `</div>`;
 
       // Pipeline
-      html += `<div class="card"><div class="card-title">📋 Pipeline ดีล<span class="info-tip" tabindex="0" data-tip="ภาพรวมเคสในแต่ละสถานะ\\n• จอง: ลูกค้าตกลงจอง\\n• รอเซ็นต์: รอเซ็นเอกสาร\\n• รอผล: รอผลไฟแนนซ์\\n• รอปล่อย: ผ่านแล้ว รอส่งรถ\\n• ปล่อย: ส่งรถสำเร็จ\\n• รีเจ็ก: ไม่ผ่าน\\nคลิกตัวเลขเปิดดูรายการเคสในสถานะนั้น">?</span></div><div class="pipe-row">`;
+      html += `<div class="card"><div class="card-title">📋 Pipeline ดีล<span class="info-tip" tabindex="0" data-tip="ภาพรวมเคสในแต่ละสถานะ\n• จอง: ลูกค้าตกลงจอง\n• รอเซ็นต์: รอเซ็นเอกสาร\n• รอผล: รอผลไฟแนนซ์\n• รอปล่อย: ผ่านแล้ว รอส่งรถ\n• ปล่อย: ส่งรถสำเร็จ\n• รีเจ็ก: ไม่ผ่าน\nคลิกตัวเลขเปิดดูรายการเคสในสถานะนั้น">?</span></div><div class="pipe-row">`;
       Object.entries(pl).forEach(([k,v]) => {
         html += `<div class="pipe-item"><div class="pipe-num" style="color:${pipeColors[k]||'var(--t1)'}">${v}</div><div class="pipe-lbl">${k}</div></div>`;
       });
@@ -970,7 +1314,7 @@
         return {cur:c, prev:p, delta, pct:pctv, isUp: delta >= 0};
       }
 
-      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\\n• Lead/ติดตาม/จอง/ปิด: รวมทุกคนในทีม\\n• Conv% = จอง ÷ Lead × 100\\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
+      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead/ติดตาม/จอง/ปิด: รวมทุกคนในทีม\n• Conv% = จอง ÷ Lead × 100\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
@@ -1011,70 +1355,201 @@
       // 🔁 เคสติดตามรายเซลล์ — สำคัญ! ใช้ประเมินผลงานเซลล์ (Diligence Score)
       // ════════════════════════════════════════════════════════════════
       // เซลล์ปัจจุบันทุกคน (ตัดเซลล์เก่า/INACTIVE/ADMIN ออก)
-      const dilEntries = sellers
-        .filter(s => !s.inactive && s.team !== 'INACTIVE' && s.team !== 'ADMIN')
+      // ── Single source of truth: ใช้ logic เดียวกับ _sval ──
+      // monthly view → ms.sellers[name].xxx (0 ถ้าไม่มีเดือนนั้น)
+      // yearly view  → s.xxx (รวมปี)
+      // ตรงกับ "สรุปรายเซลล์" 100% — ไม่ fallback ไปค่ารายปีเมื่ออยู่ในโหมดเดือน
+      // ── ตารางคะแนน 100 แต้ม (6 องค์ประกอบ + Max Normalization) ──
+      // จบ/35 · จอง/20 · ขยัน/12 · หลักฐ/6 · ปริม/12 · คุณภ/15 = รวม/100
+      const scoreEntries = sellers
+        .filter(s => !s.inactive && s.team !== 'INACTIVE')
         .map(s => {
-          const d = dilMap[s.name] || {tot:0, cnt:0, cntNormal:0, cntRJ:0, high:0, score:0, jongs:0, dones:0};
-          return {
-            n: s.name,
-            cnt: d.cnt, cntNormal: d.cntNormal, cntRJ: d.cntRJ,
-            avg: d.cnt ? Math.round((d.tot/d.cnt)*10)/10 : 0,
-            high: d.high, tot: d.tot, score: d.score,
-            jongs: d.jongs, dones: d.dones,
+          const _resolve = (key) => {
+            if (dfMonth > 0) {
+              const msd = ms?.sellers?.[s.name];
+              return msd ? (msd[key]||0) : 0;
+            }
+            return s[key]||0;
           };
+          const done    = _resolve('done');
+          const booking = _resolve('booking');
+          const cases   = _resolve('lead');           // จำนวนเคสที่รับผิดชอบ
+          const updSum  = _resolve('updateSum');       // รวมอัพเดท
+          const proofN  = _resolve('proofCount');
+          const returnN = _resolve('returnCount');
+          const cancelN = _resolve('cancelCount');
+          const avgUpd   = cases > 0 ? updSum / cases : 0;
+          const proofPct = cases > 0 ? (proofN / cases) * 100 : 0;
+          const returnPct= cases > 0 ? (returnN / cases) * 100 : 0;
+          const cancelPct= cases > 0 ? (cancelN / cases) * 100 : 0;
+          return { n: s.name, team: s.team, done, booking, cases, updSum,
+                   avgUpd, proofPct, returnPct, cancelPct,
+                   // aliases สำหรับ 📈 เกณฑ์ Performance (จัดสรร lead)
+                   leadTotal: cases, activity: avgUpd,
+                   sales: booking * SCORE_JONG + done * SCORE_DONE,
+                   jongs: booking, dones: done };
         });
-      dilEntries.sort((a,b) => {
-        if (dilSort === 'cnt')   return b.cnt - a.cnt;
-        if (dilSort === 'avg')   return b.avg - a.avg;
-        if (dilSort === 'high')  return b.high - a.high;
-        if (dilSort === 'tot')   return b.tot - a.tot;
-        if (dilSort === 'jongs') return b.jongs - a.jongs;
-        if (dilSort === 'dones') return b.dones - a.dones;
-        return b.score - a.score;  // default: score
-      });
 
-      const maxScore = Math.max(1, ...dilEntries.map(d => d.score));
+      // หาค่า max ของแต่ละมิติ (สำหรับ normalize) — กัน /0 ด้วย || 1
+      const _mx = (key) => Math.max(1, ...scoreEntries.map(e => e[key] || 0));
+      const maxDone   = _mx('done');
+      const maxBook   = _mx('booking');
+      const maxAvg    = _mx('avgUpd');
+      const maxCases  = _mx('cases');
+      const maxReturn = _mx('returnPct');
+
+      // คำนวณ 6 คะแนน + รวม
+      scoreEntries.forEach(e => {
+        e.sJob     = (e.done / maxDone) * 35;                       // จบ/35
+        e.sBook    = (e.booking / maxBook) * 20;                    // จอง/20
+        e.sActive  = (e.avgUpd / maxAvg) * 12;                      // ขยัน/12
+        e.sProof   = (e.proofPct / 100) * 6;                        // หลักฐ/6
+        e.sVolume  = (e.cases / maxCases) * 12;                     // ปริม/12
+        e.sQuality = (1 - (e.returnPct / maxReturn)) * 15;          // คุณภ/15 (กลับด้าน)
+        e.total    = e.sJob + e.sBook + e.sActive + e.sProof + e.sVolume + e.sQuality;
+      });
+      scoreEntries.sort((a,b) => b.total - a.total);
+
+      const _medals = ['🥇','🥈','🥉'];
+      const _f1 = (n) => (Math.round(n*10)/10).toFixed(1);
       html += `<div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-          <div class="card-title" style="margin:0;display:flex;align-items:center">🔁 เคสติดตามรายเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(ประเมินผลงาน)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูสูตรคำนวณคะแนน">?</span></div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="sbtn${dilSort==='score'?' on':''}" onclick="dilSort='score';render()" title="คะแนนรวม Diligence Score">Score</button>
-            <button class="sbtn${dilSort==='cnt'?' on':''}" onclick="dilSort='cnt';render()" title="จำนวนเคสที่รับติดตาม">เคสรับ</button>
-            <button class="sbtn${dilSort==='jongs'?' on':''}" onclick="dilSort='jongs';render()" title="จำนวนเคสที่จอง/อยู่ใน pipeline (+50/เคส)">จอง</button>
-            <button class="sbtn${dilSort==='dones'?' on':''}" onclick="dilSort='dones';render()" title="จำนวนเคสที่ปล่อยรถสำเร็จ (+100/เคส)">ปล่อย</button>
-            <button class="sbtn${dilSort==='avg'?' on':''}" onclick="dilSort='avg';render()" title="เฉลี่ยจำนวนครั้งอัพเดท/เคส">เฉลี่ย</button>
-            <button class="sbtn${dilSort==='high'?' on':''}" onclick="dilSort='high';render()" title="เคสที่โทร 3+ ครั้ง">🔥3+</button>
-          </div>
+          <div class="card-title" style="margin:0;display:flex;align-items:center">🏆 ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(100 คะแนนเต็ม)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูวิธีคิดแต่ละช่อง">?</span></div>
         </div>
-        <div class="card-sub">RJ ได้คะแนน × 0.5 ของ Normal — กด <b>?</b> ดูสูตรเต็ม · <b>คลิกแถวเซลล์เพื่อดูวิธีคำนวณคะแนน</b></div>
-        <div class="shdr" style="grid-template-columns:1.1fr .7fr 1.0fr .55fr .55fr .55fr .5fr 1.2fr;font-size:10px">
+        <div class="card-sub">คะแนนเทียบกับคนเก่งสุดในแต่ละด้าน (Max Normalization) · <b>คุณภ</b> กลับด้าน (คืนน้อย=ดี) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <div style="min-width:760px">
+        <div class="shdr" style="grid-template-columns:.4fr 1fr .5fr .5fr .65fr .7fr .7fr .7fr .65fr .65fr .7fr .75fr;font-size:10px">
+          <span>#</span>
           <span>เซลล์</span>
-          <span style="text-align:right">Score</span>
-          <span style="text-align:right">เคสรับ <span style="font-size:9px;color:var(--t3);font-weight:400">ปกติ/RJ</span></span>
+          <span style="text-align:right">จบ</span>
           <span style="text-align:right">จอง</span>
-          <span style="text-align:right">ปล่อย</span>
-          <span style="text-align:right">เฉลี่ย</span>
-          <span style="text-align:right">🔥3+</span>
-          <span>สัดส่วน</span>
+          <span style="text-align:right">คืน%</span>
+          <span style="text-align:right;color:var(--green-mid)">จบ/35<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--green)">จอง/20<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--blue)">ขยัน/12<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--t2)">หลักฐ/6<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--purple)">ปริม/12<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--amber)">คุณภ/15<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;font-weight:700">รวม/100</span>
         </div>`;
-      dilEntries.forEach(d => {
-        const pctScore = (d.score / maxScore) * 100;
-        const scoreColor = d.score >= 500 ? 'var(--green)' : d.score >= 200 ? 'var(--amber)' : d.score > 0 ? 'var(--t1)' : 'var(--t3)';
-        const avgColor = d.avg >= 3 ? 'var(--green)' : d.avg >= 2 ? 'var(--amber)' : d.avg > 0 ? 'var(--red)' : 'var(--t3)';
-        const splitCell = d.cnt > 0
-          ? `<span style="color:var(--t1);font-weight:500">${d.cnt}</span> <span style="font-size:9.5px;color:var(--t3)">(${d.cntNormal}<span style="color:var(--red)">/${d.cntRJ}</span>)</span>`
-          : `<span style="color:var(--t3)">0</span>`;
-        html += `<div class="srow" style="grid-template-columns:1.1fr .7fr 1.0fr .55fr .55fr .55fr .5fr 1.2fr;font-size:12px" onclick="showSellerScoreBreakdown('${h(d.n)}')" title="กดดูวิธีคำนวณคะแนน">
-          <span style="font-weight:500">${h(d.n)}</span>
-          <span style="text-align:right;color:${scoreColor};font-weight:700">${d.score}</span>
-          <span style="text-align:right">${splitCell}</span>
-          <span style="text-align:right;color:${d.jongs>0?'var(--amber)':'var(--t3)'};font-weight:${d.jongs>0?'600':'400'}">${d.jongs}</span>
-          <span style="text-align:right;color:${d.dones>0?'var(--green)':'var(--t3)'};font-weight:${d.dones>0?'700':'400'}">${d.dones}</span>
-          <span style="text-align:right;color:${avgColor}">${d.avg ? d.avg+'x' : '-'}</span>
-          <span style="text-align:right;color:${d.high>0?'var(--amber)':'var(--t3)'}">${d.high}</span>
-          <div class="pbr" style="margin-top:6px"><div class="pbf" style="width:${pctScore}%;background:var(--blue)"></div></div>
+      scoreEntries.forEach((e, i) => {
+        const rank = _medals[i] || (i + 1);
+        const isTop3 = i < 3;
+        const totalColor = e.total >= 70 ? 'var(--green)' : e.total >= 50 ? 'var(--blue)' : e.total >= 30 ? 'var(--amber)' : 'var(--red)';
+        html += `<div class="srow" style="grid-template-columns:.4fr 1fr .5fr .5fr .65fr .7fr .7fr .7fr .65fr .65fr .7fr .75fr;font-size:11.5px" onclick="showSellerScoreBreakdown('${h(e.n)}')" title="กดดูรายละเอียด">
+          <span style="${isTop3?'font-size:14px':'color:var(--t3)'}">${rank}</span>
+          <span style="font-weight:${isTop3?'700':'500'}">${h(e.n)}</span>
+          <span style="text-align:right;color:var(--t2)">${e.done}</span>
+          <span style="text-align:right;color:var(--t2)">${e.booking}</span>
+          <span style="text-align:right;color:var(--t3);font-size:10px">${_f1(e.returnPct)}</span>
+          <span style="text-align:right;color:var(--green-mid);font-weight:600">${_f1(e.sJob)}</span>
+          <span style="text-align:right;color:var(--green);font-weight:600">${_f1(e.sBook)}</span>
+          <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sActive)}</span>
+          <span style="text-align:right;color:var(--t2)">${_f1(e.sProof)}</span>
+          <span style="text-align:right;color:var(--purple);font-weight:600">${_f1(e.sVolume)}</span>
+          <span style="text-align:right;color:var(--amber);font-weight:600">${_f1(e.sQuality)}</span>
+          <span style="text-align:right;color:${totalColor};font-weight:800;font-size:13px">${_f1(e.total)}</span>
         </div>`;
       });
+      html += `</div></div>`;
+      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 35 · จอง 20 · ปริม 12 · ขยัน 12 · คุณภ 15 · หลักฐ 6 = 100 · 🚀 Velocity ดูในหน้าต่างรายละเอียด (กดแถว)</div>`;
+      html += `</div>`;
+
+      // ════════════════════════════════════════════════════════════════
+      // 📈 จัดสรร Lead ตามคะแนน — ใส่ lead/วัน → กระจายตามคะแนน 100 แต้ม
+      // ════════════════════════════════════════════════════════════════
+      // วิธี: แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน
+      //   • Floor 1 lead/วัน (ทุกคนได้อย่างน้อย 1 — ให้โอกาส)
+      //   • ปัดเศษด้วย Largest Remainder → รวมได้ตรง lead/วัน เป๊ะ
+      // ════════════════════════════════════════════════════════════════
+      const allocPool = scoreEntries.filter(e => e.total > 0);
+      const _sumScore = allocPool.reduce((a, e) => a + e.total, 0) || 1;
+
+      // ── คำนวณ lead/วัน อัตโนมัติจากสถิติ ──
+      // lead รวมในช่วงที่เลือก ÷ จำนวนวันที่ผ่าน → เฉลี่ยต่อวัน
+      const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.cases || 0), 0);
+      const _nowD = new Date();
+      const _curMonth = _nowD.getMonth() + 1;
+      let _daysElapsed;
+      if (dfMonth === _curMonth) {
+        // เดือนปัจจุบัน → นับวันที่ผ่านมาแล้ว (วันนี้ยังไม่จบ → ใช้ - 1)
+        _daysElapsed = Math.max(1, _nowD.getDate() - 1);
+      } else if (dfMonth > 0) {
+        // เดือนที่ผ่านมา → ใช้จำนวนวันเต็มของเดือนนั้น
+        _daysElapsed = new Date(_nowD.getFullYear(), dfMonth, 0).getDate();
+      } else {
+        // ทั้งปี → วันที่ผ่านมาในปีนี้ (fallback)
+        _daysElapsed = Math.max(1, Math.floor((_nowD - new Date(_nowD.getFullYear(),0,0)) / 86400000));
+      }
+      const _avgRaw = _totalLeadsMonth / _daysElapsed;     // เช่น 59.65
+      const _autoPerDay = Math.max(1, Math.round(_avgRaw)); // ตีเป็น 60
+      // ค่าที่ใช้จริง: ถ้าผู้ใช้ตั้งเอง (leadPerDay != null) ใช้ค่านั้น, ไม่งั้น auto
+      const effPerDay = leadPerDay !== null ? leadPerDay : _autoPerDay;
+      const isAuto = leadPerDay === null;
+      const _dailyEqual = allocPool.length > 0 ? (effPerDay / allocPool.length) : 0;
+
+      // Largest Remainder allocation (floor 1)
+      const _withRaw = allocPool.map(e => {
+        const raw = (e.total / _sumScore) * effPerDay;
+        return { ...e, raw, base: Math.max(1, Math.floor(raw)), frac: raw - Math.floor(raw) };
+      });
+      let _used = _withRaw.reduce((a, e) => a + e.base, 0);
+      let _remain = effPerDay - _used;   // อาจติดลบถ้า floor 1 ดันยอดเกิน
+      if (_remain > 0) {
+        [..._withRaw].sort((a,b) => b.frac - a.frac).slice(0, _remain).forEach(e => e.base += 1);
+      } else if (_remain < 0) {
+        const _cut = [..._withRaw].filter(e => e.base > 1).sort((a,b) => a.total - b.total);
+        for (let i = 0; i < _cut.length && _remain < 0; i++) { _cut[i].base -= 1; _remain++; }
+      }
+      const allocMap = {};
+      _withRaw.forEach(e => { allocMap[e.n] = e.base; });
+      const perfEntries = [...allocPool].sort((a,b) => b.total - a.total);
+
+      html += `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+          <div>
+            <div class="card-title" style="margin:0;display:flex;align-items:center">📈 จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead รวมเดือนนี้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)">?</span></div>
+            <div class="card-sub" style="margin-top:2px">${isAuto ? `auto: lead ${_totalLeadsMonth.toLocaleString()} ÷ ${_daysElapsed} วัน = <b>${_avgRaw.toFixed(2)}</b> → ${_autoPerDay}/วัน` : `ตั้งเอง ${effPerDay}/วัน · auto = ${_autoPerDay}`} · เฉลี่ยแบ่งเท่ากัน <b>${_dailyEqual.toFixed(1)}</b>/คน</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);padding:6px 10px;border-radius:8px">
+            <span style="font-size:12px;color:var(--t2);font-weight:600">Lead/วัน</span>
+            <input type="number" min="1" max="9999" value="${effPerDay}" onchange="leadPerDay=Math.max(1,parseInt(this.value)||1);render()" style="width:60px;padding:5px 8px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:14px;font-weight:700;text-align:center;font-family:inherit">
+            ${isAuto ? `<span style="font-size:9px;color:var(--green);font-weight:600">AUTO</span>` : `<button onclick="leadPerDay=null;render()" title="กลับไปคำนวณอัตโนมัติ" style="background:none;border:.5px solid var(--bd2);border-radius:5px;cursor:pointer;font-size:13px;padding:2px 6px;color:var(--blue)">↻</button>`}
+          </div>
+        </div>
+
+        <div class="shdr" style="grid-template-columns:.5fr 1.4fr .9fr .9fr 1.1fr;font-size:10.5px">
+          <span>อันดับ</span>
+          <span>เซลล์</span>
+          <span style="text-align:right">คะแนน/100</span>
+          <span style="text-align:right">สัดส่วน</span>
+          <span style="text-align:right;color:var(--purple);font-weight:700">Lead/วัน</span>
+        </div>`;
+
+      if (perfEntries.length === 0) {
+        html += `<div style="padding:18px;text-align:center;color:var(--t3);font-size:12px">ยังไม่มีข้อมูลเซลล์ในช่วงที่เลือก</div>`;
+      } else {
+        const _medals2 = ['🥇','🥈','🥉'];
+        perfEntries.forEach((p, i) => {
+          const rank = _medals2[i] || (i + 1);
+          const isTop3 = i < 3;
+          const alloc = allocMap[p.n] || 0;
+          const sharePct = ((p.total / _sumScore) * 100).toFixed(1);
+          // เทียบกับแบ่งเท่ากัน — มากกว่า=เขียว, น้อยกว่า=แดง
+          const diffColor = alloc > _dailyEqual + 0.5 ? 'var(--green)' : alloc < _dailyEqual - 0.5 ? 'var(--red)' : 'var(--t2)';
+          html += `<div class="srow" style="grid-template-columns:.5fr 1.4fr .9fr .9fr 1.1fr;font-size:12px" onclick="showSellerScoreBreakdown('${h(p.n)}')" title="กดดูรายละเอียด">
+            <span style="${isTop3?'font-size:14px':'color:var(--t3)'}">${rank}</span>
+            <span style="font-weight:${isTop3?'700':'500'}">${h(p.n)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[p.team]||'var(--t3)'};color:#fff;margin-left:4px">${h(p.team||'')}</span></span>
+            <span style="text-align:right;font-weight:700;color:var(--t1)">${p.total.toFixed(1)}</span>
+            <span style="text-align:right;color:var(--t3);font-size:11px">${sharePct}%</span>
+            <span style="text-align:right;font-weight:800;font-size:15px;color:${diffColor}">${alloc}</span>
+          </div>`;
+        });
+        html += `<div style="margin-top:10px;padding:9px 11px;background:var(--blue-bg);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.55">
+          <b style="color:var(--blue)">วิธีอ่าน:</b> lead/วัน คิดจากสถิติ (เฉลี่ยเดือนนี้) → จัดให้ตามคะแนน · <span style="color:var(--green)">สีเขียว</span> = ได้มากกว่าเฉลี่ย (เก่ง) · <span style="color:var(--red)">สีแดง</span> = ได้น้อยกว่า · ทุกคนได้ขั้นต่ำ 1 · รวมตรง ${effPerDay} เป๊ะ
+        </div>`;
+      }
       html += `</div>`;
 
       // Seller table — เพิ่มมูลค่าดีล (฿ ปล่อย)
@@ -1099,23 +1574,21 @@
 
       html += `<div class="card">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0;display:flex;align-items:center">สรุปรายเซลล์<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทุกเซลล์ในตารางเดียว\\n• ตัวเลขทุก column = ค่าในช่วงที่เลือก (เดือน/ปี)\\n• Conv% = จอง ÷ Lead × 100\\n• 🔁 X.Xx = เฉลี่ยจำนวนครั้งอัพเดท/เคสติดตาม\\n• คลิกแถว → เปิด dashboard ของเซลล์คนนั้น">?</span></div><div class="card-sub">เปรียบเทียบทุกเซลล์ในคอลัมน์เดียว — คลิกแถวเพื่อเปิด dashboard ของเซลล์คนนั้น</div>`;
+      html += `<div class="card-title" style="margin:0;display:flex;align-items:center">สรุปรายเซลล์<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทุกเซลล์ในตารางเดียว\n• ตัวเลขทุก column = ค่าในช่วงที่เลือก (เดือน/ปี)\n• Conv% = จอง ÷ Lead × 100\n• 🔁 X.Xx = เฉลี่ยจำนวนครั้งอัพเดท/เคสติดตาม\n• คลิกแถว → เปิด dashboard ของเซลล์คนนั้น">?</span></div><div class="card-sub">เปรียบเทียบทุกเซลล์ในคอลัมน์เดียว — คลิกแถวเพื่อเปิด dashboard ของเซลล์คนนั้น</div>`;
       html += `<select onchange="msort=this.value;render()"><option value="lead" ${msort==='lead'?'selected':''}>Lead มากสุด</option><option value="booking" ${msort==='booking'?'selected':''}>จองสูงสุด</option><option value="diligent" ${msort==='diligent'?'selected':''}>ติดตามมาก</option><option value="done" ${msort==='done'?'selected':''}>ปิดมากสุด</option><option value="dealValue" ${msort==='dealValue'?'selected':''}>฿ ปล่อยสูงสุด</option></select></div>`;
-      html += `<div class="shdr" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr">
+      html += `<div class="shdr" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr 1fr">
         <span>เซลล์</span>
         <span style="text-align:right">Lead<span class="info-tip" tabindex="0" data-tip="จำนวน lead ที่เซลล์รับเข้ามาในช่วงที่เลือก (รวม Normal + RJ)">?</span></span>
         <span style="text-align:right">ติดตาม<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ admin_status เข้าข่าย ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย (ไม่นับเคสปิด/junk)">?</span></span>
         <span style="text-align:right">จอง<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ admin_status หรือ sales_status มีคำว่า 'จอง' (ไม่นับเคส junk เช่น คืน/ยกเลิก/จ่ายใหม่)">?</span></span>
         <span style="text-align:right">ปิด<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ปล่อยรถแล้ว (status = ปล่อย ใน sales_reports). นับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง">?</span></span>
         <span style="text-align:right">฿ ปล่อย<span class="info-tip" tabindex="0" data-tip="รวมเงินจากเคสที่ปล่อยรถ (sale_price จาก sales_reports) — ในช่วงที่เลือก">?</span></span>
-        <span style="text-align:right">คลิป<span class="info-tip" tabindex="0" data-tip="จำนวนคลิป TikTok ที่เซลล์ทำ / เป้า (จาก sheet ติดตามไลฟ์สด)">?</span></span>
-        <span style="text-align:right">ไลฟ์<span class="info-tip" tabindex="0" data-tip="จำนวนเซสชั่นไลฟ์ของเซลล์ (จาก sheet live_sessions)">?</span></span>
-        <span>Conv%<span class="info-tip" tabindex="0" data-tip="Conversion Rate = จำนวนจอง ÷ จำนวน Lead × 100\\nบอกอัตราการแปลง Lead เป็น จอง\\n≥8% เขียว · ≥4% เหลือง · <4% แดง\\n\\nรอบขวา: 🔁 X.X x = เฉลี่ยจำนวนครั้งที่อัพเดทต่อเคสติดตาม">?</span></span>
+        <span>Conv%<span class="info-tip" tabindex="0" data-tip="Conversion Rate = จำนวนจอง ÷ จำนวน Lead × 100\nบอกอัตราการแปลง Lead เป็น จอง\n≥8% เขียว · ≥4% เหลือง · <4% แดง\n\nรอบขวา: 🔁 X.X x = เฉลี่ยจำนวนครั้งที่อัพเดทต่อเคสติดตาม">?</span></span>
       </div>`;
       ss.forEach(s => {
         const sLead=_sval(s,'lead'), sFollow=_sval(s,'follow'), sBooking=_sval(s,'booking'), sDone=_sval(s,'done');
         const sDealVal = _sval(s, 'dealValue');
-        const conv=pct(sBooking,sLead), cPct2=pct(s.clip,s.clipTarget||1);
+        const conv=pct(sBooking,sLead);
         const tC=conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)';
         const tBg=conv>=8?'var(--green-bg)':conv>=4?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
@@ -1127,18 +1600,86 @@
         const teamBadge = isInactive
           ? `<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:var(--t3);color:#fff;margin-left:2px">เก่า</span>`
           : `<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span>`;
-        html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr .7fr .7fr 1fr" ${rowClick}>`;
+        html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr 1fr" ${rowClick}>`;
         html += `<span style="font-weight:600">${h(s.name)}${teamBadge}</span>`;
         html += `<span style="text-align:right">${sLead}</span>`;
         html += `<span style="text-align:right;color:var(--blue)">${sFollow}</span>`;
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
-        html += `<span style="text-align:right;color:${cPct2>=100?'var(--green)':'var(--amber)'}">${s.clip}/${s.clipTarget}</span>`;
-        html += `<span style="text-align:right;color:${s.live>0?'var(--blue)':'var(--t3)'}">${s.live}</span>`;
-        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(cPct2,100)}%;background:var(--green-mid)"></div></div></div>`;
+        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*5,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
+      html += `</div>`;
+
+      // ── 3-col panels: 🔴 ยังไม่อัพเดท · 💰 Top มูลค่าดีล · 🏆 Top จอง ──
+      // วางต่อท้าย "สรุปรายเซลล์" ทันที — แต่ละ card คลิกแถวเปิด modal ดูรายการเคส
+      const nu = {};
+      (FD.sellers || D.sellers || []).forEach(s => {
+        if (s.inactive || s.team === 'INACTIVE' || s.team === 'ADMIN') return;
+        let count;
+        if (dfMonth > 0) {
+          const msd = ms?.sellers?.[s.name];
+          count = msd ? (msd.notCalled || 0) : 0;
+        } else {
+          count = s.notCalled || 0;
+        }
+        if (count > 0) nu[s.name] = count;
+      });
+      const topBook = [...sellers]
+        .map(s => ({...s, _bk: _sval(s, 'booking'), _ld: _sval(s, 'lead')}))
+        .filter(s => s._bk > 0)
+        .sort((a,b)=>b._bk - a._bk);
+      const topDealValue = [...sellers]
+        .map(s => ({...s, _dv: _sval(s, 'dealValue'), _done: _sval(s, 'done')}))
+        .filter(s => s._dv > 0)
+        .sort((a,b)=>b._dv - a._dv);
+      const medals = ['🥇','🥈','🥉','4.','5.','6.','7.','8.','9.','10.','11.','12.','13.','14.','15.','16.','17.','18.','19.','20.'];
+
+      const renderTopCard = (title, tipText, entries, renderRow, emptyMsg) => {
+        const top = entries.slice(0, 6);
+        const rest = entries.slice(6);
+        let body = '';
+        if (entries.length === 0) {
+          body = `<span style="font-size:12px;color:var(--t3)">${h(emptyMsg)}</span>`;
+        } else {
+          top.forEach((e, i) => { body += renderRow(e, i); });
+          if (rest.length > 0) {
+            body += `<details style="margin-top:6px"><summary style="font-size:11px;color:var(--blue);cursor:pointer;padding:4px 0;font-weight:600">+ ดูอีก ${rest.length} คน</summary><div style="margin-top:4px">`;
+            rest.forEach((e, i) => { body += renderRow(e, i + 6); });
+            body += `</div></details>`;
+          }
+        }
+        return `<div class="card" style="margin:0"><div class="card-title">${title}<span class="info-tip" tabindex="0" data-tip="${h(tipText)}">?</span></div>${body}</div>`;
+      };
+
+      html += `<div class="g3">`;
+
+      const nuEntries = Object.entries(nu).sort((a,b)=>b[1]-a[1]);
+      html += renderTopCard(
+        '🔴 ยังไม่อัพเดท',
+        "จำนวน lead ที่เซลล์ยังไม่โทร (updateCount=0)\nนับทุก lead ในช่วงที่เลือก (รวมที่ยังไม่มี admin_status)\nตัด junk ออก (จบ/คืน/ยกเลิก/จ่ายใหม่)\nคลิกชื่อเซลล์ → ดูรายการเคส",
+        nuEntries,
+        ([name, count], i) => `<div class="prow" onclick="showNotCalledCases('${h(name)}')" style="cursor:pointer" title="ดูรายการเคสยังไม่โทร"><span style="font-weight:500">${i < 6 ? '' : (i+1)+'. '}${h(name)}</span><span style="color:var(--red);font-weight:500">${count} เคส</span></div>`,
+        'ทุกเคสอัพเดทแล้ว 🎉'
+      );
+
+      html += renderTopCard(
+        '💰 Top มูลค่าดีล',
+        "เซลล์ที่ปล่อยรถได้เงินรวมมากสุดในช่วงที่เลือก\nคำนวณจาก sale_price ของเคสที่ status = ปล่อย\nแสดง Top 6 — กด '+ ดูอีก' ดูเซลล์ทุกคน\nคลิกชื่อเซลล์ → ดูรายการรถ",
+        topDealValue,
+        (s, i) => `<div class="prow" onclick="showSellerReleases('${h(s.name)}')" style="cursor:pointer" title="ดูรายการรถที่ปล่อย"><span style="font-weight:500">${medals[i]||(i+1)+'.'} ${h(s.name)}</span><span style="color:var(--green-mid);font-weight:600">${fmtBaht(s._dv)} <span style="color:var(--t3);font-weight:400;font-size:10px">· ${s._done} คัน</span></span></div>`,
+        'ยังไม่มีดีลปล่อย'
+      );
+
+      html += renderTopCard(
+        '🏆 Top จอง',
+        "เซลล์ที่จองได้มากสุดในช่วงที่เลือก\nนับจาก bookings sheet (source of truth)\nConv% = จอง ÷ Lead × 100\nแสดง Top 6 — กด '+ ดูอีก' ดูเซลล์ทุกคน\nคลิกชื่อเซลล์ → ดูรายการเคสจอง",
+        topBook,
+        (s, i) => `<div class="prow" onclick="showSellerJongs('${h(s.name)}')" style="cursor:pointer" title="ดูรายการเคสจอง"><span style="font-weight:500">${medals[i]||(i+1)+'.'} ${h(s.name)}</span><span style="color:var(--green);font-weight:500">${s._bk} จอง · ${pct(s._bk,s._ld)}%</span></div>`,
+        'ยังไม่มีจอง'
+      );
+
       html += `</div>`;
 
       // ── Admin/Executive only sections: Lead by Car + Released Cars (collapse โดย default) ──
@@ -1158,47 +1699,6 @@
         <summary>📞 เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่ยังต้องโทรต่อ เร่งด่วนก่อน คือเคสที่อัพเดทน้อยสุด</span></summary>
         <div class="adv-body">${renderFollowCasesSection()}</div>
       </details>`;
-
-      // 3-col panels — ใช้ _sval ทั้งหมด เพื่อให้ filter เดือนถูกต้อง
-      const nu = {};
-      (FD.followCases||[]).filter(l=>l.updateCount===0 && ir(l.dateIn)).forEach(l=>{nu[l.seller]=(nu[l.seller]||0)+1;});
-      // Top จอง — ใช้ค่ารายเดือนจาก _sval (เดิมใช้ s.booking รายปี → bug)
-      const topBook = [...sellers]
-        .map(s => ({...s, _bk: _sval(s, 'booking'), _ld: _sval(s, 'lead')}))
-        .filter(s => s._bk > 0)
-        .sort((a,b)=>b._bk - a._bk)
-        .slice(0,6);
-      // Top มูลค่าดีล (฿ ปล่อย)
-      const topDealValue = [...sellers]
-        .map(s => ({...s, _dv: _sval(s, 'dealValue'), _done: _sval(s, 'done')}))
-        .filter(s => s._dv > 0)
-        .sort((a,b)=>b._dv - a._dv)
-        .slice(0,6);
-      const medals = ['🥇','🥈','🥉','4.','5.','6.'];
-
-      html += `<div class="g3">`;
-      // No update
-      html += `<div class="card" style="margin:0"><div class="card-title">🔴 ยังไม่อัพเดท<span class="info-tip" tabindex="0" data-tip="เซลล์ที่มีเคสติดตามแต่ยังไม่โทรเลย (updateCount=0)\\nกรองตามวันที่รับเคสในช่วงที่เลือก\\nคลิกชื่อเซลล์ → ไป dashboard ส่วนตัว">?</span></div>`;
-      const nuEntries = Object.entries(nu).sort((a,b)=>b[1]-a[1]).slice(0,6);
-      if(nuEntries.length===0) html += `<span style="font-size:12px;color:var(--t3)">ทุกเคสอัพเดทแล้ว 🎉</span>`;
-      nuEntries.forEach(([name,count])=>{
-        html += `<div class="prow" onclick="switchToSeller('${h(name)}')"><span style="font-weight:500">${h(name)}</span><span style="color:var(--red);font-weight:500">${count} เคส</span></div>`;
-      });
-      html += `</div>`;
-      // Top มูลค่าดีล (ใหม่)
-      html += `<div class="card" style="margin:0"><div class="card-title">💰 Top มูลค่าดีล<span class="info-tip" tabindex="0" data-tip="เซลล์ที่ปล่อยรถได้เงินรวมมากสุดในช่วงที่เลือก\\nคำนวณจาก sale_price ของเคสที่ status = ปล่อย\\nแสดง Top 6">?</span></div>`;
-      if(topDealValue.length===0) html += `<span style="font-size:12px;color:var(--t3)">ยังไม่มีดีลปล่อย</span>`;
-      topDealValue.forEach((s,i)=>{
-        html += `<div class="prow" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${medals[i]} ${h(s.name)}</span><span style="color:var(--green-mid);font-weight:600">${fmtBaht(s._dv)} <span style="color:var(--t3);font-weight:400;font-size:10px">· ${s._done} คัน</span></span></div>`;
-      });
-      html += `</div>`;
-      // Top booking
-      html += `<div class="card" style="margin:0"><div class="card-title">🏆 Top จอง<span class="info-tip" tabindex="0" data-tip="เซลล์ที่จองได้มากสุดในช่วงที่เลือก\\nนับจาก leads ที่ admin_status/sales_status มีคำว่า 'จอง'\\nConv% = จอง ÷ Lead × 100">?</span></div>`;
-      if(topBook.length===0) html += `<span style="font-size:12px;color:var(--t3)">ยังไม่มีจอง</span>`;
-      topBook.forEach((s,i)=>{
-        html += `<div class="prow" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${medals[i]} ${h(s.name)}</span><span style="color:var(--green);font-weight:500">${s._bk} จอง · ${pct(s._bk,s._ld)}%</span></div>`;
-      });
-      html += `</div></div>`;
 
       // Hot Cases — พับเก็บ (ไม่ใช่หัวข้อหลัก)
       html += `<details class="adv-section">
@@ -1985,9 +2485,9 @@
 
       let html = `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">📅 ข้อมูลในช่วง <b style="color:var(--blue)">${h(periodLbl)}</b> (กรองจากตัวเลือกบนหัว)</div>`;
       html += `<div class="g3">`;
-      [{l:"ไลฟ์รวม",v:totLive+" ครั้ง",s:`session ในช่วงนี้`,c:"var(--blue)",tip:`จำนวนเซสชั่นไลฟ์ในช่วง ${periodLbl}\\nกรองจาก sheet 'live_sessions' ตามวันที่`},
-       {l:"Inbox รวม",v:fmtNum(totalInbox),s:fmtNum(totalLead)+" lead จากไลฟ์",c:"var(--green)",tip:"จำนวน inbox + lead ที่ได้จากไลฟ์ในช่วงนี้\\nรวมจากทุกเซสชั่นที่ filter"},
-       {l:"คลิปรวม",v:totClip+" คลิป",s:sellers.filter(s=>s.clip>=s.clipTarget).length+" คน ถึงเป้า · ทั้งปี",c:"var(--purple-mid)",tip:"จำนวนคลิป TikTok ทั้งปี (ยังไม่มี breakdown รายเดือนจาก backend)\\nจาก sheet 'ติดตามไลฟ์สด'"}
+      [{l:"ไลฟ์รวม",v:totLive+" ครั้ง",s:`session ในช่วงนี้`,c:"var(--blue)",tip:`จำนวนเซสชั่นไลฟ์ในช่วง ${periodLbl}\nกรองจาก sheet 'live_sessions' ตามวันที่`},
+       {l:"Inbox รวม",v:fmtNum(totalInbox),s:fmtNum(totalLead)+" lead จากไลฟ์",c:"var(--green)",tip:"จำนวน inbox + lead ที่ได้จากไลฟ์ในช่วงนี้\nรวมจากทุกเซสชั่นที่ filter"},
+       {l:"คลิปรวม",v:totClip+" คลิป",s:sellers.filter(s=>s.clip>=s.clipTarget).length+" คน ถึงเป้า · ทั้งปี",c:"var(--purple-mid)",tip:"จำนวนคลิป TikTok ทั้งปี (ยังไม่มี breakdown รายเดือนจาก backend)\nจาก sheet 'ติดตามไลฟ์สด'"}
       ].forEach(k=>{
         const tipBtn = k.tip ? `<span class="info-tip" tabindex="0" data-tip="${h(k.tip)}">?</span>` : '';
         html += `<div class="card" style="margin:0;text-align:center"><div class="kl">${k.l}${tipBtn}</div><div class="kv" style="color:${k.c}">${k.v}</div><div class="ks">${k.s}</div></div>`;
@@ -1997,7 +2497,7 @@
       // 2-col: live + clips
       html += `<div class="g2">`;
       // Live — sort + display ตาม filtered data
-      html += `<div class="card" style="margin:0"><div class="card-title">📡 ไลฟ์สด <span style="font-size:11px;color:var(--t3);font-weight:400">${h(periodLbl)}</span><span class="info-tip" tabindex="0" data-tip="จำนวนเซสชั่นไลฟ์ของเซลล์ในช่วงนี้\\nนับจาก field 'hosts' (เจ้าภาพ) แต่ละ session\\n📥 = inbox ที่ได้จากเซสชั่นนั้น">?</span></div>`;
+      html += `<div class="card" style="margin:0"><div class="card-title">📡 ไลฟ์สด <span style="font-size:11px;color:var(--t3);font-weight:400">${h(periodLbl)}</span><span class="info-tip" tabindex="0" data-tip="จำนวนเซสชั่นไลฟ์ของเซลล์ในช่วงนี้\nนับจาก field 'hosts' (เจ้าภาพ) แต่ละ session\n📥 = inbox ที่ได้จากเซสชั่นนั้น">?</span></div>`;
       html += `<div class="act-hdr"><span>เซลล์</span><span>จำนวนครั้ง</span><span style="text-align:right">inbox</span></div>`;
       const liveSorted = [...sellers].map(s => ({...s, _live: liveByHost[s.name]||0, _inbox: inboxByHost[s.name]||0}))
         .filter(s => s._live > 0)
@@ -2008,7 +2508,7 @@
       });
       html += `</div>`;
       // Clips — ยังเป็นยอดทั้งปี (backend ยังไม่ส่ง per-clip data)
-      html += `<div class="card" style="margin:0"><div class="card-title">คลิป TikTok <span style="font-size:10px;color:var(--amber);font-weight:400">(ทั้งปี)</span><span class="info-tip" tabindex="0" data-tip="คลิป TikTok ที่เซลล์ทำ / เป้าหมาย\\n** ยอดรวมทั้งปี **\\n(backend ยังไม่ส่ง breakdown รายเดือน — ถ้าต้องการแยกตามเดือน ต้องเพิ่ม per-clip date ใน API)">?</span></div>`;
+      html += `<div class="card" style="margin:0"><div class="card-title">คลิป TikTok <span style="font-size:10px;color:var(--amber);font-weight:400">(ทั้งปี)</span><span class="info-tip" tabindex="0" data-tip="คลิป TikTok ที่เซลล์ทำ / เป้าหมาย\n** ยอดรวมทั้งปี **\n(backend ยังไม่ส่ง breakdown รายเดือน — ถ้าต้องการแยกตามเดือน ต้องเพิ่ม per-clip date ใน API)">?</span></div>`;
       html += `<div class="act-hdr"><span>เซลล์</span><span>คลิป/เป้า</span><span style="text-align:right">สถานะ</span></div>`;
       [...sellers].sort((a,b)=>(b.clip/Math.max(b.clipTarget,1))-(a.clip/Math.max(a.clipTarget,1))).forEach(s=>{
         const ok=s.clip>=(s.clipTarget||1); const p=s.clipTarget>0?Math.min((s.clip/s.clipTarget)*100,100):0;
@@ -2023,7 +2523,7 @@
       const liveTeams = [...new Set((la.sessions||[]).map(s=>s.team).filter(Boolean))].sort();
 
       html += `<div class="card" style="margin-top:0"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0">📺 ไลฟ์รายครั้ง <span style="font-size:11px;font-weight:400;color:var(--t3)">${h(periodLbl)}${liveTeam!=='all'?' · ทีม '+liveTeam:''} (${sessions.length})</span><span class="info-tip" tabindex="0" data-tip="รายการเซสชั่นไลฟ์ตามวันที่ ในช่วงที่เลือก\\nกรองเดือนจากตัวเลือกบนหัว / กรองทีมจาก dropdown ขวา\\nแสดง 30 รายการล่าสุด">?</span></div>`;
+      html += `<div class="card-title" style="margin:0">📺 ไลฟ์รายครั้ง <span style="font-size:11px;font-weight:400;color:var(--t3)">${h(periodLbl)}${liveTeam!=='all'?' · ทีม '+liveTeam:''} (${sessions.length})</span><span class="info-tip" tabindex="0" data-tip="รายการเซสชั่นไลฟ์ตามวันที่ ในช่วงที่เลือก\nกรองเดือนจากตัวเลือกบนหัว / กรองทีมจาก dropdown ขวา\nแสดง 30 รายการล่าสุด">?</span></div>`;
       html += `<div style="display:flex;gap:6px;align-items:center">`;
       html += `<select onchange="liveTeam=this.value;render()" style="font-size:11px"><option value="all">ทุกทีม</option>`;
       liveTeams.forEach(t=>{html+=`<option value="${h(t)}" ${liveTeam===t?'selected':''}>${h(t)}</option>`;});
