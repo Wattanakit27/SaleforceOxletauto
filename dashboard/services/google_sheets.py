@@ -492,17 +492,8 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
             for row in rows:
                 date_cell = cell(row, LEADS_COL.received_date)
                 d = parse_date(date_cell)
-                if not (d and d.month == m_int):
-                    continue
-                # ตัด lead ที่มาจากไลฟ์สดออก (column H = channel ขึ้นต้นด้วย "LIVE")
-                # เช่น "LIVE Facebook", "LIVE Tiktok / ช่องหลัก" — ไม่ใช่ lead จากการหาเอง
-                if cell(row, LEADS_COL.channel).strip().upper().startswith("LIVE"):
-                    continue
-                # ตัด lead type RJ / Hot RJ / Hot RB ออก (คุณภาพต่ำ — ไม่นับ)
-                _t = cell(row, LEADS_COL.type).strip().upper().replace(" ", "")
-                if _t in ("RJ", "HOTRJ", "HOTRB"):
-                    continue
-                all_rows.append(row)
+                if d and d.month == m_int:
+                    all_rows.append(row)
         _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:

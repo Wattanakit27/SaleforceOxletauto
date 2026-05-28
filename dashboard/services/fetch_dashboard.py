@@ -58,7 +58,7 @@ def activity_stats(rows: list) -> dict:
     - returnCount: จำนวนเคสคืน (admin/sales_status มี 'คืน')
     - cancelCount: จำนวนเคสลูกค้ายกเลิก (มี 'ยกเลิก')
     """
-    upd_sum = proof = ret = cancel = 0
+    upd_sum = proof = ret = cancel = dist = 0
     for r in rows:
         upd_sum += int(cell_num(r, L.update_count))
         if cell(r, L.call_proof) == "ส่งแล้ว":
@@ -68,8 +68,14 @@ def activity_stats(rows: list) -> dict:
             ret += 1
         if "ยกเลิก" in combined:
             cancel += 1
+        # distributable = lead ที่แจกจ่ายได้ (ไม่ใช่ไลฟ์สด + ไม่ใช่ RJ)
+        # ใช้เฉพาะ "จัดสรร Lead อนาคต" — ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
+        _ch = cell(r, L.channel).strip().upper()
+        _ty = cell(r, L.type).strip().upper().replace(" ", "")
+        if not _ch.startswith("LIVE") and _ty not in ("RJ", "HOTRJ", "HOTRB"):
+            dist += 1
     return {"updateSum": upd_sum, "proofCount": proof,
-            "returnCount": ret, "cancelCount": cancel}
+            "returnCount": ret, "cancelCount": cancel, "leadDist": dist}
 
 
 # ── Date helpers ──
@@ -401,6 +407,7 @@ def fetch_dashboard_data() -> dict:
             "proofCount": astats["proofCount"],
             "returnCount": astats["returnCount"],
             "cancelCount": astats["cancelCount"],
+            "leadDist": astats["leadDist"],
         }
         if s_data["lead"] > 0 or s_data["done"] > 0 or s_data["booking"] > 0:
             sellers.append(s_data)
@@ -497,6 +504,7 @@ def fetch_dashboard_data() -> dict:
             "proofCount": admin_astats["proofCount"],
             "returnCount": admin_astats["returnCount"],
             "cancelCount": admin_astats["cancelCount"],
+            "leadDist": admin_astats["leadDist"],
         })
 
     # Teams
@@ -730,6 +738,7 @@ def fetch_dashboard_data() -> dict:
                 "proofCount": m_astats["proofCount"],
                 "returnCount": m_astats["returnCount"],
                 "cancelCount": m_astats["cancelCount"],
+                "leadDist": m_astats["leadDist"],
             }
 
         # ── เพิ่ม orphan sellers ต่อเดือน — split per name (เซลล์เก่าแต่ละคน) ──
@@ -790,6 +799,7 @@ def fetch_dashboard_data() -> dict:
                 "proofCount": o_astats["proofCount"],
                 "returnCount": o_astats["returnCount"],
                 "cancelCount": o_astats["cancelCount"],
+                "leadDist": o_astats["leadDist"],
             }
 
         # ── ADMIN (monthly) — orphan handling ข้าม ADMIN ผ่าน known_names จึงต้องเพิ่มเอง ──
@@ -822,6 +832,7 @@ def fetch_dashboard_data() -> dict:
                 "proofCount": m_admin_astats["proofCount"],
                 "returnCount": m_admin_astats["returnCount"],
                 "cancelCount": m_admin_astats["cancelCount"],
+                "leadDist": m_admin_astats["leadDist"],
             }
 
         m_teams = {}

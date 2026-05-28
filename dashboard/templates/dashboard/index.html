@@ -1373,7 +1373,8 @@
           };
           const done    = _resolve('done');
           const booking = _resolve('booking');
-          const cases   = _resolve('lead');           // จำนวนเคสที่รับผิดชอบ
+          const cases   = _resolve('lead');           // จำนวนเคสที่รับผิดชอบ (นับเต็ม รวม LIVE+RJ)
+          const leadDist= _resolve('leadDist');        // lead แจกจ่ายได้ (ไม่ใช่ไลฟ์+RJ) — ใช้จัดสรรอนาคต
           const updSum  = _resolve('updateSum');       // รวมอัพเดท
           const proofN  = _resolve('proofCount');
           const returnN = _resolve('returnCount');
@@ -1382,7 +1383,7 @@
           const proofPct = cases > 0 ? (proofN / cases) * 100 : 0;
           const returnPct= cases > 0 ? (returnN / cases) * 100 : 0;
           const cancelPct= cases > 0 ? (cancelN / cases) * 100 : 0;
-          return { n: s.name, team: s.team, done, booking, cases, updSum,
+          return { n: s.name, team: s.team, done, booking, cases, updSum, leadDist,
                    avgUpd, proofPct, returnPct, cancelPct,
                    // aliases สำหรับ 📈 เกณฑ์ Performance (จัดสรร lead)
                    leadTotal: cases, activity: avgUpd,
@@ -1467,8 +1468,9 @@
       const _sumScore = allocPool.reduce((a, e) => a + e.total, 0) || 1;
 
       // ── คำนวณ lead/วัน อัตโนมัติจากสถิติ ──
-      // lead รวมในช่วงที่เลือก ÷ จำนวนวันที่ผ่าน → เฉลี่ยต่อวัน
-      const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.cases || 0), 0);
+      // ใช้ leadDist (lead แจกจ่ายได้ = ไม่ใช่ไลฟ์สด + ไม่ใช่ RJ) ÷ จำนวนวันที่ผ่าน
+      // → เฉพาะการจัดสรรอนาคต ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
+      const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.leadDist || 0), 0);
       const _nowD = new Date();
       const _curMonth = _nowD.getMonth() + 1;
       let _daysElapsed;
@@ -1509,8 +1511,8 @@
       html += `<div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:6px">
           <div>
-            <div class="card-title" style="margin:0;display:flex;align-items:center">📈 จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead รวมเดือนนี้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)">?</span></div>
-            <div class="card-sub" style="margin-top:2px">${isAuto ? `auto: lead ${_totalLeadsMonth.toLocaleString()} ÷ ${_daysElapsed} วัน = <b>${_avgRaw.toFixed(2)}</b> → ${_autoPerDay}/วัน` : `ตั้งเอง ${effPerDay}/วัน · auto = ${_autoPerDay}`} · เฉลี่ยแบ่งเท่ากัน <b>${_dailyEqual.toFixed(1)}</b>/คน</div>
+            <div class="card-title" style="margin:0;display:flex;align-items:center">📈 จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead แจกจ่ายได้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n  (lead แจกจ่ายได้ = ตัดไลฟ์สด + RJ ออก)\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)\n\nหมายเหตุ: KPI/เคส/RJ ด้านบนนับเต็ม — ตัดไลฟ์+RJ เฉพาะการจัดสรรนี้">?</span></div>
+            <div class="card-sub" style="margin-top:2px">${isAuto ? `auto: lead แจกจ่ายได้ ${_totalLeadsMonth.toLocaleString()} (ตัดไลฟ์+RJ) ÷ ${_daysElapsed} วัน = <b>${_avgRaw.toFixed(2)}</b> → ${_autoPerDay}/วัน` : `ตั้งเอง ${effPerDay}/วัน · auto = ${_autoPerDay}`} · เฉลี่ยแบ่งเท่ากัน <b>${_dailyEqual.toFixed(1)}</b>/คน</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);padding:6px 10px;border-radius:8px">
             <span style="font-size:12px;color:var(--t2);font-weight:600">Lead/วัน</span>
