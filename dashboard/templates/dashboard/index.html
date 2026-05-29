@@ -1585,14 +1585,16 @@
         <span style="text-align:right">จอง<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ admin_status หรือ sales_status มีคำว่า 'จอง' (ไม่นับเคส junk เช่น คืน/ยกเลิก/จ่ายใหม่)">?</span></span>
         <span style="text-align:right">ปิด<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ปล่อยรถแล้ว (status = ปล่อย ใน sales_reports). นับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง">?</span></span>
         <span style="text-align:right">฿ ปล่อย<span class="info-tip" tabindex="0" data-tip="รวมเงินจากเคสที่ปล่อยรถ (sale_price จาก sales_reports) — ในช่วงที่เลือก">?</span></span>
-        <span>Conv%<span class="info-tip" tabindex="0" data-tip="Conversion Rate = จำนวนจอง ÷ จำนวน Lead × 100\nบอกอัตราการแปลง Lead เป็น จอง\n≥8% เขียว · ≥4% เหลือง · <4% แดง\n\nรอบขวา: 🔁 X.X x = เฉลี่ยจำนวนครั้งที่อัพเดทต่อเคสติดตาม">?</span></span>
+        <span>Conv%<span class="info-tip" tabindex="0" data-tip="Conversion Rate = ปล่อย ÷ Lead ปกติ × 100\n(Lead ปกติ = ไม่รวม RJ — เพราะ RJ ปิดยาก ไม่ควรถ่วงอัตรา)\nบอกอัตราการปิดดีลจาก lead คุณภาพ\n≥5% เขียว · ≥2% เหลือง · <2% แดง\n\nรอบขวา: 🔁 X.X x = เฉลี่ยจำนวนครั้งที่อัพเดทต่อเคสติดตาม">?</span></span>
       </div>`;
       ss.forEach(s => {
         const sLead=_sval(s,'lead'), sFollow=_sval(s,'follow'), sBooking=_sval(s,'booking'), sDone=_sval(s,'done');
+        const sLeadNormal=_sval(s,'leadNormal');   // lead ปกติ (ไม่รวม RJ)
         const sDealVal = _sval(s, 'dealValue');
-        const conv=pct(sBooking,sLead);
-        const tC=conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)';
-        const tBg=conv>=8?'var(--green-bg)':conv>=4?'var(--amber-bg)':'var(--red-bg)';
+        // Conv% = ปล่อย ÷ lead ปกติ (ไม่เอา RJ มาถ่วง)
+        const conv=pct(sDone, sLeadNormal);
+        const tC=conv>=5?'var(--green)':conv>=2?'var(--amber)':'var(--red)';
+        const tBg=conv>=5?'var(--green-bg)':conv>=2?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
         // Inactive seller (เซลล์เก่าที่ไม่อยู่ใน config) — แสดงเป็น row read-only มี style ต่าง
         const isInactive = s.inactive === true || s.team === 'INACTIVE';
@@ -1609,7 +1611,7 @@
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
-        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*5,100)}%;background:var(--green-mid)"></div></div></div>`;
+        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
