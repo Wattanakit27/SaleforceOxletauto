@@ -52,6 +52,20 @@ OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
+# ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — ใส่ LINE user_id แอดมิน
+# ช่วงทดสอบส่งเข้า id นี้แทนกลุ่ม. ถ้าว่าง → ปฏิเสธการส่ง (ไม่ fallback)
+FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "")
+
+# Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+# Supabase — mirror Sheet + เก็บฟอร์ม (server-side, ใช้ secret key)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
+SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+# เปิด = dashboard อ่านจาก Supabase (sheet_cache), ปิด = อ่าน Google Sheets ตรง (เดิม)
+USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes")
+
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (cron-job.org, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
 CRON_SECRET = os.getenv("CRON_SECRET", "")

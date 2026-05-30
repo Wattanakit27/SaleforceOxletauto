@@ -7,6 +7,9 @@ urlpatterns = [
     path("admin/", views.admin_page, name="admin"),
     path("api/dashboard", views.api_dashboard, name="api_dashboard"),
     path("api/auth", views.api_auth, name="api_auth"),
+    path("api/seller/finance_check", views.finance_check_submit, name="finance_check_submit"),
+    path("api/seller/scan_doc", views.scan_doc, name="scan_doc"),
+    path("api/seller/loan_submit", views.loan_submit, name="loan_submit"),
     path("u/<str:token>/", views.magic_link, name="magic_link"),
     path("s/<str:token>/", views.seller_dashboard, name="seller_dashboard"),
     path("login/", views.login_view, name="login"),
@@ -16,6 +19,7 @@ urlpatterns = [
     path("api/admin/schedule_config", views.admin_schedule_config, name="admin_schedule_config"),
     path("api/admin/diagnostics", views.admin_diagnostics, name="admin_diagnostics"),
     path("api/admin/export_leadscore", views.admin_export_leadscore, name="admin_export_leadscore"),
+    path("api/cron/sync", views.cron_sync, name="cron_sync"),
     path("api/cron/send_line", views.cron_send_line, name="cron_send_line"),
     path("api/cron/tick", views.cron_tick, name="cron_tick"),
 ]

@@ -507,6 +507,15 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
     Leads ใช้ fetch_leads_by_month_tabs (อ่าน monthly tab + filter date ตรง tab month)
     เพื่อให้ตัวเลขตรงกับการนับ raw rows ใน Google Sheet ที่ admin คาดหวัง.
     """
+    # ถ้าเปิด USE_SUPABASE → อ่านจาก sheet_cache (mirror) แทน Google
+    # ถ้า cache ขาด/error → fallback ไปอ่าน Google ตรง (ปลอดภัย)
+    if getattr(settings, "USE_SUPABASE", False):
+        try:
+            from .supabase_client import fetch_all_from_supabase
+            return fetch_all_from_supabase()
+        except Exception:
+            pass
+
     other_keys = ["sales_reports", "bookings", "live_sessions", "live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}
 

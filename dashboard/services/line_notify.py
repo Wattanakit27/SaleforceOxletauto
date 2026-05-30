@@ -547,6 +547,185 @@ def load_schedules() -> list[dict]:
     return schedules
 
 
+def build_finance_check_flex(d: dict, base_url: str = "") -> dict:
+    """สร้าง Flex 'เช็คเคสไฟแนนซ์ก่อนเซ็น' — ส่งให้ senior อนุมัติ/แก้ไข/ยกเลิก.
+
+    d = dict จากฟอร์มในหน้าเซลล์ (leadCode, branch, customer, car, plate, price,
+        finco, status, approved, down, monthly, terms, cond,
+        signDate, signTime, docs[list], seller, extra)
+    """
+    def g(k: str) -> str:
+        v = str(d.get(k) or "").strip()
+        return v or "-"
+
+    docs = d.get("docs") or []
+    docs_str = ", ".join(docs) if docs else "-"
+    seller = g("seller")
+    ref = g("leadCode")
+
+    def kv(label: str, value, color: str = "#1f2937") -> dict:
+        return {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": label, "size": "xs", "color": "#9ca3af", "flex": 4},
+            {"type": "text", "text": str(value), "size": "xs", "color": color,
+             "flex": 7, "wrap": True, "weight": "bold"},
+        ]}
+
+    body = [
+        {"type": "text", "text": g("customer"), "weight": "bold", "size": "lg", "color": "#1f2937", "wrap": True},
+        {"type": "text", "text": f"Lead {ref} · {g('branch')}", "size": "xs", "color": "#9ca3af", "margin": "xs"},
+        {"type": "separator", "margin": "md"},
+        {"type": "box", "layout": "vertical", "margin": "md", "spacing": "sm", "contents": [
+            kv("🚗 รถ", g("car")),
+            kv("ทะเบียน", g("plate")),
+            kv("💰 ราคารถ", g("price")),
+        ]},
+        {"type": "separator", "margin": "md"},
+        {"type": "box", "layout": "vertical", "margin": "md", "spacing": "sm", "contents": [
+            kv("🏦 ไฟแนนซ์", g("finco")),
+            kv("สถานะ", g("status"), "#059669"),
+            kv("วงเงินอนุมัติ", g("approved")),
+            kv("ยอดดาวน์", g("down")),
+            kv("ผ่อน/งวด", f"{g('monthly')} x {g('terms')} งวด"),
+        ]},
+    ]
+    if g("cond") != "-":
+        body.append(kv("เงื่อนไข", g("cond")))
+    body += [
+        {"type": "separator", "margin": "md"},
+        {"type": "box", "layout": "vertical", "margin": "md", "spacing": "sm", "contents": [
+            kv("📅 นัดเซ็น", f"{g('signDate')} {d.get('signTime') or ''}".strip()),
+            kv("📎 เอกสาร", docs_str),
+            kv("🧑‍💼 เซลล์", seller, "#185fa5"),
+        ]},
+    ]
+    if g("extra") != "-":
+        body.append(kv("📝 หมายเหตุ", g("extra")))
+
+    return {
+        "type": "flex",
+        "altText": f"📋 เช็คไฟแนนซ์ก่อนเซ็น — {g('customer')} ({seller})",
+        "contents": {
+            "type": "bubble", "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical", "backgroundColor": "#3b6d11", "paddingAll": "16px",
+                "contents": [
+                    {"type": "text", "text": "📋 เช็คเคสไฟแนนซ์ก่อนเซ็น", "size": "sm", "color": "#eaf3de", "weight": "bold"},
+                    {"type": "text", "text": "รออนุมัติจาก Senior", "size": "xs", "color": "#c3e0a0", "margin": "xs"},
+                ],
+            },
+            "body": {"type": "box", "layout": "vertical", "paddingAll": "16px", "contents": body},
+            "footer": {
+                "type": "box", "layout": "vertical", "spacing": "sm", "paddingAll": "12px", "contents": [
+                    {"type": "button", "style": "primary", "color": "#1d9e75", "height": "sm",
+                     "action": {"type": "postback", "label": "✅ อนุมัติ",
+                                "data": f"action=approve&ref={ref}", "displayText": f"✅ อนุมัติเคส {ref}"}},
+                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                        {"type": "button", "style": "secondary", "height": "sm",
+                         "action": {"type": "postback", "label": "✏️ แก้ไข",
+                                    "data": f"action=edit&ref={ref}", "displayText": f"✏️ ขอแก้ไขเคส {ref}"}},
+                        {"type": "button", "style": "secondary", "height": "sm",
+                         "action": {"type": "postback", "label": "❌ ยกเลิก",
+                                    "data": f"action=cancel&ref={ref}", "displayText": f"❌ ยกเลิกเคส {ref}"}},
+                    ]},
+                ],
+            },
+        },
+    }
+
+
+def build_loan_flex(d: dict, base_url: str = "") -> dict:
+    """สร้าง Flex 'ยื่นสินเชื่อ' — สรุปโปรไฟล์ลูกค้า + ส่ง senior อนุมัติ/แก้ไข/ยกเลิก."""
+    def g(k: str) -> str:
+        v = str(d.get(k) or "").strip()
+        return v or "-"
+
+    sales = g("sales")
+    ref = g("phone")  # ใช้เบอร์เป็น ref (ใบยื่นไม่มี lead code)
+    has_guarantor = bool(str(d.get("gCustomer") or "").strip())
+
+    def kv(label: str, value, color: str = "#1f2937") -> dict:
+        return {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+            {"type": "text", "text": label, "size": "xs", "color": "#9ca3af", "flex": 4},
+            {"type": "text", "text": str(value), "size": "xs", "color": color,
+             "flex": 7, "wrap": True, "weight": "bold"},
+        ]}
+
+    def section(title: str, rows: list) -> list:
+        return [
+            {"type": "separator", "margin": "md"},
+            {"type": "text", "text": title, "size": "xs", "color": "#185fa5", "weight": "bold", "margin": "md"},
+            {"type": "box", "layout": "vertical", "margin": "sm", "spacing": "sm", "contents": rows},
+        ]
+
+    body = [
+        {"type": "text", "text": g("customer"), "weight": "bold", "size": "lg", "color": "#1f2937", "wrap": True},
+        {"type": "text", "text": f"อายุ {g('age')} · {g('phone')} · {g('province')}",
+         "size": "xs", "color": "#9ca3af", "margin": "xs", "wrap": True},
+    ]
+    body += section("💼 อาชีพ & รายได้", [
+        kv("อาชีพ", g("occupation")),
+        kv("ชื่อบริษัท/กิจการ", g("company") if g("company") != "-" else g("bizName")),
+        kv("รายได้เฉลี่ย/เดือน", g("avgIncome") if g("avgIncome") != "-" else g("salary")),
+        kv("แหล่งรายได้", g("incomeSource")),
+    ])
+    body += section("📊 ประวัติเครดิต", [
+        kv("ผ่อนอยู่กับ", f"{g('payBank')} · งวดละ {g('payInstallment')}"),
+        kv("สถานะผ่อน", g("payStatus"), "#059669"),
+        kv("บัตรเครดิต", g("credit")),
+        kv("แบล็คลิสต์", g("blacklist")),
+    ])
+    body += section("🚗 รถ & ไฟแนนซ์", [
+        kv("รุ่นรถ", g("carModel")),
+        kv("ไฟแนนซ์ที่จัด", g("finance"), "#185fa5"),
+        kv("เหตุผล", g("reason")),
+    ])
+    if has_guarantor:
+        body += section("🤝 ผู้ค้ำ/ผู้กู้ร่วม", [
+            kv("ชื่อ", g("gCustomer")),
+            kv("ความสัมพันธ์", g("gRelation")),
+            kv("อาชีพ", g("gOccupation")),
+            kv("รายได้/เดือน", g("gAvgIncome")),
+        ])
+    body += [
+        {"type": "separator", "margin": "md"},
+        {"type": "box", "layout": "baseline", "spacing": "sm", "margin": "md", "contents": [
+            {"type": "text", "text": "🧑‍💼 เซลล์", "size": "xs", "color": "#9ca3af", "flex": 4},
+            {"type": "text", "text": sales, "size": "xs", "color": "#185fa5", "flex": 7, "weight": "bold"},
+        ]},
+    ]
+
+    return {
+        "type": "flex",
+        "altText": f"📄 ยื่นสินเชื่อ — {g('customer')} · {g('finance')} ({sales})",
+        "contents": {
+            "type": "bubble", "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical", "backgroundColor": "#185fa5", "paddingAll": "16px",
+                "contents": [
+                    {"type": "text", "text": "📄 ข้อมูลผู้ยื่นขอสินเชื่อ", "size": "sm", "color": "#cfe2f7", "weight": "bold"},
+                    {"type": "text", "text": "รออนุมัติจาก Senior", "size": "xs", "color": "#9cc3ec", "margin": "xs"},
+                ],
+            },
+            "body": {"type": "box", "layout": "vertical", "paddingAll": "16px", "contents": body},
+            "footer": {
+                "type": "box", "layout": "vertical", "spacing": "sm", "paddingAll": "12px", "contents": [
+                    {"type": "button", "style": "primary", "color": "#1d9e75", "height": "sm",
+                     "action": {"type": "postback", "label": "✅ อนุมัติ",
+                                "data": f"action=approve&type=loan&ref={ref}", "displayText": f"✅ อนุมัติเคส {g('customer')}"}},
+                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                        {"type": "button", "style": "secondary", "height": "sm",
+                         "action": {"type": "postback", "label": "✏️ แก้ไข",
+                                    "data": f"action=edit&type=loan&ref={ref}", "displayText": f"✏️ ขอแก้ไขเคส {g('customer')}"}},
+                        {"type": "button", "style": "secondary", "height": "sm",
+                         "action": {"type": "postback", "label": "❌ ยกเลิก",
+                                    "data": f"action=cancel&type=loan&ref={ref}", "displayText": f"❌ ยกเลิกเคส {g('customer')}"}},
+                    ]},
+                ],
+            },
+        },
+    }
+
+
 def schedule_matches_now(sched: dict, now=None) -> bool:
     """ตรวจว่า schedule ตรงกับเวลาปัจจุบัน (BKK) หรือเปล่า — match by HH:MM นาทีต่อนาที"""
     from .fetch_dashboard import bangkok_now

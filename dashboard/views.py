@@ -5,7 +5,7 @@ import urllib.parse
 from django.conf import settings
 from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .services.fetch_dashboard import fetch_dashboard_data
@@ -32,6 +32,20 @@ def _session_user(request):
     u = request.session.get("oxlet_user")
     if u and isinstance(u, dict) and u.get("position"):
         return u
+    return None
+
+
+def _save_to_supabase(table, row):
+    """เก็บ row ลง Supabase (best-effort). คืน id ถ้าสำเร็จ, None ถ้าล่ม/ยังไม่ตั้งค่า."""
+    try:
+        from .services.supabase_client import is_configured, insert_row
+        if not is_configured():
+            return None
+        saved = insert_row(table, row)
+        if saved and isinstance(saved, list):
+            return saved[0].get("id")
+    except Exception:
+        pass
     return None
 
 
@@ -501,6 +515,34 @@ def cron_tick(request):
         "fired": len(fired_schedules),
         "results": all_results,
     })
+
+
+@require_http_methods(["GET", "POST"])
+def cron_sync(request):
+    """Public (?secret=xxx) — sync Google Sheets → Supabase (sheet_cache).
+    ให้ external cron ยิงทุก 1 นาที = realtime (วิธี A). Auth เหมือน cron_tick.
+    """
+    secret_setting = (getattr(settings, "CRON_SECRET", "") or "").strip()
+    if not secret_setting:
+        return JsonResponse({"error": "CRON_SECRET ยังไม่ได้ตั้งใน env"}, status=500)
+    auth_header = request.headers.get("Authorization", "")
+    bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    submitted = (
+        bearer
+        or request.GET.get("secret", "").strip()
+        or request.headers.get("X-Cron-Secret", "").strip()
+    )
+    if submitted != secret_setting:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    from .services.supabase_client import is_configured, sync_all_sheets_to_supabase
+    if not is_configured():
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง SUPABASE_URL / SUPABASE_SECRET_KEY"}, status=500)
+    try:
+        result = sync_all_sheets_to_supabase()
+    except Exception as e:
+        return JsonResponse({"error": f"sync ล้มเหลว: {e}"}, status=500)
+    return JsonResponse({"ok": True, "synced": result})
 
 
 @require_http_methods(["GET", "POST"])
@@ -988,6 +1030,153 @@ def api_auth(request):
 def magic_link(request, token):
     """Magic link auth entry — /u/<token>/"""
     return render(request, "dashboard/magic_link.html", {"token": token})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def finance_check_submit(request):
+    """รับฟอร์ม 'เช็คเคสไฟแนนซ์ก่อนเซ็น' จากหน้าเซลล์ → สร้าง Flex → push เข้า LINE
+
+    ช่วงทดสอบ: ส่งเข้า FINANCE_TEST_LINE_ID (หรือ EXECUTIVE_USER_IDS[0]) แทนกลุ่ม
+    body JSON: {"token": "<seller token>", "data": {...form fields...}}
+    """
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+    token = (body.get("token") or "").strip()
+    data = body.get("data") or {}
+    if not isinstance(data, dict):
+        return JsonResponse({"error": "data ต้องเป็น object"}, status=400)
+
+    seller_name = seller_from_token(token) or "-"
+    data.setdefault("seller", seller_name)
+
+    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not channel_token:
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN ใน .env"}, status=500)
+
+    # ปลายทาง: ส่งเข้า FINANCE_TEST_LINE_ID เท่านั้น — ไม่ fallback ไป id อื่นเด็ดขาด (กันส่งผิดคน)
+    target = (getattr(settings, "FINANCE_TEST_LINE_ID", "") or "").strip()
+    if not target:
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง FINANCE_TEST_LINE_ID ใน .env — ปฏิเสธการส่ง (กันส่งผิดคน)"}, status=500)
+
+    # เก็บลง Supabase (best-effort — ไม่ block การส่ง LINE)
+    record_id = _save_to_supabase("finance_checks", {
+        "seller": data.get("seller") or seller_name,
+        "lead_code": data.get("leadCode", ""),
+        "customer": data.get("customer", ""),
+        "finco": data.get("finco", ""),
+        "status": "pending",
+        "data": data,
+    })
+
+    from .services.line_notify import build_finance_check_flex, push_line_message
+    base_url = request.build_absolute_uri("/").rstrip("/")
+    try:
+        flex = build_finance_check_flex(data, base_url=base_url)
+        code, text = push_line_message(target, [flex], channel_token)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+    if code == 200:
+        return JsonResponse({"ok": True, "target": target[:10] + "...", "saved": bool(record_id), "id": record_id})
+    return JsonResponse({"error": f"LINE {code}: {text[:200]}"}, status=502)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def scan_doc(request):
+    """รับรูปเอกสารไฟแนนซ์ → Gemini OCR → คืน field สำหรับเติมฟอร์ม (ร่าง ให้คนตรวจก่อน).
+
+    body JSON: {"image": "data:image/jpeg;base64,...."}  (หรือ base64 ล้วน)
+    """
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+    img = (body.get("image") or "").strip()
+    if not img:
+        return JsonResponse({"error": "ไม่มีรูป"}, status=400)
+
+    mime = "image/jpeg"
+    if img.startswith("data:"):
+        try:
+            header, b64 = img.split(",", 1)
+            mime = header.split(";")[0].replace("data:", "").strip() or mime
+        except ValueError:
+            return JsonResponse({"error": "รูปไม่ถูกต้อง"}, status=400)
+    else:
+        b64 = img
+
+    import base64 as _b64
+    try:
+        img_bytes = _b64.b64decode(b64)
+    except Exception:
+        return JsonResponse({"error": "decode รูปไม่ได้"}, status=400)
+    if len(img_bytes) > 8 * 1024 * 1024:
+        return JsonResponse({"error": "รูปใหญ่เกิน 8MB — ถ่ายใหม่หรือย่อก่อน"}, status=400)
+
+    form = (body.get("form") or "finance").strip()
+    from .services.gemini_ocr import extract_finance_fields, extract_loan_fields
+    try:
+        if form == "loan":
+            fields = extract_loan_fields(img_bytes, mime)
+        else:
+            fields = extract_finance_fields(img_bytes, mime)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=502)
+    return JsonResponse({"ok": True, "fields": fields})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def loan_submit(request):
+    """รับฟอร์ม 'ยื่นสินเชื่อ' จากหน้าเซลล์ → สร้าง Flex → push เข้า LINE (ทดสอบส่ง id แอดมิน)."""
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+    token = (body.get("token") or "").strip()
+    data = body.get("data") or {}
+    if not isinstance(data, dict):
+        return JsonResponse({"error": "data ต้องเป็น object"}, status=400)
+
+    seller_name = seller_from_token(token) or "-"
+    data.setdefault("sales", seller_name)
+
+    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not channel_token:
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN ใน .env"}, status=500)
+
+    target = (getattr(settings, "FINANCE_TEST_LINE_ID", "") or "").strip()
+    if not target:
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง FINANCE_TEST_LINE_ID ใน .env — ปฏิเสธการส่ง (กันส่งผิดคน)"}, status=500)
+
+    # เก็บลง Supabase (best-effort)
+    record_id = _save_to_supabase("loan_applications", {
+        "seller": data.get("sales") or seller_name,
+        "customer": data.get("customer", ""),
+        "phone": data.get("phone", ""),
+        "finance": data.get("finance", ""),
+        "status": "pending",
+        "data": data,
+    })
+
+    from .services.line_notify import build_loan_flex, push_line_message
+    base_url = request.build_absolute_uri("/").rstrip("/")
+    try:
+        flex = build_loan_flex(data, base_url=base_url)
+        code, text = push_line_message(target, [flex], channel_token)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+    if code == 200:
+        return JsonResponse({"ok": True, "target": target[:10] + "...", "saved": bool(record_id), "id": record_id})
+    return JsonResponse({"error": f"LINE {code}: {text[:200]}"}, status=502)
 
 
 @require_GET

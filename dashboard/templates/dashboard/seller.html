@@ -113,6 +113,7 @@
   let bookStatusFilter = 'all';
   let statusFilter = 'all';   // dropdown ในหัว lead list: all | follow | returned | cancelled | reassigned
   let sortOrder = '';         // '' (default urgency) | 'updates_desc' | 'updates_asc'
+  let pageMode = 'dashboard'; // 'dashboard' | 'finance' — เลือกจาก dropdown โหมดบนหัว
   const __charts = {};
 
   // ── date utils ──
@@ -482,6 +483,8 @@
 
   // ── render ──
   function render() {
+    if (pageMode === 'finance') { renderFinanceMode(); return; }
+    if (pageMode === 'loan') { renderLoanMode(); return; }
     const s = D.seller;
     const teamId = s.team || '?';
     const teamName = (C.TEAM_NAMES || {})[teamId] || teamId;
@@ -531,6 +534,7 @@
     };
 
     let html = `
+      ${modeBar()}
       <div class="seller-hd">
         <div>
           <h1>${h(SELLER_NAME)}</h1>
@@ -1236,6 +1240,482 @@
       </div>
     `;
     document.body.appendChild(overlay);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // โหมด (mode selector) — สลับ แดชบอร์ด / ฟอร์มเช็คไฟแนนซ์
+  // ════════════════════════════════════════════════════════════════
+  function modeBar() {
+    return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:var(--bg);border:.5px solid var(--bd);border-radius:12px;padding:10px 14px">
+        <span style="font-size:12px;color:var(--t3);font-weight:700">โหมด</span>
+        <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">
+          <option value="dashboard" ${pageMode==='dashboard'?'selected':''}>📊 แดชบอร์ดของฉัน</option>
+          <option value="loan" ${pageMode==='loan'?'selected':''}>📄 ยื่นสินเชื่อ</option>
+          <option value="finance" ${pageMode==='finance'?'selected':''}>📝 เช็คเคสไฟแนนซ์ก่อนเซ็น</option>
+        </select>
+      </div>`;
+  }
+  function setPageMode(v) { pageMode = v; window.scrollTo(0,0); render(); }
+
+  // ── ตัวเลือก dropdown (แก้ลิสต์ตรงนี้ได้เลย) ──
+  const FC_BRANCHES = ['เลือกสาขา', 'สำนักงานใหญ่', 'สาขาย่อย'];
+  const FC_FINCOS   = ['เลือกไฟแนนซ์','AY','KK','ASK','TTB','CIMB','Orico','SCB','Tisco','AEON','Nissan','MIDA'];
+  const FC_STATUSES = ['เลือก', '✅ อนุมัติ', '🟡 อนุมัติแบบมีเงื่อนไข', '⏳ รออนุมัติ', '❌ ไม่อนุมัติ'];
+  const FC_TERMS    = ['เลือก', '12', '24', '36', '48', '60', '72', '84'];
+  const FC_DOCS     = ['บัตรประชาชน', 'ทะเบียนบ้าน', 'สลิปเงินเดือน', 'Statement 6 เดือน', 'สำเนาผู้ค้ำ', 'เงินดาวน์'];
+  const FC_DOCS_DEFAULT = ['บัตรประชาชน', 'ทะเบียนบ้าน'];
+
+  function renderFinanceMode() {
+    const lbl = (t) => `<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
+    const inStyle = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;font-family:inherit;box-sizing:border-box';
+    const inp = (id, ph, val) => `<input id="${id}" placeholder="${h(ph||'')}" value="${h(val||'')}" style="${inStyle}">`;
+    const sel = (id, opts) => `<select id="${id}" style="${inStyle};cursor:pointer">${opts.map((o,i)=>`<option value="${i===0?'':h(o)}">${h(o)}</option>`).join('')}</select>`;
+    const area = (id, ph) => `<textarea id="${id}" placeholder="${h(ph||'')}" rows="2" style="${inStyle};resize:vertical;min-height:54px"></textarea>`;
+    const field = (label, control) => `<div>${lbl(label)}${control}</div>`;
+
+    const docsHtml = FC_DOCS.map(doc => {
+      const checked = FC_DOCS_DEFAULT.includes(doc) ? 'checked' : '';
+      return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--t1);cursor:pointer;padding:4px 8px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg2)"><input type="checkbox" class="fc-doc" value="${h(doc)}" ${checked}>${h(doc)}</label>`;
+    }).join('');
+
+    const html = `
+      ${modeBar()}
+      <div style="background:var(--green-bg,#eaf3de);border:.5px solid var(--green-mid,#1d9e75);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:26px">📋</div>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:var(--t1)">เช็คเคสไฟแนนซ์ก่อนเซ็น</div>
+          <div style="font-size:12px;color:var(--t2)">กรอกข้อมูล แล้วกด "บันทึก & ส่ง LINE" เพื่อส่งให้ Senior อนุมัติ</div>
+        </div>
+      </div>
+
+      <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <input id="fc_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanDoc(this)">
+        <button onclick="document.getElementById('fc_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">📷 สแกนเอกสาร กรอกให้อัตโนมัติ</button>
+        <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบอนุมัติ/ฟอร์ม → ระบบกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนกดส่ง</b> (โดยเฉพาะตัวเลข)</span>
+        <span id="fc_scan_status" style="font-size:12px"></span>
+      </div>
+
+      <div class="section">
+        <h2>ข้อมูลทั่วไป</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${field('Lead Code', inp('fc_leadcode','TLD-XXXXX'))}
+          ${field('สาขา', sel('fc_branch', FC_BRANCHES))}
+          <div style="grid-column:span 2">${field('ชื่อลูกค้า', inp('fc_customer','ชื่อ-นามสกุล'))}</div>
+          <div style="grid-column:span 2">${field('รถที่จอง (ยี่ห้อ/รุ่น/ปี)', inp('fc_car','เช่น Honda Civic 2020'))}</div>
+          ${field('ทะเบียน', inp('fc_plate','กข-1234 กรุงเทพฯ'))}
+          ${field('ราคารถ (บาท)', inp('fc_price','000,000'))}
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>ข้อมูลไฟแนนซ์</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${field('บริษัทไฟแนนซ์', sel('fc_finco', FC_FINCOS))}
+          ${field('สถานะอนุมัติ', sel('fc_status', FC_STATUSES))}
+          ${field('วงเงินที่อนุมัติ (บาท)', inp('fc_approved','000,000'))}
+          ${field('ยอดดาวน์ (บาท)', inp('fc_down','000,000'))}
+          ${field('ยอดผ่อน/เดือน (บาท)', inp('fc_monthly','0,000'))}
+          ${field('จำนวนงวด', sel('fc_terms', FC_TERMS))}
+          <div style="grid-column:span 2">${field('เงื่อนไขพิเศษ / หมายเหตุจากไฟแนนซ์', area('fc_cond','เช่น ต้องมีผู้ค้ำ, ดอกเบี้ยพิเศษ...'))}</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>นัดเซ็นสัญญา</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${field('วันนัดเซ็น', `<input id="fc_signdate" type="date" style="${inStyle};cursor:pointer">`)}
+          ${field('เวลานัด', `<input id="fc_signtime" type="time" style="${inStyle};cursor:pointer">`)}
+        </div>
+        <div style="margin-top:12px">${lbl('เอกสารที่ต้องนำมา')}<div style="display:flex;flex-wrap:wrap;gap:7px">${docsHtml}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+          ${field('เซลล์ผู้ดูแล', inp('fc_seller','ชื่อเซลล์', SELLER_NAME))}
+          ${field('หมายเหตุเพิ่มเติม', inp('fc_extra','ถ้ามี...'))}
+        </div>
+      </div>
+
+      <div id="fc-result" style="margin-bottom:10px"></div>
+      <div id="fc-preview-box" style="display:none;margin-bottom:10px"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button onclick="previewFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">👁️ ดูตัวอย่าง</button>
+        <button onclick="copyFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">📋 คัดลอกข้อความ</button>
+        <button id="fc-send-btn" onclick="sendFinance()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--green-mid,#1d9e75);color:#fff;font-size:13px;font-weight:800;cursor:pointer">💾 บันทึก & ส่ง LINE</button>
+      </div>
+    `;
+    document.getElementById('root').innerHTML = html;
+  }
+
+  // ── เก็บค่า + สร้างข้อความ ──
+  function collectFinance() {
+    const v = (id) => (document.getElementById(id)?.value || '').trim();
+    const docs = [];
+    document.querySelectorAll('.fc-doc:checked').forEach(c => docs.push(c.value));
+    return {
+      leadCode:v('fc_leadcode'), branch:v('fc_branch'), customer:v('fc_customer'),
+      car:v('fc_car'), plate:v('fc_plate'), price:v('fc_price'),
+      finco:v('fc_finco'), status:v('fc_status'), approved:v('fc_approved'),
+      down:v('fc_down'), monthly:v('fc_monthly'), terms:v('fc_terms'), cond:v('fc_cond'),
+      signDate:v('fc_signdate'), signTime:v('fc_signtime'), docs,
+      seller:v('fc_seller'), extra:v('fc_extra'),
+    };
+  }
+  function financeText(d) {
+    const x = (s) => s || '-';
+    const docs = d.docs && d.docs.length ? d.docs.join(', ') : '-';
+    return `📋 เช็คเคสไฟแนนซ์ก่อนเซ็น
+━━━━━━━━━━━━
+👤 ลูกค้า: ${x(d.customer)}
+🔖 Lead: ${x(d.leadCode)}  |  สาขา: ${x(d.branch)}
+🚗 รถ: ${x(d.car)}  (${x(d.plate)})
+💰 ราคารถ: ${x(d.price)}
+
+🏦 ไฟแนนซ์: ${x(d.finco)} — ${x(d.status)}
+วงเงินอนุมัติ: ${x(d.approved)}  |  ดาวน์: ${x(d.down)}
+ผ่อน: ${x(d.monthly)} x ${x(d.terms)} งวด
+เงื่อนไข: ${x(d.cond)}
+
+📅 นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}
+📎 เอกสาร: ${docs}
+🧑‍💼 เซลล์: ${x(d.seller)}
+📝 ${x(d.extra)}`;
+  }
+  function previewFinance() {
+    const box = document.getElementById('fc-preview-box');
+    const txt = financeText(collectFinance());
+    box.style.display = 'block';
+    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;color:var(--t1)">${h(txt)}</div>`;
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  function copyFinance() {
+    navigator.clipboard.writeText(financeText(collectFinance())).then(() => {
+      const box = document.getElementById('fc-result');
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ คัดลอกข้อความแล้ว</div>`;
+      setTimeout(() => { box.innerHTML = ''; }, 2000);
+    });
+  }
+  async function sendFinance() {
+    const d = collectFinance();
+    if (!d.customer && !d.leadCode) { alert('กรอกอย่างน้อย "ชื่อลูกค้า" หรือ "Lead Code"'); return; }
+    if (!confirm('ส่งเคสนี้เข้า LINE ให้ Senior อนุมัติ?')) return;
+    const btn = document.getElementById('fc-send-btn');
+    const box = document.getElementById('fc-result');
+    btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...';
+    const parts = location.pathname.split('/').filter(Boolean);  // ['s', '<token>']
+    const token = parts[1] || '';
+    try {
+      const res = await fetch('/api/seller/finance_check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, data: d }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) {
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+      } else {
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+      }
+    } catch (e) {
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(e.message)}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
+    }
+  }
+
+  // ── 📷 สแกนเอกสาร (Gemini OCR) → เติมฟอร์มเป็นร่าง ──
+  function downscaleImage(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.width, hh = img.height;
+        if (Math.max(w, hh) > maxDim) { const s = maxDim / Math.max(w, hh); w = Math.round(w*s); hh = Math.round(hh*s); }
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = hh;
+        cv.getContext('2d').drawImage(img, 0, 0, w, hh);
+        resolve(cv.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('โหลดรูปไม่ได้')); };
+      img.src = url;
+    });
+  }
+  // เซ็ตค่าเข้า field — input ใส่ตรง, select หา option ที่ match (exact/contains/normalize)
+  function fcSet(id, val) {
+    if (!val) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName === 'SELECT') {
+      const opts = Array.from(el.options).filter(o => o.value);
+      const norm = (s) => (s||'').replace(/[^฀-๿a-zA-Z0-9]/g, '').toLowerCase();
+      let m = opts.find(o => o.value === val)
+           || opts.find(o => o.value.includes(val) || val.includes(o.value))
+           || opts.find(o => norm(o.value) && (norm(o.value).includes(norm(val)) || norm(val).includes(norm(o.value))));
+      if (m) el.value = m.value;
+    } else {
+      el.value = val;
+    }
+  }
+  function applyScanFields(f) {
+    ['leadCode','branch','customer','car','plate','price','finco','status','approved','down','monthly','terms','cond','signDate','signTime','extra']
+      .forEach(k => fcSet('fc_' + k, f[k]));
+  }
+  async function scanDoc(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const st = document.getElementById('fc_scan_status');
+    st.innerHTML = '<span style="display:inline-flex;align-items:center;gap:7px;color:var(--blue);font-weight:600"><span class="spin" style="width:15px;height:15px;border-width:2px;display:inline-block"></span>กำลังอ่านเอกสาร...</span>';
+    try {
+      const dataUrl = await downscaleImage(file, 1600, 0.85);
+      const res = await fetch('/api/seller/scan_doc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) {
+        st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
+      } else {
+        applyScanFields(j.fields || {});
+        st.innerHTML = `<span style="color:var(--green)">✅ กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(e.message)}</span>`;
+    } finally {
+      input.value = '';
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 📄 โหมด "ยื่นสินเชื่อ" (ตามใบกระดาษ ข้อมูลผู้ยื่นขอสินเชื่อ)
+  // ════════════════════════════════════════════════════════════════
+  const LN_BANKS = ['เลือกไฟแนนซ์','AY','KK','ASK','TTB','CIMB','Orico','SCB','Tisco','AEON','Nissan','MIDA'];
+  const LN_KEYS = ['customer','age','phone','province','sex','residence','rent','liveYears','marital','children',
+    'occupation','incomeSource','company','companyAbout','companyLoc','position','workYears','salary','ot','avgIncome',
+    'bizName','bizType','bizLoc','bizYears','socialSecurity','socialAmount','otherJob',
+    'loanHistoryType','credit','payBank','payInstallment','payDuration','payStatus','payClosed','blacklist','tracking','creditRequests',
+    'carModel','finance','reason','note',
+    'gCustomer','gRelation','gAge','gPhone','gProvince','gOccupation','gAvgIncome',
+    'referrer','referrerPhone','sales','date'];
+
+  function renderLoanMode() {
+    const inS = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;font-family:inherit;box-sizing:border-box';
+    const lbl = (t) => `<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
+    const inp = (id, ph, val) => `<input id="ln_${id}" placeholder="${h(ph||'')}" value="${h(val||'')}" style="${inS}">`;
+    const num = (id, ph) => `<input id="ln_${id}" type="text" inputmode="numeric" placeholder="${h(ph||'')}" style="${inS}">`;
+    const sel = (id, opts) => `<select id="ln_${id}" style="${inS};cursor:pointer">${opts.map((o,i)=>`<option value="${i===0?'':h(o)}">${h(o)}</option>`).join('')}</select>`;
+    const area = (id, ph) => `<textarea id="ln_${id}" placeholder="${h(ph||'')}" rows="2" style="${inS};resize:vertical;min-height:54px"></textarea>`;
+    const f = (label, ctrl, span) => `<div${span?' style="grid-column:span 2"':''}>${lbl(label)}${ctrl}</div>`;
+    const grid = (inner) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${inner}</div>`;
+
+    const html = `
+      ${modeBar()}
+      <div style="background:var(--blue-bg,#e6f1fb);border:.5px solid var(--blue);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:26px">📄</div>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:var(--t1)">ข้อมูลผู้ยื่นขอสินเชื่อรถยนต์มือสอง</div>
+          <div style="font-size:12px;color:var(--t2)">ถ่ายรูปใบยื่น → กรอกอัตโนมัติ → ตรวจ/แก้ → ส่งให้ Senior อนุมัติ</div>
+        </div>
+      </div>
+
+      <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <input id="ln_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanLoanDoc(this)">
+        <button onclick="document.getElementById('ln_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">📷 สแกนใบยื่น กรอกอัตโนมัติ</button>
+        <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบกระดาษ → ระบบอ่านลายมือกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนส่ง</b></span>
+        <span id="ln_scan_status" style="font-size:12px"></span>
+      </div>
+
+      <div class="section">
+        <h2>👤 ข้อมูลผู้เช่าซื้อ (ลูกค้า)</h2>
+        ${grid(
+          f('ชื่อลูกค้า', inp('customer','ชื่อ-นามสกุล'), true) +
+          f('อายุ', inp('age','ปี')) +
+          f('เบอร์โทร', inp('phone','08x-xxx-xxxx')) +
+          f('จังหวัด', inp('province','จังหวัด')) +
+          f('เพศ', sel('sex',['เลือก','ชาย','หญิง'])) +
+          f('ที่พัก', sel('residence',['เลือก','บ้านตัวเอง','บ้านเช่า','ห้องเช่า','บ้านพักสวัสดิการ'])) +
+          f('ค่าเช่า/ผ่อนบ้าน (บาท/เดือน)', num('rent','0')) +
+          f('ระยะเวลาที่อาศัย', inp('liveYears','เช่น 20 ปี')) +
+          f('สถานภาพ', sel('marital',['เลือก','โสด','สมรส','จดทะเบียน','ไม่จดทะเบียน'])) +
+          f('จำนวนบุตร', inp('children','คน'))
+        )}
+      </div>
+
+      <div class="section">
+        <h2>💼 อาชีพ &amp; รายได้</h2>
+        ${grid(
+          f('อาชีพ', sel('occupation',['เลือก','พนักงานบริษัท','เจ้าของกิจการ','ค้าขาย','เกษตรกร','รับเหมา','อื่นๆ'])) +
+          f('แหล่งที่มารายได้', sel('incomeSource',['เลือก','เงินเข้าบัญชีอัตโนมัติ','รับเงินสด','นายจ้างโอนเข้าบัญชี'])) +
+          f('ชื่อบริษัท', inp('company','')) +
+          f('ทำเกี่ยวกับ', inp('companyAbout','')) +
+          f('ที่ตั้งบริษัท', inp('companyLoc',''), true) +
+          f('ตำแหน่ง', inp('position','')) +
+          f('อายุงาน', inp('workYears','ปี/เดือน')) +
+          f('ฐานเงินเดือน', num('salary','0')) +
+          f('โอที (OT)', num('ot','0')) +
+          f('รับเฉลี่ย/เดือน', num('avgIncome','0')) +
+          f('ชื่อกิจการ/ร้าน', inp('bizName','')) +
+          f('ประเภทสินค้า', inp('bizType','')) +
+          f('ที่ตั้งกิจการ', inp('bizLoc','')) +
+          f('เปิดมาแล้ว', inp('bizYears','ปี/เดือน')) +
+          f('ประกันสังคม', sel('socialSecurity',['เลือก','มี','ไม่มี'])) +
+          f('หักประกันสังคม/เดือน', num('socialAmount','0')) +
+          f('อาชีพอื่น', inp('otherJob',''), true)
+        )}
+      </div>
+
+      <div class="section">
+        <h2>📊 ประวัติการผ่อน / เครดิต</h2>
+        ${grid(
+          f('ประเภทประวัติผ่อน', sel('loanHistoryType',['เลือก','บ้าน','รถยนต์','รถมอเตอร์ไซค์'])) +
+          f('บัตรเครดิต / ประวัติ', sel('credit',['เลือก','บัตรเครดิต','ไม่มีประวัติ','อื่นๆ'])) +
+          f('ธนาคารที่ผ่อนอยู่', inp('payBank','')) +
+          f('งวดละ (บาท)', num('payInstallment','0')) +
+          f('ผ่อนมาแล้ว', inp('payDuration','เช่น 1 ปี')) +
+          f('สถานะการผ่อน', sel('payStatus',['เลือก','ผ่อนดีผ่อนตรง','เคยล่าช้าไม่เกิน 30 วัน','ล่าช้าเกิน 30 วัน'])) +
+          f('การปิดบัญชี', sel('payClosed',['เลือก','ผ่อนชำระหมดแล้ว','ปิดปกติ','ไม่ปกติ'])) +
+          f('แบล็คลิสต์', sel('blacklist',['เลือก','ไม่ติด','ปิดแล้ว','ยังไม่ปิด'])) +
+          f('Tracking ใน 2 ปี', sel('tracking',['เลือก','เคยยื่นตรวจสอบเครดิต','ไม่เคยยื่น'])) +
+          f('สินเชื่อที่ขอ (จำนวนครั้ง)', inp('creditRequests',''))
+        )}
+      </div>
+
+      <div class="section">
+        <h2>🚗 การเลือกไฟแนนซ์</h2>
+        ${grid(
+          f('รุ่นรถที่เลือกซื้อ', inp('carModel','เช่น Honda Civic 2020'), true) +
+          f('ไฟแนนซ์ที่เลือกจัด', sel('finance', LN_BANKS), true)
+        )}
+        <div style="margin-top:12px">${lbl('เหตุผลที่เลือกไฟแนนซ์นี้')}${area('reason','เช่น อนุมัติง่ายกว่า, ดอกเบี้ยต่ำ...')}</div>
+        <div style="margin-top:12px">${lbl('หมายเหตุ')}${area('note','ถ้ามี...')}</div>
+      </div>
+
+      <details class="section" style="padding:0">
+        <summary style="list-style:none;cursor:pointer;padding:13px;font-size:14px;font-weight:700;color:var(--t1)">🤝 ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:11px;font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
+        <div style="padding:0 13px 13px">
+          ${grid(
+            f('ชื่อผู้ค้ำ', inp('gCustomer','ชื่อ-นามสกุล')) +
+            f('ความสัมพันธ์', inp('gRelation','เช่น พี่/น้อง/คู่สมรส')) +
+            f('อายุ', inp('gAge','ปี')) +
+            f('เบอร์โทร', inp('gPhone','')) +
+            f('จังหวัด', inp('gProvince','')) +
+            f('อาชีพ', inp('gOccupation','')) +
+            f('รายได้เฉลี่ย/เดือน', num('gAvgIncome','0'))
+          )}
+        </div>
+      </details>
+
+      <div class="section">
+        <h2>✍️ ลงชื่อ</h2>
+        ${grid(
+          f('ชื่อคนแนะนำ', inp('referrer','')) +
+          f('เบอร์คนแนะนำ', inp('referrerPhone','')) +
+          f('พนักงานขาย', inp('sales','', SELLER_NAME)) +
+          f('วันที่', `<input id="ln_date" type="date" style="${inS};cursor:pointer">`)
+        )}
+      </div>
+
+      <div id="ln-result" style="margin-bottom:10px"></div>
+      <div id="ln-preview-box" style="display:none;margin-bottom:10px"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button onclick="previewLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">👁️ ดูตัวอย่าง</button>
+        <button onclick="copyLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">📋 คัดลอกข้อความ</button>
+        <button id="ln-send-btn" onclick="sendLoan()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:800;cursor:pointer">💾 บันทึก &amp; ส่ง LINE</button>
+      </div>
+    `;
+    document.getElementById('root').innerHTML = html;
+  }
+
+  function collectLoan() {
+    const v = (id) => (document.getElementById('ln_' + id)?.value || '').trim();
+    const o = {};
+    LN_KEYS.forEach(k => o[k] = v(k));
+    return o;
+  }
+  function applyLoanScanFields(f) { LN_KEYS.forEach(k => fcSet('ln_' + k, f[k])); }
+  function loanText(d) {
+    const x = (s) => s || '-';
+    const g = d.gCustomer ? `\n\n🤝 ผู้ค้ำ: ${x(d.gCustomer)} (${x(d.gRelation)})  อาชีพ ${x(d.gOccupation)}  รายได้ ${x(d.gAvgIncome)}` : '';
+    return `📄 ข้อมูลผู้ยื่นขอสินเชื่อ
+━━━━━━━━━━━━
+👤 ${x(d.customer)}  อายุ ${x(d.age)}  ${x(d.phone)}  จ.${x(d.province)}
+เพศ ${x(d.sex)} · ${x(d.marital)} · บุตร ${x(d.children)} · ที่พัก ${x(d.residence)}
+
+💼 อาชีพ: ${x(d.occupation)}  รายได้ ${x(d.incomeSource)}
+บริษัท/กิจการ: ${x(d.company || d.bizName)}
+ฐานเงินเดือน ${x(d.salary)} · OT ${x(d.ot)} · เฉลี่ย/เดือน ${x(d.avgIncome)}
+
+📊 ประวัติเครดิต: ${x(d.credit)}
+ผ่อน ${x(d.payBank)} งวดละ ${x(d.payInstallment)} (${x(d.payDuration)}) — ${x(d.payStatus)}
+แบล็คลิสต์: ${x(d.blacklist)} · Tracking: ${x(d.tracking)}
+
+🚗 รถ: ${x(d.carModel)}
+🏦 ไฟแนนซ์: ${x(d.finance)}
+เหตุผล: ${x(d.reason)}${g}
+
+🧑‍💼 เซลล์: ${x(d.sales)}  ผู้แนะนำ: ${x(d.referrer)}
+📝 ${x(d.note)}`;
+  }
+  function previewLoan() {
+    const box = document.getElementById('ln-preview-box');
+    box.style.display = 'block';
+    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;color:var(--t1)">${h(loanText(collectLoan()))}</div>`;
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  function copyLoan() {
+    navigator.clipboard.writeText(loanText(collectLoan())).then(() => {
+      const box = document.getElementById('ln-result');
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ คัดลอกข้อความแล้ว</div>`;
+      setTimeout(() => { box.innerHTML = ''; }, 2000);
+    });
+  }
+  async function sendLoan() {
+    const d = collectLoan();
+    if (!d.customer && !d.phone) { alert('กรอกอย่างน้อย "ชื่อลูกค้า" หรือ "เบอร์โทร"'); return; }
+    if (!confirm('ส่งใบยื่นสินเชื่อนี้เข้า LINE ให้ Senior อนุมัติ?')) return;
+    const btn = document.getElementById('ln-send-btn');
+    const box = document.getElementById('ln-result');
+    btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...';
+    const token = location.pathname.split('/').filter(Boolean)[1] || '';
+    try {
+      const res = await fetch('/api/seller/loan_submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, data: d }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) {
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+      } else {
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+      }
+    } catch (e) {
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(e.message)}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
+    }
+  }
+  async function scanLoanDoc(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const st = document.getElementById('ln_scan_status');
+    st.innerHTML = '<span style="display:inline-flex;align-items:center;gap:7px;color:var(--blue);font-weight:600"><span class="spin" style="width:15px;height:15px;border-width:2px;display:inline-block"></span>กำลังอ่านใบยื่น...</span>';
+    try {
+      const dataUrl = await downscaleImage(file, 1600, 0.85);
+      const res = await fetch('/api/seller/scan_doc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl, form: 'loan' }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) {
+        st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
+      } else {
+        applyLoanScanFields(j.fields || {});
+        st.innerHTML = `<span style="color:var(--green)">✅ กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(e.message)}</span>`;
+    } finally {
+      input.value = '';
+    }
   }
 
   render();
