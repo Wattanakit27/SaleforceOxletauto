@@ -58,6 +58,8 @@ FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "")
 
 # Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# โมเดล OCR — pro = แม่นสุด (ลายมือ), flash = เร็ว/ถูกกว่า
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 
 # Supabase — mirror Sheet + เก็บฟอร์ม (server-side, ใช้ secret key)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")

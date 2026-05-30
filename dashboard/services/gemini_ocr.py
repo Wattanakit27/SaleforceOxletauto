@@ -12,7 +12,7 @@ import json
 import requests
 from django.conf import settings
 
-GEMINI_MODEL = "gemini-2.5-flash"
+_DEFAULT_MODEL = "gemini-2.5-pro"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
@@ -99,7 +99,8 @@ def _call_gemini(image_bytes: bytes, mime_type: str, schema: dict, prompt: str) 
             "temperature": 0,
         },
     }
-    url = _GEMINI_URL.format(model=GEMINI_MODEL) + f"?key={key}"
+    model = (getattr(settings, "GEMINI_MODEL", "") or _DEFAULT_MODEL).strip()
+    url = _GEMINI_URL.format(model=model) + f"?key={key}"
     r = requests.post(url, json=body, timeout=60)
     if r.status_code != 200:
         raise Exception(f"Gemini API {r.status_code}: {r.text[:300]}")

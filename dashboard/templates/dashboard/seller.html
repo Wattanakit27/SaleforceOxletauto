@@ -119,7 +119,16 @@
   // ── date utils ──
   function parseSheetDate(s) {
     if (!s || s === '-') return null;
-    const m = String(s).match(/^(\d+)\/(\d+)\/(\d+)/);
+    s = String(s).trim();
+    // Excel serial date (4-5 หลักล้วน) — เช่น 46053
+    if (/^\d{4,5}$/.test(s)) {
+      const serial = parseInt(s, 10);
+      if (serial > 1000 && serial < 100000) {
+        const dt = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+        return { day: dt.getUTCDate(), month: dt.getUTCMonth() + 1, year: dt.getUTCFullYear() };
+      }
+    }
+    const m = s.match(/^(\d+)\/(\d+)\/(\d+)/);
     if (m) return { day: +m[1], month: +m[2], year: +m[3] };
     return null;
   }
@@ -318,7 +327,10 @@
   function bookingsInRange() {
     return (D.bookingCases || []).filter(b => {
       if (b.status === 'ปล่อย') {
-        const rd = (b.releaseDate && b.releaseDate !== '-') ? b.releaseDate : b.date;
+        // releaseDate (คอลัมน์ W) บางเคส admin กรอกเป็นข้อความ เช่น "ปล่อย 9/5" / "รับวันที่ 30/5"
+        // → ถ้า parse เป็นวันที่ไม่ได้ ใช้วันจอง (b.date) แทน (ตรงกับ backend get_done_month)
+        let rd = b.releaseDate;
+        if (!rd || rd === '-' || !parseSheetDate(rd)) rd = b.date;
         return dateMatchesFilter(rd);
       }
       return dateMatchesFilter(b.date);
@@ -1465,7 +1477,7 @@
     const st = document.getElementById('fc_scan_status');
     st.innerHTML = '<span style="display:inline-flex;align-items:center;gap:7px;color:var(--blue);font-weight:600"><span class="spin" style="width:15px;height:15px;border-width:2px;display:inline-block"></span>กำลังอ่านเอกสาร...</span>';
     try {
-      const dataUrl = await downscaleImage(file, 1600, 0.85);
+      const dataUrl = await downscaleImage(file, 2048, 0.92);
       const res = await fetch('/api/seller/scan_doc', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUrl }),
@@ -1699,7 +1711,7 @@
     const st = document.getElementById('ln_scan_status');
     st.innerHTML = '<span style="display:inline-flex;align-items:center;gap:7px;color:var(--blue);font-weight:600"><span class="spin" style="width:15px;height:15px;border-width:2px;display:inline-block"></span>กำลังอ่านใบยื่น...</span>';
     try {
-      const dataUrl = await downscaleImage(file, 1600, 0.85);
+      const dataUrl = await downscaleImage(file, 2048, 0.92);
       const res = await fetch('/api/seller/scan_doc', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUrl, form: 'loan' }),
