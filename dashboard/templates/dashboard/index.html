@@ -374,16 +374,17 @@
       // Excel serial
       if (/^\d{4,5}$/.test(ds)) {
         const serial = parseInt(ds, 10);
-        if (serial > 1000 && serial < 100000) {
+        if (serial > 40000 && serial < 50000) {   // ช่วงสมเหตุสมผล ~2009-2036 (กันเลขมั่ว)
           // Excel epoch = 1899-12-30
           return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
         }
+        return null;
       }
       const p = ds.split('/');
       if (p.length < 3) return null;
       let d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
       if (isNaN(d) || isNaN(mo) || isNaN(y)) return null;
-      if (y < 100) y += 2000;       // 25 → 2025
+      if (y < 100) y += (y > 50 ? 2500 : 2000);  // >50 = พ.ศ. 2 หลัก (69→2569), ≤50 = ค.ศ. (26)
       if (y > 2500) y -= 543;       // 2569 → 2026
       return new Date(y, mo - 1, d);
     }
@@ -1801,7 +1802,7 @@
         const p = String(s).split('/');
         if (p.length < 3) return 0;
         let y = parseInt(p[2]);
-        if (y < 100) y += 2000;
+        if (y < 100) y += (y > 50 ? 2500 : 2000);
         if (y > 2500) y -= 543;
         return y*10000 + (parseInt(p[1])||0)*100 + (parseInt(p[0])||0);
       };
@@ -2042,7 +2043,7 @@
         const p = String(s||'').split('/');
         if (p.length < 3) return null;
         let y = parseInt(p[2]);
-        if (y < 100) y += 2000;
+        if (y < 100) y += (y > 50 ? 2500 : 2000);
         if (y > 2500) y -= 543;
         const d = new Date(y, (parseInt(p[1])||1)-1, parseInt(p[0])||1);
         return isNaN(d) ? null : d;

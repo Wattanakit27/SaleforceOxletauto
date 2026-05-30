@@ -86,35 +86,69 @@ def bangkok_now() -> datetime:
 def parse_date(date_str: str) -> date | None:
     if not date_str or date_str == "-":
         return None
-    # Excel serial date
-    if re.match(r"^\d{4,5}$", date_str.strip()):
-        serial = int(date_str.strip())
-        if 1000 < serial < 100000:
+    s = date_str.strip()
+    # Excel serial date — จำกัดช่วงสมเหตุสมผล (~2009-2036) กันเลขมั่ว
+    # (เช่น "25235" = ปี 1969) ถูกตีเป็นวันที่ → ถ้านอกช่วงคืน None ให้ caller fallback ไปวันจอง
+    if re.match(r"^\d{4,5}$", s):
+        serial = int(s)
+        if 40000 < serial < 50000:
             from datetime import timedelta
-            excel_epoch = date(1899, 12, 30)
-            d = excel_epoch + timedelta(days=serial)
-            return d
-    # d/m/yy format
-    parts = date_str.split("/")
+            return date(1899, 12, 30) + timedelta(days=serial)
+        return None
+    # d/m/yy format — รองรับทั้ง ค.ศ. ("26") และ พ.ศ. ("69") ปนกันในชีต
+    parts = s.split("/")
     if len(parts) == 3:
         try:
             day = int(parts[0])
-            month = int(parts[1]) - 1  # 0-based for compatibility
+            month = int(parts[1])
             year = int(parts[2])
             if year < 100:
-                year += 2000
+                # 2 หลัก: >50 = พ.ศ. (69→2569→2026), ≤50 = ค.ศ. (26→2026)
+                year += 2500 if year > 50 else 2000
             if year > 2500:
                 year -= 543
-            return date(year, month + 1, day)
+            return date(year, month, day)
         except (ValueError, TypeError):
             pass
     # Fallback
     try:
         from dateutil.parser import parse as dateutil_parse
-        return dateutil_parse(date_str).date()
+        return dateutil_parse(s).date()
     except Exception:
         pass
     return None
+
+
+_EMBED_DATE_RE = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
+
+
+def extract_release_date(r) -> str:
+    """วันที่ปล่อยรถ — convention การกรอก: เดือน พ.ค.+ อยู่ X(23), เดือนก่อนหน้าอยู่ W(22)
+    (เผื่อ scan V/U ถ้าตัวหลักว่าง). ค่ามักปนข้อความ ('รับรถ 20/3/69') → ดึงวันที่ออกมา
+    กรองปี 2020-2035 กัน data เสีย (เช่น 1/2/1969). คืน '' ถ้าไม่เจอ → caller fallback วันจอง
+    """
+    def _ok(d):
+        return d is not None and 2020 <= d.year <= 2035
+
+    def _pick(val):
+        if not val:
+            return None
+        if _ok(parse_date(val)):              # วันที่ล้วน หรือ excel serial
+            return val
+        m = _EMBED_DATE_RE.search(val)        # วันที่ฝังในข้อความ
+        if m and _ok(parse_date(m.group())):
+            return m.group()
+        return None
+
+    bd = parse_date(cell(r, S.date))          # วันจอง (เชื่อถือได้) ใช้ดูว่าเป็นเดือน พ.ค.+ ไหม
+    is_may = bool(bd and bd.month >= 5)
+    # X=23, W=22, V=21, U=20 ; พ.ค.+ เริ่มที่ X, เดือนอื่นเริ่มที่ W แล้วค่อย scan ที่เหลือ
+    order = (23, 22, 21, 20) if is_may else (22, 23, 21, 20)
+    for col in order:
+        got = _pick(cell(r, col))
+        if got:
+            return got
+    return ""
 
 
 def is_this_year(date_str: str) -> bool:
@@ -148,7 +182,23 @@ def get_month(date_str: str) -> int:
 
 
 # ── Main fetch function ──
+_dash_cache: dict = {"ts": 0.0, "data": None}
+_DASH_TTL = 30  # วินาที — cache ผล dashboard กันคำนวณ aggregation ซ้ำทุก request
+
+
 def fetch_dashboard_data() -> dict:
+    """Cache wrapper — คืนผลที่คำนวณไว้ถ้ายังไม่เกิน TTL (เร็วขึ้นมากเวลาโหลดถี่)."""
+    import time
+    c = _dash_cache
+    if c["data"] is not None and (time.time() - c["ts"]) < _DASH_TTL:
+        return c["data"]
+    data = _compute_dashboard_data()
+    c["ts"] = time.time()
+    c["data"] = data
+    return data
+
+
+def _compute_dashboard_data() -> dict:
     # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
     # ถ้า sheet หายหรือ error → ใช้ default hardcode
     from .constants import refresh_from_sheet
@@ -251,11 +301,7 @@ def fetch_dashboard_data() -> dict:
             continue
         is_cash = "(ซื้อสด)" in status
         # วันที่ปล่อยรถ: ใช้ W (car_release_date) เป็นหลัก, ถ้าว่าง/parse ไม่ได้ ลอง V (legacy)
-        new_release = cell(r, S.car_release_date)
-        legacy_release = cell(r, S.legacy_car_release_date)
-        chosen_release = new_release if (new_release and parse_date(new_release)) else (
-            legacy_release if parse_date(legacy_release) else new_release
-        )
+        chosen_release = extract_release_date(r)
         lead_code = cell(r, S.lead_code).strip()
         channel_val = cell(r, S.channel)
         booking_cases.append({
@@ -1261,11 +1307,7 @@ def fetch_seller_stats(seller_name: str) -> dict:
         if not status:
             continue
         is_cash = "(ซื้อสด)" in status
-        new_release = cell(r, S.car_release_date)
-        legacy_release = cell(r, S.legacy_car_release_date)
-        chosen_release = new_release if (new_release and parse_date(new_release)) else (
-            legacy_release if parse_date(legacy_release) else new_release
-        )
+        chosen_release = extract_release_date(r)
         lead_code = cell(r, S.lead_code).strip()
         channel_val = cell(r, S.channel)
         my_booking_cases.append({

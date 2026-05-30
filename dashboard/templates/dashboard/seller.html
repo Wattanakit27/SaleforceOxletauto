@@ -123,10 +123,11 @@
     // Excel serial date (4-5 หลักล้วน) — เช่น 46053
     if (/^\d{4,5}$/.test(s)) {
       const serial = parseInt(s, 10);
-      if (serial > 1000 && serial < 100000) {
+      if (serial > 40000 && serial < 50000) {   // ช่วงสมเหตุสมผล ~2009-2036 (กันเลขมั่ว เช่น 25235)
         const dt = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
         return { day: dt.getUTCDate(), month: dt.getUTCMonth() + 1, year: dt.getUTCFullYear() };
       }
+      return null;
     }
     const m = s.match(/^(\d+)\/(\d+)\/(\d+)/);
     if (m) return { day: +m[1], month: +m[2], year: +m[3] };
@@ -136,7 +137,7 @@
   function sheetDateToJS(d) {
     if (!d) return null;
     let y = d.year;
-    if (y < 100) y += 2000;
+    if (y < 100) y += (y > 50 ? 2500 : 2000);  // >50 = พ.ศ. 2 หลัก (69→2569), ≤50 = ค.ศ. (26)
     if (y > 2500) y -= 543;
     return new Date(y, d.month - 1, d.day);
   }

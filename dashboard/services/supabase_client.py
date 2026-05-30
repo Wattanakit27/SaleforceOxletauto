@@ -4,10 +4,37 @@
 - sheet_cache: mirror ข้อมูลจาก Google Sheets (dashboard อ่านจากนี่แทน)
 - loan_applications / finance_checks: เก็บฟอร์มจากหน้าเซลล์
 """
+import threading
 from datetime import datetime, timezone
 
 import requests
 from django.conf import settings
+
+# ── Lazy background sync ──
+# เวลา dashboard อ่าน Supabase แล้วเจอข้อมูลเก่า > TTL → ยิง sync เบื้องหลัง (ไม่ block)
+# ทำให้ local สดเองโดยไม่ต้องมี external cron (บน Vercel ใช้ cron-job.org คู่กัน)
+_STALE_TTL = 120  # วินาที
+_bg_lock = threading.Lock()
+_bg_syncing = False
+
+
+def _trigger_bg_sync():
+    global _bg_syncing
+    with _bg_lock:
+        if _bg_syncing:
+            return
+        _bg_syncing = True
+
+    def _run():
+        global _bg_syncing
+        try:
+            sync_all_sheets_to_supabase()
+        except Exception:
+            pass
+        finally:
+            _bg_syncing = False
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def is_configured() -> bool:
@@ -103,16 +130,28 @@ def fetch_all_from_supabase() -> dict:
     url, key = _base()
     keys = ["leads", "sales_reports", "bookings", "live_sessions", "live_followups", "employees"]
     r = requests.get(
-        f"{url}/rest/v1/sheet_cache?select=sheet_key,rows", headers=_headers(key), timeout=60,
+        f"{url}/rest/v1/sheet_cache?select=sheet_key,rows,synced_at", headers=_headers(key), timeout=60,
     )
     if r.status_code != 200:
         raise Exception(f"Supabase get_all sheet_cache {r.status_code}: {r.text[:300]}")
-    cache = {row["sheet_key"]: row.get("rows", []) for row in r.json()}
+    data = r.json()
+    cache = {row["sheet_key"]: row.get("rows", []) for row in data}
     out = {}
     for k in keys:
         if k not in cache:
             raise Exception(f"sheet_cache ยังไม่มี '{k}' (ต้อง sync ก่อน)")
         out[k] = cache[k]
+
+    # ข้อมูลเก่าเกิน TTL → ยิง sync เบื้องหลัง (คืนข้อมูลปัจจุบันทันที ไม่รอ)
+    try:
+        stamps = [row["synced_at"] for row in data if row.get("synced_at")]
+        if stamps:
+            oldest = min(stamps).replace("Z", "+00:00")
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(oldest)).total_seconds()
+            if age > _STALE_TTL:
+                _trigger_bg_sync()
+    except Exception:
+        pass
     return out
 
 
