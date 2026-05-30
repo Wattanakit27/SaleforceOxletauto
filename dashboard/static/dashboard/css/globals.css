@@ -1,63 +1,80 @@
 :root {
-  --bg: #fff;
-  --bg2: #f6f5f2;
-  --bg3: #edece8;
-  --t1: #1a1a18;
-  --t2: #5c5b57;
-  --t3: #9a9891;
-  --bd: rgba(0, 0, 0, 0.09);
-  --bd2: rgba(0, 0, 0, 0.16);
-  --r: 10px;
-  --r-sm: 6px;
-  --blue: #185fa5;
-  --blue-bg: #e6f1fb;
-  --blue-dk: #0c447c;
-  --green: #3b6d11;
-  --green-bg: #eaf3de;
-  --green-mid: #1d9e75;
-  --red: #791f1f;
-  --red-bg: #fcebeb;
-  --red-mid: #e24b4a;
-  --amber: #633806;
-  --amber-bg: #faeeda;
-  --amber-mid: #ef9f27;
-  --purple: #4c1d95;
-  --purple-bg: #ede9fe;
-  --purple-mid: #7c3aed;
-  --tA: #1d4ed8;
-  --tB: #065f46;
-  --tC: #7c3aed;
+  /* ══ ธีม "ม่วงขาว" (Purple-White) — โทนหลักของทั้งแอป ══ */
+  --bg: #ffffff;
+  --bg2: #f6f4fb;          /* ขาวอมม่วงอ่อน */
+  --bg3: #ece7f6;          /* ม่วงอ่อน */
+  --t1: #1c1830;           /* หมึก (ม่วงดำ) */
+  --t2: #56506b;
+  --t3: #948da8;
+  --bd: rgba(109, 40, 217, 0.10);
+  --bd2: rgba(109, 40, 217, 0.20);
+  --r: 12px;
+  --r-sm: 7px;
+
+  /* primary = ม่วง (remap --blue ทั้งระบบ → ทุกที่ที่ใช้ var(--blue) กลายเป็นม่วง) */
+  --blue: #7c3aed;
+  --blue-bg: #f2ecfd;
+  --blue-dk: #5b21b6;
+
+  --green: #15803d;
+  --green-bg: #e7f5ec;
+  --green-mid: #16a34a;
+
+  --red: #b91c1c;
+  --red-bg: #fdebeb;
+  --red-mid: #ef4444;
+
+  --amber: #92500a;
+  --amber-bg: #fcf2e1;
+  --amber-mid: #f59e0b;
+
+  --purple: #6d28d9;
+  --purple-bg: #f2ecfd;
+  --purple-mid: #8b5cf6;
+
+  --tA: #7c3aed;           /* ทีม A — ม่วง */
+  --tB: #0d9488;           /* ทีม B — เขียวน้ำทะเล */
+  --tC: #db2777;           /* ทีม C — ชมพู */
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1b1b19;
-    --bg2: #242422;
-    --bg3: #2d2d2b;
-    --t1: #f0ede6;
-    --t2: #a6a39c;
-    --t3: #6a6763;
-    --bd: rgba(255, 255, 255, 0.09);
-    --bd2: rgba(255, 255, 255, 0.16);
-    --blue: #85b7eb;
-    --blue-bg: #0c2a45;
-    --blue-dk: #b5d4f4;
-    --green: #97c459;
-    --green-bg: #173404;
-    --green-mid: #5dcaa5;
-    --red: #f09595;
-    --red-bg: #280d0d;
-    --red-mid: #e24b4a;
-    --amber: #fac775;
-    --amber-bg: #2d1a06;
-    --amber-mid: #ef9f27;
-    --purple: #c4b5fd;
-    --purple-bg: #2e1065;
-    --purple-mid: #9f67fa;
-    --tA: #3b82f6;
-    --tB: #10b981;
-    --tC: #a78bfa;
-  }
+/* ══ โหมดกลางคืน (ม่วงเข้ม) — ตั้งผ่าน html[data-theme="dark"] (JS toggle + จำค่า) ══ */
+html[data-theme="dark"] {
+  --bg: #15121e;           /* ม่วงดำลึก */
+  --bg2: #1e1a2c;
+  --bg3: #2a2440;
+  --t1: #efeafb;
+  --t2: #aaa0c4;
+  --t3: #6f6789;
+  --bd: rgba(255, 255, 255, 0.09);
+  --bd2: rgba(255, 255, 255, 0.17);
+
+  --blue: #a78bfa;         /* ม่วงสว่าง (primary) */
+  --blue-bg: #2c2147;
+  --blue-dk: #c4b5fd;
+
+  --green: #4ade80;
+  --green-bg: #16331f;
+  --green-mid: #34d399;
+
+  --red: #f87171;
+  --red-bg: #3a1414;
+  --red-mid: #ef4444;
+
+  --amber: #fbbf24;
+  --amber-bg: #34230a;
+  --amber-mid: #f59e0b;
+
+  --purple: #c4b5fd;
+  --purple-bg: #2e1d52;
+  --purple-mid: #a78bfa;
+
+  --tA: #a78bfa;
+  --tB: #2dd4bf;
+  --tC: #f472b6;
+
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -116,9 +133,9 @@ body {
 
 /* team card */
 .team-card { border-radius: var(--r); padding: 12px; margin-bottom: 8px; }
-.team-card.A { background: rgba(29, 78, 216, 0.08); border: 0.5px solid rgba(29, 78, 216, 0.25); }
-.team-card.B { background: rgba(6, 95, 70, 0.08); border: 0.5px solid rgba(6, 95, 70, 0.25); }
-.team-card.C { background: rgba(124, 58, 237, 0.08); border: 0.5px solid rgba(124, 58, 237, 0.25); }
+.team-card.A { background: rgba(124, 58, 237, 0.08); border: 0.5px solid rgba(124, 58, 237, 0.25); }
+.team-card.B { background: rgba(13, 148, 136, 0.08); border: 0.5px solid rgba(13, 148, 136, 0.25); }
+.team-card.C { background: rgba(219, 39, 119, 0.08); border: 0.5px solid rgba(219, 39, 119, 0.25); }
 
 /* seller table */
 .shdr, .srow { display: grid; grid-template-columns: 82px 38px 44px 40px 44px 50px 46px 1fr; gap: 5px; align-items: center; padding: 7px 8px; font-size: 12px; }

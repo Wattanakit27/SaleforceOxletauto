@@ -8,6 +8,16 @@
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+  <script>
+    // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
+    (function(){
+      try {
+        var t = localStorage.getItem('oxlet_theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     /* Mobile safety — ป้องกัน horizontal scroll + KPI grid overflow */
@@ -895,6 +905,17 @@
       document.body.appendChild(overlay);
     }
 
+    // ── Theme toggle (สว่าง/มืด) ──
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', cur);
+      try { localStorage.setItem('oxlet_theme', cur); } catch(e) {}
+      if (typeof render === 'function') render();  // refresh ไอคอนปุ่ม + สีกราฟ
+    }
+    function themeIcon() {
+      return document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    }
+
     // ── Render engine ──
     const root = document.getElementById('dashboard-root');
 
@@ -956,6 +977,7 @@
         allNames.forEach(n => { html += `<option value="${h(n)}" ${impersonate===n?'selected':''}>👁️ ดูในฐานะ ${h(n)}</option>`; });
         html += `</select>`;
       }
+      html += `<button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:13px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>`;
       html += `<button onclick="location.reload()" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">🔄 รีเฟรช</button>`;
       if (isAdmin) {
         html += `<button onclick="if(confirm('ออกจากสิทธิ์ Admin? (จะกลับเป็นมุมมองผู้บริหาร)'))location.href='/logout/'" title="ออกจากสิทธิ์ Admin" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">🚪 ออก Admin</button>`;
@@ -975,19 +997,19 @@
       html += `<div style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px">`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
-        'b': 'เคสจอง/ปล่อย ทุกสถานะ พร้อมราคา + อายุเคส',
-        's': 'เลือกเซลล์คนใดคนหนึ่ง → ดู dashboard ส่วนตัว',
+        'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
+        's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
       };
       // ตัด tab 'a' (กิจกรรม/ไลฟ์สด) ออก
       if (tab === 'a') tab = 'o';
-      [{id:'o',l:'ภาพรวม'},{id:'b',l:'จอง'},{id:'s',l:'เซลล์'}].forEach(t => {
+      [{id:'o',l:'ภาพรวม'},{id:'b',l:'ติดตามสถานะจอง'},{id:'s',l:'เซลล์'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${t.l}</button>`;
       });
       html += `</div>`;
       html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
-      // Date filter bar
-      html += renderDateFilterBar();
+      // Date filter bar (ซ่อนในแท็บ "เซลล์" เพราะ iframe มี filter ของตัวเอง)
+      if(tab!=='s') html += renderDateFilterBar();
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
@@ -1017,6 +1039,10 @@
     }
     function initCharts() {
       if (typeof Chart === 'undefined') return;
+      // ปรับสีกราฟให้อ่านง่ายตามธีม (สว่าง/มืด)
+      const _dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      Chart.defaults.color = _dark ? '#aaa0c4' : '#56506b';
+      Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
       const ms = D.monthlySummary || {};
       const isDaily = dfMonth > 0;
       // เซลล์ที่ admin กำลังสวมมุมมอง หรือ เซลล์ตัวเองตอนไม่ใช่ admin
@@ -2607,13 +2633,53 @@
       const totU = cases.reduce((a,l)=>a+l.updateCount,0);
       const bkCount = (FD.bookingCases||[]).filter(b=>b.seller===effectiveCurS).length;
 
-      // Case detail
-      if(showCase) {
-        const l = (D.followCases||[]).find(c=>c.code===showCase);
-        if(l) return renderCaseDetail(l);
+      // ── ฝังหน้าจริงที่เซลล์เห็น (/s/<token>/) + กรองรายชื่อเซลล์ตามเดือน ──
+      // โชว์เฉพาะเซลล์ที่มีข้อมูล (lead/จอง/ปิด > 0) ในเดือนที่เลือก
+      let monthNames = sellerNames;
+      if (dfMonth > 0 && D.monthlySummary?.[dfMonth]?.sellers) {
+        const msS = D.monthlySummary[dfMonth].sellers;
+        monthNames = sellerNames.filter(n => {
+          const s = msS[n];
+          return s && ((s.lead||0) > 0 || (s.done||0) > 0 || (s.booking||0) > 0);
+        });
       }
+      if (monthNames.length === 0) monthNames = sellerNames;
+      let curSeller = (curS && monthNames.includes(curS)) ? curS : (curS || monthNames[0] || '');
+      if (curS !== curSeller) curS = curSeller;
+      const token = (D.sellerTokens || {})[curSeller] || '';
+      const MF = C.MONTHS_FULL || [];
+      const monthLbl = dfMonth > 0 ? (MF[dfMonth-1]||('เดือน'+dfMonth)) : (dfMonth === -1 ? 'วันนี้' : 'ทั้งปี');
 
       let html = '';
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">`;
+      html += `<button class="bbtn" onclick="switchTab('o')">← กลับ</button>`;
+      html += `<div class="av">${h(curSeller.charAt(0))}</div>`;
+      html += `<div style="flex:1;min-width:100px"><div style="font-size:15px;font-weight:700">${h(curSeller)}</div><div style="font-size:11px;color:var(--t2)">หน้าจริงที่เซลล์เห็น</div></div>`;
+      html += `<select onchange="setDf(parseInt(this.value))" title="กรองรายชื่อเซลล์ตามเดือน" style="max-width:130px">`;
+      html += `<option value="0" ${dfMonth<=0?'selected':''}>ทั้งปี</option>`;
+      for (let m=1;m<=12;m++) html += `<option value="${m}" ${dfMonth===m?'selected':''}>${h(MF[m-1]||('เดือน'+m))}</option>`;
+      html += `</select>`;
+      html += `<select onchange="curS=this.value;showCase=null;updateUrl();render()" title="เซลล์ที่มีข้อมูลในเดือนนี้" style="max-width:150px">`;
+      if (curSeller && !monthNames.includes(curSeller)) html += `<option value="${h(curSeller)}" selected>${h(curSeller)} (ไม่มีข้อมูลเดือนนี้)</option>`;
+      monthNames.forEach(n => { html += `<option value="${h(n)}" ${curSeller===n?'selected':''}>${h(n)}</option>`; });
+      html += `</select>`;
+      if (token) html += `<a href="/s/${h(token)}/" target="_blank" class="bbtn" style="text-decoration:none">↗ เต็มจอ</a>`;
+      html += `</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">📅 ${h(monthLbl)} · เซลล์ที่มีข้อมูล ${monthNames.length} คน</div>`;
+
+      if (token) {
+        html += `<div style="position:relative;width:100%;height:calc(100vh - 200px);min-height:540px">
+          <div id="seller-iframe-loading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg);border:.5px solid var(--bd);border-radius:14px;z-index:2"><div class="spin"></div><span style="font-size:13px;color:var(--t3)">กำลังโหลดหน้าเซลล์...</span></div>
+          <iframe src="/s/${h(token)}/" title="หน้าเซลล์ ${h(curSeller)}" onload="var el=document.getElementById('seller-iframe-loading');if(el)el.style.display='none'" style="width:100%;height:100%;border:.5px solid var(--bd);border-radius:14px;background:var(--bg)"></iframe>
+        </div>`;
+      } else {
+        html += `<div class="card" style="text-align:center;padding:36px 16px"><div style="font-size:30px;margin-bottom:8px">🔗</div><div style="font-size:14px;color:var(--t1);font-weight:600;margin-bottom:4px">เซลล์ "${h(curSeller)}" ยังไม่มี LINE user_id</div><div style="font-size:12px;color:var(--t3)">ตั้ง LINE user_id ใน sheet พนักงาน เพื่อแสดงหน้าส่วนตัวของเซลล์คนนี้</div></div>`;
+      }
+      return html;
+
+      // ───────────── โค้ดมุมมองเซลล์แบบเดิม (admin) ไม่ถูกเรียกแล้ว เก็บไว้เผื่อย้อน ─────────────
+      // eslint-disable-next-line
+      var _legacyHtml = '';
 
       // Header
       html += `<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap">`;

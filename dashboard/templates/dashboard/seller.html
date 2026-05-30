@@ -7,6 +7,15 @@
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}">
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('oxlet_theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -86,7 +95,7 @@
     <div style="font-size:13px;color:var(--t2);margin-top:8px">{{ error }}</div>
   </div>
   {% else %}
-  <div id="root"></div>
+  <div id="root"><div class="loading-container"><div class="spin"></div><span style="font-size:13px">กำลังโหลด...</span></div></div>
   {% endif %}
 </div>
 
@@ -353,6 +362,9 @@
 
   function initCharts() {
     if (typeof Chart === 'undefined') return;
+    const _dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = _dark ? '#aaa0c4' : '#56506b';
+    Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
     const daily = D.daily || {};
     const monthly = D.monthly || {};
     const isDaily = fMonth > 0;
@@ -1267,9 +1279,19 @@
           <option value="loan" ${pageMode==='loan'?'selected':''}>📄 ยื่นสินเชื่อ</option>
           <option value="finance" ${pageMode==='finance'?'selected':''}>📝 เช็คเคสไฟแนนซ์ก่อนเซ็น</option>
         </select>
+        <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="margin-left:auto;font-size:15px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
       </div>`;
   }
   function setPageMode(v) { pageMode = v; window.scrollTo(0,0); render(); }
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', cur);
+    try { localStorage.setItem('oxlet_theme', cur); } catch(e) {}
+    render();
+  }
+  function themeIcon() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+  }
 
   // ── ตัวเลือก dropdown (แก้ลิสต์ตรงนี้ได้เลย) ──
   const FC_BRANCHES = ['เลือกสาขา', 'สำนักงานใหญ่', 'สาขาย่อย'];

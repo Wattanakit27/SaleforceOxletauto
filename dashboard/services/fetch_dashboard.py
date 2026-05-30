@@ -219,13 +219,16 @@ def _compute_dashboard_data() -> dict:
     clip_month_target = weeks_elapsed * 2
 
     # userIdMap + employee list (สำหรับ admin panel)
+    # sellerTokens: normalize(ชื่อเล่น) → LINE user_id — ใช้ iframe หน้าเซลล์จริง /s/<token>/
     user_id_map = {}
+    seller_tokens = {}
     employee_list = []
     for row in employees:
         uid = cell(row, EM.user_id)
         nickname = cell(row, EM.nickname)
         if uid and nickname:
             user_id_map[uid] = nickname
+            seller_tokens[normalize_seller(nickname)] = uid
         if not uid:
             continue
         # ไม่ส่ง reply_token ออกไปเพราะเป็น sensitive (ใช้ตอบ LINE webhook)
@@ -1058,6 +1061,7 @@ def _compute_dashboard_data() -> dict:
         "bookingCases": booking_cases,
         "liveActivity": live_activity,
         "userIdMap": user_id_map,
+        "sellerTokens": seller_tokens,
         "employees": employee_list,
         "monthlySummary": monthly_summary,
         "dailyByMonth": daily_by_month,
