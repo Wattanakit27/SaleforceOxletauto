@@ -103,7 +103,10 @@ def get_sheet(sheet_key: str) -> list | None:
 
 def sync_all_sheets_to_supabase() -> dict:
     """อ่าน Google Sheets ทั้งหมด → upsert ลง sheet_cache. คืนสรุปจำนวนแถวต่อ sheet."""
-    from .google_sheets import fetch_sheet, fetch_leads_by_month_tabs, fetch_sales_by_month_tabs
+    from .google_sheets import (
+        fetch_sheet, fetch_leads_by_month_tabs, fetch_sales_by_month_tabs,
+        fetch_bookings_by_month_tabs,
+    )
     results: dict = {}
 
     # leads + sales ใช้ month tabs (ตรงกับที่ dashboard ใช้)
@@ -121,7 +124,14 @@ def sync_all_sheets_to_supabase() -> dict:
     except Exception as e:
         results["sales_reports"] = f"error: {e}"
 
-    for k in ("bookings", "live_sessions", "live_followups", "employees"):
+    try:
+        rows = fetch_bookings_by_month_tabs()
+        upsert_sheet("bookings", rows)
+        results["bookings"] = len(rows)
+    except Exception as e:
+        results["bookings"] = f"error: {e}"
+
+    for k in ("live_sessions", "live_followups", "employees"):
         try:
             rows = fetch_sheet(k)
             upsert_sheet(k, rows)

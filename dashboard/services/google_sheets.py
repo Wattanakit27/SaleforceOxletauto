@@ -808,6 +808,59 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
         return fetch_sheet("sales_reports")
 
 
+def fetch_bookings_by_month_tabs() -> list[list[str]]:
+    """อ่าน 'จอง' จากแท็บรายเดือน 'จอง/จบ <เดือน> 69' (ไฟล์ bookings) แทน 'รวม sheet' (เก่า).
+
+    แท็บวางจอง(ซ้าย A-K)+จบ(ขวา) แยกกัน — อ่านแค่ A-K (ฝั่งจอง) ซึ่งตรง BOOKINGS_COL เป๊ะ
+    (NO|DATE|เซลล์|ช่องทาง|พิมพ์|ยอดจอง|CODE|ADS|TYPE|CAR|ทะเบียน). year_jongs กรอง date เอง.
+    ชื่อแท็บมี '/' → ใช้ values:batchGet (range เป็น query param). Failsafe → fetch_sheet('bookings').
+    """
+    import urllib.parse
+    load_sheet_config_overrides()
+    cache_key = "bookings_month_tabs"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from .fetch_dashboard import bangkok_now
+        sid = SHEET_CONFIG["bookings"]["spreadsheet_id"]
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        auth = {"Authorization": f"Bearer {creds.token}"}
+
+        now = bangkok_now()
+        be2 = (now.year + 543) % 100
+        want = {f"จอง/จบ {_THAI_MONTHS[m - 1]} {be2:02d}": m for m in range(1, now.month + 1)}
+
+        meta = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+                            headers=auth, timeout=20).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+        def _norm(t):
+            return "".join(t.split())
+        want_norm = {_norm(k) for k in want}
+        tabs = [t for t in titles if _norm(t) in want_norm]
+        if not tabs:
+            return fetch_sheet("bookings")
+
+        # batchGet หลาย range พร้อมกัน (ชื่อแท็บมี '/' → encode safe='')
+        qs = "&".join(
+            "ranges=" + urllib.parse.quote(f"'{t}'!A1:K400", safe="") for t in tabs
+        )
+        url = f"{SHEETS_API}/{sid}/values:batchGet?{qs}&valueRenderOption=FORMATTED_VALUE"
+        r = requests.get(url, headers=auth, timeout=60)
+        if r.status_code != 200:
+            return fetch_sheet("bookings")
+
+        all_rows: list[list[str]] = []
+        for vr in r.json().get("valueRanges", []):
+            all_rows.extend(vr.get("values", []))
+        _cache_set(cache_key, all_rows)
+        return all_rows
+    except Exception:
+        return fetch_sheet("bookings")
+
+
 def fetch_all_sheets() -> dict[str, list[list[str]]]:
     """Fetch all 6 sheets in parallel using threads.
 
@@ -823,14 +876,15 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
         except Exception:
             pass
 
-    # sales_reports อ่านจากแท็บรายเดือนตรง (per-seller block) — เลิกพึ่ง 'รวม sheet' (สูตร)
-    other_keys = ["bookings", "live_sessions", "live_followups", "employees"]
+    # sales_reports + bookings อ่านจากแท็บรายเดือนตรง — เลิกพึ่ง 'รวม sheet' (เก่า/สูตร)
+    other_keys = ["live_sessions", "live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(fetch_sheet, k): k for k in other_keys}
         futures[executor.submit(fetch_leads_by_month_tabs)] = "leads"
         futures[executor.submit(fetch_sales_by_month_tabs)] = "sales_reports"
+        futures[executor.submit(fetch_bookings_by_month_tabs)] = "bookings"
         for future in concurrent.futures.as_completed(futures):
             key = futures[future]
             results[key] = future.result()
