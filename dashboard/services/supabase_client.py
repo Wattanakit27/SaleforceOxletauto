@@ -103,10 +103,10 @@ def get_sheet(sheet_key: str) -> list | None:
 
 def sync_all_sheets_to_supabase() -> dict:
     """อ่าน Google Sheets ทั้งหมด → upsert ลง sheet_cache. คืนสรุปจำนวนแถวต่อ sheet."""
-    from .google_sheets import fetch_sheet, fetch_leads_by_month_tabs
+    from .google_sheets import fetch_sheet, fetch_leads_by_month_tabs, fetch_sales_by_month_tabs
     results: dict = {}
 
-    # leads ใช้ month tabs (ตรงกับที่ dashboard ใช้)
+    # leads + sales ใช้ month tabs (ตรงกับที่ dashboard ใช้)
     try:
         rows = fetch_leads_by_month_tabs()
         upsert_sheet("leads", rows)
@@ -114,7 +114,14 @@ def sync_all_sheets_to_supabase() -> dict:
     except Exception as e:
         results["leads"] = f"error: {e}"
 
-    for k in ("sales_reports", "bookings", "live_sessions", "live_followups", "employees"):
+    try:
+        rows = fetch_sales_by_month_tabs()
+        upsert_sheet("sales_reports", rows)
+        results["sales_reports"] = len(rows)
+    except Exception as e:
+        results["sales_reports"] = f"error: {e}"
+
+    for k in ("bookings", "live_sessions", "live_followups", "employees"):
         try:
             rows = fetch_sheet(k)
             upsert_sheet(k, rows)
@@ -153,6 +160,49 @@ def fetch_all_from_supabase() -> dict:
     except Exception:
         pass
     return out
+
+
+def get_sheet_config() -> dict:
+    """อ่าน override ของ SHEET_CONFIG จาก Supabase → {key: {spreadsheet_id, sheet_name}}.
+    คืน {} ถ้าไม่ได้ตั้งค่า/ตารางไม่มี (→ ใช้ default hardcode)."""
+    if not is_configured():
+        return {}
+    url, key = _base()
+    try:
+        r = requests.get(
+            f"{url}/rest/v1/sheet_config?select=key,spreadsheet_id,sheet_name",
+            headers=_headers(key), timeout=15,
+        )
+        if r.status_code != 200:
+            return {}
+        out = {}
+        for row in r.json():
+            out[row["key"]] = {
+                "spreadsheet_id": (row.get("spreadsheet_id") or "").strip(),
+                "sheet_name": (row.get("sheet_name") or "").strip(),
+            }
+        return out
+    except Exception:
+        return {}
+
+
+def save_sheet_config(items: list) -> None:
+    """upsert override config — items = [{key, spreadsheet_id, sheet_name}, ...]."""
+    url, key = _base()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = [{
+        "key": i["key"],
+        "spreadsheet_id": (i.get("spreadsheet_id") or "").strip(),
+        "sheet_name": (i.get("sheet_name") or "").strip(),
+        "updated_at": now_iso,
+    } for i in items if i.get("key")]
+    r = requests.post(
+        f"{url}/rest/v1/sheet_config?on_conflict=key",
+        headers=_headers(key, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
+        json=payload, timeout=30,
+    )
+    if r.status_code not in (200, 201, 204):
+        raise Exception(f"Supabase save sheet_config {r.status_code}: {r.text[:200]}")
 
 
 def ping() -> dict:

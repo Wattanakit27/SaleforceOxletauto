@@ -345,6 +345,10 @@
     const SCORE_JONG = 50;
     const SCORE_DONE = 100;
     const RJ_WEIGHT = 0.5;
+    // ── เป้าสูตรคะแนนใหม่ (100 คะแนน) ──
+    const DONE_TGT = 15;   // จบ(ปล่อย) เป้า → เต็ม 20
+    const JONG_TGT = 60;   // จอง เป้า → เต็ม 10
+    const CONV_TGT = 5;    // Conv เป้า (%) → เต็ม 30
     const JONG_STATUSES = new Set(['จอง', 'รอเซ็นต์', 'รอผล', 'รอปล่อย']);
     const RJ_TYPES_SET = new Set(['RJ', 'Hot RJ', 'Hot RB']);
 
@@ -365,6 +369,9 @@
         high:0, score:0, jongs:0, dones:0,
         scoreCall:0, scoreCallNormal:0, scoreCallRJ:0,
         scoreJong:0, scoreDone:0,
+        // สูตรคะแนนใหม่: capped updates (ติดตาม) · leads (conv) · bans (โดนแบน)
+        capUpd:0, leads:0, bans:0,
+        sDone:0, sJong:0, sConv:0, sFollow:0, sBan:0, conv:0, completion:0,
         // Distribution ตามจำนวนครั้งที่โทร — สำหรับ breakdown ใน modal
         // callBuckets[updateCount] = {nNormal, nRJ, score}
         callBuckets: {},
@@ -419,6 +426,7 @@
         const e = _ensureDilEntry(m, l.seller);
         const isRJ = RJ_TYPES_SET.has(l.leadType);
         e.tot += l.updateCount;
+        e.capUpd += Math.min(l.updateCount || 0, 4);   // ติดตาม: cap 4/เคส
         if (isRJ) { e.cntRJ++; e.totRJ += l.updateCount; }
         else      { e.cntNormal++; e.totNormal += l.updateCount; }
         e.cnt++;
@@ -445,13 +453,14 @@
         const sd = monthlySrc ? (monthlySrc.sellers?.[s.name] || {}) : s;
         const jongs = sd.booking || 0;
         const dones = sd.done || 0;
-        if (jongs > 0 || dones > 0) {
+        const leads = sd.lead || 0;
+        const bans  = sd.bans || 0;
+        // สร้าง entry ให้เซลล์ที่มี activity ใดๆ (lead/จอง/ปล่อย หรือมีโทรจากส่วน 1)
+        if (jongs > 0 || dones > 0 || leads > 0 || m[s.name]) {
           const e = _ensureDilEntry(m, s.name);
-          e.jongs = jongs;
-          e.scoreJong = jongs * SCORE_JONG;
-          e.dones = dones;
+          e.jongs = jongs; e.dones = dones; e.leads = leads; e.bans = bans;
+          e.scoreJong = jongs * SCORE_JONG;   // เก็บไว้ใช้ใน velocity/breakdown เดิม
           e.scoreDone = dones * SCORE_DONE;
-          e.score += e.scoreJong + e.scoreDone;
         }
       });
       // ส่วนที่ 3: Pipeline Velocity — แยก 2 phase
@@ -484,6 +493,25 @@
             }
           }
         }
+      });
+      // ── สูตรคะแนนใหม่ (100 คะแนน) — แทนสูตรเดิม ──
+      //   จบ20 (ปล่อย/15) · จอง10 (จอง/60) · Conv30 (ปล่อย÷lead vs 5%) · ติดตาม30 · โดนแบน10
+      Object.values(m).forEach(e => {
+        const sDone = Math.min((e.dones || 0) / DONE_TGT, 1) * 20;
+        const sJong = Math.min((e.jongs || 0) / JONG_TGT, 1) * 10;
+        const conv = (e.leads || 0) > 0 ? (e.dones || 0) / e.leads * 100 : 0;
+        const sConv = Math.min(conv / CONV_TGT, 1) * 30;
+        const completion = (e.cnt || 0) > 0 ? (e.capUpd || 0) / (4 * e.cnt) : 0;
+        const sFollow = completion * 30;
+        const sBan = Math.max(0, 10 - (e.bans || 0));
+        e.conv = Math.round(conv * 10) / 10;
+        e.completion = Math.round(completion * 100);
+        e.sDone = Math.round(sDone * 10) / 10;
+        e.sJong = Math.round(sJong * 10) / 10;
+        e.sConv = Math.round(sConv * 10) / 10;
+        e.sFollow = Math.round(sFollow * 10) / 10;
+        e.sBan = sBan;
+        e.score = Math.round((sDone + sJong + sConv + sFollow + sBan) * 10) / 10;  // 0-100
       });
       return m;
     }
@@ -770,18 +798,20 @@
 
           <div style="padding:14px 18px;overflow-y:auto;flex:1">
 
-            <!-- 2 มิติของคะแนน (Activity + Sales) -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-              <div style="padding:12px 10px;background:var(--blue-bg);border-radius:8px;text-align:center">
-                <div style="font-size:11px;color:var(--blue);font-weight:600">📞 Activity (เฉลี่ย/เคส)</div>
-                <div style="font-size:22px;font-weight:800;color:var(--blue);margin-top:2px">${d.cnt > 0 ? Math.round((d.tot/d.cnt)*10)/10 : 0}</div>
-                <div style="font-size:10px;color:var(--t3)">รวมอัพเดท ${fmtNum(d.tot)} ÷ ${d.cnt} เคส</div>
-              </div>
-              <div style="padding:12px 10px;background:var(--green-bg,#e6f9ed);border-radius:8px;text-align:center">
-                <div style="font-size:11px;color:var(--green);font-weight:600">💰 Sales</div>
-                <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:2px">${fmtNum(d.scoreJong + d.scoreDone)}</div>
-                <div style="font-size:10px;color:var(--t3)">จอง ${d.jongs} (+${fmtNum(d.scoreJong)}) · ปล่อย ${d.dones} (+${fmtNum(d.scoreDone)})</div>
-              </div>
+            <!-- องค์ประกอบคะแนน (5 ด้าน รวม 100) -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px">
+              ${[
+                {l:'จบ (ปล่อย)', sc:d.sDone, max:20, sub:`${d.dones||0}/${DONE_TGT} คัน`, c:'var(--green)'},
+                {l:'จอง', sc:d.sJong, max:10, sub:`${d.jongs||0}/${JONG_TGT}`, c:'var(--blue)'},
+                {l:'Conv', sc:d.sConv, max:30, sub:`${d.conv||0}% · เป้า ${CONV_TGT}%`, c:'var(--blue)'},
+                {l:'ติดตาม', sc:d.sFollow, max:30, sub:`${d.completion||0}% · ${d.cnt||0} เคส`, c:'var(--amber)'},
+                {l:'โดนแบน', sc:d.sBan, max:10, sub:`แบน ${d.bans||0} ครั้ง`, c:(d.bans>0?'var(--red)':'var(--green)')},
+              ].map(x=>`
+                <div style="padding:9px 8px;background:var(--bg2);border-radius:8px;text-align:center">
+                  <div style="font-size:10px;color:var(--t3);font-weight:600">${x.l}</div>
+                  <div style="font-size:18px;font-weight:800;color:${x.c};margin-top:2px">${fmtNum(x.sc)}<span style="font-size:10px;color:var(--t3)">/${x.max}</span></div>
+                  <div style="font-size:9px;color:var(--t3);margin-top:1px">${x.sub}</div>
+                </div>`).join('')}
             </div>
 
             <!-- Pipeline Velocity 2 Phases -->
@@ -860,11 +890,10 @@
 
             <!-- หัวข้อ -->
             <div style="padding:11px 13px;background:var(--blue-bg);border-radius:8px;margin-bottom:12px;font-size:12px;line-height:1.6;color:var(--t1)">
-              คะแนนเต็ม <b>100</b> จาก 6 ด้าน · แต่ละด้านคิดแบบ <b>เทียบกับคนเก่งสุดในทีม</b> (Max Normalization)<br>
-              <span style="font-size:10.5px;color:var(--t3)">เช่น จบ: คนจบมากสุดได้เต็ม 35 · คนอื่นได้ตามสัดส่วน</span>
+              คะแนนเต็ม <b>100</b> จาก 5 ด้าน · แต่ละด้าน<b>เทียบกับเป้าที่ตั้งไว้</b> (ถึงเป้า = เต็ม, ไม่ถึงคิดตามสัดส่วน)
             </div>
 
-            <!-- ตาราง 6 ด้าน -->
+            <!-- ตาราง 5 ด้าน -->
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px">
               <thead>
                 <tr style="background:var(--bg2);color:var(--t3)">
@@ -874,29 +903,22 @@
                 </tr>
               </thead>
               <tbody>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green-mid);font-weight:700">จบ</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">35</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จบเรา ÷ จบมากสุด × 35 <span style="color:var(--t3)">(รายได้จริง)</span></td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green);font-weight:700">จอง</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จองเรา ÷ จองมากสุด × 20</td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--purple);font-weight:700">ปริม</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">12</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เคสเรา ÷ เคสมากสุด × 12 <span style="color:var(--t3)">(โหลดงาน)</span></td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">ขยัน</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">12</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เฉลี่ยอัพเดท/เคส ÷ มากสุด × 12 <span style="color:var(--t3)">(ใช้เฉลี่ย ไม่ใช่ผลรวม)</span></td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--amber);font-weight:700">คุณภ</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">15</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(1 − คืน%เรา ÷ คืน%มากสุด) × 15 <span style="color:var(--red)">กลับด้าน!</span></td></tr>
-                <tr><td style="padding:6px 8px;color:var(--t2);font-weight:700">หลักฐ</td><td style="padding:6px 8px;text-align:center;font-weight:700">6</td><td style="padding:6px 8px;color:var(--t2)">% ส่งหลักฐานโทร ÷ 100 × 6 <span style="color:var(--t3)">(compliance)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green);font-weight:700">จบ (ปล่อย)</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">ปล่อย ÷ 15 × 20 <span style="color:var(--t3)">(ปล่อย ≥15 = เต็ม)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">จอง</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จอง ÷ 60 × 10</td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">Conv</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">30</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(ปล่อย ÷ lead × 100) ÷ 5 × 30 <span style="color:var(--t3)">(ได้ 5% = เต็ม)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--amber);font-weight:700">ติดตาม</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">30</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">อัพเดทจริง(cap 4/เคส) ÷ (4 × เคสที่ต้องตาม) × 30</td></tr>
+                <tr><td style="padding:6px 8px;color:var(--red);font-weight:700">โดนแบน</td><td style="padding:6px 8px;text-align:center;font-weight:700">10</td><td style="padding:6px 8px;color:var(--t2)">เริ่มเต็ม 10 → โดนแบน −1 ต่อครั้ง</td></tr>
               </tbody>
             </table>
 
-            <!-- คุณภ กลับด้าน -->
+            <!-- หมายเหตุ -->
             <div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.6;margin-bottom:10px">
-              <b style="color:var(--amber)">⚠️ คุณภ (คืนเคส) กลับด้าน:</b> คืนเคส = ยิ่งน้อยยิ่งดี<br>
-              <span style="color:var(--t3)">คนคืนน้อยสุด = ได้ 15 เต็ม · คนคืนมากสุด = ได้ 0 · ใช้สูตร (1 − สัดส่วน) เพื่อให้คนคืนน้อยได้คะแนนสูง</span>
-            </div>
-
-            <!-- ตัวอย่าง บอย -->
-            <div style="padding:11px 13px;background:var(--blue-bg);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.7">
-              <b style="color:var(--blue)">ตัวอย่าง บอย (จบสูงสุด 5 คัน):</b><br>
-              <span style="font-family:monospace;font-size:10.5px;color:var(--t2)">จบ 35.0 + จอง 20.0 + ขยัน 6.4<br>+ หลักฐ 5.8 + ปริม 12.0 + คุณภ 8.3<br>= <b style="color:var(--blue)">87.5 คะแนน</b></span>
+              <b style="color:var(--amber)">Conv</b> = อัตราปิดการขาย (ปล่อยกี่ % ของ lead ที่รับ) — น้ำหนักสูงสุด 30 เพราะวัดประสิทธิภาพจริง<br>
+              <span style="color:var(--t3)">เช่น Conv 2.5% → 2.5÷5 × 30 = 15 คะแนน · Conv ≥5% → เต็ม 30</span>
             </div>
 
             <div style="margin-top:10px;font-size:10px;color:var(--t3);line-height:1.5">
-              <b>ทำไม "จบ" น้ำหนักสูงสุด (35):</b> เพราะจบ = รายได้จริง · จอง (20) อาจล่ม · ขยัน/ปริม (12) วัดความพยายาม · คุณภ (15) วัดคุณภาพ lead · หลักฐ (6) แค่ compliance พื้นฐาน
+              รวม = จบ(20) + จอง(10) + Conv(30) + ติดตาม(30) + โดนแบน(10) = <b>100</b> · ข้อมูลแบนจาก sheet "รายงานแบน"
             </div>
 
           </div>
@@ -963,6 +985,7 @@
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE Flex Manager</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">ตั้งเป้า / ทีม</button>
+            <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">📊 แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Log / Diagnostics</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Export Score → Sheet</button>
           </div>
@@ -1097,10 +1120,15 @@
           type: 'line',
           data: {
             labels: labels,
-            datasets: [
-              { label: 'Lead ปกติ', data: leadNormal, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.15)', tension: .35, fill: true, pointRadius: isDaily ? 2 : 3 },
-              { label: 'RJ', data: leadRJ, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.10)', tension: .35, fill: true, pointRadius: isDaily ? 2 : 3 },
-            ]
+            datasets: (function(){
+              const ds = [
+                { label: 'Lead ปกติ', data: leadNormal, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.15)', tension: .35, fill: true, pointRadius: isDaily ? 2 : 3 },
+                { label: 'RJ', data: leadRJ, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.10)', tension: .35, fill: true, pointRadius: isDaily ? 2 : 3 },
+              ];
+              const t = (!isDaily && typeof trendLineActual === 'function') ? trendLineActual(leadNormal) : null;
+              if (t) ds.push({ label: 'แนวโน้ม Lead', data: t, borderColor: '#eab308', borderWidth: 2.5, pointRadius: 0, fill: false, tension: .3 });
+              return ds;
+            })()
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -1114,14 +1142,18 @@
       const cv2 = document.getElementById('chart-book-done');
       if (cv2) {
         destroyChart('bookDone');
+        // เส้นแนวโน้มยอดปล่อย (สีเหลือง พาดบนบาร์ — ทิศทางของจริง ไม่ใช่ทำนาย)
+        const _bdTrend = (!isDaily && typeof trendLineActual === 'function') ? trendLineActual(dones) : null;
+        const _bdDatasets = [
+          { label: 'จอง', data: bookings, backgroundColor: '#f59e0b', order: 2 },
+          { label: 'ปล่อย', data: dones, backgroundColor: '#10b981', order: 2 },
+        ];
+        if (_bdTrend) _bdDatasets.push({ type: 'line', label: 'แนวโน้มปล่อย', data: _bdTrend, borderColor: '#eab308', borderWidth: 2.5, pointRadius: 0, fill: false, tension: .3, order: 0 });
         __charts.bookDone = new Chart(cv2, {
           type: 'bar',
           data: {
             labels: labels,
-            datasets: [
-              { label: 'จอง', data: bookings, backgroundColor: '#f59e0b' },
-              { label: 'ปล่อย', data: dones, backgroundColor: '#10b981' },
-            ]
+            datasets: _bdDatasets
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -1178,21 +1210,24 @@
       if (cv4) {
         destroyChart('dealValue');
         const totalDV = dealValue.reduce((a,b)=>a+b,0);
+        const _dvDatasets = [
+          {
+            label: 'ยอดปล่อย (฿)', data: dealValue,
+            borderColor: '#059669',
+            backgroundColor: 'rgba(5,150,105,.15)',
+            tension: .35, fill: true,
+            pointRadius: isDaily ? 2 : 4,
+            pointBackgroundColor: '#059669',
+            borderWidth: 2.4,
+          },
+        ];
+        const _dvTrend = (!isDaily && typeof trendLineActual === 'function') ? trendLineActual(dealValue) : null;
+        if (_dvTrend) _dvDatasets.push({ label: 'แนวโน้ม', data: _dvTrend, borderColor: '#eab308', borderWidth: 2.5, pointRadius: 0, fill: false, tension: .3 });
         __charts.dealValue = new Chart(cv4, {
           type: 'line',
           data: {
             labels: labels,
-            datasets: [
-              {
-                label: 'ยอดปล่อย (฿)', data: dealValue,
-                borderColor: '#059669',
-                backgroundColor: 'rgba(5,150,105,.15)',
-                tension: .35, fill: true,
-                pointRadius: isDaily ? 2 : 4,
-                pointBackgroundColor: '#059669',
-                borderWidth: 2.4,
-              },
-            ]
+            datasets: _dvDatasets
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -1229,6 +1264,73 @@
       else if(dfMonth===-1) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${dfCount} เคส</span>`;
       html += `</div>`;
       return html;
+    }
+
+    // ── 🔮 พยากรณ์ยอดขาย (linear regression จากยอดจริงรายเดือน) ──
+    function monthForecast(vals12) {
+      // vals12: index 0..11 = Jan..Dec — ใช้เฉพาะเดือนที่ผ่านมาจริง (1..เดือนปัจจุบัน) กันค่าหลงในอนาคตถ่วง
+      const _cur = new Date().getMonth() + 1;
+      const pts = [];
+      for (let m=1;m<=Math.min(12,_cur);m++){ if (vals12[m-1] > 0) pts.push([m, vals12[m-1]]); }
+      if (pts.length < 2) return null;
+      const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]), n=xs.length;
+      const sx=xs.reduce((a,b)=>a+b,0), sy=ys.reduce((a,b)=>a+b,0);
+      const sxx=xs.reduce((a,b)=>a+b*b,0), sxy=xs.reduce((a,_,i)=>a+xs[i]*ys[i],0);
+      const denom = n*sxx - sx*sx;
+      const slope = denom ? (n*sxy - sx*sy)/denom : 0;
+      const intercept = (sy - slope*sx)/n;
+      const lastM = pts[pts.length-1][0];
+      const arr = new Array(12).fill(null);
+      arr[lastM-1] = vals12[lastM-1];  // จุดเชื่อมกับเส้นจริง
+      for (let k=1;k<=3 && lastM+k<=12;k++) arr[lastM-1+k] = Math.max(0, Math.round(slope*(lastM+k)+intercept));
+      return { arr, slope, lastM, next: Math.max(0, Math.round(slope*(lastM+1)+intercept)) };
+    }
+    function _monthlyVals(key) {
+      const ms = D.monthlySummary || {}; const out = [];
+      for (let m=1;m<=12;m++){ const x = ms[m]||ms[String(m)]||{}; out[m-1] = x[key]||0; }
+      return out;
+    }
+    function renderForecastCard() {
+      if (!canViewAll) return '';
+      const fd = monthForecast(_monthlyVals('totalDone'));
+      if (!fd) return '';
+      const base = (fd.arr[fd.lastM-1] || 1);
+      const dir = fd.slope > base*0.04 ? {t:'↗ กำลังขึ้น',c:'var(--green)'} : fd.slope < -base*0.04 ? {t:'↘ กำลังลง',c:'var(--red)'} : {t:'→ ทรงตัว',c:'var(--t3)'};
+      return `
+        <div class="card" style="border-left:3px solid var(--purple-mid)">
+          <div class="card-title">🧠 วิเคราะห์ยอดขาย & แนวโน้มตลาด <span style="font-size:11px;font-weight:400;color:var(--t3)">(AI)</span></div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:8px">ทิศทางยอดปิดช่วงนี้: <b style="color:${dir.c}">${dir.t}</b> · ให้ AI วิเคราะห์เชิงลึก รวมปัจจัยตลาด (ราคาน้ำมัน · เทรนด์ EV · เศรษฐกิจ · ภูมิรัฐศาสตร์) + กลยุทธ์เต็นท์</div>
+          <div id="forecast-ai-result" style="font-size:12.5px;color:var(--t1);line-height:1.7;margin-bottom:6px"></div>
+          <button id="forecast-ai-btn" onclick="runForecastAI()" style="padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid);color:#fff;font-size:13px;font-weight:700;cursor:pointer">✨ วิเคราะห์ยอดขาย + แนวโน้มตลาด</button>
+          <div style="font-size:10px;color:var(--t3);margin-top:6px">* เส้นสีเหลืองบนกราฟ "จอง/ปล่อย" = เส้นแนวโน้มยอดจริง (ไม่ใช่การทำนายอนาคต)</div>
+        </div>`;
+    }
+    // เส้นแนวโน้มจากยอดจริง (regression เฉพาะเดือนที่มีข้อมูล — ไม่ต่อไปอนาคต)
+    function trendLineActual(vals12) {
+      const _cur = new Date().getMonth() + 1;
+      const pts=[]; for(let m=1;m<=Math.min(12,_cur);m++){ if(vals12[m-1]>0) pts.push([m,vals12[m-1]]); }
+      if(pts.length<2) return null;
+      const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),n=xs.length;
+      const sx=xs.reduce((a,b)=>a+b,0),sy=ys.reduce((a,b)=>a+b,0);
+      const sxx=xs.reduce((a,b)=>a+b*b,0),sxy=xs.reduce((a,_,i)=>a+xs[i]*ys[i],0);
+      const d=n*sxx-sx*sx; const slope=d?(n*sxy-sx*sy)/d:0; const ic=(sy-slope*sx)/n;
+      const arr=new Array(12).fill(null);
+      for(let m=pts[0][0];m<=pts[pts.length-1][0];m++) arr[m-1]=Math.max(0, Math.round((slope*m+ic)*10)/10);
+      return arr;
+    }
+    function runForecastAI() {
+      const ms = D.monthlySummary || {}; const MF = C.MONTHS_FULL || [];
+      const lines = [];
+      for (let m=1;m<=12;m++){ const x=ms[m]||ms[String(m)]||{}; if((x.totalLeads||0)>0||(x.totalDone||0)>0) lines.push(`${MF[m-1]}: lead ${x.totalLeads||0}, จอง ${x.totalBookings||0}, ปิด ${x.totalDone||0} คัน, ยอด ${Math.round(x.totalDealValue||0).toLocaleString()} บาท`); }
+      const summary = 'ยอดขายรายเดือนปีนี้:\n' + lines.join('\n');
+      const btn=document.getElementById('forecast-ai-btn'), box=document.getElementById('forecast-ai-result');
+      btn.disabled=true; btn.innerHTML='<span class="spin" style="width:13px;height:13px;border-width:2px;display:inline-block;vertical-align:middle"></span> AI กำลังวิเคราะห์...';
+      fetch('/api/insights/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})})
+        .then(r=>r.json()).then(j=>{
+          if(!j.ok||j.error){ box.innerHTML=`<div style="color:var(--red)">⚠️ ${h(j.error||'วิเคราะห์ไม่สำเร็จ')}</div>`; }
+          else { box.innerHTML=`<div style="background:var(--purple-bg);border-radius:10px;padding:12px 14px;line-height:1.7">${h(j.narrative).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^[-*] /gm,'• ').replace(/\n/g,'<br>')}</div>`; }
+        }).catch(e=>{ box.innerHTML=`<div style="color:var(--red)">⚠️ ${h(e.message)}</div>`; })
+        .finally(()=>{ btn.disabled=false; btn.textContent='🤖 วิเคราะห์อีกครั้ง'; });
     }
 
     // ── OVERVIEW ──
@@ -1304,6 +1406,9 @@
         html += `<div class="kpi"${clickAttr}><div class="kl">${k.l}${tipBtn}${k.mk?' <span style=\"font-size:9px;color:var(--t3);font-weight:400\">↗ ดูเพิ่ม</span>':''}</div><div class="kv" style="color:${k.c}">${k.v}</div><div class="ks">${k.s}</div></div>`;
       });
       html += `</div>`;
+
+      // 🔮 พยากรณ์ยอดขาย (admin/exec)
+      html += renderForecastCard();
 
       // Charts
       const _focusName = (!canViewAll ? employee.nickname : impersonate);
@@ -2963,6 +3068,131 @@
         alert(`เขียนสำเร็จ ${data.rows_written} เซลล์ (${data.month_name} ${data.year})\nเปิด Google Sheet ดูที่ tab 'leadscore'`);
       } catch (e) {
         alert('เกิดข้อผิดพลาด: ' + e.message);
+      }
+    }
+
+    // ── 📊 แหล่งข้อมูล (Sheets) — แบบ node ใน n8n ──
+    async function openSheetsPanel() {
+      const old = document.getElementById('sheets-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'sheets-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = `<div style="background:var(--bg);border-radius:16px;max-width:860px;width:100%;padding:24px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังเช็คแหล่งข้อมูลสด...</div></div>`;
+      document.body.appendChild(overlay);
+
+      let data;
+      try {
+        const r = await fetch('/api/admin/sheets_status', { credentials: 'same-origin' });
+        data = await r.json();
+        if (!r.ok || data.error) throw new Error(data.error || 'fetch failed');
+      } catch (e) {
+        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">⚠️ ${h(String(e))}</div>`;
+        return;
+      }
+      window.__sheetsData = data;
+
+      const sheetCard = (s) => {
+        const ok = s.status === 'ok';
+        const badge = ok
+          ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700">✓ เชื่อมต่อ</span>`
+          : `<span style="background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700">✗ error</span>`;
+        return `
+          <div style="border:.5px solid var(--bd);border-radius:12px;padding:13px;background:var(--bg2);display:flex;gap:11px;align-items:flex-start">
+            <div style="width:38px;height:38px;border-radius:8px;background:#0f9d58;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📊</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:var(--t1)">${h(s.name)}</span>${badge}</div>
+              <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${h(s.desc)}</div>
+              <div style="font-size:10.5px;color:var(--t2);margin-top:4px">tab: <b>${h(s.tab)}</b> · ${ok ? `<b style="color:var(--green-mid)">${s.rows.toLocaleString()}</b> แถว` : `<span style="color:var(--red)">${h(s.error||'อ่านไม่ได้')}</span>`}</div>
+              <a href="${h(s.url)}" target="_blank" style="font-size:10.5px;color:var(--blue);text-decoration:none">เปิดใน Google Sheet ↗</a>
+            </div>
+          </div>`;
+      };
+
+      const cfgChip = (c) => `<a href="${h(c.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:.5px solid var(--bd);border-radius:9px;padding:6px 10px;font-size:11px;color:var(--t1);text-decoration:none">${h(c.name)} <span style="color:var(--t3)">↗</span></a>`;
+
+      const monthChips = (data.monthlyTabs || []).map(t =>
+        `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:8px;font-size:11px;font-weight:600">${h(t)}</span>`).join('');
+
+      let html = `<div style="background:var(--bg);border-radius:16px;max-width:860px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
+      html += `<div style="padding:18px 22px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">`;
+      html += `<div><div style="font-size:11px;color:var(--t3)">Google Sheets ที่ระบบดึงข้อมูล · เช็คสด</div><div style="font-size:18px;font-weight:800;color:var(--t1)">📊 แหล่งข้อมูล (${data.sources.length} sheet)</div></div>`;
+      const editBtn = data.canEdit
+        ? `<button onclick="renderSheetsEdit()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">✏️ ย้าย/แก้ไขแหล่งข้อมูล</button>`
+        : '';
+      html += `<div style="display:flex;gap:6px">${editBtn}<button onclick="openSheetsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">🔄 เช็คใหม่</button><button onclick="document.getElementById('sheets-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button></div>`;
+      html += `</div><div id="sheets-body" style="overflow-y:auto;padding:18px 22px;flex:1">`;
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${data.sources.map(sheetCard).join('')}</div>`;
+      // monthly tabs (realtime)
+      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">🗓️ Tab รายเดือนที่ระบบเห็น (Lead) <span style="font-size:11px;font-weight:400;color:var(--t3)">— สร้าง tab เดือนใหม่ → โผล่ที่นี่อัตโนมัติ</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${monthChips || '<span style="color:var(--t3);font-size:12px">ไม่พบ tab รายเดือน</span>'}</div></div>`;
+      // config sheets
+      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">⚙️ Sheet ตั้งค่า</div><div style="display:flex;flex-wrap:wrap;gap:8px">${(data.configSources||[]).map(cfgChip).join('')}</div></div>`;
+      // note
+      html += `<div style="margin-top:18px;padding:12px;background:var(--blue-bg);border-radius:10px;border-left:3px solid var(--blue);font-size:11px;color:var(--t2);line-height:1.6">`;
+      html += `📝 <b>Realtime:</b> ระบบอ่านรายชื่อ tab ใหม่ทุกครั้ง (cache 60 วิ) → สร้าง sheet/tab เดือนใหม่ในมือ ระบบเห็นเอง ไม่ต้องแก้โค้ด`;
+      html += data.useSupabase ? `<br>⚡ ตอนนี้ dashboard อ่านผ่าน <b>Supabase</b> (mirror) — sheet เป็นต้นทาง, sync เข้า Supabase` : '';
+      html += `</div></div></div>`;
+      overlay.innerHTML = html;
+    }
+
+    // ── โหมดแก้ไข: ย้าย spreadsheet/tab ของแต่ละแหล่ง (เก็บลง Supabase) ──
+    function renderSheetsEdit() {
+      const data = window.__sheetsData;
+      const body = document.getElementById('sheets-body');
+      if (!data || !body) return;
+
+      const editRow = (s, isCfg) => `
+        <div data-sk="${h(s.key)}" style="border:.5px solid var(--bd);border-radius:11px;padding:12px;background:var(--bg2);margin-bottom:9px">
+          <div style="font-size:12.5px;font-weight:700;color:var(--t1);margin-bottom:7px">${h(s.name)}${isCfg ? ' <span style="font-size:10px;color:var(--t3);font-weight:400">(sheet ตั้งค่า)</span>' : ''}</div>
+          <div style="display:grid;grid-template-columns:1fr;gap:7px">
+            <label style="font-size:10.5px;color:var(--t3)">Spreadsheet ID <span style="color:var(--t3)">(ส่วนใน URL: /d/<b>นี่</b>/edit)</span>
+              <input class="sh-sid" value="${h(s.spreadsheetId || '')}" placeholder="1AbC...xyz" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"></label>
+            <label style="font-size:10.5px;color:var(--t3)">ชื่อ Tab
+              <input class="sh-tab" value="${h(s.tab || '')}" placeholder="รวม sheet" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px"></label>
+          </div>
+        </div>`;
+
+      let html = `<div style="padding:11px 13px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber);font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px">`;
+      html += `⚠️ <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> วาง Spreadsheet ID ใหม่ + ชื่อ tab → กดบันทึก ระบบจะอ่านจากไฟล์ใหม่ทันที (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
+      html += `เว้นว่าง = ใช้ค่าเดิมในโค้ด · Service account ต้องมีสิทธิ์อ่านไฟล์ใหม่ด้วย`;
+      html += `</div>`;
+      html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:8px">📊 แหล่งข้อมูลหลัก</div>`;
+      html += data.sources.map(s => editRow(s, false)).join('');
+      if ((data.configSources || []).length) {
+        html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin:14px 0 8px">⚙️ Sheet ตั้งค่า</div>`;
+        html += data.configSources.map(s => editRow(s, true)).join('');
+      }
+      html += `<div style="display:flex;gap:8px;margin-top:14px;position:sticky;bottom:0;background:var(--bg);padding-top:8px">`;
+      html += `<button onclick="saveSheetsConfig(this)" style="flex:1;padding:11px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:800;font-size:13px;cursor:pointer">💾 บันทึก + sync ข้อมูลใหม่</button>`;
+      html += `<button onclick="openSheetsPanel()" style="padding:11px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:13px;cursor:pointer">← กลับ</button>`;
+      html += `</div>`;
+      body.innerHTML = html;
+    }
+
+    async function saveSheetsConfig(btn) {
+      const rows = document.querySelectorAll('#sheets-body [data-sk]');
+      const items = [];
+      rows.forEach(r => items.push({
+        key: r.getAttribute('data-sk'),
+        spreadsheetId: (r.querySelector('.sh-sid') || {}).value?.trim() || '',
+        sheetName: (r.querySelector('.sh-tab') || {}).value?.trim() || '',
+      }));
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '⏳ บันทึก + sync ข้อมูลใหม่...';
+      try {
+        const r = await fetch('/api/admin/sheet_config', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || 'save failed');
+        btn.textContent = '✓ บันทึกแล้ว — กำลังโหลดสถานะใหม่';
+        setTimeout(() => openSheetsPanel(), 800);
+      } catch (e) {
+        alert('บันทึกไม่สำเร็จ: ' + e.message);
+        btn.disabled = false; btn.textContent = orig;
       }
     }
 

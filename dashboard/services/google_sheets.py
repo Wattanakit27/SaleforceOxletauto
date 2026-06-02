@@ -82,7 +82,16 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "เกณฑ์คะแนน lead",
     },
+    "ban_report": {   # log การโดนแบน (1 แถว = 1 ครั้ง) — ใช้ในคะแนนเซลล์ส่วน "โดนแบน"
+        "spreadsheet_id": "18Djos3lUJnoZ00gYEBuCCExwm1YknfIQrP-TIuUgjWU",
+        "sheet_name": "รายงานแบน",
+    },
 }
+
+# คอลัมน์ tab "รายงานแบน": banDate|time|seller|sellerDisplay|banType|reason|bannedBy|unbanDate|status|...
+class BAN_COL:
+    ban_date = 0; time = 1; seller = 2; seller_display = 3
+    ban_type = 4; reason = 5; banned_by = 6; unban_date = 7; status = 8
 
 # ── Column index maps (0-based) ──
 class LEADS_COL:
@@ -95,6 +104,84 @@ class LEADS_COL:
     status = 24; admin_survey = 25; admin_status = 26; _skip = 27
     sales_status = 28; case_update_1 = 29; case_update_2 = 30
     case_update_3 = 31; final_status = 32
+    # คอลัม Z "สถานะลูกค้า" (layout ใหม่ มิ.ย.69+) — canonical slot ใหม่
+    # ไม่ทับ index เดิม. normalize ยัดค่ามาที่นี่ผ่าน header matching
+    customer_status = 33
+    # คอลัม U–Y (layout ใหม่) — profile ที่เซลล์กรอกได้ (canonical slot ใหม่ map ตามหัวตาราง)
+    occupation = 34        # U อาชีพ
+    income = 35            # V รายได้
+    job_tenure = 36        # W อายุงาน
+    payment_history = 37   # X ประวัติการผ่อน
+    customer_type = 38     # Y ประเภทลูกค้า
+
+# ── Header-based column mapping (กันคอลัมน์ย้าย) ──
+# ชีต lead เรียงคอลัมน์ไม่เหมือนกันในแต่ละเดือน (เช่น มิ.ย.69 ย้ายสถานะมาคอลัม Z)
+# เลยไม่ fix ตำแหน่งตายตัว แต่จับคู่ field กับ "ชื่อหัวตาราง" แทน → เดือนไหน layout ไหนก็อ่านถูก
+# alias เขียนเป็นภาษาคนได้เลย (เว้นวรรค/ขึ้นบรรทัด/พิมพ์เล็กใหญ่ ไม่สำคัญ — _norm_header ตัดทิ้ง)
+_LEAD_FIELD_ALIASES = [
+    (LEADS_COL.received_date, ["ว/ด/ป", "วันที่", "วดป"]),
+    (LEADS_COL.phone, ["เบอร์โทร", "เบอร์"]),
+    (LEADS_COL.time, ["เวลา"]),
+    (LEADS_COL.lead_code, ["Code"]),
+    (LEADS_COL.sales_rep, ["เซลล์"]),
+    (LEADS_COL.live_team, ["ทีมไลฟ์"]),
+    (LEADS_COL.admin, ["Admin"]),
+    (LEADS_COL.channel, ["ช่องทาง"]),
+    (LEADS_COL.branch, ["สาขา"]),
+    (LEADS_COL.type, ["type"]),
+    (LEADS_COL.ads, ["ADS"]),
+    (LEADS_COL.car_inquiry, ["รถลูกค้าถาม"]),
+    (LEADS_COL.car_formula, ["CAR / สูตร", "CAR/สูตร"]),
+    (LEADS_COL.call_proof, ["แจ้งหลักฐานการโทร", "แจ้งหลักฐาน การโทร"]),
+    (LEADS_COL.focus, ["FOCUS"]),
+    (LEADS_COL.contact_datetime, ["วัน เวลา ที่ติดต่อ"]),
+    (LEADS_COL.update_count, ["จำนวนอัพเดท"]),
+    (LEADS_COL.last_updated_at, ["วัน เวลา อัพเดทล่าสุด"]),
+    (LEADS_COL.fill_sheet_note, ["มากรอกชีตกันเถอะ"]),
+    (LEADS_COL.customer_profile, ["PROFILE ลูกค้า จาก ADMIN", "PROFILE ลูกค้า"]),
+    (LEADS_COL.occupation, ["อาชีพ"]),                     # คอลัม U
+    (LEADS_COL.income, ["รายได้"]),                        # คอลัม V
+    (LEADS_COL.job_tenure, ["อายุงาน"]),                   # คอลัม W
+    (LEADS_COL.payment_history, ["ประวัติการผ่อน"]),        # คอลัม X
+    (LEADS_COL.customer_type, ["ประเภทลูกค้า"]),            # คอลัม Y
+    (LEADS_COL.customer_status, ["สถานะลูกค้า"]),          # คอลัม Z (layout ใหม่)
+    (LEADS_COL.admin_status, ["Status แอดมิน", "สถานะแอดมิน"]),
+    (LEADS_COL.sales_status, ["Status เซลล์", "สถานะเซลล์"]),
+]
+# canonical index ที่ "จัดการ" (ต้อง map จาก header — หาไม่เจอ = เคลียร์ว่าง กันอ่านผิดคอลัม)
+_LEAD_MANAGED_IDX = [idx for idx, _ in _LEAD_FIELD_ALIASES]
+_LEAD_CANON_WIDTH = 39  # max canonical index (customer_type=38) + 1
+
+
+def _norm_header(s: str) -> str:
+    """normalize ชื่อหัวคอลัมน์ — ตัดช่องว่าง/ขึ้นบรรทัดทิ้ง + พิมพ์เล็ก (จับคู่ง่าย ทนการพิมพ์)."""
+    return "".join((s or "").split()).lower()
+
+
+def _resolve_lead_colmap(header: list) -> dict:
+    """header row → {canonical_index: source_index} จับคู่ตามชื่อหัวตาราง (เจอตัวแรกชนะ)."""
+    norm = [_norm_header(c) for c in header]
+    colmap: dict[int, int] = {}
+    for canon_idx, aliases in _LEAD_FIELD_ALIASES:
+        targets = {_norm_header(a) for a in aliases}
+        for src_idx, hv in enumerate(norm):
+            if hv and hv in targets:
+                colmap[canon_idx] = src_idx
+                break
+    return colmap
+
+
+def _normalize_lead_row(raw: list, colmap: dict) -> list:
+    """จัดแถวให้อยู่ใน canonical layout: field ที่ map ได้ → ย้ายมาช่อง canonical,
+    field ที่หา header ไม่เจอ → เคลียร์ว่าง (กันค่าคอลัมอื่นมาปนแล้วอ่านผิด เช่น 'ดึงคืน').
+    คอลัมที่ไม่ได้จัดการ (ไม่มีใน alias) ปล่อยตามตำแหน่งเดิม."""
+    width = max(len(raw), _LEAD_CANON_WIDTH)
+    new_row = list(raw) + [""] * (width - len(raw))
+    for canon_idx in _LEAD_MANAGED_IDX:
+        src_idx = colmap.get(canon_idx)
+        new_row[canon_idx] = raw[src_idx] if (src_idx is not None and src_idx < len(raw)) else ""
+    return new_row
+
 
 class SALES_COL:
     sales_rep = 0; order_num = 1; date = 2; channel = 3; lead_code = 4
@@ -237,6 +324,116 @@ def write_sheet(config_key: str, values: list[list]) -> None:
     invalidate_cache(f"sheet:{config_key}")
 
 
+def _col_letter(i: int) -> str:
+    """0 → A, 25 → Z, 26 → AA ..."""
+    s = ""
+    i += 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+# ช่องที่อนุญาตให้เซลล์เขียนกลับจากหน้า LEAD (canonical field → LEADS_COL index)
+_WRITABLE_LEAD_FIELDS = {
+    "fill_sheet_note": LEADS_COL.fill_sheet_note,   # คอลัม S "มากรอกชีตกันเถอะ"
+    "customer_status": LEADS_COL.customer_status,   # คอลัม Z "สถานะลูกค้า"
+    "customer_profile": LEADS_COL.customer_profile, # คอลัม T PROFILE ลูกค้า
+    "occupation": LEADS_COL.occupation,             # คอลัม U อาชีพ
+    "income": LEADS_COL.income,                     # คอลัม V รายได้
+    "job_tenure": LEADS_COL.job_tenure,             # คอลัม W อายุงาน
+    "payment_history": LEADS_COL.payment_history,   # คอลัม X ประวัติการผ่อน
+    "customer_type": LEADS_COL.customer_type,       # คอลัม Y ประเภทลูกค้า
+}
+
+
+def update_lead_field(code: str, field: str, value: str, month: int | None = None,
+                      expected_seller: str = "") -> dict:
+    """เขียนค่ากลับ 1 ช่องของ lead ตาม Code — รองรับหลาย field (S/Z/N).
+
+    หา source column ของ field + lead_code จาก header (รองรับทุก layout)
+    แล้ว PATCH เฉพาะ cell เดียว. คืน {ok, tab, cell} หรือ {error}.
+    expected_seller (normalized) — ถ้าใส่ จะเขียนเฉพาะแถวที่เซลล์ตรงกัน (กันแก้เคสคนอื่น).
+    """
+    import urllib.parse
+    from .constants import normalize_seller   # late import กัน circular
+    canon = _WRITABLE_LEAD_FIELDS.get(field)
+    if canon is None:
+        return {"error": f"ไม่อนุญาตให้แก้ field '{field}'"}
+    load_sheet_config_overrides()
+    code = (code or "").strip()
+    if not code:
+        return {"error": "ไม่มี Code"}
+
+    sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    auth = {"Authorization": f"Bearer {creds.token}"}
+
+    # รายชื่อ tab รายเดือนทั้งหมด (สด)
+    try:
+        meta = requests.get(
+            f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+            headers=auth, timeout=15,
+        ).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+    except Exception as e:
+        return {"error": f"อ่านรายชื่อ tab ไม่ได้: {e}"}
+
+    # จัดลำดับ tab ที่จะค้น — เดือนเป้าหมายก่อน แล้วค่อยที่เหลือ + "รวม sheet"
+    monthly = [t for t in titles if any(t.startswith(m + " ") for m in _THAI_MONTHS)]
+    ordered = []
+    if month and 1 <= month <= 12:
+        mname = _THAI_MONTHS[month - 1]
+        ordered += [t for t in monthly if t.startswith(mname + " ")]
+    ordered += [t for t in monthly if t not in ordered]
+    if "รวม sheet" in titles:
+        ordered.append("รวม sheet")
+
+    for tab in ordered:
+        encoded = urllib.parse.quote(f"'{tab}'")
+        r = requests.get(
+            f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE",
+            headers=auth, timeout=30,
+        )
+        if r.status_code != 200:
+            continue
+        vals = r.json().get("values", [])
+        if not vals:
+            continue
+        colmap = _resolve_lead_colmap(vals[0])
+        code_src = colmap.get(LEADS_COL.lead_code)
+        field_src = colmap.get(canon)
+        rep_src = colmap.get(LEADS_COL.sales_rep)
+        if code_src is None or field_src is None:
+            continue
+        for i, raw in enumerate(vals[1:], start=2):   # sheet row = index+2 (1 header)
+            if code_src < len(raw) and (raw[code_src] or "").strip() == code:
+                # กันเซลล์แก้เคสคนอื่น (ถ้ามี code ซ้ำข้ามเซลล์ → ข้ามแถวที่ไม่ใช่ของเขา)
+                if expected_seller and rep_src is not None:
+                    rs = normalize_seller(raw[rep_src]) if rep_src < len(raw) else ""
+                    if rs != expected_seller:
+                        continue
+                a1 = urllib.parse.quote(f"'{tab}'!{_col_letter(field_src)}{i}")
+                up = requests.put(
+                    f"{SHEETS_API}/{sid}/values/{a1}?valueInputOption=USER_ENTERED",
+                    headers={**auth, "Content-Type": "application/json"},
+                    json={"values": [[value]]}, timeout=15,
+                )
+                if up.status_code != 200:
+                    return {"error": f"เขียนไม่สำเร็จ {up.status_code}: {up.text[:160]}"}
+                invalidate_cache()   # leads cache → ดึงใหม่
+                return {"ok": True, "tab": tab, "cell": f"{_col_letter(field_src)}{i}"}
+
+    return {"error": f"ไม่พบเคส Code '{code}' ในชีต"}
+
+
+def update_lead_fill_note(code: str, value: str, month: int | None = None,
+                          expected_seller: str = "") -> dict:
+    """back-compat — เขียนคอลัม S ('มากรอกชีตกันเถอะ'). ใช้ update_lead_field ข้างใน."""
+    return update_lead_field(code, "fill_sheet_note", value, month, expected_seller)
+
+
 # ── Fetch helpers ──
 def cell(row: list[str], index: int) -> str:
     if index < len(row):
@@ -257,10 +454,36 @@ def cell_bool(row: list[str], index: int) -> bool:
     return v in ("ส่งแล้ว", "true", "yes", "1")
 
 
+# ── Override SHEET_CONFIG จาก Supabase (เปลี่ยน spreadsheet/tab ได้จากแอดมิน) ──
+# โหลดครั้งเดียวต่อ process (flag) — admin กดบันทึกจะ reload ด้วย force=True
+_sheet_config_loaded = False
+
+
+def load_sheet_config_overrides(force: bool = False) -> None:
+    """อ่าน override จาก Supabase แล้ว mutate SHEET_CONFIG in-place (spreadsheet_id/sheet_name).
+    ใช้สำหรับย้ายไฟล์ชีต (เช่น ปีใหม่) โดยไม่ต้องแก้โค้ด. error/ไม่มี Supabase → ใช้ default.
+    """
+    global _sheet_config_loaded
+    if _sheet_config_loaded and not force:
+        return
+    _sheet_config_loaded = True
+    try:
+        from .supabase_client import get_sheet_config
+        for k, v in (get_sheet_config() or {}).items():
+            if k in SHEET_CONFIG:
+                if v.get("spreadsheet_id"):
+                    SHEET_CONFIG[k]["spreadsheet_id"] = v["spreadsheet_id"]
+                if v.get("sheet_name"):
+                    SHEET_CONFIG[k]["sheet_name"] = v["sheet_name"]
+    except Exception:
+        pass
+
+
 def fetch_sheet(config_key: str) -> list[list[str]]:
     """Fetch a single sheet → list of row arrays (skip header).
     Cache TTL 60s — ลด API quota hits (Vercel warm instance memory)
     """
+    load_sheet_config_overrides()
     cache_key = f"sheet:{config_key}"
     cached = _cache_get(cache_key)
     if cached is not None:
@@ -466,10 +689,11 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
             return fetch_sheet("leads")
 
         def _fetch_tab(tab: str) -> list[list[str]]:
+            # เก็บ header (แถวแรก) ไว้ด้วย เพื่อ map คอลัมน์ตามชื่อหัวตาราง
             encoded = urllib.parse.quote(f"'{tab}'")
             url = f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE"
             r = requests.get(url, headers=headers_auth, timeout=30)
-            return r.json().get("values", [])[1:] if r.status_code == 200 else []
+            return r.json().get("values", []) if r.status_code == 200 else []
 
         # Fetch all tabs in parallel
         tab_rows: dict[str, tuple[int, list[list[str]]]] = {}
@@ -487,10 +711,14 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
 
         all_rows: list[list[str]] = []
         for m_int, tab in monthly_tabs:
-            _, rows = tab_rows.get(tab, (m_int, []))
-            for row in rows:
-                date_cell = cell(row, LEADS_COL.received_date)
-                d = parse_date(date_cell)
+            _, vals = tab_rows.get(tab, (m_int, []))
+            if not vals:
+                continue
+            # map คอลัมน์ตามชื่อหัวตารางของ tab นี้ (แต่ละเดือน layout อาจต่างกัน)
+            colmap = _resolve_lead_colmap(vals[0])
+            for raw in vals[1:]:
+                row = _normalize_lead_row(raw, colmap)
+                d = parse_date(cell(row, LEADS_COL.received_date))
                 if d and d.month == m_int:
                     all_rows.append(row)
         _cache_set(cache_key, all_rows)
@@ -498,6 +726,86 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
     except Exception:
         # graceful fallback — อย่างน้อยมีข้อมูลจาก "รวม sheet"
         return fetch_sheet("leads")
+
+
+def fetch_sales_by_month_tabs() -> list[list[str]]:
+    """อ่านยอดขายจากแท็บรายเดือน '<เดือน>69' ตรงๆ (แทน 'รวม sheet' ที่ใช้สูตร REDUCE).
+
+    แต่ละแท็บจัดกลุ่มตามเซลล์ด้วย marker 'ชื่อเซลล์ X' ใน column B:
+    - ดึงบล็อกของแต่ละเซลล์ (ตั้งแต่ใต้ marker ถึง marker ถัดไป)
+    - เอาเฉพาะแถวที่ลำดับ(B) เป็นตัวเลข + สถานะ(N) ไม่ว่าง (ตรงกับ filter ในสูตร)
+    - prepend ชื่อเซลล์เป็น column 0 → ได้รูปแบบเดียวกับ flattened 'รวม sheet' เดิม (ตรง SALES_COL)
+
+    ★ ชื่อเซลล์ match กับ ALL_SELLERS (รายชื่อจริง dynamic) → เซลล์ใหม่เพิ่มเองอัตโนมัติ,
+      marker ขยะ ('A' / ว่าง / ชื่อไม่อยู่ในรายชื่อ) ถูกตัดทิ้ง — แก้ปัญหาสูตร hardcode 13 ชื่อ
+    Failsafe: แท็บไม่มี/ว่าง → fall back ไป fetch_sheet('sales_reports')
+    """
+    import urllib.parse
+    load_sheet_config_overrides()
+    cache_key = "sales_month_tabs"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from .constants import normalize_seller, ALL_SELLERS, refresh_from_sheet
+        from .fetch_dashboard import bangkok_now
+        refresh_from_sheet()   # ให้ ALL_SELLERS เป็นรายชื่อล่าสุด
+
+        sid = SHEET_CONFIG["sales_reports"]["spreadsheet_id"]
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        auth = {"Authorization": f"Bearer {creds.token}"}
+
+        now = bangkok_now()
+        be_year2 = (now.year + 543) % 100               # 2026 -> 2569 -> 69
+        want = {f"{_THAI_MONTHS[m - 1]}{be_year2:02d}": m for m in range(1, now.month + 1)}
+
+        meta = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+                            headers=auth, timeout=20).json()
+        titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
+        tabs = [(t, m) for t, m in want.items() if t in titles]
+        if not tabs:
+            return fetch_sheet("sales_reports")
+
+        known = {normalize_seller(s) for s in ALL_SELLERS}
+
+        def _fetch(tab):
+            enc = urllib.parse.quote(f"'{tab}'")
+            r = requests.get(f"{SHEETS_API}/{sid}/values/{enc}?valueRenderOption=FORMATTED_VALUE",
+                             headers=auth, timeout=40)
+            return r.json().get("values", []) if r.status_code == 200 else []
+
+        tab_vals = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            futs = {ex.submit(_fetch, t): t for t, _ in tabs}
+            for f in concurrent.futures.as_completed(futs):
+                tab_vals[futs[f]] = f.result()
+
+        all_rows: list[list[str]] = []
+        for tab, _m in tabs:
+            vals = tab_vals.get(tab, [])
+            # หา marker 'ชื่อเซลล์ X' ใน column B (index 1)
+            markers = []
+            for i, row in enumerate(vals):
+                b = (row[1] if len(row) > 1 else "") or ""
+                if isinstance(b, str) and b.strip().startswith("ชื่อเซลล์"):
+                    markers.append((i, b.strip()[len("ชื่อเซลล์"):].strip()))
+            for k, (mi, raw_name) in enumerate(markers):
+                name = normalize_seller(raw_name)
+                if name not in known:
+                    continue   # ตัด marker ขยะ / เซลล์ไม่อยู่ในรายชื่อจริง
+                end = markers[k + 1][0] if k + 1 < len(markers) else len(vals)
+                for j in range(mi + 1, end):
+                    row = vals[j]
+                    seq = str(row[1] if len(row) > 1 else "").strip()
+                    status = str(row[13] if len(row) > 13 else "").strip()
+                    if not seq.isdigit() or not status:
+                        continue   # ข้าม sub-header / แถวว่าง (ตรง filter N<>"" ในสูตร)
+                    all_rows.append([name] + [(row[i] if i < len(row) else "") for i in range(1, 28)])
+        _cache_set(cache_key, all_rows)
+        return all_rows
+    except Exception:
+        return fetch_sheet("sales_reports")
 
 
 def fetch_all_sheets() -> dict[str, list[list[str]]]:
@@ -515,12 +823,14 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
         except Exception:
             pass
 
-    other_keys = ["sales_reports", "bookings", "live_sessions", "live_followups", "employees"]
+    # sales_reports อ่านจากแท็บรายเดือนตรง (per-seller block) — เลิกพึ่ง 'รวม sheet' (สูตร)
+    other_keys = ["bookings", "live_sessions", "live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(fetch_sheet, k): k for k in other_keys}
         futures[executor.submit(fetch_leads_by_month_tabs)] = "leads"
+        futures[executor.submit(fetch_sales_by_month_tabs)] = "sales_reports"
         for future in concurrent.futures.as_completed(futures):
             key = futures[future]
             results[key] = future.result()

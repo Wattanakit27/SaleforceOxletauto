@@ -1034,6 +1034,250 @@ def magic_link(request, token):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def insights_seller(request):
+    """AI วิเคราะห์เซลล์ — body {seller, stats}. คืน narrative จาก Gemini (cache 30 นาที)."""
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+    seller = (body.get("seller") or "").strip()
+    stats = (body.get("stats") or "").strip()
+    if not seller or not stats:
+        return JsonResponse({"error": "ต้องมี seller + stats"}, status=400)
+    from .services.gemini_insights import analyze_seller
+    try:
+        text = analyze_seller(seller, stats)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=502)
+    return JsonResponse({"ok": True, "analysis": text})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def insights_forecast(request):
+    """AI อธิบายแนวโน้มยอดขาย — body {summary}. คืน narrative จาก Gemini."""
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+    summary = (body.get("summary") or "").strip()
+    if not summary:
+        return JsonResponse({"error": "ต้องมี summary"}, status=400)
+    from .services.gemini_insights import forecast_narrative
+    try:
+        text = forecast_narrative(summary)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=502)
+    return JsonResponse({"ok": True, "narrative": text})
+
+
+@require_GET
+def admin_sheets_status(request):
+    """Admin — แสดงแหล่งข้อมูล (Google Sheets) ที่ระบบใช้ + สถานะเชื่อมต่อ + tab รายเดือน (สด)."""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    import concurrent.futures
+    import requests as _rq
+    from google.auth.transport.requests import Request as AuthRequest
+    from .services.google_sheets import (
+        SHEET_CONFIG, fetch_sheet, _get_credentials, SHEETS_API, _THAI_MONTHS,
+        load_sheet_config_overrides,
+    )
+
+    from .services.supabase_client import is_configured as _sb_configured
+
+    # ดึง override ล่าสุดจาก Supabase ก่อน (ถ้า admin เคยย้ายไฟล์ชีต)
+    load_sheet_config_overrides(force=True)
+
+    # 6 แหล่งข้อมูลหลัก (ตรงกับ node ใน n8n)
+    sources_def = [
+        ("leads", "📋 Lead", "รายการ Lead ทั้งหมด (รวม sheet + tab รายเดือน)"),
+        ("sales_reports", "💰 รายงานฝ่ายขาย", "ยอดขาย / สถานะจอง-ปล่อย"),
+        ("bookings", "📝 จอง", "รายการจอง"),
+        ("live_sessions", "📡 ไลฟ์สด", "เซสชั่นไลฟ์"),
+        ("live_followups", "🎬 ติดตามไลฟ์สด", "คลิป follow-up"),
+        ("employees", "👤 พนักงาน (USRID)", "พนักงาน + LINE user_id"),
+    ]
+
+    def _check(item_def):
+        key, name, desc = item_def
+        cfg = SHEET_CONFIG.get(key, {})
+        d = {
+            "key": key, "name": name, "desc": desc,
+            "tab": cfg.get("sheet_name", ""),
+            "spreadsheetId": cfg.get("spreadsheet_id", ""),
+            "url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
+        }
+        try:
+            d["rows"] = len(fetch_sheet(key))
+            d["status"] = "ok"
+        except Exception as e:
+            d["status"] = "error"
+            d["error"] = str(e)[:140]
+            d["rows"] = 0
+        return d
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        sources = list(ex.map(_check, sources_def))
+
+    # leads: รายชื่อ tab รายเดือนที่เจอ (สด)
+    monthly_tabs = []
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+        meta = _rq.get(
+            f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+            headers={"Authorization": f"Bearer {creds.token}"}, timeout=15,
+        ).json()
+        for s in meta.get("sheets", []):
+            title = s["properties"]["title"]
+            for m in _THAI_MONTHS:
+                if title.startswith(m + " "):
+                    monthly_tabs.append(title)
+                    break
+    except Exception:
+        pass
+
+    # sheet ตั้งค่า (ไม่ใช่ data feed)
+    config_sources = []
+    for key, name in [("sellers_config", "🎯 ตั้งค่าเซลล์"),
+                      ("schedule_config", "⏰ ตั้งเวลาส่ง LINE"),
+                      ("lead_score_config", "📊 เกณฑ์คะแนน Lead")]:
+        cfg = SHEET_CONFIG.get(key, {})
+        config_sources.append({
+            "key": key, "name": name, "tab": cfg.get("sheet_name", ""),
+            "spreadsheetId": cfg.get("spreadsheet_id", ""),
+            "url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
+        })
+
+    return JsonResponse({
+        "ok": True,
+        "sources": sources,
+        "monthlyTabs": monthly_tabs,
+        "configSources": config_sources,
+        "useSupabase": bool(getattr(settings, "USE_SUPABASE", False)),
+        "canEdit": _sb_configured(),
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def admin_sheet_config(request):
+    """Admin — บันทึก override ของแหล่งข้อมูล (ย้าย spreadsheet/tab) ลง Supabase.
+
+    body JSON: {"items": [{"key": "leads", "spreadsheetId": "...", "sheetName": "..."}, ...]}
+    เก็บใน Supabase table sheet_config → load_sheet_config_overrides() จะ apply ทุก process.
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.supabase_client import is_configured as sb_ok, save_sheet_config
+    if not sb_ok():
+        return JsonResponse({"error": "ต้องตั้ง Supabase ก่อน (SUPABASE_URL/SUPABASE_SECRET_KEY) ถึงจะบันทึก override ได้"}, status=400)
+
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+    items_in = body.get("items") or []
+    if not isinstance(items_in, list) or not items_in:
+        return JsonResponse({"error": "ต้องมี items"}, status=400)
+
+    from .services.google_sheets import SHEET_CONFIG, load_sheet_config_overrides
+    items = []
+    for it in items_in:
+        key = (it.get("key") or "").strip()
+        if key not in SHEET_CONFIG:
+            continue
+        items.append({
+            "key": key,
+            "spreadsheet_id": (it.get("spreadsheetId") or "").strip(),
+            "sheet_name": (it.get("sheetName") or "").strip(),
+        })
+    if not items:
+        return JsonResponse({"error": "ไม่มี key ที่ถูกต้อง"}, status=400)
+
+    try:
+        save_sheet_config(items)
+    except Exception as e:
+        return JsonResponse({"error": str(e)[:300]}, status=502)
+
+    # apply ทันที + ล้าง cache ทั้งหมด (sheet cache + dashboard) ให้ดึงไฟล์ใหม่
+    load_sheet_config_overrides(force=True)
+    from .services.google_sheets import invalidate_cache
+    invalidate_cache()
+    try:
+        from .services.fetch_dashboard import _dash_cache
+        _dash_cache["data"] = None  # force คำนวณใหม่จากไฟล์ใหม่ (ไม่ใช้ .clear() เพราะต้องคง key "ts")
+    except Exception:
+        pass
+
+    # ถ้าอ่านผ่าน Supabase mirror → ต้อง re-sync จากไฟล์ใหม่ ไม่งั้น dashboard เห็นข้อมูลเก่า
+    synced = None
+    if getattr(settings, "USE_SUPABASE", False):
+        try:
+            from .services.supabase_client import sync_all_sheets_to_supabase
+            synced = sync_all_sheets_to_supabase()
+        except Exception as e:
+            synced = {"error": str(e)[:200]}
+
+    return JsonResponse({"ok": True, "saved": len(items), "synced": synced},
+                        json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_lead_note(request):
+    """หน้า LEAD — เซลล์กรอกคอลัม S ('มากรอกชีตกันเถอะ') → เขียนกลับ Google Sheet จริง.
+
+    body JSON: {token, code, note, month?}
+    note = ข้อความอัพเดทแต่ละครั้งคั่นด้วย ' / ' (ตามจำนวนอัพเดทในคอลัม Q)
+    """
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+    token = (body.get("token") or "").strip()
+    code = (body.get("code") or "").strip()
+    field = (body.get("field") or "fill_sheet_note").strip()   # S=fill_sheet_note (default) / Z=customer_status / N=call_proof
+    value = body.get("value", body.get("note", ""))            # back-compat: เดิมส่ง 'note'
+    if not isinstance(value, str):
+        value = str(value)
+
+    seller_name = seller_from_token(token)   # คืนชื่อ normalize แล้ว
+    if not seller_name:
+        return JsonResponse({"error": "token ไม่ถูกต้อง"}, status=401)
+    if not code:
+        return JsonResponse({"error": "ไม่มี code"}, status=400)
+
+    try:
+        mi = int(body.get("month")) if body.get("month") else None
+    except (ValueError, TypeError):
+        mi = None
+
+    from .services.google_sheets import update_lead_field
+    res = update_lead_field(code, field, value, mi, expected_seller=seller_name)
+    if res.get("error"):
+        return JsonResponse(res, status=502)
+
+    # mirror Supabase → re-sync เบื้องหลัง ให้ dashboard เห็นค่าใหม่ (ไม่ block)
+    if getattr(settings, "USE_SUPABASE", False):
+        try:
+            from .services.supabase_client import _trigger_bg_sync
+            _trigger_bg_sync()
+        except Exception:
+            pass
+    return JsonResponse(res, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def finance_check_submit(request):
     """รับฟอร์ม 'เช็คเคสไฟแนนซ์ก่อนเซ็น' จากหน้าเซลล์ → สร้าง Flex → push เข้า LINE
 
@@ -1231,7 +1475,7 @@ def seller_dashboard(request, token):
     # เลขตรงกับการนับ raw rows ใน Google Sheet
     from .services.google_sheets import fetch_leads_by_month_tabs, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
-    from .services.fetch_dashboard import is_this_year
+    from .services.fetch_dashboard import is_this_year, customer_status_priority
     import re as _re
 
     raw_leads = fetch_leads_by_month_tabs()
@@ -1275,9 +1519,17 @@ def seller_dashboard(request, token):
             "updateCount": int(cell_num(r, L.update_count)),
             "adminStatus": cell(r, L.admin_status),
             "salesStatus": cell(r, L.sales_status),
+            "customerStatus": cell(r, L.customer_status),   # คอลัม Z (layout ใหม่)
+            "followPriority": customer_status_priority(cell(r, L.customer_status)),
             "lastUpdate": cell(r, L.last_updated_at),
             "note": note,
-            "profile": cell(r, L.customer_profile),
+            "fillNote": note,                                # คอลัม S ดิบ (ไว้กรอก/แก้)
+            "profile": cell(r, L.customer_profile),          # T PROFILE ลูกค้า
+            "occupation": cell(r, L.occupation),             # U อาชีพ
+            "income": cell(r, L.income),                     # V รายได้
+            "jobTenure": cell(r, L.job_tenure),              # W อายุงาน
+            "paymentHistory": cell(r, L.payment_history),    # X ประวัติการผ่อน
+            "customerType": cell(r, L.customer_type),        # Y ประเภทลูกค้า
             "leadScore": ls["score"],
             "leadTier": ls["tier"],
             "scoreBreakdown": ls["breakdown"],

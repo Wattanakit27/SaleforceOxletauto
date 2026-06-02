@@ -25,6 +25,68 @@ FOLLOW_KEYWORDS = ["ติดตาม", "รอตอบ", "รอลูกค�
 # sync กับ line_notify.SKIP_STATUS — admin ใส่คำเหล่านี้เพื่อบอกว่าไม่ต้องตามต่อ
 SKIP_STATUS = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 
+# ── คอลัม Z "สถานะลูกค้า" (layout ใหม่ มิ.ย.69+) — ใช้คัดลำดับว่าตามเคสไหนก่อน ──
+# ลำดับความสำคัญ (สูง = ตามก่อน) ตามที่ผู้ใช้กำหนด:
+#   active chase (priority ≥3): สนใจมาก > ลังเล > ไม่รับสาย > รอเงิน > รอเช็คเครดิต > ดาวน์ไม่พอ
+#   booked/done (priority 1-2): จอง, ส่งมอบ — ไม่ใช่เคสเสีย แต่ไม่ต้อง remind ให้โทร
+CUSTOMER_STATUS_PRIORITY = {
+    "สนใจมาก": 8,
+    "ลังเล": 7,
+    "ไม่รับสาย": 6,
+    "รอเงิน": 5,
+    "รอเช็คเครดิต": 4,
+    "ดาวน์ไม่พอ": 3,
+    "จอง": 2,
+    "ส่งมอบ": 1,
+}
+# Z ที่ "เคสเสีย" (ในวงเล็บ) — ไม่ต้องตาม + ไม่ remind (คืนเคส = เพิ่มใหม่)
+CUSTOMER_STATUS_DEAD = [
+    "ยังไม่ออก", "แบล็คลิส", "แบล็คลิสต์", "เครดิตไม่ผ่าน", "ไม่สนใจ", "คืนเคส",
+]
+
+
+def customer_status_priority(z: str) -> int:
+    """คอลัม Z → คะแนนลำดับการตาม (8=สนใจมากสุด ... 1=ส่งมอบ, 0=เคสเสีย/ไม่รู้จัก)."""
+    if not z:
+        return 0
+    for k, v in CUSTOMER_STATUS_PRIORITY.items():
+        if k in z:
+            return v
+    return 0
+
+
+def is_nofollow_z(z: str) -> bool:
+    """คอลัม Z เป็น 'เคสเสีย' (ในวงเล็บ) ไหม — ไม่ต้องตาม."""
+    return bool(z) and any(k in z for k in CUSTOMER_STATUS_DEAD)
+
+
+def effective_status(r) -> str:
+    """สถานะที่ใช้ตัดสิน follow/skip ของ lead 1 แถว —
+    ใช้คอลัม Z (สถานะลูกค้า) ก่อนถ้ามีค่า, ไม่งั้น fallback admin_status (layout เก่า/ยังไม่กรอก Z)."""
+    z = cell(r, L.customer_status).strip()
+    return z if z else cell(r, L.admin_status)
+
+
+def should_follow(r) -> bool:
+    """lead นี้ 'ต้องตามต่อ' ไหม (row-level, Z-aware).
+    - มีคอลัม Z (layout ใหม่): ตามต่อถ้าไม่ใช่ '(ไม่ต้องตาม)'
+    - ไม่มี Z (layout เก่า/ยังไม่กรอก): ใช้ is_follow(admin_status) เดิม → ผลเท่าเดิมเป๊ะ"""
+    z = cell(r, L.customer_status).strip()
+    if z:
+        if is_nofollow_z(z):
+            return False                          # เคสเสีย (ในวงเล็บ)
+        if "จอง" in z or "ส่งมอบ" in z:
+            return False                          # booked/done — ไม่ remind ให้โทร
+        return True                               # active chase (หรือ status ที่ไม่รู้จัก)
+    return is_follow(cell(r, L.admin_status))
+
+
+def is_lead_vacant(r) -> bool:
+    """lead ยัง 'ว่าง' (ยังไม่ตีสถานะ) ไหม — มี Z = ไม่ว่าง, ไม่งั้นใช้ is_vacant(admin) เดิม."""
+    if cell(r, L.customer_status).strip():
+        return False
+    return is_vacant(cell(r, L.admin_status))
+
 
 def is_skipped(status: str) -> bool:
     """เคสที่ถือว่า 'จบแล้ว' — ใช้สำหรับ exclude จากการแจ้งเตือนติดตาม
@@ -196,6 +258,27 @@ def fetch_dashboard_data() -> dict:
     c["ts"] = time.time()
     c["data"] = data
     return data
+
+
+def fetch_ban_counts_by_month(year: int) -> dict:
+    """อ่าน tab 'รายงานแบน' → {month: {seller_normalized: จำนวนครั้งโดนแบน}} ของปีนั้น.
+    1 แถว = 1 ครั้งที่โดนแบน (นับตาม banDate). error/ไม่มี sheet → {}."""
+    from .google_sheets import fetch_sheet, BAN_COL
+    out: dict[int, dict] = {}
+    try:
+        rows = fetch_sheet("ban_report")
+    except Exception:
+        return out
+    for r in rows:
+        d = parse_date(cell(r, BAN_COL.ban_date))
+        if not d or d.year != year:
+            continue
+        seller = normalize_seller(cell(r, BAN_COL.seller))
+        if not seller:
+            continue
+        out.setdefault(d.month, {})
+        out[d.month][seller] = out[d.month].get(seller, 0) + 1
+    return out
 
 
 def _compute_dashboard_data() -> dict:
@@ -372,8 +455,8 @@ def _compute_dashboard_data() -> dict:
     done_cases = [b for b in booking_cases if b["status"] == "ปล่อย"]
     total_done = len(done_cases)
     total_target = sum(TARGETS.values())
-    total_follow = len([r for r in year_leads if is_follow(cell(r, L.admin_status))])
-    total_vacant = len([r for r in year_leads if is_vacant(cell(r, L.admin_status))])
+    total_follow = len([r for r in year_leads if should_follow(r)])
+    total_vacant = len([r for r in year_leads if is_lead_vacant(r)])
     # Deal Value — ยอดปล่อยรถ (sum of sale_price for status=ปล่อย)
     total_deal_value = sum(b["price"] for b in done_cases)
     # Pipeline value — มูลค่าดีลที่ยังอยู่ใน pipeline (จอง/รอเซ็นต์/รอผล/รอปล่อย — ไม่รวมรีเจ็ก/ปล่อย)
@@ -412,8 +495,8 @@ def _compute_dashboard_data() -> dict:
         sl = [r for r in year_leads if normalize_seller(cell(r, L.sales_rep)) == name]
         sb = [b for b in booking_cases if b["seller"] == name]
         sb_done = [b for b in sb if b["status"] == "ปล่อย"]
-        follow = len([r for r in sl if is_follow(cell(r, L.admin_status))])
-        vacant = len([r for r in sl if is_vacant(cell(r, L.admin_status))])
+        follow = len([r for r in sl if should_follow(r)])
+        vacant = len([r for r in sl if is_lead_vacant(r)])
         # ยังไม่อัพเดท = update_count == 0 และไม่ใช่ junk
         not_called = 0
         for r in sl:
@@ -500,8 +583,8 @@ def _compute_dashboard_data() -> dict:
         sellers.append({
             "name": name, "team": "INACTIVE",  # team = INACTIVE → frontend แสดงเป็น "เซลล์เก่า"
             "lead": len(g["leads"]),
-            "follow": len([r for r in g["leads"] if is_follow(cell(r, L.admin_status))]),
-            "vacant": len([r for r in g["leads"] if is_vacant(cell(r, L.admin_status))]),
+            "follow": len([r for r in g["leads"] if should_follow(r)]),
+            "vacant": len([r for r in g["leads"] if is_lead_vacant(r)]),
             "done": n_done,
             "target": 0, "booking": len(g["jongs"]),
             "live": 0, "clip": 0, "clipTarget": 0,
@@ -516,8 +599,8 @@ def _compute_dashboard_data() -> dict:
     # ADMIN seller
     admin_leads = [r for r in year_leads if normalize_seller(cell(r, L.sales_rep)) == "ADMIN"]
     if admin_leads:
-        admin_follow = len([r for r in admin_leads if is_follow(cell(r, L.admin_status))])
-        admin_vacant = len([r for r in admin_leads if is_vacant(cell(r, L.admin_status))])
+        admin_follow = len([r for r in admin_leads if should_follow(r)])
+        admin_vacant = len([r for r in admin_leads if is_lead_vacant(r)])
         admin_sb = [b for b in booking_cases if b["seller"] == "ADMIN"]
         admin_done_b = [b for b in admin_sb if b["status"] == "ปล่อย"]
         admin_done = len(admin_done_b)
@@ -578,7 +661,7 @@ def _compute_dashboard_data() -> dict:
     # Follow Cases
     follow_cases = []
     for r in year_leads:
-        if not is_follow(cell(r, L.admin_status)):
+        if not should_follow(r):
             continue
         seller = normalize_seller(cell(r, L.sales_rep)) or "-"
         if seller == "-":
@@ -593,6 +676,8 @@ def _compute_dashboard_data() -> dict:
             "leadType": cell(r, L.type),
             "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
             "adminStatus": cell(r, L.admin_status) or "ติดตาม",
+            "customerStatus": cell(r, L.customer_status),
+            "followPriority": customer_status_priority(cell(r, L.customer_status)),
             "callProof": cell(r, L.call_proof) or "-",
             "profile": cell(r, L.customer_profile) or "",
             "dateIn": cell(r, L.received_date) or "-",
@@ -666,8 +751,8 @@ def _compute_dashboard_data() -> dict:
 
     today_summary = {
         "totalLeads": len(today_leads),
-        "totalFollow": len([r for r in today_leads if is_follow(cell(r, L.admin_status))]),
-        "totalVacant": len([r for r in today_leads if is_vacant(cell(r, L.admin_status))]),
+        "totalFollow": len([r for r in today_leads if should_follow(r)]),
+        "totalVacant": len([r for r in today_leads if is_lead_vacant(r)]),
         "bySeller": today_by_seller,
     }
 
@@ -721,8 +806,8 @@ def _compute_dashboard_data() -> dict:
         m_jongs = [j for j in year_jongs if get_month(j["date"]) == m]
         m_ln = len([r for r in m_leads if cell(r, L.type) not in RJ_TYPES])
         m_lr = len([r for r in m_leads if cell(r, L.type) in RJ_TYPES])
-        m_follow = len([r for r in m_leads if is_follow(cell(r, L.admin_status))])
-        m_vacant = len([r for r in m_leads if is_vacant(cell(r, L.admin_status))])
+        m_follow = len([r for r in m_leads if should_follow(r)])
+        m_vacant = len([r for r in m_leads if is_lead_vacant(r)])
 
         m_bookings = [b for b in booking_cases if get_month(b["date"]) == m]
         m_done = [b for b in booking_cases if b["status"] == "ปล่อย" and get_done_month(b) == m]
@@ -773,8 +858,8 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(sl2),
                 "leadNormal": len([r for r in sl2 if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in sl2 if cell(r, L.type) in RJ_TYPES]),
-                "follow": len([r for r in sl2 if is_follow(cell(r, L.admin_status))]),
-                "vacant": len([r for r in sl2 if is_vacant(cell(r, L.admin_status))]),
+                "follow": len([r for r in sl2 if should_follow(r)]),
+                "vacant": len([r for r in sl2 if is_lead_vacant(r)]),
                 "notCalled": m_not_called,
                 "done": n_done2,
                 "booking": m_jong_by_seller.get(name, 0),
@@ -835,8 +920,8 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(g["leads"]),
                 "leadNormal": len([r for r in g["leads"] if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in g["leads"] if cell(r, L.type) in RJ_TYPES]),
-                "follow": len([r for r in g["leads"] if is_follow(cell(r, L.admin_status))]),
-                "vacant": len([r for r in g["leads"] if is_vacant(cell(r, L.admin_status))]),
+                "follow": len([r for r in g["leads"] if should_follow(r)]),
+                "vacant": len([r for r in g["leads"] if is_lead_vacant(r)]),
                 "done": n_done,
                 "booking": o_booking,
                 "dealValue": dv,
@@ -869,8 +954,8 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(m_admin_leads),
                 "leadNormal": len([r for r in m_admin_leads if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in m_admin_leads if cell(r, L.type) in RJ_TYPES]),
-                "follow": len([r for r in m_admin_leads if is_follow(cell(r, L.admin_status))]),
-                "vacant": len([r for r in m_admin_leads if is_vacant(cell(r, L.admin_status))]),
+                "follow": len([r for r in m_admin_leads if should_follow(r)]),
+                "vacant": len([r for r in m_admin_leads if is_lead_vacant(r)]),
                 "done": len(m_admin_done),
                 "booking": m_admin_booking,
                 "dealValue": m_admin_dv,
@@ -1042,6 +1127,15 @@ def _compute_dashboard_data() -> dict:
         daily_by_seller[b["seller"]][mm]["dones"][dd] += 1
         daily_by_seller[b["seller"]][mm]["dealValue"][dd] += b["price"] or 0
 
+    # ── โดนแบน (คะแนนเซลล์ส่วน "โดนแบน") — inject ต่อเซลล์ทั้งรายเดือน + รายปี ──
+    ban_by_month = fetch_ban_counts_by_month(year_full)
+    for s in sellers:
+        s["bans"] = sum(ban_by_month.get(mm, {}).get(s["name"], 0) for mm in range(1, 13))
+    for mm, msum in monthly_summary.items():
+        mm_int = int(mm)
+        for nm, sd in (msum.get("sellers") or {}).items():
+            sd["bans"] = ban_by_month.get(mm_int, {}).get(nm, 0)
+
     return {
         "meta": {
             "generatedAt": now.isoformat(),
@@ -1133,6 +1227,9 @@ def compute_diligence_scores(target_month: int | None = None,
                 "scoreCall": 0, "scoreCallNormal": 0, "scoreCallRJ": 0,
                 "scoreJong": 0, "scoreDone": 0,
                 "high": 0,
+                # สูตรใหม่ (100 คะแนน)
+                "capUpd": 0, "leads": 0, "bans": 0, "conv": 0, "completion": 0,
+                "sDone": 0, "sJong": 0, "sConv": 0, "sFollow": 0, "sBan": 0,
             }
         return score_map[name]
 
@@ -1145,6 +1242,7 @@ def compute_diligence_scores(target_month: int | None = None,
         upd = int(l.get("updateCount", 0))
         is_rj = l.get("leadType") in rj_set
         e["totUpdates"] += upd
+        e["capUpd"] += min(upd, 4)   # ติดตาม: cap 4/เคส
         if is_rj:
             e["cntRJ"] += 1
             e["totRJ"] += upd
@@ -1159,23 +1257,25 @@ def compute_diligence_scores(target_month: int | None = None,
             e["scoreCallRJ"] += sc
         else:
             e["scoreCallNormal"] += sc
-        e["scoreCall"] += sc
-        e["score"] += sc
+        e["scoreCall"] += sc   # เก็บไว้ดู (ไม่รวมใน score ใหม่)
 
-    # ── ส่วน 2: คะแนนจอง/ปล่อย จาก monthlySummary[m].sellers[name] ──
+    # ── ส่วน 2: จอง/ปล่อย/lead/แบน จาก monthlySummary[m].sellers[name] ──
     m_sellers = (monthly.get(m) or monthly.get(str(m)) or {}).get("sellers", {})
     for name, sd in m_sellers.items():
         if name not in ALL_SELLERS and name != "ADMIN":
             continue  # skip orphan/inactive
         jongs = int(sd.get("booking", 0))
         dones = int(sd.get("done", 0))
-        if jongs > 0 or dones > 0:
+        leads = int(sd.get("lead", 0))
+        bans = int(sd.get("bans", 0))
+        if jongs > 0 or dones > 0 or leads > 0 or name in score_map:
             e = _ensure(name)
             e["jongs"] = jongs
             e["dones"] = dones
+            e["leads"] = leads
+            e["bans"] = bans
             e["scoreJong"] = jongs * SCORE_JONG
             e["scoreDone"] = dones * SCORE_DONE
-            e["score"] += e["scoreJong"] + e["scoreDone"]
 
     # avg per case
     for e in score_map.values():
@@ -1185,6 +1285,19 @@ def compute_diligence_scores(target_month: int | None = None,
     for name in ALL_SELLERS:
         if name not in score_map:
             _ensure(name)
+
+    # ── สูตรคะแนนใหม่ (100): จบ20 จอง10 Conv30 ติดตาม30 แบน10 ──
+    for e in score_map.values():
+        e["sDone"] = round(min(e["dones"] / 15, 1) * 20, 1)
+        e["sJong"] = round(min(e["jongs"] / 60, 1) * 10, 1)
+        conv = (e["dones"] / e["leads"] * 100) if e["leads"] else 0
+        e["conv"] = round(conv, 1)
+        e["sConv"] = round(min(conv / 5, 1) * 30, 1)
+        completion = (e["capUpd"] / (4 * e["cnt"])) if e["cnt"] else 0
+        e["completion"] = round(completion * 100)
+        e["sFollow"] = round(completion * 30, 1)
+        e["sBan"] = max(0, 10 - e["bans"])
+        e["score"] = round(e["sDone"] + e["sJong"] + e["sConv"] + e["sFollow"] + e["sBan"], 1)
 
     # Sort by score desc
     out = sorted(score_map.values(), key=lambda x: -x["score"])
@@ -1207,22 +1320,20 @@ def export_leadscore_to_sheet(target_month: int | None = None,
     generated_at = now.isoformat(timespec="seconds")
 
     header = [
-        "เซลล์", "ทีม", "Score รวม",
-        "เคสรับ", "ปกติ", "RJ",
-        "จำนวนโทรรวม", "เฉลี่ย/เคส", "🔥 3+",
-        "จอง", "ปล่อย",
-        "คะแนนโทร (Normal)", "คะแนนโทร (RJ)", "คะแนนจอง", "คะแนนปล่อย",
-        "เป้า/เดือน", "เดือน", "ปี", "อัพเดทเมื่อ",
+        "เซลล์", "ทีม", "Score รวม (100)",
+        "Lead", "ปล่อย", "จอง", "เคสติดตาม",
+        "Conv %", "ติดตาม %", "โดนแบน",
+        "จบ /20", "จอง /10", "Conv /30", "ติดตาม /30", "แบน /10",
+        "เดือน", "ปี", "อัพเดทเมื่อ",
     ]
     rows = [header]
     for e in scores:
         rows.append([
             e["name"], e["team"], e["score"],
-            e["cnt"], e["cntNormal"], e["cntRJ"],
-            e["totUpdates"], e["avg"], e["high"],
-            e["jongs"], e["dones"],
-            e["scoreCallNormal"], e["scoreCallRJ"], e["scoreJong"], e["scoreDone"],
-            e["target"], month_name, y, generated_at,
+            e["leads"], e["dones"], e["jongs"], e["cnt"],
+            e["conv"], e["completion"], e["bans"],
+            e["sDone"], e["sJong"], e["sConv"], e["sFollow"], e["sBan"],
+            month_name, y, generated_at,
         ])
 
     write_sheet("leadscore", rows)
@@ -1358,7 +1469,7 @@ def fetch_seller_stats(seller_name: str) -> dict:
     # ── 4) Follow cases ของเซลล์ ──
     my_follow_cases = []
     for r in my_year_leads:
-        if not is_follow(cell(r, L.admin_status)):
+        if not should_follow(r):
             continue
         note_raw = cell(r, L.fill_sheet_note) or "-"
         note = re.sub(r"^\d{4,5}\s*", "", note_raw) or "-"
@@ -1370,6 +1481,8 @@ def fetch_seller_stats(seller_name: str) -> dict:
             "leadType": cell(r, L.type),
             "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
             "adminStatus": cell(r, L.admin_status) or "ติดตาม",
+            "customerStatus": cell(r, L.customer_status),
+            "followPriority": customer_status_priority(cell(r, L.customer_status)),
             "callProof": cell(r, L.call_proof) or "-",
             "profile": cell(r, L.customer_profile) or "",
             "dateIn": cell(r, L.received_date) or "-",
@@ -1391,8 +1504,8 @@ def fetch_seller_stats(seller_name: str) -> dict:
     # ── 5) Today summary (เฉพาะเซลล์) ──
     my_today = {
         "lead": len(my_today_leads),
-        "follow": len([r for r in my_today_leads if is_follow(cell(r, L.admin_status))]),
-        "vacant": len([r for r in my_today_leads if is_vacant(cell(r, L.admin_status))]),
+        "follow": len([r for r in my_today_leads if should_follow(r)]),
+        "vacant": len([r for r in my_today_leads if is_lead_vacant(r)]),
     }
 
     # ── 6) Monthly summary (เฉพาะเซลล์, 12 เดือน) ──
@@ -1415,8 +1528,8 @@ def fetch_seller_stats(seller_name: str) -> dict:
             "lead": len(m_leads),
             "leadNormal": len([r for r in m_leads if cell(r, L.type) not in RJ_TYPES]),
             "leadRJ": len([r for r in m_leads if cell(r, L.type) in RJ_TYPES]),
-            "follow": len([r for r in m_leads if is_follow(cell(r, L.admin_status))]),
-            "vacant": len([r for r in m_leads if is_vacant(cell(r, L.admin_status))]),
+            "follow": len([r for r in m_leads if should_follow(r)]),
+            "vacant": len([r for r in m_leads if is_lead_vacant(r)]),
             "done": n_done,
             "booking": len(m_jongs),
             "dealValue": dv,
@@ -1463,8 +1576,8 @@ def fetch_seller_stats(seller_name: str) -> dict:
         "team": TEAM_ID.get(seller_name, "?"),
         "target": TARGETS.get(seller_name, 0),
         "lead": len(my_year_leads),
-        "follow": len([r for r in my_year_leads if is_follow(cell(r, L.admin_status))]),
-        "vacant": len([r for r in my_year_leads if is_vacant(cell(r, L.admin_status))]),
+        "follow": len([r for r in my_year_leads if should_follow(r)]),
+        "vacant": len([r for r in my_year_leads if is_lead_vacant(r)]),
         "done": n_done_year,
         "booking": len(my_year_jongs),
         "dealValue": dv_year,
