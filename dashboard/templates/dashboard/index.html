@@ -1491,56 +1491,22 @@
       // monthly view → ms.sellers[name].xxx (0 ถ้าไม่มีเดือนนั้น)
       // yearly view  → s.xxx (รวมปี)
       // ตรงกับ "สรุปรายเซลล์" 100% — ไม่ fallback ไปค่ารายปีเมื่ออยู่ในโหมดเดือน
-      // ── ตารางคะแนน 100 แต้ม (6 องค์ประกอบ + Max Normalization) ──
-      // จบ/35 · จอง/20 · ขยัน/12 · หลักฐ/6 · ปริม/12 · คุณภ/15 = รวม/100
+      // ── ตารางคะแนน 100 (สูตรใหม่: จบ20·จอง10·Conv30·ติดตาม30·แบน10) ──
+      // ใช้ค่าจาก dilMap (buildDilMap) → sync กับ modal คะแนน + Python export
       const scoreEntries = sellers
         .filter(s => !s.inactive && s.team !== 'INACTIVE')
         .map(s => {
-          const _resolve = (key) => {
-            if (dfMonth > 0) {
-              const msd = ms?.sellers?.[s.name];
-              return msd ? (msd[key]||0) : 0;
-            }
-            return s[key]||0;
+          const e = dilMap[s.name] || {};
+          const leadDist = dfMonth > 0 ? (ms?.sellers?.[s.name]?.leadDist || 0) : (s.leadDist || 0);
+          return {
+            n: s.name, team: s.team, leadDist,
+            dones: e.dones||0, jongs: e.jongs||0, leads: e.leads||0, bans: e.bans||0,
+            conv: e.conv||0, completion: e.completion||0, cnt: e.cnt||0,
+            sDone: e.sDone||0, sJong: e.sJong||0, sConv: e.sConv||0,
+            sFollow: e.sFollow||0, sBan: (e.sBan==null?10:e.sBan),
+            total: e.score||0,
           };
-          const done    = _resolve('done');
-          const booking = _resolve('booking');
-          const cases   = _resolve('lead');           // จำนวนเคสที่รับผิดชอบ (นับเต็ม รวม LIVE+RJ)
-          const leadDist= _resolve('leadDist');        // lead แจกจ่ายได้ (ไม่ใช่ไลฟ์+RJ) — ใช้จัดสรรอนาคต
-          const updSum  = _resolve('updateSum');       // รวมอัพเดท
-          const proofN  = _resolve('proofCount');
-          const returnN = _resolve('returnCount');
-          const cancelN = _resolve('cancelCount');
-          const avgUpd   = cases > 0 ? updSum / cases : 0;
-          const proofPct = cases > 0 ? (proofN / cases) * 100 : 0;
-          const returnPct= cases > 0 ? (returnN / cases) * 100 : 0;
-          const cancelPct= cases > 0 ? (cancelN / cases) * 100 : 0;
-          return { n: s.name, team: s.team, done, booking, cases, updSum, leadDist,
-                   avgUpd, proofPct, returnPct, cancelPct,
-                   // aliases สำหรับ 📈 เกณฑ์ Performance (จัดสรร lead)
-                   leadTotal: cases, activity: avgUpd,
-                   sales: booking * SCORE_JONG + done * SCORE_DONE,
-                   jongs: booking, dones: done };
         });
-
-      // หาค่า max ของแต่ละมิติ (สำหรับ normalize) — กัน /0 ด้วย || 1
-      const _mx = (key) => Math.max(1, ...scoreEntries.map(e => e[key] || 0));
-      const maxDone   = _mx('done');
-      const maxBook   = _mx('booking');
-      const maxAvg    = _mx('avgUpd');
-      const maxCases  = _mx('cases');
-      const maxReturn = _mx('returnPct');
-
-      // คำนวณ 6 คะแนน + รวม
-      scoreEntries.forEach(e => {
-        e.sJob     = (e.done / maxDone) * 35;                       // จบ/35
-        e.sBook    = (e.booking / maxBook) * 20;                    // จอง/20
-        e.sActive  = (e.avgUpd / maxAvg) * 12;                      // ขยัน/12
-        e.sProof   = (e.proofPct / 100) * 6;                        // หลักฐ/6
-        e.sVolume  = (e.cases / maxCases) * 12;                     // ปริม/12
-        e.sQuality = (1 - (e.returnPct / maxReturn)) * 15;          // คุณภ/15 (กลับด้าน)
-        e.total    = e.sJob + e.sBook + e.sActive + e.sProof + e.sVolume + e.sQuality;
-      });
       scoreEntries.sort((a,b) => b.total - a.total);
 
       const _medals = ['🥇','🥈','🥉'];
@@ -1549,44 +1515,42 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
           <div class="card-title" style="margin:0;display:flex;align-items:center">🏆 ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(100 คะแนนเต็ม)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูวิธีคิดแต่ละช่อง">?</span></div>
         </div>
-        <div class="card-sub">คะแนนเทียบกับคนเก่งสุดในแต่ละด้าน (Max Normalization) · <b>คุณภ</b> กลับด้าน (คืนน้อย=ดี) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
+        <div class="card-sub">5 ด้าน เทียบกับเป้า (ถึงเป้า=เต็ม) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <div style="min-width:760px">
-        <div class="shdr" style="grid-template-columns:.4fr 1fr .5fr .5fr .65fr .7fr .7fr .7fr .65fr .65fr .7fr .75fr;font-size:10px">
+        <div style="min-width:720px">
+        <div class="shdr" style="grid-template-columns:.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .85fr .7fr .8fr;font-size:10px">
           <span>#</span>
           <span>เซลล์</span>
-          <span style="text-align:right">จบ</span>
+          <span style="text-align:right">ปล่อย</span>
           <span style="text-align:right">จอง</span>
-          <span style="text-align:right">คืน%</span>
-          <span style="text-align:right;color:var(--green-mid)">จบ/35<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--green)">จอง/20<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--blue)">ขยัน/12<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--t2)">หลักฐ/6<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--purple)">ปริม/12<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--amber)">คุณภ/15<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right">Conv%</span>
+          <span style="text-align:right;color:var(--green)">จบ/20<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--blue)">จอง/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--blue)">Conv/30<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--amber)">ติดตาม/30<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--red)">แบน/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;font-weight:700">รวม/100</span>
         </div>`;
       scoreEntries.forEach((e, i) => {
         const rank = _medals[i] || (i + 1);
         const isTop3 = i < 3;
         const totalColor = e.total >= 70 ? 'var(--green)' : e.total >= 50 ? 'var(--blue)' : e.total >= 30 ? 'var(--amber)' : 'var(--red)';
-        html += `<div class="srow" style="grid-template-columns:.4fr 1fr .5fr .5fr .65fr .7fr .7fr .7fr .65fr .65fr .7fr .75fr;font-size:11.5px" onclick="showSellerScoreBreakdown('${h(e.n)}')" title="กดดูรายละเอียด">
+        html += `<div class="srow" style="grid-template-columns:.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .85fr .7fr .8fr;font-size:11.5px" onclick="showSellerScoreBreakdown('${h(e.n)}')" title="กดดูรายละเอียด">
           <span style="${isTop3?'font-size:14px':'color:var(--t3)'}">${rank}</span>
           <span style="font-weight:${isTop3?'700':'500'}">${h(e.n)}</span>
-          <span style="text-align:right;color:var(--t2)">${e.done}</span>
-          <span style="text-align:right;color:var(--t2)">${e.booking}</span>
-          <span style="text-align:right;color:var(--t3);font-size:10px">${_f1(e.returnPct)}</span>
-          <span style="text-align:right;color:var(--green-mid);font-weight:600">${_f1(e.sJob)}</span>
-          <span style="text-align:right;color:var(--green);font-weight:600">${_f1(e.sBook)}</span>
-          <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sActive)}</span>
-          <span style="text-align:right;color:var(--t2)">${_f1(e.sProof)}</span>
-          <span style="text-align:right;color:var(--purple);font-weight:600">${_f1(e.sVolume)}</span>
-          <span style="text-align:right;color:var(--amber);font-weight:600">${_f1(e.sQuality)}</span>
+          <span style="text-align:right;color:var(--t2)">${e.dones}</span>
+          <span style="text-align:right;color:var(--t2)">${e.jongs}</span>
+          <span style="text-align:right;color:var(--t3);font-size:10px">${_f1(e.conv)}</span>
+          <span style="text-align:right;color:var(--green);font-weight:600">${_f1(e.sDone)}</span>
+          <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sJong)}</span>
+          <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sConv)}</span>
+          <span style="text-align:right;color:var(--amber);font-weight:600">${_f1(e.sFollow)}</span>
+          <span style="text-align:right;color:${e.bans>0?'var(--red)':'var(--t2)'};font-weight:600">${_f1(e.sBan)}</span>
           <span style="text-align:right;color:${totalColor};font-weight:800;font-size:13px">${_f1(e.total)}</span>
         </div>`;
       });
       html += `</div></div>`;
-      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 35 · จอง 20 · ปริม 12 · ขยัน 12 · คุณภ 15 · หลักฐ 6 = 100 · 🚀 Velocity ดูในหน้าต่างรายละเอียด (กดแถว)</div>`;
+      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 20 · จอง 10 · Conv 30 · ติดตาม 30 · โดนแบน 10 = 100 · ข้อมูลแบนจาก "รายงานแบน" · กดแถวดูรายละเอียด</div>`;
       html += `</div>`;
 
       // ════════════════════════════════════════════════════════════════

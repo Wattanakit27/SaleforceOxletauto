@@ -260,9 +260,18 @@ def fetch_dashboard_data() -> dict:
     return data
 
 
+_ban_cache: dict = {"ts": 0.0, "year": None, "data": None}
+_BAN_TTL = 600  # 10 นาที — แบนเปลี่ยนน้อยมาก ไม่ต้องอ่าน Google ทุก cold load (เดิม +1.5s/load)
+
+
 def fetch_ban_counts_by_month(year: int) -> dict:
     """อ่าน tab 'รายงานแบน' → {month: {seller_normalized: จำนวนครั้งโดนแบน}} ของปีนั้น.
-    1 แถว = 1 ครั้งที่โดนแบน (นับตาม banDate). error/ไม่มี sheet → {}."""
+    1 แถว = 1 ครั้งที่โดนแบน (นับตาม banDate). cache 10 นาที. error/ไม่มี sheet → {}."""
+    import time
+    c = _ban_cache
+    if c["data"] is not None and c["year"] == year and (time.time() - c["ts"]) < _BAN_TTL:
+        return c["data"]
+
     from .google_sheets import fetch_sheet, BAN_COL
     out: dict[int, dict] = {}
     try:
@@ -278,6 +287,7 @@ def fetch_ban_counts_by_month(year: int) -> dict:
             continue
         out.setdefault(d.month, {})
         out[d.month][seller] = out[d.month].get(seller, 0) + 1
+    c["ts"] = time.time(); c["year"] = year; c["data"] = out
     return out
 
 
