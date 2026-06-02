@@ -455,13 +455,11 @@
         const dones = sd.done || 0;
         const leads = sd.lead || 0;
         const bans  = sd.bans || 0;
-        // สร้าง entry ให้เซลล์ที่มี activity ใดๆ (lead/จอง/ปล่อย หรือมีโทรจากส่วน 1)
-        if (jongs > 0 || dones > 0 || leads > 0 || m[s.name]) {
-          const e = _ensureDilEntry(m, s.name);
-          e.jongs = jongs; e.dones = dones; e.leads = leads; e.bans = bans;
-          e.scoreJong = jongs * SCORE_JONG;   // เก็บไว้ใช้ใน velocity/breakdown เดิม
-          e.scoreDone = dones * SCORE_DONE;
-        }
+        // สร้าง entry ให้ "ทุกเซลล์" — คะแนนแบนเริ่ม 10 เสมอ (ไม่งั้นเซลล์ที่ไม่มี activity total=0 ขัดกับแบน=10)
+        const e = _ensureDilEntry(m, s.name);
+        e.jongs = jongs; e.dones = dones; e.leads = leads; e.bans = bans;
+        e.scoreJong = jongs * SCORE_JONG;   // เก็บไว้ใช้ใน velocity/breakdown เดิม
+        e.scoreDone = dones * SCORE_DONE;
       });
       // ส่วนที่ 3: Pipeline Velocity — แยก 2 phase
       //   Phase 1: รับหลีด (leadDate) → จอง (date)
@@ -1560,7 +1558,8 @@
       //   • Floor 1 lead/วัน (ทุกคนได้อย่างน้อย 1 — ให้โอกาส)
       //   • ปัดเศษด้วย Largest Remainder → รวมได้ตรง lead/วัน เป๊ะ
       // ════════════════════════════════════════════════════════════════
-      const allocPool = scoreEntries.filter(e => e.total > 0);
+      // จัดสรร lead เฉพาะเซลล์ที่มี activity จริง (ปล่อย/จอง/เคสติดตาม) — ไม่นับคนที่ได้แค่คะแนนแบนเริ่มต้น 10
+      const allocPool = scoreEntries.filter(e => (e.dones + e.jongs + e.cnt) > 0);
       const _sumScore = allocPool.reduce((a, e) => a + e.total, 0) || 1;
 
       // ── คำนวณ lead/วัน อัตโนมัติจากสถิติ ──
