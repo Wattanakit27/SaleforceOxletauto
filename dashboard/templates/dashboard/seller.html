@@ -521,8 +521,7 @@
 
   // ── render ──
   function render() {
-    if (pageMode === 'finance') { renderFinanceMode(); return; }
-    if (pageMode === 'loan') { renderLoanMode(); return; }
+    if (pageMode === 'finance' || pageMode === 'loan') { renderLoanMode(); return; }  // รวมเป็นฟอร์มเดียว
     const s = D.seller;
     const teamId = s.team || '?';
     const teamName = (C.TEAM_NAMES || {})[teamId] || teamId;
@@ -1436,8 +1435,7 @@
         <span style="font-size:12px;color:var(--t3);font-weight:700">โหมด</span>
         <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">
           <option value="dashboard" ${pageMode==='dashboard'?'selected':''}>📊 แดชบอร์ดของฉัน</option>
-          <option value="loan" ${pageMode==='loan'?'selected':''}>📄 ยื่นสินเชื่อ</option>
-          <option value="finance" ${pageMode==='finance'?'selected':''}>📝 เช็คเคสไฟแนนซ์ก่อนเซ็น</option>
+          <option value="loan" ${(pageMode==='loan'||pageMode==='finance')?'selected':''}>📄 ยื่นสินเชื่อ / เช็คไฟแนนซ์</option>
         </select>
         <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="margin-left:auto;font-size:15px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
       </div>`;
@@ -1687,7 +1685,7 @@
     'occupation','incomeSource','company','companyAbout','companyLoc','position','workYears','salary','ot','avgIncome',
     'bizName','bizType','bizLoc','bizYears','socialSecurity','socialAmount','otherJob',
     'loanHistoryType','credit','payBank','payInstallment','payDuration','payStatus','payClosed','blacklist','tracking','creditRequests',
-    'carModel','finance','reason','note',
+    'carModel','finance','price','apprStatus','approved','down','monthly','terms','signDate','signTime','reason','note',
     'gCustomer','gRelation','gAge','gPhone','gProvince','gOccupation','gAvgIncome',
     'referrer','referrerPhone','sales','date'];
 
@@ -1783,6 +1781,20 @@
         <div style="margin-top:12px">${lbl('หมายเหตุ')}${area('note','ถ้ามี...')}</div>
       </div>
 
+      <div class="section">
+        <h2>💳 ผลอนุมัติไฟแนนซ์ &amp; นัดเซ็น <span style="font-size:11px;font-weight:400;color:var(--t3)">(กรอกตอนเช็คก่อนเซ็น)</span></h2>
+        ${grid(
+          f('ราคารถ (บาท)', num('price','000,000')) +
+          f('สถานะอนุมัติ', sel('apprStatus', FC_STATUSES)) +
+          f('วงเงินอนุมัติ (บาท)', num('approved','000,000')) +
+          f('ยอดดาวน์ (บาท)', num('down','000,000')) +
+          f('ยอดผ่อน/เดือน (บาท)', num('monthly','0,000')) +
+          f('จำนวนงวด', sel('terms', FC_TERMS)) +
+          f('วันนัดเซ็น', `<input id="ln_signDate" type="date" style="${inS};cursor:pointer">`) +
+          f('เวลานัด', `<input id="ln_signTime" type="time" style="${inS};cursor:pointer">`)
+        )}
+      </div>
+
       <details class="section" style="padding:0">
         <summary style="list-style:none;cursor:pointer;padding:13px;font-size:14px;font-weight:700;color:var(--t1)">🤝 ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:11px;font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
         <div style="padding:0 13px 13px">
@@ -1830,6 +1842,8 @@
   function loanText(d) {
     const x = (s) => s || '-';
     const g = d.gCustomer ? `\n\n🤝 ผู้ค้ำ: ${x(d.gCustomer)} (${x(d.gRelation)})  อาชีพ ${x(d.gOccupation)}  รายได้ ${x(d.gAvgIncome)}` : '';
+    // ส่วนผลอนุมัติ/นัดเซ็น — แสดงเฉพาะถ้ากรอก
+    const fin = (d.apprStatus || d.approved || d.signDate) ? `\n\n💳 ผลอนุมัติ: ${x(d.apprStatus)}\nราคารถ ${x(d.price)} · วงเงิน ${x(d.approved)} · ดาวน์ ${x(d.down)}\nผ่อน ${x(d.monthly)} x ${x(d.terms)} งวด\n📅 นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}` : '';
     return `📄 ข้อมูลผู้ยื่นขอสินเชื่อ
 ━━━━━━━━━━━━
 👤 ${x(d.customer)}  อายุ ${x(d.age)}  ${x(d.phone)}  จ.${x(d.province)}
@@ -1848,7 +1862,7 @@
 เหตุผล: ${x(d.reason)}${g}
 
 🧑‍💼 เซลล์: ${x(d.sales)}  ผู้แนะนำ: ${x(d.referrer)}
-📝 ${x(d.note)}`;
+📝 ${x(d.note)}${fin}`;
   }
   function previewLoan() {
     const box = document.getElementById('ln-preview-box');
