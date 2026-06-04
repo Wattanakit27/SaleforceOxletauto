@@ -69,9 +69,19 @@ def insert_row(table: str, row: dict) -> list:
     return r.json()
 
 
+def _trim_row(row: list) -> list:
+    """ตัด cell ว่างท้ายแถวทิ้ง — ลดขนาด jsonb (เขียนเร็วขึ้น, กัน statement timeout).
+    ปลอดภัย: aggregator อ่านด้วย cell(r, idx) ซึ่งคืน '' ถ้า idx เกินความยาวแถวอยู่แล้ว."""
+    i = len(row)
+    while i > 0 and (row[i - 1] is None or str(row[i - 1]).strip() == ""):
+        i -= 1
+    return row[:i] if i < len(row) else row
+
+
 def upsert_sheet(sheet_key: str, rows: list) -> None:
     """upsert ข้อมูล 1 sheet ลง sheet_cache (sheet_key เป็น primary key)."""
     url, key = _base()
+    rows = [_trim_row(r) for r in rows]   # ลดขนาดก้อน → เขียนเร็วขึ้น (leads 15k แถวเคย timeout)
     payload = {
         "sheet_key": sheet_key,
         "rows": rows,
@@ -203,6 +213,24 @@ def get_dashboard_cache() -> dict | None:
             return None
         rows = r.json()
         return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def get_dashboard_cache_age() -> float | None:
+    """อายุ (วินาที) ของผล pre-compute ล่าสุด — อ่านแค่ updated_at (เบา). None ถ้าไม่มี."""
+    if not is_configured():
+        return None
+    url, key = _base()
+    try:
+        r = requests.get(
+            f"{url}/rest/v1/dashboard_cache?key=eq.main&select=updated_at",
+            headers=_headers(key), timeout=15,
+        )
+        if r.status_code != 200 or not r.json():
+            return None
+        ts = r.json()[0]["updated_at"].replace("Z", "+00:00")
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
     except Exception:
         return None
 
