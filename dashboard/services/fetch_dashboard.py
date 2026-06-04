@@ -192,12 +192,17 @@ def extract_release_date(r) -> str:
     def _ok(d):
         return d is not None and 2020 <= d.year <= 2035
 
-    def _pick(val):
+    def _clean(val):
+        # ทั้งช่องเป็นวันที่ล้วน (หรือ excel serial) — เชื่อถือได้สุด
+        if val and _ok(parse_date(val)):
+            return val
+        return None
+
+    def _embed(val):
+        # วันที่ที่ฝังอยู่ในข้อความโน้ต (เช่น 'รับรถ 20/3/69') — ใช้ต่อเมื่อไม่มีวันที่สะอาดเลย
         if not val:
             return None
-        if _ok(parse_date(val)):              # วันที่ล้วน หรือ excel serial
-            return val
-        m = _EMBED_DATE_RE.search(val)        # วันที่ฝังในข้อความ
+        m = _EMBED_DATE_RE.search(val)
         if m and _ok(parse_date(m.group())):
             return m.group()
         return None
@@ -206,8 +211,15 @@ def extract_release_date(r) -> str:
     is_may = bool(bd and bd.month >= 5)
     # X=23, W=22, V=21, U=20 ; พ.ค.+ เริ่มที่ X, เดือนอื่นเริ่มที่ W แล้วค่อย scan ที่เหลือ
     order = (23, 22, 21, 20) if is_may else (22, 23, 21, 20)
+    # รอบ 1: หาวันที่ "สะอาด" (ทั้งช่องเป็นวันที่) ก่อน — กันไปคว้าวันที่ฝังในโน้ต
+    # (เช่น W = 'นัดเซ็น 29/04/69' ทั้งที่ X มีวันปล่อยจริง '19/5/2026' สะอาดอยู่)
     for col in order:
-        got = _pick(cell(r, col))
+        got = _clean(cell(r, col))
+        if got:
+            return got
+    # รอบ 2: ไม่มีวันที่สะอาดเลย → fallback ดึงวันที่ที่ฝังในข้อความโน้ต
+    for col in order:
+        got = _embed(cell(r, col))
         if got:
             return got
     return ""
