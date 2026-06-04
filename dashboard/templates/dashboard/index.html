@@ -1879,65 +1879,67 @@
     }
 
     // ── 🧹 ข้อมูลต้องเติม/แก้ (admin/exec) — เคสที่ข้อมูลวันที่ไม่ครบ/ผิด ตามไปเติมในชีต ──
-    //   (1) วันปล่อยว่าง: status=ปล่อย แต่ไม่มีวันปล่อย → กรองตามช่วงวันที่ (วันจอง)
-    //   (2) ปีผิด: ช่องวันที่ใดมีปีนอก 2020–2035 (มักพิมพ์ 1969) → แสดงทุกเคส (กรองตามวันที่ไม่ได้ เพราะวันที่คือตัวที่ผิด)
+    //   ทุกกลุ่ม "กรองตามช่วงวันที่ (วันจอง)" ยกเว้นเคสที่ "วันจองเองพัง" (ปีจองผิด) ซึ่งกรองไม่ได้ → แสดงเสมอ
     function renderDataQualityPanel() {
       if (!canViewAll) return '';
       const BAD_MIN = 2020, BAD_MAX = 2035;
-      const dateFields = [['วันจอง','date'], ['วันเซ็น','signDate'], ['วันผลออก','resultDate'], ['วันปล่อย','releaseDate']];
-      const blankRel = [], badYr = [];
+      const _yr = (s) => { const d = _parseDmy(s); return d ? d.getFullYear() : null; };
+      const _bad = (y) => y !== null && (y < BAD_MIN || y > BAD_MAX);
+      const otherFields = [['วันเซ็น','signDate'], ['วันผลออก','resultDate'], ['วันปล่อย','releaseDate']];
+      const blankRel = [], badOther = [], badBooking = [];
       (D.bookingCases || []).forEach((b, idx) => {
-        // ปีผิด — สแกนทุกช่องวันที่
-        const bad = [];
-        dateFields.forEach(([lbl, key]) => {
-          const v = b[key];
-          if (!v || v === '-') return;
-          const d = _parseDmy(v);
-          if (d) { const y = d.getFullYear(); if (y < BAD_MIN || y > BAD_MAX) bad.push(lbl+'='+v); }
-        });
-        if (bad.length) badYr.push({b, bad, idx});
-        // วันปล่อยว่าง (เฉพาะ ปล่อย) — กรองตามช่วงด้วยวันจอง
-        if (b.status === 'ปล่อย' && (!b.releaseDate || b.releaseDate === '' || b.releaseDate === '-') && ir(b.date)) {
+        const bookBad = _bad(_yr(b.date));
+        const otherErrs = [];
+        otherFields.forEach(([lbl, k]) => { if (_bad(_yr(b[k]))) otherErrs.push(lbl+'='+b[k]); });
+        if (bookBad) {
+          // วันจองเองพัง → กรองตามช่วงไม่ได้ (เพราะวันจองคือตัวที่ผิด) → แสดงเสมอ
+          badBooking.push({b, idx, errs: ['วันจอง='+(b.date||'-'), ...otherErrs]});
+          return;
+        }
+        // วันจองยังถูก → ใช้กรองตามช่วง
+        if (!ir(b.date)) return;
+        if (otherErrs.length) badOther.push({b, idx, errs: otherErrs});
+        if (b.status === 'ปล่อย' && (!b.releaseDate || b.releaseDate === '' || b.releaseDate === '-')) {
           blankRel.push({b, idx});
         }
       });
-      const total = blankRel.length + badYr.length;
+      const total = blankRel.length + badOther.length + badBooking.length;
       const _k = (s) => { const d = _parseDmy(s); return d ? _ymd(d) : '9999-99-99'; };
       blankRel.sort((a,b) => _k(a.b.date) < _k(b.b.date) ? -1 : 1);
 
+      // helper render แถว
+      const _list = (arr, cols, cellsFn, emptyMsg) => {
+        if (!arr.length) return `<div style="font-size:11px;color:var(--green);padding:2px 0 4px">✅ ${emptyMsg}</div>`;
+        let s = `<div class="shdr" style="grid-template-columns:${cols};font-size:10px">${cellsFn('hdr')}</div>`;
+        arr.forEach(o => { s += `<div class="srow" style="grid-template-columns:${cols};font-size:11.5px;cursor:pointer" onclick="openBookingDetail(${o.idx})" title="กดดูรายละเอียดเคส">${cellsFn(o)}</div>`; });
+        return s;
+      };
+
       let body = '';
-      // กลุ่ม 1 — วันปล่อยว่าง
-      body += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin:2px 0 6px">📅 วันปล่อยว่าง · ${blankRel.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(สถานะ "ปล่อย" แต่ยังไม่กรอกวันปล่อย → ระบบเดาเดือนจากวันจอง · กระทบคะแนนเวลาปิดดีล)</span></div>`;
-      if (blankRel.length) {
-        body += `<div class="shdr" style="grid-template-columns:.9fr 1.4fr .8fr 1.1fr;font-size:10px"><span>เซลล์</span><span>ลูกค้า</span><span>วันจอง</span><span>รถ</span></div>`;
-        blankRel.forEach(({b, idx}) => {
-          body += `<div class="srow" style="grid-template-columns:.9fr 1.4fr .8fr 1.1fr;font-size:11.5px;cursor:pointer" onclick="openBookingDetail(${idx})" title="กดดูรายละเอียดเคส">
-            <span style="font-weight:600">${h(b.seller||'-')}</span>
-            <span style="color:var(--t2)">${h((b.customer||'-').slice(0,22))}</span>
-            <span style="color:var(--amber);font-weight:600">${h(b.date||'-')}</span>
-            <span style="color:var(--t3);font-size:10px">${h((b.car||'-').slice(0,18))}</span>
-          </div>`;
-        });
-      } else {
-        body += `<div style="font-size:11px;color:var(--green);padding:2px 0 4px">✅ ไม่มี</div>`;
-      }
-      // กลุ่ม 2 — ปีผิด
-      body += `<div style="font-size:12px;font-weight:700;color:var(--red);margin:14px 0 6px">⚠️ ปีผิด (นอกช่วง 2020–2035) · ${badYr.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(มักพิมพ์ 1969 · แสดงทุกเคส กรองตามวันที่ไม่ได้)</span></div>`;
-      if (badYr.length) {
-        body += `<div class="shdr" style="grid-template-columns:.9fr 1.3fr 1.8fr;font-size:10px"><span>เซลล์</span><span>ลูกค้า</span><span>ช่องที่ผิด</span></div>`;
-        badYr.forEach(({b, bad, idx}) => {
-          body += `<div class="srow" style="grid-template-columns:.9fr 1.3fr 1.8fr;font-size:11.5px;cursor:pointer" onclick="openBookingDetail(${idx})" title="กดดูรายละเอียดเคส">
-            <span style="font-weight:600">${h(b.seller||'-')}</span>
-            <span style="color:var(--t2)">${h((b.customer||'-').slice(0,20))}</span>
-            <span style="color:var(--red);font-size:10.5px">${h(bad.join(' · '))}</span>
-          </div>`;
-        });
-      } else {
-        body += `<div style="font-size:11px;color:var(--green);padding:2px 0 4px">✅ ไม่มี</div>`;
-      }
+      // กลุ่ม 1 — วันปล่อยว่าง (กรองตามช่วง)
+      body += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin:2px 0 6px">📅 วันปล่อยว่าง · ${blankRel.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(สถานะ "ปล่อย" แต่ยังไม่กรอกวันปล่อย → เดาเดือนจากวันจอง · กระทบคะแนนเวลาปิดดีล)</span></div>`;
+      body += _list(blankRel, '.9fr 1.4fr .8fr 1.1fr',
+        (o) => o === 'hdr'
+          ? '<span>เซลล์</span><span>ลูกค้า</span><span>วันจอง</span><span>รถ</span>'
+          : `<span style="font-weight:600">${h(o.b.seller||'-')}</span><span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,22))}</span><span style="color:var(--amber);font-weight:600">${h(o.b.date||'-')}</span><span style="color:var(--t3);font-size:10px">${h((o.b.car||'-').slice(0,18))}</span>`,
+        'ไม่มีในช่วงนี้');
+      // กลุ่ม 2 — ปีผิดช่องอื่น (วันจองถูก, กรองตามช่วง)
+      body += `<div style="font-size:12px;font-weight:700;color:var(--red);margin:14px 0 6px">⚠️ ปีผิด (ช่องอื่น) · ${badOther.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(วันจองยังถูก แต่วันเซ็น/ผล/ปล่อย ปีนอก 2020–2035 · กรองตามช่วง)</span></div>`;
+      body += _list(badOther, '.9fr 1.3fr 1.8fr',
+        (o) => o === 'hdr'
+          ? '<span>เซลล์</span><span>ลูกค้า</span><span>ช่องที่ผิด</span>'
+          : `<span style="font-weight:600">${h(o.b.seller||'-')}</span><span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,20))}</span><span style="color:var(--red);font-size:10.5px">${h(o.errs.join(' · '))}</span>`,
+        'ไม่มีในช่วงนี้');
+      // กลุ่ม 3 — วันจองพัง (แสดงเสมอ)
+      body += `<div style="font-size:12px;font-weight:700;color:var(--red);margin:14px 0 6px">🚨 วันจองพัง (ปีจองผิด) · ${badBooking.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(วันจองปีผิด → เคสนับเดือนเพี้ยน · กรองตามช่วงไม่ได้ จึงแสดงเสมอ — แก้ด่วน)</span></div>`;
+      body += _list(badBooking, '.9fr 1.3fr 1.8fr',
+        (o) => o === 'hdr'
+          ? '<span>เซลล์</span><span>ลูกค้า</span><span>ช่องที่ผิด</span>'
+          : `<span style="font-weight:600">${h(o.b.seller||'-')}</span><span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,20))}</span><span style="color:var(--red);font-size:10.5px">${h(o.errs.join(' · '))}</span>`,
+        'ไม่มี');
 
       return `<details class="adv-section" ${total>0?'open':''}>
-        <summary>🧹 ข้อมูลต้องเติม/แก้ ${total>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:4px">${total}</span>`:'<span style="color:var(--green);font-size:11px;margin-left:4px">✅</span>'} <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสข้อมูลวันที่ไม่ครบ/ผิด · ตามไปเติมในชีตได้</span></summary>
+        <summary>🧹 ข้อมูลต้องเติม/แก้ ${total>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:4px">${total}</span>`:'<span style="color:var(--green);font-size:11px;margin-left:4px">✅</span>'} <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสข้อมูลวันที่ไม่ครบ/ผิด · กรองตามช่วงวันที่ (ยกเว้นวันจองพัง)</span></summary>
         <div class="adv-body">${body}</div>
       </details>`;
     }
