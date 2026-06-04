@@ -25,6 +25,14 @@ FOLLOW_KEYWORDS = ["ติดตาม", "รอตอบ", "รอลูกค�
 # sync กับ line_notify.SKIP_STATUS — admin ใส่คำเหล่านี้เพื่อบอกว่าไม่ต้องตามต่อ
 SKIP_STATUS = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 
+# ── คำที่ "ไม่ใช่ชื่อเซลล์" — กันคำสถานะหลุดเข้ามาเป็น orphan seller ในตารางรายเซลล์ ──
+# (บางแถวกรอกคำสถานะลงคอลัมน์ชื่อเซลล์ → ระบบนึกว่าเป็นเซลล์เก่า) เช็คแบบ exact หลัง normalize
+NON_SELLER_NAMES = {
+    "(ว่าง)", "จอง", "ส่งมอบ", "คืนเคส", "คืน", "จ่ายใหม่", "ยกเลิก", "ไม่สนใจ",
+    "รอปล่อย", "รอผล", "รอเซ็นต์", "รอเซ็น", "รีเจ็ก", "ปล่อย", "ติดตาม", "จบ",
+    "dead", "-", "",
+}
+
 # ── คอลัม Z "สถานะลูกค้า" (layout ใหม่ มิ.ย.69+) — ใช้คัดลำดับว่าตามเคสไหนก่อน ──
 # ลำดับความสำคัญ (สูง = ตามก่อน) ตามที่ผู้ใช้กำหนด:
 #   active chase (priority ≥3): สนใจมาก > ลังเล > ไม่รับสาย > รอเงิน > รอเช็คเครดิต > ดาวน์ไม่พอ
@@ -610,13 +618,13 @@ def _compute_dashboard_data() -> dict:
     orphan_groups: dict[str, dict] = {}
     for r in year_leads:
         s = normalize_seller(cell(r, L.sales_rep)) or "(ว่าง)"
-        if s in known_names:
+        if s in known_names or s in NON_SELLER_NAMES:
             continue
         g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
         g["leads"].append(r)
     for b in booking_cases:
         s = b["seller"] or "(ว่าง)"
-        if s in known_names:
+        if s in known_names or s in NON_SELLER_NAMES:
             continue
         g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
         g["bookings"].append(b)
@@ -624,7 +632,7 @@ def _compute_dashboard_data() -> dict:
             g["dones"].append(b)
     for j in year_jongs:
         s = j["seller"] or "(ว่าง)"
-        if s in known_names:
+        if s in known_names or s in NON_SELLER_NAMES:
             continue
         g = orphan_groups.setdefault(s, {"leads": [], "bookings": [], "dones": [], "jongs": []})
         g["jongs"].append(j)
@@ -1138,6 +1146,8 @@ def _compute_dashboard_data() -> dict:
         daily_by_month[mm]["dealValue"][dd] += b["price"] or 0
 
     # Daily-by-month แยกตามเซลล์ — ใช้ตอน admin impersonate เซลล์คนใดคนหนึ่ง
+    # รวม orphan/inactive sellers ด้วย → ตารางรายเซลล์กรองตามช่วงวันที่ได้ (ไม่งั้นโชว์ 0)
+    _daily_names = set(ALL_SELLERS) | {s["name"] for s in sellers if s.get("inactive")}
     daily_by_seller = {
         name: {
             m: {
@@ -1149,7 +1159,7 @@ def _compute_dashboard_data() -> dict:
             }
             for m in range(1, 13)
         }
-        for name in ALL_SELLERS
+        for name in _daily_names
     }
 
     for r in year_leads:

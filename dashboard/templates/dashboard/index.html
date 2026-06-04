@@ -312,12 +312,24 @@
       });
       let totalFollow = 0;
       (D.followCases || []).forEach(c => { if(!inRange(c.dateIn)) return; totalFollow++; if(sellers[c.seller]) sellers[c.seller].follow++; });
+      // รวมเป็นทีม (range) — ให้การ์ด "แยกตามทีม" เปลี่ยนตามช่วงวันที่ด้วย
+      const teams = {};
+      Object.values(sellers).forEach(sd => {
+        const tid = sd.team;
+        if(!tid || tid === 'INACTIVE') return;
+        const t = teams[tid] || (teams[tid] = {lead:0, leadNormal:0, leadRJ:0, follow:0, booking:0, done:0, dealValue:0, vacant:0});
+        t.lead += sd.lead||0; t.leadNormal += sd.leadNormal||0; t.leadRJ += sd.leadRJ||0;
+        t.follow += sd.follow||0; t.booking += sd.booking||0; t.done += sd.done||0;
+        t.dealValue += sd.dealValue||0; t.vacant += sd.vacant||0;
+      });
       _rmKey = key;
       _rmCache = { totalLeads:ov.lead+ov.leadRJ, leadNormal:ov.lead, leadRJ:ov.leadRJ,
         totalBookings:ov.booking, totalDone:ov.done, totalDealValue:ov.deal, totalFollow,
-        sellers, pipeline:D.pipeline };
+        sellers, teams, pipeline:D.pipeline };
       return _rmCache;
     }
+    // จำนวนเดือนที่ช่วงครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วงที่เลือก
+    const rangeMonthCount = () => ([...new Set(rangeDays().map(x => x[0]))].length || 1);
     const rangeLabelTH = () => {
       const f = new Date(dfFrom+'T00:00:00'), t = new Date(dfTo+'T00:00:00');
       const o = {day:'numeric',month:'short'};
@@ -1515,7 +1527,8 @@
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
         const tBooking=mt?mt.booking:t.booking, tDone=mt?mt.done:t.done;
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
-        const conv=pct(tBooking,tLead), tPct=pct(tDone,t.target);
+        const tTarget = (t.target||0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
+        const conv=pct(tBooking,tLead), tPct=pct(tDone,tTarget);
         const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
         // MoM
         const t_mLead = teamMoM(tid, 'lead');
@@ -1531,7 +1544,7 @@
         html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLead}</div>${momBadge(t_mLead)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div>${momBadge(t_mBook)}</div>`;
-        html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ↗</div><div style="font-size:15px;font-weight:600;color:${tDone>=t.target?'var(--green)':'var(--amber)'}">${tDone}/${t.target}</div>${momBadge(t_mDone)}</div>`;
+        html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ↗</div><div style="font-size:15px;font-weight:600;color:${tDone>=tTarget?'var(--green)':'var(--amber)'}">${tDone}/${tTarget}</div>${momBadge(t_mDone)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
         html += `</div>`;
         // Deal Value row
@@ -1540,7 +1553,7 @@
         html += `</div>`;
         // Progress bars
         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
-        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">เป้าจบ ${t.done}/${t.target}</span><span style="color:${C.TEAM_COLORS[tid]}">${tPct}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(tPct,100)}%;background:${C.TEAM_COLORS[tid]}"></div></div></div>`;
+        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">เป้าจบ ${tDone}/${tTarget}</span><span style="color:${C.TEAM_COLORS[tid]}">${tPct}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(tPct,100)}%;background:${C.TEAM_COLORS[tid]}"></div></div></div>`;
         html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">📡${t.live} 🎬${t.clip}/${t.clipTarget}</span><span style="color:${t.clip>=t.clipTarget?'var(--green)':'var(--amber)'}">${Math.round(cPct)}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(cPct,100)}%;background:${t.clip>=t.clipTarget?'var(--green-mid)':'var(--purple-mid)'}"></div></div></div>`;
         html += `</div></div>`;
       });
@@ -1560,7 +1573,7 @@
         .filter(s => !s.inactive && s.team !== 'INACTIVE')
         .map(s => {
           const e = dilMap[s.name] || {};
-          const leadDist = dfMonth > 0 ? (ms?.sellers?.[s.name]?.leadDist || 0) : (s.leadDist || 0);
+          const leadDist = (ms?.sellers?.[s.name]?.leadDist) ?? (s.leadDist || 0);   // 📅 ตามช่วงวันที่
           return {
             n: s.name, team: s.team, leadDist,
             dones: e.dones||0, jongs: e.jongs||0, leads: e.leads||0, bans: e.bans||0,
@@ -1720,11 +1733,10 @@
       // _sval: ถ้าเลือกเดือน → ใช้ค่ารายเดือน (0 ถ้าเซลล์ไม่มีในเดือนนั้น)
       //         ถ้าเลือกทั้งปี → ใช้ค่ารายปี
       const _sval = (s, key) => {
-        if (dfMonth > 0) {
-          const msd = ms?.sellers?.[s.name];
-          return msd ? (msd[key]||0) : 0;   // ← ถ้าไม่มีข้อมูลเดือนนั้น → 0 (ไม่ fallback ไปรายปี)
-        }
-        return s[key]||0;
+        // 📅 ใช้ค่าตามช่วงวันที่ที่กรองเสมอ (ms = buildRangeMs()) — ตารางรายเซลล์เปลี่ยนตามวันที่
+        const msd = ms?.sellers?.[s.name];
+        if (msd && msd[key] !== undefined) return msd[key] || 0;
+        return s[key]||0;   // fallback: เซลล์ที่ไม่มีใน range summary (กันค่าหาย)
       };
       // กรองเซลล์ที่ไม่มี Lead ในช่วงที่เลือก
       let ss = sellers.filter(s => _sval(s, 'lead') > 0);
@@ -2387,24 +2399,21 @@
         const sd = (D.sellers || []).find(x => x.name === name) || {};
         const done = msd ? (msd.done || 0) : (sd.done || 0);
         const dealValue = msd ? (msd.dealValue || 0) : (sd.dealValue || 0);
-        const target = sd.target || 0;
+        const target = (sd.target || 0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
         return { name, done, dealValue, target };
       }).sort((a,b) => b.done - a.done);
 
       const totalDone = sellerStats.reduce((a,s) => a + s.done, 0);
       const totalDealValue = sellerStats.reduce((a,s) => a + s.dealValue, 0);
-      const totalTarget = team.target || 0;
+      const totalTarget = (team.target || 0) * rangeMonthCount();
 
       // เคสปล่อยจริงของทีมนี้ — filter จาก bookingCases ตาม period + sellerในทีม
       const memberSet = new Set(members);
       const releasedCases = (D.bookingCases || []).filter(b => {
         if (b.status !== 'ปล่อย') return false;
         if (!memberSet.has(b.seller)) return false;
-        if (dfMonth > 0) {
-          const useDate = b.releaseDate || b.date || '';
-          const p = String(useDate).split('/');
-          if (p.length < 2 || parseInt(p[1]) !== dfMonth) return false;
-        }
+        // 📅 กรองตามช่วงวันที่ (ใช้วันปล่อยถ้ามี ไม่งั้นวันจอง)
+        if (!ir(b.releaseDate || b.date || '')) return false;
         return true;
       }).sort((a,b) => (a.seller || '').localeCompare(b.seller || '', 'th'));
 
