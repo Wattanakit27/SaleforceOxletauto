@@ -1446,13 +1446,14 @@
         target:  "เป้าหมายรวมของทุกเซลล์ในเดือนนี้\nกำหนดใน sheet 'ตั้งค่าเซลล์' column เป้า",
         rj:      "RJ Leads (Hot RJ / Hot RB / RJ) — เคสคุณภาพต่ำ\nลูกค้าไม่ค่อยจริงจัง ปิดยาก\nเดือนไหน RJ พุ่ง = อาจมีปัญหา channel/source",
       };
+      const _tgtRange = (D.summary.totalTarget||0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
       const kpis = [
-        {l:"Lead"+(isToday?" วันนี้":dfMonth>0?" เดือนนี้":" ทั้งปี"),v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
+        {l:"Lead",v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
         {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow",tip:TIP.follow},
         {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%"+momBadge(m_book),c:"var(--green)",mk:"totalBookings",tip:TIP.book},
-        {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,D.summary.totalTarget)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone",tip:TIP.done},
+        {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,_tgtRange||1)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone",tip:TIP.done},
         {l:"💰 ยอดปล่อย",v:fmtBaht(dvDeal),s:(dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย")+momBadge(m_deal, false, fmtBaht),c:"var(--green-mid)",mk:"totalDealValue",tip:TIP.deal},
-        {l:"เป้าหมาย",v:fmtNum(D.summary.totalTarget),s:"เคส/เดือน",c:"var(--amber)",tip:TIP.target},
+        {l:"เป้าหมาย",v:fmtNum(_tgtRange),s:rangeMonthCount()>1?(rangeMonthCount()+" เดือน"):"เคส/เดือน",c:"var(--amber)",tip:TIP.target},
         {l:"RJ",v:fmtNum(ms?ms.leadRJ:D.summary.leadRJ),s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ"+momBadge(m_rj, true),c:"var(--red)",mk:"leadRJ",tip:TIP.rj},
       ];
       const pipeColors = {"รอเซ็นต์":"var(--blue)","รอผล":"var(--amber)","รอปล่อย":"var(--amber)","ปล่อย":"var(--green-mid)","รีเจ็ก":"var(--red)","จอง":"var(--green)"};
@@ -1646,19 +1647,8 @@
       // ใช้ leadDist (lead แจกจ่ายได้ = ไม่ใช่ไลฟ์สด + ไม่ใช่ RJ) ÷ จำนวนวันที่ผ่าน
       // → เฉพาะการจัดสรรอนาคต ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
       const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.leadDist || 0), 0);
-      const _nowD = new Date();
-      const _curMonth = _nowD.getMonth() + 1;
-      let _daysElapsed;
-      if (dfMonth === _curMonth) {
-        // เดือนปัจจุบัน → นับวันที่ผ่านมาแล้ว (วันนี้ยังไม่จบ → ใช้ - 1)
-        _daysElapsed = Math.max(1, _nowD.getDate() - 1);
-      } else if (dfMonth > 0) {
-        // เดือนที่ผ่านมา → ใช้จำนวนวันเต็มของเดือนนั้น
-        _daysElapsed = new Date(_nowD.getFullYear(), dfMonth, 0).getDate();
-      } else {
-        // ทั้งปี → วันที่ผ่านมาในปีนี้ (fallback)
-        _daysElapsed = Math.max(1, Math.floor((_nowD - new Date(_nowD.getFullYear(),0,0)) / 86400000));
-      }
+      // 📅 จำนวนวันในช่วงที่กรอง (leadDist ก็เป็น range แล้ว → pace ตรงกัน)
+      const _daysElapsed = Math.max(1, rangeDays().length);
       const _avgRaw = _totalLeadsMonth / _daysElapsed;     // เช่น 59.65
       const _autoPerDay = Math.max(1, Math.round(_avgRaw)); // ตีเป็น 60
       // ค่าที่ใช้จริง: ถ้าผู้ใช้ตั้งเอง (leadPerDay != null) ใช้ค่านั้น, ไม่งั้น auto
@@ -1889,10 +1879,13 @@
 
     // ── Lead by Car Model (admin/executive only) ──
     function renderLeadCarsTable() {
-      const monthKey = dfMonth > 0 ? dfMonth : 0;  // 0 = ทั้งปี
-      const src = (D.leadCarsByMonth || {})[monthKey]
-               || (D.leadCarsByMonth || {})[String(monthKey)]
-               || {};
+      // 📅 รวมรถจากทุกเดือนในช่วงที่กรอง
+      const _rmMonths = [...new Set(rangeDays().map(x => x[0]))];
+      const src = {};
+      _rmMonths.forEach(m => {
+        const mm = (D.leadCarsByMonth || {})[m] || (D.leadCarsByMonth || {})[String(m)] || {};
+        for (const [car, cnt] of Object.entries(mm)) src[car] = (src[car] || 0) + (cnt || 0);
+      });
       let entries = Object.entries(src).map(([car, cnt]) => ({car, cnt}));
       if (leadCarHideUnknown) {
         entries = entries.filter(e => e.car !== 'ไม่ระบุ');
@@ -1958,13 +1951,8 @@
       const indexed = (D.bookingCases || []).map((b, i) => ({...b, _idx: i}));
       // กรองตาม status (default = 'ปล่อย' / all = ทุกสถานะ)
       let base = releasedStatus === 'all' ? indexed : indexed.filter(b => b.status === releasedStatus);
-      // กรองตามเดือนที่เลือก (ใช้ releaseDate, fallback date)
-      let cars = base.filter(b => {
-        if (dfMonth <= 0) return true;
-        const useDate = b.releaseDate || b.date || '';
-        const parts = useDate.split('/');
-        return parts.length >= 2 && parseInt(parts[1]) === dfMonth;
-      });
+      // 📅 กรองตามช่วงวันที่ (ใช้ releaseDate, fallback date)
+      let cars = base.filter(b => ir(b.releaseDate || b.date || ''));
       // กรอง seller dropdown
       if (releasedSeller !== 'all') {
         cars = cars.filter(b => b.seller === releasedSeller);
@@ -2084,7 +2072,9 @@
       }
       const totalYear = monthData.reduce((a,e)=>a+e.v,0);
       const curMonth = (D.meta && D.meta.month) || (new Date().getMonth()+1);
-      const focusMonth = dfMonth > 0 ? dfMonth : curMonth;
+      // 📅 เดือน focus ตามช่วงวันที่ที่กรอง — เลือกเดือนล่าสุดในช่วง (cap ที่เดือนปัจจุบัน)
+      const _rmList = [...new Set(rangeDays().map(x => x[0]))];
+      const focusMonth = _rmList.length ? Math.min(_rmList[_rmList.length-1], curMonth) : curMonth;
       const focusVal = monthData[focusMonth-1].v;
       const prevVal  = focusMonth > 1 ? monthData[focusMonth-2].v : 0;
       const delta = focusVal - prevVal;
@@ -2302,12 +2292,7 @@
       (D.bookingCases || []).forEach(b => {
         if (!b.car || !b.seller) return;
         if (!b.car.toLowerCase().includes(carLower)) return;
-        // กรองเดือน (ถ้าตั้ง filter)
-        if (dfMonth > 0) {
-          const useDate = b.releaseDate || b.date || '';
-          const p = String(useDate).split('/');
-          if (p.length < 2 || parseInt(p[1]) !== dfMonth) return;
-        }
+        if (!ir(b.releaseDate || b.date || '')) return;   // 📅 กรองตามช่วงวันที่
         if (!bookSellerMap[b.seller]) bookSellerMap[b.seller] = {booked:0, done:0, dealValue:0};
         const ent = bookSellerMap[b.seller];
         if (['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'].includes(b.status)) {
@@ -2320,10 +2305,11 @@
       });
 
       // ── รวม seller จากทั้ง 2 แหล่ง ──
+      const _rmMonths = [...new Set(rangeDays().map(x => x[0]))];   // 📅 เดือนในช่วง
       const allSellers = new Set([...Object.keys(leadMap), ...Object.keys(bookSellerMap)]);
       const rows = Array.from(allSellers).map(seller => {
         const lm = leadMap[seller] || {total:0, byMonth:[]};
-        const leadCount = dfMonth > 0 ? (lm.byMonth?.[dfMonth] || 0) : (lm.total || 0);
+        const leadCount = _rmMonths.reduce((a,m) => a + (lm.byMonth?.[m] || 0), 0);   // 📅 รวมเดือนในช่วง
         const bm = bookSellerMap[seller] || {booked:0, done:0, dealValue:0};
         const sellerObj = (D.sellers || []).find(s => s.name === seller);
         const team = sellerObj?.team || '?';
@@ -2486,17 +2472,9 @@
       const allBookings = (D.bookingCases || []).filter(b => {
         if (b.seller !== sellerName) return false;
         if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-        if (dfMonth > 0) {
-          const useDate = (b.status === 'ปล่อย' ? (b.releaseDate || b.date) : b.date) || '';
-          const p = String(useDate).split('/');
-          if (p.length < 2 || parseInt(p[1]) !== dfMonth) return false;
-        } else if (dfMonth === -1) {
-          const useDate = (b.status === 'ปล่อย' ? (b.releaseDate || b.date) : b.date) || '';
-          const p = String(useDate).split('/');
-          if (p.length < 2) return false;
-          const now = new Date();
-          if (parseInt(p[0]) !== now.getDate() || parseInt(p[1]) !== (now.getMonth()+1)) return false;
-        }
+        // 📅 กรองตามช่วงวันที่ (ปล่อย → วันปล่อย, อื่นๆ → วันจอง)
+        const useDate = (b.status === 'ปล่อย' ? (b.releaseDate || b.date) : b.date) || '';
+        if (!ir(useDate)) return false;
         return true;
       });
       // sort: status order แล้ว date ใหม่ก่อน
@@ -2627,18 +2605,9 @@
       const la = D.liveActivity || {totalInbox:0,totalLead:0,totalSessions:0,byHost:{},sessions:[]};
       const periodLbl = '📅 '+rangeLabelTH();
 
-      // Filter sessions ตาม dfMonth — จากตัวเลือกบนหัว dashboard
+      // 📅 Filter sessions ตามช่วงวันที่ที่กรอง
       const allSessions = la.sessions || [];
-      const filteredSessions = allSessions.filter(s => {
-        if (dfMonth === 0) return true;
-        const p = (s.date||'').split('/');
-        if (p.length < 2) return false;
-        if (dfMonth === -1) {
-          const now = new Date();
-          return parseInt(p[0])===now.getDate() && parseInt(p[1])===now.getMonth()+1;
-        }
-        return parseInt(p[1]) === dfMonth;
-      });
+      const filteredSessions = allSessions.filter(s => ir(s.date || ''));
 
       // Aggregate per-seller จาก filtered sessions
       const liveByHost = {};
