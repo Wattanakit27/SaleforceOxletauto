@@ -245,19 +245,54 @@ def get_month(date_str: str) -> int:
 
 # ── Main fetch function ──
 _dash_cache: dict = {"ts": 0.0, "data": None}
-_DASH_TTL = 30  # วินาที — cache ผล dashboard กันคำนวณ aggregation ซ้ำทุก request
+_DASH_TTL = 30          # in-memory cache (warm lambda) — กันคำนวณซ้ำทุก request
+_PRECOMPUTE_TTL = 300   # ผล pre-compute ใน Supabase ถือว่า "สด" ภายใน 5 นาที
+
+
+def precompute_dashboard() -> dict:
+    """คำนวณ dashboard 1 ครั้ง → เก็บผลลง Supabase (เรียกจาก cron/sync).
+    ทำให้คนเข้าเว็บอ่าน "ผลสำเร็จรูป" ไม่ต้องคำนวณ 15k lead สดทุกโหลด."""
+    import time
+    data = _compute_dashboard_data()
+    try:
+        from .supabase_client import save_dashboard_cache, is_configured
+        if is_configured():
+            save_dashboard_cache(data)
+    except Exception:
+        pass
+    _dash_cache["ts"] = time.time()
+    _dash_cache["data"] = data
+    return data
 
 
 def fetch_dashboard_data() -> dict:
-    """Cache wrapper — คืนผลที่คำนวณไว้ถ้ายังไม่เกิน TTL (เร็วขึ้นมากเวลาโหลดถี่)."""
+    """อ่านผล dashboard — เร็วสุด→ช้าสุด:
+    1) in-memory cache (warm lambda, 30 วิ)
+    2) ผล pre-compute ใน Supabase (cold lambda — อ่านผลสำเร็จรูป ไม่คำนวณสด)
+    3) คำนวณสด + เก็บ (fallback ถ้า cache หาย/เก่า)
+    """
     import time
+    from datetime import datetime as _dt, timezone as _tz
     c = _dash_cache
     if c["data"] is not None and (time.time() - c["ts"]) < _DASH_TTL:
         return c["data"]
-    data = _compute_dashboard_data()
-    c["ts"] = time.time()
-    c["data"] = data
-    return data
+
+    # 2) ผล pre-compute จาก Supabase (ถ้า fresh) — ไม่ต้องอ่าน 15k lead + aggregate
+    try:
+        from .supabase_client import get_dashboard_cache
+        cached = get_dashboard_cache()
+        if cached and cached.get("data"):
+            ts = cached.get("updated_at", "").replace("Z", "+00:00")
+            age = (_dt.now(_tz.utc) - _dt.fromisoformat(ts)).total_seconds() if ts else 1e9
+            if age < _PRECOMPUTE_TTL:
+                c["ts"] = time.time()
+                c["data"] = cached["data"]
+                return cached["data"]
+    except Exception:
+        pass
+
+    # 3) ไม่มี/เก่า → คำนวณสด + เก็บผลไว้ (ครั้งถัดไปเร็ว)
+    return precompute_dashboard()
 
 
 _ban_cache: dict = {"ts": 0.0, "year": None, "data": None}

@@ -172,6 +172,41 @@ def fetch_all_from_supabase() -> dict:
     return out
 
 
+def save_dashboard_cache(data: dict) -> None:
+    """เก็บผล dashboard ที่คำนวณไว้แล้ว (pre-compute) ลง Supabase — 1 แถว (key='main')."""
+    url, key = _base()
+    payload = {
+        "key": "main",
+        "data": data,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    r = requests.post(
+        f"{url}/rest/v1/dashboard_cache?on_conflict=key",
+        headers=_headers(key, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
+        json=payload, timeout=90,
+    )
+    if r.status_code not in (200, 201, 204):
+        raise Exception(f"Supabase save dashboard_cache {r.status_code}: {r.text[:200]}")
+
+
+def get_dashboard_cache() -> dict | None:
+    """อ่านผล dashboard ที่ pre-compute ไว้. คืน {'data':..., 'updated_at':...} หรือ None."""
+    if not is_configured():
+        return None
+    url, key = _base()
+    try:
+        r = requests.get(
+            f"{url}/rest/v1/dashboard_cache?key=eq.main&select=data,updated_at",
+            headers=_headers(key), timeout=30,
+        )
+        if r.status_code != 200:
+            return None
+        rows = r.json()
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def get_sheet_config() -> dict:
     """อ่าน override ของ SHEET_CONFIG จาก Supabase → {key: {spreadsheet_id, sheet_name}}.
     คืน {} ถ้าไม่ได้ตั้งค่า/ตารางไม่มี (→ ใช้ default hardcode)."""

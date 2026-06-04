@@ -542,7 +542,18 @@ def cron_sync(request):
         result = sync_all_sheets_to_supabase()
     except Exception as e:
         return JsonResponse({"error": f"sync ล้มเหลว: {e}"}, status=500)
-    return JsonResponse({"ok": True, "synced": result})
+
+    # หลัง sync mirror เสร็จ → คำนวณ dashboard ใหม่ + เก็บผล (pre-compute)
+    # ทำให้คนเข้าเว็บอ่านผลสำเร็จรูป ไม่ต้องคำนวณ 15k lead สดเอง
+    precomputed = False
+    try:
+        from .services.fetch_dashboard import _dash_cache, precompute_dashboard
+        _dash_cache["data"] = None   # บังคับคำนวณจาก mirror ที่เพิ่ง sync
+        precompute_dashboard()
+        precomputed = True
+    except Exception as e:
+        result["precompute_error"] = str(e)[:200]
+    return JsonResponse({"ok": True, "synced": result, "precomputed": precomputed})
 
 
 @require_http_methods(["GET", "POST"])
