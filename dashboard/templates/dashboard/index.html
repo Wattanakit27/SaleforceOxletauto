@@ -194,8 +194,11 @@
     let tab = new URLSearchParams(location.search).get('tab') || 'o';
     let curS = new URLSearchParams(location.search).get('seller') || '';
     let showCase = new URLSearchParams(location.search).get('case') || null;
-    // Default = เดือนปัจจุบัน (ผู้ใช้กดปุ่ม "ทั้งหมด" เพื่อดูทั้งปีได้)
-    let dfMonth = new Date().getMonth() + 1;
+    // 📅 กรองวันที่รับเคส (ช่วงวัน จาก-ถึง · ข้ามเดือนได้) — แทน month/today filter เดิม
+    let dfMonth = 0;  // vestige (โค้ดเก่าบางจุดอ้าง — ตั้ง 0 = ไม่ใช้ month filter)
+    const _ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    let dfTo = _ymd(new Date());
+    let dfFrom = _ymd(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
     let curF = 'all';
     let curSo = 'urgent';
     let curMode = 'month';
@@ -258,7 +261,68 @@
       if(m===-1) { const now=new Date(); return day===now.getDate() && mo===now.getMonth()+1; }
       return mo===m;
     };
-    const ir = (ds) => passMonth(ds, dfMonth);
+    // เช็ค dateIn (d/m/yy) อยู่ในช่วง [dfFrom, dfTo] ไหม (เทียบ string YYYY-MM-DD)
+    function inRange(ds){
+      if(!ds) return true;
+      const d = _parseDmy(ds);
+      if(!d) return true;
+      const t = _ymd(d);
+      return t >= dfFrom && t <= dfTo;
+    }
+    const ir = inRange;
+    function setDfRange(from, to){
+      if(from!==undefined) dfFrom = from || dfFrom;
+      if(to!==undefined) dfTo = to || dfTo;
+      if(dfFrom > dfTo){ const x = dfFrom; dfFrom = dfTo; dfTo = x; }
+      lfPage = 1; releasedPage = 1; render();
+    }
+    // list ของ [month, day] ในช่วง (ปีนี้)
+    function rangeDays(){
+      const out = []; let cur = new Date(dfFrom + 'T00:00:00'); const end = new Date(dfTo + 'T00:00:00');
+      let g = 0;
+      while(cur <= end && g < 400){ out.push([cur.getMonth()+1, cur.getDate()]); cur.setDate(cur.getDate()+1); g++; }
+      return out;
+    }
+    function _sumDaily(src){
+      let lead=0, leadRJ=0, booking=0, done=0, deal=0;
+      for(const [m,d] of rangeDays()){
+        const dd = src && src[m]; if(!dd) continue;
+        lead += (dd.leads&&dd.leads[d])||0; leadRJ += (dd.leadRJ&&dd.leadRJ[d])||0;
+        booking += (dd.bookings&&dd.bookings[d])||0; done += (dd.dones&&dd.dones[d])||0;
+        deal += (dd.dealValue&&dd.dealValue[d])||0;
+      }
+      return {lead, leadRJ, booking, done, deal};
+    }
+    // สร้าง summary+sellers สำหรับช่วงวันที่ (รูปร่างเหมือน monthlySummary[m]) — แคชต่อ render
+    let _rmCache = null, _rmKey = '';
+    function buildRangeMs(){
+      const key = dfFrom + '|' + dfTo;
+      if(_rmCache && _rmKey === key) return _rmCache;
+      const ov = _sumDaily(D.dailyByMonth || {});
+      const monthsIn = [...new Set(rangeDays().map(x => x[0]))];
+      const sellers = {};
+      (D.sellers || []).forEach(s => {
+        const x = _sumDaily((D.dailyBySeller || {})[s.name] || {});
+        // bans/leadDist ไม่มีรายวัน → รวมรายเดือน (whole-month) ของเดือนในช่วง
+        let bans = 0, leadDist = 0;
+        monthsIn.forEach(m => { const md = (D.monthlySummary && D.monthlySummary[m] && D.monthlySummary[m].sellers && D.monthlySummary[m].sellers[s.name]) || {}; bans += md.bans||0; leadDist += md.leadDist||0; });
+        sellers[s.name] = { lead:x.lead+x.leadRJ, leadNormal:x.lead, leadRJ:x.leadRJ,
+          booking:x.booking, done:x.done, dealValue:x.deal, follow:0, vacant:0,
+          bans, leadDist, target:s.target||0, team:s.team };
+      });
+      let totalFollow = 0;
+      (D.followCases || []).forEach(c => { if(!inRange(c.dateIn)) return; totalFollow++; if(sellers[c.seller]) sellers[c.seller].follow++; });
+      _rmKey = key;
+      _rmCache = { totalLeads:ov.lead+ov.leadRJ, leadNormal:ov.lead, leadRJ:ov.leadRJ,
+        totalBookings:ov.booking, totalDone:ov.done, totalDealValue:ov.deal, totalFollow,
+        sellers, pipeline:D.pipeline };
+      return _rmCache;
+    }
+    const rangeLabelTH = () => {
+      const f = new Date(dfFrom+'T00:00:00'), t = new Date(dfTo+'T00:00:00');
+      const o = {day:'numeric',month:'short'};
+      return f.toLocaleDateString('th-TH',o) + ' – ' + t.toLocaleDateString('th-TH',o);
+    };
     const parseNoteHistory = (note) => {
       if(!note||note==='-') return [];
       return note.replace(/^\d{4,5}\s*/,'').split('/').map(s=>s.trim()).filter(s=>s&&s!=='-');
@@ -446,11 +510,10 @@
       // ส่วนที่ 2: คะแนนจากการจอง + ปล่อย
       // ใช้ ms.sellers[name].booking + .done จาก backend monthlySummary
       // เพื่อให้ตัวเลขตรงกับ "สรุปรายเซลล์" ตาราง (single source of truth)
-      const monthlySrc = (dfMonth > 0 && D.monthlySummary?.[dfMonth])
-        ? D.monthlySummary[dfMonth] : null;
+      const monthlySrc = buildRangeMs();   // 📅 คะแนนตามช่วงวันที่ที่เลือก
       const sellersList = FD.sellers || D.sellers || [];
       sellersList.forEach(s => {
-        const sd = monthlySrc ? (monthlySrc.sellers?.[s.name] || {}) : s;
+        const sd = (monthlySrc.sellers && monthlySrc.sellers[s.name]) || {};
         const jongs = sd.booking || 0;
         const dones = sd.done || 0;
         const leads = sd.lead || 0;
@@ -1249,17 +1312,20 @@
       }
     }
 
-    // ── Date filter bar ──
+    // ── Date filter bar (📅 กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
+    function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', _ymd(new Date())); }
+    function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(d)); }
+    const _inp = 'padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer';
     function renderDateFilterBar() {
-      const dfCount = dfMonth!==0 ? (FD.followCases||[]).filter(l=>ir(l.dateIn)).length : 0;
-      const yr = new Date().getFullYear();
-      const monthStr = dfMonth > 0 ? `${yr}-${String(dfMonth).padStart(2,'0')}` : '';
+      const cnt = (FD.followCases||[]).filter(l=>ir(l.dateIn)).length;
       let html = `<div class="df-bar"><span class="df-label">📅 กรองวันที่รับเคส:</span>`;
-      html += `<button class="df-btn${dfMonth===0?' on':''}" onclick="setDf(0)">ทั้งหมด</button>`;
-      html += `<button class="df-btn${dfMonth===-1?' on':''}" onclick="setDf(-1)">วันนี้</button>`;
-      html += `<input type="month" value="${monthStr}" onchange="setDfFromInput(this.value)" title="เลือกเดือน (ปี ${yr})" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">`;
-      if(dfMonth>0) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${C.MONTHS_FULL[dfMonth-1]} · ${dfCount} เคส</span>`;
-      else if(dfMonth===-1) html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${dfCount} เคส</span>`;
+      html += `<span style="font-size:11px;color:var(--t3)">จาก</span>`;
+      html += `<input type="date" value="${dfFrom}" onchange="setDfRange(this.value, undefined)" style="${_inp}">`;
+      html += `<span style="font-size:11px;color:var(--t3)">ถึง</span>`;
+      html += `<input type="date" value="${dfTo}" onchange="setDfRange(undefined, this.value)" style="${_inp}">`;
+      html += `<button class="df-btn" onclick="dfThisMonth()" title="เดือนนี้">เดือนนี้</button>`;
+      html += `<button class="df-btn" onclick="dfThisYear()" title="ทั้งปี (ม.ค.–วันนี้)">ทั้งปี</button>`;
+      html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${cnt} เคสติดตามในช่วง</span>`;
       html += `</div>`;
       return html;
     }
@@ -1333,30 +1399,23 @@
 
     // ── OVERVIEW ──
     function renderOverview(sellers, dilMap, sellerNames) {
-      const isToday = curMode==='today';
-      const ms = (dfMonth>0 && D.monthlySummary?.[dfMonth]) ? D.monthlySummary[dfMonth] : null;
-      const sm = isToday ? (D.today||D.summary) : (ms||D.summary);
-      const pl = ms ? ms.pipeline : D.pipeline;
+      const isToday = false;
+      const ms = buildRangeMs();        // 📅 summary ของช่วงวันที่ที่เลือก
+      const sm = ms;
+      const pl = D.pipeline;            // pipeline (รอเซ็น/รอผล/...) ไม่มีรายวัน → ใช้รวมทั้งปี
       const clipTgt = D.meta?.clipMonthTarget || 4;
 
       const MF = ["","มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
-      const modeLabel = isToday
-        ? "วันที่ "+new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short'})
-        : dfMonth>0 ? "เดือน"+MF[dfMonth] : "ทั้งปี "+new Date().getFullYear();
+      const modeLabel = "📅 " + rangeLabelTH();
 
       // Deal Value — รวมยอดปล่อยรถ (฿) ของ ช่วงที่กรอง
-      const dvDeal = ms ? (ms.totalDealValue||0) : (D.summary.totalDealValue||0);
-      const dvDone = ms ? (ms.totalDone||0) : (D.summary.totalDone||0);
+      const dvDeal = ms.totalDealValue||0;
+      const dvDone = ms.totalDone||0;
       const dvAvg  = dvDone ? Math.round(dvDeal/dvDone) : 0;
 
-      // ── MoM (Month-over-Month) — แสดงเฉพาะเมื่อกรองเดือนเฉพาะและไม่ใช่ "วันนี้" ──
-      const momActive = dfMonth > 0 && !isToday && dfMonth >= 2;
-      const m_lead    = momActive ? getMoM(dfMonth, 'totalLeads')     : null;
-      const m_follow  = momActive ? getMoM(dfMonth, 'totalFollow')    : null;
-      const m_book    = momActive ? getMoM(dfMonth, 'totalBookings')  : null;
-      const m_done    = momActive ? getMoM(dfMonth, 'totalDone')      : null;
-      const m_deal    = momActive ? getMoM(dfMonth, 'totalDealValue') : null;
-      const m_rj      = momActive ? getMoM(dfMonth, 'leadRJ')         : null;
+      // ── MoM ปิดในโหมดช่วงวันที่ (เทียบเดือนไม่ได้) ──
+      const momActive = false;
+      const m_lead = null, m_follow = null, m_book = null, m_done = null, m_deal = null, m_rj = null;
       // KPI tooltips — อธิบายว่าแต่ละตัวคืออะไร นับยังไง
       const TIP = {
         lead:    "Lead ที่รับเข้ามาทั้งหมดในช่วงนี้ (รวม Normal + RJ)\nนับจาก leads sheet · กรองตามวันที่รับเคส",
@@ -1380,12 +1439,10 @@
 
       let html = '';
 
-      // Mode toggle
+      // ช่วงวันที่ที่กำลังดู (filter bar จริงอยู่บนหัวหน้า)
       html += `<div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">`;
-      html += `<span style="font-size:12px;color:var(--t2)">แสดงข้อมูล:</span>`;
-      html += `<button class="sbtn${curMode==='month'?' on':''}" onclick="curMode='month';render()">เดือนนี้</button>`;
-      html += `<button class="sbtn${curMode==='today'?' on':''}" onclick="curMode='today';render()">วันนี้</button>`;
-      html += `<span style="font-size:11px;color:var(--t3)">${modeLabel}</span></div>`;
+      html += `<span style="font-size:12px;color:var(--t2)">แสดงข้อมูลช่วง:</span>`;
+      html += `<span style="font-size:12px;color:var(--blue);font-weight:600">${modeLabel}</span></div>`;
 
       // MoM hint (ถ้ามี)
       if (momActive) {
@@ -1830,7 +1887,7 @@
       if (leadCarPage < 1) leadCarPage = 1;
       const startIdx = (leadCarPage - 1) * LEAD_CAR_PAGE_SIZE;
       const top = entries.slice(startIdx, startIdx + LEAD_CAR_PAGE_SIZE);
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+      const periodLbl = '📅 '+rangeLabelTH();
 
       let html = `<div class="card">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
@@ -1914,7 +1971,7 @@
 
       const totalPrice = cars.reduce((a,b)=>a+(b.price||0),0);
       const sellerNames = Array.from(new Set(base.map(b=>b.seller).filter(Boolean))).sort();
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+      const periodLbl = '📅 '+rangeLabelTH();
       const statusLbl = releasedStatus === 'all' ? 'ทุกสถานะ' : releasedStatus;
       const titleEmoji = releasedStatus === 'ปล่อย' ? '🏁' : releasedStatus === 'all' ? '📋' : '🟡';
 
@@ -2212,7 +2269,7 @@
       const old = document.getElementById('car-detail-overlay');
       if (old) old.remove();
 
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : 'ทั้งปี';
+      const periodLbl = '📅 '+rangeLabelTH();
       const carLower = String(car).toLowerCase();
 
       // ── Lead per seller (จาก leadCarSellerMonth — exact match key) ──
@@ -2310,8 +2367,8 @@
       if (!team) return;
       const teamName = (C.TEAM_NAMES || {})[tid] || tid;
       const teamColor = (C.TEAM_COLORS || {})[tid] || 'var(--t3)';
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : (dfMonth===-1 ? 'วันนี้' : 'ทั้งปี');
-      const ms = (dfMonth > 0 && D.monthlySummary?.[dfMonth]) ? D.monthlySummary[dfMonth] : null;
+      const periodLbl = '📅 '+rangeLabelTH();
+      const ms = buildRangeMs();   // 📅 ตามช่วงวันที่
 
       // คำนวณ done + dealValue ต่อเซลล์ในทีมนี้
       const members = team.members || [];
@@ -2405,7 +2462,7 @@
       const old = document.getElementById('seller-bookings-overlay');
       if (old) old.remove();
 
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : (dfMonth===-1 ? 'วันนี้' : 'ทั้งปี');
+      const periodLbl = '📅 '+rangeLabelTH();
       // Filter bookings ของเซลล์ตาม period (ปล่อย ใช้ releaseDate, อื่นๆ ใช้ b.date)
       const allBookings = (D.bookingCases || []).filter(b => {
         if (b.seller !== sellerName) return false;
@@ -2549,7 +2606,7 @@
     // ── ACTIVITY TAB ──
     function renderActivity(sellers) {
       const la = D.liveActivity || {totalInbox:0,totalLead:0,totalSessions:0,byHost:{},sessions:[]};
-      const periodLbl = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : (dfMonth === -1 ? 'วันนี้' : 'ทั้งปี');
+      const periodLbl = '📅 '+rangeLabelTH();
 
       // Filter sessions ตาม dfMonth — จากตัวเลือกบนหัว dashboard
       const allSessions = la.sessions || [];
@@ -2753,7 +2810,7 @@
       html += `<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap">`;
       html += `<button class="bbtn" onclick="switchTab('o')">← กลับ</button>`;
       html += `<div class="av">${effectiveCurS.charAt(0)}</div>`;
-      const sellerPeriodLbl = dfMonth>0 ? `${C.MONTHS_FULL[dfMonth-1]}` : (dfMonth===-1 ? 'วันนี้' : 'ทั้งปี');
+      const sellerPeriodLbl = '📅 '+rangeLabelTH();
       html += `<div style="flex:1"><div style="font-size:15px;font-weight:700">${h(effectiveCurS)} <span style="font-size:11px;color:var(--t3);font-weight:500">· ${sellerPeriodLbl}</span></div><div style="font-size:11px;color:var(--t2)">${sd.lead||0} Lead · ว่าง ${sd.vacant||0} · จอง ${sd.booking||0} · ทีม ${sdYear.team||'?'}</div></div>`;
       html += `<select onchange="curS=this.value;showCase=null;curF='all';lfPage=1;updateUrl();render()">`;
       sellerNames.forEach(n=>{html+=`<option value="${h(n)}" ${effectiveCurS===n?'selected':''}>${h(n)}</option>`;});
@@ -2911,10 +2968,22 @@
     // ── Actions ──
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
-    function setDf(preset) { dfMonth=preset; lfPage=1; render(); }
+    // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น
+    // (ใช้ตอนกดบาร์เดือนในกราฟ drill-in)
+    function setDf(preset) {
+      const y = new Date().getFullYear();
+      if (preset === 0) { dfThisYear(); return; }
+      if (preset === -1) { const d = new Date(); setDfRange(_ymd(d), _ymd(d)); return; }
+      if (preset >= 1 && preset <= 12) {
+        const mm = String(preset).padStart(2, '0');
+        const last = new Date(y, preset, 0).getDate();
+        setDfRange(`${y}-${mm}-01`, `${y}-${mm}-${String(last).padStart(2, '0')}`);
+        return;
+      }
+      render();
+    }
     function setDfFromInput(v) {
       if (!v) { setDf(0); return; }
-      // v format: "YYYY-MM" — ใช้แค่ month (ระบบ filter ปีปัจจุบันใน backend แล้ว)
       const mo = parseInt(v.split('-')[1] || '0');
       if (mo >= 1 && mo <= 12) setDf(mo);
     }

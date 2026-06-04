@@ -170,9 +170,13 @@ python manage.py runserver
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
 
 ### Date filter (กรองเดือน / ช่วงวัน)
-- **UI**: `<input type="month">` (HTML5 native picker) แทนปุ่ม 12 เดือน → ไม่ต้องไปแก้โค้ดเวลามีเดือนใหม่
-- **State**:
-  - `index.html` ใช้ `dfMonth` (0=ทั้งปี, -1=วันนี้, 1-12=เดือน) + `setDfFromInput(v)` parse "YYYY-MM" → setDf(month)
+- **`index.html` หน้าหลัก = ช่วงวันที่ (จาก-ถึง ข้ามเดือนได้)** — แทน month/today filter เดิม:
+  - State: `dfFrom`/`dfTo` ("YYYY-MM-DD") · `inRange(ds)` เช็ค dateIn อยู่ในช่วง · `ir = inRange`
+  - `buildRangeMs()` = สร้าง summary+sellers ของช่วง (รูปร่างเหมือน `monthlySummary[m]`) จาก **`dailyByMonth`/`dailyBySeller`** (lead/RJ/จอง/ปล่อย/ยอด รวมรายวัน) + **`followCases`** (ติดตาม) — bans/leadDist รวมรายเดือน (whole-month). cache ต่อ render (`_rmCache`)
+  - KPI cards/scorecard(`buildDilMap`)/team breakdown ใช้ `buildRangeMs()` แทน `monthlySummary[dfMonth]` · MoM ปิดในโหมดช่วงวัน
+  - `dfMonth=0` vestige (โค้ดเก่าอ้าง) · `setDf(m)` ตอนนี้ map เป็นช่วงวัน (กดบาร์เดือนในกราฟ → ทั้งเดือนนั้น)
+  - vacant ไม่มีรายวัน → overview KPI ไม่ใช้ (มีแค่หน้า seller detail)
+- _(เดิม `<input type="month">` + `dfMonth` 0/-1/1-12 — เปลี่ยนเป็นช่วงวันแล้ว)_
   - `seller.html` ใช้ `fMonth` (เดือน) + `fDateFrom`/`fDateTo` (ช่วงวัน, "YYYY-MM-DD") — mutually exclusive (เลือก month → ล้าง range, เลือก range → ล้าง month). UI มี 2 แถว: เดือน + ช่วงวัน
 - **Year**: ยังเป็น single-year (`is_this_year` filter ใน backend) — ถ้าผู้ใช้เลือกเดือนของปีอื่นใน picker จะใช้แค่ส่วน month
 - **KPI rendering** (seller view ใน index.html):
