@@ -906,7 +906,7 @@
                 {l:'จบ (ปล่อย)', sc:d.sDone, max:30, sub:`${d.dones||0}/${DONE_TGT} คัน`, c:'var(--green)'},
                 {l:'จอง', sc:d.sJong, max:10, sub:`${d.jongs||0}/${JONG_TGT}`, c:'var(--blue)'},
                 {l:'Conv', sc:d.sConv, max:20, sub:`${d.conv||0}% · เป้า ${CONV_TGT}%`, c:'var(--blue)'},
-                {l:'ความเร็ว', sc:d.sVel, max:10, sub:`${d.velPct||0}% · ${d.velCnt||0} เคสปล่อย`, c:'var(--purple)'},
+                {l:'เวลาปิดดีล', sc:d.sVel, max:10, sub:`${d.velPct||0}% · ${d.velCnt||0} เคสปล่อย`, c:'var(--purple)'},
                 {l:'ติดตาม', sc:d.sFollow, max:20, sub:`${d.completion||0}% · ${d.cnt||0} เคส`, c:'var(--amber)'},
                 {l:'โดนแบน', sc:d.sBan, max:10, sub:`แบน ${d.bans||0} ครั้ง`, c:(d.bans>0?'var(--red)':'var(--green)')},
               ].map(x=>`
@@ -1009,7 +1009,7 @@
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green);font-weight:700">จบ (ปล่อย)</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">30</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">ปล่อย ÷ 15 × 30 <span style="color:var(--t3)">(ปล่อย ≥15 = เต็ม)</span></td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">จอง</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จอง ÷ 30 × 10</td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">Conv</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(ปล่อย ÷ lead × 100) ÷ 5 × 20 <span style="color:var(--t3)">(ได้ 5% = เต็ม)</span></td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--purple);font-weight:700">ความเร็ว</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เคสปล่อย: จอง→เซ็น ≤3 · เซ็น→ผล ≤3 · ผล→ปล่อย ≤1 วัน <span style="color:var(--t3)">(ทันกำหนด = เต็ม, ช่องวัน "ว่าง" = 0 ช่วงนั้น)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--purple);font-weight:700">ระยะเวลาปิดดีล</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เคสปล่อย: จอง→เซ็น ≤3 · เซ็น→ผล ≤3 · ผล→ปล่อย ≤1 วัน <span style="color:var(--t3)">(ทันกำหนด = เต็ม, ช่องวัน "ว่าง" = 0 ช่วงนั้น)</span></td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--amber);font-weight:700">ติดตาม</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">อัพเดทจริง(cap 4/เคส) ÷ (4 × เคสที่ต้องตาม) × 20</td></tr>
                 <tr><td style="padding:6px 8px;color:var(--red);font-weight:700">โดนแบน</td><td style="padding:6px 8px;text-align:center;font-weight:700">10</td><td style="padding:6px 8px;color:var(--t2)">เริ่มเต็ม 10 → โดนแบน −1 ต่อครั้ง</td></tr>
               </tbody>
@@ -1017,12 +1017,12 @@
 
             <!-- หมายเหตุ -->
             <div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.6;margin-bottom:10px">
-              <b style="color:var(--purple)">ความเร็ว</b> วัดจาก<b>เคสที่ปล่อยแล้ว</b> — ยิ่งจอง→เซ็น→ผล→ปล่อยเร็วตามกำหนด ยิ่งได้เต็ม<br>
+              <b style="color:var(--purple)">ระยะเวลาปิดดีล</b> วัดจาก<b>เคสที่ปล่อยแล้ว</b> — ยิ่งจอง→เซ็น→ผล→ปล่อยทันกำหนด ยิ่งได้เต็ม<br>
               <span style="color:var(--t3)">ต้องกรอก "วันเซ็น" + "วันผลออก" ในชีตยอดขายให้ครบ ไม่งั้นช่วงที่ว่างจะได้ 0</span>
             </div>
 
             <div style="margin-top:10px;font-size:10px;color:var(--t3);line-height:1.5">
-              รวม = จบ(30) + จอง(10) + Conv(20) + ความเร็ว(10) + ติดตาม(20) + โดนแบน(10) = <b>100</b> · ข้อมูลแบนจาก sheet "รายงานแบน"
+              รวม = จบ(30) + จอง(10) + Conv(20) + เวลาปิดดีล(10) + ติดตาม(20) + โดนแบน(10) = <b>100</b> · ข้อมูลแบนจาก sheet "รายงานแบน"
             </div>
 
           </div>
@@ -1604,7 +1604,7 @@
           <span style="text-align:right;color:var(--green)">จบ/30<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;color:var(--blue)">จอง/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;color:var(--blue)">Conv/20<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
-          <span style="text-align:right;color:var(--purple)">เร็ว/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
+          <span style="text-align:right;color:var(--purple)">เวลาปิด/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;color:var(--amber)">ติดตาม/20<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;color:var(--red)">แบน/10<span class="info-tip" onclick="event.stopPropagation();showScoreHelp()" tabindex="0" title="กดดูวิธีคิด">?</span></span>
           <span style="text-align:right;font-weight:700">รวม/100</span>
@@ -1622,14 +1622,14 @@
           <span style="text-align:right;color:var(--green);font-weight:600">${_f1(e.sDone)}</span>
           <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sJong)}</span>
           <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sConv)}</span>
-          <span style="text-align:right;color:var(--purple);font-weight:600" title="${e.velPct}% เร็วตามเกณฑ์">${_f1(e.sVel)}</span>
+          <span style="text-align:right;color:var(--purple);font-weight:600" title="${e.velPct}% ปิดทันกำหนด">${_f1(e.sVel)}</span>
           <span style="text-align:right;color:var(--amber);font-weight:600">${_f1(e.sFollow)}</span>
           <span style="text-align:right;color:${e.bans>0?'var(--red)':'var(--t2)'};font-weight:600">${_f1(e.sBan)}</span>
           <span style="text-align:right;color:${totalColor};font-weight:800;font-size:13px">${_f1(e.total)}</span>
         </div>`;
       });
       html += `</div></div>`;
-      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 30 · จอง 10 · Conv 20 · ความเร็ว 10 · ติดตาม 20 · โดนแบน 10 = 100 · ข้อมูลแบนจาก "รายงานแบน" · กดแถวดูรายละเอียด</div>`;
+      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 30 · จอง 10 · Conv 20 · เวลาปิดดีล 10 · ติดตาม 20 · โดนแบน 10 = 100 · ข้อมูลแบนจาก "รายงานแบน" · กดแถวดูรายละเอียด</div>`;
       html += `</div>`;
 
       // ════════════════════════════════════════════════════════════════
