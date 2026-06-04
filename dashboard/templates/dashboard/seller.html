@@ -113,10 +113,12 @@
   // ── state ──
   // Filter mode: month (เลือกเดือน) | range (เลือกช่วงวัน) | today | all
   // เลือก month → reset range; เลือก range → reset month (mutually exclusive)
-  let fMonth = new Date().getMonth() + 1;   // default = เดือนปัจจุบัน (0=ทั้งปี, 1-12=เดือน)
-  let fDay = 0;            // 0=ทั้งเดือน/range, -1=วันนี้ (เก็บไว้ backward compat — UI ลบปุ่ม 1-31 ออก)
-  let fDateFrom = '';      // 'YYYY-MM-DD' — ใช้คู่กับ fDateTo
-  let fDateTo = '';        // 'YYYY-MM-DD'
+  // กรองด้วย "ช่วงวันที่รับเคส" (จาก-ถึง ข้ามเดือนได้) — รวมตัวกรองเดือน/ช่วงวันเดิมที่ซ้ำกันให้เหลือชุดเดียว
+  const _ymdS = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  let fMonth = 0;          // vestige (passFilter/กราฟ บางจุดอ้าง) — ใช้ช่วงวันแทน
+  let fDay = 0;
+  let fDateFrom = _ymdS(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
+  let fDateTo = _ymdS(new Date());                                                       // ถึงวันนี้
   let kpiFilter = 'inHand';
   let viewMode = 'leads';
   let bookStatusFilter = 'all';
@@ -278,7 +280,9 @@
     if (z) return !Z_DEAD.some(k => z.includes(k));   // มี Z + ไม่ dead = ยังอยู่ในมือ
     const a = (l.adminStatus||'').toLowerCase();
     const s = (l.salesStatus||'').toLowerCase();
-    if (s && s !== '-' && FOLLOW_KEYWORDS.some(k => s.includes(k))) return true;
+    // เช็คทั้ง admin + sales (เดือน มิ.ย.+ salesStatus ว่าง แต่ adminStatus=ติดตาม)
+    const fk = (x) => x && x !== '-' && FOLLOW_KEYWORDS.some(k => x.includes(k));
+    if (fk(s) || fk(a)) return true;
     if (a.includes('จอง') || s.includes('จอง')) return true;
     if (a.includes('ปล่อย') || s.includes('ปล่อย')) return true;
     return false;
@@ -292,8 +296,9 @@
         if (isBooked(l)) return false;   // จองแล้ว = ไม่ต้องเตือนโทร
         if (zVal(l)) return true;        // มี Z + ผ่าน skip/booked = สถานะ active ต้องตาม
         const s = (l.salesStatus||'').toLowerCase();
-        if (!s || s === '-') return false;
-        return FOLLOW_KEYWORDS.some(k => s.includes(k));
+        const a = (l.adminStatus||'').toLowerCase();   // เช็ค admin ด้วย (มิ.ย.+ sales ว่าง)
+        if ((!s || s==='-') && (!a || a==='-')) return false;
+        return FOLLOW_KEYWORDS.some(k => s.includes(k) || a.includes(k));
       }},
     { key: 'all',       label: 'เคสทั้งหมด',       color: 'var(--t1)',     hint: 'รวมที่ปิด/คืน/ยกเลิกด้วย', test: l => true },
   ];
@@ -609,19 +614,13 @@
       })()}
 
       <div class="filter-bar">
-        <span class="lbl">เดือน</span>
-        <button class="f-btn ${fMonth===0 && !fDateFrom && !fDateTo && fDay===0 ?'on':''}" onclick="resetFilter()">ทั้งปี</button>
-        <button class="f-btn ${fDay===-1?'on':''}" onclick="setDay(-1)">วันนี้</button>
-        <input type="month" value="${fMonth>0 ? `${new Date().getFullYear()}-${String(fMonth).padStart(2,'0')}` : ''}" onchange="setMonthFromInput(this.value)" title="เลือกเดือน (ปี ${new Date().getFullYear()})" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
-        ${fMonth>0 ? `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${(C.MONTHS_FULL||[])[fMonth-1]||''}</span>` : ''}
-      </div>
-
-      <div class="filter-bar">
-        <span class="lbl">ช่วงวัน</span>
+        <span class="lbl">📅 วันที่รับเคส</span>
         <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
         <span style="font-size:11px;color:var(--t3)">ถึง</span>
         <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
-        ${(fDateFrom||fDateTo) ? `<button class="f-btn" onclick="clearDateRange()" style="background:var(--red-bg,#fee);color:var(--red)">ล้าง</button>` : ''}
+        <button class="f-btn" onclick="setRangeMonth()">เดือนนี้</button>
+        <button class="f-btn" onclick="setRangeYear()">ทั้งปี</button>
+        <button class="f-btn ${(fDateFrom&&fDateFrom===fDateTo)?'on':''}" onclick="setRangeToday()">วันนี้</button>
       </div>
 
       <div class="kgrid" style="grid-template-columns:repeat(5,minmax(0,1fr))">
@@ -1365,6 +1364,10 @@
   }
   function clearDateRange() { fDateFrom = ''; fDateTo = ''; render(); }
   function resetFilter() { fMonth = 0; fDay = 0; fDateFrom = ''; fDateTo = ''; render(); }
+  // ปุ่มลัดช่วงวัน
+  function setRangeMonth() { const d=new Date(); fDateFrom=_ymdS(new Date(d.getFullYear(),d.getMonth(),1)); fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
+  function setRangeYear() { const d=new Date(); fDateFrom=`${d.getFullYear()}-01-01`; fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
+  function setRangeToday() { const d=new Date(); fDateFrom=_ymdS(d); fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
   function setKpi(k) { kpiFilter = k; viewMode = 'leads'; statusFilter = 'all'; render(); }
   function setViewMode(m) { viewMode = m; render(); }
   function setBookStatus(s) { bookStatusFilter = s; render(); }
