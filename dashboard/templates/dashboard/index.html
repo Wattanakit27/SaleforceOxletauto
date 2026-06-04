@@ -1165,7 +1165,7 @@
         ? ((D.dailyBySeller || {})[focusSeller] || {})
         : (D.dailyByMonth || {});
       const _days = rangeDays();              // [[month,day],...] ในช่วงที่เลือก
-      const isDaily = _days.length <= 62;     // ช่วง ≤ ~2 เดือน → รายวัน · กว่านั้น → รายเดือน
+      const isDaily = _days.length <= 31;     // ช่วง ≤ 1 เดือน (31 วัน) → รายวัน · กว่านั้น → รายเดือน
       let labels = [], leadNormal = [], leadRJ = [], bookings = [], dones = [], dealValue = [];
       if (isDaily) {
         // รายวันตลอดช่วง (ข้ามเดือนได้)
@@ -1477,7 +1477,7 @@
       const _focusName = (!canViewAll ? employee.nickname : impersonate);
       const _focusSuffix = _focusName ? ` · ${h(_focusName)}` : ``;
       const _rangeTxt = (typeof rangeLabelTH === 'function') ? rangeLabelTH() : '';
-      const _isDailyChart = (typeof rangeDays === 'function') ? (rangeDays().length <= 62) : false;
+      const _isDailyChart = (typeof rangeDays === 'function') ? (rangeDays().length <= 31) : false;
       const _chartPeriod = `· ${_isDailyChart ? 'รายวัน' : 'รายเดือน'} ${_rangeTxt}`;
       const _pipePeriod = _rangeTxt || 'ช่วงที่เลือก';
       html += `<div class="cgrid">`;
