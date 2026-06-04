@@ -1158,49 +1158,42 @@
       const _dark = document.documentElement.getAttribute('data-theme') === 'dark';
       Chart.defaults.color = _dark ? '#aaa0c4' : '#56506b';
       Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
-      const ms = D.monthlySummary || {};
-      const isDaily = dfMonth > 0;
       // เซลล์ที่ admin กำลังสวมมุมมอง หรือ เซลล์ตัวเองตอนไม่ใช่ admin
       const focusSeller = !canViewAll ? employee.nickname : impersonate;
-      let labels, leadNormal, leadRJ, bookings, dones, dealValue;
-
+      // 📅 กราฟผูกกับช่วงวันที่ที่กรอง (dfFrom..dfTo) — ดึงจาก dailyByMonth/dailyBySeller
+      const _dailySrc = focusSeller
+        ? ((D.dailyBySeller || {})[focusSeller] || {})
+        : (D.dailyByMonth || {});
+      const _days = rangeDays();              // [[month,day],...] ในช่วงที่เลือก
+      const isDaily = _days.length <= 62;     // ช่วง ≤ ~2 เดือน → รายวัน · กว่านั้น → รายเดือน
+      let labels = [], leadNormal = [], leadRJ = [], bookings = [], dones = [], dealValue = [];
       if (isDaily) {
-        // รายวันของเดือนที่เลือก
-        const dailySrc = focusSeller
-          ? ((D.dailyBySeller || {})[focusSeller] || {})
-          : (D.dailyByMonth || {});
-        const daily = dailySrc[dfMonth] || { leads:[], leadRJ:[], bookings:[], dones:[], dealValue:[] };
-        const yr = (D.meta && D.meta.year) || new Date().getFullYear();
-        const daysInMonth = new Date(yr, dfMonth, 0).getDate();
-        labels = []; leadNormal = []; leadRJ = []; bookings = []; dones = []; dealValue = [];
-        for (let d = 1; d <= daysInMonth; d++) {
-          labels.push(String(d));
-          leadNormal.push((daily.leads || [])[d] || 0);
-          leadRJ.push((daily.leadRJ || [])[d] || 0);
-          bookings.push((daily.bookings || [])[d] || 0);
-          dones.push((daily.dones || [])[d] || 0);
-          dealValue.push((daily.dealValue || [])[d] || 0);
+        // รายวันตลอดช่วง (ข้ามเดือนได้)
+        for (const [mo, d] of _days) {
+          const dd = _dailySrc[mo] || {};
+          labels.push(d + '/' + mo);
+          leadNormal.push((dd.leads || [])[d] || 0);
+          leadRJ.push((dd.leadRJ || [])[d] || 0);
+          bookings.push((dd.bookings || [])[d] || 0);
+          dones.push((dd.dones || [])[d] || 0);
+          dealValue.push((dd.dealValue || [])[d] || 0);
         }
       } else {
-        // รายเดือนทั้งปี
-        labels = C.MONTHS_SHORT;
-        leadNormal = []; leadRJ = []; bookings = []; dones = []; dealValue = [];
-        for (let m = 1; m <= 12; m++) {
-          const x = ms[m] || {};
-          if (focusSeller) {
-            const ss = (x.sellers || {})[focusSeller] || {};
-            leadNormal.push(ss.leadNormal || 0);
-            leadRJ.push(ss.leadRJ || 0);
-            bookings.push(ss.booking || 0);
-            dones.push(ss.done || 0);
-            dealValue.push(ss.dealValue || 0);
-          } else {
-            leadNormal.push(x.leadNormal || 0);
-            leadRJ.push(x.leadRJ || 0);
-            bookings.push(x.totalBookings || 0);
-            dones.push(x.totalDone || 0);
-            dealValue.push(x.totalDealValue || 0);
+        // รายเดือน — รวมเฉพาะวันที่อยู่ในช่วง (เดือนหัว/ท้ายอาจไม่เต็มเดือน)
+        const monthsIn = [...new Set(_days.map(x => x[0]))].sort((a, b) => a - b);
+        for (const mo of monthsIn) {
+          const dd = _dailySrc[mo] || {};
+          let ln = 0, lr = 0, bk = 0, dn = 0, dv = 0;
+          for (const [mm, d] of _days) {
+            if (mm !== mo) continue;
+            ln += (dd.leads || [])[d] || 0;
+            lr += (dd.leadRJ || [])[d] || 0;
+            bk += (dd.bookings || [])[d] || 0;
+            dn += (dd.dones || [])[d] || 0;
+            dv += (dd.dealValue || [])[d] || 0;
           }
+          labels.push((C.MONTHS_SHORT || [])[mo - 1] || ('ด.' + mo));
+          leadNormal.push(ln); leadRJ.push(lr); bookings.push(bk); dones.push(dn); dealValue.push(dv);
         }
       }
 
@@ -1260,28 +1253,12 @@
       if (cv3) {
         destroyChart('pipeline');
         const order = C.STATUS_ORDER || ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย','รีเจ็ก'];
-        let pl;
-        if (focusSeller) {
-          // คำนวณจาก FD ที่กรองตามเซลล์แล้ว
-          pl = {}; order.forEach(k => pl[k] = 0);
-          (FD.bookingCases || []).forEach(b => {
-            if (dfMonth > 0) {
-              const p = (b.date || '').split('/');
-              if (p.length < 2 || parseInt(p[1]) !== dfMonth) return;
-            }
-            if (pl[b.status] !== undefined) pl[b.status]++;
-          });
-          // จอง — ใช้ค่า booking ของ seller
-          if (dfMonth > 0) {
-            const ss = (ms[dfMonth] && ms[dfMonth].sellers && ms[dfMonth].sellers[focusSeller]) || {};
-            pl['จอง'] = ss.booking || 0;
-          } else {
-            const sObj = (D.sellers || []).find(x => x.name === focusSeller);
-            pl['จอง'] = (sObj && sObj.booking) || 0;
-          }
-        } else {
-          pl = (dfMonth > 0 && ms[dfMonth] && ms[dfMonth].pipeline) ? ms[dfMonth].pipeline : (D.pipeline || {});
-        }
+        // นับสถานะปัจจุบันของเคสที่ "จอง" ในช่วงวันที่เลือก (FD กรองตามเซลล์ให้แล้ว)
+        const pl = {}; order.forEach(k => pl[k] = 0);
+        (FD.bookingCases || []).forEach(b => {
+          if (!ir(b.date)) return;
+          if (pl[b.status] !== undefined) pl[b.status]++;
+        });
         const counts = order.map(k => pl[k] || 0);
         const colors = order.map(k => (C.STATUS_COLOR || {})[k] || '#888');
         __charts.pipeline = new Chart(cv3, {
@@ -1499,10 +1476,10 @@
       // Charts
       const _focusName = (!canViewAll ? employee.nickname : impersonate);
       const _focusSuffix = _focusName ? ` · ${h(_focusName)}` : ``;
-      const _chartPeriod = dfMonth > 0
-        ? `รายวัน — เดือน${C.MONTHS_FULL[dfMonth-1]}`
-        : `รายเดือน (ทั้งปี)`;
-      const _pipePeriod = dfMonth > 0 ? `เดือน${C.MONTHS_FULL[dfMonth-1]}` : `ทั้งปี`;
+      const _rangeTxt = (typeof rangeLabelTH === 'function') ? rangeLabelTH() : '';
+      const _isDailyChart = (typeof rangeDays === 'function') ? (rangeDays().length <= 62) : false;
+      const _chartPeriod = `· ${_isDailyChart ? 'รายวัน' : 'รายเดือน'} ${_rangeTxt}`;
+      const _pipePeriod = _rangeTxt || 'ช่วงที่เลือก';
       html += `<div class="cgrid">`;
       html += `<div class="card chart-card"><div class="card-title">📈 ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\nแยก 2 เส้น: Lead ปกติ + RJ\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
       html += `<div class="card chart-card"><div class="card-title">📊 ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
