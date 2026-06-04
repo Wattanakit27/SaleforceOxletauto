@@ -417,23 +417,6 @@ def cron_tick(request):
     if submitted != secret_setting:
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
-    # ── รีเฟรช dashboard (sync mirror + pre-compute) แบบ throttle ~5 นาที ──
-    # ใช้ cron tick (1 นาที) ตัวเดียว ไม่ต้องสร้าง cron sync แยก
-    if getattr(settings, "USE_SUPABASE", False):
-        try:
-            from .services.supabase_client import (
-                is_configured, get_dashboard_cache_age, sync_all_sheets_to_supabase,
-            )
-            if is_configured():
-                age = get_dashboard_cache_age()
-                if age is None or age > 270:   # > ~4.5 นาที → รีเฟรช
-                    sync_all_sheets_to_supabase()
-                    from .services.fetch_dashboard import precompute_dashboard, _dash_cache
-                    _dash_cache["data"] = None
-                    precompute_dashboard()
-        except Exception:
-            pass   # best-effort — ไม่ให้กระทบงานส่ง LINE
-
     channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
     if not channel_token:
         return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
@@ -451,10 +434,29 @@ def cron_tick(request):
     fired_schedules = [s for s in schedules if schedule_matches_now(s, now)]
 
     if not fired_schedules:
+        # ไม่มี LINE ต้องส่งนาทีนี้ → ใช้จังหวะนี้รีเฟรช dashboard (sync + pre-compute) แบบ throttle ~5 นาที
+        # → cron tick (1 นาที) ตัวเดียวดูแลทั้ง LINE + ความเร็ว dashboard ไม่ต้องสร้าง cron แยก
+        refreshed = False
+        if getattr(settings, "USE_SUPABASE", False):
+            try:
+                from .services.supabase_client import (
+                    is_configured, get_dashboard_cache_age, sync_all_sheets_to_supabase,
+                )
+                if is_configured():
+                    age = get_dashboard_cache_age()
+                    if age is None or age > 270:   # > ~4.5 นาที → รีเฟรช
+                        sync_all_sheets_to_supabase()
+                        from .services.fetch_dashboard import precompute_dashboard, _dash_cache
+                        _dash_cache["data"] = None
+                        precompute_dashboard()
+                        refreshed = True
+            except Exception:
+                pass   # best-effort
         return JsonResponse({
             "ok": True, "fired": 0,
             "now": f"{now.hour:02d}:{now.minute:02d}",
             "total_schedules": len(schedules),
+            "dashboard_refreshed": refreshed,
         })
 
     try:
