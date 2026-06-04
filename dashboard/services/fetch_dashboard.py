@@ -1274,7 +1274,8 @@ def compute_diligence_scores(target_month: int | None = None,
                 "high": 0,
                 # สูตรใหม่ (100 คะแนน)
                 "capUpd": 0, "leads": 0, "bans": 0, "conv": 0, "completion": 0,
-                "sDone": 0, "sJong": 0, "sConv": 0, "sFollow": 0, "sBan": 0,
+                "velPct": 0, "velN": 0,
+                "sDone": 0, "sJong": 0, "sConv": 0, "sVel": 0, "sFollow": 0, "sBan": 0,
             }
         return score_map[name]
 
@@ -1331,18 +1332,59 @@ def compute_diligence_scores(target_month: int | None = None,
         if name not in score_map:
             _ensure(name)
 
-    # ── สูตรคะแนนใหม่ (100): จบ20 จอง10 Conv30 ติดตาม30 แบน10 ──
+    # ── ส่วน 3: ความเร็ว (จอง→เซ็น→ผล→ปล่อย) ของเคสปล่อยในเดือน ──
+    # 3 ช่วง: จอง→เซ็น ≤3วัน · เซ็น→ผล ≤3วัน · ผล→ปล่อย ≤1วัน
+    # แต่ละช่วง: ทันกำหนด=1.0, เกินค่อยลดเชิงเส้นถึง 0 ที่ 3× กำหนด, วันว่าง/parse ไม่ได้=0
+    def _stage_score(d_from: str, d_to: str, deadline: int) -> float:
+        a, b = parse_date(d_from or ""), parse_date(d_to or "")
+        if not a or not b:
+            return 0.0
+        days = (b - a).days
+        if days <= deadline:
+            return 1.0
+        return max(0.0, 1 - (days - deadline) / (2 * deadline))
+
+    def _case_velocity(bc: dict) -> float:
+        s1 = _stage_score(bc.get("date"), bc.get("signDate"), 3)
+        s2 = _stage_score(bc.get("signDate"), bc.get("resultDate"), 3)
+        s3 = _stage_score(bc.get("resultDate"), bc.get("releaseDate"), 1)
+        return (s1 + s2 + s3) / 3.0   # [0,1]
+
+    vel_acc: dict[str, list] = {}
+    for bc in booking_cases:
+        if bc.get("status") != "ปล่อย":
+            continue
+        rd = bc.get("releaseDate") or ""
+        dm = get_month(rd) if rd and rd != "-" else 0
+        if dm == 0:
+            dm = get_month(bc.get("date", ""))
+        if dm != m:
+            continue
+        name = bc.get("seller")
+        if name not in score_map:
+            if name in ALL_SELLERS or name == "ADMIN":
+                _ensure(name)
+            else:
+                continue
+        vel_acc.setdefault(name, []).append(_case_velocity(bc))
+
+    # ── สูตรคะแนนใหม่ (100): จบ30 จอง10 Conv20 ความเร็ว10 ติดตาม20 แบน10 ──
     for e in score_map.values():
-        e["sDone"] = round(min(e["dones"] / 15, 1) * 20, 1)
-        e["sJong"] = round(min(e["jongs"] / 60, 1) * 10, 1)
+        e["sDone"] = round(min(e["dones"] / 15, 1) * 30, 1)
+        e["sJong"] = round(min(e["jongs"] / 30, 1) * 10, 1)
         conv = (e["dones"] / e["leads"] * 100) if e["leads"] else 0
         e["conv"] = round(conv, 1)
-        e["sConv"] = round(min(conv / 5, 1) * 30, 1)
+        e["sConv"] = round(min(conv / 5, 1) * 20, 1)
+        fr = vel_acc.get(e["name"], [])
+        e["velN"] = len(fr)
+        vel = (sum(fr) / len(fr)) if fr else 0
+        e["velPct"] = round(vel * 100)
+        e["sVel"] = round(vel * 10, 1)
         completion = (e["capUpd"] / (4 * e["cnt"])) if e["cnt"] else 0
         e["completion"] = round(completion * 100)
-        e["sFollow"] = round(completion * 30, 1)
+        e["sFollow"] = round(completion * 20, 1)
         e["sBan"] = max(0, 10 - e["bans"])
-        e["score"] = round(e["sDone"] + e["sJong"] + e["sConv"] + e["sFollow"] + e["sBan"], 1)
+        e["score"] = round(e["sDone"] + e["sJong"] + e["sConv"] + e["sVel"] + e["sFollow"] + e["sBan"], 1)
 
     # Sort by score desc
     out = sorted(score_map.values(), key=lambda x: -x["score"])
@@ -1367,8 +1409,8 @@ def export_leadscore_to_sheet(target_month: int | None = None,
     header = [
         "เซลล์", "ทีม", "Score รวม (100)",
         "Lead", "ปล่อย", "จอง", "เคสติดตาม",
-        "Conv %", "ติดตาม %", "โดนแบน",
-        "จบ /20", "จอง /10", "Conv /30", "ติดตาม /30", "แบน /10",
+        "Conv %", "ติดตาม %", "ความเร็ว %", "โดนแบน",
+        "จบ /30", "จอง /10", "Conv /20", "ความเร็ว /10", "ติดตาม /20", "แบน /10",
         "เดือน", "ปี", "อัพเดทเมื่อ",
     ]
     rows = [header]
@@ -1376,8 +1418,8 @@ def export_leadscore_to_sheet(target_month: int | None = None,
         rows.append([
             e["name"], e["team"], e["score"],
             e["leads"], e["dones"], e["jongs"], e["cnt"],
-            e["conv"], e["completion"], e["bans"],
-            e["sDone"], e["sJong"], e["sConv"], e["sFollow"], e["sBan"],
+            e["conv"], e["completion"], e["velPct"], e["bans"],
+            e["sDone"], e["sJong"], e["sConv"], e["sVel"], e["sFollow"], e["sBan"],
             month_name, y, generated_at,
         ])
 

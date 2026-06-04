@@ -148,14 +148,16 @@ python manage.py runserver
 แทนสูตร Diligence/Max-Normalization เดิม. คิดแบบ **เทียบเป้าตายตัว** (ถึงเป้า=เต็ม, ไม่ถึงคิดสัดส่วน):
 | ด้าน | เต็ม | สูตร |
 |---|---|---|
-| จบ (ปล่อย) | 20 | `min(ปล่อย/15,1)×20` |
-| จอง | 10 | `min(จอง/60,1)×10` |
-| Conv | 30 | `min((ปล่อย/lead×100)/5,1)×30` (ได้ 5%=เต็ม) |
-| ติดตาม | 30 | `(Σmin(อัพเดท,4) / (4×เคสที่ต้องตาม)) ×30` |
+| จบ (ปล่อย) | 30 | `min(ปล่อย/15,1)×30` |
+| จอง | 10 | `min(จอง/30,1)×10` |
+| Conv | 20 | `min((ปล่อย/lead×100)/5,1)×20` (ได้ 5%=เต็ม) |
+| ความเร็ว | 10 | เคสปล่อย: เฉลี่ย 3 ช่วง (จอง→เซ็น ≤3วัน · เซ็น→ผล ≤3วัน · ผล→ปล่อย ≤1วัน) ×10 |
+| ติดตาม | 20 | `(Σmin(อัพเดท,4) / (4×เคสที่ต้องตาม)) ×20` |
 | โดนแบน | 10 | `max(0, 10−จำนวนแบนเดือนนั้น)` |
-- **2 ที่ต้อง sync กัน**: JS `buildDilMap()` (scorecard ที่โชว์จริง, ใน [index.html](dashboard/templates/dashboard/index.html), const `DONE_TGT/JONG_TGT/CONV_TGT`) + Python `compute_diligence_scores()` (สำหรับ export → sheet "leadscore"). แก้สูตรต้องแก้ทั้งคู่
+- **ความเร็ว (velocity)**: วัดเฉพาะ**เคสที่ปล่อยแล้ว** (status="ปล่อย") ในช่วงที่เลือก. แต่ละช่วง: ทันกำหนด=1.0, เกินลดเชิงเส้นถึง 0 ที่ **3× กำหนด** (เช่น จอง→เซ็น: 3วัน=เต็ม, 9วัน=0). **ช่องวันว่าง/parse ไม่ได้ = 0 ช่วงนั้น** (จูงใจให้เซลล์กรอก `signDate`/`resultDate` ในชีตยอดขาย). ใช้ฟิลด์ booking_cases: `date`(จอง C) `signDate`(เซ็น O) `resultDate`(ผล T) `releaseDate`(ปล่อย V). JS helper `_stageScore()` + const `VEL_STAGES` · Python `_stage_score()`+`_case_velocity()`
+- **2 ที่ต้อง sync กัน**: JS `buildDilMap()` (scorecard ที่โชว์จริง, ใน [index.html](dashboard/templates/dashboard/index.html), const `DONE_TGT=15/JONG_TGT=30/CONV_TGT=5` + `VEL_STAGES`) + Python `compute_diligence_scores()` (สำหรับ export → sheet "leadscore"). แก้สูตรต้องแก้ทั้งคู่
 - **ข้อมูลแบน**: `fetch_ban_counts_by_month()` อ่าน tab **"รายงานแบน"** (`SHEET_CONFIG["ban_report"]`, ไฟล์ live) — log 1 แถว=1 ครั้ง (`BAN_COL`), นับตาม banDate. inject เข้า `sellers[].bans` + `monthlySummary[m].sellers[name]["bans"]`
-- เปิด modal คะแนน → ปุ่ม "ดูสูตรคะแนน" (`showScoreHelp`) อธิบาย 5 ด้าน
+- เปิด modal คะแนน → ปุ่ม "ดูสูตรคะแนน" (`showScoreHelp`) อธิบาย 6 ด้าน
 
 ### Seller page KPI structure (`seller.html`)
 หน้าเซลล์ (`/s/<token>/`) แบ่ง KPI เป็น 2 zones — ตัวเลขใหญ่ = ภาพรวม, chip = filter ลึกลง:
