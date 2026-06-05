@@ -3447,6 +3447,7 @@
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd)">ชื่อเล่น</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:70px">ทีม</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:90px">เป้า/เดือน</th>
+          <th style="text-align:center;padding:5px 6px;color:var(--amber);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:60px" title="ติ๊ก = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย (login แล้วเป็นแอดมิน)">👑 แอดมิน</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:170px">URL ส่วนตัว</th>
           <th style="border-bottom:.5px solid var(--bd);width:32px"></th>
         </tr></thead>
@@ -3462,6 +3463,7 @@
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.name)}" oninput="__scRows[${i}].name=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input list="sc-teams" value="${h(s.team)}" oninput="__scRows[${i}].team=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:center;font-weight:700;text-transform:uppercase"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input type="number" min="0" value="${s.target}" oninput="__scRows[${i}].target=parseInt(this.value)||0;__scUpdateTotal()" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:right"></td>
+              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><input type="checkbox" ${s.is_admin?'checked':''} onchange="__scRows[${i}].is_admin=this.checked" title="ติ๊ก = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย" style="width:16px;height:16px;cursor:pointer;accent-color:var(--amber)"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)">${urlCell}</td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><button onclick="__scDeleteRow(${i})" title="ลบเซลล์นี้" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px">ลบ</button></td>
             </tr>
@@ -3492,7 +3494,7 @@
     }
 
     function __scAddRow() {
-      __scRows.push({ name: '', team: '', target: 0 });
+      __scRows.push({ name: '', team: '', target: 0, is_admin: false });
       const modal = document.querySelector('#sconfig-overlay > div');
       if (modal && modal.__sellerConfigData) drawSellerConfigBody(modal, modal.__sellerConfigData);
     }

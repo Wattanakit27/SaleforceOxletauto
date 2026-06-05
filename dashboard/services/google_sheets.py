@@ -213,11 +213,12 @@ class EMPLOYEE_COL:
 
 class SELLER_CONFIG_COL:
     # ตั้งค่าเซลล์ tab — admin แก้ใน Google Sheets ตรงๆ ได้
-    # Row format: ชื่อเล่น | ทีม (A/B/C) | เป้าต่อเดือน
+    # Row format: ชื่อเล่น | ทีม (A/B/C) | เป้าต่อเดือน | แอดมิน (TRUE/ว่าง)
     # หมายเหตุ: ไม่มี column token แล้ว — URL ส่วนตัวเซลล์ใช้ LINE user_id (จาก employees sheet)
     nickname = 0
     team = 1
     target = 2
+    is_admin = 3   # คอลัมน์ D — TRUE = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย (login แล้วเป็น admin)
 
 class SCHEDULE_COL:
     # ตั้งเวลาส่ง tab — ตารางเวลา trigger LINE Flex

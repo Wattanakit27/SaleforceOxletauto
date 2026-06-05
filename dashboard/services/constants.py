@@ -44,6 +44,15 @@ for tid, members in TEAMS.items():
     for name in members:
         TEAM_ID[name] = tid
 
+# เซลล์ที่ได้สิทธิ์ "แอดมินด้วย" (ติ๊กคอลัมน์ "แอดมิน" ในชีตตั้งค่าเซลล์)
+# → login ด้วย LINE user_id แล้วได้ position=admin แต่ยังนับเป็นเซลล์ปกติ
+# mutate in-place เท่านั้น (.clear()/.update()) — กัน import binding หาย
+ADMIN_SELLERS: set[str] = set()
+
+
+def _is_truthy_flag(v: str) -> bool:
+    return (v or "").strip().lower() in ("true", "1", "yes", "y", "✓", "✔", "admin", "ใช่")
+
 
 def refresh_from_sheet() -> bool:
     """อ่าน sheet "ตั้งค่าเซลล์" แล้ว mutate TEAMS/TARGETS/ALL_SELLERS/TEAM_ID in-place.
@@ -65,6 +74,7 @@ def refresh_from_sheet() -> bool:
 
     new_teams: dict[str, list[str]] = {}
     new_targets: dict[str, int] = {}
+    new_admins: set[str] = set()
     for r in rows:
         name = SELLER_MAP.get(cell(r, SC.nickname).strip(), cell(r, SC.nickname).strip())
         if not name or name in ("ชื่อเล่น", "nickname", "Nickname"):
@@ -75,6 +85,8 @@ def refresh_from_sheet() -> bool:
             continue
         new_teams.setdefault(team, []).append(name)
         new_targets[name] = target
+        if _is_truthy_flag(cell(r, SC.is_admin)):
+            new_admins.add(name)
 
     if not new_targets:
         return False  # sheet ว่าง → fallback
@@ -90,6 +102,9 @@ def refresh_from_sheet() -> bool:
 
     TEAM_ID.clear()
     TEAM_ID.update({n: tid for tid, ms in TEAMS.items() for n in ms})
+
+    ADMIN_SELLERS.clear()
+    ADMIN_SELLERS.update(new_admins)
     return True
 
 RJ_TYPES = ["RJ", "Hot RJ", "Hot RB"]

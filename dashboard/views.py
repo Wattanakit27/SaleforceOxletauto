@@ -225,11 +225,18 @@ def login_view(request):
                     position = (cell(r, EM.position) or "").strip().lower()
                     nickname = cell(r, EM.nickname)
                     display = cell(r, EM.display_name)
+                    # เซลล์ที่ super-admin ติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์ → ได้สิทธิ์ admin
+                    # (ยังนับเป็นเซลล์ปกติในสถิติ — แค่ได้สิทธิ์ดู/ใช้เครื่องมือ admin เพิ่ม)
+                    from .services.constants import normalize_seller, ADMIN_SELLERS, refresh_from_sheet
+                    refresh_from_sheet()
+                    if normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
+                        position = "admin"
                     request.session["oxlet_user"] = {
                         "user_id": line_token,
                         "nickname": nickname,
                         "display_name": display,
                         "position": position or "seller",
+                        "seller_name": (nickname or "").strip(),
                     }
                     request.session.set_expiry(60 * 60 * 24 * 30)
                     # เซลล์ทั่วไป → /s/<user_id>/, ผู้บริหาร → /dashboard/
@@ -403,7 +410,7 @@ def admin_seller_config(request):
     if not user or user.get("position") != "admin":
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
 
-    from .services.constants import refresh_from_sheet, TEAMS, TARGETS
+    from .services.constants import refresh_from_sheet, TEAMS, TARGETS, ADMIN_SELLERS
     from .services.google_sheets import SHEET_CONFIG, write_sheet
     from .services.line_notify import get_nickname_to_user_id
 
@@ -436,14 +443,18 @@ def admin_seller_config(request):
             if name in seen_names:
                 return JsonResponse({"error": f"ชื่อเล่นซ้ำ: {name}"}, status=400)
             seen_names.add(name)
-            cleaned.append([name, team, target])
+            is_admin = bool(s.get("is_admin"))
+            cleaned.append([name, team, target, is_admin])
 
         if not cleaned:
             return JsonResponse({"error": "ต้องมีอย่างน้อย 1 เซลล์"}, status=400)
 
-        # เรียง by team, name แล้วใส่ header
+        # เรียง by team, name แล้วใส่ header (คอลัมน์ D = "แอดมิน": TRUE/ว่าง)
         cleaned.sort(key=lambda r: (r[1], r[0]))
-        values = [["ชื่อเล่น", "ทีม", "เป้า"]] + cleaned
+        values = [["ชื่อเล่น", "ทีม", "เป้า", "แอดมิน"]] + [
+            [name, team, target, ("TRUE" if is_admin else "")]
+            for name, team, target, is_admin in cleaned
+        ]
 
         try:
             write_sheet("sellers_config", values)
@@ -472,6 +483,7 @@ def admin_seller_config(request):
                 "team": tid,
                 "target": TARGETS.get(name, 0),
                 "user_id": uid_map.get(name, ""),  # LINE user_id = URL /s/<user_id>/
+                "is_admin": name in ADMIN_SELLERS,  # ติ๊กแล้ว → login เป็นแอดมิน
             })
     sellers.sort(key=lambda s: (s["team"], s["name"]))
 

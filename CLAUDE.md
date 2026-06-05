@@ -149,12 +149,19 @@ create table if not exists app_users (
 
 ### Sellers & Teams (Dynamic)
 - **เริ่มต้น (fallback)**: [constants.py](dashboard/services/constants.py) มี `TEAMS` + `TARGETS` hardcode
-- **Override (จริง)**: อ่านจาก Google Sheet tab **"ตั้งค่าเซลล์"** (cols: ชื่อเล่น | ทีม | เป้า)
-  - `fetch_dashboard_data()` เรียก `refresh_from_sheet()` ทุกครั้ง → mutate TEAMS/TARGETS/ALL_SELLERS/TEAM_ID in-place
+- **Override (จริง)**: อ่านจาก Google Sheet tab **"ตั้งค่าเซลล์"** (cols: ชื่อเล่น | ทีม | เป้า | **แอดมิน**)
+  - `fetch_dashboard_data()` เรียก `refresh_from_sheet()` ทุกครั้ง → mutate TEAMS/TARGETS/ALL_SELLERS/TEAM_ID/**ADMIN_SELLERS** in-place
   - Sheet ว่าง/error → fallback ใช้ค่า hardcode
-- **Admin แก้ในระบบ**: ปุ่ม **🎯 ตั้งเป้า/ทีม** → inline edit table → POST เขียนทับ sheet
+- **Admin แก้ในระบบ**: ปุ่ม **🎯 ตั้งเป้า/ทีม** → inline edit table (มี checkbox 👑 แอดมิน) → POST เขียนทับ sheet
 - **เพิ่มเซลล์ใหม่**: แค่เพิ่มแถวใน sheet → ระบบ pickup auto (แต่ token ใน [seller_tokens.py](dashboard/services/seller_tokens.py) ต้องเพิ่มเองสำหรับ URL `/s/`)
 - **`SELLER_MAP`** = normalize ชื่อสะกดต่าง (เจเจ→เจ, กลอฟ→กอล์ฟ) — ใช้ผ่าน `normalize_seller()` เสมอ
+
+#### 👑 เซลล์แอดมิน (admin-seller) — คอลัมน์ "แอดมิน" (D) ในชีตตั้งค่าเซลล์
+แอดมินใหญ่ติ๊กว่าเซลล์คนไหนเป็นแอดมินด้วยได้ (เพราะคนที่เป็นแอดมินเปลี่ยนบ่อย — เพิ่ม/ถอดง่าย):
+- **คอลัมน์ D `is_admin`** ([google_sheets.py](dashboard/services/google_sheets.py) `SELLER_CONFIG_COL.is_admin=3`) = `TRUE`/ว่าง → `refresh_from_sheet()` สร้าง set **`ADMIN_SELLERS`** ([constants.py](dashboard/services/constants.py))
+- **Login**: `login_view` (LINE user_id branch) — ถ้า `normalize_seller(nickname) in ADMIN_SELLERS` → set `position="admin"` → เข้า `/dashboard/` พร้อมเครื่องมือแอดมิน. **ยังนับเป็นเซลล์ปกติในสถิติ** (ยอดมาจากชีต ไม่ขึ้นกับ role)
+- **จัดการ**: ปุ่ม 🎯 ตั้งเป้า/ทีม → checkbox 👑 ต่อเซลล์ → save เขียนคอลัมน์ D (`admin_seller_config` GET ส่ง `is_admin`, POST เขียน header 4 คอลัมน์ + `"TRUE"`/ว่าง)
+- เซลล์แอดมินใช้ปุ่ม "ดูในฐานะ <ตัวเอง>" (impersonate) ดูหน้าเซลล์ตัวเองได้ · ต่างจาก **แอดมินสูงสุด** (env/`app_users role=admin`) ที่ไม่ใช่เซลล์
 
 ### Source of truth สำหรับนับเคสตามสถานะ
 - **"จอง"** → นับจาก **leads sheet** (admin_status หรือ sales_status มีคำว่า "จอง" + ไม่ skipped). ดู `has_booking_status()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py)
