@@ -389,6 +389,17 @@ def _compute_dashboard_data() -> dict:
             "position": cell(row, EM.position),
         })
 
+    # "ADMIN" = ศูนย์รวมเทเลเซลล์ (เคสที่ลงชื่อ "ADMIN" ในชีต = ทีมโทรรวมกัน)
+    # ตั้ง token ของ "ADMIN" = LINE user_id ของเทเลเซลล์คนแรก → dropdown หน้าเซลล์เปิด /s/ ได้
+    # (seller_from_token map ทุกไอดีเทเลเซลล์ → "ADMIN" อยู่แล้ว)
+    try:
+        from .constants import load_admin_user_ids, ADMIN_USER_IDS
+        load_admin_user_ids()
+        if ADMIN_USER_IDS:
+            seller_tokens["ADMIN"] = sorted(ADMIN_USER_IDS)[0]
+    except Exception:
+        pass
+
     # Filter leads
     year_leads = [r for r in raw_leads if is_this_year(cell(r, L.received_date))]
     today_leads = [r for r in raw_leads if is_today(cell(r, L.received_date))]

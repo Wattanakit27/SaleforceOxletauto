@@ -63,6 +63,15 @@ def seller_from_token(token: str) -> str | None:
     if token in TOKEN_TO_SELLER:
         return TOKEN_TO_SELLER[token]
 
+    # 1.5 เทเลเซลล์ — ไอดีในชีต "ตั้งค่าแอดมิน" → เห็นหน้า "ADMIN" (ศูนย์รวมเทเลเซลล์ที่ลงชื่อ ADMIN ในชีต)
+    try:
+        from .constants import load_admin_user_ids, ADMIN_USER_IDS
+        load_admin_user_ids()   # fetch_sheet มี cache → ไม่ช้า
+        if token in ADMIN_USER_IDS:
+            return "ADMIN"
+    except Exception:
+        pass
+
     # 2. LINE user_id lookup จาก employees sheet
     try:
         from .google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
