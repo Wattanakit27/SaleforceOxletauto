@@ -1452,7 +1452,7 @@
         {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow",tip:TIP.follow},
         {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%"+momBadge(m_book),c:"var(--green)",mk:"totalBookings",tip:TIP.book},
         {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,_tgtRange||1)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone",tip:TIP.done},
-        {l:"💰 ยอดปล่อย",v:fmtBaht(dvDeal),s:(dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย")+momBadge(m_deal, false, fmtBaht),c:"var(--green-mid)",mk:"totalDealValue",tip:TIP.deal},
+        {l:ic('lucide:wallet',15)+" ยอดปล่อย",v:fmtBaht(dvDeal),s:(dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย")+momBadge(m_deal, false, fmtBaht),c:"var(--green-mid)",mk:"totalDealValue",tip:TIP.deal},
         {l:"เป้าหมาย",v:fmtNum(_tgtRange),s:rangeMonthCount()>1?(rangeMonthCount()+" เดือน"):"เคส/เดือน",c:"var(--amber)",tip:TIP.target},
         {l:"RJ",v:fmtNum(ms?ms.leadRJ:D.summary.leadRJ),s:"จาก "+(ms?ms.leadNormal:D.summary.leadNormal)+" ปกติ"+momBadge(m_rj, true),c:"var(--red)",mk:"leadRJ",tip:TIP.rj},
       ];
@@ -1497,7 +1497,7 @@
       html += `<div class="card chart-card"><div class="card-title">${ic('lucide:trending-up',16)} ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\nแยก 2 เส้น: Lead ปกติ + RJ\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
       html += `<div class="card chart-card"><div class="card-title">${ic('lucide:bar-chart-3',16)} ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
       html += `<div class="card chart-card span2"><div class="card-title">${ic('lucide:wallet',16)} ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}<span class="info-tip" tabindex="0" data-tip="เงินที่เข้าจริงรายเดือน (หรือรายวัน)\nรวมจาก sale_price ของเคส status = ปล่อย\nดูว่าเดือนไหน peak/ตก">?</span></div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
-      html += `<div class="card chart-card span2"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})<span class="info-tip" tabindex="0" data-tip="โดนัทกราฟแสดงสัดส่วนเคสในแต่ละสถานะ\nสีไหนใหญ่ = bottleneck (เช่น รอเซ็น เยอะ = เร่งเอกสาร)">?</span></div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">${ic('lucide:bar-chart-3',16)} ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})<span class="info-tip" tabindex="0" data-tip="โดนัทกราฟแสดงสัดส่วนเคสในแต่ละสถานะ\nสีไหนใหญ่ = bottleneck (เช่น รอเซ็น เยอะ = เร่งเอกสาร)">?</span></div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
       html += `</div>`;
 
       // Pipeline
@@ -2110,12 +2110,12 @@
     // ── KPI Detail Modal — กดที่ KPI card เพื่อดู trend 12 เดือน + breakdown ──
     function openMetricDetail(metricKey) {
       const cfg = {
-        'totalLeads':     {label:'Lead',         emoji:'📩', color:'#374151', invert:false, fmt:fmtNum},
-        'totalFollow':    {label:'ติดตามอยู่',    emoji:'📞', color:'#3b82f6', invert:true,  fmt:fmtNum},
-        'totalBookings':  {label:'จองแล้ว',       emoji:'📋', color:'#10b981', invert:false, fmt:fmtNum},
-        'totalDone':      {label:'ปิดได้',        emoji:'🏁', color:'#059669', invert:false, fmt:fmtNum},
-        'totalDealValue': {label:'ยอดปล่อย',     emoji:'💰', color:'#059669', invert:false, fmt:fmtBaht},
-        'leadRJ':         {label:'RJ',           emoji:'🚫', color:'#ef4444', invert:true,  fmt:fmtNum},
+        'totalLeads':     {label:'Lead',         emoji:ic('lucide:inbox',18),        color:'#374151', invert:false, fmt:fmtNum},
+        'totalFollow':    {label:'ติดตามอยู่',    emoji:ic('lucide:phone',18),        color:'#3b82f6', invert:true,  fmt:fmtNum},
+        'totalBookings':  {label:'จองแล้ว',       emoji:ic('lucide:clipboard-list',18),color:'#10b981', invert:false, fmt:fmtNum},
+        'totalDone':      {label:'ปิดได้',        emoji:ic('lucide:flag',18),         color:'#059669', invert:false, fmt:fmtNum},
+        'totalDealValue': {label:'ยอดปล่อย',     emoji:ic('lucide:wallet',18),       color:'#059669', invert:false, fmt:fmtBaht},
+        'leadRJ':         {label:'RJ',           emoji:ic('lucide:ban',18),          color:'#ef4444', invert:true,  fmt:fmtNum},
       }[metricKey];
       if (!cfg) return;
       const old = document.getElementById('metric-detail-overlay');
@@ -2896,7 +2896,7 @@
         {l:"ว่าง",v:sd.vacant||0,c:"var(--t3)",     action:`openSellerBookingsModal('${h(effectiveCurS)}','all','ว่าง — ไม่มีในเคสติดตาม')`, hint:"ดูใน sheet"},
         {l:"จอง",v:sd.booking||0,c:"var(--green)",  action:`openSellerBookingsModal('${h(effectiveCurS)}','จอง','')`,  hint:"ดูเคสจอง"},
         {l:"ปิด/เป้า",v:(sd.done||0)+'/'+(sd.target||0),c:(sd.done||0)>=(sd.target||1)?'var(--green)':'var(--amber)', action:`openSellerBookingsModal('${h(effectiveCurS)}','ปล่อย','')`, hint:"ดูเคสที่ปล่อย"},
-        {l:"💰 ยอดปล่อย",v:fmtBaht(sd.dealValue||0),c:"var(--green-mid)", action:`openSellerBookingsModal('${h(effectiveCurS)}','ปล่อย','')`, hint:"ดูเคสที่ปล่อย"},
+        {l:ic('lucide:wallet',15)+" ยอดปล่อย",v:fmtBaht(sd.dealValue||0),c:"var(--green-mid)", action:`openSellerBookingsModal('${h(effectiveCurS)}','ปล่อย','')`, hint:"ดูเคสที่ปล่อย"},
         {l:"ยังไม่โทร",v:noU,c:noU>10?'var(--red)':'var(--amber)', action:`curF='notcalled';lfPage=1;render()`, hint:"ดูเคสยังไม่โทร"},
       ];
       html += `<div class="kgrid" style="margin-bottom:10px">`;
