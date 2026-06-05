@@ -19,6 +19,8 @@
     })();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Iconify (web component) — ไอคอนเส้นโมเดิร์นแทนอิโมจิ · upgrade เองตอนยัด innerHTML -->
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <style>
     /* Mobile safety — ป้องกัน horizontal scroll + KPI grid overflow */
     * { box-sizing: border-box; }
@@ -246,6 +248,8 @@
 
     // ── Helpers ──
     const h = (s) => s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+    // ไอคอน Iconify (Lucide) — ใช้แทนอิโมจิ. คืนเป็น HTML string ใส่ใน innerHTML ได้เลย (inherit currentColor)
+    const ic = (name, size=16) => `<iconify-icon icon="${name}" width="${size}" height="${size}" style="vertical-align:-0.15em"></iconify-icon>`;
     const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
     const nc = (u) => Math.max(0, C.UPD_TGT - u);
     const urg = (l) => { let s = l.updateCount===0?100:0; s += nc(l.updateCount)*10; return s; };
@@ -1039,7 +1043,7 @@
       if (typeof render === 'function') render();  // refresh ไอคอนปุ่ม + สีกราฟ
     }
     function themeIcon() {
-      return document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+      return document.documentElement.getAttribute('data-theme') === 'dark' ? ic('lucide:sun',15) : ic('lucide:moon',15);
     }
 
     // ── Render engine ──
@@ -1106,9 +1110,9 @@
         html += `</select>`;
       }
       html += `<button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:13px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>`;
-      html += `<button onclick="location.reload()" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">🔄 รีเฟรช</button>`;
+      html += `<button onclick="location.reload()" style="font-size:11px;padding:4px 11px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:refresh-cw',13)} รีเฟรช</button>`;
       // ออกจากระบบ — ทุกคนที่เห็นหน้านี้ login แล้ว (admin/ผู้บริหาร). role กำหนดตอน login ที่ /login/
-      html += `<button onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">🚪 ออกจากระบบ</button>`;
+      html += `<button onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:11px;padding:4px 11px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:log-out',13)} ออกจากระบบ</button>`;
       html += `</div></header>`;
 
       // Last fetch
@@ -2751,7 +2755,7 @@
       let base = (FD.bookingCases||[]).filter(b=>ir(_effDate(b)));
       if(bkSel!=='all') base = base.filter(b=>b.seller===bkSel);
       const STAGES = ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'];
-      const STAT_EMOJI = {'จอง':'📝','รอเซ็นต์':'✍️','รอผล':'⏳','รอปล่อย':'🚗','ปล่อย':'✅','รีเจ็ก':'❌'};
+      const STAT_EMOJI = {'จอง':ic('lucide:bookmark',14),'รอเซ็นต์':ic('lucide:pen-line',14),'รอผล':ic('lucide:hourglass',14),'รอปล่อย':ic('lucide:car-front',14),'ปล่อย':ic('lucide:circle-check',14),'รีเจ็ก':ic('lucide:circle-x',14)};
       const counts = {}; let releasedVal = 0;
       C.STATUS_ORDER.forEach(s=>counts[s]=0);
       base.forEach(b=>{ counts[b.status]=(counts[b.status]||0)+1; if(b.status==='ปล่อย') releasedVal+=(b.price||0); });
@@ -2779,7 +2783,7 @@
         const clickAttr = (gi!=null) ? `onclick="openBookingDetail(${gi})" style="cursor:pointer"` : '';
         const ci = STAGES.indexOf(b.status);
         let stepper;
-        if(b.status==='รีเจ็ก'){ stepper = `<span style="font-size:10px;color:#fff;font-weight:700;opacity:.95">❌ ไม่อนุมัติ</span>`; }
+        if(b.status==='รีเจ็ก'){ stepper = `<span style="font-size:10px;color:#fff;font-weight:700;opacity:.95;display:inline-flex;align-items:center;gap:3px">${ic('lucide:circle-x',12)} ไม่อนุมัติ</span>`; }
         else { stepper = `<span style="display:inline-flex;align-items:center">`+STAGES.map((s,i)=>{ const on=ci>=0&&i<=ci; const dot=`<span title="${h(s)}" style="width:7px;height:7px;border-radius:50%;background:${on?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`; const ln=i<STAGES.length-1?`<span style="width:9px;height:2px;background:${(ci>=0&&i<ci)?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`:''; return dot+ln; }).join('')+`</span>`; }
         const _pending = (b.status!=='ปล่อย' && b.status!=='รีเจ็ก');
         const _ag = ageOf(b.date);
