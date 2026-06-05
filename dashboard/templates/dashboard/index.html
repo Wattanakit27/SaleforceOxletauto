@@ -2745,33 +2745,52 @@
 
     // ── BOOKING TAB ──
     function renderBookings(sellerNames) {
-      let bk = [...(FD.bookingCases||[])];
-      if(bkSel!=='all') bk=bk.filter(b=>b.seller===bkSel);
-      if(bkStatus!=='all') bk=bk.filter(b=>b.status===bkStatus);
-      bk=bk.filter(b=>ir(b.date));
+      // base = กรอง seller + ช่วงวันที่ (ยังไม่กรองสถานะ — ไว้ทำแถบสรุป pipeline)
+      let base = (FD.bookingCases||[]).filter(b=>ir(b.date));
+      if(bkSel!=='all') base = base.filter(b=>b.seller===bkSel);
+      const STAGES = ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'];
+      const STAT_EMOJI = {'จอง':'📝','รอเซ็นต์':'✍️','รอผล':'⏳','รอปล่อย':'🚗','ปล่อย':'✅','รีเจ็ก':'❌'};
+      const counts = {}; let releasedVal = 0;
+      C.STATUS_ORDER.forEach(s=>counts[s]=0);
+      base.forEach(b=>{ counts[b.status]=(counts[b.status]||0)+1; if(b.status==='ปล่อย') releasedVal+=(b.price||0); });
+      let bk = (bkStatus==='all') ? [...base] : base.filter(b=>b.status===bkStatus);
       bk.sort((a,b)=>{const ai=C.STATUS_ORDER.indexOf(a.status);const bi=C.STATUS_ORDER.indexOf(b.status);return(ai===-1?99:ai)-(bi===-1?99:bi);});
+      const gidx = new Map((D.bookingCases||[]).map((b,i)=>[b,i]));
+      const ageOf = (ds)=>{const d=_parseDmy(ds);return d?Math.floor((Date.now()-d.getTime())/86400000):null;};
+      const ageCol = (n)=> n>90?'var(--red)':n>30?'var(--amber)':'var(--green-mid)';
 
       let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div style="font-size:13px;font-weight:600">Pipeline จอง</div>`;
-      html += `<div style="display:flex;gap:6px;align-items:center">`;
+      html += `<div style="font-size:13px;font-weight:600">Pipeline จอง${releasedVal>0?` · <span style="color:var(--green)">ปล่อย ${fmtBaht(releasedVal)}</span>`:''}</div>`;
       html += `<select onchange="bkSel=this.value;render()"><option value="all">ทุกเซลล์</option>`;
       sellerNames.forEach(n=>{html+=`<option value="${h(n)}" ${bkSel===n?'selected':''}>${h(n)}</option>`;});
-      html += `</select>`;
-      html += `<select onchange="bkStatus=this.value;render()"><option value="all">ทุกสถานะ</option>`;
-      C.STATUS_ORDER.forEach(s=>{html+=`<option value="${h(s)}" ${bkStatus===s?'selected':''}>${h(s)}</option>`;});
-      html += `</select></div></div>`;
+      html += `</select></div>`;
+      // แถบสรุป pipeline (กดเพื่อ filter ตามสถานะ)
+      html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px">`;
+      html += `<button onclick="bkStatus='all';render()" style="flex-shrink:0;border:none;cursor:pointer;border-radius:10px;padding:7px 12px;font-size:11px;font-weight:700;background:${bkStatus==='all'?'var(--blue)':'var(--bg2)'};color:${bkStatus==='all'?'#fff':'var(--t2)'}">ทั้งหมด ${base.length}</button>`;
+      C.STATUS_ORDER.forEach(s=>{ const c=counts[s]||0, col=C.STATUS_COLOR[s]||'#888', active=bkStatus===s; html += `<button onclick="bkStatus='${h(s)}';render()" style="flex-shrink:0;border:1px solid ${col}55;cursor:pointer;border-radius:10px;padding:7px 12px;font-size:11px;font-weight:700;background:${active?col:'transparent'};color:${active?'#fff':col};opacity:${c===0?.45:1}">${STAT_EMOJI[s]||''} ${h(s)} ${c}</button>`; });
+      html += `</div>`;
 
-      if(bk.length===0) html += `<div style="text-align:center;padding:24px;color:var(--t3);font-size:13px">ไม่มีเคสในระบบ</div>`;
+      if(bk.length===0) return html + `<div style="text-align:center;padding:24px;color:var(--t3);font-size:13px">ไม่มีเคสในสถานะนี้</div>`;
       bk.forEach(b=>{
         const color = C.STATUS_COLOR[b.status]||'#6b7280';
+        const gi = gidx.get(b);
+        const clickAttr = (gi!=null) ? `onclick="openBookingDetail(${gi})" style="cursor:pointer"` : '';
+        const ci = STAGES.indexOf(b.status);
+        let stepper;
+        if(b.status==='รีเจ็ก'){ stepper = `<span style="font-size:10px;color:#fff;font-weight:700;opacity:.95">❌ ไม่อนุมัติ</span>`; }
+        else { stepper = `<span style="display:inline-flex;align-items:center">`+STAGES.map((s,i)=>{ const on=ci>=0&&i<=ci; const dot=`<span title="${h(s)}" style="width:7px;height:7px;border-radius:50%;background:${on?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`; const ln=i<STAGES.length-1?`<span style="width:9px;height:2px;background:${(ci>=0&&i<ci)?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`:''; return dot+ln; }).join('')+`</span>`; }
+        const _pending = (b.status!=='ปล่อย' && b.status!=='รีเจ็ก');
+        const _ag = ageOf(b.date);
+        const agePill = (_pending && _ag!=null) ? `<span style="background:rgba(255,255,255,.92);color:${ageCol(_ag)};font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap">⏳ ค้าง ${_ag} วัน</span>` : '';
         let keyDate='',keyLabel='',needDate=false;
         if(b.status==='รอเซ็นต์'){keyLabel='นัดเซ็น';keyDate=b.signDate;needDate=empty(b.signDate);}
         else if(b.status==='รอผล'){keyLabel='ผลออก';keyDate=b.resultDate;needDate=empty(b.resultDate);}
         else if(b.status==='รอปล่อย'){keyLabel='ปล่อยรถ';keyDate=b.releaseDate;needDate=empty(b.releaseDate);}
         else if(b.status==='ปล่อย'){keyLabel='ปล่อยแล้ว';keyDate=b.releaseDate;}
         else if(b.status==='จอง'){keyLabel='วันจอง';keyDate=b.date;}
-        html += `<div class="booking-card">`;
+        html += `<div class="booking-card" ${clickAttr}>`;
         html += `<div class="booking-head" style="background:linear-gradient(135deg,${color} 0%,${color}cc 100%)">`;
+        html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">${stepper}<span style="margin-left:auto">${agePill}</span></div>`;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:#fff;font-weight:700;background:rgba(0,0,0,.2);padding:2px 8px;border-radius:20px">${h(b.status)}</span><span style="font-size:11px;color:#fff;opacity:.9">${h(b.seller)}${b.isCash?' · 💵 ซื้อสด':''}</span></div>`;
         html += `<div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:2px">${h(b.customer)}</div>`;
         html += `<div style="font-size:11px;color:rgba(255,255,255,.8)">${h(b.car)}${b.plate&&b.plate!=='-'?' · '+h(b.plate):''}</div></div>`;
@@ -2783,6 +2802,7 @@
         if(b.finance&&!empty(b.finance)) html += `<div class="brow"><span class="blbl">🏦 ไฟแนนซ์</span><span class="bval">${h(b.finance)}${b.grade&&!empty(b.grade)?' · เกรด '+h(b.grade):''}${b.year&&!empty(b.year)?' · ปี '+h(b.year):''}</span></div>`;
         if(b.leadCode&&!empty(b.leadCode)) html += `<div class="brow"><span class="blbl">🔖 Lead Code</span><span class="bval" style="color:var(--blue);cursor:pointer" onclick="event.stopPropagation();openCaseFromOverview('${h(b.leadCode)}','${h(b.seller)}')">${h(b.leadCode)} →</span></div>`;
         if(b.note&&!empty(b.note)) html += `<div class="brow"><span class="blbl">📝 หมายเหตุ</span><span class="bval" style="color:var(--t2)">${h(b.note)}</span></div>`;
+        html += `<div style="text-align:center;padding-top:7px"><span style="font-size:10px;color:var(--t3)">👆 กดดูรายละเอียด · ไทม์ไลน์</span></div>`;
         html += `</div></div>`;
       });
       return html;
