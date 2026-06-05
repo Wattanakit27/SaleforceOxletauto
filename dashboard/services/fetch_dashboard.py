@@ -1736,25 +1736,31 @@ def fetch_seller_stats(seller_name: str) -> dict:
 
 # Default config — ใช้ตอน sheet ว่างหรืออ่านไม่ได้
 _LEAD_SCORE_DEFAULTS: dict[str, int] = {
+    # ── ความใหม่ (Freshness) ──
     "Lead ใหม่ (≤3 วัน)": 20,
     "Lead ปานกลาง (4-7 วัน)": 10,
     "Lead เก่า (8-14 วัน)": 0,
     "Lead เย็น (>14 วัน)": -5,
-    "ประเภท: Normal": 50,
-    "ประเภท: Hot RB": 30,
-    "ประเภท: Hot RJ": 25,
-    "ประเภท: RJ": 15,
-    "รุ่นรถยอดนิยม (top 20)": 20,
-    "ราคารถสูง (≥500,000)": 10,
-    "ราคารถปานกลาง (200-500k)": 5,
-    "เคยจองแล้วยกเลิก": -5,
-    "เคยจอง+ปล่อยสำเร็จ": -10,
+    # ── ประเภท (Type) — ทเยอร์ตามค่าในชีต (match ตรงๆ "ประเภท: <ค่า>") · มิ.ย.69 ──
+    "ประเภท: Very Hot": 60,
+    "ประเภท: Hot": 50,
+    "ประเภท: TLD / Hot": 50,   # type แยกจาก TLD (มีในชีตจริง x45)
+    "ประเภท: MerHot": 38,
+    "ประเภท: TLD": 35,
+    "ประเภท: Moderate": 35,
+    "ประเภท: BLD": 30,
+    "ประเภท: Hot RB": 28,       # รีเจค
+    "ประเภท: Hot RJ": 22,       # รีเจค
+    "ประเภท: RJ": 15,           # รีเจค
+    # ── ช่องทาง (Channel) ──
     "มาจาก Facebook Ads": 5,
     "มาจาก TikTok / ไลฟ์สด": 10,
     "มาจาก Walk-in / โทรมา": 15,
+    # ── Engagement ──
     "ลูกค้าตอบไลน์/โทรกลับ": 25,
     "ลูกค้าทักก่อน (inbox)": 15,
     "โทรไม่รับเกิน 3 ครั้ง": -10,
+    # (ตัด "รถ/ราคา" + "ประวัติ" ออกแล้ว — มิ.ย.69 ตามเกณฑ์ใหม่)
 }
 
 
@@ -1851,35 +1857,15 @@ def compute_lead_score(lead_row: list,
         else:
             _apply("Lead เย็น (>14 วัน)")
 
-    # 2) Type
+    # 2) Type — match ค่าในชีตตรงๆ ("ประเภท: <value>") → config
+    #    รองรับทุก type (Very Hot/Hot/TLD / Hot/MerHot/TLD/Moderate/BLD/Hot RB/Hot RJ/RJ)
+    #    เพิ่ม type ใหม่ได้โดยเพิ่มแถวในชีต "เกณฑ์คะแนน lead" — ไม่ต้องแก้โค้ด
+    #    (เดิม else=Normal+50 ทำให้ Moderate/TLD/BLD = 65% ของลีด ได้ +50 เท่า Very Hot → ดูฮอทมั่ว)
     lead_type = cell(lead_row, L.type).strip()
-    if lead_type == "Hot RB":
-        _apply("ประเภท: Hot RB")
-    elif lead_type == "Hot RJ":
-        _apply("ประเภท: Hot RJ")
-    elif lead_type == "RJ":
-        _apply("ประเภท: RJ")
-    else:
-        _apply("ประเภท: Normal")
+    if lead_type:
+        _apply("ประเภท: " + lead_type)
 
-    # 3) Car popularity + price
-    car = cell(lead_row, L.car_formula).strip()
-    if car and car in top_cars:
-        _apply("รุ่นรถยอดนิยม (top 20)")
-    if price_lookup and car in price_lookup:
-        p = price_lookup[car]
-        if p >= 500_000:
-            _apply("ราคารถสูง (≥500,000)")
-        elif p >= 200_000:
-            _apply("ราคารถปานกลาง (200-500k)")
-
-    # 4) History — code เคยอยู่ใน sales_reports หรือไม่
-    code = cell(lead_row, L.lead_code).strip()
-    if code:
-        if code in done_codes:
-            _apply("เคยจอง+ปล่อยสำเร็จ")
-        elif code in cancelled_codes:
-            _apply("เคยจองแล้วยกเลิก")
+    # (ตัด "รถ/ราคา" + "ประวัติ" ออกแล้ว — มิ.ย.69 ตามเกณฑ์ใหม่)
 
     # 5) Channel
     channel = cell(lead_row, L.channel).lower()
@@ -1908,10 +1894,11 @@ def compute_lead_score(lead_row: list,
         _apply("โทรไม่รับเกิน 3 ครั้ง")
 
     # ── สรุป ──
+    # threshold: hot≥55 (Very Hot/Hot/TLD-Hot แม้ลีดเก่า) · warm≥35 (TLD/Moderate/MerHot) · cold = ที่เหลือ
     total = sum(pts for _, pts in breakdown)
-    if total >= 80:
+    if total >= 55:
         tier = "🔥hot"
-    elif total >= 50:
+    elif total >= 35:
         tier = "🌡warm"
     else:
         tier = "❄cold"

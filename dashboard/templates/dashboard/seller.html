@@ -1430,29 +1430,27 @@
           <p style="margin:0 0 10px"><b>Lead Score คือคะแนนคุณภาพของแต่ละ lead</b> บอกว่า "เคสนี้น่าปิดแค่ไหน" — ใช้ priority ว่าโทรอันไหนก่อน</p>
 
           <div style="margin:10px 0;padding:10px 12px;background:var(--bg2);border-radius:8px">
-            <b style="color:var(--blue)">คิดจาก 6 ส่วน:</b>
+            <b style="color:var(--blue)">คิดจาก 4 ส่วน:</b>
             <ul style="margin:6px 0 0 18px;padding:0;font-size:11.5px">
-              <li><b>ความใหม่ (Freshness)</b> — ≤3 วัน +20, เย็น -5</li>
-              <li><b>ประเภท (Type)</b> — Normal +50, RJ +15</li>
-              <li><b>รถ (Car)</b> — รุ่นยอดนิยม +20, ราคาสูง +10</li>
-              <li><b>ประวัติ (History)</b> — เคยยกเลิก -5</li>
-              <li><b>ช่องทาง (Channel)</b> — Walk-in +15, TikTok +10</li>
-              <li><b>Engagement</b> — ลูกค้าตอบ +25, โทรไม่รับ -10</li>
+              <li><b>ความใหม่ (Freshness)</b> — ≤3 วัน +20 · 4-7 วัน +10 · เย็น(&gt;14) -5</li>
+              <li><b>ประเภท (Type)</b> — Very Hot +60 · Hot / TLD&nbsp;Hot +50 · MerHot +38 · TLD / Moderate +35 · BLD +30 · Hot RB +28 · Hot RJ +22 · RJ +15</li>
+              <li><b>ช่องทาง (Channel)</b> — Walk-in +15 · TikTok/ไลฟ์ +10 · FB +5</li>
+              <li><b>Engagement</b> — ลูกค้าตอบ +25 · inbox +15 · โทรไม่รับ -10</li>
             </ul>
           </div>
 
           <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap">
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--red-bg,#fee);border-radius:8px;text-align:center">
               <div style="font-size:14px;font-weight:700;color:var(--red)">${ic('lucide:flame',16)} hot</div>
-              <div style="font-size:10px;color:var(--t3)">≥ 80 คะแนน</div>
+              <div style="font-size:10px;color:var(--t3)">≥ 55 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--amber-bg,#fff7e6);border-radius:8px;text-align:center">
               <div style="font-size:14px;font-weight:700;color:var(--amber)">${ic('lucide:thermometer',16)} warm</div>
-              <div style="font-size:10px;color:var(--t3)">50-79 คะแนน</div>
+              <div style="font-size:10px;color:var(--t3)">35-54 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--blue-bg,#e7f0fd);border-radius:8px;text-align:center">
               <div style="font-size:14px;font-weight:700;color:var(--blue)">${ic('lucide:snowflake',16)} cold</div>
-              <div style="font-size:10px;color:var(--t3)">&lt; 50 คะแนน</div>
+              <div style="font-size:10px;color:var(--t3)">&lt; 35 คะแนน</div>
             </div>
           </div>
 
