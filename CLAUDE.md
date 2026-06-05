@@ -25,7 +25,7 @@ UI เป็น Thai-language, timezone Asia/Bangkok
 ```
 manage.py
 vercel.json              # Vercel build + cron config
-.env                     # secrets (committed in private repo)
+.env                     # secrets — gitignored (ไม่ commit) · local เท่านั้น + Vercel env
 oxlet/
   settings.py            # config, env vars, ALLOWED_HOSTS, WhiteNoise, session
   urls.py
@@ -432,13 +432,11 @@ CRON_SECRET=xxx...
 
 ## Deploy บน Vercel
 
-1. **env vars บน Vercel dashboard** (Settings → Environment Variables) ใส่ทุกตัวจาก `.env`:
-   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `DEBUG=False`
-   - `OXLET_ADMIN_USER`, `OXLET_ADMIN_PASSWORD`
-   - `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`
-   - `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `USE_SUPABASE=True`
-   - **ระบบสมาชิก/เมล**: `GMAIL_APP_PASSWORD`, `EMAIL_HOST_USER=oxletauto@gmail.com`, `APPROVAL_NOTIFY_EMAIL=oxletauto@gmail.com`, `SITE_URL=https://your-app.vercel.app` (ใส่ให้ลิงก์ approve ในเมลชี้โดเมนจริง)
-   - `ALLOWED_HOSTS=your-app.vercel.app`, `CSRF_TRUSTED_ORIGINS=https://your-app.vercel.app`
+1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 8 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
+   - **8 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`, `GMAIL_APP_PASSWORD`
+   - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `EMAIL_HOST_USER`, `APPROVAL_NOTIFY_EMAIL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
+   - **ตัวเลือก**: `DEBUG` (default=False อยู่แล้ว ไม่ต้องตั้งก็ปลอดภัย), `SITE_URL=https://your-app.vercel.app` (ตั้งถ้าอยากให้ลิงก์ approve ในเมลชี้โดเมนจริงแน่ๆ — ไม่ตั้ง=ใช้โดเมนจาก request)
+   - **⚠️ `.env` ถูก gitignored แล้ว (ไม่ commit)** — ประวัติ git ถูกล้าง .env ออกหมดแล้ว (filter-repo + force-push มิ.ย.69). ห้ามเอา .env กลับเข้า git อีก
 
 2. **Use canonical URL** (`your-app.vercel.app`) ไม่ใช่ deployment-specific URL (`your-app-xxx.vercel.app`) — อันยาวมี Vercel Auth wall ป้องกันอยู่
 
