@@ -1,6 +1,6 @@
-# Secrets — keep .env in this private repo on purpose.
-# ถ้า repo เปลี่ยนเป็น public วันไหน ให้ใส่ .env กลับเข้ามาที่ list นี้ทันที
-# .env
+# Secrets — .env ต้องไม่ขึ้น git (ถอดออกจาก tracking แล้ว มิ.ย.69)
+# secrets เก็บใน local .env + Vercel env vars เท่านั้น
+.env
 .env.local
 .env.*.local
 *.pem
