@@ -1106,12 +1106,8 @@
       }
       html += `<button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:13px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>`;
       html += `<button onclick="location.reload()" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">🔄 รีเฟรช</button>`;
-      if (isAdmin) {
-        html += `<button onclick="if(confirm('ออกจากสิทธิ์ Admin? (จะกลับเป็นมุมมองผู้บริหาร)'))location.href='/logout/'" title="ออกจากสิทธิ์ Admin" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">🚪 ออก Admin</button>`;
-      } else if (canViewAll) {
-        // ผู้บริหาร (executive) — โชว์ปุ่ม ADMIN ให้ upgrade ได้
-        html += `<button onclick="openAdminLogin()" title="เข้าสู่ระบบในฐานะ Admin" style="font-size:11px;padding:4px 12px;border-radius:14px;border:.5px solid var(--amber);background:var(--amber-bg);color:var(--amber);cursor:pointer;font-weight:700">🔐 ADMIN</button>`;
-      }
+      // ออกจากระบบ — ทุกคนที่เห็นหน้านี้ login แล้ว (admin/ผู้บริหาร). role กำหนดตอน login ที่ /login/
+      html += `<button onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">🚪 ออกจากระบบ</button>`;
       html += `</div></header>`;
 
       // Last fetch
@@ -3050,80 +3046,13 @@
       tab='s'; curS=seller; showCase=code; updateUrl(); render();
     }
 
-    // ── Admin Login Modal ──
+    // ── CSRF token helper ──
     function getCsrfToken() {
       const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
       return m ? decodeURIComponent(m[1]) : '';
     }
-    function openAdminLogin() {
-      // ปิด modal เก่าถ้ามี
-      const old = document.getElementById('admin-login-overlay');
-      if (old) old.remove();
-      const overlay = document.createElement('div');
-      overlay.id = 'admin-login-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = `
-        <div style="background:var(--bg);border-radius:16px;max-width:360px;width:100%;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">
-          <div style="text-align:center;margin-bottom:16px">
-            <div style="font-size:32px;margin-bottom:6px">🔐</div>
-            <div style="font-size:16px;font-weight:800;color:var(--t1)">เข้าสู่ระบบ Admin</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:2px">เพื่อใช้เครื่องมือสำหรับผู้ดูแลระบบ</div>
-          </div>
-          <div id="admin-login-err" style="display:none;background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:10px;font-size:12px;margin-bottom:12px;border:.5px solid var(--red-mid)"></div>
-          <div style="margin-bottom:10px">
-            <label style="display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">ชื่อผู้ใช้</label>
-            <input id="admin-user" type="text" autocomplete="username" value="admin" style="width:100%;padding:10px 12px;border:.5px solid var(--bd2);border-radius:10px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;box-sizing:border-box">
-          </div>
-          <div style="margin-bottom:14px">
-            <label style="display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">รหัสผ่าน</label>
-            <input id="admin-pass" type="password" autocomplete="current-password" placeholder="••••" style="width:100%;padding:10px 12px;border:.5px solid var(--bd2);border-radius:10px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;box-sizing:border-box">
-          </div>
-          <div style="display:flex;gap:8px">
-            <button onclick="document.getElementById('admin-login-overlay').remove()" style="flex:1;padding:10px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ยกเลิก</button>
-            <button id="admin-login-submit" onclick="submitAdminLogin()" style="flex:2;padding:10px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">เข้าสู่ระบบ</button>
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
-      const u = document.getElementById('admin-user');
-      const p = document.getElementById('admin-pass');
-      p.focus();
-      const onEnter = (e) => { if (e.key === 'Enter') submitAdminLogin(); };
-      u.addEventListener('keydown', onEnter);
-      p.addEventListener('keydown', onEnter);
-    }
-    async function submitAdminLogin() {
-      const u = document.getElementById('admin-user').value.trim();
-      const p = document.getElementById('admin-pass').value;
-      const btn = document.getElementById('admin-login-submit');
-      const errBox = document.getElementById('admin-login-err');
-      errBox.style.display = 'none';
-      btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
-      try {
-        const fd = new FormData();
-        fd.append('username', u);
-        fd.append('password', p);
-        fd.append('next', '/dashboard/');
-        const res = await fetch('/login/', {
-          method: 'POST',
-          body: fd,
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() },
-          credentials: 'same-origin',
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.ok) {
-          location.reload();
-          return;
-        }
-        errBox.textContent = '⚠️ ' + (data.error || 'เข้าสู่ระบบไม่สำเร็จ');
-        errBox.style.display = 'block';
-      } catch (e) {
-        errBox.textContent = '⚠️ เกิดข้อผิดพลาด: ' + e.message;
-        errBox.style.display = 'block';
-      } finally {
-        btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
-      }
-    }
+    // (ลบ openAdminLogin/submitAdminLogin + modal ออก — login ทำที่หน้า /login/ แล้ว
+    //  เลือก role ตอน login, ไม่ต้อง upgrade เป็น admin ในหน้า dashboard อีก)
 
     // ── Seller Config Panel (admin only) — ตั้งเป้า + จัดทีม ผ่าน Google Sheet ──
     // ── 🔍 Diagnostics Panel (admin only) — ดู log การกรองข้อมูล + เคสที่หาย ──
