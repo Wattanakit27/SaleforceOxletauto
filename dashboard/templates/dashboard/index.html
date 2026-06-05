@@ -1061,10 +1061,10 @@
       let html = '';
 
       // Header
-      html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">`;
-      html += `<div style="display:flex;align-items:center;gap:8px">`;
-      html += `<img src="${LOGO_URL}" alt="Oxlet" style="height:28px;width:auto;display:block">`;
-      html += `<span style="font-size:16px;font-weight:700;color:var(--t1)">Oxlet Dashboard</span>`;
+      html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:13px 18px;background:var(--bg);border:.5px solid var(--bd);border-radius:16px;box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
+      html += `<div style="display:flex;align-items:center;gap:13px">`;
+      html += `<img src="${LOGO_URL}" alt="Oxlet" style="height:42px;width:auto;display:block">`;
+      html += `<div style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:22px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span><span style="font-size:10.5px;color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span></div>`;
       // Viewer badge
       if(canViewAll) {
         const roleLabel = isAdmin ? 'Admin' : 'ผู้บริหาร';
@@ -1072,12 +1072,12 @@
         const roleFg = isAdmin ? 'var(--amber)' : 'var(--purple)';
         const roleBd = isAdmin ? 'var(--amber-mid)' : 'var(--purple-mid)';
         if(impersonate) {
-          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง${isAdmin?' Admin':'ผู้บริหาร'}" style="background:var(--purple-bg);color:var(--purple);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--purple-mid);cursor:pointer">👁️ ดูในฐานะ ${h(impersonate)} ✕</button>`;
+          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง${isAdmin?' Admin':'ผู้บริหาร'}" style="background:var(--purple-bg);color:var(--purple);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid var(--purple-mid);cursor:pointer">👁️ ดูในฐานะ ${h(impersonate)} ✕</button>`;
         } else {
-          html += `<span style="background:${roleBg};color:${roleFg};padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid ${roleBd}">${roleLabel} (ทั้งหมด)</span>`;
+          html += `<span style="background:${roleBg};color:${roleFg};padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid ${roleBd}">${roleLabel} (ทั้งหมด)</span>`;
         }
       } else {
-        html += `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600;border:.5px solid var(--blue)">${h(employee.nickname)}</span>`;
+        html += `<span style="background:var(--blue-bg);color:var(--blue);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid var(--blue)">${h(employee.nickname)}</span>`;
       }
       html += `</div>`;
       html += `<div style="display:flex;align-items:center;gap:8px">`;
