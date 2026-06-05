@@ -17,6 +17,8 @@
     })();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Iconify (web component) — ไอคอนเส้นแทนอิโมจิ -->
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { overflow-x: hidden; }
@@ -111,6 +113,8 @@
 
   // ── helpers ──
   const h = (s) => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+  // ไอคอน Iconify (Lucide) แทนอิโมจิ — คืน HTML string (inherit currentColor)
+  const ic = (name, size=16) => `<iconify-icon icon="${name}" width="${size}" height="${size}" style="vertical-align:-0.15em"></iconify-icon>`;
   const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
   const nc = (u) => Math.max(0, C.UPD_TGT - u);
 
@@ -462,7 +466,7 @@
       });
     }
 
-    // 4) Line — 💰 ยอดปล่อย (Deal Value)
+    // 4) Line — ${ic('lucide:wallet',16)} ยอดปล่อย (Deal Value)
     const cv4 = document.getElementById('chart-deal-value');
     if (cv4) {
       destroyChart('dealValue');
@@ -598,7 +602,7 @@
       ${renderAICoachCard()}
 
       ${(() => {
-        // ── 🔔 แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
+        // ── ${ic('lucide:bell',16)} แจ้งเตือนเดือนปัจจุบัน — ไม่ขึ้นกับ filter (เพื่อ remind เซลล์เสมอ) ──
         // exclude junk (คืน/ยกเลิก/จ่ายใหม่/...) + จอง/ปล่อย — ไม่ remind เคสที่จัดการแล้ว
         const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l) && !isBooked(l));
         const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
@@ -617,7 +621,7 @@
       })()}
 
       <div class="filter-bar">
-        <span class="lbl">📅 วันที่รับเคส</span>
+        <span class="lbl">${ic('lucide:calendar',16)} วันที่รับเคส</span>
         <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
         <span style="font-size:11px;color:var(--t3)">ถึง</span>
         <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
@@ -650,7 +654,7 @@
       </div>
 
       ${(() => {
-        // ── ⚠️ เคสค้าง — ยังไม่โทรเกิน 7 วัน ──
+        // ── ${ic('lucide:triangle-alert',16)} เคสค้าง — ยังไม่โทรเกิน 7 วัน ──
         // นับเฉพาะ: เคสที่ยังไม่โทร (updateCount=0) — ไม่ว่ามี/ไม่มีสถานะติดตาม
         // ตัดออก: junk · จอง · ปล่อย (เพราะจัดการไปแล้ว)
         const staleCases = allLeads
@@ -693,7 +697,7 @@
         <div style="background:var(--red-bg,#fee);border:.5px solid var(--red-mid,#fca);border-left:3px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:14px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
             <div style="font-size:13px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:6px">
-              ⚠️ เคสค้าง — ยังไม่โทรเกิน 7 วัน <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">${staleCases.length}</span>
+              ${ic('lucide:triangle-alert',16)} เคสค้าง — ยังไม่โทรเกิน 7 วัน <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">${staleCases.length}</span>
             </div>
             <div style="font-size:10.5px;color:var(--t3)">เรียงจากค้างนานสุด — คลิกดูรายละเอียด</div>
           </div>
@@ -711,7 +715,7 @@
       })()}
 
       ${(() => {
-        // ── 🎯 Lead Score Priority — โทรเคสไหนก่อน ──
+        // ── ${ic('lucide:target',16)} Lead Score Priority — โทรเคสไหนก่อน ──
         // filter: ยังต้องตาม (!isSkipped + !isBooked) + มีคะแนน
         // จอง/ปล่อยแล้ว = จัดการแล้ว ไม่ต้องเตือนให้โทร
         // sort: คะแนนสูงสุดก่อน (hot → warm → cold)
@@ -739,7 +743,7 @@
 
         return `
         <div class="section" style="margin-bottom:14px">
-          <h2 style="display:flex;align-items:center;gap:6px">🎯 โทรเคสไหนก่อน <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(Top ${priorityLeads.length})</span>
+          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:target',16)} โทรเคสไหนก่อน <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(Top ${priorityLeads.length})</span>
             <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);color:var(--t2);font-size:11px;font-weight:700;cursor:help;border:.5px solid var(--bd2);margin-left:4px" onclick="showLeadScoreHelp()" title="ดูสูตร Lead Score">?</span>
           </h2>
           <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เรียงเคสที่ยังต้องตามตาม Lead Score (สด/ประเภท/ช่อง/engagement) — เคสที่คะแนนสูงสุดควรโทรก่อน</div>
@@ -800,7 +804,7 @@
       </div>
 
       ${(() => {
-        // ── 🔻 My Pipeline Funnel — เห็นว่าเคสหายไปตรงไหน ──
+        // ── ${ic('lucide:filter',16)} My Pipeline Funnel — เห็นว่าเคสหายไปตรงไหน ──
         // 4 stage: รับ → ตาม (มี updateCount≥1) → จอง → ปล่อย
         // ใช้ allLeads (in range) + bookings (in range) ที่คำนวณไว้แล้ว
         const received = allLeads.filter(l => !isSkipped(l)).length;
@@ -826,13 +830,13 @@
         // สี + คำแนะนำ insight สำหรับ rate ต่ำๆ
         const rateColor = (r, good, ok) => r >= good ? 'var(--green)' : r >= ok ? 'var(--amber)' : 'var(--red)';
         const insights = [];
-        if (received >= 10 && callRate < 70) insights.push(`📞 โทรไม่ครบ — ตามแค่ ${callRate}% ของที่รับมา`);
-        if (called >= 10 && bookRate < 15)   insights.push(`🔄 จองยาก — ${bookRate}% จากที่ตาม (ทีมเฉลี่ย ~20%)`);
-        if (booked >= 5 && releaseRate < 50) insights.push(`🚗 ปิดดีลยาก — ${releaseRate}% ของจองได้ปล่อย`);
+        if (received >= 10 && callRate < 70) insights.push(`${ic('lucide:phone',16)} โทรไม่ครบ — ตามแค่ ${callRate}% ของที่รับมา`);
+        if (called >= 10 && bookRate < 15)   insights.push(`${ic('lucide:refresh-cw',16)} จองยาก — ${bookRate}% จากที่ตาม (ทีมเฉลี่ย ~20%)`);
+        if (booked >= 5 && releaseRate < 50) insights.push(`${ic('lucide:car-front',16)} ปิดดีลยาก — ${releaseRate}% ของจองได้ปล่อย`);
 
         return `
         <div class="section" style="margin-bottom:14px">
-          <h2 style="display:flex;align-items:center;gap:6px">🔻 Pipeline ของคุณ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
+          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:filter',16)} Pipeline ของคุณ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
           <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เห็นว่าเคสหายไปตรง stage ไหน → ช่วยรู้ว่าควรพัฒนาตรงไหน (รับเยอะแต่ตามไม่ครบ? ตามได้แต่จองไม่ลง?)</div>
 
           <div style="display:grid;gap:6px;margin-bottom:10px">
@@ -840,7 +844,7 @@
             <!-- Stage 1: รับ -->
             <div>
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">📋 รับเข้ามา</span>
+                <span style="color:var(--t2);font-weight:600">${ic('lucide:clipboard-list',16)} รับเข้ามา</span>
                 <span style="font-weight:700;color:var(--t1)">${received} เคส</span>
               </div>
               <div style="height:22px;background:var(--blue);border-radius:5px;width:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">100%</div>
@@ -852,7 +856,7 @@
             <!-- Stage 2: โทรตาม -->
             <div>
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">📞 โทรตามแล้ว</span>
+                <span style="color:var(--t2);font-weight:600">${ic('lucide:phone',16)} โทรตามแล้ว</span>
                 <span style="font-weight:700;color:var(--t1)">${called} เคส</span>
               </div>
               <div style="height:22px;background:var(--amber);border-radius:5px;width:${widthOf(called)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((called/received)*100)}%</div>
@@ -863,7 +867,7 @@
             <!-- Stage 3: จอง -->
             <div>
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">📝 จอง</span>
+                <span style="color:var(--t2);font-weight:600">${ic('lucide:file-pen',16)} จอง</span>
                 <span style="font-weight:700;color:var(--t1)">${booked} เคส</span>
               </div>
               <div style="height:22px;background:var(--green);border-radius:5px;width:${widthOf(booked)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((booked/received)*100)}%</div>
@@ -874,7 +878,7 @@
             <!-- Stage 4: ปล่อย -->
             <div>
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">🚗 ปล่อยรถ</span>
+                <span style="color:var(--t2);font-weight:600">${ic('lucide:car-front',16)} ปล่อยรถ</span>
                 <span style="font-weight:700;color:var(--t1)">${released} เคส</span>
               </div>
               <div style="height:22px;background:#3a8a3a;border-radius:5px;width:${widthOf(released)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${received>0?Math.round((released/received)*100):0}%</div>
@@ -883,7 +887,7 @@
 
           ${insights.length > 0 ? `
             <div style="background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:6px;padding:9px 12px;font-size:11.5px;line-height:1.7;color:var(--t1)">
-              <div style="font-weight:700;color:var(--amber);margin-bottom:3px">💡 สังเกตได้</div>
+              <div style="font-weight:700;color:var(--amber);margin-bottom:3px">${ic('lucide:lightbulb',16)} สังเกตได้</div>
               ${insights.map(i => `<div>• ${h(i)}</div>`).join('')}
             </div>
           ` : `
@@ -935,7 +939,7 @@
       // default: สถานะลูกค้า (Z) สำคัญก่อน → ยังไม่โทรก่อน → โทรน้อยไปมาก
       filtered.sort((a,b) => {
         const pa = a.followPriority||0, pb = b.followPriority||0;
-        if (pa !== pb) return pb - pa;     // 🎯 สนใจมาก > ลังเล > ... ก่อน
+        if (pa !== pb) return pb - pa;     // ${ic('lucide:target',16)} สนใจมาก > ลังเล > ... ก่อน
         const sa = a.updateCount === 0 ? 100 : 0; const sb = b.updateCount === 0 ? 100 : 0;
         if (sa !== sb) return sb - sa;
         return a.updateCount - b.updateCount;
@@ -1016,7 +1020,7 @@
     if (!z) return '';
     const p = l.followPriority || 0;
     const col = p >= 5 ? 'var(--green)' : p >= 3 ? 'var(--amber)' : p >= 1 ? 'var(--blue)' : 'var(--t3)';
-    return `<span class="badge" style="background:${col};color:#fff">🎯 ${h(z)}</span>`;
+    return `<span class="badge" style="background:${col};color:#fff">${ic('lucide:target',16)} ${h(z)}</span>`;
   }
   async function saveLeadNote(code) {
     const overlay = document.getElementById('lead-detail-overlay');
@@ -1184,9 +1188,9 @@
           ${row('จำนวนอัพเดท', `${l.updateCount} / ${C.UPD_TGT} ครั้ง`)}
           ${row('อัพเดทล่าสุด', l.lastUpdate)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 6px">📝 มากรอกชีตกันเถอะ <span style="font-weight:400;color:var(--t3)">(คอลัม S · ${l.updateCount||0} อัพเดท · กรอกแล้วเขียนลงชีตจริง)</span></div>
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 6px">${ic('lucide:file-pen',16)} มากรอกชีตกันเถอะ <span style="font-weight:400;color:var(--t3)">(คอลัม S · ${l.updateCount||0} อัพเดท · กรอกแล้วเขียนลงชีตจริง)</span></div>
           <div id="note-slots">${noteSlotsHtml(l)}</div>
-          <button id="save-note-btn" onclick="saveLeadNote('${(l.code||'').replace(/'/g,'')}')" style="margin-top:6px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">💾 บันทึกลงชีต</button>
+          <button id="save-note-btn" onclick="saveLeadNote('${(l.code||'').replace(/'/g,'')}')" style="margin-top:6px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึกลงชีต</button>
           <div id="save-note-msg" style="font-size:11px;margin-top:6px;text-align:center"></div>
 
           <div style="font-size:11px;color:var(--t3);font-weight:700;margin:16px 0 6px">ข้อมูลลูกค้า <span style="font-weight:400;color:var(--t3)">(กรอกแล้วเขียนลงชีต)</span></div>
@@ -1388,7 +1392,7 @@
     overlay.innerHTML = `
       <div style="background:var(--bg);border-radius:14px;max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
         <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">🎯 Lead Score — สูตรคำนวณ</h3>
+          <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">${ic('lucide:target',16)} Lead Score — สูตรคำนวณ</h3>
           <button onclick="document.getElementById('leadscore-help-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
         </div>
         <div style="padding:14px 18px;overflow-y:auto;flex:1;font-size:12px;line-height:1.7;color:var(--t1)">
@@ -1408,15 +1412,15 @@
 
           <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap">
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--red-bg,#fee);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--red)">🔥 hot</div>
+              <div style="font-size:14px;font-weight:700;color:var(--red)">${ic('lucide:flame',16)} hot</div>
               <div style="font-size:10px;color:var(--t3)">≥ 80 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--amber-bg,#fff7e6);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--amber)">🌡 warm</div>
+              <div style="font-size:14px;font-weight:700;color:var(--amber)">${ic('lucide:thermometer',16)} warm</div>
               <div style="font-size:10px;color:var(--t3)">50-79 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--blue-bg,#e7f0fd);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--blue)">❄ cold</div>
+              <div style="font-size:14px;font-weight:700;color:var(--blue)">${ic('lucide:snowflake',16)} cold</div>
               <div style="font-size:10px;color:var(--t3)">&lt; 50 คะแนน</div>
             </div>
           </div>
@@ -1479,7 +1483,7 @@
     const html = `
       ${modeBar()}
       <div style="background:var(--green-bg,#eaf3de);border:.5px solid var(--green-mid,#1d9e75);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
-        <div style="font-size:26px">📋</div>
+        <div style="font-size:26px">${ic('lucide:clipboard-list',16)}</div>
         <div>
           <div style="font-size:17px;font-weight:800;color:var(--t1)">เช็คเคสไฟแนนซ์ก่อนเซ็น</div>
           <div style="font-size:12px;color:var(--t2)">กรอกข้อมูล แล้วกด "บันทึก & ส่ง LINE" เพื่อส่งให้ Senior อนุมัติ</div>
@@ -1488,7 +1492,7 @@
 
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <input id="fc_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanDoc(this)">
-        <button onclick="document.getElementById('fc_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">📷 สแกนเอกสาร กรอกให้อัตโนมัติ</button>
+        <button onclick="document.getElementById('fc_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนเอกสาร กรอกให้อัตโนมัติ</button>
         <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบอนุมัติ/ฟอร์ม → ระบบกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนกดส่ง</b> (โดยเฉพาะตัวเลข)</span>
         <span id="fc_scan_status" style="font-size:12px"></span>
       </div>
@@ -1535,9 +1539,9 @@
       <div id="fc-preview-box" style="display:none;margin-bottom:10px"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button onclick="previewFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">👁️ ดูตัวอย่าง</button>
-        <button onclick="copyFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">📋 คัดลอกข้อความ</button>
-        <button id="fc-send-btn" onclick="sendFinance()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--green-mid,#1d9e75);color:#fff;font-size:13px;font-weight:800;cursor:pointer">💾 บันทึก & ส่ง LINE</button>
+        <button onclick="previewFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
+        <button onclick="copyFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
+        <button id="fc-send-btn" onclick="sendFinance()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--green-mid,#1d9e75);color:#fff;font-size:13px;font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก & ส่ง LINE</button>
       </div>
     `;
     document.getElementById('root').innerHTML = html;
@@ -1560,22 +1564,22 @@
   function financeText(d) {
     const x = (s) => s || '-';
     const docs = d.docs && d.docs.length ? d.docs.join(', ') : '-';
-    return `📋 เช็คเคสไฟแนนซ์ก่อนเซ็น
+    return `${ic('lucide:clipboard-list',16)} เช็คเคสไฟแนนซ์ก่อนเซ็น
 ━━━━━━━━━━━━
-👤 ลูกค้า: ${x(d.customer)}
-🔖 Lead: ${x(d.leadCode)}  |  สาขา: ${x(d.branch)}
-🚗 รถ: ${x(d.car)}  (${x(d.plate)})
-💰 ราคารถ: ${x(d.price)}
+${ic('lucide:user',16)} ลูกค้า: ${x(d.customer)}
+${ic('lucide:bookmark',16)} Lead: ${x(d.leadCode)}  |  สาขา: ${x(d.branch)}
+${ic('lucide:car-front',16)} รถ: ${x(d.car)}  (${x(d.plate)})
+${ic('lucide:wallet',16)} ราคารถ: ${x(d.price)}
 
-🏦 ไฟแนนซ์: ${x(d.finco)} — ${x(d.status)}
+${ic('lucide:landmark',16)} ไฟแนนซ์: ${x(d.finco)} — ${x(d.status)}
 วงเงินอนุมัติ: ${x(d.approved)}  |  ดาวน์: ${x(d.down)}
 ผ่อน: ${x(d.monthly)} x ${x(d.terms)} งวด
 เงื่อนไข: ${x(d.cond)}
 
-📅 นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}
-📎 เอกสาร: ${docs}
-🧑‍💼 เซลล์: ${x(d.seller)}
-📝 ${x(d.extra)}`;
+${ic('lucide:calendar',16)} นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}
+${ic('lucide:paperclip',16)} เอกสาร: ${docs}
+${ic('lucide:user-round',16)} เซลล์: ${x(d.seller)}
+${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   }
   function previewFinance() {
     const box = document.getElementById('fc-preview-box');
@@ -1587,7 +1591,7 @@
   function copyFinance() {
     navigator.clipboard.writeText(financeText(collectFinance())).then(() => {
       const box = document.getElementById('fc-result');
-      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ คัดลอกข้อความแล้ว</div>`;
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
       setTimeout(() => { box.innerHTML = ''; }, 2000);
     });
   }
@@ -1608,18 +1612,18 @@
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
       } else {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
       }
     } catch (e) {
-      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(e.message)}</div>`;
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
     } finally {
       btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
     }
   }
 
-  // ── 📷 สแกนเอกสาร (Gemini OCR) → เติมฟอร์มเป็นร่าง ──
+  // ── ${ic('lucide:camera',16)} สแกนเอกสาร (Gemini OCR) → เติมฟอร์มเป็นร่าง ──
   function downscaleImage(file, maxDim, quality) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -1669,20 +1673,20 @@
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
+        st.innerHTML = `<span style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
       } else {
         applyScanFields(j.fields || {});
-        st.innerHTML = `<span style="color:var(--green)">✅ กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
+        st.innerHTML = `<span style="color:var(--green)">${ic('lucide:circle-check',16)} กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
       }
     } catch (e) {
-      st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(e.message)}</span>`;
+      st.innerHTML = `<span style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</span>`;
     } finally {
       input.value = '';
     }
   }
 
   // ════════════════════════════════════════════════════════════════
-  // 📄 โหมด "ยื่นสินเชื่อ" (ตามใบกระดาษ ข้อมูลผู้ยื่นขอสินเชื่อ)
+  // ${ic('lucide:file-text',16)} โหมด "ยื่นสินเชื่อ" (ตามใบกระดาษ ข้อมูลผู้ยื่นขอสินเชื่อ)
   // ════════════════════════════════════════════════════════════════
   const LN_BANKS = ['เลือกไฟแนนซ์','AY','KK','ASK','TTB','CIMB','Orico','SCB','Tisco','AEON','Nissan','MIDA'];
   const LN_KEYS = ['customer','age','phone','province','sex','residence','rent','liveYears','marital','children',
@@ -1706,7 +1710,7 @@
     const html = `
       ${modeBar()}
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px solid var(--blue);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
-        <div style="font-size:26px">📄</div>
+        <div style="font-size:26px">${ic('lucide:file-text',16)}</div>
         <div>
           <div style="font-size:17px;font-weight:800;color:var(--t1)">ข้อมูลผู้ยื่นขอสินเชื่อรถยนต์มือสอง</div>
           <div style="font-size:12px;color:var(--t2)">ถ่ายรูปใบยื่น → กรอกอัตโนมัติ → ตรวจ/แก้ → ส่งให้ Senior อนุมัติ</div>
@@ -1715,13 +1719,13 @@
 
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <input id="ln_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanLoanDoc(this)">
-        <button onclick="document.getElementById('ln_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">📷 สแกนใบยื่น กรอกอัตโนมัติ</button>
+        <button onclick="document.getElementById('ln_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนใบยื่น กรอกอัตโนมัติ</button>
         <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบกระดาษ → ระบบอ่านลายมือกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนส่ง</b></span>
         <span id="ln_scan_status" style="font-size:12px"></span>
       </div>
 
       <div class="section">
-        <h2>👤 ข้อมูลผู้เช่าซื้อ (ลูกค้า)</h2>
+        <h2>${ic('lucide:user',16)} ข้อมูลผู้เช่าซื้อ (ลูกค้า)</h2>
         ${grid(
           f('ชื่อลูกค้า', inp('customer','ชื่อ-นามสกุล'), true) +
           f('อายุ', inp('age','ปี')) +
@@ -1737,7 +1741,7 @@
       </div>
 
       <div class="section">
-        <h2>💼 อาชีพ &amp; รายได้</h2>
+        <h2>${ic('lucide:briefcase',16)} อาชีพ &amp; รายได้</h2>
         ${grid(
           f('อาชีพ', sel('occupation',['เลือก','พนักงานบริษัท','เจ้าของกิจการ','ค้าขาย','เกษตรกร','รับเหมา','อื่นๆ'])) +
           f('แหล่งที่มารายได้', sel('incomeSource',['เลือก','เงินเข้าบัญชีอัตโนมัติ','รับเงินสด','นายจ้างโอนเข้าบัญชี'])) +
@@ -1760,7 +1764,7 @@
       </div>
 
       <div class="section">
-        <h2>📊 ประวัติการผ่อน / เครดิต</h2>
+        <h2>${ic('lucide:bar-chart-3',16)} ประวัติการผ่อน / เครดิต</h2>
         ${grid(
           f('ประเภทประวัติผ่อน', sel('loanHistoryType',['เลือก','บ้าน','รถยนต์','รถมอเตอร์ไซค์'])) +
           f('บัตรเครดิต / ประวัติ', sel('credit',['เลือก','บัตรเครดิต','ไม่มีประวัติ','อื่นๆ'])) +
@@ -1776,7 +1780,7 @@
       </div>
 
       <div class="section">
-        <h2>🚗 การเลือกไฟแนนซ์</h2>
+        <h2>${ic('lucide:car-front',16)} การเลือกไฟแนนซ์</h2>
         ${grid(
           f('รุ่นรถที่เลือกซื้อ', inp('carModel','เช่น Honda Civic 2020'), true) +
           f('ไฟแนนซ์ที่เลือกจัด', sel('finance', LN_BANKS), true)
@@ -1786,7 +1790,7 @@
       </div>
 
       <div class="section">
-        <h2>💳 ผลอนุมัติไฟแนนซ์ &amp; นัดเซ็น <span style="font-size:11px;font-weight:400;color:var(--t3)">(กรอกตอนเช็คก่อนเซ็น)</span></h2>
+        <h2>${ic('lucide:credit-card',16)} ผลอนุมัติไฟแนนซ์ &amp; นัดเซ็น <span style="font-size:11px;font-weight:400;color:var(--t3)">(กรอกตอนเช็คก่อนเซ็น)</span></h2>
         ${grid(
           f('ราคารถ (บาท)', num('price','000,000')) +
           f('สถานะอนุมัติ', sel('apprStatus', FC_STATUSES)) +
@@ -1800,7 +1804,7 @@
       </div>
 
       <details class="section" style="padding:0">
-        <summary style="list-style:none;cursor:pointer;padding:13px;font-size:14px;font-weight:700;color:var(--t1)">🤝 ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:11px;font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
+        <summary style="list-style:none;cursor:pointer;padding:13px;font-size:14px;font-weight:700;color:var(--t1)">${ic('lucide:handshake',16)} ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:11px;font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
         <div style="padding:0 13px 13px">
           ${grid(
             f('ชื่อผู้ค้ำ', inp('gCustomer','ชื่อ-นามสกุล')) +
@@ -1815,7 +1819,7 @@
       </details>
 
       <div class="section">
-        <h2>✍️ ลงชื่อ</h2>
+        <h2>${ic('lucide:pen-line',16)} ลงชื่อ</h2>
         ${grid(
           f('ชื่อคนแนะนำ', inp('referrer','')) +
           f('เบอร์คนแนะนำ', inp('referrerPhone','')) +
@@ -1828,9 +1832,9 @@
       <div id="ln-preview-box" style="display:none;margin-bottom:10px"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button onclick="previewLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">👁️ ดูตัวอย่าง</button>
-        <button onclick="copyLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">📋 คัดลอกข้อความ</button>
-        <button id="ln-send-btn" onclick="sendLoan()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:800;cursor:pointer">💾 บันทึก &amp; ส่ง LINE</button>
+        <button onclick="previewLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
+        <button onclick="copyLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
+        <button id="ln-send-btn" onclick="sendLoan()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก &amp; ส่ง LINE</button>
       </div>
     `;
     document.getElementById('root').innerHTML = html;
@@ -1845,28 +1849,28 @@
   function applyLoanScanFields(f) { LN_KEYS.forEach(k => fcSet('ln_' + k, f[k])); }
   function loanText(d) {
     const x = (s) => s || '-';
-    const g = d.gCustomer ? `\n\n🤝 ผู้ค้ำ: ${x(d.gCustomer)} (${x(d.gRelation)})  อาชีพ ${x(d.gOccupation)}  รายได้ ${x(d.gAvgIncome)}` : '';
+    const g = d.gCustomer ? `\n\n${ic('lucide:handshake',16)} ผู้ค้ำ: ${x(d.gCustomer)} (${x(d.gRelation)})  อาชีพ ${x(d.gOccupation)}  รายได้ ${x(d.gAvgIncome)}` : '';
     // ส่วนผลอนุมัติ/นัดเซ็น — แสดงเฉพาะถ้ากรอก
-    const fin = (d.apprStatus || d.approved || d.signDate) ? `\n\n💳 ผลอนุมัติ: ${x(d.apprStatus)}\nราคารถ ${x(d.price)} · วงเงิน ${x(d.approved)} · ดาวน์ ${x(d.down)}\nผ่อน ${x(d.monthly)} x ${x(d.terms)} งวด\n📅 นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}` : '';
-    return `📄 ข้อมูลผู้ยื่นขอสินเชื่อ
+    const fin = (d.apprStatus || d.approved || d.signDate) ? `\n\n${ic('lucide:credit-card',16)} ผลอนุมัติ: ${x(d.apprStatus)}\nราคารถ ${x(d.price)} · วงเงิน ${x(d.approved)} · ดาวน์ ${x(d.down)}\nผ่อน ${x(d.monthly)} x ${x(d.terms)} งวด\n${ic('lucide:calendar',16)} นัดเซ็น: ${x(d.signDate)} ${d.signTime||''}` : '';
+    return `${ic('lucide:file-text',16)} ข้อมูลผู้ยื่นขอสินเชื่อ
 ━━━━━━━━━━━━
-👤 ${x(d.customer)}  อายุ ${x(d.age)}  ${x(d.phone)}  จ.${x(d.province)}
+${ic('lucide:user',16)} ${x(d.customer)}  อายุ ${x(d.age)}  ${x(d.phone)}  จ.${x(d.province)}
 เพศ ${x(d.sex)} · ${x(d.marital)} · บุตร ${x(d.children)} · ที่พัก ${x(d.residence)}
 
-💼 อาชีพ: ${x(d.occupation)}  รายได้ ${x(d.incomeSource)}
+${ic('lucide:briefcase',16)} อาชีพ: ${x(d.occupation)}  รายได้ ${x(d.incomeSource)}
 บริษัท/กิจการ: ${x(d.company || d.bizName)}
 ฐานเงินเดือน ${x(d.salary)} · OT ${x(d.ot)} · เฉลี่ย/เดือน ${x(d.avgIncome)}
 
-📊 ประวัติเครดิต: ${x(d.credit)}
+${ic('lucide:bar-chart-3',16)} ประวัติเครดิต: ${x(d.credit)}
 ผ่อน ${x(d.payBank)} งวดละ ${x(d.payInstallment)} (${x(d.payDuration)}) — ${x(d.payStatus)}
 แบล็คลิสต์: ${x(d.blacklist)} · Tracking: ${x(d.tracking)}
 
-🚗 รถ: ${x(d.carModel)}
-🏦 ไฟแนนซ์: ${x(d.finance)}
+${ic('lucide:car-front',16)} รถ: ${x(d.carModel)}
+${ic('lucide:landmark',16)} ไฟแนนซ์: ${x(d.finance)}
 เหตุผล: ${x(d.reason)}${g}
 
-🧑‍💼 เซลล์: ${x(d.sales)}  ผู้แนะนำ: ${x(d.referrer)}
-📝 ${x(d.note)}${fin}`;
+${ic('lucide:user-round',16)} เซลล์: ${x(d.sales)}  ผู้แนะนำ: ${x(d.referrer)}
+${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
   }
   function previewLoan() {
     const box = document.getElementById('ln-preview-box');
@@ -1877,7 +1881,7 @@
   function copyLoan() {
     navigator.clipboard.writeText(loanText(collectLoan())).then(() => {
       const box = document.getElementById('ln-result');
-      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ คัดลอกข้อความแล้ว</div>`;
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
       setTimeout(() => { box.innerHTML = ''; }, 2000);
     });
   }
@@ -1896,12 +1900,12 @@
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
       } else {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">✅ ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
       }
     } catch (e) {
-      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">⚠️ ${h(e.message)}</div>`;
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
     } finally {
       btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
     }
@@ -1919,25 +1923,25 @@
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
+        st.innerHTML = `<span style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(j.error || 'อ่านไม่สำเร็จ')}</span>`;
       } else {
         applyLoanScanFields(j.fields || {});
-        st.innerHTML = `<span style="color:var(--green)">✅ กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
+        st.innerHTML = `<span style="color:var(--green)">${ic('lucide:circle-check',16)} กรอกให้แล้ว — ตรวจ/แก้ก่อนกดส่ง</span>`;
       }
     } catch (e) {
-      st.innerHTML = `<span style="color:var(--red)">⚠️ ${h(e.message)}</span>`;
+      st.innerHTML = `<span style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</span>`;
     } finally {
       input.value = '';
     }
   }
 
-  // ── 🤖 AI โค้ชส่วนตัว ──
+  // ── ${ic('lucide:bot',16)} AI โค้ชส่วนตัว ──
   function renderAICoachCard() {
     return `
       <div class="section" style="margin-bottom:10px;border-left:3px solid var(--purple-mid,#8b5cf6)">
-        <h2 style="display:flex;align-items:center;gap:6px;margin-bottom:6px">🤖 AI โค้ชส่วนตัว <span style="font-size:11px;font-weight:400;color:var(--t3)">วิเคราะห์ผลงาน + แนะนำ</span></h2>
+        <h2 style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${ic('lucide:bot',16)} AI โค้ชส่วนตัว <span style="font-size:11px;font-weight:400;color:var(--t3)">วิเคราะห์ผลงาน + แนะนำ</span></h2>
         <div id="ai-coach-result" style="font-size:12.5px;color:var(--t1);line-height:1.7"></div>
-        <button id="ai-coach-btn" onclick="runAICoach()" style="margin-top:6px;padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid,#8b5cf6);color:#fff;font-size:13px;font-weight:700;cursor:pointer">✨ ให้ AI วิเคราะห์ผลงานฉัน</button>
+        <button id="ai-coach-btn" onclick="runAICoach()" style="margin-top:6px;padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid,#8b5cf6);color:#fff;font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:sparkles',16)} ให้ AI วิเคราะห์ผลงานฉัน</button>
       </div>`;
   }
   function aiStatsSummary() {
@@ -1964,12 +1968,12 @@
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        box.innerHTML = `<div style="color:var(--red)">⚠️ ${h(j.error || 'วิเคราะห์ไม่สำเร็จ')}</div>`;
+        box.innerHTML = `<div style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(j.error || 'วิเคราะห์ไม่สำเร็จ')}</div>`;
       } else {
         box.innerHTML = `<div style="background:var(--purple-bg,#f2ecfd);border-radius:10px;padding:12px 14px;margin-bottom:4px;line-height:1.7">${aiMarkdown(j.analysis)}</div>`;
       }
     } catch (e) {
-      box.innerHTML = `<div style="color:var(--red)">⚠️ ${h(e.message)}</div>`;
+      box.innerHTML = `<div style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
     } finally {
       btn.disabled = false; btn.textContent = '✨ วิเคราะห์อีกครั้ง';
     }

@@ -127,10 +127,10 @@
   <div class="app" id="app">
     {% if error %}
     <div style="text-align:center;padding-top:80px">
-      <div style="font-size:48px;margin-bottom:14px">⚠️</div>
+      <div style="font-size:48px;margin-bottom:14px">${ic('lucide:triangle-alert',16)}</div>
       <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:6px">เกิดข้อผิดพลาด</div>
       <div style="font-size:13px;color:var(--t2)">{{ error }}</div>
-      <button onclick="location.reload()" class="bbtn" style="margin-top:12px">🔄 ลองอีกครั้ง</button>
+      <button onclick="location.reload()" class="bbtn" style="margin-top:12px">${ic('lucide:refresh-cw',16)} ลองอีกครั้ง</button>
     </div>
     {% else %}
     <div class="loading-container" id="loading">
@@ -196,7 +196,7 @@
     let tab = new URLSearchParams(location.search).get('tab') || 'o';
     let curS = new URLSearchParams(location.search).get('seller') || '';
     let showCase = new URLSearchParams(location.search).get('case') || null;
-    // 📅 กรองวันที่รับเคส (ช่วงวัน จาก-ถึง · ข้ามเดือนได้) — แทน month/today filter เดิม
+    // ${ic('lucide:calendar',16)} กรองวันที่รับเคส (ช่วงวัน จาก-ถึง · ข้ามเดือนได้) — แทน month/today filter เดิม
     let dfMonth = 0;  // vestige (โค้ดเก่าบางจุดอ้าง — ตั้ง 0 = ไม่ใช้ month filter)
     const _ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     let dfTo = _ymd(new Date());
@@ -537,7 +537,7 @@
       // ส่วนที่ 2: คะแนนจากการจอง + ปล่อย
       // ใช้ ms.sellers[name].booking + .done จาก backend monthlySummary
       // เพื่อให้ตัวเลขตรงกับ "สรุปรายเซลล์" ตาราง (single source of truth)
-      const monthlySrc = buildRangeMs();   // 📅 คะแนนตามช่วงวันที่ที่เลือก
+      const monthlySrc = buildRangeMs();   // ${ic('lucide:calendar',16)} คะแนนตามช่วงวันที่ที่เลือก
       const sellersList = FD.sellers || D.sellers || [];
       sellersList.forEach(s => {
         const sd = (monthlySrc.sellers && monthlySrc.sellers[s.name]) || {};
@@ -747,7 +747,7 @@
         </tr>
       `);
       _showCaseListModal({
-        title: `💰 Top มูลค่าดีล · ${h(sellerName)}`,
+        title: `${ic('lucide:wallet',16)} Top มูลค่าดีล · ${h(sellerName)}`,
         subtitle: `${all.length} คัน · รวม ${fmtBaht(totalValue)}`,
         headers: [
           {label: 'ลูกค้า / รถ'},
@@ -780,7 +780,7 @@
         </tr>
       `);
       _showCaseListModal({
-        title: `🏆 Top จอง · ${h(sellerName)}`,
+        title: `${ic('lucide:trophy',16)} Top จอง · ${h(sellerName)}`,
         subtitle: `${all.length} เคสจอง · รวมมัดจำ ${fmtBaht(totalAmount)}`,
         headers: [
           {label: 'ลูกค้า / รถ'},
@@ -937,7 +937,7 @@
 
             <!-- 1. รายละเอียด Activity — แยกตามจำนวนครั้งที่โทร -->
             <div style="margin-bottom:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">📞 รายละเอียด Activity</div>
+              <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:3px">${ic('lucide:phone',16)} รายละเอียด Activity</div>
               <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px">รับผิดชอบ <b style="color:var(--t1)">${d.cnt}</b> เคสติดตาม · อัพเดทรวม <b style="color:var(--t1)">${d.tot}</b> ครั้ง — แยกตามว่าโทรกี่ครั้ง</div>
               <table style="width:100%;border-collapse:collapse;font-size:11px">
                 <thead>
@@ -1076,7 +1076,7 @@
         const roleFg = isAdmin ? 'var(--amber)' : 'var(--purple)';
         const roleBd = isAdmin ? 'var(--amber-mid)' : 'var(--purple-mid)';
         if(impersonate) {
-          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง${isAdmin?' Admin':'ผู้บริหาร'}" style="background:var(--purple-bg);color:var(--purple);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid var(--purple-mid);cursor:pointer">👁️ ดูในฐานะ ${h(impersonate)} ✕</button>`;
+          html += `<button onclick="setImpersonate('')" title="คลิกเพื่อกลับสู่มุมมอง${isAdmin?' Admin':'ผู้บริหาร'}" style="background:var(--purple-bg);color:var(--purple);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid var(--purple-mid);cursor:pointer">${ic('lucide:eye',16)} ดูในฐานะ ${h(impersonate)} ✕</button>`;
         } else {
           html += `<span style="background:${roleBg};color:${roleFg};padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid ${roleBd}">${roleLabel} (ทั้งหมด)</span>`;
         }
@@ -1093,8 +1093,8 @@
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE Flex Manager</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">ตั้งเป้า / ทีม</button>
-            <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">👑 จัดการแอดมิน</button>
-            <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">📊 แหล่งข้อมูล (Sheets)</button>
+            <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
+            <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Log / Diagnostics</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Export Score → Sheet</button>
           </div>
@@ -1173,7 +1173,7 @@
       Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
       // เซลล์ที่ admin กำลังสวมมุมมอง หรือ เซลล์ตัวเองตอนไม่ใช่ admin
       const focusSeller = !canViewAll ? employee.nickname : impersonate;
-      // 📅 กราฟผูกกับช่วงวันที่ที่กรอง (dfFrom..dfTo) — ดึงจาก dailyByMonth/dailyBySeller
+      // ${ic('lucide:calendar',16)} กราฟผูกกับช่วงวันที่ที่กรอง (dfFrom..dfTo) — ดึงจาก dailyByMonth/dailyBySeller
       const _dailySrc = focusSeller
         ? ((D.dailyBySeller || {})[focusSeller] || {})
         : (D.dailyByMonth || {});
@@ -1287,7 +1287,7 @@
         });
       }
 
-      // 4) Line — 💰 ยอดปล่อย (Deal Value)
+      // 4) Line — ${ic('lucide:wallet',16)} ยอดปล่อย (Deal Value)
       const cv4 = document.getElementById('chart-deal-value');
       if (cv4) {
         destroyChart('dealValue');
@@ -1333,13 +1333,13 @@
       }
     }
 
-    // ── Date filter bar (📅 กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
+    // ── Date filter bar (${ic('lucide:calendar',16)} กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
     function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', _ymd(new Date())); }
     function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(d)); }
     const _inp = 'padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer';
     function renderDateFilterBar() {
       const cnt = (FD.followCases||[]).filter(l=>ir(l.dateIn)).length;
-      let html = `<div class="df-bar"><span class="df-label">📅 กรองวันที่รับเคส:</span>`;
+      let html = `<div class="df-bar"><span class="df-label">${ic('lucide:calendar',16)} กรองวันที่รับเคส:</span>`;
       html += `<span style="font-size:11px;color:var(--t3)">จาก</span>`;
       html += `<input type="date" value="${dfFrom}" onchange="setDfRange(this.value, undefined)" style="${_inp}">`;
       html += `<span style="font-size:11px;color:var(--t3)">ถึง</span>`;
@@ -1351,7 +1351,7 @@
       return html;
     }
 
-    // ── 🔮 พยากรณ์ยอดขาย (linear regression จากยอดจริงรายเดือน) ──
+    // ── ${ic('lucide:sparkles',16)} พยากรณ์ยอดขาย (linear regression จากยอดจริงรายเดือน) ──
     function monthForecast(vals12) {
       // vals12: index 0..11 = Jan..Dec — ใช้เฉพาะเดือนที่ผ่านมาจริง (1..เดือนปัจจุบัน) กันค่าหลงในอนาคตถ่วง
       const _cur = new Date().getMonth() + 1;
@@ -1383,10 +1383,10 @@
       const dir = fd.slope > base*0.04 ? {t:'↗ กำลังขึ้น',c:'var(--green)'} : fd.slope < -base*0.04 ? {t:'↘ กำลังลง',c:'var(--red)'} : {t:'→ ทรงตัว',c:'var(--t3)'};
       return `
         <div class="card" style="border-left:3px solid var(--purple-mid)">
-          <div class="card-title">🧠 วิเคราะห์ยอดขาย & แนวโน้มตลาด <span style="font-size:11px;font-weight:400;color:var(--t3)">(AI)</span></div>
+          <div class="card-title">${ic('lucide:brain',16)} วิเคราะห์ยอดขาย & แนวโน้มตลาด <span style="font-size:11px;font-weight:400;color:var(--t3)">(AI)</span></div>
           <div style="font-size:12px;color:var(--t2);margin-bottom:8px">ทิศทางยอดปิดช่วงนี้: <b style="color:${dir.c}">${dir.t}</b> · ให้ AI วิเคราะห์เชิงลึก รวมปัจจัยตลาด (ราคาน้ำมัน · เทรนด์ EV · เศรษฐกิจ · ภูมิรัฐศาสตร์) + กลยุทธ์เต็นท์</div>
           <div id="forecast-ai-result" style="font-size:12.5px;color:var(--t1);line-height:1.7;margin-bottom:6px"></div>
-          <button id="forecast-ai-btn" onclick="runForecastAI()" style="padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid);color:#fff;font-size:13px;font-weight:700;cursor:pointer">✨ วิเคราะห์ยอดขาย + แนวโน้มตลาด</button>
+          <button id="forecast-ai-btn" onclick="runForecastAI()" style="padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid);color:#fff;font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:sparkles',16)} วิเคราะห์ยอดขาย + แนวโน้มตลาด</button>
           <div style="font-size:10px;color:var(--t3);margin-top:6px">* เส้นสีเหลืองบนกราฟ "จอง/ปล่อย" = เส้นแนวโน้มยอดจริง (ไม่ใช่การทำนายอนาคต)</div>
         </div>`;
     }
@@ -1412,16 +1412,16 @@
       btn.disabled=true; btn.innerHTML='<span class="spin" style="width:13px;height:13px;border-width:2px;display:inline-block;vertical-align:middle"></span> AI กำลังวิเคราะห์...';
       fetch('/api/insights/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})})
         .then(r=>r.json()).then(j=>{
-          if(!j.ok||j.error){ box.innerHTML=`<div style="color:var(--red)">⚠️ ${h(j.error||'วิเคราะห์ไม่สำเร็จ')}</div>`; }
+          if(!j.ok||j.error){ box.innerHTML=`<div style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(j.error||'วิเคราะห์ไม่สำเร็จ')}</div>`; }
           else { box.innerHTML=`<div style="background:var(--purple-bg);border-radius:10px;padding:12px 14px;line-height:1.7">${h(j.narrative).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^[-*] /gm,'• ').replace(/\n/g,'<br>')}</div>`; }
-        }).catch(e=>{ box.innerHTML=`<div style="color:var(--red)">⚠️ ${h(e.message)}</div>`; })
+        }).catch(e=>{ box.innerHTML=`<div style="color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`; })
         .finally(()=>{ btn.disabled=false; btn.textContent='🤖 วิเคราะห์อีกครั้ง'; });
     }
 
     // ── OVERVIEW ──
     function renderOverview(sellers, dilMap, sellerNames) {
       const isToday = false;
-      const ms = buildRangeMs();        // 📅 summary ของช่วงวันที่ที่เลือก
+      const ms = buildRangeMs();        // ${ic('lucide:calendar',16)} summary ของช่วงวันที่ที่เลือก
       const sm = ms;
       const pl = D.pipeline;            // pipeline (รอเซ็น/รอผล/...) ไม่มีรายวัน → ใช้รวมทั้งปี
       const clipTgt = D.meta?.clipMonthTarget || 4;
@@ -1447,7 +1447,7 @@
         target:  "เป้าหมายรวมของทุกเซลล์ในเดือนนี้\nกำหนดใน sheet 'ตั้งค่าเซลล์' column เป้า",
         rj:      "RJ Leads (Hot RJ / Hot RB / RJ) — เคสคุณภาพต่ำ\nลูกค้าไม่ค่อยจริงจัง ปิดยาก\nเดือนไหน RJ พุ่ง = อาจมีปัญหา channel/source",
       };
-      const _tgtRange = (D.summary.totalTarget||0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
+      const _tgtRange = (D.summary.totalTarget||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
       const kpis = [
         {l:"Lead",v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
         {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow",tip:TIP.follow},
@@ -1470,7 +1470,7 @@
       if (momActive) {
         const curMonthName = C.MONTHS_FULL[dfMonth-1] || '';
         const prevFull = C.MONTHS_FULL[dfMonth-2] || '';
-        html += `<div style="font-size:11px;color:var(--t3);margin-bottom:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;display:inline-block">📊 % คือเทียบ <b style="color:var(--t1)">${curMonthName}</b> vs <b style="color:var(--t1)">${prevFull}</b></div>`;
+        html += `<div style="font-size:11px;color:var(--t3);margin-bottom:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;display:inline-block">${ic('lucide:bar-chart-3',16)} % คือเทียบ <b style="color:var(--t1)">${curMonthName}</b> vs <b style="color:var(--t1)">${prevFull}</b></div>`;
       }
 
       // KPI Grid — k.v ถูก pre-format มาแล้ว, k.mk = metric key (กดได้ถ้ามี)
@@ -1484,7 +1484,7 @@
       });
       html += `</div>`;
 
-      // 🔮 พยากรณ์ยอดขาย (admin/exec)
+      // ${ic('lucide:sparkles',16)} พยากรณ์ยอดขาย (admin/exec)
       html += renderForecastCard();
 
       // Charts
@@ -1495,14 +1495,14 @@
       const _chartPeriod = `· ${_isDailyChart ? 'รายวัน' : 'รายเดือน'} ${_rangeTxt}`;
       const _pipePeriod = _rangeTxt || 'ช่วงที่เลือก';
       html += `<div class="cgrid">`;
-      html += `<div class="card chart-card"><div class="card-title">📈 ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\nแยก 2 เส้น: Lead ปกติ + RJ\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
-      html += `<div class="card chart-card"><div class="card-title">📊 ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
-      html += `<div class="card chart-card span2"><div class="card-title">💰 ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}<span class="info-tip" tabindex="0" data-tip="เงินที่เข้าจริงรายเดือน (หรือรายวัน)\nรวมจาก sale_price ของเคส status = ปล่อย\nดูว่าเดือนไหน peak/ตก">?</span></div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
+      html += `<div class="card chart-card"><div class="card-title">${ic('lucide:trending-up',16)} ยอด Lead ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="แนวโน้ม Lead รายเดือน (หรือรายวันถ้ากรองเดือน)\nแยก 2 เส้น: Lead ปกติ + RJ\nดูว่าเดือนไหน lead ขึ้น/ลง · RJ มากผิดปกติไหม">?</span></div><div class="chart-box"><canvas id="chart-leads"></canvas></div></div>`;
+      html += `<div class="card chart-card"><div class="card-title">${ic('lucide:bar-chart-3',16)} ยอดจอง / ปล่อย ${_chartPeriod}${_focusSuffix}<span class="info-tip" tabindex="0" data-tip="กราฟแท่ง: จองและปล่อยรถ\nห่างกันมาก = pipeline สะดุด (เซ็นช้า/ปล่อยช้า)">?</span></div><div class="chart-box"><canvas id="chart-book-done"></canvas></div></div>`;
+      html += `<div class="card chart-card span2"><div class="card-title">${ic('lucide:wallet',16)} ยอดปล่อย (Deal Value) ${_chartPeriod}${_focusSuffix} · รวม ${fmtBaht(dvDeal)}<span class="info-tip" tabindex="0" data-tip="เงินที่เข้าจริงรายเดือน (หรือรายวัน)\nรวมจาก sale_price ของเคส status = ปล่อย\nดูว่าเดือนไหน peak/ตก">?</span></div><div class="chart-box"><canvas id="chart-deal-value"></canvas></div></div>`;
       html += `<div class="card chart-card span2"><div class="card-title">🥯 ภาพรวมสถานะดีล (${_pipePeriod}${_focusSuffix})<span class="info-tip" tabindex="0" data-tip="โดนัทกราฟแสดงสัดส่วนเคสในแต่ละสถานะ\nสีไหนใหญ่ = bottleneck (เช่น รอเซ็น เยอะ = เร่งเอกสาร)">?</span></div><div class="chart-box"><canvas id="chart-pipeline"></canvas></div></div>`;
       html += `</div>`;
 
       // Pipeline
-      html += `<div class="card"><div class="card-title">📋 Pipeline ดีล<span class="info-tip" tabindex="0" data-tip="ภาพรวมเคสในแต่ละสถานะ\n• จอง: ลูกค้าตกลงจอง\n• รอเซ็นต์: รอเซ็นเอกสาร\n• รอผล: รอผลไฟแนนซ์\n• รอปล่อย: ผ่านแล้ว รอส่งรถ\n• ปล่อย: ส่งรถสำเร็จ\n• รีเจ็ก: ไม่ผ่าน\nคลิกตัวเลขเปิดดูรายการเคสในสถานะนั้น">?</span></div><div class="pipe-row">`;
+      html += `<div class="card"><div class="card-title">${ic('lucide:clipboard-list',16)} Pipeline ดีล<span class="info-tip" tabindex="0" data-tip="ภาพรวมเคสในแต่ละสถานะ\n• จอง: ลูกค้าตกลงจอง\n• รอเซ็นต์: รอเซ็นเอกสาร\n• รอผล: รอผลไฟแนนซ์\n• รอปล่อย: ผ่านแล้ว รอส่งรถ\n• ปล่อย: ส่งรถสำเร็จ\n• รีเจ็ก: ไม่ผ่าน\nคลิกตัวเลขเปิดดูรายการเคสในสถานะนั้น">?</span></div><div class="pipe-row">`;
       Object.entries(pl).forEach(([k,v]) => {
         html += `<div class="pipe-item"><div class="pipe-num" style="color:${pipeColors[k]||'var(--t1)'}">${v}</div><div class="pipe-lbl">${k}</div></div>`;
       });
@@ -1529,7 +1529,7 @@
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
         const tBooking=mt?mt.booking:t.booking, tDone=mt?mt.done:t.done;
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
-        const tTarget = (t.target||0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
+        const tTarget = (t.target||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
         const conv=pct(tBooking,tLead), tPct=pct(tDone,tTarget);
         const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
         // MoM
@@ -1546,23 +1546,23 @@
         html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLead}</div>${momBadge(t_mLead)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div>${momBadge(t_mBook)}</div>`;
-        html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ↗</div><div style="font-size:15px;font-weight:600;color:${tDone>=tTarget?'var(--green)':'var(--amber)'}">${tDone}/${tTarget}</div>${momBadge(t_mDone)}</div>`;
+        html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ${ic('lucide:arrow-up-right',13)}</div><div style="font-size:15px;font-weight:600;color:${tDone>=tTarget?'var(--green)':'var(--amber)'}">${tDone}/${tTarget}</div>${momBadge(t_mDone)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
         html += `</div>`;
         // Deal Value row
         html += `<div style="margin-bottom:6px;padding:6px 8px;background:var(--green-bg);border-radius:6px;text-align:center">`;
-        html += `<div style="font-size:10px;color:var(--t3)">💰 ยอดปล่อย</div><div style="font-size:14px;font-weight:700;color:var(--green-mid)">${fmtBaht(tDealValue)} ${momBadge(t_mDeal, false, fmtBaht)}</div>`;
+        html += `<div style="font-size:10px;color:var(--t3)">${ic('lucide:wallet',16)} ยอดปล่อย</div><div style="font-size:14px;font-weight:700;color:var(--green-mid)">${fmtBaht(tDealValue)} ${momBadge(t_mDeal, false, fmtBaht)}</div>`;
         html += `</div>`;
         // Progress bars
         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
         html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">เป้าจบ ${tDone}/${tTarget}</span><span style="color:${C.TEAM_COLORS[tid]}">${tPct}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(tPct,100)}%;background:${C.TEAM_COLORS[tid]}"></div></div></div>`;
-        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">📡${t.live} 🎬${t.clip}/${t.clipTarget}</span><span style="color:${t.clip>=t.clipTarget?'var(--green)':'var(--amber)'}">${Math.round(cPct)}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(cPct,100)}%;background:${t.clip>=t.clipTarget?'var(--green-mid)':'var(--purple-mid)'}"></div></div></div>`;
+        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">${ic('lucide:radio',16)}${t.live} ${ic('lucide:clapperboard',16)}${t.clip}/${t.clipTarget}</span><span style="color:${t.clip>=t.clipTarget?'var(--green)':'var(--amber)'}">${Math.round(cPct)}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(cPct,100)}%;background:${t.clip>=t.clipTarget?'var(--green-mid)':'var(--purple-mid)'}"></div></div></div>`;
         html += `</div></div>`;
       });
       html += `</div>`;
 
       // ════════════════════════════════════════════════════════════════
-      // 🔁 เคสติดตามรายเซลล์ — สำคัญ! ใช้ประเมินผลงานเซลล์ (Diligence Score)
+      // ${ic('lucide:repeat',16)} เคสติดตามรายเซลล์ — สำคัญ! ใช้ประเมินผลงานเซลล์ (Diligence Score)
       // ════════════════════════════════════════════════════════════════
       // เซลล์ปัจจุบันทุกคน (ตัดเซลล์เก่า/INACTIVE/ADMIN ออก)
       // ── Single source of truth: ใช้ logic เดียวกับ _sval ──
@@ -1575,7 +1575,7 @@
         .filter(s => !s.inactive && s.team !== 'INACTIVE')
         .map(s => {
           const e = dilMap[s.name] || {};
-          const leadDist = (ms?.sellers?.[s.name]?.leadDist) ?? (s.leadDist || 0);   // 📅 ตามช่วงวันที่
+          const leadDist = (ms?.sellers?.[s.name]?.leadDist) ?? (s.leadDist || 0);   // ${ic('lucide:calendar',16)} ตามช่วงวันที่
           return {
             n: s.name, team: s.team, leadDist,
             dones: e.dones||0, jongs: e.jongs||0, leads: e.leads||0, bans: e.bans||0,
@@ -1591,7 +1591,7 @@
       const _f1 = (n) => (Math.round(n*10)/10).toFixed(1);
       html += `<div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-          <div class="card-title" style="margin:0;display:flex;align-items:center">🏆 ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(100 คะแนนเต็ม)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูวิธีคิดแต่ละช่อง">?</span></div>
+          <div class="card-title" style="margin:0;display:flex;align-items:center">${ic('lucide:trophy',16)} ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(100 คะแนนเต็ม)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูวิธีคิดแต่ละช่อง">?</span></div>
         </div>
         <div class="card-sub">6 ด้าน เทียบกับเป้า (ถึงเป้า=เต็ม) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
@@ -1634,7 +1634,7 @@
       html += `</div>`;
 
       // ════════════════════════════════════════════════════════════════
-      // 📈 จัดสรร Lead ตามคะแนน — ใส่ lead/วัน → กระจายตามคะแนน 100 แต้ม
+      // ${ic('lucide:trending-up',16)} จัดสรร Lead ตามคะแนน — ใส่ lead/วัน → กระจายตามคะแนน 100 แต้ม
       // ════════════════════════════════════════════════════════════════
       // วิธี: แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน
       //   • Floor 1 lead/วัน (ทุกคนได้อย่างน้อย 1 — ให้โอกาส)
@@ -1648,7 +1648,7 @@
       // ใช้ leadDist (lead แจกจ่ายได้ = ไม่ใช่ไลฟ์สด + ไม่ใช่ RJ) ÷ จำนวนวันที่ผ่าน
       // → เฉพาะการจัดสรรอนาคต ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
       const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.leadDist || 0), 0);
-      // 📅 จำนวนวันในช่วงที่กรอง (leadDist ก็เป็น range แล้ว → pace ตรงกัน)
+      // ${ic('lucide:calendar',16)} จำนวนวันในช่วงที่กรอง (leadDist ก็เป็น range แล้ว → pace ตรงกัน)
       const _daysElapsed = Math.max(1, rangeDays().length);
       const _avgRaw = _totalLeadsMonth / _daysElapsed;     // เช่น 59.65
       const _autoPerDay = Math.max(1, Math.round(_avgRaw)); // ตีเป็น 60
@@ -1677,13 +1677,13 @@
       html += `<div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:6px">
           <div>
-            <div class="card-title" style="margin:0;display:flex;align-items:center">📈 จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead แจกจ่ายได้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n  (lead แจกจ่ายได้ = ตัดไลฟ์สด + RJ ออก)\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)\n\nหมายเหตุ: KPI/เคส/RJ ด้านบนนับเต็ม — ตัดไลฟ์+RJ เฉพาะการจัดสรรนี้">?</span></div>
+            <div class="card-title" style="margin:0;display:flex;align-items:center">${ic('lucide:trending-up',16)} จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead แจกจ่ายได้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n  (lead แจกจ่ายได้ = ตัดไลฟ์สด + RJ ออก)\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)\n\nหมายเหตุ: KPI/เคส/RJ ด้านบนนับเต็ม — ตัดไลฟ์+RJ เฉพาะการจัดสรรนี้">?</span></div>
             <div class="card-sub" style="margin-top:2px">${isAuto ? `auto: lead แจกจ่ายได้ ${_totalLeadsMonth.toLocaleString()} (ตัดไลฟ์+RJ) ÷ ${_daysElapsed} วัน = <b>${_avgRaw.toFixed(2)}</b> → ${_autoPerDay}/วัน` : `ตั้งเอง ${effPerDay}/วัน · auto = ${_autoPerDay}`} · เฉลี่ยแบ่งเท่ากัน <b>${_dailyEqual.toFixed(1)}</b>/คน</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);padding:6px 10px;border-radius:8px">
             <span style="font-size:12px;color:var(--t2);font-weight:600">Lead/วัน</span>
             <input type="number" min="1" max="9999" value="${effPerDay}" onchange="leadPerDay=Math.max(1,parseInt(this.value)||1);render()" style="width:60px;padding:5px 8px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:14px;font-weight:700;text-align:center;font-family:inherit">
-            ${isAuto ? `<span style="font-size:9px;color:var(--green);font-weight:600">AUTO</span>` : `<button onclick="leadPerDay=null;render()" title="กลับไปคำนวณอัตโนมัติ" style="background:none;border:.5px solid var(--bd2);border-radius:5px;cursor:pointer;font-size:13px;padding:2px 6px;color:var(--blue)">↻</button>`}
+            ${isAuto ? `<span style="font-size:9px;color:var(--green);font-weight:600">AUTO</span>` : `<button onclick="leadPerDay=null;render()" title="กลับไปคำนวณอัตโนมัติ" style="background:none;border:.5px solid var(--bd2);border-radius:5px;cursor:pointer;font-size:13px;padding:2px 6px;color:var(--blue)">${ic('lucide:rotate-cw',14)}</button>`}
           </div>
         </div>
 
@@ -1724,7 +1724,7 @@
       // _sval: ถ้าเลือกเดือน → ใช้ค่ารายเดือน (0 ถ้าเซลล์ไม่มีในเดือนนั้น)
       //         ถ้าเลือกทั้งปี → ใช้ค่ารายปี
       const _sval = (s, key) => {
-        // 📅 ใช้ค่าตามช่วงวันที่ที่กรองเสมอ (ms = buildRangeMs()) — ตารางรายเซลล์เปลี่ยนตามวันที่
+        // ${ic('lucide:calendar',16)} ใช้ค่าตามช่วงวันที่ที่กรองเสมอ (ms = buildRangeMs()) — ตารางรายเซลล์เปลี่ยนตามวันที่
         const msd = ms?.sellers?.[s.name];
         if (msd && msd[key] !== undefined) return msd[key] || 0;
         return s[key]||0;   // fallback: เซลล์ที่ไม่มีใน range summary (กันค่าหาย)
@@ -1776,12 +1776,12 @@
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
-        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">🔁${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
+        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">${ic('lucide:repeat',16)}${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
 
-      // ── 3-col panels: 🔴 ยังไม่อัพเดท · 💰 Top มูลค่าดีล · 🏆 Top จอง ──
+      // ── 3-col panels: 🔴 ยังไม่อัพเดท · ${ic('lucide:wallet',16)} Top มูลค่าดีล · ${ic('lucide:trophy',16)} Top จอง ──
       // วางต่อท้าย "สรุปรายเซลล์" ทันที — แต่ละ card คลิกแถวเปิด modal ดูรายการเคส
       const nu = {};
       (FD.sellers || D.sellers || []).forEach(s => {
@@ -1854,11 +1854,11 @@
       // ── Admin/Executive only sections: Lead by Car + Released Cars (collapse โดย default) ──
       if (canViewAll) {
         html += `<details class="adv-section">
-          <summary>🚗 Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— รถยอดฮิตที่ลูกค้าถาม กดดูได้ว่าเซลล์ไหนรับเคสรถนั้น</span></summary>
+          <summary>${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— รถยอดฮิตที่ลูกค้าถาม กดดูได้ว่าเซลล์ไหนรับเคสรถนั้น</span></summary>
           <div class="adv-body">${renderLeadCarsTable()}</div>
         </details>`;
         html += `<details class="adv-section">
-          <summary>📋 เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
+          <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
           <div class="adv-body">${renderReleasedCarsTable()}</div>
         </details>`;
         html += renderDataQualityPanel();
@@ -1866,7 +1866,7 @@
 
       // Follow cases section — พับเก็บ (ไม่ใช่หัวข้อหลัก)
       html += `<details class="adv-section">
-        <summary>📞 เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่ยังต้องโทรต่อ เร่งด่วนก่อน คือเคสที่อัพเดทน้อยสุด</span></summary>
+        <summary>${ic('lucide:phone',16)} เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่ยังต้องโทรต่อ เร่งด่วนก่อน คือเคสที่อัพเดทน้อยสุด</span></summary>
         <div class="adv-body">${renderFollowCasesSection()}</div>
       </details>`;
 
@@ -1879,7 +1879,7 @@
       return html;
     }
 
-    // ── 🧹 ข้อมูลต้องเติม/แก้ (admin/exec) — เคสที่ข้อมูลวันที่ไม่ครบ/ผิด ตามไปเติมในชีต ──
+    // ── ${ic('lucide:brush',16)} ข้อมูลต้องเติม/แก้ (admin/exec) — เคสที่ข้อมูลวันที่ไม่ครบ/ผิด ตามไปเติมในชีต ──
     //   กรองตาม "วัน/เดือนของวันจอง" — ถ้าปีจองพิมพ์ผิด (เช่น 1969) ดูจากวัน/เดือนแทน (วัน/เดือนมักถูก)
     //   → เคสไปโผล่ในเดือนที่ควรอยู่จริง (22/2/1969 → โผล่ตอนเลือก ก.พ. ไม่ใช่ มิ.ย.)
     function renderDataQualityPanel() {
@@ -1910,7 +1910,7 @@
       blankRel.sort((a,b) => _k(a.b.date) < _k(b.b.date) ? -1 : 1);
 
       const _list = (arr, cols, cellsFn, emptyMsg) => {
-        if (!arr.length) return `<div style="font-size:11px;color:var(--green);padding:2px 0 4px">✅ ${emptyMsg}</div>`;
+        if (!arr.length) return `<div style="font-size:11px;color:var(--green);padding:2px 0 4px">${ic('lucide:circle-check',16)} ${emptyMsg}</div>`;
         let s = `<div class="shdr" style="grid-template-columns:${cols};font-size:10px">${cellsFn('hdr')}</div>`;
         arr.forEach(o => { s += `<div class="srow" style="grid-template-columns:${cols};font-size:11.5px;cursor:pointer" onclick="openBookingDetail(${o.idx})" title="กดดูรายละเอียดเคส">${cellsFn(o)}</div>`; });
         return s;
@@ -1918,14 +1918,14 @@
 
       let body = '';
       // กลุ่ม 1 — วันปล่อยว่าง
-      body += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin:2px 0 6px">📅 วันปล่อยว่าง · ${blankRel.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(สถานะ "ปล่อย" แต่ยังไม่กรอกวันปล่อย → เดาเดือนจากวันจอง · กระทบคะแนนเวลาปิดดีล)</span></div>`;
+      body += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin:2px 0 6px">${ic('lucide:calendar',16)} วันปล่อยว่าง · ${blankRel.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(สถานะ "ปล่อย" แต่ยังไม่กรอกวันปล่อย → เดาเดือนจากวันจอง · กระทบคะแนนเวลาปิดดีล)</span></div>`;
       body += _list(blankRel, '.9fr 1.4fr .8fr 1.1fr',
         (o) => o === 'hdr'
           ? '<span>เซลล์</span><span>ลูกค้า</span><span>วันจอง</span><span>รถ</span>'
           : `<span style="font-weight:600">${h(o.b.seller||'-')}</span><span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,22))}</span><span style="color:var(--amber);font-weight:600">${h(o.b.date||'-')}</span><span style="color:var(--t3);font-size:10px">${h((o.b.car||'-').slice(0,18))}</span>`,
         'ไม่มีในช่วงนี้');
       // กลุ่ม 2 — ปีผิด (กรองตามวัน/เดือนของวันจอง)
-      body += `<div style="font-size:12px;font-weight:700;color:var(--red);margin:14px 0 6px">⚠️ ปีผิด (1969/นอกช่วง 2020–2035) · ${badYr.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(กรองตามวัน/เดือนของวันจอง — ปีจองพิมพ์ผิดก็ดูจากวัน/เดือนแทน)</span></div>`;
+      body += `<div style="font-size:12px;font-weight:700;color:var(--red);margin:14px 0 6px">${ic('lucide:triangle-alert',16)} ปีผิด (1969/นอกช่วง 2020–2035) · ${badYr.length} เคส <span style="font-weight:400;color:var(--t3);font-size:10px">(กรองตามวัน/เดือนของวันจอง — ปีจองพิมพ์ผิดก็ดูจากวัน/เดือนแทน)</span></div>`;
       body += _list(badYr, '.9fr 1.3fr 1.8fr',
         (o) => o === 'hdr'
           ? '<span>เซลล์</span><span>ลูกค้า</span><span>ช่องที่ผิด</span>'
@@ -1933,14 +1933,14 @@
         'ไม่มีในช่วงนี้');
 
       return `<details class="adv-section" ${total>0?'open':''}>
-        <summary>🧹 ข้อมูลต้องเติม/แก้ ${total>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:4px">${total}</span>`:'<span style="color:var(--green);font-size:11px;margin-left:4px">✅</span>'} <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสข้อมูลวันที่ไม่ครบ/ผิด · กรองตามวัน/เดือนของวันจอง</span></summary>
+        <summary>${ic('lucide:brush',16)} ข้อมูลต้องเติม/แก้ ${total>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:4px">${total}</span>`:'<span style="color:var(--green);font-size:11px;margin-left:4px">✅</span>'} <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสข้อมูลวันที่ไม่ครบ/ผิด · กรองตามวัน/เดือนของวันจอง</span></summary>
         <div class="adv-body">${body}</div>
       </details>`;
     }
 
     // ── Lead by Car Model (admin/executive only) ──
     function renderLeadCarsTable() {
-      // 📅 รวมรถจากทุกเดือนในช่วงที่กรอง
+      // ${ic('lucide:calendar',16)} รวมรถจากทุกเดือนในช่วงที่กรอง
       const _rmMonths = [...new Set(rangeDays().map(x => x[0]))];
       const src = {};
       _rmMonths.forEach(m => {
@@ -1967,7 +1967,7 @@
 
       let html = `<div class="card">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0">🚗 Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${periodLbl} · ${entries.length} รุ่น · ${totalLead} เคส)</span></div>`;
+      html += `<div class="card-title" style="margin:0">${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${periodLbl} · ${entries.length} รุ่น · ${totalLead} เคส)</span></div>`;
       html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">`;
       html += `<input id="lead-car-search" type="text" placeholder="🔍 ค้นหา..." value="${h(leadCarQuery)}" oninput="leadCarQuery=this.value;leadCarPage=1;render()" style="padding:4px 8px;border:.5px solid var(--bd);border-radius:6px;font-size:11px;width:120px;background:var(--bg)">`;
       html += `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t2);cursor:pointer"><input type="checkbox" ${leadCarHideUnknown?'checked':''} onchange="leadCarHideUnknown=this.checked;leadCarPage=1;render()"> ซ่อน 'ไม่ระบุ'</label>`;
@@ -1985,7 +1985,7 @@
           const rank = startIdx + i + 1;
           html += `<div class="srow" style="grid-template-columns:.5fr 4fr 1fr 1fr 2fr;cursor:pointer" onclick="openCarDetail('${safeCar}')" title="คลิกดูเซลล์ที่รับเคสรถนี้">`;
           html += `<span style="color:var(--t3);font-size:11px">${rank}</span>`;
-          html += `<span style="font-weight:500;color:var(--blue)">🚗 ${h(e.car).slice(0,60)}</span>`;
+          html += `<span style="font-weight:500;color:var(--blue)">${ic('lucide:car-front',16)} ${h(e.car).slice(0,60)}</span>`;
           html += `<span style="text-align:right;font-weight:600;color:var(--blue)">${e.cnt}</span>`;
           html += `<span style="text-align:right;color:var(--t3);font-size:11px">${pctVal}%</span>`;
           html += `<div><div class="pbr"><div class="pbf" style="width:${barW}%;background:var(--blue)"></div></div></div>`;
@@ -2012,7 +2012,7 @@
       const indexed = (D.bookingCases || []).map((b, i) => ({...b, _idx: i}));
       // กรองตาม status (default = 'ปล่อย' / all = ทุกสถานะ)
       let base = releasedStatus === 'all' ? indexed : indexed.filter(b => b.status === releasedStatus);
-      // 📅 กรองตามช่วงวันที่ (ใช้ releaseDate, fallback date)
+      // ${ic('lucide:calendar',16)} กรองตามช่วงวันที่ (ใช้ releaseDate, fallback date)
       let cars = base.filter(b => ir(b.releaseDate || b.date || ''));
       // กรอง seller dropdown
       if (releasedSeller !== 'all') {
@@ -2133,7 +2133,7 @@
       }
       const totalYear = monthData.reduce((a,e)=>a+e.v,0);
       const curMonth = (D.meta && D.meta.month) || (new Date().getMonth()+1);
-      // 📅 เดือน focus ตามช่วงวันที่ที่กรอง — เลือกเดือนล่าสุดในช่วง (cap ที่เดือนปัจจุบัน)
+      // ${ic('lucide:calendar',16)} เดือน focus ตามช่วงวันที่ที่กรอง — เลือกเดือนล่าสุดในช่วง (cap ที่เดือนปัจจุบัน)
       const _rmList = [...new Set(rangeDays().map(x => x[0]))];
       const focusMonth = _rmList.length ? Math.min(_rmList[_rmList.length-1], curMonth) : curMonth;
       const focusVal = monthData[focusMonth-1].v;
@@ -2188,7 +2188,7 @@
       inner += `</div>`;
 
       // 12-month bar trend
-      inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">📈 Trend ทั้งปี · รวม ${cfg.fmt(totalYear)}</div>`;
+      inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">${ic('lucide:trending-up',16)} Trend ทั้งปี · รวม ${cfg.fmt(totalYear)}</div>`;
       inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">`;
       inner += `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:120px">`;
       monthData.forEach(({m, v}) => {
@@ -2260,7 +2260,7 @@
       const statusColor = (C.STATUS_COLOR||{})[b.status] || '#888';
       const phoneClean = (b.phone||'').replace(/[^0-9+]/g, '');
       const callLink = phoneClean
-        ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">📞 โทร ${h(b.phone)}</a>` : '';
+        ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">${ic('lucide:phone',16)} โทร ${h(b.phone)}</a>` : '';
 
       // คำนวณ "เก่ากี่วันแล้ว" — เทียบจากวันที่จอง/ปล่อย ใกล้สุดที่ parse ได้ กับวันนี้
       const parseDmy = (s) => {
@@ -2308,18 +2308,18 @@
             ${row('Lead Code', b.leadCode, {mono:true})}
             ${row('เซลล์', b.seller)}
 
-            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">🚗 รถ</div>
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:car-front',16)} รถ</div>
             ${row('รถ', b.car)}
             ${row('ปีรถ', b.year)}
             ${row('ทะเบียน', b.plate)}
 
-            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">💰 ราคา / การจ่าย</div>
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:wallet',16)} ราคา / การจ่าย</div>
             ${row('ราคาขาย', b.price)}
             ${row('เงินจอง', b.deposit)}
             ${row('ไฟแนนซ์', b.finance)}
             ${row('เกรด', b.grade)}
 
-            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📅 ไทม์ไลน์</div>
+            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:calendar',16)} ไทม์ไลน์</div>
             ${row('วันที่จอง', b.date)}
             ${row('วันที่เซ็นต์', b.signDate)}
             ${row('วันที่รู้ผล', b.resultDate)}
@@ -2327,7 +2327,7 @@
             ${row('วันที่ปล่อยรถ', b.releaseDate)}
 
             ${b.note && b.note !== '-' ? `
-              <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">📝 หมายเหตุ</div>
+              <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:file-pen',16)} หมายเหตุ</div>
               <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(b.note)}</div>
             ` : ''}
           </div>
@@ -2353,7 +2353,7 @@
       (D.bookingCases || []).forEach(b => {
         if (!b.car || !b.seller) return;
         if (!b.car.toLowerCase().includes(carLower)) return;
-        if (!ir(b.releaseDate || b.date || '')) return;   // 📅 กรองตามช่วงวันที่
+        if (!ir(b.releaseDate || b.date || '')) return;   // ${ic('lucide:calendar',16)} กรองตามช่วงวันที่
         if (!bookSellerMap[b.seller]) bookSellerMap[b.seller] = {booked:0, done:0, dealValue:0};
         const ent = bookSellerMap[b.seller];
         if (['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'].includes(b.status)) {
@@ -2366,11 +2366,11 @@
       });
 
       // ── รวม seller จากทั้ง 2 แหล่ง ──
-      const _rmMonths = [...new Set(rangeDays().map(x => x[0]))];   // 📅 เดือนในช่วง
+      const _rmMonths = [...new Set(rangeDays().map(x => x[0]))];   // ${ic('lucide:calendar',16)} เดือนในช่วง
       const allSellers = new Set([...Object.keys(leadMap), ...Object.keys(bookSellerMap)]);
       const rows = Array.from(allSellers).map(seller => {
         const lm = leadMap[seller] || {total:0, byMonth:[]};
-        const leadCount = _rmMonths.reduce((a,m) => a + (lm.byMonth?.[m] || 0), 0);   // 📅 รวมเดือนในช่วง
+        const leadCount = _rmMonths.reduce((a,m) => a + (lm.byMonth?.[m] || 0), 0);   // ${ic('lucide:calendar',16)} รวมเดือนในช่วง
         const bm = bookSellerMap[seller] || {booked:0, done:0, dealValue:0};
         const sellerObj = (D.sellers || []).find(s => s.name === seller);
         const team = sellerObj?.team || '?';
@@ -2390,7 +2390,7 @@
 
       let inner = `<div style="background:var(--bg);border-radius:16px;max-width:780px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
       inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap">`;
-      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียดรถ · ${h(periodLbl)}</div><div style="font-size:18px;font-weight:800;color:var(--blue)">🚗 ${h(car)}</div></div>`;
+      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียดรถ · ${h(periodLbl)}</div><div style="font-size:18px;font-weight:800;color:var(--blue)">${ic('lucide:car-front',16)} ${h(car)}</div></div>`;
       inner += `<button onclick="document.getElementById('car-detail-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
       inner += `</div>`;
 
@@ -2437,7 +2437,7 @@
       const teamName = (C.TEAM_NAMES || {})[tid] || tid;
       const teamColor = (C.TEAM_COLORS || {})[tid] || 'var(--t3)';
       const periodLbl = '📅 '+rangeLabelTH();
-      const ms = buildRangeMs();   // 📅 ตามช่วงวันที่
+      const ms = buildRangeMs();   // ${ic('lucide:calendar',16)} ตามช่วงวันที่
 
       // คำนวณ done + dealValue ต่อเซลล์ในทีมนี้
       const members = team.members || [];
@@ -2446,7 +2446,7 @@
         const sd = (D.sellers || []).find(x => x.name === name) || {};
         const done = msd ? (msd.done || 0) : (sd.done || 0);
         const dealValue = msd ? (msd.dealValue || 0) : (sd.dealValue || 0);
-        const target = (sd.target || 0) * rangeMonthCount();   // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง
+        const target = (sd.target || 0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
         return { name, done, dealValue, target };
       }).sort((a,b) => b.done - a.done);
 
@@ -2459,7 +2459,7 @@
       const releasedCases = (D.bookingCases || []).filter(b => {
         if (b.status !== 'ปล่อย') return false;
         if (!memberSet.has(b.seller)) return false;
-        // 📅 กรองตามช่วงวันที่ (ใช้วันปล่อยถ้ามี ไม่งั้นวันจอง)
+        // ${ic('lucide:calendar',16)} กรองตามช่วงวันที่ (ใช้วันปล่อยถ้ามี ไม่งั้นวันจอง)
         if (!ir(b.releaseDate || b.date || '')) return false;
         return true;
       }).sort((a,b) => (a.seller || '').localeCompare(b.seller || '', 'th'));
@@ -2478,14 +2478,14 @@
       // Summary boxes
       inner += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">`;
       inner += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปล่อย</div><div style="font-size:20px;font-weight:800;color:var(--green-mid)">${totalDone}</div></div>`;
-      inner += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">💰 ยอดปล่อย</div><div style="font-size:20px;font-weight:800;color:var(--green-mid)">${fmtBaht(totalDealValue)}</div></div>`;
+      inner += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">${ic('lucide:wallet',16)} ยอดปล่อย</div><div style="font-size:20px;font-weight:800;color:var(--green-mid)">${fmtBaht(totalDealValue)}</div></div>`;
       const pct = totalTarget > 0 ? Math.round(totalDone/totalTarget*100) : 0;
       inner += `<div style="background:${pct>=100?'var(--green-bg)':'var(--amber-bg)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">% ของเป้า</div><div style="font-size:20px;font-weight:800;color:${pct>=100?'var(--green)':'var(--amber)'}">${pct}%</div></div>`;
       inner += `</div>`;
 
       // ตารางเซลล์
       inner += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">สมาชิกทีม</div>`;
-      inner += `<div style="display:grid;grid-template-columns:1.4fr .6fr .8fr 1fr;gap:6px;padding:6px 8px;font-size:10px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)"><span>เซลล์</span><span style="text-align:right">ปล่อย/เป้า</span><span style="text-align:right">% เป้า</span><span style="text-align:right">💰 ยอดปล่อย</span></div>`;
+      inner += `<div style="display:grid;grid-template-columns:1.4fr .6fr .8fr 1fr;gap:6px;padding:6px 8px;font-size:10px;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd)"><span>เซลล์</span><span style="text-align:right">ปล่อย/เป้า</span><span style="text-align:right">% เป้า</span><span style="text-align:right">${ic('lucide:wallet',16)} ยอดปล่อย</span></div>`;
       sellerStats.forEach(s => {
         const sPct = s.target > 0 ? Math.round(s.done/s.target*100) : 0;
         const sColor = s.done >= s.target ? 'var(--green)' : (s.done > 0 ? 'var(--amber)' : 'var(--t3)');
@@ -2533,7 +2533,7 @@
       const allBookings = (D.bookingCases || []).filter(b => {
         if (b.seller !== sellerName) return false;
         if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-        // 📅 กรองตามช่วงวันที่ (ปล่อย → วันปล่อย, อื่นๆ → วันจอง)
+        // ${ic('lucide:calendar',16)} กรองตามช่วงวันที่ (ปล่อย → วันปล่อย, อื่นๆ → วันจอง)
         const useDate = (b.status === 'ปล่อย' ? (b.releaseDate || b.date) : b.date) || '';
         if (!ir(useDate)) return false;
         return true;
@@ -2565,7 +2565,7 @@
 
       // Summary: ยอดเงินรวม + breakdown by status
       if (totalDealValue > 0) {
-        inner += `<div style="padding:10px;background:var(--green-bg);border-radius:8px;margin-bottom:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">💰 ยอดรวม (ปล่อย)</div><div style="font-size:22px;font-weight:800;color:var(--green-mid)">${fmtBaht(totalDealValue)}</div></div>`;
+        inner += `<div style="padding:10px;background:var(--green-bg);border-radius:8px;margin-bottom:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${ic('lucide:wallet',16)} ยอดรวม (ปล่อย)</div><div style="font-size:22px;font-weight:800;color:var(--green-mid)">${fmtBaht(totalDealValue)}</div></div>`;
       }
       if (statusFilter === 'all' && allBookings.length > 0) {
         const stCounts = {};
@@ -2615,7 +2615,7 @@
       else cases.sort((a,b)=>urg(b)-urg(a));
 
       let html = `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0">📞 เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${cases.length} เคส)</span></div><div class="card-sub">เคสที่ยังต้องโทรต่อ — เร่งด่วนก่อน คือเคสที่อัพเดทน้อยที่สุด</div>`;
+      html += `<div class="card-title" style="margin:0">${ic('lucide:phone',16)} เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3)">(${cases.length} เคส)</span></div><div class="card-sub">เคสที่ยังต้องโทรต่อ — เร่งด่วนก่อน คือเคสที่อัพเดทน้อยที่สุด</div>`;
       html += `<select onchange="followFilter=this.value;render()"><option value="urgent" ${followFilter==='urgent'?'selected':''}>เร่งด่วนก่อน</option><option value="notcalled" ${followFilter==='notcalled'?'selected':''}>ยังไม่โทร</option><option value="hot" ${followFilter==='hot'?'selected':''}>ติดตาม 3+x</option><option value="recent" ${followFilter==='recent'?'selected':''}>อัพเดทล่าสุด</option></select></div>`;
       html += `<div class="lfhdr"><span>Code · เซลล์</span><span>หมายเหตุ / รถ</span><span style="text-align:right">อัพ</span></div>`;
       html += `<div style="max-height:480px;overflow-y:auto">`;
@@ -2626,7 +2626,7 @@
         html += `<div class="${cls}" onclick="openCaseFromOverview('${h(l.code)}','${h(l.seller)}')">`;
         html += `<div><div style="font-weight:700;font-size:11px;color:var(--blue)">${h(l.code)}</div><div style="font-size:10px;color:var(--t2);margin-top:1px">${h(l.seller)}</div><div style="font-size:10px;color:var(--t3)">${l.lastUpdate&&l.lastUpdate!=='-'?h(l.lastUpdate):'ยังไม่อัพเดท'}</div></div>`;
         html += `<div><div style="font-size:11px;color:var(--t2);line-height:1.5">${h((l.note||'-').slice(0,80))}</div>`;
-        if(carHas) html += `<div style="font-size:10px;color:var(--t3);margin-top:2px">🚗 ${h(l.car)}</div>`;
+        if(carHas) html += `<div style="font-size:10px;color:var(--t3);margin-top:2px">${ic('lucide:car-front',16)} ${h(l.car)}</div>`;
         html += `<div style="margin-top:3px">${urgBadge(l)}</div></div>`;
         html += `<div>${dotsHtml(l.updateCount)}</div></div>`;
       });
@@ -2666,7 +2666,7 @@
       const la = D.liveActivity || {totalInbox:0,totalLead:0,totalSessions:0,byHost:{},sessions:[]};
       const periodLbl = '📅 '+rangeLabelTH();
 
-      // 📅 Filter sessions ตามช่วงวันที่ที่กรอง
+      // ${ic('lucide:calendar',16)} Filter sessions ตามช่วงวันที่ที่กรอง
       const allSessions = la.sessions || [];
       const filteredSessions = allSessions.filter(s => ir(s.date || ''));
 
@@ -2688,7 +2688,7 @@
       // คลิป: ยังไม่ filter รายเดือน (backend ไม่ได้ส่ง per-clip date มา) — แสดงยอดรวมทั้งปี
       const totClip = sellers.reduce((a,s)=>a+s.clip,0);
 
-      let html = `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">📅 ข้อมูลในช่วง <b style="color:var(--blue)">${h(periodLbl)}</b> (กรองจากตัวเลือกบนหัว)</div>`;
+      let html = `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">${ic('lucide:calendar',16)} ข้อมูลในช่วง <b style="color:var(--blue)">${h(periodLbl)}</b> (กรองจากตัวเลือกบนหัว)</div>`;
       html += `<div class="g3">`;
       [{l:"ไลฟ์รวม",v:totLive+" ครั้ง",s:`session ในช่วงนี้`,c:"var(--blue)",tip:`จำนวนเซสชั่นไลฟ์ในช่วง ${periodLbl}\nกรองจาก sheet 'live_sessions' ตามวันที่`},
        {l:"Inbox รวม",v:fmtNum(totalInbox),s:fmtNum(totalLead)+" lead จากไลฟ์",c:"var(--green)",tip:"จำนวน inbox + lead ที่ได้จากไลฟ์ในช่วงนี้\nรวมจากทุกเซสชั่นที่ filter"},
@@ -2702,14 +2702,14 @@
       // 2-col: live + clips
       html += `<div class="g2">`;
       // Live — sort + display ตาม filtered data
-      html += `<div class="card" style="margin:0"><div class="card-title">📡 ไลฟ์สด <span style="font-size:11px;color:var(--t3);font-weight:400">${h(periodLbl)}</span><span class="info-tip" tabindex="0" data-tip="จำนวนเซสชั่นไลฟ์ของเซลล์ในช่วงนี้\nนับจาก field 'hosts' (เจ้าภาพ) แต่ละ session\n📥 = inbox ที่ได้จากเซสชั่นนั้น">?</span></div>`;
+      html += `<div class="card" style="margin:0"><div class="card-title">${ic('lucide:radio',16)} ไลฟ์สด <span style="font-size:11px;color:var(--t3);font-weight:400">${h(periodLbl)}</span><span class="info-tip" tabindex="0" data-tip="จำนวนเซสชั่นไลฟ์ของเซลล์ในช่วงนี้\nนับจาก field 'hosts' (เจ้าภาพ) แต่ละ session\n📥 = inbox ที่ได้จากเซสชั่นนั้น">?</span></div>`;
       html += `<div class="act-hdr"><span>เซลล์</span><span>จำนวนครั้ง</span><span style="text-align:right">inbox</span></div>`;
       const liveSorted = [...sellers].map(s => ({...s, _live: liveByHost[s.name]||0, _inbox: inboxByHost[s.name]||0}))
         .filter(s => s._live > 0)
         .sort((a,b)=>b._live - a._live);
       if (liveSorted.length === 0) html += `<div style="padding:12px;text-align:center;color:var(--t3);font-size:12px">ไม่มีไลฟ์ในช่วงนี้</div>`;
       liveSorted.forEach(s=>{
-        html += `<div class="act-row" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${h(s.name)}</span><span style="font-size:12px;font-weight:600;color:var(--blue)">${s._live} ครั้ง</span><span style="text-align:right;font-size:11px;color:var(--t3)">📥${s._inbox}</span></div>`;
+        html += `<div class="act-row" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${h(s.name)}</span><span style="font-size:12px;font-weight:600;color:var(--blue)">${s._live} ครั้ง</span><span style="text-align:right;font-size:11px;color:var(--t3)">${ic('lucide:inbox',16)}${s._inbox}</span></div>`;
       });
       html += `</div>`;
       // Clips — ยังเป็นยอดทั้งปี (backend ยังไม่ส่ง per-clip data)
@@ -2728,7 +2728,7 @@
       const liveTeams = [...new Set((la.sessions||[]).map(s=>s.team).filter(Boolean))].sort();
 
       html += `<div class="card" style="margin-top:0"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0">📺 ไลฟ์รายครั้ง <span style="font-size:11px;font-weight:400;color:var(--t3)">${h(periodLbl)}${liveTeam!=='all'?' · ทีม '+liveTeam:''} (${sessions.length})</span><span class="info-tip" tabindex="0" data-tip="รายการเซสชั่นไลฟ์ตามวันที่ ในช่วงที่เลือก\nกรองเดือนจากตัวเลือกบนหัว / กรองทีมจาก dropdown ขวา\nแสดง 30 รายการล่าสุด">?</span></div>`;
+      html += `<div class="card-title" style="margin:0">${ic('lucide:tv',16)} ไลฟ์รายครั้ง <span style="font-size:11px;font-weight:400;color:var(--t3)">${h(periodLbl)}${liveTeam!=='all'?' · ทีม '+liveTeam:''} (${sessions.length})</span><span class="info-tip" tabindex="0" data-tip="รายการเซสชั่นไลฟ์ตามวันที่ ในช่วงที่เลือก\nกรองเดือนจากตัวเลือกบนหัว / กรองทีมจาก dropdown ขวา\nแสดง 30 รายการล่าสุด">?</span></div>`;
       html += `<div style="display:flex;gap:6px;align-items:center">`;
       html += `<select onchange="liveTeam=this.value;render()" style="font-size:11px"><option value="all">ทุกทีม</option>`;
       liveTeams.forEach(t=>{html+=`<option value="${h(t)}" ${liveTeam===t?'selected':''}>${h(t)}</option>`;});
@@ -2740,7 +2740,7 @@
         html += `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--bg3);color:var(--t3)">${h(s.team||'-')}</span>`;
         html += `<span style="font-weight:500">${h(s.hosts.join(', '))}</span>`;
         html += `<span style="color:var(--t2)">${h(s.topic||'—')}</span>`;
-        html += `<span style="text-align:right;color:var(--t2)">📥${s.inbox} 🎯${s.lead}</span></div>`;
+        html += `<span style="text-align:right;color:var(--t2)">${ic('lucide:inbox',16)}${s.inbox} ${ic('lucide:target',16)}${s.lead}</span></div>`;
       });
       if(sessions.length>30) html += `<div style="text-align:center;padding:8px;font-size:11px;color:var(--t3)">แสดง 30 จาก ${sessions.length} รายการ</div>`;
       html += `</div>`;
@@ -2787,7 +2787,7 @@
         else { stepper = `<span style="display:inline-flex;align-items:center">`+STAGES.map((s,i)=>{ const on=ci>=0&&i<=ci; const dot=`<span title="${h(s)}" style="width:7px;height:7px;border-radius:50%;background:${on?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`; const ln=i<STAGES.length-1?`<span style="width:9px;height:2px;background:${(ci>=0&&i<ci)?'#fff':'rgba(255,255,255,.4)'};display:inline-block"></span>`:''; return dot+ln; }).join('')+`</span>`; }
         const _pending = (b.status!=='ปล่อย' && b.status!=='รีเจ็ก');
         const _ag = ageOf(b.date);
-        const agePill = (_pending && _ag!=null) ? `<span style="background:rgba(255,255,255,.92);color:${ageCol(_ag)};font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap">⏳ ค้าง ${_ag} วัน</span>` : '';
+        const agePill = (_pending && _ag!=null) ? `<span style="background:rgba(255,255,255,.92);color:${ageCol(_ag)};font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap">${ic('lucide:hourglass',16)} ค้าง ${_ag} วัน</span>` : '';
         let keyDate='',keyLabel='',needDate=false;
         if(b.status==='รอเซ็นต์'){keyLabel='นัดเซ็น';keyDate=b.signDate;needDate=empty(b.signDate);}
         else if(b.status==='รอผล'){keyLabel='ผลออก';keyDate=b.resultDate;needDate=empty(b.resultDate);}
@@ -2801,14 +2801,14 @@
         html += `<div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:2px">${h(b.customer)}</div>`;
         html += `<div style="font-size:11px;color:rgba(255,255,255,.8)">${h(b.car)}${b.plate&&b.plate!=='-'?' · '+h(b.plate):''}</div></div>`;
         html += `<div class="booking-body">`;
-        if(keyLabel) html += `<div class="brow"><span class="blbl">📅 ${keyLabel}</span><span class="bval" style="color:${needDate?'var(--red)':'var(--t1)'};font-weight:${needDate?600:400}">${needDate?'⚠️ ยังไม่ได้ใส่!':h(keyDate||'-')}</span></div>`;
-        if(b.phone&&!empty(b.phone)) html += `<div class="brow"><span class="blbl">📞 เบอร์</span><span class="bval" style="color:var(--blue)">${h(b.phone)}</span></div>`;
-        if(b.price>0) html += `<div class="brow"><span class="blbl">💰 ราคา</span><span class="bval" style="color:var(--t1);font-weight:500">${fmtPrice(b.price)}</span></div>`;
-        html += `<div class="brow"><span class="blbl">💳 มัดจำ</span><span class="bval" style="color:var(--green);font-weight:600">${fmtPrice(b.deposit)}</span></div>`;
-        if(b.finance&&!empty(b.finance)) html += `<div class="brow"><span class="blbl">🏦 ไฟแนนซ์</span><span class="bval">${h(b.finance)}${b.grade&&!empty(b.grade)?' · เกรด '+h(b.grade):''}${b.year&&!empty(b.year)?' · ปี '+h(b.year):''}</span></div>`;
-        if(b.leadCode&&!empty(b.leadCode)) html += `<div class="brow"><span class="blbl">🔖 Lead Code</span><span class="bval" style="color:var(--blue);cursor:pointer" onclick="event.stopPropagation();openCaseFromOverview('${h(b.leadCode)}','${h(b.seller)}')">${h(b.leadCode)} →</span></div>`;
-        if(b.note&&!empty(b.note)) html += `<div class="brow"><span class="blbl">📝 หมายเหตุ</span><span class="bval" style="color:var(--t2)">${h(b.note)}</span></div>`;
-        html += `<div style="text-align:center;padding-top:7px"><span style="font-size:10px;color:var(--t3)">👆 กดดูรายละเอียด · ไทม์ไลน์</span></div>`;
+        if(keyLabel) html += `<div class="brow"><span class="blbl">${ic('lucide:calendar',16)} ${keyLabel}</span><span class="bval" style="color:${needDate?'var(--red)':'var(--t1)'};font-weight:${needDate?600:400}">${needDate?'⚠️ ยังไม่ได้ใส่!':h(keyDate||'-')}</span></div>`;
+        if(b.phone&&!empty(b.phone)) html += `<div class="brow"><span class="blbl">${ic('lucide:phone',16)} เบอร์</span><span class="bval" style="color:var(--blue)">${h(b.phone)}</span></div>`;
+        if(b.price>0) html += `<div class="brow"><span class="blbl">${ic('lucide:wallet',16)} ราคา</span><span class="bval" style="color:var(--t1);font-weight:500">${fmtPrice(b.price)}</span></div>`;
+        html += `<div class="brow"><span class="blbl">${ic('lucide:credit-card',16)} มัดจำ</span><span class="bval" style="color:var(--green);font-weight:600">${fmtPrice(b.deposit)}</span></div>`;
+        if(b.finance&&!empty(b.finance)) html += `<div class="brow"><span class="blbl">${ic('lucide:landmark',16)} ไฟแนนซ์</span><span class="bval">${h(b.finance)}${b.grade&&!empty(b.grade)?' · เกรด '+h(b.grade):''}${b.year&&!empty(b.year)?' · ปี '+h(b.year):''}</span></div>`;
+        if(b.leadCode&&!empty(b.leadCode)) html += `<div class="brow"><span class="blbl">${ic('lucide:bookmark',16)} Lead Code</span><span class="bval" style="color:var(--blue);cursor:pointer" onclick="event.stopPropagation();openCaseFromOverview('${h(b.leadCode)}','${h(b.seller)}')">${h(b.leadCode)} →</span></div>`;
+        if(b.note&&!empty(b.note)) html += `<div class="brow"><span class="blbl">${ic('lucide:file-pen',16)} หมายเหตุ</span><span class="bval" style="color:var(--t2)">${h(b.note)}</span></div>`;
+        html += `<div style="text-align:center;padding-top:7px"><span style="font-size:10px;color:var(--t3)">${ic('lucide:mouse-pointer-click',16)} กดดูรายละเอียด · ไทม์ไลน์</span></div>`;
         html += `</div></div>`;
       });
       return html;
@@ -2859,9 +2859,9 @@
       if (curSeller && !monthNames.includes(curSeller)) html += `<option value="${h(curSeller)}" selected>${h(curSeller)} (ไม่มีข้อมูลเดือนนี้)</option>`;
       monthNames.forEach(n => { html += `<option value="${h(n)}" ${curSeller===n?'selected':''}>${h(n)}</option>`; });
       html += `</select>`;
-      if (token) html += `<a href="/s/${h(token)}/" target="_blank" class="bbtn" style="text-decoration:none">↗ เต็มจอ</a>`;
+      if (token) html += `<a href="/s/${h(token)}/" target="_blank" class="bbtn" style="text-decoration:none">${ic('lucide:arrow-up-right',13)} เต็มจอ</a>`;
       html += `</div>`;
-      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">📅 ${h(monthLbl)} · เซลล์ที่มีข้อมูล ${monthNames.length} คน</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">${ic('lucide:calendar',16)} ${h(monthLbl)} · เซลล์ที่มีข้อมูล ${monthNames.length} คน</div>`;
 
       if (token) {
         html += `<div style="position:relative;width:100%;height:calc(100vh - 200px);min-height:540px">
@@ -2869,7 +2869,7 @@
           <iframe src="/s/${h(token)}/" title="หน้าเซลล์ ${h(curSeller)}" onload="var el=document.getElementById('seller-iframe-loading');if(el)el.style.display='none'" style="width:100%;height:100%;border:.5px solid var(--bd);border-radius:14px;background:var(--bg)"></iframe>
         </div>`;
       } else {
-        html += `<div class="card" style="text-align:center;padding:36px 16px"><div style="font-size:30px;margin-bottom:8px">🔗</div><div style="font-size:14px;color:var(--t1);font-weight:600;margin-bottom:4px">เซลล์ "${h(curSeller)}" ยังไม่มี LINE user_id</div><div style="font-size:12px;color:var(--t3)">ตั้ง LINE user_id ใน sheet พนักงาน เพื่อแสดงหน้าส่วนตัวของเซลล์คนนี้</div></div>`;
+        html += `<div class="card" style="text-align:center;padding:36px 16px"><div style="font-size:30px;margin-bottom:8px">${ic('lucide:link',16)}</div><div style="font-size:14px;color:var(--t1);font-weight:600;margin-bottom:4px">เซลล์ "${h(curSeller)}" ยังไม่มี LINE user_id</div><div style="font-size:12px;color:var(--t3)">ตั้ง LINE user_id ใน sheet พนักงาน เพื่อแสดงหน้าส่วนตัวของเซลล์คนนี้</div></div>`;
       }
       return html;
 
@@ -2900,7 +2900,7 @@
       ];
       html += `<div class="kgrid" style="margin-bottom:10px">`;
       kpis.forEach(k=>{
-        html += `<div class="kpi" style="cursor:pointer" onclick="${k.action}" title="${k.hint}"><div class="kl">${k.l} <span style="font-size:9px;color:var(--t3);font-weight:400">↗</span></div><div class="kv" style="color:${k.c}">${k.v}</div></div>`;
+        html += `<div class="kpi" style="cursor:pointer" onclick="${k.action}" title="${k.hint}"><div class="kl">${k.l} <span style="font-size:9px;color:var(--t3);font-weight:400">${ic('lucide:arrow-up-right',13)}</span></div><div class="kv" style="color:${k.c}">${k.v}</div></div>`;
       });
       html += `</div>`;
 
@@ -2908,7 +2908,7 @@
       const lt = sd.leadTypes||{};
       const ltTotal = Object.values(lt).reduce((a,v)=>a+v,0)||1;
       const ltSorted = Object.entries(lt).sort((a,b)=>b[1]-a[1]);
-      html += `<div class="card" style="margin-bottom:10px"><div class="card-title">🏷️ ประเภท Lead</div>`;
+      html += `<div class="card" style="margin-bottom:10px"><div class="card-title">${ic('lucide:tag',16)} ประเภท Lead</div>`;
       if(ltSorted.length===0) html += `<span style="font-size:12px;color:var(--t3)">ยังไม่มีข้อมูล</span>`;
       ltSorted.forEach(([name,count])=>{
         const p=Math.round((count/ltTotal)*100);
@@ -2966,8 +2966,8 @@
         html += `<div class="${cls}" onclick="showCase='${h(l.code)}';updateUrl();render()">`;
         html += `<div><div style="font-weight:700;font-size:11px;color:var(--blue)">${h(l.code)}${l.leadType?`<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:var(--blue-bg);color:var(--blue);font-weight:600;margin-left:3px">${h(l.leadType)}</span>`:''}</div>`;
         html += `<div style="font-size:10px;color:var(--t3)">${l.lastUpdate&&l.lastUpdate!=='-'?h(l.lastUpdate):'ยังไม่อัพเดท'}</div>`;
-        if(carHas) html += `<div style="font-size:10px;color:var(--t2)">🚗 ${h(l.car)}</div>`;
-        if(chanHas) html += `<div style="font-size:10px;color:var(--purple-mid)">📢 ${h(l.channel)}</div>`;
+        if(carHas) html += `<div style="font-size:10px;color:var(--t2)">${ic('lucide:car-front',16)} ${h(l.car)}</div>`;
+        if(chanHas) html += `<div style="font-size:10px;color:var(--purple-mid)">${ic('lucide:megaphone',16)} ${h(l.channel)}</div>`;
         html += `</div><div><div style="font-size:11px;color:var(--t2);line-height:1.5">${h((l.note||'-').slice(0,80))}</div><div style="margin-top:3px">${urgBadge(l)}</div></div>`;
         html += `<div>${dotsHtml(l.updateCount)}</div></div>`;
       });
@@ -3014,7 +3014,7 @@
       cdKpis.forEach(k=>{html+=`<div class="cd-kpi"><div class="cd-kl">${k.l}</div><div class="cd-kv" style="color:${k.c}">${h(k.v)}</div></div>`;});
       html += `</div>`;
       // Info
-      html += `<div class="card" style="margin-bottom:10px"><div class="card-title">📞 ข้อมูลลูกค้า</div>`;
+      html += `<div class="card" style="margin-bottom:10px"><div class="card-title">${ic('lucide:phone',16)} ข้อมูลลูกค้า</div>`;
       infoRows.forEach(r=>{html+=`<div class="irow"><span class="ilbl">${r.l}</span><span class="ival" style="color:${r.c}">${h(r.v)}</span></div>`;});
       // Progress dots
       html += `<div style="margin-top:10px;padding-top:10px;border-top:.5px solid var(--bd)"><div style="font-size:11px;color:var(--t3);margin-bottom:5px">ความคืบหน้า</div><div style="display:flex;align-items:center;gap:4px">`;
@@ -3025,11 +3025,11 @@
       }
       html += `<span style="font-size:11px;color:var(--t3);margin-left:6px">${l.updateCount}/${C.UPD_TGT} ครั้ง</span></div></div></div>`;
       // History
-      html += `<div class="card"><div class="card-title">📝 ประวัติการติดตาม</div>`;
+      html += `<div class="card"><div class="card-title">${ic('lucide:file-pen',16)} ประวัติการติดตาม</div>`;
       if(history.length===0) html += `<div style="color:var(--t3);font-size:12px;padding:8px 0">ยังไม่มีหมายเหตุ</div>`;
       history.forEach((hh,i)=>{
         html += `<div class="upd-item"><span class="upd-n">${String(i+1).padStart(2,'0')}</span><div><div style="font-size:11px;color:var(--t2);line-height:1.55">${h(hh)}</div>`;
-        if(i===history.length-1) html += `<span class="bdg" style="background:var(--blue-bg);color:var(--blue);margin-top:3px;display:inline-block">📍 ล่าสุด</span>`;
+        if(i===history.length-1) html += `<span class="bdg" style="background:var(--blue-bg);color:var(--blue);margin-top:3px;display:inline-block">${ic('lucide:map-pin',16)} ล่าสุด</span>`;
         html += `</div></div>`;
       });
       html += `</div>`;
@@ -3082,7 +3082,7 @@
     //  เลือก role ตอน login, ไม่ต้อง upgrade เป็น admin ในหน้า dashboard อีก)
 
     // ── Seller Config Panel (admin only) — ตั้งเป้า + จัดทีม ผ่าน Google Sheet ──
-    // ── 🔍 Diagnostics Panel (admin only) — ดู log การกรองข้อมูล + เคสที่หาย ──
+    // ── ${ic('lucide:search',16)} Diagnostics Panel (admin only) — ดู log การกรองข้อมูล + เคสที่หาย ──
     // ── Export Diligence Score ลง Google Sheet ──
     async function exportLeadScore() {
       const now = new Date();
@@ -3107,7 +3107,7 @@
       }
     }
 
-    // ── 📊 แหล่งข้อมูล (Sheets) — แบบ node ใน n8n ──
+    // ── ${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets) — แบบ node ใน n8n ──
     async function openSheetsPanel() {
       const old = document.getElementById('sheets-overlay');
       if (old) old.remove();
@@ -3124,7 +3124,7 @@
         data = await r.json();
         if (!r.ok || data.error) throw new Error(data.error || 'fetch failed');
       } catch (e) {
-        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">⚠️ ${h(String(e))}</div>`;
+        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">${ic('lucide:triangle-alert',16)} ${h(String(e))}</div>`;
         return;
       }
       window.__sheetsData = data;
@@ -3136,38 +3136,38 @@
           : `<span style="background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700">✗ error</span>`;
         return `
           <div style="border:.5px solid var(--bd);border-radius:12px;padding:13px;background:var(--bg2);display:flex;gap:11px;align-items:flex-start">
-            <div style="width:38px;height:38px;border-radius:8px;background:#0f9d58;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📊</div>
+            <div style="width:38px;height:38px;border-radius:8px;background:#0f9d58;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">${ic('lucide:bar-chart-3',16)}</div>
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:var(--t1)">${h(s.name)}</span>${badge}</div>
               <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${h(s.desc)}</div>
               <div style="font-size:10.5px;color:var(--t2);margin-top:4px">tab: <b>${h(s.tab)}</b> · ${ok ? `<b style="color:var(--green-mid)">${s.rows.toLocaleString()}</b> แถว` : `<span style="color:var(--red)">${h(s.error||'อ่านไม่ได้')}</span>`}</div>
-              <a href="${h(s.url)}" target="_blank" style="font-size:10.5px;color:var(--blue);text-decoration:none">เปิดใน Google Sheet ↗</a>
+              <a href="${h(s.url)}" target="_blank" style="font-size:10.5px;color:var(--blue);text-decoration:none">เปิดใน Google Sheet ${ic('lucide:arrow-up-right',13)}</a>
             </div>
           </div>`;
       };
 
-      const cfgChip = (c) => `<a href="${h(c.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:.5px solid var(--bd);border-radius:9px;padding:6px 10px;font-size:11px;color:var(--t1);text-decoration:none">${h(c.name)} <span style="color:var(--t3)">↗</span></a>`;
+      const cfgChip = (c) => `<a href="${h(c.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:.5px solid var(--bd);border-radius:9px;padding:6px 10px;font-size:11px;color:var(--t1);text-decoration:none">${h(c.name)} <span style="color:var(--t3)">${ic('lucide:arrow-up-right',13)}</span></a>`;
 
       const monthChips = (data.monthlyTabs || []).map(t =>
         `<span style="background:var(--blue-bg);color:var(--blue);padding:3px 9px;border-radius:8px;font-size:11px;font-weight:600">${h(t)}</span>`).join('');
 
       let html = `<div style="background:var(--bg);border-radius:16px;max-width:860px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
       html += `<div style="padding:18px 22px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">`;
-      html += `<div><div style="font-size:11px;color:var(--t3)">Google Sheets ที่ระบบดึงข้อมูล · เช็คสด</div><div style="font-size:18px;font-weight:800;color:var(--t1)">📊 แหล่งข้อมูล (${data.sources.length} sheet)</div></div>`;
+      html += `<div><div style="font-size:11px;color:var(--t3)">Google Sheets ที่ระบบดึงข้อมูล · เช็คสด</div><div style="font-size:18px;font-weight:800;color:var(--t1)">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (${data.sources.length} sheet)</div></div>`;
       const editBtn = data.canEdit
-        ? `<button onclick="renderSheetsEdit()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">✏️ ย้าย/แก้ไขแหล่งข้อมูล</button>`
+        ? `<button onclick="renderSheetsEdit()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">${ic('lucide:pencil',16)} ย้าย/แก้ไขแหล่งข้อมูล</button>`
         : '';
-      html += `<div style="display:flex;gap:6px">${editBtn}<button onclick="openSheetsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">🔄 เช็คใหม่</button><button onclick="document.getElementById('sheets-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button></div>`;
+      html += `<div style="display:flex;gap:6px">${editBtn}<button onclick="openSheetsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">${ic('lucide:refresh-cw',16)} เช็คใหม่</button><button onclick="document.getElementById('sheets-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button></div>`;
       html += `</div><div id="sheets-body" style="overflow-y:auto;padding:18px 22px;flex:1">`;
       html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${data.sources.map(sheetCard).join('')}</div>`;
       // monthly tabs (realtime)
-      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">🗓️ Tab รายเดือนที่ระบบเห็น (Lead) <span style="font-size:11px;font-weight:400;color:var(--t3)">— สร้าง tab เดือนใหม่ → โผล่ที่นี่อัตโนมัติ</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${monthChips || '<span style="color:var(--t3);font-size:12px">ไม่พบ tab รายเดือน</span>'}</div></div>`;
+      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">${ic('lucide:calendar-days',16)} Tab รายเดือนที่ระบบเห็น (Lead) <span style="font-size:11px;font-weight:400;color:var(--t3)">— สร้าง tab เดือนใหม่ → โผล่ที่นี่อัตโนมัติ</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${monthChips || '<span style="color:var(--t3);font-size:12px">ไม่พบ tab รายเดือน</span>'}</div></div>`;
       // config sheets
-      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">⚙️ Sheet ตั้งค่า</div><div style="display:flex;flex-wrap:wrap;gap:8px">${(data.configSources||[]).map(cfgChip).join('')}</div></div>`;
+      html += `<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">${ic('lucide:settings',16)} Sheet ตั้งค่า</div><div style="display:flex;flex-wrap:wrap;gap:8px">${(data.configSources||[]).map(cfgChip).join('')}</div></div>`;
       // note
       html += `<div style="margin-top:18px;padding:12px;background:var(--blue-bg);border-radius:10px;border-left:3px solid var(--blue);font-size:11px;color:var(--t2);line-height:1.6">`;
-      html += `📝 <b>Realtime:</b> ระบบอ่านรายชื่อ tab ใหม่ทุกครั้ง (cache 60 วิ) → สร้าง sheet/tab เดือนใหม่ในมือ ระบบเห็นเอง ไม่ต้องแก้โค้ด`;
-      html += data.useSupabase ? `<br>⚡ ตอนนี้ dashboard อ่านผ่าน <b>Supabase</b> (mirror) — sheet เป็นต้นทาง, sync เข้า Supabase` : '';
+      html += `${ic('lucide:file-pen',16)} <b>Realtime:</b> ระบบอ่านรายชื่อ tab ใหม่ทุกครั้ง (cache 60 วิ) → สร้าง sheet/tab เดือนใหม่ในมือ ระบบเห็นเอง ไม่ต้องแก้โค้ด`;
+      html += data.useSupabase ? `<br>${ic('lucide:zap',16)} ตอนนี้ dashboard อ่านผ่าน <b>Supabase</b> (mirror) — sheet เป็นต้นทาง, sync เข้า Supabase` : '';
       html += `</div></div></div>`;
       overlay.innerHTML = html;
     }
@@ -3190,17 +3190,17 @@
         </div>`;
 
       let html = `<div style="padding:11px 13px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber);font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px">`;
-      html += `⚠️ <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> วาง Spreadsheet ID ใหม่ + ชื่อ tab → กดบันทึก ระบบจะอ่านจากไฟล์ใหม่ทันที (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
+      html += `${ic('lucide:triangle-alert',16)} <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> วาง Spreadsheet ID ใหม่ + ชื่อ tab → กดบันทึก ระบบจะอ่านจากไฟล์ใหม่ทันที (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
       html += `เว้นว่าง = ใช้ค่าเดิมในโค้ด · Service account ต้องมีสิทธิ์อ่านไฟล์ใหม่ด้วย`;
       html += `</div>`;
-      html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:8px">📊 แหล่งข้อมูลหลัก</div>`;
+      html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูลหลัก</div>`;
       html += data.sources.map(s => editRow(s, false)).join('');
       if ((data.configSources || []).length) {
-        html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin:14px 0 8px">⚙️ Sheet ตั้งค่า</div>`;
+        html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin:14px 0 8px">${ic('lucide:settings',16)} Sheet ตั้งค่า</div>`;
         html += data.configSources.map(s => editRow(s, true)).join('');
       }
       html += `<div style="display:flex;gap:8px;margin-top:14px;position:sticky;bottom:0;background:var(--bg);padding-top:8px">`;
-      html += `<button onclick="saveSheetsConfig(this)" style="flex:1;padding:11px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:800;font-size:13px;cursor:pointer">💾 บันทึก + sync ข้อมูลใหม่</button>`;
+      html += `<button onclick="saveSheetsConfig(this)" style="flex:1;padding:11px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:800;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึก + sync ข้อมูลใหม่</button>`;
       html += `<button onclick="openSheetsPanel()" style="padding:11px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:13px;cursor:pointer">← กลับ</button>`;
       html += `</div>`;
       body.innerHTML = html;
@@ -3248,7 +3248,7 @@
         data = await r.json();
         if (!r.ok) throw new Error(data.error || 'fetch failed');
       } catch (e) {
-        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">❌ ${h(String(e))}</div>`;
+        overlay.querySelector('div > div').innerHTML = `<div style="color:var(--red);padding:24px;text-align:center">${ic('lucide:circle-x',16)} ${h(String(e))}</div>`;
         return;
       }
 
@@ -3257,9 +3257,9 @@
       let html = `<div style="background:var(--bg);border-radius:16px;max-width:900px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
       // Header
       html += `<div style="padding:18px 22px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">`;
-      html += `<div><div style="font-size:11px;color:var(--t3)">Admin Diagnostics · ${h(new Date(data.generatedAt).toLocaleString('th-TH'))}</div><div style="font-size:18px;font-weight:800;color:var(--t1)">🔍 Log การกรองข้อมูล</div></div>`;
+      html += `<div><div style="font-size:11px;color:var(--t3)">Admin Diagnostics · ${h(new Date(data.generatedAt).toLocaleString('th-TH'))}</div><div style="font-size:18px;font-weight:800;color:var(--t1)">${ic('lucide:search',16)} Log การกรองข้อมูล</div></div>`;
       html += `<div style="display:flex;gap:6px">`;
-      html += `<button onclick="openDiagnosticsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">🔄 รีเฟรช</button>`;
+      html += `<button onclick="openDiagnosticsPanel()" style="padding:6px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">${ic('lucide:refresh-cw',16)} รีเฟรช</button>`;
       html += `<button onclick="document.getElementById('diag-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
       html += `</div></div>`;
 
@@ -3267,12 +3267,12 @@
 
       // ── Leads section ──
       html += `<div style="margin-bottom:18px">`;
-      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">📩 Leads — ${L.total.toLocaleString()} แถว</div>`;
+      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:mail',16)} Leads — ${L.total.toLocaleString()} แถว</div>`;
       html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">`;
       html += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปีนี้ (${data.currentYear})</div><div style="font-size:18px;font-weight:800;color:var(--green)">${L.thisYear.toLocaleString()}</div><div style="font-size:9px;color:var(--t3)">ขึ้น dashboard</div></div>`;
       html += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ปีก่อน</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${L.prevYear.toLocaleString()}</div><div style="font-size:9px;color:var(--t3)">ถูกตัดออก (intentional)</div></div>`;
       const badDateCol = L.badDate > 0 ? 'var(--red)' : 'var(--t3)';
-      html += `<div style="background:${L.badDate>0?'var(--red-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">วันที่พัง</div><div style="font-size:18px;font-weight:800;color:${badDateCol}">${L.badDate}</div><div style="font-size:9px;color:var(--t3)">⚠️ หายจาก dashboard</div></div>`;
+      html += `<div style="background:${L.badDate>0?'var(--red-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">วันที่พัง</div><div style="font-size:18px;font-weight:800;color:${badDateCol}">${L.badDate}</div><div style="font-size:9px;color:var(--t3)">${ic('lucide:triangle-alert',16)} หายจาก dashboard</div></div>`;
       const noDataCol = L.noDateWithData.length > 0 ? 'var(--amber)' : 'var(--t3)';
       html += `<div style="background:${L.noDateWithData.length>0?'var(--amber-bg)':'var(--bg2)'};padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ไม่มีวันที่ แต่มีข้อมูล</div><div style="font-size:18px;font-weight:800;color:${noDataCol}">${L.noDateWithData.length}</div><div style="font-size:9px;color:var(--t3)">${L.noDateWithData.length>0?'⚠️ ตรวจ':'OK'}</div></div>`;
       html += `</div>`;
@@ -3280,7 +3280,7 @@
       // เคสวันที่พัง
       if (L.badDateExamples.length > 0) {
         html += `<div style="margin-top:12px;padding:12px;background:var(--red-bg);border-radius:10px;border-left:3px solid var(--red)">`;
-        html += `<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ Lead ที่วันที่ parse ไม่ได้ — แก้ใน Google Sheet (column A)</div>`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">${ic('lucide:triangle-alert',16)} Lead ที่วันที่ parse ไม่ได้ — แก้ใน Google Sheet (column A)</div>`;
         html += `<div class="shdr" style="grid-template-columns:1fr 1fr 1fr 1.5fr;font-size:10px;padding:4px 0"><span>Code</span><span>เซลล์</span><span>เบอร์</span><span>วันที่ที่กรอกมา</span></div>`;
         L.badDateExamples.forEach(e => {
           html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid var(--red-mid,#fecaca)"><span style="font-family:monospace">${h(e.code)}</span><span>${h(e.seller)}</span><span style="font-family:monospace">${h(e.phone)}</span><span style="font-family:monospace;color:var(--red)">${h(e.rawDate)}</span></div>`;
@@ -3291,7 +3291,7 @@
       // เคสไม่มีวันที่ แต่มีข้อมูล
       if (L.noDateWithData.length > 0) {
         html += `<div style="margin-top:12px;padding:12px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber)">`;
-        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ Lead ที่ลืมกรอกวันที่ (${L.noDateWithData.length} เคส) — กรอก column A ใน Google Sheet</div>`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">${ic('lucide:triangle-alert',16)} Lead ที่ลืมกรอกวันที่ (${L.noDateWithData.length} เคส) — กรอก column A ใน Google Sheet</div>`;
         html += `<div class="shdr" style="grid-template-columns:1fr 1fr 1.2fr 1.5fr;font-size:10px;padding:4px 0"><span>Code</span><span>เซลล์</span><span>เบอร์</span><span>รถ</span></div>`;
         L.noDateWithData.forEach(e => {
           html += `<div style="display:grid;grid-template-columns:1fr 1fr 1.2fr 1.5fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid #fde68a"><span style="font-family:monospace">${h(e.code)}</span><span>${h(e.seller)}</span><span style="font-family:monospace">${h(e.phone)}</span><span>${h(e.car)}</span></div>`;
@@ -3302,7 +3302,7 @@
 
       // ── Sales section ──
       html += `<div style="margin-bottom:18px">`;
-      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">🛒 Sales Reports — ${S.total} แถว</div>`;
+      html += `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:shopping-cart',16)} Sales Reports — ${S.total} แถว</div>`;
       html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">`;
       html += `<div style="background:var(--green-bg);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">เคสที่นับ</div><div style="font-size:18px;font-weight:800;color:var(--green)">${S.kept}</div></div>`;
       html += `<div style="background:var(--bg2);padding:10px;border-radius:8px;text-align:center"><div style="font-size:10px;color:var(--t3)">ลำดับว่าง/header</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${S.dropNoSeq}</div><div style="font-size:9px;color:var(--t3)">ปกติ — header rows</div></div>`;
@@ -3314,7 +3314,7 @@
 
       // Status breakdown
       html += `<div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:10px">`;
-      html += `<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">📊 แจกแจงสถานะ</div>`;
+      html += `<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">${ic('lucide:bar-chart-3',16)} แจกแจงสถานะ</div>`;
       html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px">`;
       Object.entries(S.statusBreakdown).sort((a,b)=>b[1]-a[1]).forEach(([st,n]) => {
         const col = (C.STATUS_COLOR||{})[st] || 'var(--t3)';
@@ -3325,7 +3325,7 @@
       // เคสไม่มีสถานะ
       if (S.noStatusExamples.length > 0) {
         html += `<div style="margin-top:12px;padding:12px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber)">`;
-        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ เคสที่ลืมใส่สถานะ (${S.dropNoStatus} เคส) — กรอก column N ใน Google Sheet</div>`;
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">${ic('lucide:triangle-alert',16)} เคสที่ลืมใส่สถานะ (${S.dropNoStatus} เคส) — กรอก column N ใน Google Sheet</div>`;
         html += `<div class="shdr" style="grid-template-columns:.4fr 1fr 1.4fr .8fr 1.4fr;font-size:10px"><span>#</span><span>เซลล์</span><span>ลูกค้า</span><span>วันที่</span><span>รถ</span></div>`;
         S.noStatusExamples.forEach(e => {
           html += `<div style="display:grid;grid-template-columns:.4fr 1fr 1.4fr .8fr 1.4fr;gap:8px;padding:4px 0;font-size:11px;border-bottom:.5px solid #fde68a"><span>${h(e.seq)}</span><span>${h(e.seller)}</span><span>${h(e.customer)}</span><span style="font-family:monospace">${h(e.date)}</span><span>${h(e.car)}</span></div>`;
@@ -3365,7 +3365,7 @@
         const knownEntries = Object.entries(R.knownSellers || {});
         if (knownEntries.length > 0) {
           html += `<div style="padding:10px;background:var(--green-bg);border-radius:8px;margin-bottom:8px">`;
-          html += `<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">✅ เซลล์ในระบบ — ${R.knownSum} เคส</div>`;
+          html += `<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">${ic('lucide:circle-check',16)} เซลล์ในระบบ — ${R.knownSum} เคส</div>`;
           html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:5px">`;
           knownEntries.forEach(([name,n]) => {
             html += `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg);border-radius:6px"><span style="font-size:11px;color:var(--t1);font-weight:600">${h(name)}</span><span style="font-size:12px;font-weight:700;color:var(--green)">${n}</span></div>`;
@@ -3376,7 +3376,7 @@
         const orphanEntries = Object.entries(R.orphanSellers || {});
         if (orphanEntries.length > 0) {
           html += `<div style="padding:10px;background:var(--amber-bg);border-radius:8px;border-left:3px solid var(--amber);margin-bottom:8px">`;
-          html += `<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ เซลล์ที่ไม่อยู่ใน ALL_SELLERS (orphan) — ${R.orphanSum} เคส</div>`;
+          html += `<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">${ic('lucide:triangle-alert',16)} เซลล์ที่ไม่อยู่ใน ALL_SELLERS (orphan) — ${R.orphanSum} เคส</div>`;
           html += `<div style="font-size:10px;color:var(--t3);margin-bottom:6px">หมายเหตุ:ใส่ชื่อเหล่านี้ใน sheet "ตั้งค่าเซลล์" หรือเปิด normalize_seller() map ให้</div>`;
           orphanEntries.forEach(([name,n]) => {
             html += `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg);border-radius:6px;margin-bottom:3px"><span style="font-size:11px;color:var(--t1);font-weight:600">${h(name)}</span><span style="font-size:12px;font-weight:700;color:var(--amber)">${n}</span></div>`;
@@ -3387,7 +3387,7 @@
         const rawEntries = Object.entries(R.bySellerRaw || {});
         const normEntries = Object.entries(R.bySellerNormalized || {});
         if (rawEntries.length !== normEntries.length || rawEntries.some(([k]) => !(k in (R.bySellerNormalized||{})))) {
-          html += `<details style="padding:10px;background:var(--bg2);border-radius:8px;font-size:11px"><summary style="cursor:pointer;color:var(--t2);font-weight:600">🔍 ดูชื่อเซลล์ใน sheet (raw ก่อน normalize)</summary>`;
+          html += `<details style="padding:10px;background:var(--bg2);border-radius:8px;font-size:11px"><summary style="cursor:pointer;color:var(--t2);font-weight:600">${ic('lucide:search',16)} ดูชื่อเซลล์ใน sheet (raw ก่อน normalize)</summary>`;
           html += `<div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:5px">`;
           rawEntries.forEach(([name,n]) => {
             html += `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg);border-radius:6px"><span style="font-size:11px;color:var(--t2)">${h(name)}</span><span style="font-size:12px;color:var(--t3)">${n}</span></div>`;
@@ -3399,12 +3399,12 @@
 
       // Footer note
       html += `<div style="margin-top:18px;padding:12px;background:var(--blue-bg);border-radius:10px;border-left:3px solid var(--blue)">`;
-      html += `<div style="font-size:11px;color:var(--blue);font-weight:700;margin-bottom:4px">📝 หมายเหตุ</div>`;
+      html += `<div style="font-size:11px;color:var(--blue);font-weight:700;margin-bottom:4px">${ic('lucide:file-pen',16)} หมายเหตุ</div>`;
       html += `<div style="font-size:11px;color:var(--t2);line-height:1.6">`;
       html += `• ระบบ <b>ไม่มี cache</b> ดึงสดจาก Google Sheets ทุกครั้งที่ refresh page<br>`;
       html += `• "ปีก่อน" ${L.prevYear} เคสถูกตัดออกตั้งใจ (filter <code>is_this_year</code>)<br>`;
       html += `• "ลำดับว่าง/header" ${S.dropNoSeq} เคสเป็น header row ของ sheet ปกติ<br>`;
-      html += `• ⚠️ <b>วันที่พัง / ไม่มีสถานะ</b> = ต้องไปแก้ใน Google Sheet ตามตัวอย่างด้านบน`;
+      html += `• ${ic('lucide:triangle-alert',16)} <b>วันที่พัง / ไม่มีสถานะ</b> = ต้องไปแก้ใน Google Sheet ตามตัวอย่างด้านบน`;
       html += `</div></div>`;
 
       html += `</div></div>`;
@@ -3436,7 +3436,7 @@
         if (!res.ok || data.error) throw new Error(data.error || 'load failed');
         renderSellerConfig(modal, data);
       } catch (e) {
-        modal.querySelector('#sc-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+        modal.querySelector('#sc-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       }
     }
 
@@ -3452,11 +3452,11 @@
     function drawSellerConfigBody(modal, data) {
       const total = __scRows.reduce((a,s)=>a+(parseInt(s.target)||0),0);
       const teamSet = new Set(__scRows.map(s=>s.team).filter(Boolean));
-      const sheetUrlBtn = `<a href="${h(data.sheet_url)}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">📊 ดูใน Sheet</a>`;
+      const sheetUrlBtn = `<a href="${h(data.sheet_url)}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">${ic('lucide:bar-chart-3',16)} ดูใน Sheet</a>`;
 
       const banner = data.loaded_from_sheet
-        ? `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border:.5px solid var(--green-mid);border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span>✅ โหลดจาก Sheet "${h(data.sheet_name)}" สำเร็จ</span>${sheetUrlBtn}</div>`
-        : `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border:.5px solid var(--amber-mid);border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span>⚠️ ยังไม่มี sheet — กดบันทึกจะสร้างให้อัตโนมัติ</span>${sheetUrlBtn}</div>`;
+        ? `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border:.5px solid var(--green-mid);border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span>${ic('lucide:circle-check',16)} โหลดจาก Sheet "${h(data.sheet_name)}" สำเร็จ</span>${sheetUrlBtn}</div>`
+        : `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border:.5px solid var(--amber-mid);border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span>${ic('lucide:triangle-alert',16)} ยังไม่มี sheet — กดบันทึกจะสร้างให้อัตโนมัติ</span>${sheetUrlBtn}</div>`;
 
       // datalist for team suggestions
       const teamOpts = ['A','B','C','D','E'].concat(Array.from(teamSet)).filter((v,i,a)=>a.indexOf(v)===i);
@@ -3474,7 +3474,7 @@
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd)">ชื่อเล่น</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:70px">ทีม</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:90px">เป้า/เดือน</th>
-          <th style="text-align:center;padding:5px 6px;color:var(--amber);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:60px" title="ติ๊ก = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย (login แล้วเป็นแอดมิน)">👑 แอดมิน</th>
+          <th style="text-align:center;padding:5px 6px;color:var(--amber);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:60px" title="ติ๊ก = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย (login แล้วเป็นแอดมิน)">${ic('lucide:crown',16)} แอดมิน</th>
           <th style="text-align:left;padding:5px 6px;color:var(--t3);font-size:10px;font-weight:600;border-bottom:.5px solid var(--bd);width:170px">URL ส่วนตัว</th>
           <th style="border-bottom:.5px solid var(--bd);width:32px"></th>
         </tr></thead>
@@ -3498,7 +3498,7 @@
         </tbody>
       </table>`;
 
-      html += `<button onclick="__scAddRow()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">➕ เพิ่มเซลล์ใหม่</button>`;
+      html += `<button onclick="__scAddRow()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">${ic('lucide:plus',16)} เพิ่มเซลล์ใหม่</button>`;
       html += `<div id="sc-msg" style="margin-top:10px"></div>`;
 
       modal.querySelector('#sc-body').innerHTML = html;
@@ -3513,10 +3513,10 @@
         footer.style.cssText = 'padding:12px 16px;border-top:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px';
         modal.appendChild(footer);
       }
-      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">⚠️ บันทึก = เขียนทับ tab "ตั้งค่าเซลล์" ใน Google Sheet</div>
+      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">${ic('lucide:triangle-alert',16)} บันทึก = เขียนทับ tab "ตั้งค่าเซลล์" ใน Google Sheet</div>
         <div style="display:flex;gap:8px">
           <button onclick="document.getElementById('sconfig-overlay').remove()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ปิด</button>
-          <button id="sc-save-btn" onclick="__scSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">💾 บันทึก</button>
+          <button id="sc-save-btn" onclick="__scSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึก</button>
         </div>`;
     }
 
@@ -3545,10 +3545,10 @@
         const r = __scRows[i];
         r.team = (r.team || '').trim().toUpperCase();  // uppercase ตอน save (กัน cursor jump ระหว่างพิมพ์)
         if (!r.name || !r.name.trim()) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ แถวที่ ${i+1}: ชื่อว่าง</div>`; return;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} แถวที่ ${i+1}: ชื่อว่าง</div>`; return;
         }
         if (!r.team) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(r.name)}: ยังไม่ได้ใส่ทีม</div>`; return;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(r.name)}: ยังไม่ได้ใส่ทีม</div>`; return;
         }
       }
       if (!confirm(`บันทึกการตั้งค่าเซลล์ ${__scRows.length} คน? (จะเขียนทับ sheet)`)) return;
@@ -3563,18 +3563,18 @@
         });
         const data = await res.json();
         if (!res.ok || data.error) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
         } else {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ บันทึก ${data.saved} เซลล์เรียบร้อย — รีเฟรชหน้า dashboard เพื่อดูผล</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">${ic('lucide:circle-check',16)} บันทึก ${data.saved} เซลล์เรียบร้อย — รีเฟรชหน้า dashboard เพื่อดูผล</div>`;
         }
       } catch (e) {
-        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = '💾 บันทึก';
       }
     }
 
-    // ── 👑 จัดการแอดมิน (admin IDs) — รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ) ──
+    // ── ${ic('lucide:crown',16)} จัดการแอดมิน (admin IDs) — รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ) ──
     let __aiAdmins = [];      // [{user_id, name, note}]
     let __aiEmployees = [];   // [{user_id, nickname, display, dept}]
     async function openAdminIdsPanel() {
@@ -3589,7 +3589,7 @@
       modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:600px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
       modal.onclick = (e) => e.stopPropagation();
       modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:15px;font-weight:700;color:var(--t1)">👑 จัดการแอดมิน (ไอดี)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">${ic('lucide:crown',16)} จัดการแอดมิน (ไอดี)</div>
         <button onclick="document.getElementById('aiconfig-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button>
       </div>
       <div id="ai-body" style="overflow-y:auto;padding:16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด...</div></div>`;
@@ -3604,14 +3604,14 @@
         modal.__aiData = data;
         drawAdminIds(modal, data);
       } catch (e) {
-        modal.querySelector('#ai-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+        modal.querySelector('#ai-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       }
     }
 
     function drawAdminIds(modal, data) {
       const adminIds = new Set(__aiAdmins.map(a => a.user_id));
       const avail = __aiEmployees.filter(e => !adminIds.has(e.user_id));
-      const sheetBtn = `<a href="${h(data.sheet_url)}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">📊 ดูใน Sheet</a>`;
+      const sheetBtn = `<a href="${h(data.sheet_url)}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">${ic('lucide:bar-chart-3',16)} ดูใน Sheet</a>`;
 
       let html = `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border:.5px solid var(--amber-mid);border-radius:8px;font-size:11px;margin-bottom:12px;line-height:1.6">
         แอดมินกลุ่มนี้ = คนที่ <b>ไม่ใช่เซลล์ใน TEAMS</b> (เทเลเซลล์/ออฟฟิศ) — login ด้วย LINE user_id แล้วได้สิทธิ์แอดมิน<br>
@@ -3620,7 +3620,7 @@
 
       // ── add section ──
       html += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">➕ เพิ่มแอดมิน</div>
+        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">${ic('lucide:plus',16)} เพิ่มแอดมิน</div>
         <div style="display:flex;gap:6px;margin-bottom:8px">
           <select id="ai-emp-sel" style="flex:1;padding:8px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;outline:none">
             <option value="">— เลือกจากรายชื่อพนักงาน —</option>
@@ -3663,10 +3663,10 @@
         footer.style.cssText = 'padding:12px 16px;border-top:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px';
         modal.appendChild(footer);
       }
-      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">⚠️ บันทึก = เขียนทับชีต "ตั้งค่าแอดมิน"</div>
+      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">${ic('lucide:triangle-alert',16)} บันทึก = เขียนทับชีต "ตั้งค่าแอดมิน"</div>
         <div style="display:flex;gap:8px">
           <button onclick="document.getElementById('aiconfig-overlay').remove()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ปิด</button>
-          <button id="ai-save-btn" onclick="__aiSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">💾 บันทึก</button>
+          <button id="ai-save-btn" onclick="__aiSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึก</button>
         </div>`;
     }
 
@@ -3689,7 +3689,7 @@
       const msg = document.getElementById('ai-msg');
       if (!uid) return;
       if (!uid.startsWith('U') || uid.length < 20) {
-        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ LINE user_id ต้องขึ้นต้นด้วย U</div>`; return;
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} LINE user_id ต้องขึ้นต้นด้วย U</div>`; return;
       }
       if (__aiAdmins.some(a => a.user_id === uid)) {
         msg.innerHTML = `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:11px">มีไอดีนี้อยู่แล้ว</div>`; return;
@@ -3718,12 +3718,12 @@
         });
         const data = await res.json();
         if (!res.ok || data.error) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
         } else {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ บันทึก ${data.saved} แอดมินเรียบร้อย</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">${ic('lucide:circle-check',16)} บันทึก ${data.saved} แอดมินเรียบร้อย</div>`;
         }
       } catch (e) {
-        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = '💾 บันทึก';
       }
@@ -3747,12 +3747,12 @@
 
       // Tabs: ส่งทันที / ตารางเวลา
       modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:15px;font-weight:700;color:var(--t1)">📤 LINE Flex Manager</div>
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">${ic('lucide:send',16)} LINE Flex Manager</div>
         <button onclick="document.getElementById('cron-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button>
       </div>
       <div style="display:flex;border-bottom:.5px solid var(--bd);background:var(--bg2)">
-        <button class="lf-tab on" data-tab="now" onclick="__lfTab('now')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--blue);border-bottom:2px solid var(--blue)">🚀 ส่งทันที (One-time)</button>
-        <button class="lf-tab" data-tab="sched" onclick="__lfTab('sched')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent">📅 ตารางเวลา (Auto)</button>
+        <button class="lf-tab on" data-tab="now" onclick="__lfTab('now')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--blue);border-bottom:2px solid var(--blue)">${ic('lucide:rocket',16)} ส่งทันที (One-time)</button>
+        <button class="lf-tab" data-tab="sched" onclick="__lfTab('sched')" style="flex:1;padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent">${ic('lucide:calendar',16)} ตารางเวลา (Auto)</button>
       </div>
       <div id="lf-content" style="overflow-y:auto;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด...</div></div>`;
       overlay.appendChild(modal);
@@ -3779,7 +3779,7 @@
         // Default tab = ส่งทันที
         __lfTab('now');
       } catch (e) {
-        modal.querySelector('#lf-content').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+        modal.querySelector('#lf-content').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       }
     }
 
@@ -3814,11 +3814,11 @@
       const tickUrl = `${baseUrl}/api/cron/tick?secret=YOUR_CRON_SECRET`;
 
       let html = `<div style="padding:9px 12px;background:var(--blue-bg);border:.5px solid var(--blue);border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:12px;line-height:1.6">
-        🔄 ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ระบบจะเช็คตารางและส่งตรงเวลาเอง
+        ${ic('lucide:refresh-cw',16)} ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ระบบจะเช็คตารางและส่งตรงเวลาเอง
       </div>`;
       html += `<div style="position:relative;margin-bottom:14px">
         <input id="sched-tick-url" readonly value="${h(tickUrl)}" style="width:100%;padding:8px 70px 8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:10px;font-family:monospace;outline:none;box-sizing:border-box">
-        <button onclick="navigator.clipboard.writeText(document.getElementById('sched-tick-url').value).then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='📋',1200)})" style="position:absolute;right:5px;top:5px;font-size:10px;padding:5px 10px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">📋</button>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('sched-tick-url').value).then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='📋',1200)})" style="position:absolute;right:5px;top:5px;font-size:10px;padding:5px 10px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">${ic('lucide:clipboard-list',16)}</button>
       </div>`;
 
       // Render each schedule card
@@ -3829,12 +3829,12 @@
           html += renderSchedCard(s, i);
         });
       }
-      html += `<button onclick="__schedAdd()" style="margin-top:10px;padding:9px 14px;border-radius:10px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">➕ เพิ่มตารางใหม่</button>`;
+      html += `<button onclick="__schedAdd()" style="margin-top:10px;padding:9px 14px;border-radius:10px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">${ic('lucide:plus',16)} เพิ่มตารางใหม่</button>`;
 
       html += `<details style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px">
-        <summary style="cursor:pointer;font-weight:600;color:var(--t1)">🧪 ทดสอบยิง tick endpoint ทันที</summary>
+        <summary style="cursor:pointer;font-weight:600;color:var(--t1)">${ic('lucide:flask-conical',16)} ทดสอบยิง tick endpoint ทันที</summary>
         <input id="sched-test-secret" type="password" placeholder="CRON_SECRET" style="margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box">
-        <button onclick="__schedTestTick()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-weight:700;font-size:11px;cursor:pointer">🚀 ยิง tick</button>
+        <button onclick="__schedTestTick()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-weight:700;font-size:11px;cursor:pointer">${ic('lucide:rocket',16)} ยิง tick</button>
         <div id="sched-test-result" style="margin-top:8px"></div>
       </details>`;
 
@@ -3863,14 +3863,14 @@
       const daysLbl = ({'*':'ทุกวัน','1-5':'จ-ศ','0,6':'ส-อา','1':'จันทร์','5':'ศุกร์'})[s.days] || s.days;
       const recCount = (isAll ? totalSellers : s.sellers.filter(x => x !== '*').length) + (s.include_executive ? 1 : 0);
       const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + ผู้บริหาร' : ''}`;
-      const modeDesc = s.test_target ? `🧪 test → ${s.test_target.slice(0,12)}...` : 'ส่งจริง';
+      const modeDesc = s.test_target ? `${ic('lucide:flask-conical',16)} test → ${s.test_target.slice(0,12)}...` : 'ส่งจริง';
 
       let html = `<div style="border:.5px solid var(--bd);border-radius:10px;margin-bottom:8px;overflow:hidden;${s.enabled?'':'opacity:.6'}">`;
 
       // Header (clickable to expand)
       html += `<div style="display:grid;grid-template-columns:auto 70px auto 1fr auto auto;gap:8px;align-items:center;padding:10px 12px;background:var(--bg2);cursor:pointer" onclick="__schedExpand(${i})">
         <label style="display:flex;align-items:center;cursor:pointer" onclick="event.stopPropagation()"><input type="checkbox" ${s.enabled?'checked':''} onchange="__schedRows[${i}].enabled=this.checked;__schedRedraw()" style="cursor:pointer"></label>
-        <span style="font-family:monospace;font-weight:700;color:var(--t1);font-size:13px">⏰ ${h(s.time)}</span>
+        <span style="font-family:monospace;font-weight:700;color:var(--t1);font-size:13px">${ic('lucide:alarm-clock',16)} ${h(s.time)}</span>
         <span style="font-size:11px;color:var(--t2);background:var(--bg);padding:2px 8px;border-radius:8px">${h(daysLbl)}</span>
         <span style="font-size:12px;color:var(--t1);font-weight:600">${h(s.label||'-')}</span>
         <span style="font-size:10px;color:var(--t3)">${recCount} ผู้รับ · ${modeDesc}</span>
@@ -3883,8 +3883,8 @@
 
         // Row 1: time, day, label
         html += `<div style="display:grid;grid-template-columns:auto auto 1fr auto;gap:10px;margin-bottom:12px;align-items:center">
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">⏰<input type="time" value="${h(s.time)}" oninput="__schedRows[${i}].time=this.value" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"></label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">📅<select onchange="__schedRows[${i}].days=this.value;__schedRedraw()" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">${ic('lucide:alarm-clock',16)}<input type="time" value="${h(s.time)}" oninput="__schedRows[${i}].time=this.value" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"></label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2)">${ic('lucide:calendar',16)}<select onchange="__schedRows[${i}].days=this.value;__schedRedraw()" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px">
             <option value="*" ${s.days==='*'?'selected':''}>ทุกวัน</option>
             <option value="1-5" ${s.days==='1-5'?'selected':''}>จ-ศ</option>
             <option value="0,6" ${s.days==='0,6'?'selected':''}>ส-อา</option>
@@ -3939,13 +3939,13 @@
 
         // Test mode field
         html += `<div style="margin-top:10px;padding:9px 11px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:8px">
-          <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">🧪 Test mode — ถ้ามีค่า: ทุก Flex จะส่งไปที่ user_id นี้แทน (ไม่ส่งจริง)</label>
+          <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">${ic('lucide:flask-conical',16)} Test mode — ถ้ามีค่า: ทุก Flex จะส่งไปที่ user_id นี้แทน (ไม่ส่งจริง)</label>
           <input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value" placeholder="ว่าง = ส่งจริง / ใส่ U... = test ส่งให้ตัวเอง" style="width:100%;padding:7px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box;font-family:monospace">
         </div>`;
 
         // Delete + collapse
         html += `<div style="display:flex;justify-content:space-between;margin-top:12px">
-          <button onclick="__schedDel(${i})" style="padding:6px 12px;border-radius:6px;border:.5px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-size:11px;font-weight:600">🗑️ ลบตารางนี้</button>
+          <button onclick="__schedDel(${i})" style="padding:6px 12px;border-radius:6px;border:.5px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-size:11px;font-weight:600">${ic('lucide:trash-2',16)} ลบตารางนี้</button>
           <button onclick="__schedExpand(${i})" style="padding:6px 12px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;font-size:11px">▲ ยุบ</button>
         </div>`;
 
@@ -3994,7 +3994,7 @@
       footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">บันทึก = เขียนทับ tab "ตั้งเวลาส่ง"</div>
         <div style="display:flex;gap:8px">
           <button onclick="document.getElementById('cron-overlay').remove()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ปิด</button>
-          <button id="sched-save-btn" onclick="__schedSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">💾 บันทึก</button>
+          <button id="sched-save-btn" onclick="__schedSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึก</button>
         </div>`;
     }
 
@@ -4022,7 +4022,7 @@
       for (let i = 0; i < __schedRows.length; i++) {
         const r = __schedRows[i];
         if (!r.time || !/^\d{1,2}:\d{2}$/.test(r.time)) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ แถวที่ ${i+1}: เวลาผิด (ต้อง HH:MM)</div>`; return;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} แถวที่ ${i+1}: เวลาผิด (ต้อง HH:MM)</div>`; return;
         }
       }
       btn.disabled = true; btn.textContent = '⏳ บันทึก...';
@@ -4036,12 +4036,12 @@
         });
         const data = await res.json();
         if (!res.ok || data.error) {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'failed')}</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(data.error || 'failed')}</div>`;
         } else {
-          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ บันทึก ${data.saved} ตารางเรียบร้อย</div>`;
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">${ic('lucide:circle-check',16)} บันทึก ${data.saved} ตารางเรียบร้อย</div>`;
         }
       } catch (e) {
-        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = '💾 บันทึก';
       }
@@ -4049,19 +4049,19 @@
     async function __schedTestTick() {
       const secret = document.getElementById('sched-test-secret').value.trim();
       const result = document.getElementById('sched-test-result');
-      if (!secret) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ต้องใส่ secret</div>`; return; }
-      result.innerHTML = `<div style="padding:8px;color:var(--t3);font-size:11px">⏳ ยิง tick...</div>`;
+      if (!secret) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ต้องใส่ secret</div>`; return; }
+      result.innerHTML = `<div style="padding:8px;color:var(--t3);font-size:11px">${ic('lucide:hourglass',16)} ยิง tick...</div>`;
       try {
         const res = await fetch(`/api/cron/tick?secret=${encodeURIComponent(secret)}`);
         const data = await res.json();
         if (!res.ok || data.error) {
-          result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error||'failed')}</div>`;
+          result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(data.error||'failed')}</div>`;
         } else {
           const fired = data.fired || 0;
-          result.innerHTML = `<div style="padding:8px 11px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px">✅ Now: ${h(data.now)} · Fired ${fired} schedule(s)${fired===0?' (ยังไม่ถึงเวลาใดเลย — เป็นเรื่องปกติ)':''}</div>`;
+          result.innerHTML = `<div style="padding:8px 11px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px">${ic('lucide:circle-check',16)} Now: ${h(data.now)} · Fired ${fired} schedule(s)${fired===0?' (ยังไม่ถึงเวลาใดเลย — เป็นเรื่องปกติ)':''}</div>`;
         }
       } catch (e) {
-        result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+        result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       }
     }
 
@@ -4070,21 +4070,21 @@
       const testMode = document.getElementById('cron-test-mode').checked;
       const target = document.getElementById('cron-test-target').value.trim();
       const result = document.getElementById('cron-test-result');
-      if (!secret) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ต้องใส่ secret</div>`; return; }
-      if (testMode && !target) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ Test mode ต้องใส่ target user_id</div>`; return; }
-      result.innerHTML = `<div style="padding:8px;color:var(--t3);font-size:11px">⏳ กำลังยิง...</div>`;
+      if (!secret) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ต้องใส่ secret</div>`; return; }
+      if (testMode && !target) { result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} Test mode ต้องใส่ target user_id</div>`; return; }
+      result.innerHTML = `<div style="padding:8px;color:var(--t3);font-size:11px">${ic('lucide:hourglass',16)} กำลังยิง...</div>`;
       try {
         const params = new URLSearchParams({ secret });
         if (testMode) { params.set('test', '1'); params.set('target', target); }
         const res = await fetch(`/api/cron/send_line?${params.toString()}`);
         const data = await res.json();
         if (!res.ok || data.error) {
-          result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'failed')}</div>`;
+          result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(data.error || 'failed')}</div>`;
         } else {
-          result.innerHTML = `<div style="padding:8px 11px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ ส่งสำเร็จ ${data.sent}/${data.count} ${data.failed?'(ล้มเหลว '+data.failed+')':''}</div>`;
+          result.innerHTML = `<div style="padding:8px 11px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">${ic('lucide:circle-check',16)} ส่งสำเร็จ ${data.sent}/${data.count} ${data.failed?'(ล้มเหลว '+data.failed+')':''}</div>`;
         }
       } catch (e) {
-        result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+        result.innerHTML = `<div style="padding:8px 11px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       }
     }
 
@@ -4102,11 +4102,11 @@
         });
       }
       const tokenWarn = preview.has_token ? '' :
-        `<div style="background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:10px;font-size:11px;margin-bottom:10px;border:.5px solid var(--red-mid)">⚠️ ยังไม่ได้ตั้ง <code>LINE_CHANNEL_ACCESS_TOKEN</code> ใน <code>.env</code> — ส่งจริงจะไม่ทำงาน</div>`;
+        `<div style="background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:10px;font-size:11px;margin-bottom:10px;border:.5px solid var(--red-mid)">${ic('lucide:triangle-alert',16)} ยังไม่ได้ตั้ง <code>LINE_CHANNEL_ACCESS_TOKEN</code> ใน <code>.env</code> — ส่งจริงจะไม่ทำงาน</div>`;
 
       let html = tokenWarn;
       html += `<div style="background:var(--bg2);padding:10px 12px;border-radius:10px;font-size:11px;color:var(--t2);margin-bottom:10px;line-height:1.6">
-        📦 พบ <b>${sellers.length}</b> เซลล์มีข้อมูลเดือนนี้ · เลือก <b id="ls-count">${__lsSelected.size}</b> คน<br>
+        ${ic('lucide:package',16)} พบ <b>${sellers.length}</b> เซลล์มีข้อมูลเดือนนี้ · เลือก <b id="ls-count">${__lsSelected.size}</b> คน<br>
         หมายเหตุ:ติ๊กถูกตามชื่อเพื่อเลือกผู้รับ · เซลล์ที่ไม่มี LINE user_id จะถูกข้าม
       </div>`;
       html += `<div style="display:flex;gap:8px;margin-bottom:10px">
@@ -4137,7 +4137,7 @@
       html += `</tbody></table>`;
       html += `<div style="margin-top:14px;padding:10px 12px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:10px">
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--amber);font-weight:600;cursor:pointer">
-          <input type="checkbox" ${__lsTestMode?'checked':''} onchange="__lsToggleTest(this.checked)"> 🧪 Test mode — ส่งทุก Flex ไปที่ user_id ที่กำหนด (ไม่ส่งจริงไปเซลล์)
+          <input type="checkbox" ${__lsTestMode?'checked':''} onchange="__lsToggleTest(this.checked)"> ${ic('lucide:flask-conical',16)} Test mode — ส่งทุก Flex ไปที่ user_id ที่กำหนด (ไม่ส่งจริงไปเซลล์)
         </label>
         <input id="ls-test-uid" type="text" value="${h(__lsTestUid)}" oninput="__lsTestUid=this.value" placeholder="U6bf1d72cf1d7e237c3a5c9848dde9bf4" style="display:${__lsTestMode?'block':'none'};margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px;outline:none;font-family:monospace;box-sizing:border-box">
         <div id="ls-test-hint" style="display:${__lsTestMode?'block':'none'};margin-top:6px;font-size:10px;color:var(--amber)">หมายเหตุ:ถ้าไม่ติ๊กเซลล์ใดเลย → จะส่ง Flex ของ <b>ทุกเซลล์ที่มีข้อมูล</b> ไปที่ user_id นี้</div>
@@ -4154,7 +4154,7 @@
         modal.appendChild(footer);
       }
       footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">ทั้งหมด: <b id="ls-count2">${__lsSelected.size}</b> คน</div>
-        <button id="ls-send-btn" onclick="__lsSend()" style="padding:9px 18px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">📤 ส่ง</button>`;
+        <button id="ls-send-btn" onclick="__lsSend()" style="padding:9px 18px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:send',16)} ส่ง</button>`;
     }
     function __lsToggle(name, on) {
       if (on) __lsSelected.add(name); else __lsSelected.delete(name);
@@ -4189,18 +4189,18 @@
       // Test mode: ถ้าไม่เลือก → ส่งทุกเซลล์ไป test user_id
       // Production: ต้องเลือกอย่างน้อย 1 คน
       if (!__lsTestMode && __lsSelected.size === 0) {
-        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ กรุณาเลือกเซลล์อย่างน้อย 1 คน</div>`;
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">${ic('lucide:triangle-alert',16)} กรุณาเลือกเซลล์อย่างน้อย 1 คน</div>`;
         return;
       }
       if (__lsTestMode && !__lsTestUid.trim()) {
-        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ Test mode ต้องกรอก target user_id</div>`;
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">${ic('lucide:triangle-alert',16)} Test mode ต้องกรอก target user_id</div>`;
         return;
       }
       const sellersToSend = __lsSelected.size > 0 ? Array.from(__lsSelected) : [];
       const countLabel = sellersToSend.length > 0 ? `${sellersToSend.length} คน` : 'ทุกเซลล์ที่มีข้อมูล';
       if (!confirm(`ยืนยันส่ง LINE Flex (${countLabel})?${__lsTestMode?' [Test mode → '+__lsTestUid.trim().slice(0,20)+'...]':''}`)) return;
       btn.disabled = true; btn.textContent = 'กำลังส่ง...';
-      result.innerHTML = `<div style="padding:10px;color:var(--t3);font-size:12px">⏳ กำลังส่ง...</div>`;
+      result.innerHTML = `<div style="padding:10px;color:var(--t3);font-size:12px">${ic('lucide:hourglass',16)} กำลังส่ง...</div>`;
       try {
         const payload = {
           test: __lsTestMode,
@@ -4216,7 +4216,7 @@
         });
         const data = await res.json();
         if (!res.ok || data.error) {
-          result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ ${h(data.error || 'ส่งล้มเหลว')}</div>`;
+          result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">${ic('lucide:triangle-alert',16)} ${h(data.error || 'ส่งล้มเหลว')}</div>`;
         } else {
           const results = data.results || [];
           const ok = results.filter(r => r.sent);
@@ -4226,18 +4226,18 @@
           const headerIcon = fail.length === 0 ? '✅' : (ok.length === 0 ? '❌' : '⚠️');
           let html = `<div style="padding:10px 12px;background:${headerBg};color:${headerColor};border-radius:10px;font-size:12px;font-weight:600">${headerIcon} สำเร็จ ${ok.length}/${data.count} · ล้มเหลว ${fail.length}</div>`;
 
-          // ✅ Success list — แสดงทุกคนที่ส่งสำเร็จ
+          // ${ic('lucide:circle-check',16)} Success list — แสดงทุกคนที่ส่งสำเร็จ
           if (ok.length) {
-            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--green-bg);border-radius:10px;font-size:11px"><div style="color:var(--green);font-weight:700;margin-bottom:6px">✅ ส่งสำเร็จ (${ok.length})</div><div style="display:flex;flex-wrap:wrap;gap:5px">`;
+            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--green-bg);border-radius:10px;font-size:11px"><div style="color:var(--green);font-weight:700;margin-bottom:6px">${ic('lucide:circle-check',16)} ส่งสำเร็จ (${ok.length})</div><div style="display:flex;flex-wrap:wrap;gap:5px">`;
             ok.forEach(r => {
               html += `<span style="background:var(--green);color:#fff;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:500">${h(r.seller)}</span>`;
             });
             html += `</div></div>`;
           }
 
-          // ❌ Failure list — แสดงทุกคนที่ล้มเหลว + เหตุผล
+          // ${ic('lucide:circle-x',16)} Failure list — แสดงทุกคนที่ล้มเหลว + เหตุผล
           if (fail.length) {
-            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border-radius:10px;font-size:11px"><div style="color:var(--red);font-weight:700;margin-bottom:6px">❌ ล้มเหลว (${fail.length})</div>`;
+            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border-radius:10px;font-size:11px"><div style="color:var(--red);font-weight:700;margin-bottom:6px">${ic('lucide:circle-x',16)} ล้มเหลว (${fail.length})</div>`;
             fail.forEach(f => {
               html += `<div style="margin-bottom:4px;padding:4px 0;border-bottom:.5px solid rgba(0,0,0,.05)"><b style="color:var(--red)">${h(f.seller)}</b> <span style="color:var(--t3);font-size:10px">— ${h(f.error || 'unknown')}</span></div>`;
             });
@@ -4246,7 +4246,7 @@
           result.innerHTML = html;
         }
       } catch (e) {
-        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">⚠️ ${h(e.message)}</div>`;
+        result.innerHTML = `<div style="padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:10px;font-size:12px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = '📤 ส่ง';
       }
@@ -4327,8 +4327,8 @@
           if (e.group_id) body += `<span title="${h(e.group_id)}">GID: ${h(shortId(e.group_id))}</span>`;
           body += `</div></div>`;
           body += `<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">`;
-          body += `<button onclick="navigator.clipboard.writeText('${h(e.user_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 user_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">📋 user_id</button>`;
-          if (e.group_id) body += `<button onclick="navigator.clipboard.writeText('${h(e.group_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 group_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">📋 group_id</button>`;
+          body += `<button onclick="navigator.clipboard.writeText('${h(e.user_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 user_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">${ic('lucide:clipboard-list',16)} user_id</button>`;
+          if (e.group_id) body += `<button onclick="navigator.clipboard.writeText('${h(e.group_id)}').then(()=>{this.textContent='✓ copied';setTimeout(()=>this.textContent='📋 group_id',1200)})" style="font-size:10px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;white-space:nowrap">${ic('lucide:clipboard-list',16)} group_id</button>`;
           body += `</div></div>`;
         });
         body += `</div>`;
