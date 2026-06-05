@@ -35,6 +35,19 @@ def _session_user(request):
     return None
 
 
+# position ที่เห็นข้อมูลรวมทั้งหมด (admin + ผู้บริหาร) — เซลล์ทั่วไปไม่อยู่ในนี้
+EXEC_POSITIONS = {"executive", "ผู้บริหาร", "manager", "exec", "admin"}
+
+
+def _can_view_all(user) -> bool:
+    """True ถ้าเป็น admin/ผู้บริหาร (เห็น dashboard รวม). เซลล์ = False."""
+    return bool(user) and (user.get("position") or "").strip().lower() in EXEC_POSITIONS
+
+
+def _is_admin(user) -> bool:
+    return bool(user) and (user.get("position") or "").strip().lower() == "admin"
+
+
 def _save_to_supabase(table, row):
     """เก็บ row ลง Supabase (best-effort). คืน id ถ้าสำเร็จ, None ถ้าล่ม/ยังไม่ตั้งค่า."""
     try:
@@ -49,30 +62,17 @@ def _save_to_supabase(table, row):
     return None
 
 
-DEFAULT_EXECUTIVE_USER = {
-    "user_id": "guest",
-    "nickname": "ผู้บริหาร",
-    "display_name": "ผู้บริหาร",
-    "position": "executive",
-}
-
-# Default user สำหรับช่วงทดสอบ — ปิด login ใน /admin/ ด้วย
-# TODO: production → เปลี่ยน admin_page ให้ require_admin จริงๆ
-DEFAULT_ADMIN_USER = {
-    "user_id": "test-admin",
-    "nickname": "admin",
-    "display_name": "Admin (Test)",
-    "position": "admin",
-}
-
-
 @ensure_csrf_cookie
 @require_GET
 def dashboard_page(request):
-    """Main dashboard — เปิดสาธารณะ default = 'ผู้บริหาร' (ช่วงทดสอบ).
-    TODO: production → เปลี่ยนเป็น `if not user: return HttpResponseRedirect("/login/?next=/dashboard/")`
+    """Main dashboard — ต้อง login (admin/ผู้บริหารเท่านั้น).
+    เซลล์ทั่วไป → redirect ไปหน้าส่วนตัว /me/ (กันเห็น data รวมของทุกคนผ่าน DevTools).
     """
-    user = _session_user(request) or DEFAULT_EXECUTIVE_USER
+    user = _session_user(request)
+    if not user:
+        return HttpResponseRedirect("/login/?next=/dashboard/")
+    if not _can_view_all(user):
+        return HttpResponseRedirect("/me/")
 
     try:
         data = fetch_dashboard_data()
@@ -106,7 +106,9 @@ def dashboard_page(request):
 
 @require_GET
 def api_dashboard(request):
-    """GET /api/dashboard — JSON data (executive level, ไม่ต้อง login)."""
+    """GET /api/dashboard — JSON data รวมทุกเซลล์ → ต้อง login admin/ผู้บริหาร."""
+    if not _can_view_all(_session_user(request)):
+        return JsonResponse({"error": "ต้อง login ผู้บริหาร/admin ก่อน"}, status=401)
     try:
         data = fetch_dashboard_data()
         return JsonResponse(data, json_dumps_params={"ensure_ascii": False, "default": str})
@@ -118,13 +120,11 @@ def api_dashboard(request):
 @require_GET
 def admin_page(request):
     """/admin/ — alias ของ /dashboard/ ใช้ template เดียวกัน (index.html)
-    ช่วงทดสอบ: ไม่ require login → default เป็น admin
-    TODO: production → uncomment block ด้านล่างเพื่อบังคับ admin login
+    ต้อง login เป็น admin (แอดมินสูงสุด) เท่านั้น.
     """
-    user = _session_user(request) or DEFAULT_ADMIN_USER
-    # production:
-    # if not user or user.get("position") != "admin":
-    #     return HttpResponseRedirect("/login/?next=/admin/")
+    user = _session_user(request)
+    if not user or not _is_admin(user):
+        return HttpResponseRedirect("/login/?next=/admin/")
 
     try:
         data = fetch_dashboard_data()
@@ -171,6 +171,34 @@ def login_view(request):
     username = (request.POST.get("username") or "").strip()
     password = (request.POST.get("password") or "").strip()
     line_token = (request.POST.get("token") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+
+    # ทาง 0: สมาชิก (email + password) ผ่าน Supabase — เส้นทางหลักของระบบใหม่
+    if email:
+        from .services.auth_users import is_enabled, verify_login, session_payload
+        if not is_enabled():
+            err = "ระบบสมาชิกยังไม่พร้อม (ยังไม่ได้ตั้งค่า Supabase)"
+            if is_ajax:
+                return JsonResponse({"ok": False, "error": err}, status=503)
+            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
+        try:
+            user, err = verify_login(email, password)
+        except Exception as e:
+            user, err = None, f"ตรวจสอบบัญชีล้มเหลว: {e}"
+        if user:
+            payload = session_payload(user)
+            request.session["oxlet_user"] = payload
+            request.session.set_expiry(60 * 60 * 24 * 30)
+            if payload["position"] in EXEC_POSITIONS:
+                target = next_url if next_url and next_url not in ("/me/",) else "/dashboard/"
+            else:
+                target = "/me/"
+            if is_ajax:
+                return JsonResponse({"ok": True, "next": target})
+            return HttpResponseRedirect(target)
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": err}, status=401)
+        return render(request, "dashboard/login.html", {"next": next_url, "error": err})
 
     # ทาง 1: Admin login (ชื่อ + รหัสผ่าน)
     admin_user = (getattr(settings, "OXLET_ADMIN_USER", "admin") or "admin").strip()
@@ -226,11 +254,142 @@ def login_view(request):
 
 @require_GET
 def logout_view(request):
-    """ออกจากระบบ — กลับสู่มุมมอง 'ผู้บริหาร' (default ช่วงทดสอบ)"""
+    """ออกจากระบบ — กลับไปหน้า login (dashboard ต้อง login แล้ว)"""
     request.session.flush()
-    resp = HttpResponseRedirect("/dashboard/")
+    resp = HttpResponseRedirect("/login/")
     resp.delete_cookie("oxlet_employee")
     return resp
+
+
+@ensure_csrf_cookie
+@require_http_methods(["GET", "POST"])
+def register_view(request):
+    """หน้าสมัครสมาชิก — /register/
+    GET → ฟอร์มสมัคร. POST → สร้างบัญชี pending ใน Supabase + ส่งเมล approve ไปผู้ดูแล.
+    บัญชีใช้งานได้หลังผู้ดูแลกดลิงก์ approve ในเมล oxletauto@gmail.com.
+    """
+    from .services.auth_users import is_enabled, create_pending_user, ROLE_LABELS, VALID_ROLES, make_action_token
+
+    ctx_roles = ROLE_LABELS  # {"seller":"เซลล์", "executive":"ผู้บริหาร", "admin":"แอดมินสูงสุด"}
+
+    if request.method == "GET":
+        return render(request, "dashboard/register.html", {
+            "roles": ctx_roles, "error": None, "done": False, "form": {},
+        })
+
+    # POST
+    form = {
+        "full_name": (request.POST.get("full_name") or "").strip(),
+        "nickname": (request.POST.get("nickname") or "").strip(),
+        "email": (request.POST.get("email") or "").strip().lower(),
+        "role": (request.POST.get("role") or "").strip().lower(),
+        "seller_name": (request.POST.get("seller_name") or "").strip(),
+    }
+    password = request.POST.get("password") or ""
+    password2 = request.POST.get("password2") or ""
+
+    def _err(msg):
+        return render(request, "dashboard/register.html", {
+            "roles": ctx_roles, "error": msg, "done": False, "form": form,
+        })
+
+    if not is_enabled():
+        return _err("ระบบสมัครสมาชิกยังไม่พร้อม (ยังไม่ได้ตั้งค่า Supabase)")
+    if not form["full_name"] or not form["email"] or not password or not form["role"]:
+        return _err("กรุณากรอกข้อมูลให้ครบ (ชื่อ / อีเมล / รหัสผ่าน / บทบาท)")
+    if "@" not in form["email"] or "." not in form["email"].split("@")[-1]:
+        return _err("รูปแบบอีเมลไม่ถูกต้อง")
+    if len(password) < 6:
+        return _err("รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร")
+    if password != password2:
+        return _err("รหัสผ่านทั้งสองช่องไม่ตรงกัน")
+    if form["role"] not in VALID_ROLES:
+        return _err("กรุณาเลือกบทบาทให้ถูกต้อง")
+
+    nickname = form["nickname"] or form["full_name"]
+    seller_name = form["seller_name"] or nickname if form["role"] == "seller" else form["seller_name"]
+
+    try:
+        user = create_pending_user(
+            email=form["email"], password=password, full_name=form["full_name"],
+            nickname=nickname, role=form["role"], seller_name=seller_name,
+        )
+    except ValueError as e:
+        return _err(str(e))
+    except Exception as e:
+        return _err(f"สร้างบัญชีไม่สำเร็จ: {e}")
+
+    # สร้างลิงก์ approve/reject (signed token) → ส่งเข้าเมลผู้ดูแล
+    base = (getattr(settings, "SITE_URL", "") or "").rstrip("/") or request.build_absolute_uri("/").rstrip("/")
+    approve_url = f"{base}/account/review/?t={make_action_token(user['id'], 'approve')}"
+    reject_url = f"{base}/account/review/?t={make_action_token(user['id'], 'reject')}"
+
+    email_ok, email_err = True, ""
+    try:
+        from .services.email_send import send_approval_request
+        send_approval_request(user, approve_url, reject_url)
+    except Exception as e:
+        email_ok, email_err = False, str(e)
+
+    return render(request, "dashboard/register.html", {
+        "roles": ctx_roles, "error": None, "done": True, "form": {},
+        "email_ok": email_ok, "email_err": email_err,
+        "notify_email": getattr(settings, "APPROVAL_NOTIFY_EMAIL", ""),
+    })
+
+
+@ensure_csrf_cookie
+@require_http_methods(["GET", "POST"])
+def account_review(request):
+    """หน้า approve/reject บัญชี — /account/review/?t=<signed_token> (ลิงก์จากเมล).
+    GET = แสดงหน้ายืนยัน (ไม่เปลี่ยนสถานะ — กันลิงก์ถูก prefetch แล้ว approve เอง).
+    POST = ทำรายการจริง (อนุมัติ → active, ปฏิเสธ → rejected).
+    """
+    from django.core.signing import BadSignature, SignatureExpired
+    from .services.auth_users import load_action_token, get_user_by_id, set_status, role_label
+
+    token = (request.GET.get("t") or request.POST.get("t") or "").strip()
+
+    def _page(state, **extra):
+        return render(request, "dashboard/account_review.html",
+                      {"state": state, "token": token, **extra})
+
+    if not token:
+        return _page("invalid")
+    try:
+        uid, action = load_action_token(token)
+    except SignatureExpired:
+        return _page("expired")
+    except (BadSignature, Exception):
+        return _page("invalid")
+
+    if action not in ("approve", "reject"):
+        return _page("invalid")
+
+    try:
+        user = get_user_by_id(uid)
+    except Exception as e:
+        return _page("error", error=str(e))
+    if not user:
+        return _page("invalid")
+
+    status = (user.get("status") or "").lower()
+    view_ctx = {"user": user, "action": action, "role_label": role_label(user.get("role"))}
+
+    # ทำรายการแล้ว (active/rejected) → ไม่ให้ทำซ้ำ
+    if status != "pending":
+        return _page("already", **view_ctx)
+
+    if request.method == "GET":
+        return _page("confirm", **view_ctx)
+
+    # POST → ดำเนินการ
+    new_status = "active" if action == "approve" else "rejected"
+    try:
+        set_status(uid, new_status)
+    except Exception as e:
+        return _page("error", error=str(e), **view_ctx)
+    return _page("done", **view_ctx)
 
 
 @require_http_methods(["GET", "POST"])
@@ -1472,7 +1631,33 @@ def seller_dashboard(request, token):
             "data_json": "null",
             "constants_json": "{}",
         }, status=404)
+    return _render_seller_page(request, seller_name)
 
+
+@ensure_csrf_cookie
+@require_GET
+def me_dashboard(request):
+    """/me/ — หน้าส่วนตัวของเซลล์ที่ login (email+password) — ดึง seller_name จาก session.
+    admin/ผู้บริหาร → redirect ไป /dashboard/ (ไม่มีข้อมูลรายเซลล์ของตัวเอง)."""
+    user = _session_user(request)
+    if not user:
+        return HttpResponseRedirect("/login/?next=/me/")
+    if _can_view_all(user):
+        return HttpResponseRedirect("/dashboard/")
+    from .services.constants import normalize_seller
+    raw_name = (user.get("seller_name") or user.get("nickname") or "").strip()
+    seller_name = normalize_seller(raw_name) or raw_name
+    if not seller_name:
+        return render(request, "dashboard/seller.html", {
+            "error": "บัญชีนี้ยังไม่ได้ผูกกับชื่อเซลล์ — กรุณาติดต่อผู้ดูแลระบบ",
+            "seller": None, "data_json": "null", "constants_json": "{}",
+        }, status=404)
+    return _render_seller_page(request, seller_name)
+
+
+def _render_seller_page(request, seller_name):
+    """render หน้า seller.html ของเซลล์ 1 คน (ใช้ร่วม /s/<token>/ และ /me/).
+    ส่งเฉพาะข้อมูลของเซลล์คนนี้ (fetch_seller_stats) — ไม่มี data ของคนอื่นใน JSON."""
     from .services.fetch_dashboard import fetch_seller_stats
 
     try:

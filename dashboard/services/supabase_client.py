@@ -69,6 +69,36 @@ def insert_row(table: str, row: dict) -> list:
     return r.json()
 
 
+def select_rows(table: str, query: str = "select=*", limit: int | None = None) -> list:
+    """SELECT แบบ generic — query เป็น PostgREST query string (เช่น 'email=eq.x&select=*').
+    คืน list ของ row (dict). raise ถ้า request ล้มเหลว."""
+    url, key = _base()
+    q = query
+    if limit is not None:
+        q = f"{q}&limit={limit}"
+    r = requests.get(f"{url}/rest/v1/{table}?{q}", headers=_headers(key), timeout=20)
+    if r.status_code != 200:
+        raise Exception(f"Supabase select {table} {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def update_rows(table: str, match: str, patch: dict) -> list:
+    """PATCH (UPDATE) แถวที่ตรงกับ match (PostgREST filter เช่น 'id=eq.123').
+    คืน row ที่อัปเดต. raise ถ้าล้มเหลว."""
+    url, key = _base()
+    r = requests.patch(
+        f"{url}/rest/v1/{table}?{match}",
+        headers=_headers(key, {"Prefer": "return=representation"}),
+        json=patch, timeout=20,
+    )
+    if r.status_code not in (200, 204):
+        raise Exception(f"Supabase update {table} {r.status_code}: {r.text[:300]}")
+    try:
+        return r.json()
+    except Exception:
+        return []
+
+
 def _trim_row(row: list) -> list:
     """ตัด cell ว่างท้ายแถวทิ้ง — ลดขนาด jsonb (เขียนเร็วขึ้น, กัน statement timeout).
     ปลอดภัย: aggregator อ่านด้วย cell(r, idx) ซึ่งคืน '' ถ้า idx เกินความยาวแถวอยู่แล้ว."""

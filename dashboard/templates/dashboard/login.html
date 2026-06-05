@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Oxlet Dashboard</title>
+  <title>เข้าสู่ระบบ — Oxlet Dashboard</title>
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260604b">
@@ -24,8 +24,12 @@
     .btn-primary { width:100%; padding:10px; border-radius:10px; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:13px; cursor:pointer; }
     .btn-primary:hover { filter:brightness(1.05); }
     .err { background:var(--red-bg); color:var(--red); padding:8px 12px; border-radius:10px; font-size:12px; margin-bottom:14px; border:.5px solid var(--red-mid); }
-    .hint { font-size:11px; color:var(--t3); margin-top:14px; padding:10px 12px; background:var(--bg2); border-radius:10px; line-height:1.6; }
-    .hint code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:10px; }
+    .foot { text-align:center; margin-top:16px; font-size:12px; color:var(--t3); }
+    .foot a { color:var(--blue); font-weight:700; text-decoration:none; }
+    details { margin-top:16px; }
+    details summary { font-size:12px; color:var(--t3); cursor:pointer; list-style:none; text-align:center; }
+    details summary::-webkit-details-marker { display:none; }
+    .sub-box { margin-top:12px; padding:14px; background:var(--bg2); border-radius:10px; }
   </style>
 </head>
 <body>
@@ -38,25 +42,47 @@
 
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
+  <!-- ทางหลัก: อีเมล + รหัสผ่าน (สมาชิกที่ผ่านการอนุมัติ) -->
   <form method="post" action="/login/">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
     <div class="field">
-      <label>รหัสผ่าน Admin</label>
-      <input type="password" name="password" autocomplete="current-password" placeholder="กรอกรหัสผ่านสำหรับสิทธิ์ Admin">
+      <label>อีเมล</label>
+      <input type="email" name="email" autocomplete="email" placeholder="you@example.com">
     </div>
-    <div class="divider">หรือ</div>
     <div class="field">
-      <label>LINE user_id (สำหรับ ผู้บริหาร / เซลล์)</label>
-      <input type="text" name="token" autocomplete="off" placeholder="U xxxxxxxxxxxxxxxx">
+      <label>รหัสผ่าน</label>
+      <input type="password" name="password" autocomplete="current-password" placeholder="รหัสผ่าน">
     </div>
     <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
   </form>
 
-  <div class="hint">
-    <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่ admin ให้ <code>/s/&lt;token&gt;/</code> แทนการ login ที่นี่<br>
-    <b>Admin</b> ตั้งรหัสใน <code>.env</code> ที่ <code>OXLET_ADMIN_PASSWORD=xxxx</code>
-  </div>
+  <div class="foot">ยังไม่มีบัญชี? <a href="/register/">สมัครสมาชิก</a></div>
+
+  <!-- ทางสำรอง: แอดมินระบบ (env) / LINE user_id -->
+  <details>
+    <summary>▸ เข้าสู่ระบบด้วยวิธีอื่น (แอดมินระบบ / LINE)</summary>
+    <div class="sub-box">
+      <form method="post" action="/login/">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
+        <div class="field">
+          <label>ชื่อผู้ใช้แอดมินระบบ</label>
+          <input type="text" name="username" autocomplete="off" placeholder="admin">
+        </div>
+        <div class="field">
+          <label>รหัสผ่านแอดมินระบบ</label>
+          <input type="password" name="password" autocomplete="off" placeholder="รหัสผ่านแอดมินระบบ">
+        </div>
+        <div class="divider">หรือ</div>
+        <div class="field">
+          <label>LINE user_id (ผู้บริหาร / เซลล์)</label>
+          <input type="text" name="token" autocomplete="off" placeholder="U xxxxxxxxxxxxxxxx">
+        </div>
+        <button type="submit" class="btn-primary">เข้าสู่ระบบ (สำรอง)</button>
+      </form>
+    </div>
+  </details>
 </div>
 </body>
 </html>

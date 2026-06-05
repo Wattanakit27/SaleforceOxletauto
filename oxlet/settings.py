@@ -6,8 +6,20 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ──────────────────────────────────────────────────────────────────────
+# กลยุทธ์ ENV (Vercel จำกัด ~15 ตัว):
+#   • SECRET (ต้องตั้งบน Vercel เท่านั้น ห้าม inline ลงโค้ด) — 8 ตัว:
+#       GOOGLE_PRIVATE_KEY, DJANGO_SECRET_KEY, OXLET_ADMIN_PASSWORD,
+#       LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET, GEMINI_API_KEY,
+#       SUPABASE_SECRET_KEY, GMAIL_APP_PASSWORD
+#   • NON-SECRET (inline เป็น default ด้านล่าง — Vercel ไม่ต้องตั้ง):
+#       email/url/model/flag/username/hostname ฯลฯ
+#   • local dev: .env (gitignored) override ได้ทุกตัว
+# ──────────────────────────────────────────────────────────────────────
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
-DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
+# DEBUG default = False (ปลอดภัยสำหรับ prod ที่ไม่ได้ตั้ง env). local dev ตั้ง DEBUG=True ใน .env
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 
 # ALLOWED_HOSTS — รับจาก env var ถ้ามี (comma-separated), fallback "*" สำหรับ dev
 _hosts_env = os.getenv("ALLOWED_HOSTS", "").strip()
@@ -52,25 +64,42 @@ OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
-# ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — ใส่ LINE user_id แอดมิน
-# ช่วงทดสอบส่งเข้า id นี้แทนกลุ่ม. ถ้าว่าง → ปฏิเสธการส่ง (ไม่ fallback)
-FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "")
+# ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — LINE user_id แอดมิน (ไม่ลับ: เป็นปลายทาง ไม่ใช่ credential)
+FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
 
-# Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น)
+# Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น) — SECRET ต้องตั้งบน Vercel
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-# โมเดล OCR — pro = แม่นสุด (ลายมือ), flash = เร็ว/ถูกกว่า
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+# โมเดล OCR (ไม่ลับ — ชื่อโมเดล): pro = แม่นสุด (ลายมือ), flash = เร็ว/ถูกกว่า
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 
-# Supabase — mirror Sheet + เก็บฟอร์ม (server-side, ใช้ secret key)
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+# Supabase — mirror Sheet + เก็บฟอร์ม (server-side)
+# URL = ไม่ลับ (public REST endpoint, ป้องกันด้วย key+RLS) → inline ได้
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ydscbkpnexgwircqcczv.supabase.co").rstrip("/")
+# SECRET (service_role ข้าม RLS) — ต้องตั้งบน Vercel เท่านั้น
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
-SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
-# เปิด = dashboard อ่านจาก Supabase (sheet_cache), ปิด = อ่าน Google Sheets ตรง (เดิม)
-USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes")
+# (ลบ SUPABASE_PUBLISHABLE_KEY ออก — ไม่มีโค้ดไหนอ่าน)
+# default True — ระบบใช้ Supabase เป็นหลัก
+USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
 
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (cron-job.org, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
 CRON_SECRET = os.getenv("CRON_SECRET", "")
+
+# ── Email (Gmail SMTP) — ส่งเมล approve การสมัครสมาชิก ──
+# ต้องเปิด 2FA บนบัญชี Gmail แล้วสร้าง App Password (16 หลัก) → ใส่ใน GMAIL_APP_PASSWORD
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "oxletauto@gmail.com")
+# App Password ของ Gmail (เว้นวรรคออกได้) — ตั้งบน .env + Vercel เท่านั้น ห้าม commit
+EMAIL_HOST_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "20"))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"Oxlet Dashboard <{EMAIL_HOST_USER}>")
+# ปลายทางที่รับเมล "ขออนุมัติบัญชี" (admin กดลิงก์ approve ในเมลนี้)
+APPROVAL_NOTIFY_EMAIL = os.getenv("APPROVAL_NOTIFY_EMAIL", "oxletauto@gmail.com")
+# URL ฐานของเว็บ (สำหรับสร้างลิงก์ approve ในเมล) — ว่าง = ใช้ request.build_absolute_uri แทน
+SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
 
 ROOT_URLCONF = "oxlet.urls"
 
@@ -111,7 +140,12 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Google Sheets config
-GOOGLE_SERVICE_ACCOUNT_EMAIL = os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
+# service account email = ไม่ลับ (เป็น identity ไม่ใช่ credential) → inline ได้
+GOOGLE_SERVICE_ACCOUNT_EMAIL = os.getenv(
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    "n8n-sheets@sylvan-road-477705-q4.iam.gserviceaccount.com",
+)
+# GOOGLE_PRIVATE_KEY = SECRET (RSA private key) — ต้องตั้งบน Vercel เท่านั้น ห้าม inline
 GOOGLE_PRIVATE_KEY = os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n")
 # Strip surrounding quotes
 if GOOGLE_PRIVATE_KEY.startswith('"') and GOOGLE_PRIVATE_KEY.endswith('"'):
