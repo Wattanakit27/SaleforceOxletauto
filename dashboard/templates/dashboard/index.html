@@ -1089,6 +1089,7 @@
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE Flex Manager</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">ตั้งเป้า / ทีม</button>
+            <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">👑 จัดการแอดมิน</button>
             <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">📊 แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Log / Diagnostics</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">Export Score → Sheet</button>
@@ -3539,6 +3540,161 @@
           msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
         } else {
           msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ บันทึก ${data.saved} เซลล์เรียบร้อย — รีเฟรชหน้า dashboard เพื่อดูผล</div>`;
+        }
+      } catch (e) {
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 บันทึก';
+      }
+    }
+
+    // ── 👑 จัดการแอดมิน (admin IDs) — รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ) ──
+    let __aiAdmins = [];      // [{user_id, name, note}]
+    let __aiEmployees = [];   // [{user_id, nickname, display, dept}]
+    async function openAdminIdsPanel() {
+      if (!isAdmin) return;
+      const old = document.getElementById('aiconfig-overlay');
+      if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'aiconfig-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      const modal = document.createElement('div');
+      modal.style.cssText = 'background:var(--bg);border-radius:14px;max-width:600px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
+      modal.onclick = (e) => e.stopPropagation();
+      modal.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:15px;font-weight:700;color:var(--t1)">👑 จัดการแอดมิน (ไอดี)</div>
+        <button onclick="document.getElementById('aiconfig-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button>
+      </div>
+      <div id="ai-body" style="overflow-y:auto;padding:16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3);font-size:13px"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด...</div></div>`;
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      try {
+        const res = await fetch('/api/admin/admin_config', { credentials:'same-origin' });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'load failed');
+        __aiAdmins = (data.admins || []).map(a => ({...a}));
+        __aiEmployees = data.employees || [];
+        modal.__aiData = data;
+        drawAdminIds(modal, data);
+      } catch (e) {
+        modal.querySelector('#ai-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">⚠️ ${h(e.message)}</div>`;
+      }
+    }
+
+    function drawAdminIds(modal, data) {
+      const adminIds = new Set(__aiAdmins.map(a => a.user_id));
+      const avail = __aiEmployees.filter(e => !adminIds.has(e.user_id));
+      const sheetBtn = `<a href="${h(data.sheet_url)}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">📊 ดูใน Sheet</a>`;
+
+      let html = `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border:.5px solid var(--amber-mid);border-radius:8px;font-size:11px;margin-bottom:12px;line-height:1.6">
+        แอดมินกลุ่มนี้ = คนที่ <b>ไม่ใช่เซลล์ใน TEAMS</b> (เทเลเซลล์/ออฟฟิศ) — login ด้วย LINE user_id แล้วได้สิทธิ์แอดมิน<br>
+        <span style="display:flex;justify-content:space-between"><span>เซลล์ที่เป็นแอดมิน ให้ติ๊กในปุ่ม "ตั้งเป้า / ทีม" แทน</span>${sheetBtn}</span>
+      </div>`;
+
+      // ── add section ──
+      html += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">➕ เพิ่มแอดมิน</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <select id="ai-emp-sel" style="flex:1;padding:8px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;outline:none">
+            <option value="">— เลือกจากรายชื่อพนักงาน —</option>
+            ${avail.map(e => `<option value="${h(e.user_id)}">${h(e.nickname || e.display || '(ไม่มีชื่อ)')}${e.dept ? ' · '+h(e.dept) : ''}</option>`).join('')}
+          </select>
+          <button onclick="__aiAddFromSel()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">เพิ่ม</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="ai-uid-manual" placeholder="หรือวาง LINE user_id (U...)" style="flex:1;padding:8px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box">
+          <button onclick="__aiAddManual()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap">วางเอง</button>
+        </div>
+      </div>`;
+
+      // ── current admins list ──
+      html += `<div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">แอดมินปัจจุบัน (${__aiAdmins.length})</div>`;
+      if (!__aiAdmins.length) {
+        html += `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;background:var(--bg2);border-radius:8px">ยังไม่มีแอดมินในรายชื่อ</div>`;
+      } else {
+        html += `<div style="display:flex;flex-direction:column;gap:6px">`;
+        __aiAdmins.forEach((a,i) => {
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--t1)">${h(a.name || '(ไม่ระบุชื่อ)')}</div>
+              <code style="font-size:10px;color:var(--t3)" title="${h(a.user_id)}">${h(a.user_id.slice(0,12))}...${h(a.user_id.slice(-4))}</code>
+            </div>
+            <button onclick="__aiRemove(${i})" title="เอาออก" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:4px 8px">ลบ</button>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      html += `<div id="ai-msg" style="margin-top:10px"></div>`;
+
+      modal.querySelector('#ai-body').innerHTML = html;
+
+      // footer
+      let footer = modal.querySelector('#ai-footer');
+      if (!footer) {
+        footer = document.createElement('div');
+        footer.id = 'ai-footer';
+        footer.style.cssText = 'padding:12px 16px;border-top:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px';
+        modal.appendChild(footer);
+      }
+      footer.innerHTML = `<div style="font-size:11px;color:var(--t3)">⚠️ บันทึก = เขียนทับชีต "ตั้งค่าแอดมิน"</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="document.getElementById('aiconfig-overlay').remove()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ปิด</button>
+          <button id="ai-save-btn" onclick="__aiSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">💾 บันทึก</button>
+        </div>`;
+    }
+
+    function __aiRedraw() {
+      const modal = document.querySelector('#aiconfig-overlay > div');
+      if (modal && modal.__aiData) drawAdminIds(modal, modal.__aiData);
+    }
+    function __aiAddFromSel() {
+      const sel = document.getElementById('ai-emp-sel');
+      const uid = sel.value;
+      if (!uid) return;
+      const emp = __aiEmployees.find(e => e.user_id === uid);
+      if (__aiAdmins.some(a => a.user_id === uid)) return;
+      __aiAdmins.push({ user_id: uid, name: emp ? (emp.nickname || emp.display) : '', note: '' });
+      __aiRedraw();
+    }
+    function __aiAddManual() {
+      const inp = document.getElementById('ai-uid-manual');
+      const uid = (inp.value || '').trim();
+      const msg = document.getElementById('ai-msg');
+      if (!uid) return;
+      if (!uid.startsWith('U') || uid.length < 20) {
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ LINE user_id ต้องขึ้นต้นด้วย U</div>`; return;
+      }
+      if (__aiAdmins.some(a => a.user_id === uid)) {
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:11px">มีไอดีนี้อยู่แล้ว</div>`; return;
+      }
+      const emp = __aiEmployees.find(e => e.user_id === uid);
+      __aiAdmins.push({ user_id: uid, name: emp ? (emp.nickname || emp.display) : '', note: '' });
+      __aiRedraw();
+    }
+    function __aiRemove(i) {
+      const name = __aiAdmins[i]?.name || __aiAdmins[i]?.user_id || '';
+      if (!confirm(`เอา "${name}" ออกจากแอดมิน?`)) return;
+      __aiAdmins.splice(i, 1);
+      __aiRedraw();
+    }
+    async function __aiSave() {
+      const btn = document.getElementById('ai-save-btn');
+      const msg = document.getElementById('ai-msg');
+      if (!confirm(`บันทึกแอดมิน ${__aiAdmins.length} คน? (เขียนทับชีต)`)) return;
+      btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+      try {
+        const res = await fetch('/api/admin/admin_config', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'X-CSRFToken': getCsrfToken(), 'X-Requested-With':'XMLHttpRequest' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ admins: __aiAdmins }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(data.error || 'บันทึกล้มเหลว')}</div>`;
+        } else {
+          msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">✅ บันทึก ${data.saved} แอดมินเรียบร้อย</div>`;
         }
       } catch (e) {
         msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">⚠️ ${h(e.message)}</div>`;

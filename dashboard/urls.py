@@ -22,6 +22,7 @@ urlpatterns = [
     path("account/review/", views.account_review, name="account_review"),
     path("api/admin/send_line", views.admin_send_line, name="admin_send_line"),
     path("api/admin/seller_config", views.admin_seller_config, name="admin_seller_config"),
+    path("api/admin/admin_config", views.admin_admin_config, name="admin_admin_config"),
     path("api/admin/schedule_config", views.admin_schedule_config, name="admin_schedule_config"),
     path("api/admin/diagnostics", views.admin_diagnostics, name="admin_diagnostics"),
     path("api/admin/sheets_status", views.admin_sheets_status, name="admin_sheets_status"),

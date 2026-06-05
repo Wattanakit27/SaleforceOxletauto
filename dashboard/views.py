@@ -225,11 +225,16 @@ def login_view(request):
                     position = (cell(r, EM.position) or "").strip().lower()
                     nickname = cell(r, EM.nickname)
                     display = cell(r, EM.display_name)
-                    # เซลล์ที่ super-admin ติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์ → ได้สิทธิ์ admin
-                    # (ยังนับเป็นเซลล์ปกติในสถิติ — แค่ได้สิทธิ์ดู/ใช้เครื่องมือ admin เพิ่ม)
-                    from .services.constants import normalize_seller, ADMIN_SELLERS, refresh_from_sheet
+                    # ได้สิทธิ์ admin จาก 2 ทาง (ยังนับเป็นเซลล์ปกติในสถิติ):
+                    #  1) LINE user_id อยู่ในชีต "ตั้งค่าแอดมิน" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)
+                    #  2) เป็นเซลล์ใน TEAMS ที่ถูกติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์
+                    from .services.constants import (
+                        normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS,
+                        refresh_from_sheet, load_admin_user_ids,
+                    )
                     refresh_from_sheet()
-                    if normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
+                    load_admin_user_ids()
+                    if line_token in ADMIN_USER_IDS or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
                         position = "admin"
                     request.session["oxlet_user"] = {
                         "user_id": line_token,
@@ -495,6 +500,96 @@ def admin_seller_config(request):
         "sellers": sellers,
         "total_target": sum(s["target"] for s in sellers),
         "team_count": len({s["team"] for s in sellers}),
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def admin_admin_config(request):
+    """Admin endpoint — จัดการ "ไอดีแอดมิน" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์ใน TEAMS)
+    GET  → รายชื่อแอดมินปัจจุบัน + รายชื่อ employees (ไว้เลือกใน UI)
+    POST body: {"admins":[{"user_id":"U...","name":"เฟิร์น","note":""},...]} → เขียนชีต "ตั้งค่าแอดมิน"
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.google_sheets import (
+        SHEET_CONFIG, write_sheet, fetch_sheet, cell,
+        ADMIN_CONFIG_COL as AC, EMPLOYEE_COL as EM,
+    )
+    from .services.constants import load_admin_user_ids
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+
+        incoming = body.get("admins") or []
+        if not isinstance(incoming, list):
+            return JsonResponse({"error": "admins ต้องเป็น list"}, status=400)
+
+        cleaned = []
+        seen = set()
+        for idx, a in enumerate(incoming):
+            uid = str(a.get("user_id", "") or "").strip()
+            if not uid:
+                continue
+            if not uid.startswith("U") or len(uid) < 20:
+                return JsonResponse({"error": f"แถวที่ {idx+1}: LINE user_id ไม่ถูกต้อง (ต้องขึ้นต้น U)"}, status=400)
+            if uid in seen:
+                continue
+            seen.add(uid)
+            cleaned.append([uid, str(a.get("name", "") or "").strip(), str(a.get("note", "") or "").strip()])
+
+        values = [["LINE user_id", "ชื่อ", "หมายเหตุ"]] + cleaned
+        try:
+            write_sheet("admin_config", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+
+        load_admin_user_ids()  # โหลดใหม่ทันที
+        return JsonResponse({"ok": True, "saved": len(cleaned)})
+
+    # GET
+    cfg = SHEET_CONFIG.get("admin_config", {})
+    try:
+        rows = fetch_sheet("admin_config")
+    except Exception:
+        rows = []
+    admins = []
+    for r in rows:
+        uid = cell(r, AC.user_id).strip()
+        if not uid.startswith("U") or len(uid) < 20:
+            continue
+        admins.append({
+            "user_id": uid,
+            "name": cell(r, AC.name).strip(),
+            "note": cell(r, AC.note).strip(),
+        })
+
+    # employees list — ไว้ให้ UI เลือกคนแทนการพิมพ์ user_id เอง
+    employees = []
+    try:
+        for r in fetch_sheet("employees"):
+            uid = cell(r, EM.user_id).strip()
+            if not uid.startswith("U") or len(uid) < 20:
+                continue
+            employees.append({
+                "user_id": uid,
+                "nickname": cell(r, EM.nickname).strip(),
+                "display": cell(r, EM.display_name).strip(),
+                "dept": cell(r, EM.position).strip(),
+            })
+    except Exception:
+        pass
+
+    return JsonResponse({
+        "ok": True,
+        "admins": admins,
+        "employees": employees,
+        "sheet_url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
+        "sheet_name": cfg.get("sheet_name", "ตั้งค่าแอดมิน"),
     })
 
 

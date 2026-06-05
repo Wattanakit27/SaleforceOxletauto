@@ -49,9 +49,32 @@ for tid, members in TEAMS.items():
 # mutate in-place เท่านั้น (.clear()/.update()) — กัน import binding หาย
 ADMIN_SELLERS: set[str] = set()
 
+# รายชื่อ LINE user_id ที่เป็นแอดมิน "โดยตรง" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์ใน TEAMS)
+# อ่านจากชีต "ตั้งค่าแอดมิน" — แก้ผ่านปุ่ม 👑 จัดการแอดมิน หรือแก้ในชีตตรงๆ
+ADMIN_USER_IDS: set[str] = set()
+
 
 def _is_truthy_flag(v: str) -> bool:
     return (v or "").strip().lower() in ("true", "1", "yes", "y", "✓", "✔", "admin", "ใช่")
+
+
+def load_admin_user_ids() -> set[str]:
+    """อ่านชีต 'ตั้งค่าแอดมิน' → set ของ LINE user_id ที่เป็นแอดมิน. mutate ADMIN_USER_IDS in-place.
+    ถ้าชีตยังไม่มี/error → คงค่าเดิม (ไม่ล้าง) เพื่อกันแอดมินหลุดสิทธิ์ชั่วคราว."""
+    try:
+        from .google_sheets import fetch_sheet, cell, ADMIN_CONFIG_COL as AC
+        rows = fetch_sheet("admin_config")
+    except Exception:
+        return ADMIN_USER_IDS
+    new_ids = set()
+    for r in rows:
+        uid = cell(r, AC.user_id).strip()
+        # LINE user_id ขึ้นต้น U ยาว 33 ตัว — กรอง header/ขยะออก
+        if uid.startswith("U") and len(uid) >= 20:
+            new_ids.add(uid)
+    ADMIN_USER_IDS.clear()
+    ADMIN_USER_IDS.update(new_ids)
+    return ADMIN_USER_IDS
 
 
 def refresh_from_sheet() -> bool:

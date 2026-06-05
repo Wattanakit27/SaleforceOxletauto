@@ -74,6 +74,10 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "ตั้งเวลาส่ง",
     },
+    "admin_config": {   # รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์ใน TEAMS)
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "ตั้งค่าแอดมิน",
+    },
     "leadscore": {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "leadscore",
@@ -219,6 +223,13 @@ class SELLER_CONFIG_COL:
     team = 1
     target = 2
     is_admin = 3   # คอลัมน์ D — TRUE = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย (login แล้วเป็น admin)
+
+class ADMIN_CONFIG_COL:
+    # tab "ตั้งค่าแอดมิน" — รายชื่อ LINE user_id ที่เป็นแอดมิน (คนที่ไม่ใช่เซลล์ใน TEAMS)
+    # Row: LINE user_id | ชื่อ | หมายเหตุ
+    user_id = 0
+    name = 1
+    note = 2
 
 class SCHEDULE_COL:
     # ตั้งเวลาส่ง tab — ตารางเวลา trigger LINE Flex
