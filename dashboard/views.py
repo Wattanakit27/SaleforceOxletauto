@@ -171,36 +171,8 @@ def login_view(request):
     username = (request.POST.get("username") or "").strip()
     password = (request.POST.get("password") or "").strip()
     line_token = (request.POST.get("token") or "").strip()
-    email = (request.POST.get("email") or "").strip()
 
-    # ทาง 0: สมาชิก (email + password) ผ่าน Supabase — เส้นทางหลักของระบบใหม่
-    if email:
-        from .services.auth_users import is_enabled, verify_login, session_payload
-        if not is_enabled():
-            err = "ระบบสมาชิกยังไม่พร้อม (ยังไม่ได้ตั้งค่า Supabase)"
-            if is_ajax:
-                return JsonResponse({"ok": False, "error": err}, status=503)
-            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
-        try:
-            user, err = verify_login(email, password)
-        except Exception as e:
-            user, err = None, f"ตรวจสอบบัญชีล้มเหลว: {e}"
-        if user:
-            payload = session_payload(user)
-            request.session["oxlet_user"] = payload
-            request.session.set_expiry(60 * 60 * 24 * 30)
-            if payload["position"] in EXEC_POSITIONS:
-                target = next_url if next_url and next_url not in ("/me/",) else "/dashboard/"
-            else:
-                target = "/me/"
-            if is_ajax:
-                return JsonResponse({"ok": True, "next": target})
-            return HttpResponseRedirect(target)
-        if is_ajax:
-            return JsonResponse({"ok": False, "error": err}, status=401)
-        return render(request, "dashboard/login.html", {"next": next_url, "error": err})
-
-    # ทาง 1: Admin login (ชื่อ + รหัสผ่าน)
+    # ทาง 1: Admin login (ชื่อ + รหัสผ่าน — break-glass)
     admin_user = (getattr(settings, "OXLET_ADMIN_USER", "admin") or "admin").strip()
     admin_pw = (getattr(settings, "OXLET_ADMIN_PASSWORD", "") or "").strip()
 
@@ -216,8 +188,14 @@ def login_view(request):
             return JsonResponse({"ok": True, "next": next_url})
         return HttpResponseRedirect(next_url)
 
-    # ทาง 2: LINE user_id (ผู้บริหาร/เซลล์) → ตรวจ employees sheet + set session
+    # ทาง 2: LINE user_id + รหัสรวม (เซลล์/ผู้บริหาร/แอดมิน-เซลล์) → ตรวจ employees sheet + set session
     if line_token:
+        shared_pw = (getattr(settings, "OXLET_SELLER_PASSWORD", "") or "").strip()
+        if not password or password != shared_pw:
+            err = "รหัสผ่านไม่ถูกต้อง"
+            if is_ajax:
+                return JsonResponse({"ok": False, "error": err}, status=401)
+            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
         try:
             employees = fetch_sheet("employees")
             for r in employees:
@@ -271,137 +249,6 @@ def logout_view(request):
     resp = HttpResponseRedirect("/login/")
     resp.delete_cookie("oxlet_employee")
     return resp
-
-
-@ensure_csrf_cookie
-@require_http_methods(["GET", "POST"])
-def register_view(request):
-    """หน้าสมัครสมาชิก — /register/
-    GET → ฟอร์มสมัคร. POST → สร้างบัญชี pending ใน Supabase + ส่งเมล approve ไปผู้ดูแล.
-    บัญชีใช้งานได้หลังผู้ดูแลกดลิงก์ approve ในเมล oxletauto@gmail.com.
-    """
-    from .services.auth_users import is_enabled, create_pending_user, ROLE_LABELS, VALID_ROLES, make_action_token
-
-    ctx_roles = ROLE_LABELS  # {"seller":"เซลล์", "executive":"ผู้บริหาร", "admin":"แอดมินสูงสุด"}
-
-    if request.method == "GET":
-        return render(request, "dashboard/register.html", {
-            "roles": ctx_roles, "error": None, "done": False, "form": {},
-        })
-
-    # POST
-    form = {
-        "full_name": (request.POST.get("full_name") or "").strip(),
-        "nickname": (request.POST.get("nickname") or "").strip(),
-        "email": (request.POST.get("email") or "").strip().lower(),
-        "role": (request.POST.get("role") or "").strip().lower(),
-        "seller_name": (request.POST.get("seller_name") or "").strip(),
-    }
-    password = request.POST.get("password") or ""
-    password2 = request.POST.get("password2") or ""
-
-    def _err(msg):
-        return render(request, "dashboard/register.html", {
-            "roles": ctx_roles, "error": msg, "done": False, "form": form,
-        })
-
-    if not is_enabled():
-        return _err("ระบบสมัครสมาชิกยังไม่พร้อม (ยังไม่ได้ตั้งค่า Supabase)")
-    if not form["full_name"] or not form["email"] or not password or not form["role"]:
-        return _err("กรุณากรอกข้อมูลให้ครบ (ชื่อ / อีเมล / รหัสผ่าน / บทบาท)")
-    if "@" not in form["email"] or "." not in form["email"].split("@")[-1]:
-        return _err("รูปแบบอีเมลไม่ถูกต้อง")
-    if len(password) < 6:
-        return _err("รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร")
-    if password != password2:
-        return _err("รหัสผ่านทั้งสองช่องไม่ตรงกัน")
-    if form["role"] not in VALID_ROLES:
-        return _err("กรุณาเลือกบทบาทให้ถูกต้อง")
-
-    nickname = form["nickname"] or form["full_name"]
-    seller_name = form["seller_name"] or nickname if form["role"] == "seller" else form["seller_name"]
-
-    try:
-        user = create_pending_user(
-            email=form["email"], password=password, full_name=form["full_name"],
-            nickname=nickname, role=form["role"], seller_name=seller_name,
-        )
-    except ValueError as e:
-        return _err(str(e))
-    except Exception as e:
-        return _err(f"สร้างบัญชีไม่สำเร็จ: {e}")
-
-    # สร้างลิงก์ approve/reject (signed token) → ส่งเข้าเมลผู้ดูแล
-    base = (getattr(settings, "SITE_URL", "") or "").rstrip("/") or request.build_absolute_uri("/").rstrip("/")
-    approve_url = f"{base}/account/review/?t={make_action_token(user['id'], 'approve')}"
-    reject_url = f"{base}/account/review/?t={make_action_token(user['id'], 'reject')}"
-
-    email_ok, email_err = True, ""
-    try:
-        from .services.email_send import send_approval_request
-        send_approval_request(user, approve_url, reject_url)
-    except Exception as e:
-        email_ok, email_err = False, str(e)
-
-    return render(request, "dashboard/register.html", {
-        "roles": ctx_roles, "error": None, "done": True, "form": {},
-        "email_ok": email_ok, "email_err": email_err,
-        "notify_email": getattr(settings, "APPROVAL_NOTIFY_EMAIL", ""),
-    })
-
-
-@ensure_csrf_cookie
-@require_http_methods(["GET", "POST"])
-def account_review(request):
-    """หน้า approve/reject บัญชี — /account/review/?t=<signed_token> (ลิงก์จากเมล).
-    GET = แสดงหน้ายืนยัน (ไม่เปลี่ยนสถานะ — กันลิงก์ถูก prefetch แล้ว approve เอง).
-    POST = ทำรายการจริง (อนุมัติ → active, ปฏิเสธ → rejected).
-    """
-    from django.core.signing import BadSignature, SignatureExpired
-    from .services.auth_users import load_action_token, get_user_by_id, set_status, role_label
-
-    token = (request.GET.get("t") or request.POST.get("t") or "").strip()
-
-    def _page(state, **extra):
-        return render(request, "dashboard/account_review.html",
-                      {"state": state, "token": token, **extra})
-
-    if not token:
-        return _page("invalid")
-    try:
-        uid, action = load_action_token(token)
-    except SignatureExpired:
-        return _page("expired")
-    except (BadSignature, Exception):
-        return _page("invalid")
-
-    if action not in ("approve", "reject"):
-        return _page("invalid")
-
-    try:
-        user = get_user_by_id(uid)
-    except Exception as e:
-        return _page("error", error=str(e))
-    if not user:
-        return _page("invalid")
-
-    status = (user.get("status") or "").lower()
-    view_ctx = {"user": user, "action": action, "role_label": role_label(user.get("role"))}
-
-    # ทำรายการแล้ว (active/rejected) → ไม่ให้ทำซ้ำ
-    if status != "pending":
-        return _page("already", **view_ctx)
-
-    if request.method == "GET":
-        return _page("confirm", **view_ctx)
-
-    # POST → ดำเนินการ
-    new_status = "active" if action == "approve" else "rejected"
-    try:
-        set_status(uid, new_status)
-    except Exception as e:
-        return _page("error", error=str(e), **view_ctx)
-    return _page("done", **view_ctx)
 
 
 @require_http_methods(["GET", "POST"])

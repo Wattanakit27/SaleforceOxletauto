@@ -68,10 +68,8 @@ python manage.py runserver
 | `/` | `index` | redirect → `/dashboard/` |
 | `/dashboard/` | `dashboard_page` | **ต้อง login (admin/ผู้บริหาร)** — เซลล์ → redirect ไป `/me/` · ไม่ login → `/login/` |
 | `/admin/` | `admin_page` | **ต้อง login admin** เท่านั้น (ไม่งั้น → `/login/`) |
-| `/me/` | `me_dashboard` | หน้าส่วนตัวของเซลล์ที่ login (email+pw) — ดึง `seller_name` จาก session, render `seller.html` (data แยกเฉพาะตัว) |
-| `/login/` | `login_view` | GET = form, POST = **email+password (สมาชิก)** หรือ admin user/pass (env) หรือ LINE user_id |
-| `/register/` | `register_view` | **หน้าสมัครสมาชิก** — GET=form, POST=สร้างบัญชี pending (Supabase) + ส่งเมล approve |
-| `/account/review/` | `account_review` | หน้า approve/reject จากลิงก์ในเมล (`?t=<signed_token>`) — GET=ยืนยัน, POST=ทำจริง |
+| `/me/` | `me_dashboard` | หน้าส่วนตัวของเซลล์ที่ login — ดึง `seller_name` จาก session, render `seller.html` (data แยกเฉพาะตัว) |
+| `/login/` | `login_view` | GET = form, POST = **LINE user_id + รหัสรวม** (`OXLET_SELLER_PASSWORD`) หรือ admin user/pass (env, สำรอง) |
 | `/logout/` | `logout_view` | clear session → กลับ `/login/` |
 | `/u/<token>/` | `magic_link` | login เซลล์ผ่าน LINE user_id (จาก employees sheet) |
 | `/s/<token>/` | `seller_dashboard` | หน้าส่วนตัวของเซลล์ — token จาก [seller_tokens.py](dashboard/services/seller_tokens.py) (token = auth ในตัว) |
@@ -105,46 +103,12 @@ python manage.py runserver
 
 **⚠️ บังคับ login ทุกหน้า (ไม่มี default test user แล้ว)** — `dashboard_page`/`admin_page`/`api_dashboard` เช็ค session ก่อนเสมอ ([views.py](dashboard/views.py) helper `_session_user`/`_can_view_all`/`_is_admin`). เซลล์ที่เผลอเข้า `/dashboard/` → redirect `/me/` (กันเปิด DevTools เห็น data รวมของทุกคน)
 
-**Login 3 ทาง** (ทุกทางเก็บ session `oxlet_user = {user_id, nickname, display_name, position, seller_name?, email?}`):
-1. **สมาชิก (หลัก)** — POST `/login/` ด้วย `email`+`password` → `auth_users.verify_login()` (Supabase `app_users`, ต้อง status=active) → exec/admin ไป `/dashboard/`, เซลล์ไป `/me/`
+**Login (แบบง่าย — ไม่มีสมัครสมาชิก)** — ทุกทางเก็บ session `oxlet_user = {user_id, nickname, display_name, position, seller_name?}`:
+1. **หลัก: LINE user_id + รหัสรวม** — POST `/login/` ด้วย `token`(LINE user_id) + `password`. รหัสต้องตรง `OXLET_SELLER_PASSWORD` (env, default `OXletauto55555`) → หา user_id ใน employees sheet → role จาก [ชีตตั้งค่าแอดมิน/เซลล์แอดมิน](#-แอดมินจาก-line-user_id-2-ทาง) → exec/admin ไป `/dashboard/`, เซลล์ไป `/s/<user_id>/`
 2. **แอดมินระบบ (สำรอง/break-glass)** — username/password จาก env `OXLET_ADMIN_USER` / `OXLET_ADMIN_PASSWORD`
-3. **เซลล์ (legacy)** — `/u/<token>/` ที่ token = LINE user_id, หรือ `/s/<token>/` ที่ token จาก seller_tokens.py
+3. **เซลล์ (ลิงก์ตรง ไม่ต้อง login)** — `/s/<token>/` (token จาก seller_tokens.py) หรือ `/u/<token>/` (LINE user_id) — เซลล์ใช้ลิงก์ส่วนตัวเข้าได้เลย
 
-## ระบบสมาชิก (สมัคร / อนุมัติ / login) — เพิ่ม มิ.ย.69
-
-ระบบความปลอดภัย: บังคับ login ทุกหน้า + สมัครสมาชิกเอง แล้ว **admin กดอนุมัติผ่านลิงก์ในเมล** `oxletauto@gmail.com`
-
-**ไฟล์หลัก**:
-- [auth_users.py](dashboard/services/auth_users.py) — user store บน Supabase table `app_users` (CRUD + verify). รหัสผ่าน hash ด้วย Django `make_password`/`check_password` (PBKDF2, ไม่ใช้ DB/ไม่ใช้ contrib.auth). มี `make_action_token()`/`load_action_token()` = signed token (`django.core.signing`, หมดอายุ 14 วัน) สำหรับลิงก์ approve/reject
-- [email_send.py](dashboard/services/email_send.py) — `send_approval_request(user, approve_url, reject_url)` ส่ง Flex-like HTML email ผ่าน **Gmail SMTP** (Django `EmailMultiAlternatives`)
-- [supabase_client.py](dashboard/services/supabase_client.py) — เพิ่ม `select_rows()` / `update_rows()` (PostgREST generic) ใช้โดย auth_users
-- views: `register_view` · `account_review` · `me_dashboard` · `login_view` (เพิ่ม branch email+pw) · `_render_seller_page()` (แยก render ใช้ร่วม `/s/` + `/me/`)
-- templates: `register.html` · `account_review.html` · `login.html` (เพิ่ม email+pw เป็นหลัก, admin/LINE เป็น `<details>` สำรอง)
-
-**Flow สมัคร→อนุมัติ→login**:
-1. `/register/` กรอก ชื่อ/อีเมล/รหัสผ่าน/บทบาท (+ชื่อเซลล์ในระบบ ถ้าเลือกเซลล์) → POST สร้างแถว `app_users` status=`pending`
-2. ส่งเมลไป `APPROVAL_NOTIFY_EMAIL` (oxletauto@gmail.com) พร้อมปุ่ม ✅อนุมัติ / ❌ปฏิเสธ (ลิงก์ `/account/review/?t=<signed>`)
-3. admin กดลิงก์ → **GET = หน้ายืนยัน (ไม่เปลี่ยนสถานะ)** → กดปุ่ม = **POST ทำจริง** (กัน email scanner/prefetch เผลอ approve). approve→status=`active`, reject→`rejected`. ทำซ้ำไม่ได้ (เช็ค status!=pending)
-4. ผู้ใช้ login ด้วย email+password (ต้อง active) → set session → exec/admin ไป `/dashboard/`, เซลล์ไป `/me/`
-
-**Role mapping** (`ROLE_LABELS` ใน auth_users.py): เซลล์→`seller` · ผู้บริหาร→`executive` · แอดมินสูงสุด→`admin` (= position เดิม, permission check ทุกที่ใช้ได้เลย)
-
-**ความปลอดภัย**: ส่งเมลล้มเหลว → บัญชี pending ยังถูกบันทึก (view แจ้ง warn) · table หาย → fallback แสดง error ไม่ crash · ลิงก์ปลอม/หมดอายุ → หน้า invalid/expired
-
-**SQL สร้างตาราง** (รันใน Supabase SQL editor ครั้งเดียว — ดู docstring ใน [auth_users.py](dashboard/services/auth_users.py)):
-```sql
-create table if not exists app_users (
-  id uuid primary key default gen_random_uuid(),
-  email text unique not null, password_hash text not null,
-  full_name text, nickname text,
-  role text not null default 'seller',       -- seller | executive | admin
-  seller_name text,                           -- เซลล์: ชื่อในระบบ (map data dashboard)
-  status text not null default 'pending',     -- pending | active | rejected
-  created_at timestamptz default now(), approved_at timestamptz
-);
-```
-
-**Env ที่ต้องตั้ง** (`.env` + **Vercel**): `GMAIL_APP_PASSWORD` (App Password 16 หลัก, ต้องเปิด 2FA), `EMAIL_HOST_USER` (=oxletauto@gmail.com), `APPROVAL_NOTIFY_EMAIL`, `SITE_URL` (URL จริงตอน deploy เพื่อลิงก์ในเมลถูก — ว่าง=ใช้โดเมนจาก request). settings ที่ [settings.py](oxlet/settings.py): `EMAIL_BACKEND/HOST/PORT/USE_TLS` (smtp.gmail.com:587 TLS)
+> **เลิกใช้แล้ว (มิ.ย.69)**: ระบบสมัครสมาชิก + อนุมัติทางเมล (email/password, Supabase `app_users`, Gmail SMTP, signed token, `/register/`, `/account/review/`) — ถอดออกเพราะซับซ้อนเกินจำเป็น (เซลล์มีลิงก์อยู่แล้ว). LINE user_id หาได้ที่ปุ่ม 📋 LINE ID พนักงาน · รหัสรวมตั้งให้ทุกคนใช้ร่วมกัน. **ไม่ต้องใช้ Gmail/app_users อีก**
 
 ## Concepts สำคัญ
 
@@ -449,10 +413,11 @@ CRON_SECRET=xxx...
 
 ## Deploy บน Vercel
 
-1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 8 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
-   - **8 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`, `GMAIL_APP_PASSWORD`
-   - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `EMAIL_HOST_USER`, `APPROVAL_NOTIFY_EMAIL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
-   - **ตัวเลือก**: `DEBUG` (default=False อยู่แล้ว ไม่ต้องตั้งก็ปลอดภัย), `SITE_URL=https://your-app.vercel.app` (ตั้งถ้าอยากให้ลิงก์ approve ในเมลชี้โดเมนจริงแน่ๆ — ไม่ตั้ง=ใช้โดเมนจาก request)
+1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 7 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
+   - **7 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`
+   - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `OXLET_SELLER_PASSWORD` (รหัสรวม login = OXletauto55555), `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
+   - **ตัวเลือก**: `DEBUG` (default=False อยู่แล้ว ไม่ต้องตั้งก็ปลอดภัย)
+   - **เลิกใช้แล้ว**: `GMAIL_APP_PASSWORD`, `EMAIL_*`, `APPROVAL_NOTIFY_EMAIL`, `SITE_URL` (ถอดระบบสมัครสมาชิก+เมลออกแล้ว มิ.ย.69)
    - **⚠️ `.env` ถูก gitignored แล้ว (ไม่ commit)** — ประวัติ git ถูกล้าง .env ออกหมดแล้ว (filter-repo + force-push มิ.ย.69). ห้ามเอา .env กลับเข้า git อีก
 
 2. **Use canonical URL** (`your-app.vercel.app`) ไม่ใช่ deployment-specific URL (`your-app-xxx.vercel.app`) — อันยาวมี Vercel Auth wall ป้องกันอยู่

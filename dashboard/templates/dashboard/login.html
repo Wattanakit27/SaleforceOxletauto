@@ -24,8 +24,8 @@
     .btn-primary { width:100%; padding:10px; border-radius:10px; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:13px; cursor:pointer; }
     .btn-primary:hover { filter:brightness(1.05); }
     .err { background:var(--red-bg); color:var(--red); padding:8px 12px; border-radius:10px; font-size:12px; margin-bottom:14px; border:.5px solid var(--red-mid); }
-    .foot { text-align:center; margin-top:16px; font-size:12px; color:var(--t3); }
-    .foot a { color:var(--blue); font-weight:700; text-decoration:none; }
+    .hint { font-size:11px; color:var(--t3); margin-top:14px; padding:10px 12px; background:var(--bg2); border-radius:10px; line-height:1.6; }
+    .hint code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:10px; }
     details { margin-top:16px; }
     details summary { font-size:12px; color:var(--t3); cursor:pointer; list-style:none; text-align:center; }
     details summary::-webkit-details-marker { display:none; }
@@ -42,13 +42,13 @@
 
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
-  <!-- ทางหลัก: อีเมล + รหัสผ่าน (สมาชิกที่ผ่านการอนุมัติ) -->
+  <!-- ทางหลัก: LINE user_id + รหัสรวม -->
   <form method="post" action="/login/">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
     <div class="field">
-      <label>อีเมล</label>
-      <input type="email" name="email" autocomplete="email" placeholder="you@example.com">
+      <label>LINE user_id</label>
+      <input type="text" name="token" autocomplete="username" placeholder="U xxxxxxxxxxxxxxxx">
     </div>
     <div class="field">
       <label>รหัสผ่าน</label>
@@ -57,11 +57,14 @@
     <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
   </form>
 
-  <div class="foot">ยังไม่มีบัญชี? <a href="/register/">สมัครสมาชิก</a></div>
+  <div class="hint">
+    <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่แอดมินให้ <code>/s/&lt;token&gt;/</code> เข้าได้เลย ไม่ต้อง login<br>
+    <b>แอดมิน/ผู้บริหาร</b> ใช้ LINE user_id (ดูได้ที่ปุ่ม 📋 LINE ID พนักงาน) + รหัสที่แอดมินตั้งให้
+  </div>
 
-  <!-- ทางสำรอง: แอดมินระบบ (env) / LINE user_id -->
+  <!-- ทางสำรอง: แอดมินระบบ (env) -->
   <details>
-    <summary>▸ เข้าสู่ระบบด้วยวิธีอื่น (แอดมินระบบ / LINE)</summary>
+    <summary>▸ เข้าสู่ระบบแอดมินระบบ (สำรอง)</summary>
     <div class="sub-box">
       <form method="post" action="/login/">
         {% csrf_token %}
@@ -73,11 +76,6 @@
         <div class="field">
           <label>รหัสผ่านแอดมินระบบ</label>
           <input type="password" name="password" autocomplete="off" placeholder="รหัสผ่านแอดมินระบบ">
-        </div>
-        <div class="divider">หรือ</div>
-        <div class="field">
-          <label>LINE user_id (ผู้บริหาร / เซลล์)</label>
-          <input type="text" name="token" autocomplete="off" placeholder="U xxxxxxxxxxxxxxxx">
         </div>
         <button type="submit" class="btn-primary">เข้าสู่ระบบ (สำรอง)</button>
       </form>

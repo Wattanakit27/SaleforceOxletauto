@@ -8,12 +8,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ──────────────────────────────────────────────────────────────────────
 # กลยุทธ์ ENV (Vercel จำกัด ~15 ตัว):
-#   • SECRET (ต้องตั้งบน Vercel เท่านั้น ห้าม inline ลงโค้ด) — 8 ตัว:
+#   • SECRET (ต้องตั้งบน Vercel เท่านั้น ห้าม inline ลงโค้ด) — 7 ตัว:
 #       GOOGLE_PRIVATE_KEY, DJANGO_SECRET_KEY, OXLET_ADMIN_PASSWORD,
-#       LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET, GEMINI_API_KEY,
-#       SUPABASE_SECRET_KEY, GMAIL_APP_PASSWORD
+#       LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET, GEMINI_API_KEY, SUPABASE_SECRET_KEY
 #   • NON-SECRET (inline เป็น default ด้านล่าง — Vercel ไม่ต้องตั้ง):
-#       email/url/model/flag/username/hostname ฯลฯ
+#       url/model/flag/username/hostname + OXLET_SELLER_PASSWORD (รหัสรวม login) ฯลฯ
 #   • local dev: .env (gitignored) override ได้ทุกตัว
 # ──────────────────────────────────────────────────────────────────────
 
@@ -61,6 +60,10 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 วัน
 OXLET_ADMIN_USER = os.getenv("OXLET_ADMIN_USER", "admin")
 OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 
+# รหัสรวมสำหรับ login ด้วย LINE user_id (เซลล์/ผู้บริหาร/แอดมิน-เซลล์)
+# ทุกคนใช้รหัสนี้ + LINE user_id ของตัวเอง — เปลี่ยนได้ผ่าน env OXLET_SELLER_PASSWORD
+OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "OXletauto55555")
+
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
@@ -84,22 +87,6 @@ USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (cron-job.org, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
 CRON_SECRET = os.getenv("CRON_SECRET", "")
-
-# ── Email (Gmail SMTP) — ส่งเมล approve การสมัครสมาชิก ──
-# ต้องเปิด 2FA บนบัญชี Gmail แล้วสร้าง App Password (16 หลัก) → ใส่ใน GMAIL_APP_PASSWORD
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "oxletauto@gmail.com")
-# App Password ของ Gmail (เว้นวรรคออกได้) — ตั้งบน .env + Vercel เท่านั้น ห้าม commit
-EMAIL_HOST_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
-EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "20"))
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"Oxlet Dashboard <{EMAIL_HOST_USER}>")
-# ปลายทางที่รับเมล "ขออนุมัติบัญชี" (admin กดลิงก์ approve ในเมลนี้)
-APPROVAL_NOTIFY_EMAIL = os.getenv("APPROVAL_NOTIFY_EMAIL", "oxletauto@gmail.com")
-# URL ฐานของเว็บ (สำหรับสร้างลิงก์ approve ในเมล) — ว่าง = ใช้ request.build_absolute_uri แทน
-SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
 
 ROOT_URLCONF = "oxlet.urls"
 
