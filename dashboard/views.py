@@ -1793,21 +1793,21 @@ def _render_seller_page(request, seller_name):
     my_follows.sort(key=lambda c: c["callScore"], reverse=True)
     must_call_count = sum(1 for c in my_follows if c["mustCall"])
 
-    # ── ดึง lead list (รวม junk) — ใช้ fetch_leads_by_month_tabs (cached)
-    # เลขตรงกับการนับ raw rows ใน Google Sheet
-    from .services.google_sheets import fetch_leads_by_month_tabs, cell, cell_num, LEADS_COL as L
+    # ── ดึง lead list (รวม junk) — ใช้ leads+sales จาก fetch_all_sheets (cache ร่วมกับ fetch_seller_stats)
+    # consistent กับ mirror ที่ fetch_seller_stats ใช้ + เร็ว (ไม่อ่าน Google รายเดือน/sales ซ้ำต่อ request)
+    from .services.google_sheets import fetch_all_sheets, fetch_leads_by_month_tabs, cell, cell_num, LEADS_COL as L
     from .services.constants import normalize_seller
-    from .services.fetch_dashboard import is_this_year, customer_status_priority
+    from .services.fetch_dashboard import (
+        is_this_year, customer_status_priority, prepare_lead_score_context, compute_lead_score,
+    )
     import re as _re
 
-    raw_leads = fetch_leads_by_month_tabs()
-
-    # ── Lead Score context: โหลด config + maps ครั้งเดียวสำหรับ batch ──
-    from .services.fetch_dashboard import prepare_lead_score_context, compute_lead_score
-    from .services.google_sheets import fetch_sheet
     try:
-        sales_rows = fetch_sheet("sales_reports")
+        _all = fetch_all_sheets()
+        raw_leads = _all.get("leads") or fetch_leads_by_month_tabs()
+        sales_rows = _all.get("sales_reports") or []
     except Exception:
+        raw_leads = fetch_leads_by_month_tabs()
         sales_rows = []
     score_ctx = prepare_lead_score_context(raw_leads, sales_rows)
 

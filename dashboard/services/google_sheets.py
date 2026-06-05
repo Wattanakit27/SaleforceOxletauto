@@ -879,12 +879,20 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
     Leads ใช้ fetch_leads_by_month_tabs (อ่าน monthly tab + filter date ตรง tab month)
     เพื่อให้ตัวเลขตรงกับการนับ raw rows ใน Google Sheet ที่ admin คาดหวัง.
     """
+    # in-memory cache (60s) — กัน seller page / request ซ้ำ อ่าน mirror ใหญ่ (14k leads) ใหม่ทุกครั้ง
+    # (เดิม USE_SUPABASE bypass cache → ทุก /s/ load อ่าน Supabase สด ~2s) · invalidate ตอน write/sync
+    cached = _cache_get("all_sheets")
+    if cached is not None:
+        return cached
+
     # ถ้าเปิด USE_SUPABASE → อ่านจาก sheet_cache (mirror) แทน Google
     # ถ้า cache ขาด/error → fallback ไปอ่าน Google ตรง (ปลอดภัย)
     if getattr(settings, "USE_SUPABASE", False):
         try:
             from .supabase_client import fetch_all_from_supabase
-            return fetch_all_from_supabase()
+            result = fetch_all_from_supabase()
+            _cache_set("all_sheets", result)
+            return result
         except Exception:
             pass
 
@@ -901,7 +909,7 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
             key = futures[future]
             results[key] = future.result()
 
-    return {
+    result = {
         "leads": results["leads"],
         "sales_reports": results["sales_reports"],
         "bookings": results["bookings"],
@@ -909,3 +917,5 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
         "live_followups": results["live_followups"],
         "employees": results["employees"],
     }
+    _cache_set("all_sheets", result)
+    return result

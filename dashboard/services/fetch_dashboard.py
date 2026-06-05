@@ -1919,19 +1919,33 @@ def compute_lead_score(lead_row: list,
     return {"score": total, "tier": tier, "breakdown": breakdown}
 
 
+_lsc_cache: dict = {"key": None, "ts": 0.0, "val": None}
+
+
 def prepare_lead_score_context(raw_leads: list, sales_reports: list) -> dict:
     """โหลด config + สร้าง lookup maps สำหรับการคำนวณ Lead Score แบบ batch.
     เรียก 1 ครั้งต่อ request → ใช้ซ้ำได้กับหลาย rows.
+
+    Cache 60s (in-process): ผลขึ้นกับ raw_leads+sales_reports ซึ่งเป็น sheet ที่ cache อยู่แล้ว
+    → ไม่ต้องวน 14k leads สร้าง top_cars ใหม่ทุกหน้าเซลล์. key = (len, len) กัน data คนละชุด.
     """
+    import time as _t
+    key = (len(raw_leads), len(sales_reports))
+    now = _t.time()
+    if _lsc_cache["val"] is not None and _lsc_cache["key"] == key and (now - _lsc_cache["ts"]) < 60:
+        return _lsc_cache["val"]
+
     cfg = load_lead_score_config()
     cancelled, done = _build_lead_history_maps(sales_reports)
     top_cars = _build_top_cars_set(raw_leads, top_n=20)
-    return {
+    val = {
         "cfg": cfg,
         "cancelled": cancelled,
         "done": done,
         "top_cars": top_cars,
     }
+    _lsc_cache.update(key=key, ts=now, val=val)
+    return val
 
 
 def attach_lead_scores(follow_cases: list[dict],
