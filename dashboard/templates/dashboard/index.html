@@ -2746,7 +2746,9 @@
     // ── BOOKING TAB ──
     function renderBookings(sellerNames) {
       // base = กรอง seller + ช่วงวันที่ (ยังไม่กรองสถานะ — ไว้ทำแถบสรุป pipeline)
-      let base = (FD.bookingCases||[]).filter(b=>ir(b.date));
+      // "ปล่อย" นับตามวันปล่อย (releaseDate) ให้ตรงกับ KPI "ปิดได้" · สถานะอื่นนับตามวันจอง
+      const _effDate = (b)=> (b.status==='ปล่อย' && !empty(b.releaseDate)) ? b.releaseDate : b.date;
+      let base = (FD.bookingCases||[]).filter(b=>ir(_effDate(b)));
       if(bkSel!=='all') base = base.filter(b=>b.seller===bkSel);
       const STAGES = ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'];
       const STAT_EMOJI = {'จอง':'📝','รอเซ็นต์':'✍️','รอผล':'⏳','รอปล่อย':'🚗','ปล่อย':'✅','รีเจ็ก':'❌'};
