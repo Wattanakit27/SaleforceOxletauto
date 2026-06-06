@@ -547,8 +547,9 @@ def cron_tick(request):
     fired_schedules = [s for s in schedules if schedule_matches_now(s, now)]
 
     if not fired_schedules:
-        # ไม่มี LINE ต้องส่งนาทีนี้ → ใช้จังหวะนี้รีเฟรช dashboard (sync + pre-compute) แบบ throttle ~5 นาที
-        # → cron tick (1 นาที) ตัวเดียวดูแลทั้ง LINE + ความเร็ว dashboard ไม่ต้องสร้าง cron แยก
+        # ไม่มี LINE ต้องส่งนาทีนี้ → ใช้จังหวะนี้รีเฟรช dashboard (sync + pre-compute) "ทุกนาที"
+        # → cron tick (ยิงทุก 1 นาทีอยู่แล้ว) sync ทุกครั้ง = ข้อมูลอัพเดทเองอัตโนมัติ ~1 นาที
+        #   (ไม่ต้องกดปุ่ม ไม่ต้องตั้ง cron แยก · ถ้า Supabase หนักไป ค่อยขยับเลขขึ้น)
         refreshed = False
         if getattr(settings, "USE_SUPABASE", False):
             try:
@@ -557,7 +558,7 @@ def cron_tick(request):
                 )
                 if is_configured():
                     age = get_dashboard_cache_age()
-                    if age is None or age > 270:   # > ~4.5 นาที → รีเฟรช
+                    if age is None or age > 45:   # tick ห่าง ~60s → sync เกือบทุกนาที (near-realtime)
                         sync_all_sheets_to_supabase()
                         from .services.fetch_dashboard import precompute_dashboard, _dash_cache
                         _dash_cache["data"] = None

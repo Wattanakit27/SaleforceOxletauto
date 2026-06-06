@@ -305,7 +305,7 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 แทนที่จะอ่าน 15k lead + aggregate สดทุกโหลด → **คำนวณล่วงหน้าเก็บผลไว้ คนเข้าเว็บอ่านผลสำเร็จรูป** (เร็วคงที่ ไม่ขึ้นกับจำนวนข้อมูล):
 - `precompute_dashboard()` ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) — คำนวณ `_compute_dashboard_data()` 1 ครั้ง → เก็บลง Supabase table **`dashboard_cache`** (1 แถว key='main', `data` jsonb)
 - `fetch_dashboard_data()` อ่านเร็ว→ช้า: **in-memory (30s)** → **ผล pre-compute Supabase (`_PRECOMPUTE_TTL`=5นาที)** → คำนวณสด+เก็บ (fallback)
-- รีเฟรชโดย: **`cron_tick`** (ทุก 1 นาที — branch "ไม่มี LINE ต้องส่ง" + ผลเก่า >4.5 นาที → sync+precompute) + `cron_sync`. ใช้ cron tick ตัวเดียว ไม่ต้องสร้าง cron sync แยก
+- รีเฟรชโดย: **`cron_tick`** (ทุก 1 นาที — branch "ไม่มี LINE ต้องส่ง" + ผลเก่า **>45 วิ** → sync+precompute = **near-realtime ~1 นาที อัตโนมัติ**) + `cron_sync`. ใช้ cron tick ตัวเดียว ไม่ต้องสร้าง cron sync แยก. (เดิม >270วิ/~5นาที — ลดเป็น 45 เพื่อ realtime; ถ้า Supabase หนัก leads 15k upsert ทุกนาที → ขยับเลขขึ้น)
 - `upsert_sheet()` ตัด cell ว่างท้ายแถว (`_trim_row`) ลดขนาด jsonb — กัน leads (15k) เขียนชน Supabase statement timeout
 - **ไม่แตะ Sheet เพิ่ม** — pre-compute อ่าน mirror (Supabase) ไม่ใช่ Sheet · Sheet ถูกอ่านแค่ตอน sync (~15-20 req ทุก ~5 นาที)
 - SQL: `create table if not exists dashboard_cache (key text primary key, data jsonb, updated_at timestamptz default now());`
