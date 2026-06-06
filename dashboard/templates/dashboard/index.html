@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606c">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606d">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1129,8 +1129,8 @@
       };
       // ตัด tab 'a' (กิจกรรม/ไลฟ์สด) ออก
       if (tab === 'a') tab = 'o';
-      [{id:'o',l:'ภาพรวม'},{id:'b',l:'ติดตามสถานะจอง'},{id:'s',l:'เซลล์'}].forEach(t => {
-        html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${t.l}</button>`;
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'s',i:'lucide:user',l:'เซลล์'}].forEach(t => {
+        html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
       html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;

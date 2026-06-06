@@ -112,7 +112,7 @@ body {
 .brand-sub { font-size: 13px; color: var(--t3); margin-top: 3px; }
 
 .nav { display: flex; gap: 2px; background: var(--bg2); padding: 3px; border-radius: 24px; border: 0.5px solid var(--bd); box-shadow: var(--shadow); }
-.ntab { padding: 6px 13px; font-size: 12px; border-radius: 20px; border: none; background: transparent; cursor: pointer; color: var(--t2); font-family: inherit; white-space: nowrap; transition: background .18s ease, color .18s ease; }
+.ntab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 13px; font-size: 12px; border-radius: 20px; border: none; background: transparent; cursor: pointer; color: var(--t2); font-family: inherit; white-space: nowrap; transition: background .18s ease, color .18s ease; }
 .ntab:hover { color: var(--t1); }
 .ntab.on { background: var(--grad); color: #fff; font-weight: 600; box-shadow: 0 3px 10px rgba(124,58,237,.35); }
 
