@@ -946,6 +946,60 @@ def admin_diagnostics(request):
     }, json_dumps_params={"ensure_ascii": False})
 
 
+@require_http_methods(["POST"])
+def admin_send_followup(request):
+    """Admin-only — ส่งแจ้งเตือน "ตามด่วน" (ข้อความธรรมดา · เฟส 2) ให้เซลล์ที่เลือก แบบแมนนวล
+    POST body JSON: {test: bool, target_user_id?: str, sellers?: [name,...]}
+    ใช้ build_followup_messages (สมองเดียวกับ cron 09:00/13:00) → ส่งเฉพาะเซลล์ที่ติ๊ก
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login เป็น admin ก่อน"}, status=401)
+
+    import json as _json
+    try:
+        body = _json.loads(request.body or b"{}")
+    except Exception:
+        body = {}
+    test = bool(body.get("test"))
+    target = (body.get("target_user_id") or "").strip()
+    sellers_filter = body.get("sellers")
+    if test and not target:
+        return JsonResponse({"error": "Test mode ต้องกรอก target user_id"}, status=400)
+
+    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not channel_token:
+        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
+
+    from .services.fetch_dashboard import build_followup_messages
+    from .services.line_notify import push_line_message
+    from .services.constants import normalize_seller
+
+    try:
+        msgs = build_followup_messages()
+    except Exception as e:
+        return JsonResponse({"error": f"สร้างข้อความล้มเหลว: {e}"}, status=500)
+
+    sel = set(normalize_seller(s) for s in sellers_filter) if sellers_filter else None
+    results = []
+    for m in msgs:
+        if sel is not None and m["seller"] not in sel:
+            continue
+        tgt = target if test else m["user_id"]
+        if not tgt:
+            results.append({"recipient": m["seller"], "sent": False, "error": "no user_id"})
+            continue
+        try:
+            code, text = push_line_message(tgt, [{"type": "text", "text": m["text"]}], channel_token)
+            results.append({
+                "recipient": m["seller"], "sent": code == 200,
+                "error": None if code == 200 else f"LINE {code}: {text[:120]}",
+            })
+        except Exception as e:
+            results.append({"recipient": m["seller"], "sent": False, "error": str(e)})
+    return JsonResponse({"ok": True, "results": results}, json_dumps_params={"ensure_ascii": False})
+
+
 @require_http_methods(["GET", "POST"])
 def admin_send_line(request):
     """Admin-only — ดู preview pipeline + ส่ง LINE Flex แจ้งเตือน
