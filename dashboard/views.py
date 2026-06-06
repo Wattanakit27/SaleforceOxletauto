@@ -546,6 +546,22 @@ def cron_tick(request):
     schedules = load_schedules()
     fired_schedules = [s for s in schedules if schedule_matches_now(s, now)]
 
+    # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2) ──
+    # TEST MODE: _FU_TEST_TARGET ตั้งไว้ = ส่งเข้าไลน์แอดมิน (ทดสอบ) · ตั้ง "" เมื่อพร้อมส่งเซลล์จริง
+    _FU_TIMES = {"09:00", "13:00"}
+    _FU_TEST_TARGET = "U6bf1d72cf1d7e237c3a5c9848dde9bf4"   # "" = ส่งเซลล์จริงแต่ละคน
+    followup_sent = 0
+    if f"{now.hour:02d}:{now.minute:02d}" in _FU_TIMES:
+        try:
+            from .services.fetch_dashboard import build_followup_messages
+            for _m in build_followup_messages():
+                _tgt = _FU_TEST_TARGET or _m["user_id"]
+                _code, _ = push_line_message(_tgt, [{"type": "text", "text": _m["text"]}], channel_token)
+                if _code == 200:
+                    followup_sent += 1
+        except Exception:
+            pass
+
     if not fired_schedules:
         # ไม่มี LINE ต้องส่งนาทีนี้ → ใช้จังหวะนี้รีเฟรช dashboard (sync + pre-compute) "ทุกนาที"
         # → cron tick (ยิงทุก 1 นาทีอยู่แล้ว) sync ทุกครั้ง = ข้อมูลอัพเดทเองอัตโนมัติ ~1 นาที
@@ -571,6 +587,7 @@ def cron_tick(request):
             "now": f"{now.hour:02d}:{now.minute:02d}",
             "total_schedules": len(schedules),
             "dashboard_refreshed": refreshed,
+            "followup_sent": followup_sent,
         })
 
     try:
@@ -646,6 +663,7 @@ def cron_tick(request):
         "ok": True,
         "now": f"{now.hour:02d}:{now.minute:02d}",
         "fired": len(fired_schedules),
+        "followup_sent": followup_sent,
         "results": all_results,
     })
 
