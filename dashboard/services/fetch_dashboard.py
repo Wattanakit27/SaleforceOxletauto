@@ -1471,7 +1471,25 @@ MONTHS_FULL_TH = [
 fetch_global_stats = fetch_dashboard_data
 
 
+_seller_stats_cache: dict = {}   # {seller_name: (ts, data)}
+_SELLER_STATS_TTL = 45           # วิ — cache หน้าเซลล์ (sync ~1นาทีอยู่แล้ว ข้อมูลไม่เก่ากว่านั้น)
+
+
 def fetch_seller_stats(seller_name: str) -> dict:
+    """cache ผลต่อเซลล์ ~45 วิ → โหลดซ้ำไม่ต้องคำนวณ 14k ลีดใหม่ (เดิม ~2.4s → ~0s)
+    (ความสดของข้อมูลคุมโดย mirror sync ~1 นาทีอยู่แล้ว · 45 วิ จึงไม่ทำให้เก่าขึ้น)
+    """
+    import time
+    _now = time.time()
+    _hit = _seller_stats_cache.get(seller_name)
+    if _hit and _now - _hit[0] < _SELLER_STATS_TTL:
+        return _hit[1]
+    _data = _fetch_seller_stats_impl(seller_name)
+    _seller_stats_cache[seller_name] = (_now, _data)
+    return _data
+
+
+def _fetch_seller_stats_impl(seller_name: str) -> dict:
     """ดึง data เฉพาะของเซลล์คนเดียว — ใช้ใน /s/<token>/
 
     Goals:
