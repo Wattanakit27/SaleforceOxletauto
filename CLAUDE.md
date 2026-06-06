@@ -89,7 +89,7 @@ python manage.py runserver
 | `/api/admin/sheet_config` | `admin_sheet_config` | admin POST: ย้าย spreadsheet/tab ของแต่ละแหล่ง (เก็บ Supabase `sheet_config`) — ใช้ตอนขึ้นปีใหม่/ย้ายไฟล์ |
 | `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
-| `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — เช็คตาราง schedule + ส่งถ้าถึงเวลา (cron-job.org ยิงทุก 1 นาที) |
+| `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute ทุกนาที (near-realtime) (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ 09:00/13:00** (cron-job.org ยิงทุก 1 นาที) · **Flex ตาม schedule ตัดออกแล้ว** |
 
 ## Roles (สิทธิ์ผู้ใช้)
 
@@ -369,7 +369,7 @@ CRON_SECRET=xxx...
 
 ### Trigger 2 แบบ
 1. **Manual** — admin กดปุ่ม "📤 LINE Flex" → tab "ส่งทันที" → POST `/api/admin/send_line`
-2. **Auto** — cron-job.org ยิง `/api/cron/tick?secret=xxx` ทุก 1 นาที → `cron_tick` view เช็ค `load_schedules()` → ถ้า match ส่ง Flex
+2. **Auto** — cron-job.org ยิง `/api/cron/tick?secret=xxx` ทุก 1 นาที → `cron_tick` ส่ง **followup "ตามด่วน" รายเซลล์ 09:00/13:00** (ข้อความธรรมดา · `build_followup_messages`). **Flex ตาม schedule sheet เลิกใช้ในcronแล้ว** (`load_schedules`/`build_seller_flex` ยังอยู่ — manual `/api/admin/send_line` ยังใช้ได้)
 
 ### Schedule format (sheet "ตั้งเวลาส่ง")
 ```

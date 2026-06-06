@@ -513,7 +513,8 @@ def admin_schedule_config(request):
 @require_http_methods(["GET", "POST"])
 def cron_tick(request):
     """Public endpoint สำหรับ external cron ยิงเข้ามาทุกนาที (* * * * *)
-    อ่าน schedule sheet → ส่ง LINE Flex ตาม schedule ที่ match เวลาปัจจุบัน (BKK)
+    หน้าที่: (1) sync mirror + precompute ทุกนาที (near-realtime) (2) ส่งแจ้งเตือน "ตามด่วน" รายเซลล์ 09:00/13:00
+    (Flex ตาม schedule sheet ถูกตัดออกแล้ว — แทนด้วย followup ข้อความธรรมดา เฟส 2 · build_followup_messages)
     Auth: เหมือน cron_send_line (?secret=xxx, Authorization Bearer, X-Cron-Secret)
     """
     secret_setting = (getattr(settings, "CRON_SECRET", "") or "").strip()
@@ -534,19 +535,12 @@ def cron_tick(request):
     if not channel_token:
         return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
 
-    from .services.line_notify import (
-        load_schedules, schedule_matches_now,
-        build_seller_pipelines, build_seller_flex, build_overview_flex,
-        push_line_message, get_nickname_to_user_id,
-    )
-    from .services.fetch_dashboard import bangkok_now, fetch_dashboard_data
-    from .services.constants import EXECUTIVE_USER_IDS
+    from .services.line_notify import push_line_message
+    from .services.fetch_dashboard import bangkok_now
 
     now = bangkok_now()
-    schedules = load_schedules()
-    fired_schedules = [s for s in schedules if schedule_matches_now(s, now)]
 
-    # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2) ──
+    # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2 — แทน Flex เดิมที่ตัดออกแล้ว) ──
     # TEST MODE: _FU_TEST_TARGET ตั้งไว้ = ส่งเข้าไลน์แอดมิน (ทดสอบ) · ตั้ง "" เมื่อพร้อมส่งเซลล์จริง
     _FU_TIMES = {"09:00", "13:00"}
     _FU_TEST_TARGET = "U6bf1d72cf1d7e237c3a5c9848dde9bf4"   # "" = ส่งเซลล์จริงแต่ละคน
@@ -562,109 +556,29 @@ def cron_tick(request):
         except Exception:
             pass
 
-    if not fired_schedules:
-        # ไม่มี LINE ต้องส่งนาทีนี้ → ใช้จังหวะนี้รีเฟรช dashboard (sync + pre-compute) "ทุกนาที"
-        # → cron tick (ยิงทุก 1 นาทีอยู่แล้ว) sync ทุกครั้ง = ข้อมูลอัพเดทเองอัตโนมัติ ~1 นาที
-        #   (ไม่ต้องกดปุ่ม ไม่ต้องตั้ง cron แยก · ถ้า Supabase หนักไป ค่อยขยับเลขขึ้น)
-        refreshed = False
-        if getattr(settings, "USE_SUPABASE", False):
-            try:
-                from .services.supabase_client import (
-                    is_configured, get_dashboard_cache_age, sync_all_sheets_to_supabase,
-                )
-                if is_configured():
-                    age = get_dashboard_cache_age()
-                    if age is None or age > 45:   # tick ห่าง ~60s → sync เกือบทุกนาที (near-realtime)
-                        sync_all_sheets_to_supabase()
-                        from .services.fetch_dashboard import precompute_dashboard, _dash_cache
-                        _dash_cache["data"] = None
-                        precompute_dashboard()
-                        refreshed = True
-            except Exception:
-                pass   # best-effort
-        return JsonResponse({
-            "ok": True, "fired": 0,
-            "now": f"{now.hour:02d}:{now.minute:02d}",
-            "total_schedules": len(schedules),
-            "dashboard_refreshed": refreshed,
-            "followup_sent": followup_sent,
-        })
-
-    try:
-        pipelines = build_seller_pipelines()
-        uid_map = get_nickname_to_user_id()
-    except Exception as e:
-        return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
-
-    # ถ้ามี schedule ใดต้อง include_executive → โหลด full_data (สำหรับ overview)
-    needs_overview = any(s.get("include_executive") for s in fired_schedules)
-    full_data = None
-    if needs_overview:
+    # ── รีเฟรช dashboard (sync mirror + precompute) ทุกนาที = near-realtime ──
+    refreshed = False
+    if getattr(settings, "USE_SUPABASE", False):
         try:
-            full_data = fetch_dashboard_data()
-        except Exception as e:
-            full_data = None  # fail soft — ส่ง seller flex ได้ แต่ overview ไม่ได้
-
-    base_url = request.build_absolute_uri("/").rstrip("/")
-    all_results = []
-    for sched in fired_schedules:
-        seller_filter = set(sched["sellers"]) if sched["sellers"] not in (["*"], ["*"]) else None
-        if sched["sellers"] == ["*"]:
-            seller_filter = None
-        if not sched["sellers"]:
-            seller_filter = set()  # empty list → skip all sellers (ส่งแค่ exec)
-        test_target = sched.get("test_target", "")
-        sched_results = []
-
-        # 1) ส่ง per-seller Flex
-        for p in pipelines:
-            if seller_filter is not None and p["seller"] not in seller_filter:
-                continue
-            target = test_target if test_target else uid_map.get(p["seller"], "")
-            if not target:
-                sched_results.append({"recipient": p["seller"], "sent": False, "error": "no user_id"})
-                continue
-            try:
-                flex = build_seller_flex(p, base_url=base_url)
-                code, text = push_line_message(target, [flex], channel_token)
-                sched_results.append({
-                    "recipient": p["seller"],
-                    "sent": code == 200,
-                    "error": None if code == 200 else f"LINE {code}: {text[:120]}",
-                })
-            except Exception as e:
-                sched_results.append({"recipient": p["seller"], "sent": False, "error": str(e)})
-
-        # 2) ส่ง Overview Flex ให้ผู้บริหาร (ถ้าเปิด include_executive)
-        if sched.get("include_executive") and full_data:
-            try:
-                overview = build_overview_flex(pipelines, full_data, base_url=base_url)
-                for exec_uid in EXECUTIVE_USER_IDS:
-                    target = test_target if test_target else exec_uid
-                    if not target:
-                        continue
-                    code, text = push_line_message(target, [overview], channel_token)
-                    sched_results.append({
-                        "recipient": f"🎩 ผู้บริหาร ({exec_uid[:10]}...)",
-                        "sent": code == 200,
-                        "error": None if code == 200 else f"LINE {code}: {text[:120]}",
-                    })
-            except Exception as e:
-                sched_results.append({"recipient": "🎩 ผู้บริหาร", "sent": False, "error": str(e)})
-
-        all_results.append({
-            "schedule": {"time": sched["time"], "label": sched["label"]},
-            "sent": sum(1 for r in sched_results if r["sent"]),
-            "failed": sum(1 for r in sched_results if not r["sent"]),
-            "results": sched_results,
-        })
+            from .services.supabase_client import (
+                is_configured, get_dashboard_cache_age, sync_all_sheets_to_supabase,
+            )
+            if is_configured():
+                age = get_dashboard_cache_age()
+                if age is None or age > 45:   # tick ห่าง ~60s → sync เกือบทุกนาที (near-realtime)
+                    sync_all_sheets_to_supabase()
+                    from .services.fetch_dashboard import precompute_dashboard, _dash_cache
+                    _dash_cache["data"] = None
+                    precompute_dashboard()
+                    refreshed = True
+        except Exception:
+            pass   # best-effort
 
     return JsonResponse({
         "ok": True,
         "now": f"{now.hour:02d}:{now.minute:02d}",
-        "fired": len(fired_schedules),
         "followup_sent": followup_sent,
-        "results": all_results,
+        "dashboard_refreshed": refreshed,
     })
 
 
