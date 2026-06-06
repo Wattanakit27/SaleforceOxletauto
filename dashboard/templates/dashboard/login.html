@@ -10,7 +10,7 @@
   <script>(function(){try{var t=localStorage.getItem('oxlet_theme');if(!t)t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <style>
     body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; }
-    .login-box { background:var(--bg); border-radius:16px; padding:28px 26px; max-width:380px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+    .login-box { background:var(--bg); border:.5px solid var(--bd); border-radius:16px; padding:28px 26px; max-width:380px; width:100%; box-shadow:var(--shadow-modal); }
     .login-hd { text-align:center; margin-bottom:20px; }
     .login-hd img { height:44px; margin-bottom:10px; }
     .login-hd h1 { font-size:18px; font-weight:800; color:var(--t1); margin:0 0 4px; }
@@ -21,8 +21,9 @@
     .field input:focus { border-color:var(--blue); }
     .divider { display:flex; align-items:center; gap:8px; margin:14px 0; color:var(--t3); font-size:11px; }
     .divider::before, .divider::after { content:''; flex:1; height:.5px; background:var(--bd); }
-    .btn-primary { width:100%; padding:10px; border-radius:10px; border:none; background:var(--blue); color:#fff; font-weight:700; font-size:13px; cursor:pointer; }
-    .btn-primary:hover { filter:brightness(1.05); }
+    .btn-primary { width:100%; padding:11px; border-radius:10px; border:none; background:var(--grad); color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .15s var(--ease), filter .15s ease; }
+    .btn-primary:hover { filter:brightness(1.06); }
+    .btn-primary:active { transform:scale(.98); }
     .err { background:var(--red-bg); color:var(--red); padding:8px 12px; border-radius:10px; font-size:12px; margin-bottom:14px; border:.5px solid var(--red-mid); }
     .hint { font-size:11px; color:var(--t3); margin-top:14px; padding:10px 12px; background:var(--bg2); border-radius:10px; line-height:1.6; }
     .hint code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:10px; }
