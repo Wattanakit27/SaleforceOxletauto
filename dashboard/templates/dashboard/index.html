@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606a">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606b">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1121,7 +1121,7 @@
       }
 
       // Tabs
-      html += `<div style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px">`;
+      html += `<div id="nav-slide" class="nav-slide" style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px"><div id="nav-ind" class="nav-ind"></div>`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
@@ -1146,6 +1146,7 @@
 
       root.innerHTML = html;
       if(tab==='o') initCharts();
+      requestAnimationFrame(positionNavInd);
 
       // คืน focus + cursor ให้ input ที่กำลังพิมพ์ก่อน rebuild — กัน bug "ลบได้ทีละตัวต้องคลิกใหม่"
       if (__activeId) {
@@ -1158,6 +1159,19 @@
         }
       }
     }
+
+    // ── slide nav indicator: เลื่อนแคปซูล gradient ไปใต้แท็บ active ──
+    function positionNavInd() {
+      const nav = document.getElementById('nav-slide');
+      const ind = document.getElementById('nav-ind');
+      if (!nav || !ind) return;
+      const active = nav.querySelector('.ntab.on');
+      if (!active) { ind.style.opacity = '0'; return; }
+      ind.style.opacity = '1';
+      ind.style.left = active.offsetLeft + 'px';
+      ind.style.width = active.offsetWidth + 'px';
+    }
+    window.addEventListener('resize', positionNavInd);
 
     // ── Charts (Chart.js) ──
     const __charts = {};
