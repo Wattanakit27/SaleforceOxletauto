@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606e">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606f">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1125,11 +1125,11 @@
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
         's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
-        'c': 'รถรุ่นยอดนิยม — รถที่ลูกค้าถามเยอะ + เซลล์ไหนรับเคสรถนั้น',
+        'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'Lead รถ'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
@@ -1140,7 +1140,7 @@
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
-      else if(tab==='c') html += canViewAll ? `<div class="card"><div class="card-title">${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม</div>${renderLeadCarsTable()}</div>` : `<div class="card" style="text-align:center;color:var(--t3);padding:24px">เฉพาะแอดมิน/ผู้บริหาร</div>`;
+      else if(tab==='c') html += renderLeadTab(sellerNames);
       else if(tab==='a') html += renderActivity(sellers);
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
@@ -1876,28 +1876,28 @@
 
       html += `</div>`;
 
-      // ── Admin/Executive only sections: Lead by Car + Released Cars (collapse โดย default) ──
-      if (canViewAll) {
-        // (ตาราง "Lead รถ" ย้ายไปเป็นแท็บแยกแล้ว — มิ.ย.69)
-        html += `<details class="adv-section">
-          <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
-          <div class="adv-body">${renderReleasedCarsTable()}</div>
-        </details>`;
-        html += renderDataQualityPanel();
-      }
+      // (section "เคสจอง/ปล่อย · ข้อมูลต้องเติม · เคสติดตาม · Hot Cases" ย้ายไปแท็บ LEAD แล้ว — มิ.ย.69)
+      return html;
+    }
 
-      // Follow cases section — พับเก็บ (ไม่ใช่หัวข้อหลัก)
+    // ── แท็บ "LEAD" — รวมตาราง/เคสรายละเอียด (ย้ายมาจากภาพรวม) ──
+    function renderLeadTab(sellerNames) {
+      if (!canViewAll) return `<div class="card" style="text-align:center;color:var(--t3);padding:24px">เฉพาะแอดมิน/ผู้บริหาร</div>`;
+      let html = '';
+      html += `<div class="card"><div class="card-title">${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">— รถยอดฮิตที่ลูกค้าถาม</span></div>${renderLeadCarsTable()}</div>`;
+      html += `<details class="adv-section" open>
+        <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
+        <div class="adv-body">${renderReleasedCarsTable()}</div>
+      </details>`;
+      html += renderDataQualityPanel();
       html += `<details class="adv-section">
         <summary>${ic('lucide:phone',16)} เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่ยังต้องโทรต่อ เร่งด่วนก่อน คือเคสที่อัพเดทน้อยสุด</span></summary>
         <div class="adv-body">${renderFollowCasesSection()}</div>
       </details>`;
-
-      // Hot Cases — พับเก็บ (ไม่ใช่หัวข้อหลัก)
       html += `<details class="adv-section">
         <summary>Hot Cases ≥2 อัพเดท <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่โทรไปแล้ว 2+ ครั้ง กำลังเดือดต้องปิดต่อ</span></summary>
         <div class="adv-body">${renderHotCases(sellerNames)}</div>
       </details>`;
-
       return html;
     }
 
