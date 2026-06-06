@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606b">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606c">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1161,15 +1161,26 @@
     }
 
     // ── slide nav indicator: เลื่อนแคปซูล gradient ไปใต้แท็บ active ──
+    // root re-render ทั้งหน้าทุกครั้ง → indicator ถูกสร้างใหม่ทุก render. จำตำแหน่งล่าสุด (__navIndLast)
+    // แล้วสไลด์ "จากตำแหน่งเดิม → ใหม่" (ไม่ใช่จากซ้ายสุด). render แท็บเดิม = ไม่ขยับ
+    let __navIndLast = null;
     function positionNavInd() {
       const nav = document.getElementById('nav-slide');
       const ind = document.getElementById('nav-ind');
       if (!nav || !ind) return;
       const active = nav.querySelector('.ntab.on');
       if (!active) { ind.style.opacity = '0'; return; }
+      const target = { left: active.offsetLeft, width: active.offsetWidth };
+      const from = __navIndLast || target;     // ครั้งแรก = วางเลย ไม่สไลด์
+      ind.style.transition = 'none';            // วางที่ตำแหน่งเดิมก่อน (ไม่ animate)
+      ind.style.left = from.left + 'px';
+      ind.style.width = from.width + 'px';
       ind.style.opacity = '1';
-      ind.style.left = active.offsetLeft + 'px';
-      ind.style.width = active.offsetWidth + 'px';
+      void ind.offsetWidth;                     // force reflow
+      ind.style.transition = '';                // คืน transition จาก CSS แล้วค่อยสไลด์ไป target
+      ind.style.left = target.left + 'px';
+      ind.style.width = target.width + 'px';
+      __navIndLast = target;
     }
     window.addEventListener('resize', positionNavInd);
 
