@@ -112,12 +112,13 @@ body {
 .brand-sub { font-size: 13px; color: var(--t3); margin-top: 3px; }
 
 .nav { display: flex; gap: 2px; background: var(--bg2); padding: 3px; border-radius: 24px; border: 0.5px solid var(--bd); box-shadow: var(--shadow); }
-.ntab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 13px; font-size: 12px; border-radius: 20px; border: none; background: transparent; cursor: pointer; color: var(--t2); font-family: inherit; white-space: nowrap; transition: background .18s ease, color .18s ease; }
+.ntab { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; padding: 6px 13px; font-size: 12px; border-radius: 20px; border: none; background: transparent; cursor: pointer; color: var(--t2); font-family: inherit; white-space: nowrap; transition: background .18s ease, color .18s ease; }
 .ntab:hover { color: var(--t1); }
 .ntab.on { background: var(--grad); color: #fff; font-weight: 600; box-shadow: 0 3px 10px rgba(124,58,237,.35); }
 
 /* slide nav — แคปซูล gradient เลื่อนนุ่มระหว่างแท็บ (container id=nav-slide + .nav-ind) */
-.nav-slide { position: relative; }
+.nav-slide { position: relative; scrollbar-width: none; }
+.nav-slide::-webkit-scrollbar { display: none; }
 .nav-slide .ntab { position: relative; z-index: 1; transition: color .2s var(--ease); }
 .nav-slide .ntab.on { background: transparent; box-shadow: none; }
 .nav-ind { position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; background: var(--grad); border-radius: 20px; box-shadow: 0 3px 10px rgba(124,58,237,.35); transition: left .25s var(--ease), width .25s var(--ease); z-index: 0; pointer-events: none; opacity: 0; }

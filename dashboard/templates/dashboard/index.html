@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606d">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606e">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1121,15 +1121,15 @@
       }
 
       // Tabs
-      html += `<div id="nav-slide" class="nav-slide" style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px"><div id="nav-ind" class="nav-ind"></div>`;
+      html += `<div id="nav-slide" class="nav-slide" style="display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:24px;border:.5px solid var(--bd);margin-bottom:6px;overflow-x:auto"><div id="nav-ind" class="nav-ind"></div>`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
-        'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
         's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
+        'c': 'รถรุ่นยอดนิยม — รถที่ลูกค้าถามเยอะ + เซลล์ไหนรับเคสรถนั้น',
+        'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
+        'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
       };
-      // ตัด tab 'a' (กิจกรรม/ไลฟ์สด) ออก
-      if (tab === 'a') tab = 'o';
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'s',i:'lucide:user',l:'เซลล์'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'Lead รถ'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
@@ -1140,6 +1140,7 @@
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
+      else if(tab==='c') html += canViewAll ? `<div class="card"><div class="card-title">${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม</div>${renderLeadCarsTable()}</div>` : `<div class="card" style="text-align:center;color:var(--t3);padding:24px">เฉพาะแอดมิน/ผู้บริหาร</div>`;
       else if(tab==='a') html += renderActivity(sellers);
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
@@ -1877,10 +1878,7 @@
 
       // ── Admin/Executive only sections: Lead by Car + Released Cars (collapse โดย default) ──
       if (canViewAll) {
-        html += `<details class="adv-section">
-          <summary>${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— รถยอดฮิตที่ลูกค้าถาม กดดูได้ว่าเซลล์ไหนรับเคสรถนั้น</span></summary>
-          <div class="adv-body">${renderLeadCarsTable()}</div>
-        </details>`;
+        // (ตาราง "Lead รถ" ย้ายไปเป็นแท็บแยกแล้ว — มิ.ย.69)
         html += `<details class="adv-section">
           <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
           <div class="adv-body">${renderReleasedCarsTable()}</div>
