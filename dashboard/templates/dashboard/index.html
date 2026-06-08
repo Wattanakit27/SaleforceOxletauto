@@ -1120,6 +1120,7 @@
         html += `<details class="admin-nav-menu" style="position:relative">
           <summary style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;list-style:none;font-weight:600;display:inline-block">เมนูจัดการ ▾</summary>
           <div style="position:absolute;top:calc(100% + 4px);right:0;background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;min-width:170px;display:flex;flex-direction:column;gap:3px">
+            <button onclick="openHealthPanel()" title="เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap;font-weight:700" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:circle-check',16)} สถานะระบบ</button>
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">แจ้งเตือนตามด่วน</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">ตั้งเป้า / ทีม</button>
@@ -3181,6 +3182,89 @@
     }
 
     // ── ${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets) — แบบ node ใน n8n ──
+    // ── หน้าสถานะระบบ — เช็คว่าระบบปกติไหม + รีเฟรช + เช็กข้อมูลผิดอัตโนมัติ ──
+    async function openHealthPanel() {
+      const old = document.getElementById('health-overlay'); if (old) old.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'health-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = `<div id="health-box" style="background:var(--bg);border-radius:16px;max-width:560px;width:100%;padding:24px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังเช็คสถานะระบบ...</div></div>`;
+      document.body.appendChild(overlay);
+      let data;
+      try {
+        const r = await fetch('/api/admin/system_health', {credentials:'same-origin'});
+        data = await r.json();
+        if (data.error) throw new Error(data.error);
+      } catch (e) {
+        const bx = document.getElementById('health-box');
+        if (bx) bx.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">โหลดสถานะไม่ได้: ${h(String(e.message||e))}</div><div style="text-align:center"><button onclick="document.getElementById('health-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      renderHealthPanel(data);
+    }
+
+    function renderHealthPanel(data) {
+      const box = document.getElementById('health-box'); if (!box) return;
+      const st = data.status || 'ok';
+      const stCfg = {
+        ok:   {c:'var(--green)', bg:'var(--green-bg)', bd:'var(--green-mid)', ic:'lucide:circle-check',  t:'ระบบปกติ ✓'},
+        warn: {c:'var(--amber)', bg:'var(--amber-bg)', bd:'var(--amber-mid)', ic:'lucide:triangle-alert', t:'มีบางอย่างต้องดู'},
+        err:  {c:'var(--red)',   bg:'var(--red-bg)',   bd:'var(--red-mid)',   ic:'lucide:triangle-alert', t:'ต้องแก้ด่วน'},
+      }[st];
+      const age = data.syncAgeSec;
+      const ageTxt = age == null ? 'ยังไม่เคย' : (age < 60 ? Math.round(age)+' วิที่แล้ว' : Math.round(age/60)+' นาทีที่แล้ว');
+      const ageCol = age == null ? 'var(--t3)' : (age > 600 ? 'var(--red)' : age > 300 ? 'var(--amber)' : 'var(--green)');
+      let genTxt = '-';
+      try { if (data.generatedAt) genTxt = new Date(data.generatedAt).toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}); } catch(e) {}
+      const c = data.counts || {};
+      const cell = (label,val,col) => `<div style="background:var(--bg2);border-radius:9px;padding:10px 12px"><div style="font-size:10px;color:var(--t3)">${label}</div><div style="font-size:14px;font-weight:700;color:${col||'var(--t1)'}">${val}</div></div>`;
+
+      let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">`;
+      html += `<div style="font-size:17px;font-weight:800;color:var(--t1)">${ic('lucide:circle-check',18)} สถานะระบบ</div>`;
+      html += `<button onclick="document.getElementById('health-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button></div>`;
+      html += `<div style="display:flex;align-items:center;gap:10px;background:${stCfg.bg};border:.5px solid ${stCfg.bd};border-radius:12px;padding:14px;margin-bottom:14px"><span style="color:${stCfg.c}">${ic(stCfg.ic,26)}</span><span style="font-size:16px;font-weight:800;color:${stCfg.c}">${stCfg.t}</span></div>`;
+      (data.issues||[]).forEach(it => {
+        const col = it.level==='err'?'var(--red)':'var(--amber)';
+        const bg = it.level==='err'?'var(--red-bg)':'var(--amber-bg)';
+        html += `<div style="display:flex;gap:8px;align-items:flex-start;background:${bg};border-radius:9px;padding:9px 12px;margin-bottom:7px;font-size:12px;color:var(--t1)"><span style="color:${col};flex-shrink:0">${ic('lucide:triangle-alert',15)}</span><span>${h(it.msg)}</span></div>`;
+      });
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0">`;
+      html += cell('sync ล่าสุด', ageTxt, ageCol);
+      html += cell('ข้อมูลสด ณ', h(genTxt));
+      html += cell('Supabase (ฐานข้อมูล)', data.supabaseOk?'✅ ติด':'❌ ไม่ติด', data.supabaseOk?'var(--green)':'var(--red)');
+      html += cell('LINE (แจ้งเตือน)', data.lineOk?'✅ ตั้งแล้ว':'❌ ยังไม่ตั้ง', data.lineOk?'var(--green)':'var(--red)');
+      html += `</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin:8px 0 6px">${ic('lucide:bar-chart-3',15)} จำนวนข้อมูลปีนี้</div>`;
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">`;
+      html += cell('หลีดธรรมดา', fmtNum(c.leadNormal||0)+' <span style="font-size:10px;color:var(--red)">+RJ '+fmtNum(c.leadRJ||0)+'</span>');
+      html += cell('จอง', fmtNum(c.bookings||0));
+      html += cell('ปิดได้', fmtNum(c.done||0));
+      html += cell('วันนี้รับ lead', fmtNum(data.todayLeads||0), (data.todayLeads||0)>0?'var(--green)':'var(--amber)');
+      html += cell('ไลฟ์ (session)', fmtNum(c.live||0));
+      html += cell('เซลล์', fmtNum(c.sellers||0));
+      html += `</div>`;
+      html += `<div style="display:flex;gap:8px;margin-top:14px">`;
+      html += `<button onclick="__refreshDataNow(this)" style="flex:1;padding:11px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-weight:800;font-size:13px;cursor:pointer">${ic('lucide:refresh-cw',16)} รีเฟรชข้อมูลเดี๋ยวนี้</button>`;
+      html += `<button onclick="document.getElementById('health-overlay').remove();openSheetsPanel()" style="padding:11px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">เช็คแหล่งข้อมูล →</button></div>`;
+      html += `<div style="font-size:10px;color:var(--t3);margin-top:8px;text-align:center">ปกติข้อมูลอัปเดตเองทุก ~3-4 นาที · กดรีเฟรชถ้าอยากให้สดเดี๋ยวนี้</div>`;
+      box.innerHTML = html;
+    }
+
+    async function __refreshDataNow(btn) {
+      const orig = btn.innerHTML;
+      btn.disabled = true; btn.innerHTML = '⏳ กำลังรีเฟรช... (อาจใช้เวลาหลายวิ)';
+      try {
+        const r = await fetch('/api/admin/refresh_data', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error||'failed');
+        openHealthPanel();
+      } catch (e) {
+        alert('รีเฟรชไม่สำเร็จ: ' + (e.message||e));
+        btn.disabled = false; btn.innerHTML = orig;
+      }
+    }
+
     async function openSheetsPanel() {
       const old = document.getElementById('sheets-overlay');
       if (old) old.remove();

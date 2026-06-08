@@ -1296,6 +1296,106 @@ def admin_sheets_status(request):
     }, json_dumps_params={"ensure_ascii": False})
 
 
+@require_GET
+def admin_system_health(request):
+    """Admin — สถานะระบบ: อายุ sync · จำนวนข้อมูล · การเชื่อมต่อ + เช็กข้อมูลผิดอัตโนมัติ.
+    ให้แอดมินเช็คเองว่าระบบปกติไหม โดยไม่ต้องมี dev มาดู.
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.fetch_dashboard import fetch_dashboard_data, bangkok_now
+    from .services.supabase_client import is_configured, get_dashboard_cache_age
+
+    now = bangkok_now()
+    try:
+        d = fetch_dashboard_data()
+    except Exception:
+        d = {}
+    summary = d.get("summary", {}) or {}
+    today = d.get("today", {}) or {}
+    la = d.get("liveActivity", {}) or {}
+    meta = d.get("meta", {}) or {}
+
+    sb_ok = False
+    try:
+        sb_ok = is_configured()
+    except Exception:
+        pass
+    age = None
+    try:
+        age = get_dashboard_cache_age()
+    except Exception:
+        pass
+    line_ok = bool(getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", ""))
+
+    counts = {
+        "leadNormal": int(summary.get("leadNormal", 0)),
+        "leadRJ": int(summary.get("leadRJ", 0)),
+        "bookings": int(summary.get("totalBookings", 0)),
+        "done": int(summary.get("totalDone", 0)),
+        "dealValue": int(summary.get("totalDealValue", 0)),
+        "live": int(la.get("totalSessions", 0)),
+        "sellers": len(d.get("sellers", []) or []),
+        "employees": len(d.get("employees", []) or []),
+    }
+    total_leads = int(summary.get("totalLeads", 0))
+    today_leads = int(today.get("totalLeads", 0))
+
+    # ── เช็กข้อมูลผิดอัตโนมัติ ──
+    issues = []
+    if age is None:
+        issues.append({"level": "warn", "msg": "ยังไม่เคย sync (อ่านสด) — รอ cron รอบแรก หรือกดรีเฟรช"})
+    elif age > 600:
+        issues.append({"level": "err", "msg": f"ข้อมูลค้าง — sync ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~3-4 นาที) · cron อาจหยุด"})
+    if not sb_ok:
+        issues.append({"level": "err", "msg": "Supabase ติดต่อไม่ได้ / ยังไม่ตั้งค่า — dashboard อาจช้าหรือไม่อัปเดต"})
+    if not line_ok:
+        issues.append({"level": "warn", "msg": "LINE token ไม่ได้ตั้ง — แจ้งเตือนเข้าไลน์จะไม่ทำงาน"})
+    if total_leads == 0:
+        issues.append({"level": "err", "msg": "ไม่มีข้อมูล lead เลย — ตรวจแหล่งข้อมูล (ชีตอาจเพี้ยน/แชร์หลุด)"})
+    elif today_leads == 0 and now.weekday() < 5 and now.hour >= 11:
+        issues.append({"level": "warn", "msg": "วันนี้ยังไม่มี lead เข้าเลย (วันทำการ หลัง 11 โมง) — อาจมีปัญหา channel/ชีต"})
+
+    status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
+
+    return JsonResponse({
+        "status": status,
+        "issues": issues,
+        "syncAgeSec": age,
+        "generatedAt": meta.get("generatedAt"),
+        "now": now.isoformat(),
+        "counts": counts,
+        "todayLeads": today_leads,
+        "supabaseOk": sb_ok,
+        "lineOk": line_ok,
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def admin_refresh_data(request):
+    """Admin — สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ)."""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.google_sheets import invalidate_cache
+    from .services.supabase_client import is_configured, sync_all_sheets_to_supabase
+    from .services.fetch_dashboard import precompute_dashboard, _dash_cache
+    result = {}
+    try:
+        invalidate_cache()
+        if is_configured():
+            result["sync"] = sync_all_sheets_to_supabase()
+        _dash_cache["data"] = None
+        precompute_dashboard()
+        result["ok"] = True
+    except Exception as e:
+        return JsonResponse({"error": str(e)[:300], "ok": False}, status=502)
+    return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_list_drive_sheets(request):
     """Admin — รายชื่อไฟล์ Google Sheets ที่ระบบเข้าถึงได้ (ทำ dropdown เลือกไฟล์แบบ n8n)."""
     user = _session_user(request)
