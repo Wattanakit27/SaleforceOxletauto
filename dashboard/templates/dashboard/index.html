@@ -1847,8 +1847,8 @@
       });
       html += `</div>`;
 
-      // ── 📋 ตาราง "แอดมิน" — เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอก config) · เฉพาะแอดมิน ──
-      if (typeof isAdmin !== 'undefined' && isAdmin) {
+      // ── 📋 ตาราง "แอดมิน" — เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอก config) · แอดมิน+ผู้บริหาร ──
+      if (canViewAll) {
         const _adm = sellers.filter(s => s.inactive === true || s.team === 'ADMIN');
         // นับสถานะ (รอผล/รอปล่อย/ปล่อย) รายเซลล์ จาก bookingCases ในช่วง
         const _stat = {};
