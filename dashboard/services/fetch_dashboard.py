@@ -1347,12 +1347,14 @@ def compute_diligence_scores(target_month: int | None = None,
         jongs = int(sd.get("booking", 0))
         dones = int(sd.get("done", 0))
         leads = int(sd.get("lead", 0))
+        leads_normal = int(sd.get("leadNormal", leads))   # Lead ปกติ (ไม่รวม RJ) — ใช้คิด Conv
         bans = int(sd.get("bans", 0))
         if jongs > 0 or dones > 0 or leads > 0 or name in score_map:
             e = _ensure(name)
             e["jongs"] = jongs
             e["dones"] = dones
             e["leads"] = leads
+            e["leadsNormal"] = leads_normal
             e["bans"] = bans
             e["scoreJong"] = jongs * SCORE_JONG
             e["scoreDone"] = dones * SCORE_DONE
@@ -1406,7 +1408,7 @@ def compute_diligence_scores(target_month: int | None = None,
     for e in score_map.values():
         e["sDone"] = round(min(e["dones"] / 15, 1) * 30, 1)
         e["sJong"] = round(min(e["jongs"] / 30, 1) * 10, 1)
-        conv = (e["dones"] / e["leads"] * 100) if e["leads"] else 0
+        conv = (e["dones"] / e["leadsNormal"] * 100) if e.get("leadsNormal") else 0   # Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ)
         e["conv"] = round(conv, 1)
         e["sConv"] = round(min(conv / 5, 1) * 20, 1)
         fr = vel_acc.get(e["name"], [])

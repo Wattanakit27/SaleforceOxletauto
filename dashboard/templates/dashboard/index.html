@@ -556,10 +556,11 @@
         const jongs = sd.booking || 0;
         const dones = sd.done || 0;
         const leads = sd.lead || 0;
+        const leadsNormal = sd.leadNormal || 0;   // Lead ปกติ (ไม่รวม RJ) — ใช้คิด Conv
         const bans  = sd.bans || 0;
         // สร้าง entry ให้ "ทุกเซลล์" — คะแนนแบนเริ่ม 10 เสมอ (ไม่งั้นเซลล์ที่ไม่มี activity total=0 ขัดกับแบน=10)
         const e = _ensureDilEntry(m, s.name);
-        e.jongs = jongs; e.dones = dones; e.leads = leads; e.bans = bans;
+        e.jongs = jongs; e.dones = dones; e.leads = leads; e.leadsNormal = leadsNormal; e.bans = bans;
         e.scoreJong = jongs * SCORE_JONG;   // เก็บไว้ใช้ใน velocity/breakdown เดิม
         e.scoreDone = dones * SCORE_DONE;
       });
@@ -613,7 +614,7 @@
       Object.values(m).forEach(e => {
         const sDone = Math.min((e.dones || 0) / DONE_TGT, 1) * 30;
         const sJong = Math.min((e.jongs || 0) / JONG_TGT, 1) * 10;
-        const conv = (e.leads || 0) > 0 ? (e.dones || 0) / e.leads * 100 : 0;
+        const _ln = e.leadsNormal || 0; const conv = _ln > 0 ? (e.dones || 0) / _ln * 100 : 0;   // Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ)
         const sConv = Math.min(conv / CONV_TGT, 1) * 20;
         const vel = (e.velCnt || 0) > 0 ? (e.velSum / e.velCnt) : 0;
         const sVel = vel * 10;
@@ -1023,7 +1024,7 @@
               <tbody>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--green);font-weight:700">จบ (ปล่อย)</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">30</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">ปล่อย ÷ 15 × 30 <span style="color:var(--t3)">(ปล่อย ≥15 = เต็ม)</span></td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">จอง</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">จอง ÷ 30 × 10</td></tr>
-                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">Conv</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(ปล่อย ÷ lead × 100) ÷ 5 × 20 <span style="color:var(--t3)">(ได้ 5% = เต็ม)</span></td></tr>
+                <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--blue);font-weight:700">Conv</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">(ปล่อย ÷ lead ปกติ × 100) ÷ 5 × 20 <span style="color:var(--t3)">(ไม่รวม RJ · ได้ 5% = เต็ม)</span></td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--purple);font-weight:700">สถานะ</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">10</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">เคสปล่อย: จอง→เซ็น ≤3 · เซ็น→ผล ≤3 · ผล→ปล่อย ≤1 วัน <span style="color:var(--t3)">(ทันกำหนด = เต็ม, ช่องวัน "ว่าง" = 0 ช่วงนั้น)</span></td></tr>
                 <tr><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--amber);font-weight:700">ติดตาม</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);text-align:center;font-weight:700">20</td><td style="padding:6px 8px;border-bottom:.5px solid var(--bd);color:var(--t2)">อัพเดทจริง(cap 4/เคส) ÷ (4 × เคสที่ต้องตาม) × 20</td></tr>
                 <tr><td style="padding:6px 8px;color:var(--red);font-weight:700">โดนแบน</td><td style="padding:6px 8px;text-align:center;font-weight:700">10</td><td style="padding:6px 8px;color:var(--t2)">เริ่มเต็ม 10 → โดนแบน −1 ต่อครั้ง</td></tr>
@@ -1565,14 +1566,15 @@
         return {cur:c, prev:p, delta, pct:pctv, isUp: delta >= 0};
       }
 
-      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead/ติดตาม/จอง/ปิด: รวมทุกคนในทีม\n• Conv% = จอง ÷ Lead × 100\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
+      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead/ติดตาม/จอง/ปิด: รวมทุกคนในทีม\n• Conv% = ปล่อย ÷ Lead ปกติ × 100 (ไม่รวม RJ)\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
         const tBooking=mt?mt.booking:t.booking, tDone=mt?mt.done:t.done;
+        const tLeadNormal = mt ? (mt.leadNormal||0) : (t.leadNormal!=null ? t.leadNormal : tLead);   // Lead ปกติ (ไม่รวม RJ)
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
         const tTarget = (t.target||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
-        const conv=pct(tBooking,tLead), tPct=pct(tDone,tTarget);
+        const conv=pct(tDone,tLeadNormal), tPct=pct(tDone,tTarget);   // Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ) — ตรงกับตารางรายเซลล์
         const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
         // MoM
         const t_mLead = teamMoM(tid, 'lead');
@@ -1589,7 +1591,7 @@
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div>${momBadge(t_mBook)}</div>`;
         html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ${ic('lucide:arrow-up-right',13)}</div><div style="font-size:15px;font-weight:600;color:${tDone>=tTarget?'var(--green)':'var(--amber)'}">${tDone}/${tTarget}</div>${momBadge(t_mDone)}</div>`;
-        html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=8?'var(--green)':conv>=4?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
+        html += `<div><div style="font-size:10px;color:var(--t3)">Conv</div><div style="font-size:15px;font-weight:600;color:${conv>=5?'var(--green)':conv>=2?'var(--amber)':'var(--red)'}">${conv}%</div></div>`;
         html += `</div>`;
         // Deal Value row
         html += `<div style="margin-bottom:6px;padding:6px 8px;background:var(--green-bg);border-radius:6px;text-align:center">`;
