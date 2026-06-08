@@ -331,6 +331,19 @@
         sellers, teams, pipeline:D.pipeline };
       return _rmCache;
     }
+    // เซลล์ที่ "มีกิจกรรมในช่วงที่เลือก" (lead/จอง/ปิด/ยอด/ติดตาม/คลิป/ไลฟ์) — กรองตารางไม่ให้โชว์เซลล์เก่าที่ไม่มีข้อมูลในช่วง
+    function rangeActiveSellers(){
+      const ms = buildRangeMs();
+      const act = new Set();
+      Object.keys(ms.sellers||{}).forEach(n=>{
+        const x = ms.sellers[n]||{};
+        if((x.lead||0)>0||(x.booking||0)>0||(x.done||0)>0||(x.dealValue||0)>0||(x.follow||0)>0) act.add(n);
+      });
+      const la = D.liveActivity||{};
+      (la.clips||[]).forEach(c=>{ if(c&&ir(c.date||'')) act.add(c.name); });
+      (la.sessions||[]).forEach(s=>{ if(s&&ir(s.date||'')) (s.hosts||[]).forEach(hh=>{ if(hh) act.add(hh); }); });
+      return act;
+    }
     // จำนวนเดือนที่ช่วงครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วงที่เลือก
     const rangeMonthCount = () => ([...new Set(rangeDays().map(x => x[0]))].length || 1);
     const rangeLabelTH = () => {
@@ -1057,7 +1070,12 @@
       const __activeSelEnd = (__active && 'selectionEnd' in __active) ? __active.selectionEnd : null;
 
       FD = getFilteredData();
-      const sellers = FD.sellers || [];
+      let sellers = FD.sellers || [];
+      // ยึดตามตัวกรองวันที่: มุมมองรวม (admin/ผู้บริหาร) โชว์เฉพาะเซลล์ที่มีกิจกรรมในช่วง — ตัดเซลล์เก่าที่ไม่มีข้อมูลออก
+      if (canViewAll && !impersonate) {
+        const _act = rangeActiveSellers();
+        sellers = sellers.filter(s => _act.has(s.name));
+      }
       const sellerNames = sellers.map(s=>s.name);
       const dilMap = buildDilMap();
 
@@ -1809,7 +1827,7 @@
       // ── 3-col panels: 🔴 ยังไม่อัพเดท · ${ic('lucide:wallet',16)} Top มูลค่าดีล · ${ic('lucide:trophy',16)} Top จอง ──
       // วางต่อท้าย "สรุปรายเซลล์" ทันที — แต่ละ card คลิกแถวเปิด modal ดูรายการเคส
       const nu = {};
-      (FD.sellers || D.sellers || []).forEach(s => {
+      sellers.forEach(s => {
         if (s.inactive || s.team === 'INACTIVE' || s.team === 'ADMIN') return;
         let count;
         if (dfMonth > 0) {
