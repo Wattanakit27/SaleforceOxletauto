@@ -2200,8 +2200,14 @@
       const goodTrend = cfg.invert ? delta <= 0 : delta >= 0;
       const deltaCol = deltaPct === 0 ? 'var(--t3)' : goodTrend ? 'var(--green)' : 'var(--red)';
 
-      // Team breakdown (เดือน focus)
-      const teamData = ((ms[focusMonth] || ms[String(focusMonth)] || {}).teams) || {};
+      // 📅 ค่าตามช่วงวันที่ที่กรองจริง (ไม่ใช่ทั้งเดือน) — ให้ตรงกับการ์ด KPI ที่กดเข้ามา
+      const msRange = buildRangeMs();
+      const _rangeField = {totalLeads:'leadNormal', totalFollow:'totalFollow', totalBookings:'totalBookings', totalDone:'totalDone', totalDealValue:'totalDealValue', leadRJ:'leadRJ'}[metricKey];
+      const rangeVal = Number(msRange[_rangeField] || 0);
+      const rangeRJ = isLead ? Number(msRange.leadRJ || 0) : 0;
+
+      // Team breakdown (ตามช่วงที่กรอง)
+      const teamData = msRange.teams || {};
       const teamRows = Object.entries(teamData)
         .filter(([tid]) => tid !== 'ADMIN')
         .map(([tid, t]) => {
@@ -2226,15 +2232,15 @@
       let inner = `<div style="background:var(--bg);border-radius:16px;max-width:680px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">`;
       // Header
       inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">`;
-      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียด · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
+      inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียด · ${h(rangeLabelTH())}</div>`;
       inner += `<div style="font-size:18px;font-weight:800;color:${cfg.color}">${cfg.emoji} ${isLead ? 'Lead — ธรรมดา' : cfg.label}</div></div>`;
       inner += `<button onclick="document.getElementById('metric-detail-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
       inner += `</div>`;
 
       // Big number + comparisons
       inner += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">`;
-      inner += `<div style="background:${cfg.color}1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${C.MONTHS_FULL[focusMonth-1]}</div><div style="font-size:22px;font-weight:800;color:${cfg.color}">${cfg.fmt(focusVal)}</div></div>`;
-      inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${focusMonth > 1 ? C.MONTHS_FULL[focusMonth-2] : '-'}</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${focusMonth > 1 ? cfg.fmt(prevVal) : '-'}</div></div>`;
+      inner += `<div style="background:${cfg.color}1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">ช่วงที่เลือก</div><div style="font-size:22px;font-weight:800;color:${cfg.color}">${cfg.fmt(rangeVal)}</div></div>`;
+      inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">${C.MONTHS_FULL[focusMonth-1]} (ทั้งเดือน)</div><div style="font-size:18px;font-weight:700;color:var(--t2)">${cfg.fmt(focusVal)}</div></div>`;
       if (deltaPct === 999) {
         inner += `<div style="background:var(--blue-bg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:var(--t3)">MoM</div><div style="font-size:18px;font-weight:800;color:var(--blue)">ใหม่</div></div>`;
       } else {
@@ -2247,8 +2253,8 @@
       // RJ แยกต่างหาก (ต่อท้ายหลีดธรรมดา · ไม่นับใน Lead/Conv)
       if (isLead) {
         inner += `<div style="display:flex;align-items:center;gap:8px;background:var(--red-bg);border:.5px solid var(--red-mid);border-radius:10px;padding:9px 12px;margin-bottom:14px">`;
-        inner += `<span style="font-size:11px;color:var(--t2)">${ic('lucide:triangle-alert',16)} RJ เดือนนี้ <span style="color:var(--t3)">(แยกต่างหาก — ไม่นับใน Lead/Conv)</span></span>`;
-        inner += `<span style="margin-left:auto;font-size:17px;font-weight:800;color:var(--red)">${fmtNum(rjByMonth[focusMonth-1])}</span>`;
+        inner += `<span style="font-size:11px;color:var(--t2)">${ic('lucide:triangle-alert',16)} RJ ในช่วงนี้ <span style="color:var(--t3)">(แยกต่างหาก — ไม่นับใน Lead/Conv)</span></span>`;
+        inner += `<span style="margin-left:auto;font-size:17px;font-weight:800;color:var(--red)">${fmtNum(rangeRJ)}</span>`;
         inner += `<span style="font-size:10px;color:var(--t3)">ทั้งปี ${fmtNum(rjYear)}</span>`;
         inner += `</div>`;
       }
