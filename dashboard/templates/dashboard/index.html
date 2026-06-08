@@ -44,34 +44,8 @@
       transition: background .15s;
     }
     .info-tip:hover, .info-tip:focus { background: var(--blue); outline: none; }
-    .info-tip::after {
-      content: attr(data-tip);
-      position: absolute; bottom: calc(100% + 8px); left: 50%;
-      transform: translateX(-50%);
-      background: var(--t1); color: var(--bg);
-      padding: 9px 12px; border-radius: 8px;
-      font-size: 11px; font-weight: 400; line-height: 1.6;
-      white-space: pre-line; width: max-content; max-width: 280px;
-      text-align: left;
-      box-shadow: 0 6px 20px rgba(0,0,0,.18);
-      opacity: 0; pointer-events: none;
-      transition: opacity .15s ease;
-      z-index: 100;
-    }
-    .info-tip::before {
-      content: ''; position: absolute; bottom: calc(100% + 3px); left: 50%;
-      transform: translateX(-50%);
-      border: 5px solid transparent; border-top-color: var(--t1);
-      opacity: 0; pointer-events: none;
-      transition: opacity .15s;
-    }
-    .info-tip:hover::after, .info-tip:focus::after,
-    .info-tip:hover::before, .info-tip:focus::before { opacity: 1; }
-    /* Mobile: ถ้าเข้าใกล้ขอบจอ shift ไปฝั่งซ้าย */
-    @media (max-width: 480px) {
-      .info-tip::after { max-width: 220px; left: auto; right: 0; transform: none; }
-      .info-tip::before { display: none; }
-    }
+    /* กล่อง tooltip render ด้วย JS smart-tooltip (position:fixed อิง viewport) — เลิกใช้ ::after
+       เพราะโดน parent overflow:hidden (เช่น .kpi) ตัดหัวตอนการ์ดอยู่แถวบนสุดของจอ */
 
     /* Collapsible advanced sections (Lead-by-Car, Released Cars) */
     details.adv-section { background: var(--bg); border: .5px solid var(--bd); border-radius: 12px; margin-bottom: 10px; }
@@ -254,6 +228,45 @@
     const urg = (l) => { let s = l.updateCount===0?100:0; s += nc(l.updateCount)*10; return s; };
     const nocar = (c) => !c || c==='ลูกค้าไม่ตอบ' || c==='รถที่ไม่ได้ทำการตลาด' || c==='-';
     const empty = (v) => !v || v==='-' || v==='';
+    // ── Smart tooltip — แทน .info-tip::after (CSS) ที่โดน parent overflow:hidden (.kpi ฯลฯ) ตัดหัว
+    //    กล่อง position:fixed อิง viewport → ไม่โดน parent ไหนตัด · พลิกบน/ล่างอัตโนมัติ · clamp ขอบจอ
+    (function(){
+      let tip = null;
+      const ensure = () => {
+        if (!tip) {
+          tip = document.createElement('div');
+          tip.id = '__smarttip';
+          tip.style.cssText = 'position:fixed;z-index:9999;background:var(--t1);color:var(--bg);padding:9px 12px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.6;white-space:pre-line;max-width:min(300px,92vw);text-align:left;box-shadow:0 6px 22px rgba(0,0,0,.22);opacity:0;pointer-events:none;transition:opacity .12s ease;left:0;top:0';
+          document.body.appendChild(tip);
+        }
+        return tip;
+      };
+      const show = (el) => {
+        const txt = el.getAttribute('data-tip'); if (!txt) return;
+        const t = ensure();
+        t.textContent = txt;                       // textContent = ปลอดภัย (ไม่ inject HTML) · \n + pre-line = ขึ้นบรรทัด
+        t.style.opacity = '0'; t.style.left = '0px'; t.style.top = '0px';
+        const r = el.getBoundingClientRect();
+        const tw = t.offsetWidth, th = t.offsetHeight, pad = 8, gap = 8;
+        let left = r.left + r.width / 2 - tw / 2;                                  // กึ่งกลางไอคอน
+        left = Math.max(pad, Math.min(left, window.innerWidth - tw - pad));        // clamp ซ้าย/ขวา
+        let top = r.top - th - gap;                                               // เหนือไอคอนก่อน
+        if (top < pad) top = r.bottom + gap;                                      // ไม่พอด้านบน → ไปล่าง
+        if (top + th > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - th - pad);
+        t.style.left = Math.round(left) + 'px';
+        t.style.top = Math.round(top) + 'px';
+        t.style.opacity = '1';
+      };
+      const hide = () => { if (tip) tip.style.opacity = '0'; };
+      const pick = (e) => (e.target && e.target.closest) ? e.target.closest('.info-tip[data-tip]') : null;
+      document.addEventListener('mouseover', e => { const el = pick(e); if (el) show(el); });
+      document.addEventListener('mouseout',  e => { if (pick(e)) hide(); });
+      document.addEventListener('focusin',   e => { const el = pick(e); if (el) show(el); });
+      document.addEventListener('focusout',  hide);
+      document.addEventListener('click',     e => { const el = pick(e); if (el) show(el); });   // แตะบนมือถือ
+      window.addEventListener('scroll', hide, true);
+      window.addEventListener('resize', hide);
+    })();
     const passMonth = (ds, m) => {
       if(m===0) return true;
       if(!ds) return true;
