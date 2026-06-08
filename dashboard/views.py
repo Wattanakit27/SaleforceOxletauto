@@ -1444,8 +1444,9 @@ def update_release_date(request):
         return JsonResponse({"error": "ตำแหน่งในชีตไม่ถูกต้อง"}, status=400)
     if not tab or row < 1:
         return JsonResponse({"error": "ไม่รู้ตำแหน่งในชีต — ลองกด 'รีเฟรชข้อมูลเดี๋ยวนี้' ก่อน"}, status=400)
-    if col not in (21, 23):
-        return JsonResponse({"error": "คอลัมน์ไม่ใช่ช่องวันปล่อย"}, status=400)
+    # คอลัมน์วันที่ timeline ที่อนุญาตให้เขียน: 14=O เซ็น · 18=S เอกสารครบ · 19=T ผล · 21=V/23=X ปล่อย
+    if col not in (14, 18, 19, 21, 23):
+        return JsonResponse({"error": "คอลัมน์ไม่ใช่ช่องวันที่ timeline"}, status=400)
     if value and not _re.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", value):
         return JsonResponse({"error": "วันที่ต้องเป็น d/m/yyyy (เช่น 2/6/2026)"}, status=400)
 
