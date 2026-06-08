@@ -264,6 +264,8 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 ### Analytics tables (admin/exec only)
 ในหน้า dashboard หลัก มี 2 ตารางที่ guard ด้วย `if (canViewAll)` — เซลล์ทั่วไปไม่เห็น:
 
+> **📋 ตาราง "แอดมิน"** (เฉพาะ `isAdmin`) — ใต้ตาราง "สรุปรายเซลล์" · แสดงเซลล์ที่ไม่นับในตารางหลัก (`s.inactive===true \|\| s.team==='ADMIN'` = ADMIN เทเลเซลล์ + orphan นอก config). คอลัมน์ตามรายงานชีต: ลำดับ·เซลล์·จองทั้งหมด·รอผล·รอปล่อย·ปล่อย·%การจอง·Lead·RJ·เฉลี่ยรับ Lead/วัน·ไลฟ์·คลิป·Lead ไลฟ์ + footer รวม. ค่ามาจาก `_sval` (range) + นับ status จาก `D.bookingCases` (ในช่วง) + live/clip จาก `liveActivity`. **⚠ ข้อจำกัด**: `fetch_sales_by_month_tabs` อ่านเฉพาะบล็อก 13 เซลล์ (marker) ไม่อ่านบล็อก ADMIN → `D.bookingCases` ไม่มี seller='ADMIN' → รอผล/รอปล่อย/ปล่อย ของ ADMIN = 0 (lead/จอง มาจาก leads ใช้ได้). ถ้าจะให้ครบต้องให้ reader อ่านบล็อก ADMIN ด้วย
+
 1. **🚗 Lead รถรุ่นยอดนิยม** — top cars by lead count
    - ใช้ **คอลัมน์ M เท่านั้น** (car_formula) — clean normalized names
    - มี pagination ไป/กลับ (20 รุ่น/หน้า) + 🔍 search + checkbox "ซ่อน 'ไม่ระบุ'"
