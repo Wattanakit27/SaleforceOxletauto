@@ -1497,7 +1497,7 @@
       const TIP = {
         lead:    "Lead ที่รับเข้ามาทั้งหมดในช่วงนี้ (รวม Normal + RJ)\nนับจาก leads sheet · กรองตามวันที่รับเคส",
         follow:  "เคสที่ admin_status = ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย\nไม่นับเคสปิดแล้ว (junk: คืน/ยกเลิก/จ่ายใหม่)\n% = ติดตาม ÷ Lead",
-        book:    "เคสที่ admin/sales_status มีคำว่า 'จอง' (ไม่นับ junk)\nนับจาก leads sheet\nConv = จอง ÷ Lead × 100",
+        book:    "เคสที่ admin/sales_status มีคำว่า 'จอง' (ไม่นับ junk)\nนับจาก leads sheet\nจองได้กี่ % ของลีด = จอง ÷ Lead ปกติ (ไม่รวม RJ)\n** ไม่ใช่ Conv — Conv คิดจากยอดปล่อย **",
         done:    "เคสที่ปล่อยรถสำเร็จ (status = ปล่อย ใน sales_reports)\nนับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง\n% = ปิดได้ ÷ เป้ารวมทุกเซลล์",
         deal:    "รวมเงินจาก sale_price ของเคสที่ปล่อยรถ (sales_reports)\nเฉลี่ย = รวม ÷ จำนวนคันปล่อย",
         target:  "เป้าหมายรวมของทุกเซลล์ในเดือนนี้\nกำหนดใน sheet 'ตั้งค่าเซลล์' column เป้า",
@@ -1507,7 +1507,7 @@
       const kpis = [
         {l:"Lead",v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
         {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow",tip:TIP.follow},
-        {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"Conv "+pct(ms?ms.totalBookings:D.summary.totalBookings,sm.totalLeads||1)+"%"+momBadge(m_book),c:"var(--green)",mk:"totalBookings",tip:TIP.book},
+        {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"จอง "+pct(ms?ms.totalBookings:D.summary.totalBookings,(sm.leadNormal||sm.totalLeads)||1)+"% ของลีด"+momBadge(m_book),c:"var(--green)",mk:"totalBookings",tip:TIP.book},
         {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,_tgtRange||1)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone",tip:TIP.done},
         {l:ic('lucide:wallet',15)+" ยอดปล่อย",v:fmtBaht(dvDeal),s:(dvAvg?("เฉลี่ย "+fmtBaht(dvAvg)+"/คัน"):"ยังไม่มีปล่อย")+momBadge(m_deal, false, fmtBaht),c:"var(--green-mid)",mk:"totalDealValue",tip:TIP.deal},
         {l:"เป้าหมาย",v:fmtNum(_tgtRange),s:rangeMonthCount()>1?(rangeMonthCount()+" เดือน"):"เคส/เดือน",c:"var(--amber)",tip:TIP.target},
@@ -1798,7 +1798,7 @@
 
       html += `<div class="card">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">`;
-      html += `<div class="card-title" style="margin:0;display:flex;align-items:center">สรุปรายเซลล์<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทุกเซลล์ในตารางเดียว\n• ตัวเลขทุก column = ค่าในช่วงที่เลือก (เดือน/ปี)\n• Conv% = จอง ÷ Lead × 100\n• 🔁 X.Xx = เฉลี่ยจำนวนครั้งอัพเดท/เคสติดตาม\n• คลิกแถว → เปิด dashboard ของเซลล์คนนั้น">?</span></div><div class="card-sub">เปรียบเทียบทุกเซลล์ในคอลัมน์เดียว — คลิกแถวเพื่อเปิด dashboard ของเซลล์คนนั้น</div>`;
+      html += `<div class="card-title" style="margin:0;display:flex;align-items:center">สรุปรายเซลล์<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทุกเซลล์ในตารางเดียว\n• ตัวเลขทุก column = ค่าในช่วงที่เลือก (เดือน/ปี)\n• Conv% = ปล่อย ÷ Lead ปกติ × 100 (ไม่รวม RJ)\n• 🔁 X.Xx = เฉลี่ยจำนวนครั้งอัพเดท/เคสติดตาม\n• คลิกแถว → เปิด dashboard ของเซลล์คนนั้น">?</span></div><div class="card-sub">เปรียบเทียบทุกเซลล์ในคอลัมน์เดียว — คลิกแถวเพื่อเปิด dashboard ของเซลล์คนนั้น</div>`;
       html += `<select onchange="msort=this.value;render()"><option value="lead" ${msort==='lead'?'selected':''}>Lead มากสุด</option><option value="booking" ${msort==='booking'?'selected':''}>จองสูงสุด</option><option value="diligent" ${msort==='diligent'?'selected':''}>ติดตามมาก</option><option value="done" ${msort==='done'?'selected':''}>ปิดมากสุด</option><option value="dealValue" ${msort==='dealValue'?'selected':''}>฿ ปล่อยสูงสุด</option></select></div>`;
       html += `<div class="shdr" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr 1fr">
         <span>เซลล์</span>
@@ -1894,7 +1894,7 @@
 
       html += renderTopCard(
         '🏆 Top จอง',
-        "เซลล์ที่จองได้มากสุดในช่วงที่เลือก\nนับจาก bookings sheet (source of truth)\nConv% = จอง ÷ Lead × 100\nแสดง Top 6 — กด '+ ดูอีก' ดูเซลล์ทุกคน\nคลิกชื่อเซลล์ → ดูรายการเคสจอง",
+        "เซลล์ที่จองได้มากสุดในช่วงที่เลือก\nนับจาก bookings sheet (source of truth)\n% = จองได้กี่ % ของลีด (จอง ÷ Lead) — ไม่ใช่ Conv\nแสดง Top 6 — กด '+ ดูอีก' ดูเซลล์ทุกคน\nคลิกชื่อเซลล์ → ดูรายการเคสจอง",
         topBook,
         (s, i) => `<div class="prow" onclick="showSellerJongs('${h(s.name)}')" style="cursor:pointer" title="ดูรายการเคสจอง"><span style="font-weight:500">${medals[i]||(i+1)+'.'} ${h(s.name)}</span><span style="color:var(--green);font-weight:500">${s._bk} จอง · ${pct(s._bk,s._ld)}%</span></div>`,
         'ยังไม่มีจอง'
@@ -2422,7 +2422,7 @@
         const bm = bookSellerMap[seller] || {booked:0, done:0, dealValue:0};
         const sellerObj = (D.sellers || []).find(s => s.name === seller);
         const team = sellerObj?.team || '?';
-        const convPct = leadCount > 0 ? Math.round(bm.booked/leadCount*1000)/10 : 0;
+        const convPct = leadCount > 0 ? Math.round(bm.done/leadCount*1000)/10 : 0;   // Conv = ปล่อย ÷ lead (ไม่ใช่จอง)
         return {seller, team, lead:leadCount, booked:bm.booked, done:bm.done, dealValue:bm.dealValue, convPct};
       }).filter(r => r.lead > 0 || r.booked > 0).sort((a,b) => b.lead - a.lead || b.done - a.done);
 
