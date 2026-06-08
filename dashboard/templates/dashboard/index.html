@@ -2415,6 +2415,26 @@
     }
 
     // ── Booking Detail Modal — กดที่แถวรถที่ปล่อย / รถจอง แล้วเปิด ──
+    // แปลงวันที่: ชีต d/m/yyyy ↔ input type=date (YYYY-MM-DD)
+    function _toISODate(s) {
+      const p = String(s||'').trim().split('/');
+      if (p.length < 2) return '';
+      let d = parseInt(p[0]), m = parseInt(p[1]);
+      let y = p.length >= 3 ? parseInt(p[2]) : (new Date()).getFullYear();
+      if (!d || !m || !y) return '';
+      if (y < 100) y += (y > 50 ? 2500 : 2000);   // 2 หลัก
+      if (y > 2500) y -= 543;                       // พ.ศ. → ค.ศ.
+      if (y < 2020 || y > 2035) return '';          // ปีพัง (1969) → ไม่ pre-fill
+      return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+    function _fromISODate(s) {
+      const p = String(s||'').trim().split('-');
+      if (p.length < 3) return '';
+      const y = parseInt(p[0]), m = parseInt(p[1]), d = parseInt(p[2]);
+      if (!y || !m || !d) return '';
+      return `${d}/${m}/${y}`;   // ค.ศ. 4 หลัก ไม่มี 0 นำ (ตรงรูปแบบในชีต)
+    }
+
     function openBookingDetail(idx) {
       const b = (D.bookingCases || [])[idx];
       if (!b) return;
@@ -2474,7 +2494,7 @@
             <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd);align-items:center">
               <div style="font-size:11px;color:var(--t3);font-weight:600">${ic('lucide:pencil',13)} วันที่ปล่อยรถ</div>
               <div style="display:flex;gap:6px;align-items:center">
-                <input id="rel-edit-input" value="${h(b.releaseDatePrimary||'')}" placeholder="2/6/2026" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px">
+                <input type="date" id="rel-edit-input" value="${_toISODate(b.releaseDatePrimary||'')}" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px">
                 <button onclick="saveReleaseDate(${idx})" style="padding:6px 13px;border-radius:8px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">บันทึก</button>
               </div>
             </div>
@@ -2539,9 +2559,9 @@
       const inp = document.getElementById('rel-edit-input');
       const msg = document.getElementById('rel-edit-msg');
       if (!inp) return;
-      const val = (inp.value || '').trim();
+      const val = _fromISODate(inp.value);   // input type=date → YYYY-MM-DD → d/m/yyyy สำหรับชีต (ว่าง = ลบ)
       if (val && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(val)) {
-        if (msg) { msg.textContent = '⚠ วันที่ต้องเป็น d/m/yyyy เช่น 2/6/2026'; msg.style.color = 'var(--red)'; }
+        if (msg) { msg.textContent = '⚠ วันที่ไม่ถูกต้อง'; msg.style.color = 'var(--red)'; }
         return;
       }
       if (msg) { msg.textContent = 'กำลังบันทึก...'; msg.style.color = 'var(--t3)'; }
