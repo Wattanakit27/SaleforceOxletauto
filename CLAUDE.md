@@ -282,7 +282,7 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
    - **วันปล่อยว่าง**: status="ปล่อย" แต่ไม่มีวันปล่อย · กระทบคะแนนสถานะ + การนับเดือน
    - **ปีผิด**: ช่องวันที่ใด (จอง/เซ็น/ผล/ปล่อย) มีปีนอก 2020–2035 (มักพิมพ์ 1969) → โชว์ช่องที่ผิด
    - `<details open>` อัตโนมัติถ้ามีปัญหา + badge จำนวน · กดแถว → `openBookingDetail(idx)`
-   - **🔔 กระดิ่งแจ้งเตือน (header, admin)** — `computeAdminAlerts()` + `openAlertsPanel()` (ข้างเมนูจัดการ มี badge จำนวน): เน้น **"เคสปล่อยไม่ลงวันปล่อย"** (status="ปล่อย" + releaseDate ว่าง — ทั้งปี ไม่กรองช่วง) + **เซลล์ใหม่/ยังไม่ตั้งทีม** (`s.inactive===true` มี lead/จอง — orphan ไม่อยู่ใน config) + **วันที่ปีผิด**. กดแถว → `openBookingDetail` / เซลล์ใหม่ → `openSellerConfigPanel`
+   - **🔔 กระดิ่งแจ้งเตือน (header, admin)** — `computeAdminAlerts()` + `openAlertsPanel()` (ข้างเมนูจัดการ มี badge จำนวน): เน้น **"เคสปล่อยไม่ลงวันปล่อย"** (status="ปล่อย" + releaseDate ว่าง) + **เซลล์ใหม่/ยังไม่ตั้งทีม** (`s.inactive===true` + active ในช่วง — orphan ไม่อยู่ใน config). **กรองตามช่วงวันที่** (`_inRange` วัน/เดือนของวันจอง + `rangeActiveSellers`) + **วันที่ปีผิด**. กดแถว → `openBookingDetail` / เซลล์ใหม่ → `openSellerConfigPanel`
 
 ## Google Sheets (7 sheets)
 
