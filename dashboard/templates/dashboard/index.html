@@ -3360,15 +3360,20 @@
         return `<label style="font-size:10.5px;color:var(--t3)">ไฟล์ <span style="color:var(--t3)">(เลือกจากที่แชร์ให้ระบบแล้ว)</span>
               <select class="sh-sid" onchange="__loadTabsFor(this)" style="${inputCss}">${opts}</select></label>`;
       };
+      // 4 ตัวหลักนี้อ่าน "แท็บรายเดือนอัตโนมัติตามชื่อ" — Tab ที่เลือกเป็นแค่ failsafe (เลือกแค่ไฟล์พอ)
+      const MONTHLY = new Set(['leads','sales_reports','bookings','live_sessions']);
       const tabField = (s) => {
+        const isMonthly = MONTHLY.has(s.key);
+        const note = isMonthly ? `<div style="font-size:10.5px;color:var(--green);background:var(--green-bg);border:.5px solid var(--green-mid);border-radius:7px;padding:6px 9px;margin-top:3px;line-height:1.5">${ic('lucide:calendar-days',14)} ระบบอ่านแท็บ<b>รายเดือนเองตามชื่อ</b> (มกราคม·กุมภาพันธ์...) — <b>เลือกแค่ไฟล์พอ</b> ไม่ต้องเลือก Tab</div>` : '';
+        const tabLabel = isMonthly ? `Tab สำรอง <span style="color:var(--t3)">(failsafe · ปกติไม่ต้องแตะ)</span>` : `Tab <span style="color:var(--t3)">(เลือกจากไฟล์)</span>`;
         if (!useDrop) {
-          return `<label style="font-size:10.5px;color:var(--t3)">ชื่อ Tab
+          return note + `<label style="font-size:10.5px;color:var(--t3)">${tabLabel}
               <input class="sh-tab" value="${h(s.tab || '')}" placeholder="รวม sheet" style="${inputCss}"></label>`;
         }
         const curTab = s.tab || '';
         let opts = `<option value="">— ใช้ค่าเดิม —</option>`;
         if (curTab) opts += `<option value="${h(curTab)}" selected>${h(curTab)}</option>`;
-        return `<label style="font-size:10.5px;color:var(--t3)">Tab <span style="color:var(--t3)">(เลือกจากไฟล์)</span>
+        return note + `<label style="font-size:10.5px;color:var(--t3)">${tabLabel}
               <select class="sh-tab" style="${inputCss}">${opts}</select></label>`;
       };
       const editRow = (s, isCfg) => `
@@ -3381,7 +3386,7 @@
         </div>`;
 
       let html = `<div style="padding:11px 13px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber);font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px">`;
-      html += `${ic('lucide:triangle-alert',16)} <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> เลือกไฟล์ + tab จากดรอปดาวน์ → กดบันทึก (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
+      html += `${ic('lucide:triangle-alert',16)} <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> เลือก<b>ไฟล์</b>จากดรอปดาวน์ → กดบันทึก (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>4 แหล่งหลัก (Lead/ยอดขาย/จอง/ไลฟ์) <b>ระบบหาแท็บรายเดือนเองตามชื่อ</b> — เลือกแค่ไฟล์พอ<br>`;
       html += `ไฟล์ใหม่ไม่ขึ้นในรายการ? → <b>แชร์ไฟล์ให้ระบบ (อีเมล service account) ก่อน</b> แล้วกด "เช็คใหม่"`;
       html += `</div>`;
       html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูลหลัก</div>`;
