@@ -1495,7 +1495,7 @@
       const m_lead = null, m_follow = null, m_book = null, m_done = null, m_deal = null, m_rj = null;
       // KPI tooltips — อธิบายว่าแต่ละตัวคืออะไร นับยังไง
       const TIP = {
-        lead:    "Lead ที่รับเข้ามาทั้งหมดในช่วงนี้ (รวม Normal + RJ)\nนับจาก leads sheet · กรองตามวันที่รับเคส",
+        lead:    "หลีดธรรมดา (ไม่รวม RJ) ที่รับเข้ามาในช่วงนี้\nRJ แยกดูที่การ์ด RJ (ขวาสุด) · Conv คิดจากหลีดธรรมดาเท่านั้น\nนับจาก leads sheet · กรองตามวันที่รับเคส",
         follow:  "เคสที่ admin_status = ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย\nไม่นับเคสปิดแล้ว (junk: คืน/ยกเลิก/จ่ายใหม่)\n% = ติดตาม ÷ Lead",
         book:    "เคสที่ admin/sales_status มีคำว่า 'จอง' (ไม่นับ junk)\nนับจาก leads sheet\nจองได้กี่ % ของลีด = จอง ÷ Lead ปกติ (ไม่รวม RJ)\n** ไม่ใช่ Conv — Conv คิดจากยอดปล่อย **",
         done:    "เคสที่ปล่อยรถสำเร็จ (status = ปล่อย ใน sales_reports)\nนับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง\n% = ปิดได้ ÷ เป้ารวมทุกเซลล์",
@@ -1505,7 +1505,7 @@
       };
       const _tgtRange = (D.summary.totalTarget||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
       const kpis = [
-        {l:"Lead",v:fmtNum(sm.totalLeads||0),s:"รายการ"+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
+        {l:"Lead",v:fmtNum(sm.leadNormal||0),s:"ธรรมดา · +RJ "+fmtNum(ms?ms.leadRJ:D.summary.leadRJ)+momBadge(m_lead),c:"var(--t1)",mk:"totalLeads",tip:TIP.lead},
         {l:"ติดตามอยู่",v:fmtNum(sm.totalFollow||0),s:pct(sm.totalFollow||0,sm.totalLeads||1)+"%"+momBadge(m_follow, true),c:"var(--blue)",mk:"totalFollow",tip:TIP.follow},
         {l:"จองแล้ว",v:fmtNum(ms?ms.totalBookings:D.summary.totalBookings),s:"จอง "+pct(ms?ms.totalBookings:D.summary.totalBookings,(sm.leadNormal||sm.totalLeads)||1)+"% ของลีด"+momBadge(m_book),c:"var(--green)",mk:"totalBookings",tip:TIP.book},
         {l:"ปิดได้",v:fmtNum(ms?ms.totalDone:D.summary.totalDone),s:pct(ms?ms.totalDone:D.summary.totalDone,_tgtRange||1)+"%  ของเป้า"+momBadge(m_done),c:"var(--green-mid)",mk:"totalDone",tip:TIP.done},
@@ -1579,12 +1579,13 @@
         return {cur:c, prev:p, delta, pct:pctv, isUp: delta >= 0};
       }
 
-      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead/ติดตาม/จอง/ปิด: รวมทุกคนในทีม\n• Conv% = ปล่อย ÷ Lead ปกติ × 100 (ไม่รวม RJ)\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
+      html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead = หลีดธรรมดา (ไม่รวม RJ) · +RJ แดง = RJ แยกต่างหาก\n• Conv% = ปล่อย ÷ Lead ปกติ × 100 (ไม่รวม RJ)\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
         const tBooking=mt?mt.booking:t.booking, tDone=mt?mt.done:t.done;
         const tLeadNormal = mt ? (mt.leadNormal||0) : (t.leadNormal!=null ? t.leadNormal : tLead);   // Lead ปกติ (ไม่รวม RJ)
+        const tLeadRJ = mt ? (mt.leadRJ||0) : (t.leadRJ||0);
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
         const tTarget = (t.target||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
         const conv=pct(tDone,tLeadNormal), tPct=pct(tDone,tTarget);   // Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ) — ตรงกับตารางรายเซลล์
@@ -1600,7 +1601,7 @@
         html += `<span style="font-size:13px;font-weight:700;color:${C.TEAM_COLORS[tid]}">${C.TEAM_NAMES[tid]}</span>`;
         html += `<span style="font-size:11px;color:var(--t2)">${t.members.join(' · ')}</span></div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;text-align:center">`;
-        html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLead}</div>${momBadge(t_mLead)}</div>`;
+        html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLeadNormal}${tLeadRJ?` <span style="font-size:9px;color:var(--red);font-weight:500">+RJ${tLeadRJ}</span>`:''}</div>${momBadge(t_mLead)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">จอง</div><div style="font-size:15px;font-weight:600;color:var(--green)">${tBooking}</div>${momBadge(t_mBook)}</div>`;
         html += `<div onclick="event.stopPropagation();openTeamDoneDetail('${tid}')" style="cursor:pointer" title="กดดูเซลล์ในทีมที่ปล่อย"><div style="font-size:10px;color:var(--t3)">ปิด/เป้า ${ic('lucide:arrow-up-right',13)}</div><div style="font-size:15px;font-weight:600;color:${tDone>=tTarget?'var(--green)':'var(--amber)'}">${tDone}/${tTarget}</div>${momBadge(t_mDone)}</div>`;
@@ -1802,7 +1803,7 @@
       html += `<select onchange="msort=this.value;render()"><option value="lead" ${msort==='lead'?'selected':''}>Lead มากสุด</option><option value="booking" ${msort==='booking'?'selected':''}>จองสูงสุด</option><option value="diligent" ${msort==='diligent'?'selected':''}>ติดตามมาก</option><option value="done" ${msort==='done'?'selected':''}>ปิดมากสุด</option><option value="dealValue" ${msort==='dealValue'?'selected':''}>฿ ปล่อยสูงสุด</option></select></div>`;
       html += `<div class="shdr" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr 1fr">
         <span>เซลล์</span>
-        <span style="text-align:right">Lead<span class="info-tip" tabindex="0" data-tip="จำนวน lead ที่เซลล์รับเข้ามาในช่วงที่เลือก (รวม Normal + RJ)">?</span></span>
+        <span style="text-align:right">Lead<span class="info-tip" tabindex="0" data-tip="หลีดธรรมดา (ไม่รวม RJ) ที่เซลล์รับเข้ามาในช่วงที่เลือก\n+RJ (สีแดงข้างล่าง) = จำนวน RJ แยกต่างหาก\nConv คิดจากหลีดธรรมดาเท่านั้น">?</span></span>
         <span style="text-align:right">ติดตาม<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ admin_status เข้าข่าย ติดตาม/รอตอบ/รอลูกค้า/โทรไม่รับ/ผิดนัด/นัดหมาย (ไม่นับเคสปิด/junk)">?</span></span>
         <span style="text-align:right">จอง<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ admin_status หรือ sales_status มีคำว่า 'จอง' (ไม่นับเคส junk เช่น คืน/ยกเลิก/จ่ายใหม่)">?</span></span>
         <span style="text-align:right">ปิด<span class="info-tip" tabindex="0" data-tip="จำนวนเคสที่ปล่อยรถแล้ว (status = ปล่อย ใน sales_reports). นับตามวันปล่อยรถ (ถ้ามี) หรือวันที่จอง">?</span></span>
@@ -1812,6 +1813,7 @@
       ss.forEach(s => {
         const sLead=_sval(s,'lead'), sFollow=_sval(s,'follow'), sBooking=_sval(s,'booking'), sDone=_sval(s,'done');
         const sLeadNormal=_sval(s,'leadNormal');   // lead ปกติ (ไม่รวม RJ)
+        const sLeadRJ=_sval(s,'leadRJ');
         const sDealVal = _sval(s, 'dealValue');
         // Conv% = ปล่อย ÷ lead ปกติ (ไม่เอา RJ มาถ่วง)
         const conv=pct(sDone, sLeadNormal);
@@ -1828,7 +1830,7 @@
           : `<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${C.TEAM_COLORS[s.team]||'var(--t3)'};color:#fff;margin-left:2px">${s.team}</span>`;
         html += `<div class="srow" style="grid-template-columns:1.4fr .6fr .6fr .6fr .6fr .9fr 1fr" ${rowClick}>`;
         html += `<span style="font-weight:600">${h(s.name)}${teamBadge}</span>`;
-        html += `<span style="text-align:right">${sLead}</span>`;
+        html += `<span style="text-align:right">${sLeadNormal}${sLeadRJ?`<br><span style="font-size:9px;color:var(--red)">+RJ${sLeadRJ}</span>`:''}</span>`;
         html += `<span style="text-align:right;color:var(--blue)">${sFollow}</span>`;
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
@@ -2167,17 +2169,24 @@
         'leadRJ':         {label:'RJ',           emoji:ic('lucide:ban',18),          color:'#ef4444', invert:true,  fmt:fmtNum},
       }[metricKey];
       if (!cfg) return;
+      // Lead = หลีดธรรมดา (ไม่รวม RJ) · RJ แยกแสดงต่างหาก ต่อท้าย · conv ใช้เฉพาะธรรมดา
+      const isLead = metricKey === 'totalLeads';
+      const valKey = isLead ? 'leadNormal' : metricKey;
       const old = document.getElementById('metric-detail-overlay');
       if (old) old.remove();
 
       const ms = D.monthlySummary || {};
       // ดึง 12 เดือนทั้งปี
       const monthData = [];
-      let maxVal = 0;
+      let maxVal = 0, rjYear = 0;
+      const rjByMonth = [];
       for (let m = 1; m <= 12; m++) {
-        const v = Number((ms[m] || ms[String(m)] || {})[metricKey] || 0);
+        const mm = ms[m] || ms[String(m)] || {};
+        const v = Number(mm[valKey] || 0);
         monthData.push({m, v});
         if (v > maxVal) maxVal = v;
+        const rj = isLead ? Number(mm.leadRJ || 0) : 0;
+        rjByMonth.push(rj); rjYear += rj;
       }
       const totalYear = monthData.reduce((a,e)=>a+e.v,0);
       const curMonth = (D.meta && D.meta.month) || (new Date().getMonth()+1);
@@ -2197,11 +2206,11 @@
         .filter(([tid]) => tid !== 'ADMIN')
         .map(([tid, t]) => {
           const teamKey = {
-            'totalLeads':'lead', 'totalFollow':'follow', 'totalBookings':'booking',
+            'totalLeads':'leadNormal', 'totalFollow':'follow', 'totalBookings':'booking',
             'totalDone':'done', 'totalDealValue':'dealValue', 'leadRJ':null
           }[metricKey];
           const v = teamKey ? Number(t[teamKey] || 0) : 0;
-          return {tid, v};
+          return {tid, v, rj: isLead ? Number(t.leadRJ || 0) : 0};
         })
         .filter(r => r.v > 0 || metricKey === 'leadRJ');
 
@@ -2218,7 +2227,7 @@
       // Header
       inner += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">`;
       inner += `<div><div style="font-size:11px;color:var(--t3)">รายละเอียด · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
-      inner += `<div style="font-size:18px;font-weight:800;color:${cfg.color}">${cfg.emoji} ${cfg.label}</div></div>`;
+      inner += `<div style="font-size:18px;font-weight:800;color:${cfg.color}">${cfg.emoji} ${isLead ? 'Lead — ธรรมดา' : cfg.label}</div></div>`;
       inner += `<button onclick="document.getElementById('metric-detail-overlay').remove()" style="padding:6px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">✕ ปิด</button>`;
       inner += `</div>`;
 
@@ -2235,8 +2244,17 @@
       }
       inner += `</div>`;
 
-      // 12-month bar trend
-      inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">${ic('lucide:trending-up',16)} Trend ทั้งปี · รวม ${cfg.fmt(totalYear)}</div>`;
+      // RJ แยกต่างหาก (ต่อท้ายหลีดธรรมดา · ไม่นับใน Lead/Conv)
+      if (isLead) {
+        inner += `<div style="display:flex;align-items:center;gap:8px;background:var(--red-bg);border:.5px solid var(--red-mid);border-radius:10px;padding:9px 12px;margin-bottom:14px">`;
+        inner += `<span style="font-size:11px;color:var(--t2)">${ic('lucide:triangle-alert',16)} RJ เดือนนี้ <span style="color:var(--t3)">(แยกต่างหาก — ไม่นับใน Lead/Conv)</span></span>`;
+        inner += `<span style="margin-left:auto;font-size:17px;font-weight:800;color:var(--red)">${fmtNum(rjByMonth[focusMonth-1])}</span>`;
+        inner += `<span style="font-size:10px;color:var(--t3)">ทั้งปี ${fmtNum(rjYear)}</span>`;
+        inner += `</div>`;
+      }
+
+      // 12-month bar trend (หลีดธรรมดา)
+      inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">${ic('lucide:trending-up',16)} Trend ทั้งปี · ${isLead?'หลีดธรรมดา ':''}รวม ${cfg.fmt(totalYear)}</div>`;
       inner += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">`;
       inner += `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:120px">`;
       monthData.forEach(({m, v}) => {
@@ -2261,7 +2279,7 @@
 
       // Team breakdown
       if (showTeamSection) {
-        inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">แยกตามทีม · ${C.MONTHS_FULL[focusMonth-1]}</div>`;
+        inner += `<div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:6px">แยกตามทีม · ${C.MONTHS_FULL[focusMonth-1]}${isLead?' (หลีดธรรมดา)':''}</div>`;
         inner += `<div style="background:var(--bg2);border-radius:10px;padding:10px">`;
         teamRows.sort((a,b)=>b.v-a.v).forEach(r => {
           const ratio = teamTotal > 0 ? r.v/teamTotal : 0;
@@ -2270,7 +2288,7 @@
           inner += `<div style="display:grid;grid-template-columns:80px 1fr 80px 50px;gap:8px;align-items:center;padding:5px 0">`;
           inner += `<span style="font-size:12px;font-weight:700;color:${teamCol}">${h(teamName)}</span>`;
           inner += `<div style="height:14px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;width:${ratio*100}%;background:${teamCol}"></div></div>`;
-          inner += `<span style="font-size:12px;font-weight:600;text-align:right">${cfg.fmt(r.v)}</span>`;
+          inner += `<span style="font-size:12px;font-weight:600;text-align:right">${cfg.fmt(r.v)}${isLead && r.rj ? ` <span style="font-size:9px;color:var(--red);font-weight:500">+RJ${r.rj}</span>`:''}</span>`;
           inner += `<span style="font-size:11px;color:var(--t3);text-align:right">${Math.round(ratio*1000)/10}%</span>`;
           inner += `</div>`;
         });
