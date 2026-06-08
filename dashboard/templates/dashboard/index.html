@@ -1849,30 +1849,37 @@
 
       // ── 📋 ตาราง "แอดมิน" — เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอก config) · แอดมิน+ผู้บริหาร ──
       if (canViewAll) {
-        const _adm = sellers.filter(s => s.inactive === true || s.team === 'ADMIN');
-        // นับสถานะ (รอผล/รอปล่อย/ปล่อย) รายเซลล์ จาก bookingCases ในช่วง
+        const _adm = (D.sellers||[]).filter(s => s.inactive === true || s.team === 'ADMIN');
+        // เดือนในช่วงที่กรอง → ดึงค่าจาก monthlySummary (มีข้อมูล ADMIN/เซลล์นอกระบบ ที่ buildRangeMs/_sval ไม่มี)
+        const _rMonths = [];
+        if (dfFrom && dfTo) {
+          let _dd = new Date(dfFrom); _dd = new Date(_dd.getFullYear(), _dd.getMonth(), 1);
+          const _de = new Date(dfTo);
+          while (_dd <= _de) { _rMonths.push(_dd.getMonth()+1); _dd.setMonth(_dd.getMonth()+1); }
+        }
+        const _msSum = (name, key) => { let t=0; _rMonths.forEach(m => { const sm=((D.monthlySummary&&D.monthlySummary[m]&&D.monthlySummary[m].sellers)||{})[name]; if(sm && sm[key]!=null) t+=Number(sm[key])||0; }); return t; };
+        // รอผล/รอปล่อย จาก bookingCases ในช่วง (ADMIN ไม่มีเคสในนี้ → 0)
         const _stat = {};
         (D.bookingCases||[]).forEach(b => {
           if (!b.seller || !ir(b.releaseDate || b.date || '')) return;
-          const e = _stat[b.seller] || (_stat[b.seller] = {wr:0, wrl:0, done:0});
+          const e = _stat[b.seller] || (_stat[b.seller] = {wr:0, wrl:0});
           if (b.status === 'รอผล') e.wr++;
           else if (b.status === 'รอปล่อย') e.wrl++;
-          else if (b.status === 'ปล่อย') e.done++;
         });
         // ไลฟ์/คลิป รายเซลล์ ในช่วง
         const _la = D.liveActivity || {};
         const _liveBy = {}, _clipBy = {};
         (_la.sessions||[]).filter(s=>ir(s.date||'')).forEach(s => (s.hosts||[]).forEach(hh => { if(hh) _liveBy[hh]=(_liveBy[hh]||0)+1; }));
         if (Array.isArray(_la.clips)) _la.clips.filter(c=>ir(c.date||'')).forEach(c => { _clipBy[c.name]=(_clipBy[c.name]||0)+1; });
-        // จำนวนวันในช่วง (เฉลี่ยรับ Lead/วัน)
         const _days = (dfFrom && dfTo) ? Math.max(1, Math.round((new Date(dfTo)-new Date(dfFrom))/86400000)+1) : 1;
         const _aRows = _adm.map(s => {
-          const lead=_sval(s,'leadNormal'), rj=_sval(s,'leadRJ'), booking=_sval(s,'booking');
-          const st=_stat[s.name]||{wr:0,wrl:0,done:0};
-          return {name:s.name, booking, wr:st.wr, wrl:st.wrl, done:st.done,
+          const lead=_msSum(s.name,'leadNormal'), leadAll=_msSum(s.name,'lead'), booking=_msSum(s.name,'booking'), done=_msSum(s.name,'done');
+          const rj=Math.max(0, leadAll-lead);
+          const st=_stat[s.name]||{wr:0,wrl:0};
+          return {name:s.name, booking, wr:st.wr, wrl:st.wrl, done,
                   pct: lead>0?Math.round(booking/lead*10000)/100:0, lead, rj,
-                  lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:0};
-        }).filter(r => r.lead>0||r.booking>0||r.done>0||r.wr>0||r.wrl>0).sort((a,b)=>b.lead-a.lead);
+                  lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:_msSum(s.name,'liveLead')};
+        }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>b.lead-a.lead);
 
         html += `<div class="card">`;
         html += `<div class="card-title">${ic('lucide:user-cog',16)} แอดมิน <span style="font-size:11px;font-weight:400;color:var(--t3)">— เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอกระบบ) · ${h(rangeLabelTH())}</span></div>`;
