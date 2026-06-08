@@ -1956,7 +1956,9 @@
       const blankRel = [], badYr = [];
       (D.bookingCases || []).forEach((b, idx) => {
         if (!_inRange(b)) return;   // 📅 เฉพาะช่วงที่กรอง
-        if (b.status === 'ปล่อย' && (!b.releaseDate || b.releaseDate === '' || b.releaseDate === '-')) blankRel.push({b, idx});
+        // เช็ค "ช่องวันปล่อยจริง" (releaseDatePrimary = คอลัมน์หลัก X/W) — จับเคสที่กรอกผิดช่อง (X ว่างแต่ extract เจอ V)
+        const _rel = ('releaseDatePrimary' in b) ? b.releaseDatePrimary : b.releaseDate;   // fallback ช่วง deploy
+        if (b.status === 'ปล่อย' && (!_rel || _rel === '' || _rel === '-')) blankRel.push({b, idx});
         const errs = [];
         fields.forEach(([lbl, k]) => { const y = _yr(b[k]); if (y !== null && (y < BAD_MIN || y > BAD_MAX)) errs.push(lbl+'='+b[k]); });
         if (errs.length) badYr.push({b, idx, errs});
@@ -2047,7 +2049,8 @@
         const errs = [];
         allFields.forEach(([lbl, k]) => { if (_bad(_yr(b[k]))) errs.push(lbl+'='+b[k]); });
         if (errs.length) badYr.push({b, idx, errs});
-        if (b.status === 'ปล่อย' && (!b.releaseDate || b.releaseDate === '' || b.releaseDate === '-')) blankRel.push({b, idx});
+        const _relP = ('releaseDatePrimary' in b) ? b.releaseDatePrimary : b.releaseDate;   // ช่องวันปล่อยจริง (คอลัมน์หลัก)
+        if (b.status === 'ปล่อย' && (!_relP || _relP === '' || _relP === '-')) blankRel.push({b, idx});
       });
       const total = blankRel.length + badYr.length;
       const _k = (s) => { const d = _parseDmy(s); return d ? _ymd(d) : '9999-99-99'; };

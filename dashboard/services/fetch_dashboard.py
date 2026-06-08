@@ -233,6 +233,20 @@ def extract_release_date(r) -> str:
     return ""
 
 
+def release_date_primary(r) -> str:
+    """วันปล่อยจาก 'คอลัมน์หลัก' เท่านั้น (X(23) สำหรับ พ.ค.+, W(22) สำหรับเดือนก่อนหน้า) — ไม่ fallback คอลัมน์อื่น.
+    ใช้ในกระดิ่งแจ้งเตือน: ถ้าว่าง = admin ยังไม่กรอกวันปล่อยในช่องที่ถูก (แม้ extract_release_date จะไปเจอ
+    วันที่ใน V/U/โน้ตมาแทน — เคสปล่อยแต่ "ช่องวันปล่อยจริงว่าง" เช่น กรอก V ไว้แต่ X ว่าง)."""
+    bd = parse_date(cell(r, S.date))
+    if bd and bd.month >= 5:
+        # พ.ค.+ : วันปล่อยจริงอยู่ X(23) — ถือว่า "กรอกแล้ว" ถ้ามี pattern วันที่ใน X (มี/ไม่มีปีก็ได้ เช่น 24/05)
+        # ว่าง/ข้อความล้วน ('ติดตาม','รอรับ') = ยังไม่กรอกวันปล่อย → flag (แม้ extract เจอวันที่ใน V)
+        val = (cell(r, 23) or "").strip()
+        return val if re.search(r"\d{1,2}/\d{1,2}", val) else ""
+    # เดือนก่อน พ.ค. : layout เก่า (วันปล่อยอยู่ V) — ใช้ extract เดิม (ไม่ strict กัน false positive)
+    return extract_release_date(r)
+
+
 def is_this_year(date_str: str) -> bool:
     d = parse_date(date_str)
     if not d:
@@ -485,6 +499,7 @@ def _compute_dashboard_data() -> dict:
             "resultDate": cell(r, S.result_date),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
+            "releaseDatePrimary": release_date_primary(r),   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -1585,6 +1600,7 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "resultDate": cell(r, S.result_date),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
+            "releaseDatePrimary": release_date_primary(r),   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
