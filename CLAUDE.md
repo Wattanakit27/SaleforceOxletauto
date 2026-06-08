@@ -277,12 +277,10 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
    - Pagination ไป/กลับ (50/หน้า)
    - กดที่แถว → modal `openBookingDetail(idx)` แสดงทุกฟิลด์ + ไทม์ไลน์ + อายุเคส
 
-3. **🧹 ข้อมูลต้องเติม/แก้** (`renderDataQualityPanel()`) — dashboard ให้ admin ตามไปเติมข้อมูลในชีต
-   - **กรองตาม "วัน/เดือนของวันจอง"** (`_inRange(b)`) — ถ้าปีจองพิมพ์ผิด (เช่น 1969) ใช้วัน/เดือน + ปีของ dashboard แทน (วัน/เดือนมักถูก) → เคสไปโผล่ในเดือนที่ควรอยู่จริง (22/2/1969 → โผล่ตอนเลือก ก.พ. ไม่ใช่ มิ.ย.)
-   - **วันปล่อยว่าง**: status="ปล่อย" แต่ไม่มีวันปล่อย · กระทบคะแนนสถานะ + การนับเดือน
-   - **ปีผิด**: ช่องวันที่ใด (จอง/เซ็น/ผล/ปล่อย) มีปีนอก 2020–2035 (มักพิมพ์ 1969) → โชว์ช่องที่ผิด
-   - `<details open>` อัตโนมัติถ้ามีปัญหา + badge จำนวน · กดแถว → `openBookingDetail(idx)`
-   - **🔔 กระดิ่งแจ้งเตือน (header, admin)** — `computeAdminAlerts()` + `openAlertsPanel()` (ข้างเมนูจัดการ มี badge จำนวน): เน้น **"เคสปล่อยไม่ลงวันปล่อย"** (status="ปล่อย" + releaseDate ว่าง) + **เซลล์ใหม่/ยังไม่ตั้งทีม** (`s.inactive===true` + active ในช่วง — orphan ไม่อยู่ใน config). **กรองตามช่วงวันที่** (`_inRange` วัน/เดือนของวันจอง + `rangeActiveSellers`) + **วันที่ปีผิด**. กดแถว → `openBookingDetail` / เซลล์ใหม่ → `openSellerConfigPanel`
+3. **🔔 กระดิ่งแจ้งเตือน (header, admin)** — `computeAdminAlerts()` + `openAlertsPanel()` (ข้างเมนูจัดการ มี badge จำนวน) · **แทน panel "ข้อมูลต้องเติม/แก้" เดิม** (`renderDataQualityPanel` ยังอยู่ในโค้ดแต่ไม่ render แล้ว — ตัดออกจาก LEAD tab มิ.ย.69)
+   - เน้น **"เคสปล่อยไม่ลงวันปล่อย"** — เช็ค `releaseDatePrimary` (คอลัมน์หลัก X/W ว่าง แม้ extract เจอ V) · กรองตาม **วันปล่อย** (`releaseDate||date`) → เคสจองเดือนก่อนปล่อยเดือนนี้โผล่ในเดือนที่ปล่อย
+   - **เซลล์ใหม่/ยังไม่ตั้งทีม** (`s.inactive===true` + active ในช่วง `rangeActiveSellers` — orphan ไม่อยู่ใน config) → `openSellerConfigPanel`
+   - **วันที่ปีผิด** (นอก 2020–2035 มักพิมพ์ 1969) · กรองตามวันจอง · กดแถว → `openBookingDetail(idx)`
 
 ## Google Sheets (7 sheets)
 

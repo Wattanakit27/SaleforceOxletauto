@@ -1924,7 +1924,7 @@
         <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
         <div class="adv-body">${renderReleasedCarsTable()}</div>
       </details>`;
-      html += renderDataQualityPanel();
+      // "ข้อมูลต้องเติม/แก้" ตัดออกแล้ว — ใช้กระดิ่งแจ้งเตือน (header) แทน (ครอบคลุม ปล่อยไม่ลงวันปล่อย + ปีผิด + เซลล์ใหม่)
       html += `<details class="adv-section">
         <summary>${ic('lucide:phone',16)} เคสติดตาม <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— เคสที่ยังต้องโทรต่อ เร่งด่วนก่อน คือเคสที่อัพเดทน้อยสุด</span></summary>
         <div class="adv-body">${renderFollowCasesSection()}</div>
