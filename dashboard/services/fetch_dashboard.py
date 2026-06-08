@@ -865,6 +865,7 @@ def _compute_dashboard_data() -> dict:
         "totalLead": int(sum(cell_num(r, LV.lead_count) for r in year_live)),
         "byHost": by_host,
         "sessions": live_sessions_list,
+        "clips": year_clips,   # [{name, date}] — ให้ frontend กรองตามช่วงวันที่ได้ (เกณฑ์ อาทิตย์ละ 2)
     }
 
     # Monthly Summary
