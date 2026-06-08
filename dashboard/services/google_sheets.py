@@ -450,6 +450,28 @@ def update_lead_fill_note(code: str, value: str, month: int | None = None,
     return update_lead_field(code, "fill_sheet_note", value, month, expected_seller)
 
 
+def update_release_date(tab: str, sheet_row: int, col_idx: int, value: str) -> dict:
+    """เขียน 'วันปล่อย' กลับชีตยอดขาย ตรงตำแหน่ง (tab + แถว + คอลัมน์) ที่ booking_case จำไว้ (inline edit แอดมิน).
+    col_idx 0-based (23=X พ.ค.+ · 21=V เดือนก่อน) · caller ต้องเช็คสิทธิ์ admin + validate มาแล้ว.
+    """
+    import urllib.parse
+    load_sheet_config_overrides()
+    sid = SHEET_CONFIG["sales_reports"]["spreadsheet_id"]
+    a1 = f"'{tab}'!{_col_letter(col_idx)}{int(sheet_row)}"
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    headers = {"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"}
+    enc = urllib.parse.quote(a1)
+    r = requests.put(
+        f"{SHEETS_API}/{sid}/values/{enc}?valueInputOption=USER_ENTERED",
+        headers=headers, json={"values": [[value]]}, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"write failed: {r.status_code} {r.text[:140]}")
+    invalidate_cache()   # ล้าง cache ทั้งหมด → ดึงค่าใหม่รอบหน้า
+    return {"a1": a1, "value": value}
+
+
 # ── Fetch helpers ──
 def cell(row: list[str], index: int) -> str:
     if index < len(row):
@@ -817,7 +839,8 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     status = str(row[13] if len(row) > 13 else "").strip()
                     if not seq.isdigit() or not status:
                         continue   # ข้าม sub-header / แถวว่าง (ตรง filter N<>"" ในสูตร)
-                    all_rows.append([name] + [(row[i] if i < len(row) else "") for i in range(1, 28)])
+                    # col 0=ชื่อเซลล์, col 1-27=ตรง tab · col 28=tab name, col 29=แถวในชีต (1-based) — ใช้ inline edit เขียนกลับ
+                    all_rows.append([name] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
         _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:

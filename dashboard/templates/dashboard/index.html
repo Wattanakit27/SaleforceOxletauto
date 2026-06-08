@@ -2465,6 +2465,22 @@
         return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;font-size:10px;font-weight:600;margin-left:6px">${lbl} ${n} วันก่อน</span>`;
       };
 
+      // inline edit วันปล่อย — แอดมิน + รู้ตำแหน่งในชีต (sheetTab/sheetRow) → เขียนกลับช่อง X/V ตรงๆ
+      const _canEditRel = (typeof isAdmin !== 'undefined' && isAdmin) && b.sheetTab && b.sheetRow;
+      const _relHint = (b.releaseDate && b.releaseDate !== (b.releaseDatePrimary||''))
+        ? `ระบบเดาจากช่องอื่นไว้: ${h(b.releaseDate)} — กรอกวันจริงเพื่อบันทึกลงช่องวันปล่อย`
+        : 'กรอกวันปล่อยจริง (d/m/yyyy) → บันทึกลงชีตทันที';
+      const _relEdit = _canEditRel ? `
+            <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd);align-items:center">
+              <div style="font-size:11px;color:var(--t3);font-weight:600">${ic('lucide:pencil',13)} วันที่ปล่อยรถ</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="rel-edit-input" value="${h(b.releaseDatePrimary||'')}" placeholder="2/6/2026" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px">
+                <button onclick="saveReleaseDate(${idx})" style="padding:6px 13px;border-radius:8px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">บันทึก</button>
+              </div>
+            </div>
+            <div id="rel-edit-msg" style="font-size:10px;color:var(--t3);padding:3px 0 6px">${_relHint}</div>
+      ` : row('วันที่ปล่อยรถ', b.releaseDate);
+
       overlay.innerHTML = `
         <div style="background:var(--bg);border-radius:14px;max-width:600px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
           <div style="background:${statusColor};padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -2504,7 +2520,7 @@
             ${row('วันที่เซ็นต์', b.signDate)}
             ${row('วันที่รู้ผล', b.resultDate)}
             ${row('เอกสารครบ', b.docsDate)}
-            ${row('วันที่ปล่อยรถ', b.releaseDate)}
+            ${_relEdit}
 
             ${b.note && b.note !== '-' ? `
               <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:file-pen',16)} หมายเหตุ</div>
@@ -2514,6 +2530,38 @@
         </div>
       `;
       document.body.appendChild(overlay);
+    }
+
+    // บันทึกวันปล่อยกลับชีต (inline edit จากหน้ารายละเอียดเคส — แอดมิน)
+    async function saveReleaseDate(idx) {
+      const b = (D.bookingCases || [])[idx];
+      if (!b) return;
+      const inp = document.getElementById('rel-edit-input');
+      const msg = document.getElementById('rel-edit-msg');
+      if (!inp) return;
+      const val = (inp.value || '').trim();
+      if (val && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(val)) {
+        if (msg) { msg.textContent = '⚠ วันที่ต้องเป็น d/m/yyyy เช่น 2/6/2026'; msg.style.color = 'var(--red)'; }
+        return;
+      }
+      if (msg) { msg.textContent = 'กำลังบันทึก...'; msg.style.color = 'var(--t3)'; }
+      try {
+        const res = await fetch('/api/admin/update_release_date', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({tab: b.sheetTab, row: parseInt(b.sheetRow), col: b.releaseCol, value: val})
+        });
+        const d = await res.json();
+        if (!res.ok || !d.ok) {
+          if (msg) { msg.textContent = '⚠ ' + (d.error || 'บันทึกไม่สำเร็จ'); msg.style.color = 'var(--red)'; }
+          return;
+        }
+        if (msg) { msg.textContent = '✓ บันทึกลงชีตแล้ว' + (d.wrote && d.wrote.a1 ? ' (' + d.wrote.a1 + ')' : ''); msg.style.color = 'var(--green-mid)'; }
+        // optimistic — อัปเดต local ให้กระดิ่ง/ตารางสะท้อนทันที (mirror ตามทันใน ~3-4 นาที หรือกดรีเฟรชข้อมูล)
+        b.releaseDatePrimary = val;
+        if (val) b.releaseDate = val;
+      } catch (e) {
+        if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
+      }
     }
 
     // ── Car Detail Modal — กดที่รถใน Lead car table แล้วเปิด ──

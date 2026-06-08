@@ -1425,6 +1425,41 @@ def admin_list_tabs(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def update_release_date(request):
+    """Admin — inline edit 'วันปล่อย' เขียนกลับชีตยอดขาย (จากหน้ารายละเอียดเคส/กระดิ่ง).
+    body JSON: {"tab": "<tab>", "row": <int>, "col": <21|23>, "value": "2/6/2026"} (value ว่าง = ลบ)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    import re as _re
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+    tab = (body.get("tab") or "").strip()
+    value = (body.get("value") or "").strip()
+    try:
+        row = int(body.get("row"))
+        col = int(body.get("col"))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "ตำแหน่งในชีตไม่ถูกต้อง"}, status=400)
+    if not tab or row < 1:
+        return JsonResponse({"error": "ไม่รู้ตำแหน่งในชีต — ลองกด 'รีเฟรชข้อมูลเดี๋ยวนี้' ในสถานะระบบก่อน"}, status=400)
+    if col not in (21, 23):
+        return JsonResponse({"error": "คอลัมน์ไม่ใช่ช่องวันปล่อย"}, status=400)
+    if value and not _re.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", value):
+        return JsonResponse({"error": "วันที่ต้องเป็น d/m/yyyy (เช่น 2/6/2026)"}, status=400)
+    from .services.google_sheets import update_release_date as _write
+    try:
+        res = _write(tab, row, col, value)
+    except Exception as e:
+        return JsonResponse({"error": str(e)[:300], "ok": False}, status=502)
+    return JsonResponse({"ok": True, "wrote": res}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def admin_sheet_config(request):
     """Admin — บันทึก override ของแหล่งข้อมูล (ย้าย spreadsheet/tab) ลง Supabase.
 

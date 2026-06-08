@@ -247,6 +247,12 @@ def release_date_primary(r) -> str:
     return extract_release_date(r)
 
 
+def _release_col(r) -> int:
+    """คอลัมน์ 'วันปล่อยจริง' (0-based) สำหรับ inline edit เขียนกลับ: พ.ค.+ = 23(X) · เดือนก่อน = 21(V)."""
+    d = parse_date(cell(r, S.date))
+    return 23 if (d and d.month >= 5) else 21
+
+
 def is_this_year(date_str: str) -> bool:
     d = parse_date(date_str)
     if not d:
@@ -499,7 +505,8 @@ def _compute_dashboard_data() -> dict:
             "resultDate": cell(r, S.result_date),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
-            "releaseDatePrimary": release_date_primary(r),   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
+            "releaseDatePrimary": release_date_primary(r),
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันปล่อย)   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -1600,7 +1607,8 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "resultDate": cell(r, S.result_date),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
-            "releaseDatePrimary": release_date_primary(r),   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
+            "releaseDatePrimary": release_date_primary(r),
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันปล่อย)   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
