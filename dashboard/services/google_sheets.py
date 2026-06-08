@@ -873,6 +873,39 @@ def fetch_bookings_by_month_tabs() -> list[list[str]]:
         return fetch_sheet("bookings")
 
 
+def fetch_live_by_month_tabs() -> list[list[str]]:
+    """อ่าน live sessions จากแท็บรายเดือน 'สรุปไลฟ์สด <เดือน>' (สดกว่า 'รวม sheet' ที่ใช้สูตร — เดือนล่าสุดมัก lag)
+    โครงสร้างแต่ละแท็บเหมือน 'รวม sheet' เป๊ะ (วันที่|เวลา|ทีม|ผู้ไลฟ์1-5|หัวข้อ|... → ตรง LIVE_COL).
+    รวมทุกแท็บ 'สรุปไลฟ์สด *' (Mar/Apr/May/Jun...) · Failsafe → fetch_sheet('live_sessions').
+    """
+    import urllib.parse
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        token = creds.token
+        sid = SHEET_CONFIG["live_sessions"]["spreadsheet_id"]
+        meta = requests.get(
+            f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+            headers={"Authorization": f"Bearer {token}"}, timeout=30,
+        ).json()
+        live_tabs = [
+            s["properties"]["title"] for s in meta.get("sheets", [])
+            if s["properties"]["title"].startswith("สรุปไลฟ์สด")
+        ]
+        all_rows: list[list[str]] = []
+        for tab in live_tabs:
+            enc = urllib.parse.quote(f"'{tab}'")
+            r = requests.get(
+                f"{SHEETS_API}/{sid}/values/{enc}?valueRenderOption=FORMATTED_VALUE",
+                headers={"Authorization": f"Bearer {token}"}, timeout=30,
+            )
+            if r.status_code == 200:
+                all_rows.extend(r.json().get("values", [])[1:])  # ตัด header
+        return all_rows if all_rows else fetch_sheet("live_sessions")
+    except Exception:
+        return fetch_sheet("live_sessions")
+
+
 def fetch_all_sheets() -> dict[str, list[list[str]]]:
     """Fetch all 6 sheets in parallel using threads.
 
@@ -897,7 +930,7 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
             pass
 
     # sales_reports + bookings อ่านจากแท็บรายเดือนตรง — เลิกพึ่ง 'รวม sheet' (เก่า/สูตร)
-    other_keys = ["live_sessions", "live_followups", "employees"]
+    other_keys = ["live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
@@ -905,6 +938,7 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
         futures[executor.submit(fetch_leads_by_month_tabs)] = "leads"
         futures[executor.submit(fetch_sales_by_month_tabs)] = "sales_reports"
         futures[executor.submit(fetch_bookings_by_month_tabs)] = "bookings"
+        futures[executor.submit(fetch_live_by_month_tabs)] = "live_sessions"
         for future in concurrent.futures.as_completed(futures):
             key = futures[future]
             results[key] = future.result()
