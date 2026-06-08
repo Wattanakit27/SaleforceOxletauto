@@ -126,6 +126,13 @@
   let fDay = 0;
   let fDateFrom = _ymdS(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
   let fDateTo = _ymdS(new Date());                                                       // ถึงวันนี้
+  // ฝังใน iframe หน้า admin หรือ deep link → รับช่วงวันที่จาก URL (?from=YYYY-MM-DD&to=YYYY-MM-DD)
+  try {
+    const _q = new URLSearchParams(location.search);
+    const _qf = _q.get('from'), _qt = _q.get('to');
+    if (_qf && /^\d{4}-\d{2}-\d{2}$/.test(_qf)) { fDateFrom = _qf; fMonth = 0; fDay = 0; }
+    if (_qt && /^\d{4}-\d{2}-\d{2}$/.test(_qt)) { fDateTo = _qt; fMonth = 0; fDay = 0; }
+  } catch (e) {}
   let kpiFilter = 'inHand';
   let viewMode = 'leads';
   let bookStatusFilter = 'all';
@@ -418,6 +425,65 @@
     });
   }
 
+  // จำนวนเดือนที่ช่วงวันที่ครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วง (เดือนละ 8 · กรองทั้งปี = ×เดือนในช่วง)
+  function rangeMonthCount() {
+    if (fMonth > 0) return 1;
+    if (!fDateFrom && !fDateTo) return 12;
+    const from = fDateFrom ? new Date(fDateFrom + 'T00:00:00') : new Date();
+    const to = fDateTo ? new Date(fDateTo + 'T00:00:00') : new Date();
+    const set = new Set();
+    let cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    const end = new Date(to.getFullYear(), to.getMonth(), 1);
+    let g = 0;
+    while (cur <= end && g < 24) { set.add(cur.getFullYear() + '-' + cur.getMonth()); cur.setMonth(cur.getMonth() + 1); g++; }
+    return set.size || 1;
+  }
+
+  // สร้างชุดข้อมูลกราฟตามช่วงวันที่ (≤45 วัน = รายวัน · มากกว่านั้น = รายเดือนเฉพาะเดือนในช่วง) — เลิกโชว์ 12 เดือนทั้งปีเสมอ
+  function buildRangeSeries() {
+    const daily = D.daily || {}, monthly = D.monthly || {};
+    const MS = C.MONTHS_SHORT || [];
+    const o = { labels: [], leadNormal: [], leadRJ: [], bookings: [], dones: [], dealValue: [], pointMode: false };
+    if (!fDateFrom && !fDateTo) {   // fallback: ทั้งปี 12 เดือน
+      o.labels = MS.slice();
+      for (let m = 1; m <= 12; m++) { const x = monthly[m] || monthly[String(m)] || {}; o.leadNormal.push(x.leadNormal||0); o.leadRJ.push(x.leadRJ||0); o.bookings.push(x.booking||0); o.dones.push(x.done||0); o.dealValue.push(x.dealValue||0); }
+      return o;
+    }
+    const yr = (D.meta && D.meta.year) || new Date().getFullYear();
+    const from = fDateFrom ? new Date(fDateFrom + 'T00:00:00') : new Date(yr, 0, 1);
+    const to = fDateTo ? new Date(fDateTo + 'T00:00:00') : new Date();
+    const days = Math.floor((to - from) / 86400000) + 1;
+    if (days <= 45) {                 // รายวัน
+      o.pointMode = true;
+      let cur = new Date(from), g = 0;
+      while (cur <= to && g < 400) {
+        const m = cur.getMonth() + 1, d = cur.getDate();
+        const md = daily[m] || daily[String(m)] || {};
+        o.labels.push(d + '/' + m);
+        o.leadNormal.push((md.leads||[])[d]||0); o.leadRJ.push((md.leadRJ||[])[d]||0);
+        o.bookings.push((md.bookings||[])[d]||0); o.dones.push((md.dones||[])[d]||0); o.dealValue.push((md.dealValue||[])[d]||0);
+        cur.setDate(cur.getDate() + 1); g++;
+      }
+    } else {                          // รายเดือน (เฉพาะวันในช่วง)
+      let cur = new Date(from.getFullYear(), from.getMonth(), 1);
+      const end = new Date(to.getFullYear(), to.getMonth(), 1), g0 = 0; let g = g0;
+      while (cur <= end && g < 24) {
+        const m = cur.getMonth() + 1;
+        const md = daily[m] || daily[String(m)] || {};
+        const dim = new Date(yr, m, 0).getDate();
+        let ln=0,lr=0,bk=0,dn=0,dv=0;
+        for (let d = 1; d <= dim; d++) {
+          const dd = new Date(cur.getFullYear(), m - 1, d);
+          if (dd < from || dd > to) continue;
+          ln += (md.leads||[])[d]||0; lr += (md.leadRJ||[])[d]||0; bk += (md.bookings||[])[d]||0; dn += (md.dones||[])[d]||0; dv += (md.dealValue||[])[d]||0;
+        }
+        o.labels.push(MS[m-1] || ('ด.'+m)); o.leadNormal.push(ln); o.leadRJ.push(lr); o.bookings.push(bk); o.dones.push(dn); o.dealValue.push(dv);
+        cur.setMonth(cur.getMonth() + 1); g++;
+      }
+    }
+    return o;
+  }
+
   // ── chart init ──
   function destroyChart(id) {
     if (__charts[id]) { __charts[id].destroy(); delete __charts[id]; }
@@ -438,34 +504,11 @@
     Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
     const daily = D.daily || {};
     const monthly = D.monthly || {};
-    const isDaily = fMonth > 0;
-    let labels, leadNormal, leadRJ, bookings, dones, dealValue;
-
-    if (isDaily) {
-      const m = daily[fMonth] || daily[String(fMonth)] || { leads:[], leadRJ:[], bookings:[], dones:[], dealValue:[] };
-      const yr = (D.meta && D.meta.year) || new Date().getFullYear();
-      const daysInMonth = new Date(yr, fMonth, 0).getDate();
-      labels = []; leadNormal=[]; leadRJ=[]; bookings=[]; dones=[]; dealValue=[];
-      for (let d=1; d<=daysInMonth; d++) {
-        labels.push(String(d));
-        leadNormal.push((m.leads||[])[d] || 0);
-        leadRJ.push((m.leadRJ||[])[d] || 0);
-        bookings.push((m.bookings||[])[d] || 0);
-        dones.push((m.dones||[])[d] || 0);
-        dealValue.push((m.dealValue||[])[d] || 0);
-      }
-    } else {
-      labels = C.MONTHS_SHORT;
-      leadNormal=[]; leadRJ=[]; bookings=[]; dones=[]; dealValue=[];
-      for (let m=1; m<=12; m++) {
-        const x = monthly[m] || monthly[String(m)] || {};
-        leadNormal.push(x.leadNormal || 0);
-        leadRJ.push(x.leadRJ || 0);
-        bookings.push(x.booking || 0);
-        dones.push(x.done || 0);
-        dealValue.push(x.dealValue || 0);
-      }
-    }
+    // 📅 ตามตัวกรองวันที่เสมอ (รายวันถ้าช่วงสั้น · รายเดือนถ้าช่วงยาว) — ไม่โชว์ 12 เดือนทั้งปีอีก
+    const _rs = buildRangeSeries();
+    const isDaily = _rs.pointMode;
+    const labels = _rs.labels, leadNormal = _rs.leadNormal, leadRJ = _rs.leadRJ,
+          bookings = _rs.bookings, dones = _rs.dones, dealValue = _rs.dealValue;
 
     const cv1 = document.getElementById('chart-leads');
     if (cv1) {
@@ -628,15 +671,20 @@
       return '฿' + Math.round(v).toLocaleString();
     };
 
+    // 📅 เป้ารายเดือน × จำนวนเดือนในช่วง (เดือนละ ${s.target} · กรองหลายเดือน/ทั้งปี = คูณ)
+    const _mc = rangeMonthCount();
+    const scaledTarget = Math.round((s.target || 0) * _mc);
+    const targetSub = _mc > 1 ? `เป้า ${scaledTarget} คัน (เดือนละ ${s.target}×${_mc})` : `เป้า ${scaledTarget} คัน`;
+
     let html = `
       ${modeBar()}
       <div class="seller-hd">
         <div>
           <h1>${h(SELLER_NAME)}</h1>
-          <div class="sub">ทีม ${h(teamName)} · เป้า ${s.target} คัน · ${h(periodLabel)}</div>
+          <div class="sub">ทีม ${h(teamName)} · ${targetSub} · ${h(periodLabel)}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:22px;font-weight:800;color:var(--green)">${doneCount}/${s.target}</div>
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${doneCount}/${scaledTarget}</div>
           <div style="font-size:11px;color:var(--t3)">ปล่อยในช่วงนี้</div>
         </div>
       </div>
