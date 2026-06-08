@@ -556,7 +556,7 @@ def cron_tick(request):
         except Exception:
             pass
 
-    # ── รีเฟรช dashboard (sync mirror + precompute) ทุกนาที = near-realtime ──
+    # ── รีเฟรช dashboard (sync mirror + precompute) ทุก ~3-4 นาที — ดูเหตุผล threshold ด้านล่าง ──
     refreshed = False
     if getattr(settings, "USE_SUPABASE", False):
         try:
@@ -565,7 +565,10 @@ def cron_tick(request):
             )
             if is_configured():
                 age = get_dashboard_cache_age()
-                if age is None or age > 45:   # tick ห่าง ~60s → sync เกือบทุกนาที (near-realtime)
+                # ⚠️ ห้ามลดต่ำกว่า ~120! sync 1 ครั้ง = upsert leads 15k แถวเข้า Supabase (หนัก)
+                # เคยตั้ง 45 (มิ.ย.69) → sync ทุก tick (~1440/วัน) + ถ้า sync ก่อนยังไม่เสร็จใน 60s ตัวใหม่เริ่มซ้อน
+                #   → Supabase/Vercel โหลดพุ่ง server ล่ม. 180 = sync ทุก ~3-4 นาที (~360/วัน) เสถียร + ยังสดพอ
+                if age is None or age > 180:
                     sync_all_sheets_to_supabase()
                     from .services.fetch_dashboard import precompute_dashboard, _dash_cache
                     _dash_cache["data"] = None

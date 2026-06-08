@@ -89,7 +89,7 @@ python manage.py runserver
 | `/api/admin/sheet_config` | `admin_sheet_config` | admin POST: ย้าย spreadsheet/tab ของแต่ละแหล่ง (เก็บ Supabase `sheet_config`) — ใช้ตอนขึ้นปีใหม่/ย้ายไฟล์ |
 | `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
-| `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute ทุกนาที (near-realtime) (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ 09:00/13:00** (cron-job.org ยิงทุก 1 นาที) · **Flex ตาม schedule ตัดออกแล้ว** |
+| `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ 09:00/13:00** (cron-job.org ยิงทุก 1 นาที) · **Flex ตาม schedule ตัดออกแล้ว** |
 
 ## Roles (สิทธิ์ผู้ใช้)
 
@@ -310,7 +310,8 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 แทนที่จะอ่าน 15k lead + aggregate สดทุกโหลด → **คำนวณล่วงหน้าเก็บผลไว้ คนเข้าเว็บอ่านผลสำเร็จรูป** (เร็วคงที่ ไม่ขึ้นกับจำนวนข้อมูล):
 - `precompute_dashboard()` ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) — คำนวณ `_compute_dashboard_data()` 1 ครั้ง → เก็บลง Supabase table **`dashboard_cache`** (1 แถว key='main', `data` jsonb)
 - `fetch_dashboard_data()` อ่านเร็ว→ช้า: **in-memory (30s)** → **ผล pre-compute Supabase (`_PRECOMPUTE_TTL`=5นาที)** → คำนวณสด+เก็บ (fallback)
-- รีเฟรชโดย: **`cron_tick`** (ทุก 1 นาที — branch "ไม่มี LINE ต้องส่ง" + ผลเก่า **>45 วิ** → sync+precompute = **near-realtime ~1 นาที อัตโนมัติ**) + `cron_sync`. ใช้ cron tick ตัวเดียว ไม่ต้องสร้าง cron sync แยก. (เดิม >270วิ/~5นาที — ลดเป็น 45 เพื่อ realtime; ถ้า Supabase หนัก leads 15k upsert ทุกนาที → ขยับเลขขึ้น)
+- รีเฟรชโดย: **`cron_tick`** (cron ยิงทุก 1 นาที — ถ้าผลเก่า **>180 วิ** → sync+precompute · sync ทุก ~3-4 นาที) + `cron_sync`. ใช้ cron tick ตัวเดียว ไม่ต้องสร้าง cron sync แยก.
+  - **⚠️ บทเรียน (7 มิ.ย.69 server ล่ม)**: เคยตั้ง threshold = **45 วิ** (< tick 60s) → ทุก tick ทำ full sync (upsert leads 15k) ~1440 ครั้ง/วัน + ถ้า sync ก่อนยังไม่เสร็จใน 60s ตัวใหม่เริ่ม**ซ้อน** → Supabase/Vercel โหลดพุ่ง **ล่ม** (commit 977eeae). แก้กลับเป็น **180** (sync ทุก ~3-4 นาที ~360 ครั้ง/วัน เทียบของเดิม 270วิ ~288 ครั้ง). **ห้ามลดต่ำกว่า ~120** — แต่ละ sync หนัก (leads 15k jsonb ก้อนเดียว เสี่ยง statement timeout). อยากเร็วกว่านี้แบบปลอดภัย → ต้องแยก sync leads (หนัก) ออกจาก sales/bookings/live (เล็ก) ให้ความถี่ต่างกัน
 - `upsert_sheet()` ตัด cell ว่างท้ายแถว (`_trim_row`) ลดขนาด jsonb — กัน leads (15k) เขียนชน Supabase statement timeout
 - **ไม่แตะ Sheet เพิ่ม** — pre-compute อ่าน mirror (Supabase) ไม่ใช่ Sheet · Sheet ถูกอ่านแค่ตอน sync (~15-20 req ทุก ~5 นาที)
 - SQL: `create table if not exists dashboard_cache (key text primary key, data jsonb, updated_at timestamptz default now());`
