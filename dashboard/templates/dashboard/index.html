@@ -1939,14 +1939,14 @@
     // ── ${ic('lucide:brush',16)} ข้อมูลต้องเติม/แก้ (admin/exec) — เคสที่ข้อมูลวันที่ไม่ครบ/ผิด ตามไปเติมในชีต ──
     //   กรองตาม "วัน/เดือนของวันจอง" — ถ้าปีจองพิมพ์ผิด (เช่น 1969) ดูจากวัน/เดือนแทน (วัน/เดือนมักถูก)
     //   → เคสไปโผล่ในเดือนที่ควรอยู่จริง (22/2/1969 → โผล่ตอนเลือก ก.พ. ไม่ใช่ มิ.ย.)
-    // ── แจ้งเตือนแอดมิน (กระดิ่ง) — เคสปล่อยไม่ลงวันปล่อย (หลัก) + เซลล์ใหม่ + วันที่ปีผิด · ทั้งปี (ไม่กรองช่วง) ──
+    // ── แจ้งเตือนแอดมิน (กระดิ่ง) — เคสปล่อยไม่ลงวันปล่อย (หลัก) + เซลล์ใหม่ + วันที่ปีผิด · กรองตามช่วง ──
     function computeAdminAlerts() {
       const BAD_MIN = 2020, BAD_MAX = 2035;
       const DASH_YR = (D.meta && D.meta.year) || new Date().getFullYear();
       const _yr = (s) => { const d = _parseDmy(s); return d ? d.getFullYear() : null; };
-      // 📅 กรองตามช่วงวันที่ (ใช้วัน/เดือนของวันจอง · ปีพัง → ใช้ปี dashboard) — เหมือน renderDataQualityPanel
-      const _inRange = (b) => {
-        const d = _parseDmy(b.date);
+      // 📅 กรองตามช่วงวันที่ (รับ date string · ปีพัง → ใช้ปี dashboard)
+      const _inRangeStr = (ds) => {
+        const d = _parseDmy(ds);
         if (!d) return false;
         const y = d.getFullYear();
         const t = (y >= BAD_MIN && y <= BAD_MAX) ? _ymd(d) : _ymd(new Date(DASH_YR, d.getMonth(), d.getDate()));
@@ -1955,10 +1955,14 @@
       const fields = [['วันจอง','date'], ['วันเซ็น','signDate'], ['วันผลออก','resultDate'], ['วันปล่อย','releaseDate']];
       const blankRel = [], badYr = [];
       (D.bookingCases || []).forEach((b, idx) => {
-        if (!_inRange(b)) return;   // 📅 เฉพาะช่วงที่กรอง
-        // เช็ค "ช่องวันปล่อยจริง" (releaseDatePrimary = คอลัมน์หลัก X/W) — จับเคสที่กรอกผิดช่อง (X ว่างแต่ extract เจอ V)
-        const _rel = ('releaseDatePrimary' in b) ? b.releaseDatePrimary : b.releaseDate;   // fallback ช่วง deploy
-        if (b.status === 'ปล่อย' && (!_rel || _rel === '' || _rel === '-')) blankRel.push({b, idx});
+        // เคสปล่อยไม่ลงวันปล่อย: เช็คช่องหลัก (releaseDatePrimary, fallback releaseDate ช่วง deploy)
+        // กรองตาม "วันปล่อย(extract)" ถ้ามี ไม่งั้นวันจอง → เคสจองเดือนก่อนแต่ปล่อยเดือนนี้ (เช่น กิตติมา จอง 31/5 ปล่อย 2/6) โผล่ตอนกรอง มิ.ย.
+        const _rel = ('releaseDatePrimary' in b) ? b.releaseDatePrimary : b.releaseDate;
+        if (b.status === 'ปล่อย' && (!_rel || _rel === '' || _rel === '-') && _inRangeStr(b.releaseDate || b.date)) {
+          blankRel.push({b, idx});
+        }
+        // วันที่ปีผิด: กรองตามวันจอง
+        if (!_inRangeStr(b.date)) return;
         const errs = [];
         fields.forEach(([lbl, k]) => { const y = _yr(b[k]); if (y !== null && (y < BAD_MIN || y > BAD_MAX)) errs.push(lbl+'='+b[k]); });
         if (errs.length) badYr.push({b, idx, errs});
