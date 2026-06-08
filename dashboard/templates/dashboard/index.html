@@ -3221,26 +3221,60 @@
       overlay.innerHTML = html;
     }
 
-    // ── โหมดแก้ไข: ย้าย spreadsheet/tab ของแต่ละแหล่ง (เก็บลง Supabase) ──
-    function renderSheetsEdit() {
+    // ── โหมดแก้ไข: เลือกไฟล์/tab จาก dropdown (แบบ n8n) — เก็บลง Supabase ──
+    async function renderSheetsEdit() {
       const data = window.__sheetsData;
       const body = document.getElementById('sheets-body');
       if (!data || !body) return;
+      body.innerHTML = `<div style="text-align:center;color:var(--t3);padding:34px"><div class="spin" style="margin:0 auto 10px"></div>กำลังอ่านรายชื่อไฟล์...</div>`;
 
+      // รายชื่อไฟล์ Google Sheets ที่ระบบเข้าถึงได้ (แชร์ให้แล้ว) → dropdown
+      let files = [];
+      try {
+        const r = await fetch('/api/admin/list_drive_sheets', {credentials:'same-origin'});
+        const d = await r.json();
+        files = d.files || [];
+      } catch (e) {}
+      window.__driveFiles = files;
+      const useDrop = files.length > 0;
+      const inputCss = 'width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px';
+
+      const fileField = (s) => {
+        if (!useDrop) {
+          return `<label style="font-size:10.5px;color:var(--t3)">Spreadsheet ID <span style="color:var(--amber)">(อ่านรายชื่อไฟล์ไม่ได้ — พิมพ์เอง)</span>
+              <input class="sh-sid" value="${h(s.spreadsheetId || '')}" placeholder="1AbC...xyz" style="${inputCss};font-family:monospace"></label>`;
+        }
+        const cur = s.spreadsheetId || '';
+        const inList = files.some(f => f.id === cur);
+        let opts = `<option value="">— ใช้ค่าเดิมในโค้ด —</option>`;
+        if (cur && !inList) opts += `<option value="${h(cur)}" selected>⚠️ ไฟล์ปัจจุบัน (ยังไม่แชร์ให้ระบบ?)</option>`;
+        files.forEach(f => { opts += `<option value="${h(f.id)}" ${f.id===cur?'selected':''}>${h(f.name)}</option>`; });
+        return `<label style="font-size:10.5px;color:var(--t3)">ไฟล์ <span style="color:var(--t3)">(เลือกจากที่แชร์ให้ระบบแล้ว)</span>
+              <select class="sh-sid" onchange="__loadTabsFor(this)" style="${inputCss}">${opts}</select></label>`;
+      };
+      const tabField = (s) => {
+        if (!useDrop) {
+          return `<label style="font-size:10.5px;color:var(--t3)">ชื่อ Tab
+              <input class="sh-tab" value="${h(s.tab || '')}" placeholder="รวม sheet" style="${inputCss}"></label>`;
+        }
+        const curTab = s.tab || '';
+        let opts = `<option value="">— ใช้ค่าเดิม —</option>`;
+        if (curTab) opts += `<option value="${h(curTab)}" selected>${h(curTab)}</option>`;
+        return `<label style="font-size:10.5px;color:var(--t3)">Tab <span style="color:var(--t3)">(เลือกจากไฟล์)</span>
+              <select class="sh-tab" style="${inputCss}">${opts}</select></label>`;
+      };
       const editRow = (s, isCfg) => `
         <div data-sk="${h(s.key)}" style="border:.5px solid var(--bd);border-radius:11px;padding:12px;background:var(--bg2);margin-bottom:9px">
           <div style="font-size:12.5px;font-weight:700;color:var(--t1);margin-bottom:7px">${h(s.name)}${isCfg ? ' <span style="font-size:10px;color:var(--t3);font-weight:400">(sheet ตั้งค่า)</span>' : ''}</div>
           <div style="display:grid;grid-template-columns:1fr;gap:7px">
-            <label style="font-size:10.5px;color:var(--t3)">Spreadsheet ID <span style="color:var(--t3)">(ส่วนใน URL: /d/<b>นี่</b>/edit)</span>
-              <input class="sh-sid" value="${h(s.spreadsheetId || '')}" placeholder="1AbC...xyz" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"></label>
-            <label style="font-size:10.5px;color:var(--t3)">ชื่อ Tab
-              <input class="sh-tab" value="${h(s.tab || '')}" placeholder="รวม sheet" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px"></label>
+            ${fileField(s)}
+            ${tabField(s)}
           </div>
         </div>`;
 
       let html = `<div style="padding:11px 13px;background:var(--amber-bg);border-radius:10px;border-left:3px solid var(--amber);font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px">`;
-      html += `${ic('lucide:triangle-alert',16)} <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> วาง Spreadsheet ID ใหม่ + ชื่อ tab → กดบันทึก ระบบจะอ่านจากไฟล์ใหม่ทันที (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
-      html += `เว้นว่าง = ใช้ค่าเดิมในโค้ด · Service account ต้องมีสิทธิ์อ่านไฟล์ใหม่ด้วย`;
+      html += `${ic('lucide:triangle-alert',16)} <b>ย้ายไฟล์ชีต (เช่น ขึ้นปีใหม่):</b> เลือกไฟล์ + tab จากดรอปดาวน์ → กดบันทึก (เก็บใน Supabase ไม่ต้องแก้โค้ด/deploy)<br>`;
+      html += `ไฟล์ใหม่ไม่ขึ้นในรายการ? → <b>แชร์ไฟล์ให้ระบบ (อีเมล service account) ก่อน</b> แล้วกด "เช็คใหม่"`;
       html += `</div>`;
       html += `<div style="font-size:12px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูลหลัก</div>`;
       html += data.sources.map(s => editRow(s, false)).join('');
@@ -3253,6 +3287,31 @@
       html += `<button onclick="openSheetsPanel()" style="padding:11px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:13px;cursor:pointer">← กลับ</button>`;
       html += `</div>`;
       body.innerHTML = html;
+      // โหลด tab ของไฟล์ปัจจุบันแต่ละแถวให้พร้อมเลือก
+      if (useDrop) document.querySelectorAll('#sheets-body select.sh-sid').forEach(sel => { if (sel.value) __loadTabsFor(sel); });
+    }
+
+    // โหลดรายชื่อ tab ของไฟล์ที่เลือก → เติมลง dropdown tab ของแถวนั้น
+    async function __loadTabsFor(selEl) {
+      const row = selEl.closest('[data-sk]');
+      const tabSel = row && row.querySelector('.sh-tab');
+      if (!tabSel || tabSel.tagName !== 'SELECT') return;
+      const sid = selEl.value;
+      const prev = tabSel.value;
+      if (!sid) { tabSel.innerHTML = `<option value="">— ใช้ค่าเดิม —</option>`; return; }
+      tabSel.innerHTML = `<option value="">⏳ โหลด tab...</option>`;
+      try {
+        const r = await fetch('/api/admin/list_tabs?sid=' + encodeURIComponent(sid), {credentials:'same-origin'});
+        const d = await r.json();
+        const tabs = d.tabs || [];
+        let opts = `<option value="">— เลือก tab —</option>`;
+        let hasPrev = false;
+        tabs.forEach(t => { if (t === prev) hasPrev = true; opts += `<option value="${h(t)}" ${t===prev?'selected':''}>${h(t)}</option>`; });
+        if (prev && !hasPrev) opts += `<option value="${h(prev)}" selected>${h(prev)} (เดิม)</option>`;
+        tabSel.innerHTML = opts;
+      } catch (e) {
+        tabSel.innerHTML = `<option value="${h(prev)}" selected>${h(prev || '')}</option>`;
+      }
     }
 
     async function saveSheetsConfig(btn) {

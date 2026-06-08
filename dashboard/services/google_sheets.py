@@ -258,7 +258,11 @@ def _get_credentials() -> Credentials:
         _credentials = Credentials.from_service_account_info(
             {"client_email": email, "private_key": key, "token_uri": "https://oauth2.googleapis.com/token"},
             # Full read+write scope — admin ตั้งเป้า/ทีมในระบบจะเขียนกลับ sheet ผ่าน scope นี้
-            scopes=["https://www.googleapis.com/auth/spreadsheets"],
+            # + drive.metadata.readonly — อ่านรายชื่อไฟล์ Google Sheets (ทำ dropdown เลือกไฟล์แบบ n8n)
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive.metadata.readonly",
+            ],
         )
     if not _credentials.valid:
         _credentials.refresh(AuthRequest())
@@ -904,6 +908,49 @@ def fetch_live_by_month_tabs() -> list[list[str]]:
         return all_rows if all_rows else fetch_sheet("live_sessions")
     except Exception:
         return fetch_sheet("live_sessions")
+
+
+def list_drive_spreadsheets() -> list[dict]:
+    """รายชื่อไฟล์ Google Sheets ที่ service account เข้าถึงได้ (ถูกแชร์ให้) — ทำ dropdown เลือกไฟล์แบบ n8n.
+    คืน [{id, name}] เรียงตามชื่อ · error → []
+    """
+    import urllib.parse
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    token = creds.token
+    q = urllib.parse.quote("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
+    out: list[dict] = []
+    page_token = None
+    for _ in range(15):   # กันลูป (สูงสุด ~1500 ไฟล์)
+        url = (f"https://www.googleapis.com/drive/v3/files?q={q}"
+               "&fields=nextPageToken,files(id,name)&pageSize=100&orderBy=name")
+        if page_token:
+            url += f"&pageToken={urllib.parse.quote(page_token)}"
+        r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        out.extend({"id": f.get("id"), "name": f.get("name", "")} for f in data.get("files", []))
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+    return out
+
+
+def list_spreadsheet_tabs(sid: str) -> list[str]:
+    """รายชื่อ tab ของ spreadsheet (dropdown เลือก tab) · error → []"""
+    if not sid:
+        return []
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    token = creds.token
+    r = requests.get(
+        f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+        headers={"Authorization": f"Bearer {token}"}, timeout=30,
+    )
+    if r.status_code != 200:
+        return []
+    return [s["properties"]["title"] for s in r.json().get("sheets", [])]
 
 
 def fetch_all_sheets() -> dict[str, list[list[str]]]:

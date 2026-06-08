@@ -1296,6 +1296,33 @@ def admin_sheets_status(request):
     }, json_dumps_params={"ensure_ascii": False})
 
 
+def admin_list_drive_sheets(request):
+    """Admin — รายชื่อไฟล์ Google Sheets ที่ระบบเข้าถึงได้ (ทำ dropdown เลือกไฟล์แบบ n8n)."""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.google_sheets import list_drive_spreadsheets
+    try:
+        return JsonResponse({"files": list_drive_spreadsheets()}, json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"error": str(e)[:300], "files": []}, status=502)
+
+
+def admin_list_tabs(request):
+    """Admin — รายชื่อ tab ของ spreadsheet ที่เลือก (ทำ dropdown เลือก tab)."""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    sid = (request.GET.get("sid") or "").strip()
+    if not sid:
+        return JsonResponse({"error": "missing sid", "tabs": []}, status=400)
+    from .services.google_sheets import list_spreadsheet_tabs
+    try:
+        return JsonResponse({"tabs": list_spreadsheet_tabs(sid)}, json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"error": str(e)[:300], "tabs": []}, status=502)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def admin_sheet_config(request):
