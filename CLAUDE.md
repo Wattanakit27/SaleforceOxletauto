@@ -109,7 +109,8 @@ python manage.py runserver
 **⚠️ บังคับ login ทุกหน้า (ไม่มี default test user แล้ว)** — `dashboard_page`/`admin_page`/`api_dashboard` เช็ค session ก่อนเสมอ ([views.py](dashboard/views.py) helper `_session_user`/`_can_view_all`/`_is_admin`). เซลล์ที่เผลอเข้า `/dashboard/` → redirect `/me/` (กันเปิด DevTools เห็น data รวมของทุกคน)
 
 **Login (แบบง่าย — ไม่มีสมัครสมาชิก)** — ทุกทางเก็บ session `oxlet_user = {user_id, nickname, display_name, position, seller_name?}`:
-1. **หลัก: LINE user_id + รหัสรวม** — POST `/login/` ด้วย `token`(LINE user_id) + `password`. รหัสต้องตรง `OXLET_SELLER_PASSWORD` (env, default `OXletauto55555`) → หา user_id ใน employees sheet → role จาก [ชีตตั้งค่าแอดมิน/เซลล์แอดมิน](#-แอดมินจาก-line-user_id-2-ทาง) → exec/admin ไป `/dashboard/`, เซลล์ไป `/s/<user_id>/`
+0. **หลัก (PDPA): LINE Login (OAuth)** — ปุ่ม "เข้าสู่ระบบด้วย LINE" → `/auth/line/start` (redirect ไป LINE authorize, state ใน session) → `/auth/line/callback` แลก code→token→ดึง LINE userId (ยืนยันแล้ว) → `_login_with_line_user_id()` หา employee + set session (หมดอายุ 14 วัน) → exec/admin ไป `/dashboard/`, เซลล์ไป `/me/` (อิง session ไม่ใช่ token). ต้องตั้ง `LINE_LOGIN_CHANNEL_ID`/`LINE_LOGIN_CHANNEL_SECRET` (env) + Callback URL ใน LINE Login channel = `LINE_LOGIN_CALLBACK`
+1. **สำรอง: LINE user_id + รหัสรวม** — POST `/login/` ด้วย `token`(LINE user_id) + `password`. รหัสต้องตรง `OXLET_SELLER_PASSWORD` (env, default `OXletauto55555`) → หา user_id ใน employees sheet → role จาก [ชีตตั้งค่าแอดมิน/เซลล์แอดมิน](#-แอดมินจาก-line-user_id-2-ทาง) → exec/admin ไป `/dashboard/`, เซลล์ไป `/s/<user_id>/`
 2. **แอดมินระบบ (สำรอง/break-glass)** — username/password จาก env `OXLET_ADMIN_USER` / `OXLET_ADMIN_PASSWORD`
 3. **เซลล์ (ลิงก์ตรง ไม่ต้อง login)** — `/s/<token>/` (token จาก seller_tokens.py) หรือ `/u/<token>/` (LINE user_id) — เซลล์ใช้ลิงก์ส่วนตัวเข้าได้เลย
 
@@ -448,6 +449,7 @@ CRON_SECRET=xxx...
 
 1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 7 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
    - **7 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`
+   - **LINE Login (PDPA)**: `LINE_LOGIN_CHANNEL_ID`, `LINE_LOGIN_CHANNEL_SECRET` (จาก LINE Login channel) + ตั้ง Callback URL ใน channel = `https://saleforve-django.vercel.app/auth/line/callback` (ตรงกับ `LINE_LOGIN_CALLBACK`)
    - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `OXLET_SELLER_PASSWORD` (รหัสรวม login = OXletauto55555), `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
    - **ตัวเลือก**: `DEBUG` (default=False อยู่แล้ว ไม่ต้องตั้งก็ปลอดภัย)
    - **เลิกใช้แล้ว**: `GMAIL_APP_PASSWORD`, `EMAIL_*`, `APPROVAL_NOTIFY_EMAIL`, `SITE_URL` (ถอดระบบสมัครสมาชิก+เมลออกแล้ว มิ.ย.69)

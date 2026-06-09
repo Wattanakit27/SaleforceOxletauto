@@ -43,7 +43,12 @@
 
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
-  <!-- ทางหลัก: LINE user_id + รหัสรวม -->
+  <!-- ทางหลัก: เข้าด้วย LINE (LINE Login — ยืนยันตัวตน ปลอดภัย PDPA) -->
+  <a href="/auth/line/start?next={{ next|default:'/dashboard/'|urlencode }}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;background:#06C755;color:#fff;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 4px 14px rgba(6,199,85,.35);box-sizing:border-box">เข้าสู่ระบบด้วย LINE</a>
+
+  <div class="divider">หรือใช้ LINE ID + รหัส (สำรอง)</div>
+
+  <!-- ทางสำรอง: LINE user_id + รหัสรวม -->
   <form method="post" action="/login/">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
@@ -59,8 +64,8 @@
   </form>
 
   <div class="hint">
-    <b>เซลล์</b> ใช้ลิงก์ส่วนตัวที่แอดมินให้ <code>/s/&lt;token&gt;/</code> เข้าได้เลย ไม่ต้อง login<br>
-    <b>แอดมิน/ผู้บริหาร</b> ใช้ LINE user_id (ดูได้ที่ปุ่ม 📋 LINE ID พนักงาน) + รหัสที่แอดมินตั้งให้
+    <b>เซลล์/แอดมิน/ผู้บริหาร</b> กด "เข้าสู่ระบบด้วย LINE" — ใช้บัญชี LINE ที่แอดมินเพิ่มไว้ในระบบ ไม่ต้องจำรหัส<br>
+    ทางสำรอง: LINE user_id (ดูที่ปุ่ม 📋 LINE ID พนักงาน) + รหัสรวม
   </div>
 
   <!-- ทางสำรอง: แอดมินระบบ (env) -->

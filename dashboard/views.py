@@ -242,6 +242,97 @@ def login_view(request):
     return render(request, "dashboard/login.html", {"next": next_url, "error": error})
 
 
+def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
+    """หา employee จาก LINE user_id (ยืนยันแล้วจาก LINE Login) → ตั้ง session → คืน (target_url, error)."""
+    if not line_user_id:
+        return None, "ไม่ได้รับ LINE user_id"
+    from .services.constants import (
+        normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS, refresh_from_sheet, load_admin_user_ids,
+    )
+    try:
+        employees = fetch_sheet("employees")
+    except Exception as e:
+        return None, f"อ่านรายชื่อพนักงานไม่ได้: {e}"
+    for r in employees:
+        if cell(r, EM.user_id) == line_user_id:
+            position = (cell(r, EM.position) or "").strip().lower()
+            nickname = cell(r, EM.nickname)
+            display = cell(r, EM.display_name)
+            refresh_from_sheet()
+            load_admin_user_ids()
+            if line_user_id in ADMIN_USER_IDS or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
+                position = "admin"
+            request.session["oxlet_user"] = {
+                "user_id": line_user_id,
+                "nickname": nickname,
+                "display_name": display,
+                "position": position or "seller",
+                "seller_name": (nickname or "").strip(),
+            }
+            request.session.set_expiry(60 * 60 * 24 * 14)   # 14 วัน — session หมดอายุ (PDPA)
+            if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
+                return (next_url or "/dashboard/"), None
+            return "/me/", None   # เซลล์ → /me/ (อิง session ไม่ใช่ token ใน URL)
+    return None, "ไม่พบบัญชี LINE นี้ในรายชื่อพนักงาน — แจ้งแอดมินเพิ่ม LINE ID ก่อน"
+
+
+@require_GET
+def line_login_start(request):
+    """เริ่ม LINE Login (OAuth) — redirect ไปหน้า authorize ของ LINE."""
+    cid = (getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip()
+    if not cid:
+        return render(request, "dashboard/login.html",
+                      {"next": "/dashboard/", "error": "ยังไม่ได้ตั้ง LINE Login (LINE_LOGIN_CHANNEL_ID)"})
+    import secrets
+    from urllib.parse import urlencode
+    state = secrets.token_urlsafe(16)
+    request.session["line_login_state"] = state
+    request.session["line_login_next"] = request.GET.get("next", "/dashboard/")
+    params = urlencode({
+        "response_type": "code",
+        "client_id": cid,
+        "redirect_uri": (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip(),
+        "state": state,
+        "scope": "profile openid",
+    })
+    return HttpResponseRedirect(f"https://access.line.me/oauth2/v2.1/authorize?{params}")
+
+
+@require_GET
+def line_login_callback(request):
+    """LINE Login callback — แลก code เป็น token → ดึง LINE user_id (ยืนยันแล้ว) → set session."""
+    code = (request.GET.get("code") or "").strip()
+    state = (request.GET.get("state") or "").strip()
+    if not code:
+        err = request.GET.get("error_description") or "ยกเลิกการเข้าสู่ระบบ"
+        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"LINE Login: {err}"})
+    if not state or state != request.session.get("line_login_state"):
+        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": "state ไม่ตรง — ลองเข้าใหม่"})
+    next_url = request.session.pop("line_login_next", "/dashboard/")
+    request.session.pop("line_login_state", None)
+    redirect_uri = (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip()
+    try:
+        tr = requests.post("https://api.line.me/oauth2/v2.1/token", data={
+            "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
+            "client_id": (getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip(),
+            "client_secret": (getattr(settings, "LINE_LOGIN_CHANNEL_SECRET", "") or "").strip(),
+        }, timeout=15)
+        tok = tr.json() or {}
+        access_token = tok.get("access_token")
+        if not access_token:
+            msg = tok.get("error_description") or tok.get("error") or f"HTTP {tr.status_code}"
+            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"แลก token ไม่ได้: {msg}"})
+        pr = requests.get("https://api.line.me/v2/profile",
+                          headers={"Authorization": f"Bearer {access_token}"}, timeout=15)
+        line_user_id = (pr.json() or {}).get("userId", "")
+    except Exception as e:
+        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"LINE Login error: {str(e)[:200]}"})
+    target, err = _login_with_line_user_id(request, line_user_id, next_url)
+    if err:
+        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": err})
+    return HttpResponseRedirect(target)
+
+
 @require_GET
 def logout_view(request):
     """ออกจากระบบ — กลับไปหน้า login (dashboard ต้อง login แล้ว)"""

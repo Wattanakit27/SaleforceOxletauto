@@ -67,6 +67,12 @@ OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "OXletauto55555")
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
+# LINE Login (OAuth) — ให้เซลล์เข้าด้วยบัญชี LINE (ยืนยันตัวตน · PDPA). ตั้งจาก LINE Login channel
+LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")
+LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
+# Callback URL ต้องตรงกับที่ลงทะเบียนใน LINE Login channel (ใช้ canonical URL)
+LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://saleforve-django.vercel.app/auth/line/callback")
+
 # ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — LINE user_id แอดมิน (ไม่ลับ: เป็นปลายทาง ไม่ใช่ credential)
 FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
 
