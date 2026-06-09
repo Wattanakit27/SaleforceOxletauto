@@ -43,12 +43,13 @@
 
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
-  <!-- ทางหลัก: เข้าด้วย LINE (LINE Login — ยืนยันตัวตน ปลอดภัย PDPA) -->
+  {% if line_login %}
+  <!-- เข้าด้วย LINE (LINE Login) — โผล่เฉพาะเมื่อตั้งค่า LINE_LOGIN_CHANNEL_ID แล้ว -->
   <a href="/auth/line/start?next={{ next|default:'/dashboard/'|urlencode }}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;background:#06C755;color:#fff;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 4px 14px rgba(6,199,85,.35);box-sizing:border-box">เข้าสู่ระบบด้วย LINE</a>
+  <div class="divider">หรือใช้ LINE ID + รหัส</div>
+  {% endif %}
 
-  <div class="divider">หรือใช้ LINE ID + รหัส (สำรอง)</div>
-
-  <!-- ทางสำรอง: LINE user_id + รหัสรวม -->
+  <!-- LINE user_id + รหัสรวม -->
   <form method="post" action="/login/">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">

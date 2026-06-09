@@ -164,7 +164,8 @@ def login_view(request):
     if request.method == "GET":
         if _session_user(request) and _session_user(request).get("position") == "admin":
             return HttpResponseRedirect(next_url)
-        return render(request, "dashboard/login.html", {"next": next_url, "error": None})
+        line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
+        return render(request, "dashboard/login.html", {"next": next_url, "error": None, "line_login": line_login})
 
     # POST
     next_url = request.POST.get("next", "/dashboard/")
