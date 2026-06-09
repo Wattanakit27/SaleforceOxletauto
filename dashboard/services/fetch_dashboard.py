@@ -2027,7 +2027,7 @@ def attach_lead_scores(follow_cases: list[dict],
 # 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ (เฟส 2) — mirror followUrgency จาก seller.html เป็น Python
 # cron_tick ยิงเช้า/บ่าย → ส่ง LINE ข้อความธรรมดา top N ให้เซลล์แต่ละคน · pass เดียว (group ตาม seller)
 # ════════════════════════════════════════════════════════════════
-_FU_BASE = "https://saleforve-django.vercel.app"
+_FU_BASE = "https://saleforce-oxletauto.vercel.app"
 _FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่รับสาย": 1, "รอเงิน": 3, "รอเช็คเครดิต": 2, "ดาวน์ไม่พอ": 3}
 _FU_DEAD = ["ยังไม่ออก", "ติดแบล็คลิส", "เครดิตไม่ผ่าน", "ไม่สนใจแล้ว", "คืนเคส"]
 _FU_SKIP = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]

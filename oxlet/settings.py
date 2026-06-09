@@ -71,7 +71,7 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")
 LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
 # Callback URL ต้องตรงกับที่ลงทะเบียนใน LINE Login channel (ใช้ canonical URL)
-LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://saleforve-django.vercel.app/auth/line/callback")
+LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://saleforce-oxletauto.vercel.app/auth/line/callback")
 
 # ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — LINE user_id แอดมิน (ไม่ลับ: เป็นปลายทาง ไม่ใช่ credential)
 FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
