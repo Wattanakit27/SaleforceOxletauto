@@ -805,7 +805,7 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
         if not tabs:
             return fetch_sheet("sales_reports")
 
-        known = {normalize_seller(s) for s in ALL_SELLERS}
+        known = {normalize_seller(s) for s in ALL_SELLERS} | {"ADMIN"}   # อ่านบล็อก "ชื่อเซลล์ ADMIN" ด้วย
 
         def _fetch(tab):
             enc = urllib.parse.quote(f"'{tab}'")
@@ -840,7 +840,10 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     if not seq.isdigit() or not status:
                         continue   # ข้าม sub-header / แถวว่าง (ตรง filter N<>"" ในสูตร)
                     # col 0=ชื่อเซลล์, col 1-27=ตรง tab · col 28=tab name, col 29=แถวในชีต (1-based) — ใช้ inline edit เขียนกลับ
-                    all_rows.append([name] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
+                    # เคสที่มาร์ค "ADMIN" ในคอลัมน์ AB (idx 27) = เคสของแอดมิน แม้อยู่ใต้บล็อกเซลล์อื่น → ย้ายเป็น ADMIN (ตัดจากเซลล์)
+                    admin_flag = any(str(row[c] if c < len(row) else "").strip().upper() == "ADMIN" for c in range(24, 30))
+                    seller_out = "ADMIN" if admin_flag else name
+                    all_rows.append([seller_out] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
         _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:

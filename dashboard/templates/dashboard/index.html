@@ -1858,10 +1858,12 @@
           while (_dd <= _de) { _rMonths.push(_dd.getMonth()+1); _dd.setMonth(_dd.getMonth()+1); }
         }
         const _msSum = (name, key) => { let t=0; _rMonths.forEach(m => { const sm=((D.monthlySummary&&D.monthlySummary[m]&&D.monthlySummary[m].sellers)||{})[name]; if(sm && sm[key]!=null) t+=Number(sm[key])||0; }); return t; };
-        // รอผล/รอปล่อย จาก bookingCases ในช่วง (ADMIN ไม่มีเคสในนี้ → 0)
+        // รอผล/รอปล่อย จาก bookingCases — นับตาม "แท็บเดือน" ที่เคสอยู่ (ไม่ใช่วันจอง) เพราะ pipeline จองข้ามเดือนได้
+        const _THMON={'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12};
+        const _tabMonth=(t)=>{ for(const k in _THMON) if(String(t||'').indexOf(k)>=0) return _THMON[k]; return 0; };
         const _stat = {};
         (D.bookingCases||[]).forEach(b => {
-          if (!b.seller || !ir(b.releaseDate || b.date || '')) return;
+          if (!b.seller || !_rMonths.includes(_tabMonth(b.sheetTab))) return;
           const e = _stat[b.seller] || (_stat[b.seller] = {wr:0, wrl:0});
           if (b.status === 'รอผล') e.wr++;
           else if (b.status === 'รอปล่อย') e.wrl++;
