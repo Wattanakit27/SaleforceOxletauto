@@ -72,7 +72,7 @@ python manage.py runserver
 | `/login/` | `login_view` | GET = form, POST = **LINE user_id + รหัสรวม** (`OXLET_SELLER_PASSWORD`) หรือ admin user/pass (env, สำรอง) |
 | `/logout/` | `logout_view` | clear session → กลับ `/login/` |
 | `/u/<token>/` | `magic_link` | login เซลล์ผ่าน LINE user_id (จาก employees sheet) |
-| `/s/<token>/` | `seller_dashboard` | หน้าส่วนตัวของเซลล์ — token จาก [seller_tokens.py](dashboard/services/seller_tokens.py) (token = auth ในตัว) |
+| `/s/<token>/` | `seller_dashboard` | หน้าส่วนตัวของเซลล์ — token จาก [seller_tokens.py](dashboard/services/seller_tokens.py) หรือ LINE user_id · **ต้อง login ก่อน (PDPA)**: ไม่มี session → redirect `/login/?next=` · เซลล์ดูได้เฉพาะของตัวเอง (ไม่งั้น → `/me/`) · admin/exec ดูได้ทุกคน |
 
 ### API
 

@@ -1848,6 +1848,16 @@ def seller_dashboard(request, token):
             "data_json": "null",
             "constants_json": "{}",
         }, status=404)
+    # ── ต้อง login ก่อน (PDPA — กันใครได้ลิงก์ก็เปิดดูข้อมูลโดยไม่ยืนยันตัวตน) ──
+    user = _session_user(request)
+    if not user:
+        return HttpResponseRedirect(f"/login/?next=/s/{token}/")
+    if not _can_view_all(user):
+        # เซลล์ดูได้เฉพาะของตัวเอง — ของคนอื่น → เด้งไปหน้าตัวเอง
+        from .services.constants import normalize_seller
+        own = normalize_seller((user.get("seller_name") or user.get("nickname") or "").strip())
+        if own and normalize_seller(seller_name) != own:
+            return HttpResponseRedirect("/me/")
     return _render_seller_page(request, seller_name)
 
 
