@@ -165,7 +165,10 @@ def login_view(request):
         if _session_user(request) and _session_user(request).get("position") == "admin":
             return HttpResponseRedirect(next_url)
         line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
-        return render(request, "dashboard/login.html", {"next": next_url, "error": None, "line_login": line_login})
+        return render(request, "dashboard/login.html", {
+            "next": next_url, "error": None, "line_login": line_login,
+            "uid": (request.GET.get("uid") or "").strip(),   # pre-fill LINE user_id จากลิงก์
+        })
 
     # POST
     next_url = request.POST.get("next", "/dashboard/")
@@ -1851,7 +1854,8 @@ def seller_dashboard(request, token):
     # ── ต้อง login ก่อน (PDPA — กันใครได้ลิงก์ก็เปิดดูข้อมูลโดยไม่ยืนยันตัวตน) ──
     user = _session_user(request)
     if not user:
-        return HttpResponseRedirect(f"/login/?next=/s/{token}/")
+        uid_q = f"&uid={token}" if token.startswith("U") else ""   # pre-fill LINE id ถ้า token เป็น user_id
+        return HttpResponseRedirect(f"/login/?next=/s/{token}/{uid_q}")
     if not _can_view_all(user):
         # เซลล์ดูได้เฉพาะของตัวเอง — ของคนอื่น → เด้งไปหน้าตัวเอง
         from .services.constants import normalize_seller

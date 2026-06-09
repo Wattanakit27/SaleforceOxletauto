@@ -55,7 +55,7 @@
     <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
     <div class="field">
       <label>LINE user_id</label>
-      <input type="text" name="token" autocomplete="username" placeholder="U xxxxxxxxxxxxxxxx">
+      <input type="text" name="token" id="login-uid" value="{{ uid|default:'' }}" autocomplete="username" placeholder="U xxxxxxxxxxxxxxxx">
     </div>
     <div class="field">
       <label>รหัสผ่าน</label>
@@ -89,5 +89,15 @@
     </div>
   </details>
 </div>
+<script>
+  // จำ LINE user_id ล่าสุด — เซลล์ไม่ต้องพิมพ์ id ยาวทุกครั้ง (แค่ใส่รหัส)
+  (function(){
+    var inp = document.getElementById('login-uid');
+    if (!inp) return;
+    try { if (!inp.value) { var v = localStorage.getItem('oxlet_uid'); if (v) inp.value = v; } } catch(e){}
+    var f = inp.form;
+    if (f) f.addEventListener('submit', function(){ try { if (inp.value.trim()) localStorage.setItem('oxlet_uid', inp.value.trim()); } catch(e){} });
+  })();
+</script>
 </body>
 </html>
