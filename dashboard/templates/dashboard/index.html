@@ -1880,7 +1880,7 @@
           const st=_stat[s.name]||{wr:0,wrl:0};
           return {name:s.name, booking, wr:st.wr, wrl:st.wrl, done,
                   pct: lead>0?Math.round(booking/lead*10000)/100:0, lead, rj,
-                  lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:_msSum(s.name,'liveLead')};
+                  lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:_msSum(s.name,'leadLive')};
         }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>((b.wrl+b.done)-(a.wrl+a.done))||(b.done-a.done)||(b.wrl-a.wrl)||(b.booking-a.booking));
 
         html += `<div class="card">`;

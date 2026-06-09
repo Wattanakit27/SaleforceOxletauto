@@ -957,6 +957,7 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(sl2),
                 "leadNormal": len([r for r in sl2 if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in sl2 if cell(r, L.type) in RJ_TYPES]),
+                "leadLive": len([r for r in sl2 if "LIVE" in cell(r, L.channel).upper()]),   # lead จากไลฟ์ (channel มี LIVE)
                 "follow": len([r for r in sl2 if should_follow(r)]),
                 "vacant": len([r for r in sl2 if is_lead_vacant(r)]),
                 "notCalled": m_not_called,
@@ -1019,6 +1020,7 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(g["leads"]),
                 "leadNormal": len([r for r in g["leads"] if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in g["leads"] if cell(r, L.type) in RJ_TYPES]),
+                "leadLive": len([r for r in g["leads"] if "LIVE" in cell(r, L.channel).upper()]),
                 "follow": len([r for r in g["leads"] if should_follow(r)]),
                 "vacant": len([r for r in g["leads"] if is_lead_vacant(r)]),
                 "done": n_done,
@@ -1053,6 +1055,7 @@ def _compute_dashboard_data() -> dict:
                 "lead": len(m_admin_leads),
                 "leadNormal": len([r for r in m_admin_leads if cell(r, L.type) not in RJ_TYPES]),
                 "leadRJ": len([r for r in m_admin_leads if cell(r, L.type) in RJ_TYPES]),
+                "leadLive": len([r for r in m_admin_leads if "LIVE" in cell(r, L.channel).upper()]),
                 "follow": len([r for r in m_admin_leads if should_follow(r)]),
                 "vacant": len([r for r in m_admin_leads if is_lead_vacant(r)]),
                 "done": len(m_admin_done),
