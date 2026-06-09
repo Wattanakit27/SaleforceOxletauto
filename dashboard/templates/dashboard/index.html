@@ -1879,7 +1879,7 @@
           return {name:s.name, booking, wr:st.wr, wrl:st.wrl, done,
                   pct: lead>0?Math.round(booking/lead*10000)/100:0, lead, rj,
                   lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:_msSum(s.name,'liveLead')};
-        }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>b.lead-a.lead);
+        }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>(b.done-a.done)||(b.wrl-a.wrl)||(b.booking-a.booking));
 
         html += `<div class="card">`;
         html += `<div class="card-title">${ic('lucide:users',16)} รายงานรายเซลล์ (ละเอียด) <span style="font-size:11px;font-weight:400;color:var(--t3)">— ทุกเซลล์ + ADMIN · ${h(rangeLabelTH())}</span></div>`;
@@ -1896,7 +1896,9 @@
           _aRows.forEach((r,i)=>{
             T.booking+=r.booking;T.wr+=r.wr;T.wrl+=r.wrl;T.done+=r.done;T.lead+=r.lead;T.rj+=r.rj;T.lpd+=r.lpd;T.live+=r.live;T.clip+=r.clip;T.llead+=r.llead;
             const cells=[i+1, h(r.name), r.booking, r.wr, r.wrl, r.done, r.pct+'%', r.lead, r.rj, r.lpd, r.live, r.clip, r.llead];
-            html += `<tr style="border-bottom:.5px solid var(--bd)">`;
+            const _cv = r.wrl + r.done;   // รอปล่อย + ปล่อย → สีแถว: ≥5 เขียว · 3-4 เหลือง · ≤2 แดง
+            const _rbg = _cv>=5 ? 'var(--green-bg)' : _cv>=3 ? 'var(--amber-bg)' : 'var(--red-bg)';
+            html += `<tr style="background:${_rbg};border-bottom:.5px solid var(--bd)">`;
             cells.forEach((c,ci)=>{ html += `<td style="padding:6px 8px;text-align:${ci<2?'left':'center'}${ci===1?';font-weight:600':''}">${c}</td>`; });
             html += `</tr>`;
           });
