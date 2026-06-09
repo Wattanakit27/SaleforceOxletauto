@@ -1849,7 +1849,7 @@
 
       // ── 📋 ตาราง "แอดมิน" — เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอก config) · แอดมิน+ผู้บริหาร ──
       if (canViewAll) {
-        const _adm = (D.sellers||[]).filter(s => s.inactive === true || s.team === 'ADMIN');
+        const _adm = (D.sellers||[]).filter(s => !s.inactive);   // 13 เซลล์ + ADMIN (ไม่รวม orphan inactive) — รายงานเต็มตามรูปแบบชีต
         // เดือนในช่วงที่กรอง → ดึงค่าจาก monthlySummary (มีข้อมูล ADMIN/เซลล์นอกระบบ ที่ buildRangeMs/_sval ไม่มี)
         const _rMonths = [];
         if (dfFrom && dfTo) {
@@ -1882,7 +1882,7 @@
         }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>b.lead-a.lead);
 
         html += `<div class="card">`;
-        html += `<div class="card-title">${ic('lucide:user-cog',16)} แอดมิน <span style="font-size:11px;font-weight:400;color:var(--t3)">— เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอกระบบ) · ${h(rangeLabelTH())}</span></div>`;
+        html += `<div class="card-title">${ic('lucide:users',16)} รายงานรายเซลล์ (ละเอียด) <span style="font-size:11px;font-weight:400;color:var(--t3)">— ทุกเซลล์ + ADMIN · ${h(rangeLabelTH())}</span></div>`;
         if (!_aRows.length) {
           html += `<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px">ไม่มีข้อมูลในช่วงนี้</div>`;
         } else {
