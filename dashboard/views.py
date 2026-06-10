@@ -2,13 +2,15 @@
 import json
 import urllib.parse
 
+import requests
+
 from django.conf import settings
 from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services.fetch_dashboard import fetch_dashboard_data
+from .services.fetch_dashboard import fetch_dashboard_data, _mask_phone
 from .services.google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
 from .services.constants import (
     UPD_TGT, PAGE_SIZE, STATUS_COLOR, STATUS_ORDER,
@@ -904,7 +906,7 @@ def admin_diagnostics(request):
                     no_date_with_data.append({
                         "code": cell(r, L.lead_code) or "-",
                         "seller": cell(r, L.sales_rep) or "-",
-                        "phone": cell(r, L.phone) or "-",
+                        "phone": _mask_phone(cell(r, L.phone) or "-"),
                         "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
                     })
             lead_no_date += 1
@@ -916,7 +918,7 @@ def admin_diagnostics(request):
                 bad_date_examples.append({
                     "code": cell(r, L.lead_code) or "-",
                     "seller": cell(r, L.sales_rep) or "-",
-                    "phone": cell(r, L.phone) or "-",
+                    "phone": _mask_phone(cell(r, L.phone) or "-"),
                     "rawDate": date_str,
                 })
             continue
@@ -1246,7 +1248,9 @@ def admin_send_line(request):
 
 @require_GET
 def api_auth(request):
-    """GET /api/auth?token=... — verify magic link token."""
+    """GET /api/auth?token=... — ตรวจ employee (ต้อง login ก่อน · กันคนนอกดึงรายชื่อ+ตำแหน่งพนักงาน)."""
+    if not _session_user(request):
+        return JsonResponse({"error": "ต้อง login ก่อน"}, status=401)
     token = request.GET.get("token")
     if not token:
         return JsonResponse({"error": "Missing token"}, status=400)
@@ -1275,14 +1279,17 @@ def api_auth(request):
 
 @require_GET
 def magic_link(request, token):
-    """Magic link auth entry — /u/<token>/"""
-    return render(request, "dashboard/magic_link.html", {"token": token})
+    """/u/<token>/ — เดิม login ด้วย cookie ฝั่ง client (ตัดออก · PDPA: ปลอม role ได้).
+    redirect ไปหน้า login พร้อม pre-fill LINE id → เซลล์แค่ใส่รหัส."""
+    return HttpResponseRedirect(f"/login/?uid={urllib.parse.quote(token)}")
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def insights_seller(request):
     """AI วิเคราะห์เซลล์ — body {seller, stats}. คืน narrative จาก Gemini (cache 30 นาที)."""
+    if not _session_user(request):
+        return JsonResponse({"error": "ต้อง login ก่อน"}, status=401)
     try:
         body = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
@@ -1303,6 +1310,8 @@ def insights_seller(request):
 @require_http_methods(["POST"])
 def insights_forecast(request):
     """AI อธิบายแนวโน้มยอดขาย — body {summary}. คืน narrative จาก Gemini."""
+    if not _can_view_all(_session_user(request)):
+        return JsonResponse({"error": "ต้อง login ผู้บริหาร/admin ก่อน"}, status=401)
     try:
         body = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
@@ -1741,7 +1750,9 @@ def finance_check_submit(request):
     if not isinstance(data, dict):
         return JsonResponse({"error": "data ต้องเป็น object"}, status=400)
 
-    seller_name = seller_from_token(token) or "-"
+    seller_name = seller_from_token(token)
+    if not seller_name:
+        return JsonResponse({"error": "token ไม่ถูกต้อง — เปิดจากลิงก์เซลล์แล้วลองใหม่"}, status=401)
     data.setdefault("seller", seller_name)
 
     channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
@@ -1783,6 +1794,8 @@ def scan_doc(request):
 
     body JSON: {"image": "data:image/jpeg;base64,...."}  (หรือ base64 ล้วน)
     """
+    if not _session_user(request):
+        return JsonResponse({"error": "ต้อง login ก่อน"}, status=401)
     try:
         body = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
@@ -1836,7 +1849,9 @@ def loan_submit(request):
     if not isinstance(data, dict):
         return JsonResponse({"error": "data ต้องเป็น object"}, status=400)
 
-    seller_name = seller_from_token(token) or "-"
+    seller_name = seller_from_token(token)
+    if not seller_name:
+        return JsonResponse({"error": "token ไม่ถูกต้อง — เปิดจากลิงก์เซลล์แล้วลองใหม่"}, status=401)
     data.setdefault("sales", seller_name)
 
     channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()

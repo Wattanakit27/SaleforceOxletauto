@@ -366,6 +366,16 @@ def fetch_ban_counts_by_month(year: int) -> dict:
     return out
 
 
+def _mask_phone(p) -> str:
+    """ปิดบังเบอร์โทร (PDPA) — โชว์ 3 ตัวหน้า + 2 ตัวท้าย กลางเป็น x · ใช้ในข้อมูลรวม (admin/exec).
+    หน้าเซลล์ใช้ fetch_seller_stats (คนละ path) เบอร์เต็มไว้โทรลูกค้าตัวเอง. idempotent (mask ซ้ำได้)."""
+    s = str(p or "").strip()
+    d = re.sub(r"\D", "", s)
+    if len(d) < 6:
+        return s  # ไม่ใช่เบอร์ (เช่น "-"/ว่าง/ที่ mask แล้ว) → คงเดิม
+    return d[:3] + "-xxx-" + d[-2:]
+
+
 def _compute_dashboard_data() -> dict:
     # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
     # ถ้า sheet หายหรือ error → ใช้ default hardcode
@@ -1239,6 +1249,12 @@ def _compute_dashboard_data() -> dict:
         mm_int = int(mm)
         for nm, sd in (msum.get("sellers") or {}).items():
             sd["bans"] = ban_by_month.get(mm_int, {}).get(nm, 0)
+
+    # ── PDPA: ปิดบังเบอร์โทรในข้อมูลรวม (admin/exec เห็น masked) — หน้าเซลล์เบอร์เต็ม (fetch_seller_stats คนละ path) ──
+    for _lst in (booking_cases, follow_cases, not_called_cases, jong_cases):
+        for _row in _lst:
+            if isinstance(_row, dict) and _row.get("phone"):
+                _row["phone"] = _mask_phone(_row["phone"])
 
     return {
         "meta": {

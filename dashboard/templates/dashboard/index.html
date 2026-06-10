@@ -145,18 +145,9 @@
           position: SESSION_USER.position || '',
         };
       }
-      // fallback: cookie จาก magic_link (สำหรับเซลล์ที่ใช้ลิงก์ส่วนตัว)
-      try {
-        const cookies = document.cookie.split(';');
-        for (const cookie of cookies) {
-          const [name, ...rest] = cookie.trim().split('=');
-          if (name === 'oxlet_employee') {
-            return JSON.parse(decodeURIComponent(rest.join('=')));
-          }
-        }
-      } catch {}
-      // ไม่ควรเกิด เพราะ backend ส่ง default executive มาแล้ว
-      return { id:'', user_id:'', display_name:'ผู้บริหาร', nickname:'ผู้บริหาร', position:'executive' };
+      // ไม่มี session (ไม่ควรเกิด — backend บังคับ login) → ไม่ให้สิทธิ์อะไร
+      // (เลิกอ่าน cookie oxlet_employee — เดิมปลอม role admin ฝั่ง client ได้ · PDPA/security)
+      return { id:'', user_id:'', display_name:'', nickname:'', position:'seller' };
     }
     const employee = getEmployee();
     const isAdmin = employee.position === 'admin';

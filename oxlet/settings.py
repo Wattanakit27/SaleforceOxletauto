@@ -54,6 +54,11 @@ SESSION_COOKIE_NAME = "oxlet_sess"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 วัน
+# Production (ไม่ DEBUG) บังคับ HTTPS — cookie ส่งเฉพาะ HTTPS + redirect http→https
+# (Vercel ส่ง X-Forwarded-Proto=https → Django รู้ว่า secure ผ่าน SECURE_PROXY_SSL_HEADER ด้านบน)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
 
 # Admin credentials — override ใน .env ได้: OXLET_ADMIN_USER, OXLET_ADMIN_PASSWORD
 # Default: admin / 1234 (ควรเปลี่ยนใน production)
