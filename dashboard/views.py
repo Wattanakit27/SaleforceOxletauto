@@ -636,9 +636,9 @@ def cron_tick(request):
     now = bangkok_now()
 
     # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2 — แทน Flex เดิมที่ตัดออกแล้ว) ──
-    # TEST MODE: _FU_TEST_TARGET ตั้งไว้ = ส่งเข้าไลน์แอดมิน (ทดสอบ) · ตั้ง "" เมื่อพร้อมส่งเซลล์จริง
+    # _FU_TEST_TARGET "" = PRODUCTION ส่งเซลล์จริงแต่ละคน · ใส่ id แอดมิน = TEST (ส่งเข้าแอดมินคนเดียว)
     _FU_TIMES = {"09:00", "13:00"}
-    _FU_TEST_TARGET = "U6bf1d72cf1d7e237c3a5c9848dde9bf4"   # "" = ส่งเซลล์จริงแต่ละคน
+    _FU_TEST_TARGET = ""   # production: ส่งให้เซลล์แต่ละคน 09:00/13:00 (กลับเป็น test = ใส่ "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
     followup_sent = 0
     if f"{now.hour:02d}:{now.minute:02d}" in _FU_TIMES:
         try:
