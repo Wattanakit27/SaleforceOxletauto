@@ -3469,6 +3469,13 @@
       try { if (data.generatedAt) genTxt = new Date(data.generatedAt).toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}); } catch(e) {}
       const c = data.counts || {};
       const cell = (label,val,col) => `<div style="background:var(--bg2);border-radius:9px;padding:10px 12px"><div style="font-size:10px;color:var(--t3)">${label}</div><div style="font-size:14px;font-weight:700;color:${col||'var(--t1)'}">${val}</div></div>`;
+      // cron heartbeat + followup log
+      const ctAge = data.cronTickAgeSec;
+      const cronTxt = ctAge == null ? '❌ ไม่ทำงาน' : (ctAge < 90 ? '✅ '+Math.round(ctAge)+' วิที่แล้ว' : Math.round(ctAge/60)+' นาทีที่แล้ว');
+      const cronCol = (ctAge == null || ctAge > 600) ? 'var(--red)' : (ctAge > 120 ? 'var(--amber)' : 'var(--green)');
+      const fu = data.lastFollowup;
+      let fuTxt = 'ยังไม่ส่ง';
+      try { if (fu && fu.at) fuTxt = new Date(fu.at).toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}) + ' · ' + (fu.count!=null?fu.count+' คน':'-'); } catch(e){}
 
       let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">`;
       html += `<div style="font-size:17px;font-weight:800;color:var(--t1)">${ic('lucide:circle-check',18)} สถานะระบบ</div>`;
@@ -3480,6 +3487,8 @@
         html += `<div style="display:flex;gap:8px;align-items:flex-start;background:${bg};border-radius:9px;padding:9px 12px;margin-bottom:7px;font-size:12px;color:var(--t1)"><span style="color:${col};flex-shrink:0">${ic('lucide:triangle-alert',15)}</span><span>${h(it.msg)}</span></div>`;
       });
       html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0">`;
+      html += cell('cron (ตัวตั้งเวลา)', cronTxt, cronCol);
+      html += cell('followup ส่งล่าสุด', h(fuTxt));
       html += cell('sync ล่าสุด', ageTxt, ageCol);
       html += cell('ข้อมูลสด ณ', h(genTxt));
       html += cell('Supabase (ฐานข้อมูล)', data.supabaseOk?'✅ ติด':'❌ ไม่ติด', data.supabaseOk?'var(--green)':'var(--red)');

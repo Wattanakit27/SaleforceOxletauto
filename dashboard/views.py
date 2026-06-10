@@ -634,6 +634,12 @@ def cron_tick(request):
     from .services.fetch_dashboard import bangkok_now
 
     now = bangkok_now()
+    # heartbeat — บันทึกว่า cron ทำงานล่าสุดเมื่อไหร่ (โชว์ในหน้าสถานะระบบ → รู้ว่า cron-job.org ยิงถึงไหม)
+    try:
+        from .services.supabase_client import set_kv as _set_kv
+        _set_kv("cron_tick", {"ok": True})
+    except Exception:
+        pass
 
     # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2 — แทน Flex เดิมที่ตัดออกแล้ว) ──
     # _FU_TEST_TARGET "" = PRODUCTION ส่งเซลล์จริงแต่ละคน · ใส่ id แอดมิน = TEST (ส่งเข้าแอดมินคนเดียว)
@@ -648,6 +654,11 @@ def cron_tick(request):
                 _code, _ = push_line_message(_tgt, [{"type": "text", "text": _m["text"]}], channel_token)
                 if _code == 200:
                     followup_sent += 1
+        except Exception:
+            pass
+        try:
+            from .services.supabase_client import set_kv as _set_kv
+            _set_kv("cron_followup", {"count": followup_sent, "time": f"{now.hour:02d}:{now.minute:02d}"})
         except Exception:
             pass
 
@@ -1453,12 +1464,31 @@ def admin_system_health(request):
     elif today_leads == 0 and now.weekday() < 5 and now.hour >= 11:
         issues.append({"level": "warn", "msg": "วันนี้ยังไม่มี lead เข้าเลย (วันทำการ หลัง 11 โมง) — อาจมีปัญหา channel/ชีต"})
 
+    # ── cron heartbeat + followup log (รู้ว่า cron-job.org ยิงถึงไหม + followup ส่งล่าสุด) ──
+    cron_tick_age = None
+    last_followup = None
+    try:
+        from .services.supabase_client import get_kv
+        from datetime import datetime as _dt, timezone as _tz
+        _ct = get_kv("cron_tick")
+        if _ct and _ct.get("updated_at"):
+            cron_tick_age = (_dt.now(_tz.utc) - _dt.fromisoformat(_ct["updated_at"].replace("Z", "+00:00"))).total_seconds()
+        _fu = get_kv("cron_followup")
+        if _fu:
+            last_followup = {"at": _fu.get("updated_at"), **(_fu.get("data") or {})}
+    except Exception:
+        pass
+    if cron_tick_age is None or cron_tick_age > 600:
+        issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค URL ใน cron-job.org ให้เป็นโดเมน saleforce-oxletauto"})
+
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
     return JsonResponse({
         "status": status,
         "issues": issues,
         "syncAgeSec": age,
+        "cronTickAgeSec": cron_tick_age,
+        "lastFollowup": last_followup,
         "generatedAt": meta.get("generatedAt"),
         "now": now.isoformat(),
         "counts": counts,

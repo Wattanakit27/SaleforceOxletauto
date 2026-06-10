@@ -254,6 +254,40 @@ def get_dashboard_cache() -> dict | None:
         return None
 
 
+def set_kv(k: str, data: dict) -> None:
+    """เก็บ status เล็กๆ ลง dashboard_cache (key เฉพาะ) — ใช้ log cron heartbeat / followup. ไม่ throw."""
+    if not is_configured():
+        return
+    try:
+        url, key = _base()
+        requests.post(
+            f"{url}/rest/v1/dashboard_cache?on_conflict=key",
+            headers=_headers(key, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
+            json={"key": k, "data": data, "updated_at": datetime.now(timezone.utc).isoformat()},
+            timeout=15,
+        )
+    except Exception:
+        pass
+
+
+def get_kv(k: str) -> dict | None:
+    """อ่าน status ที่เก็บด้วย set_kv. คืน {'data':..., 'updated_at':...} หรือ None."""
+    if not is_configured():
+        return None
+    try:
+        url, key = _base()
+        r = requests.get(
+            f"{url}/rest/v1/dashboard_cache?key=eq.{k}&select=data,updated_at",
+            headers=_headers(key), timeout=15,
+        )
+        if r.status_code != 200:
+            return None
+        rows = r.json()
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def get_dashboard_cache_age() -> float | None:
     """อายุ (วินาที) ของผล pre-compute ล่าสุด — อ่านแค่ updated_at (เบา). None ถ้าไม่มี."""
     if not is_configured():
