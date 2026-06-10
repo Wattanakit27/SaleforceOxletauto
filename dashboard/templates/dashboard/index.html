@@ -4294,7 +4294,7 @@
       const tickUrl = `${baseUrl}/api/cron/tick?secret=YOUR_CRON_SECRET`;
 
       let html = `<div style="padding:9px 12px;background:var(--blue-bg);border:.5px solid var(--blue);border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:12px;line-height:1.6">
-        ${ic('lucide:refresh-cw',16)} ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ระบบจะเช็คตารางและส่งตรงเวลาเอง
+        ${ic('lucide:refresh-cw',16)} ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ถึงเวลาในตาราง ระบบจะส่ง "ตามด่วน" ให้เซลล์เอง
       </div>`;
       html += `<div style="position:relative;margin-bottom:14px">
         <input id="sched-tick-url" readonly value="${h(tickUrl)}" style="width:100%;padding:8px 70px 8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:10px;font-family:monospace;outline:none;box-sizing:border-box">
@@ -4379,7 +4379,7 @@
         // Section: ผู้รับ — checkboxes by team
         html += `<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-size:12px;font-weight:700;color:var(--t1)">ผู้รับ Flex รายเซลล์</div>
+            <div style="font-size:12px;font-weight:700;color:var(--t1)">ผู้รับ "ตามด่วน" (เลือกเซลล์ที่จะได้)</div>
             <div style="display:flex;gap:4px">
               <button onclick="__schedSetAllSellers(${i},true)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">เลือกทั้งหมด</button>
               <button onclick="__schedSetAllSellers(${i},false)" style="font-size:10px;padding:3px 8px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้าง</button>
@@ -4419,7 +4419,7 @@
 
         // Test mode field
         html += `<div style="margin-top:10px;padding:9px 11px;background:var(--amber-bg);border:.5px solid var(--amber-mid);border-radius:8px">
-          <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">${ic('lucide:flask-conical',16)} Test mode — ถ้ามีค่า: ทุก Flex จะส่งไปที่ user_id นี้แทน (ไม่ส่งจริง)</label>
+          <label style="display:block;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:5px">${ic('lucide:flask-conical',16)} Test mode — ใส่ user_id = ส่งทดสอบเข้า id นั้น (เว้นว่าง = ส่งเซลล์จริง)</label>
           <input value="${h(s.test_target||'')}" oninput="__schedRows[${i}].test_target=this.value" placeholder="ว่าง = ส่งจริง / ใส่ U... = test ส่งให้ตัวเอง" style="width:100%;padding:7px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box;font-family:monospace">
         </div>`;
 

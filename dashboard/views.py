@@ -641,26 +641,34 @@ def cron_tick(request):
     except Exception:
         pass
 
-    # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ เช้า/บ่าย (เฟส 2 — แทน Flex เดิมที่ตัดออกแล้ว) ──
-    # _FU_TEST_TARGET "" = PRODUCTION ส่งเซลล์จริงแต่ละคน · ใส่ id แอดมิน = TEST (ส่งเข้าแอดมินคนเดียว)
-    _FU_TIMES = {"09:00", "13:00"}
-    _FU_TEST_TARGET = ""   # production: ส่งให้เซลล์แต่ละคน 09:00/13:00 (กลับเป็น test = ใส่ "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
+    # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ — เวลา/ผู้รับ/test ตั้งได้ในหน้า "ตารางเวลา (Auto)" ──
+    # อ่านตารางจากชีต "ตั้งเวลาส่ง" (แทน hardcode) → แอดมินแก้เวลา/ผู้รับ/test ได้เองในแดชบอร์ด
+    # test_target ว่าง = ส่งเซลล์จริงแต่ละคน · ใส่ user_id = ส่งเข้า user นั้นแทน (ทดสอบ)
     followup_sent = 0
-    if f"{now.hour:02d}:{now.minute:02d}" in _FU_TIMES:
-        try:
+    try:
+        from .services.line_notify import load_schedules, schedule_matches_now
+        _matched = [s for s in load_schedules() if schedule_matches_now(s, now)]
+        if _matched:
             from .services.fetch_dashboard import build_followup_messages
+            from .services.constants import normalize_seller
+            _sched = _matched[0]
+            _test_tgt = (_sched.get("test_target") or "").strip()
+            _sel = _sched.get("sellers") or ["*"]
+            _sel_norm = None if _sel == ["*"] else {normalize_seller(x) for x in _sel}
             for _m in build_followup_messages():
-                _tgt = _FU_TEST_TARGET or _m["user_id"]
+                if _sel_norm is not None and normalize_seller(_m["seller"]) not in _sel_norm:
+                    continue
+                _tgt = _test_tgt or _m["user_id"]
                 _code, _ = push_line_message(_tgt, [{"type": "text", "text": _m["text"]}], channel_token)
                 if _code == 200:
                     followup_sent += 1
-        except Exception:
-            pass
-        try:
-            from .services.supabase_client import set_kv as _set_kv
-            _set_kv("cron_followup", {"count": followup_sent, "time": f"{now.hour:02d}:{now.minute:02d}"})
-        except Exception:
-            pass
+            try:
+                from .services.supabase_client import set_kv as _set_kv
+                _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     # ── รีเฟรช dashboard (sync mirror + precompute) ทุก ~3-4 นาที — ดูเหตุผล threshold ด้านล่าง ──
     refreshed = False
