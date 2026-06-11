@@ -8,11 +8,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ──────────────────────────────────────────────────────────────────────
 # กลยุทธ์ ENV (Vercel จำกัด ~15 ตัว):
-#   • SECRET (ต้องตั้งบน Vercel เท่านั้น ห้าม inline ลงโค้ด) — 7 ตัว:
+#   • SECRET (ต้องตั้งบน Vercel เท่านั้น ห้าม inline ลงโค้ด) — 8 ตัว:
 #       GOOGLE_PRIVATE_KEY, DJANGO_SECRET_KEY, OXLET_ADMIN_PASSWORD,
-#       LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET, GEMINI_API_KEY, SUPABASE_SECRET_KEY
+#       LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET, GEMINI_API_KEY, SUPABASE_SECRET_KEY,
+#       OXLET_SELLER_PASSWORD (รหัสรวม login — env-only กันหลุด git)
 #   • NON-SECRET (inline เป็น default ด้านล่าง — Vercel ไม่ต้องตั้ง):
-#       url/model/flag/username/hostname + OXLET_SELLER_PASSWORD (รหัสรวม login) ฯลฯ
+#       url/model/flag/username/hostname ฯลฯ
 #   • local dev: .env (gitignored) override ได้ทุกตัว
 # ──────────────────────────────────────────────────────────────────────
 
@@ -66,8 +67,9 @@ OXLET_ADMIN_USER = os.getenv("OXLET_ADMIN_USER", "admin")
 OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 
 # รหัสรวมสำหรับ login ด้วย LINE user_id (เซลล์/ผู้บริหาร/แอดมิน-เซลล์)
-# ทุกคนใช้รหัสนี้ + LINE user_id ของตัวเอง — เปลี่ยนได้ผ่าน env OXLET_SELLER_PASSWORD
-OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "OXletauto55555")
+# ⚠️ env-only — เลิก inline default แล้ว (กันรหัสหลุดในโค้ด/git history) → ต้องตั้ง OXLET_SELLER_PASSWORD บน Vercel
+# ว่าง = ปิด login รหัสรวม (fail-safe — ไม่เปิดทิ้งให้ใครเข้า). login_view เช็ค `not password or password != shared_pw`
+OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "")
 
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
