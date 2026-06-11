@@ -4630,7 +4630,7 @@
         const dis = !s.has_user_id ? 'disabled title="ไม่มี LINE user_id ในชีต — ไม่สามารถส่งได้"' : '';
         html += `<tr style="${!s.has_user_id?'opacity:.5;':''}">
           <td style="text-align:center;padding:6px 4px;border-bottom:.5px solid var(--bd)"><input type="checkbox" ${checked} ${dis} onchange="__lsToggle('${h(s.seller)}',this.checked)" style="cursor:pointer"></td>
-          <td style="padding:8px;border-bottom:.5px solid var(--bd);color:var(--t1);font-weight:600">${h(s.seller)}</td>
+          <td style="padding:8px;border-bottom:.5px solid var(--bd);color:var(--t1);font-weight:600">${s.seller === 'ADMIN' ? 'ADMIN (เทเลเซลล์)' : h(s.seller)}</td>
           <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--green)">${s.called}</td>
           <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--red)">${s.notCalled}</td>
           <td style="text-align:right;padding:8px;border-bottom:.5px solid var(--bd);color:var(--amber)">${s.followUp}</td>

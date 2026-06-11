@@ -1195,20 +1195,25 @@ def admin_send_line(request):
                 token_info["line_api_error"] = str(e)
 
         try:
-            pipelines = build_seller_pipelines()
+            pipelines = build_seller_pipelines(include_admin=True)
             uid_map = get_nickname_to_user_id()
         except Exception as e:
             return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
+        from .services.constants import ADMIN_USER_IDS, load_admin_user_ids
+        load_admin_user_ids()
+        _admin_ids = sorted(ADMIN_USER_IDS)
         result = []
         for p in pipelines:
+            _is_adm = p["seller"] == "ADMIN"
             result.append({
                 "seller": p["seller"],
                 "called": len(p["called"]),
                 "notCalled": len(p["notCalled"]),
                 "followUp": len(p["followUp"]),
                 "noStatus": len(p["noStatus"]),
-                "user_id": uid_map.get(p["seller"], ""),
-                "has_user_id": bool(uid_map.get(p["seller"])),
+                # ADMIN (เทเลเซลล์) = ส่งหา 5 ไอดีในชีต "ตั้งค่าแอดมิน" · เซลล์ปกติ = uid ตัวเอง
+                "user_id": (_admin_ids[0] if _admin_ids else "") if _is_adm else uid_map.get(p["seller"], ""),
+                "has_user_id": bool(_admin_ids) if _is_adm else bool(uid_map.get(p["seller"])),
             })
         return JsonResponse({
             "ok": True,
@@ -1236,10 +1241,13 @@ def admin_send_line(request):
         return JsonResponse({"error": "Test mode ต้องระบุ target_user_id"}, status=400)
 
     try:
-        pipelines = build_seller_pipelines()
+        pipelines = build_seller_pipelines(include_admin=True)
         uid_map = get_nickname_to_user_id()
     except Exception as e:
         return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
+    from .services.constants import ADMIN_USER_IDS, load_admin_user_ids
+    load_admin_user_ids()
+    _admin_ids = sorted(ADMIN_USER_IDS)
 
     if only_sellers:
         wanted = set(only_sellers)
@@ -1249,21 +1257,31 @@ def admin_send_line(request):
     results = []
     for p in pipelines:
         seller = p["seller"]
-        target = target_user_id if test_mode else uid_map.get(seller, "")
-        if not target:
+        # ADMIN (เทเลเซลล์) = ส่งหา 5 ไอดี · เซลล์ปกติ = uid ตัวเอง · test = target เดียว
+        if test_mode:
+            targets = [target_user_id]
+        elif seller == "ADMIN":
+            targets = _admin_ids
+        else:
+            targets = [uid_map.get(seller, "")]
+        targets = [t for t in targets if t]
+        if not targets:
             results.append({"seller": seller, "user_id": None, "sent": False,
                             "error": "ไม่พบ LINE user_id ของเซลล์ใน employees sheet"})
             continue
         try:
             flex = build_seller_flex(p, base_url=base_url)
-            code, text = push_line_message(target, [flex], channel_token)
-            if code == 200:
-                results.append({"seller": seller, "user_id": target, "sent": True})
-            else:
-                results.append({"seller": seller, "user_id": target, "sent": False,
-                                "error": f"LINE API {code}: {text[:200]}"})
+            _ok, _err = False, ""
+            for t in targets:
+                code, text = push_line_message(t, [flex], channel_token)
+                if code == 200:
+                    _ok = True
+                else:
+                    _err = f"LINE API {code}: {text[:200]}"
+            results.append({"seller": seller, "user_id": targets[0], "sent": _ok,
+                            **({"error": _err} if not _ok else {})})
         except Exception as e:
-            results.append({"seller": seller, "user_id": target, "sent": False, "error": str(e)})
+            results.append({"seller": seller, "user_id": targets[0], "sent": False, "error": str(e)})
 
     return JsonResponse({
         "ok": True,

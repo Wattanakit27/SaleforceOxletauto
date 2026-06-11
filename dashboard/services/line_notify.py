@@ -38,8 +38,10 @@ def _strip_leading_digits(s: str) -> str:
     return re.sub(r"^\d{4,5}\s*", "", s).strip()
 
 
-def build_seller_pipelines(target_month: int | None = None, target_year: int | None = None) -> list[dict]:
-    """อ่าน leads sheet, filter เดือนเป้าหมาย, group ตามเซลล์, คืนรายการ pipeline ต่อเซลล์."""
+def build_seller_pipelines(target_month: int | None = None, target_year: int | None = None,
+                           include_admin: bool = False) -> list[dict]:
+    """อ่าน leads sheet, filter เดือนเป้าหมาย, group ตามเซลล์, คืนรายการ pipeline ต่อเซลล์.
+    include_admin=True → รวมกลุ่ม 'ADMIN' (เทเลเซลล์) ด้วย — ใช้ในหน้าส่งทันที."""
     now = bangkok_now()
     if target_month is None:
         target_month = now.month
@@ -60,7 +62,7 @@ def build_seller_pipelines(target_month: int | None = None, target_year: int | N
 
         seller_raw = cell(row, L.sales_rep).strip()
         seller = normalize_seller(seller_raw)
-        if not seller or seller == "ADMIN":
+        if not seller or (seller == "ADMIN" and not include_admin):
             continue
 
         if seller not in grouped:
