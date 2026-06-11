@@ -4727,7 +4727,7 @@
           const headerColor = fail.length === 0 ? 'var(--green)' : (ok.length === 0 ? 'var(--red)' : 'var(--amber)');
           const headerBg = fail.length === 0 ? 'var(--green-bg)' : (ok.length === 0 ? 'var(--red-bg)' : 'var(--amber-bg)');
           const headerIcon = fail.length === 0 ? '✅' : (ok.length === 0 ? '❌' : '⚠️');
-          let html = `<div style="padding:10px 12px;background:${headerBg};color:${headerColor};border-radius:10px;font-size:12px;font-weight:600">${headerIcon} สำเร็จ ${ok.length}/${data.count} · ล้มเหลว ${fail.length}</div>`;
+          let html = `<div style="padding:10px 12px;background:${headerBg};color:${headerColor};border-radius:10px;font-size:12px;font-weight:600">${headerIcon} สำเร็จ ${ok.length}/${data.count ?? results.length} · ล้มเหลว ${fail.length}</div>`;
 
           // ${ic('lucide:circle-check',16)} Success list — แสดงทุกคนที่ส่งสำเร็จ
           if (ok.length) {

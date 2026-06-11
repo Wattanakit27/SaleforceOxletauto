@@ -1254,34 +1254,39 @@ def admin_send_line(request):
         pipelines = [p for p in pipelines if p["seller"] in wanted]
 
     base_url = request.build_absolute_uri("/").rstrip("/")
+    u2n = {v: k for k, v in uid_map.items()}  # uid → ชื่อเล่น (ย่อยเทเลเซลล์รายคน)
     results = []
     for p in pipelines:
         seller = p["seller"]
-        # ADMIN (เทเลเซลล์) = ส่งหา 5 ไอดี · เซลล์ปกติ = uid ตัวเอง · test = target เดียว
+        # ผู้รับ = list ของ (uid, ชื่อ) · ADMIN ย่อยเป็น 5 เทเลเซลล์รายคน · เซลล์ปกติ 1 · test = id เดียว
         if test_mode:
-            targets = [target_user_id]
+            targets = [(target_user_id, seller)]
         elif seller == "ADMIN":
-            targets = _admin_ids
+            targets = [(t, u2n.get(t) or (t[:10] + "...")) for t in _admin_ids]
         else:
-            targets = [uid_map.get(seller, "")]
-        targets = [t for t in targets if t]
+            _uid = uid_map.get(seller, "")
+            targets = [(_uid, seller)] if _uid else []
         if not targets:
             results.append({"seller": seller, "user_id": None, "sent": False,
-                            "error": "ไม่พบ LINE user_id ของเซลล์ใน employees sheet"})
+                            "error": "ไม่พบ LINE user_id ใน employees sheet"})
             continue
         try:
             flex = build_seller_flex(p, base_url=base_url)
-            _ok, _err = False, ""
-            for t in targets:
-                code, text = push_line_message(t, [flex], channel_token)
-                if code == 200:
-                    _ok = True
-                else:
-                    _err = f"LINE API {code}: {text[:200]}"
-            results.append({"seller": seller, "user_id": targets[0], "sent": _ok,
-                            **({"error": _err} if not _ok else {})})
         except Exception as e:
-            results.append({"seller": seller, "user_id": targets[0], "sent": False, "error": str(e)})
+            for _uid, _lbl in targets:
+                results.append({"seller": _lbl, "user_id": _uid, "sent": False, "error": str(e)})
+            continue
+        # ส่งทีละคน เก็บผลรายคน → เห็น error ถ้าใครไม่ได้แอดบอท/ส่งไม่ไป
+        for _uid, _lbl in targets:
+            try:
+                code, text = push_line_message(_uid, [flex], channel_token)
+                if code == 200:
+                    results.append({"seller": _lbl, "user_id": _uid, "sent": True})
+                else:
+                    results.append({"seller": _lbl, "user_id": _uid, "sent": False,
+                                    "error": f"LINE {code}: {text[:150]}"})
+            except Exception as e:
+                results.append({"seller": _lbl, "user_id": _uid, "sent": False, "error": str(e)})
 
     return JsonResponse({
         "ok": True,
