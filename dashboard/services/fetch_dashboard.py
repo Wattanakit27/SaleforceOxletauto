@@ -2203,18 +2203,22 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
                 continue
             out.append((b, rs, d))
         out.sort(key=lambda x: -x[2])
-        return out[:max_deals]
+        return out
 
     out = []
+    summary = []  # (name, urgent_count, stuck_count) — ทุกเซลล์ที่มีงานค้าง (สำหรับสรุปแอดมิน)
     for name in sorted(ALL_SELLERS):
+        leads = leads_by_seller.get(name, [])
+        urgent_all = [l for l in leads if not _skip(l) and not _booked(l) and _urg(l) > 0]
+        urgent_all.sort(key=_urg, reverse=True)
+        sd_all = _stuck(bookings_by_seller.get(name, []))
+        if urgent_all or sd_all:
+            summary.append((name, len(urgent_all), len(sd_all)))
         uid = nick2uid.get(name)
         if not uid:
             continue
-        leads = leads_by_seller.get(name, [])
-        urgent = [l for l in leads if not _skip(l) and not _booked(l) and _urg(l) > 0]
-        urgent.sort(key=_urg, reverse=True)
-        urgent = urgent[:max_leads]
-        sd = _stuck(bookings_by_seller.get(name, []))
+        urgent = urgent_all[:max_leads]
+        sd = sd_all[:max_deals]
         if not urgent and not sd:
             continue
         lines = ["🔔 ตามด่วนวันนี้", ""]
@@ -2231,4 +2235,22 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         lines.append("เปิดหน้าตัวเอง:")
         lines.append(f"{_FU_BASE}/s/{uid}/")
         out.append({"seller": name, "user_id": uid, "text": "\n".join(lines)})
+
+    # ── สรุปรวมทีม สำหรับแอดมิน (entry พิเศษ admin=True · cron ส่งเข้า ADMIN_USER_IDS) ──
+    if summary:
+        summary.sort(key=lambda x: -(x[1] + x[2]))
+        tot_f = sum(x[1] for x in summary)
+        tot_s = sum(x[2] for x in summary)
+        olines = ["🔔 สรุปตามด่วนวันนี้ (ทีม)", "",
+                  f"ต้องตามรวม {tot_f} เคส · ดีลค้าง {tot_s} ดีล", ""]
+        for nm, nf, ns in summary:
+            parts = []
+            if nf:
+                parts.append(f"{nf} เคสตาม")
+            if ns:
+                parts.append(f"{ns} ดีลค้าง")
+            olines.append(f"• {nm} — {' · '.join(parts)}")
+        olines.append("")
+        olines.append(f"ดูภาพรวม: {_FU_BASE}/dashboard/")
+        out.append({"seller": "", "user_id": "", "admin": True, "text": "\n".join(olines)})
     return out
