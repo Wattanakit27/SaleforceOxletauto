@@ -4727,22 +4727,26 @@
           const headerColor = fail.length === 0 ? 'var(--green)' : (ok.length === 0 ? 'var(--red)' : 'var(--amber)');
           const headerBg = fail.length === 0 ? 'var(--green-bg)' : (ok.length === 0 ? 'var(--red-bg)' : 'var(--amber-bg)');
           const headerIcon = fail.length === 0 ? '✅' : (ok.length === 0 ? '❌' : '⚠️');
-          let html = `<div style="padding:10px 12px;background:${headerBg};color:${headerColor};border-radius:10px;font-size:12px;font-weight:600">${headerIcon} สำเร็จ ${ok.length}/${data.count ?? results.length} · ล้มเหลว ${fail.length}</div>`;
+          let _now = ''; try { _now = ' · ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); } catch(e){}
+          const _mode = data.test_mode ? ' · 🧪 test' : '';
+          let html = `<div style="padding:10px 12px;background:${headerBg};color:${headerColor};border-radius:10px;font-size:12px;font-weight:600">${headerIcon} สำเร็จ ${ok.length}/${data.count ?? results.length} · ล้มเหลว ${fail.length}${_now}${_mode}</div>`;
 
           // ${ic('lucide:circle-check',16)} Success list — แสดงทุกคนที่ส่งสำเร็จ
           if (ok.length) {
-            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--green-bg);border-radius:10px;font-size:11px"><div style="color:var(--green);font-weight:700;margin-bottom:6px">${ic('lucide:circle-check',16)} ส่งสำเร็จ (${ok.length})</div><div style="display:flex;flex-wrap:wrap;gap:5px">`;
+            html += `<div style="margin-top:8px;padding:10px 12px;background:var(--green-bg);border-radius:10px;font-size:11px"><div style="color:var(--green);font-weight:700;margin-bottom:6px">${ic('lucide:circle-check',16)} ส่งสำเร็จ (${ok.length})</div>`;
             ok.forEach(r => {
-              html += `<span style="background:var(--green);color:#fff;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:500">${h(r.seller)}</span>`;
+              const _id = r.user_id ? `<span style="color:var(--t3);font-size:10px;font-family:monospace">${h(r.user_id.slice(0,8))}…${h(r.user_id.slice(-4))}</span>` : '';
+              html += `<div style="padding:2px 0;color:var(--t1)">✓ ส่งไปที่ <b>${h(r.seller)}</b> ${_id}</div>`;
             });
-            html += `</div></div>`;
+            html += `</div>`;
           }
 
           // ${ic('lucide:circle-x',16)} Failure list — แสดงทุกคนที่ล้มเหลว + เหตุผล
           if (fail.length) {
             html += `<div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border-radius:10px;font-size:11px"><div style="color:var(--red);font-weight:700;margin-bottom:6px">${ic('lucide:circle-x',16)} ล้มเหลว (${fail.length})</div>`;
             fail.forEach(f => {
-              html += `<div style="margin-bottom:4px;padding:4px 0;border-bottom:.5px solid rgba(0,0,0,.05)"><b style="color:var(--red)">${h(f.seller)}</b> <span style="color:var(--t3);font-size:10px">— ${h(f.error || 'unknown')}</span></div>`;
+              const _id = f.user_id ? ` <span style="color:var(--t3);font-size:10px;font-family:monospace">${h(f.user_id.slice(0,8))}…</span>` : '';
+              html += `<div style="margin-bottom:4px;padding:4px 0;border-bottom:.5px solid rgba(0,0,0,.05)">✗ <b style="color:var(--red)">${h(f.seller)}</b>${_id} <span style="color:var(--t3);font-size:10px">— ${h(f.error || 'unknown')}</span></div>`;
             });
             html += `</div>`;
           }
