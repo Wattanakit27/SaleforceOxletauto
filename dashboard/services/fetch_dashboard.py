@@ -2209,7 +2209,11 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
 
     out = []
     summary = []  # (name, urgent_count, stuck_count) — ทุกกลุ่มที่มีงานค้าง (รวม ADMIN) สำหรับสรุปแอดมิน
+    u2n = {v: k for k, v in nick2uid.items()}  # uid → ชื่อเล่น
     admin_recip = sorted(r for r in ADMIN_USER_IDS if r)  # 5 เทเลเซลล์
+    admin_names = [u2n[u] for u in admin_recip if u in u2n]
+    admin_label = ", ".join(admin_names) if admin_names else "เทเลเซลล์"
+    admin_slash = "/".join(admin_names) if admin_names else "เทเลเซลล์"
     for name in sorted(ALL_SELLERS) + ["ADMIN"]:
         leads = leads_by_seller.get(name, [])
         urgent_all = [l for l in leads if not _skip(l) and not _booked(l) and _urg(l) > 0]
@@ -2229,7 +2233,10 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         sd = sd_all[:max_deals]
         if not urgent and not sd:
             continue
-        lines = ["🔔 ตามด่วนวันนี้ (เคส ADMIN/เทเลเซลล์)" if name == "ADMIN" else "🔔 ตามด่วนวันนี้", ""]
+        if name == "ADMIN":
+            lines = ["🔔 ตามด่วนวันนี้ (เคส ADMIN)", f"👥 {admin_label} (แอดมิน)", ""]
+        else:
+            lines = ["🔔 ตามด่วนวันนี้", ""]
         if urgent:
             lines.append("ลีดต้องตาม")
             for l in urgent:
@@ -2257,7 +2264,8 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
                 parts.append(f"{nf} เคสตาม")
             if ns:
                 parts.append(f"{ns} ดีลค้าง")
-            olines.append(f"• {nm} — {' · '.join(parts)}")
+            _lbl = f"ADMIN ({admin_slash})" if nm == "ADMIN" else nm
+            olines.append(f"• {_lbl} — {' · '.join(parts)}")
         olines.append("")
         olines.append(f"ดูภาพรวม: {_FU_BASE}/dashboard/")
         # ผู้รับสรุป = แอดมินเทเลเซลล์ (ADMIN_USER_IDS) + เซลล์ที่ติ๊กแอดมิน 👑 (ADMIN_SELLERS → uid)
