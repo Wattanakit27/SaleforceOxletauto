@@ -162,7 +162,7 @@
     // ${ic('lucide:calendar',16)} กรองวันที่รับเคส (ช่วงวัน จาก-ถึง · ข้ามเดือนได้) — แทน month/today filter เดิม
     let dfMonth = 0;  // vestige (โค้ดเก่าบางจุดอ้าง — ตั้ง 0 = ไม่ใช้ month filter)
     const _ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    let dfTo = _ymd(new Date());
+    let dfTo = _ymd(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));  // default = สิ้นเดือนปัจจุบัน (กรองทั้งเดือน)
     let dfFrom = _ymd(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
     let curF = 'all';
     let curSo = 'urgent';
@@ -1389,7 +1389,7 @@
 
     // ── Date filter bar (${ic('lucide:calendar',16)} กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
     function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', _ymd(new Date())); }
-    function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(d)); }
+    function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(new Date(d.getFullYear(),d.getMonth()+1,0))); }
     const _inp = 'padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer';
     function renderDateFilterBar() {
       const cnt = (FD.followCases||[]).filter(l=>ir(l.dateIn)).length;
