@@ -669,17 +669,15 @@ def cron_tick(request):
         _matched = [s for s in load_schedules() if schedule_matches_now(s, now)]
         if _matched:
             from .services.fetch_dashboard import build_followup_messages
-            from .services.constants import normalize_seller, ADMIN_USER_IDS, load_admin_user_ids
-            load_admin_user_ids()
-            _admin_ids = sorted(ADMIN_USER_IDS)
+            from .services.constants import normalize_seller
             _sched = _matched[0]
             _test_tgt = (_sched.get("test_target") or "").strip()
             _sel = _sched.get("sellers") or ["*"]
             _sel_norm = None if _sel == ["*"] else {normalize_seller(x) for x in _sel}
             for _m in build_followup_messages():
                 if _m.get("admin"):
-                    # สรุปรวมทีม → แอดมินในชีต "ตั้งค่าแอดมิน" · test mode = ส่งเข้า test_target แทน
-                    for _at in ([_test_tgt] if _test_tgt else _admin_ids):
+                    # สรุปรวมทีม → แอดมิน (เทเลเซลล์ + เซลล์ที่ติ๊กแอดมิน · จาก recipients) · test = test_target
+                    for _at in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
                         if not _at:
                             continue
                         _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], channel_token)

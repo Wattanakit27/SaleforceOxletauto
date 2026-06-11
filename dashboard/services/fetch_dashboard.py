@@ -2057,10 +2057,12 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     from collections import defaultdict
     from datetime import timedelta
     from .google_sheets import fetch_all_sheets, cell, cell_num, LEADS_COL as L, SALES_COL as S
-    from .constants import normalize_seller, ALL_SELLERS, refresh_from_sheet
+    from .constants import (normalize_seller, ALL_SELLERS, refresh_from_sheet,
+                            ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids)
     from .line_notify import get_nickname_to_user_id
 
     refresh_from_sheet()
+    load_admin_user_ids()
     raw = fetch_all_sheets()
     raw_leads = raw.get("leads") or []
     sales_reports = raw.get("sales_reports") or []
@@ -2252,5 +2254,9 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
             olines.append(f"• {nm} — {' · '.join(parts)}")
         olines.append("")
         olines.append(f"ดูภาพรวม: {_FU_BASE}/dashboard/")
-        out.append({"seller": "", "user_id": "", "admin": True, "text": "\n".join(olines)})
+        # ผู้รับสรุป = แอดมินเทเลเซลล์ (ADMIN_USER_IDS) + เซลล์ที่ติ๊กแอดมิน 👑 (ADMIN_SELLERS → uid)
+        admin_recipients = set(ADMIN_USER_IDS) | {nick2uid[n] for n in ADMIN_SELLERS if nick2uid.get(n)}
+        out.append({"seller": "", "user_id": "", "admin": True,
+                    "recipients": sorted(r for r in admin_recipients if r),
+                    "text": "\n".join(olines)})
     return out
