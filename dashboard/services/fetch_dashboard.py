@@ -2144,7 +2144,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     leads_by_seller = defaultdict(list)
     for r in raw_leads:
         name = normalize_seller(cell(r, L.sales_rep))
-        if not name or name not in ALL_SELLERS:
+        if not name or (name not in ALL_SELLERS and name != "ADMIN"):
             continue
         if not _inwin(cell(r, L.received_date)):
             continue
@@ -2164,7 +2164,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     bookings_by_seller = defaultdict(list)
     for r in sales_reports:
         seller = normalize_seller(cell(r, S.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip())
-        if not seller or seller not in ALL_SELLERS:
+        if not seller or (seller not in ALL_SELLERS and seller != "ADMIN"):
             continue
         seq = cell(r, S.order_num)
         if not seq or seq == "ลำดับ":
@@ -2208,22 +2208,28 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         return out
 
     out = []
-    summary = []  # (name, urgent_count, stuck_count) — ทุกเซลล์ที่มีงานค้าง (สำหรับสรุปแอดมิน)
-    for name in sorted(ALL_SELLERS):
+    summary = []  # (name, urgent_count, stuck_count) — ทุกกลุ่มที่มีงานค้าง (รวม ADMIN) สำหรับสรุปแอดมิน
+    admin_recip = sorted(r for r in ADMIN_USER_IDS if r)  # 5 เทเลเซลล์
+    for name in sorted(ALL_SELLERS) + ["ADMIN"]:
         leads = leads_by_seller.get(name, [])
         urgent_all = [l for l in leads if not _skip(l) and not _booked(l) and _urg(l) > 0]
         urgent_all.sort(key=_urg, reverse=True)
         sd_all = _stuck(bookings_by_seller.get(name, []))
         if urgent_all or sd_all:
             summary.append((name, len(urgent_all), len(sd_all)))
-        uid = nick2uid.get(name)
-        if not uid:
+        # ผู้รับ: เซลล์ปกติ = uid ตัวเอง · "ADMIN" (เทเลเซลล์) = 5 ไอดีในชีต "ตั้งค่าแอดมิน"
+        if name == "ADMIN":
+            recips, link_uid = admin_recip, (admin_recip[0] if admin_recip else "")
+        else:
+            _uid = nick2uid.get(name)
+            recips, link_uid = ([_uid] if _uid else []), (_uid or "")
+        if not recips:
             continue
         urgent = urgent_all[:max_leads]
         sd = sd_all[:max_deals]
         if not urgent and not sd:
             continue
-        lines = ["🔔 ตามด่วนวันนี้", ""]
+        lines = ["🔔 ตามด่วนวันนี้ (เคส ADMIN/เทเลเซลล์)" if name == "ADMIN" else "🔔 ตามด่วนวันนี้", ""]
         if urgent:
             lines.append("ลีดต้องตาม")
             for l in urgent:
@@ -2234,9 +2240,9 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
             for b, rs, d in sd:
                 lines.append(f"- {b.get('customer') or '-'} · ทะเบียน {b.get('plate') or '-'} — {rs} {d} วัน")
             lines.append("")
-        lines.append("เปิดหน้าตัวเอง:")
-        lines.append(f"{_FU_BASE}/s/{uid}/")
-        out.append({"seller": name, "user_id": uid, "text": "\n".join(lines)})
+        lines.append("เปิดหน้ากลุ่ม ADMIN:" if name == "ADMIN" else "เปิดหน้าตัวเอง:")
+        lines.append(f"{_FU_BASE}/s/{link_uid}/")
+        out.append({"seller": name, "user_id": link_uid, "recipients": recips, "text": "\n".join(lines)})
 
     # ── สรุปรวมทีม สำหรับแอดมิน (entry พิเศษ admin=True · cron ส่งเข้า ADMIN_USER_IDS) ──
     if summary:

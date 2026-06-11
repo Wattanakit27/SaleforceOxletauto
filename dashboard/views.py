@@ -686,10 +686,12 @@ def cron_tick(request):
                     continue
                 if _sel_norm is not None and normalize_seller(_m["seller"]) not in _sel_norm:
                     continue
-                _tgt = _test_tgt or _m["user_id"]
-                _code, _ = push_line_message(_tgt, [{"type": "text", "text": _m["text"]}], channel_token)
-                if _code == 200:
-                    followup_sent += 1
+                for _t in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
+                    if not _t:
+                        continue
+                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], channel_token)
+                    if _code == 200:
+                        followup_sent += 1
             try:
                 from .services.supabase_client import set_kv as _set_kv
                 _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})
