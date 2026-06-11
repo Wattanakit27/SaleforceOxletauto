@@ -4735,8 +4735,9 @@
           if (ok.length) {
             html += `<div style="margin-top:8px;padding:10px 12px;background:var(--green-bg);border-radius:10px;font-size:11px"><div style="color:var(--green);font-weight:700;margin-bottom:6px">${ic('lucide:circle-check',16)} ส่งสำเร็จ (${ok.length})</div>`;
             ok.forEach(r => {
+              const _nm = r.seller || r.user_id || '(ไม่ทราบ)';
               const _id = r.user_id ? `<span style="color:var(--t3);font-size:10px;font-family:monospace">${h(r.user_id.slice(0,8))}…${h(r.user_id.slice(-4))}</span>` : '';
-              html += `<div style="padding:2px 0;color:var(--t1)">✓ ส่งไปที่ <b>${h(r.seller)}</b> ${_id}</div>`;
+              html += `<div style="padding:2px 0;color:var(--t1)">✓ ส่งไปที่ <b>${h(_nm)}</b> ${_id}</div>`;
             });
             html += `</div>`;
           }
