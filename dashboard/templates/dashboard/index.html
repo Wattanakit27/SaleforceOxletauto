@@ -1804,9 +1804,12 @@
       const _msSum = (name, key) => { let t=0; _rMonths.forEach(m => { const sm=((D.monthlySummary&&D.monthlySummary[m]&&D.monthlySummary[m].sellers)||{})[name]; if(sm && sm[key]!=null) t+=Number(sm[key])||0; }); return t; };
       const _sval = (s, key) => {
         // ${ic('lucide:calendar',16)} ใช้ค่าตามช่วงวันที่ที่กรองเสมอ (ms = buildRangeMs()) — ตารางรายเซลล์เปลี่ยนตามวันที่
+        // ⚠️ ADMIN/เซลล์นอก config ไม่มีใน dailyBySeller → buildRangeMs ใส่ entry เป็น 0 ทั้งหมด (ตามวน D.sellers ครบ)
+        //    เลยต้องเช็คก่อน: ไม่มีข้อมูลรายวัน → ใช้ผลรวมรายเดือนในช่วง (monthlySummary) แทน entry 0 นั้น
+        const hasDaily = (D.dailyBySeller || {})[s.name];
+        if (!hasDaily && _rMonths.length) return _msSum(s.name, key);
         const msd = ms?.sellers?.[s.name];
         if (msd && msd[key] !== undefined) return msd[key] || 0;
-        // ADMIN/เซลล์นอก config ไม่อยู่ใน range summary (ไม่มีรายวัน) → ใช้ผลรวมรายเดือนในช่วงแทน
         if (_rMonths.length) { const v = _msSum(s.name, key); if (v) return v; }
         return s[key]||0;   // fallback: เซลล์ที่ไม่มีใน range summary (กันค่าหาย)
       };
