@@ -18,7 +18,10 @@ UI เป็น Thai-language, timezone Asia/Bangkok
 - **Auth**: Django signed-cookie session (admin) + magic link / per-seller token (sellers)
 - **Static**: WhiteNoise (in-Django static serving) + `WHITENOISE_USE_FINDERS=True` (no `collectstatic` needed)
 - **LINE Messaging API**: push Flex messages via env-stored Channel Access Token
-- **Cron**: External scheduler (cron-job.org) ยิงเข้า `/api/cron/tick` ทุก 1 นาที
+- **Mirror/cache**: Supabase (PostgREST ผ่าน `requests` — ไม่มี SDK) เก็บ mirror ของ sheets + pre-compute dashboard + kv heartbeat + ฟอร์ม finance/loan
+- **AI**: Google Gemini (REST ผ่าน `requests`) — (1) insights โค้ชเซลล์/พยากรณ์ยอด (2) OCR สแกนเอกสาร finance/loan → กรอกฟอร์มอัตโนมัติ
+- **Cron**: External scheduler (**n8n** — เปลี่ยนจาก cron-job.org) ยิงเข้า `/api/cron/tick` ทุก 1 นาที
+- **Deps** ([requirements.txt](requirements.txt)): มีแค่ Django, google-auth, requests, python-dotenv, whitenoise — **ไม่มี SDK ของ Supabase/Gemini/LINE** (เรียก REST ผ่าน `requests` หมด)
 
 ## โครงสร้างไฟล์
 
@@ -38,14 +41,18 @@ dashboard/
     seller_tokens.py     # token /s/<token>/ ของเซลล์แต่ละคน
     google_sheets.py     # auth + read + write helpers (ensure_sheet_tab, write_sheet)
     fetch_dashboard.py   # main aggregator: รวมข้อมูล 7 sheets → dict สำหรับ template
-    line_notify.py       # Flex builder + push + schedule loader
+    line_notify.py       # Flex builder + push + schedule loader + finance/loan Flex
+    supabase_client.py   # PostgREST client — mirror sheets (sheet_cache), dashboard_cache, kv, finance/loan tables
+    gemini_insights.py   # Gemini: โค้ชเซลล์ (analyze_seller) + พยากรณ์ยอด (forecast_narrative) · cache 30 นาที
+    gemini_ocr.py        # Gemini vision OCR: สแกนเอกสาร finance/loan → ดึง field (JSON schema mode)
     helpers.py
   templates/dashboard/
     index.html           # หน้า dashboard หลัก (admin / ผู้บริหาร เห็นทั้งหมด, อื่นๆ เห็นเฉพาะตัวเอง)
-    login.html           # /login/ — admin login (user+password)
+    login.html           # /login/ — admin login (user+password) + ปุ่ม LINE Login
     magic_link.html      # /u/<token>/ — set cookie แล้ว redirect ไป /dashboard/
-    seller.html          # /s/<token>/ — หน้าส่วนตัวของเซลล์ (filter+charts+KPI+lead detail modal)
+    seller.html          # /s/<token>/ — หน้าส่วนตัวของเซลล์ (filter+charts+KPI+lead detail modal + ฟอร์ม finance/loan + สแกนเอกสาร)
   static/dashboard/      # CSS + image (โลโก้บริษัท)
+README.md · SYSTEM-DESIGN.md  # เอกสารประกอบ (overview + design notes)
 ```
 
 ## รันโปรเจกต์ (Dev)
@@ -81,6 +88,8 @@ python manage.py runserver
 | `/api/dashboard` | `api_dashboard` | JSON ของ full dashboard data |
 | `/api/auth?token=` | `api_auth` | ตรวจ LINE user_id กับ employees sheet |
 | `/api/admin/send_line` | `admin_send_line` | admin: GET=preview, POST=ส่ง Flex ทันที |
+| `/api/admin/send_followup` | `admin_send_followup` | admin POST: ส่งข้อความ "ตามด่วน" (plain text เฟส 2) เดี๋ยวนี้ — logic เดียวกับ cron 09:00/13:00 (`build_followup_messages`). body `{test, target_user_id?, sellers?}` · test=ส่งเข้า target_user_id · ปุ่ม "🚀 ส่งทันที" รองรับกลุ่ม ADMIN (เทเลเซลล์ 5 คน) |
+| `/api/admin/export_leadscore` | `admin_export_leadscore` | admin POST: เขียนคะแนนเซลล์ (diligence) ลงชีต tab "leadscore" — body `{month?, year?}` (default เดือน/ปีนี้) → `export_leadscore_to_sheet()`. เมนูจัดการ "ส่งคะแนนเข้าชีต" |
 | `/api/admin/seller_config` | `admin_seller_config` | admin: GET=อ่าน config, POST=บันทึก (เขียน sheet "ตั้งค่าเซลล์") — รวมคอลัมน์ `is_admin` (เซลล์แอดมิน) |
 | `/api/admin/admin_config` | `admin_admin_config` | admin: GET=รายชื่อแอดมิน(ไอดี)+employees, POST=บันทึก (เขียน sheet "ตั้งค่าแอดมิน") — เทเลเซลล์/ออฟฟิศที่ไม่ใช่เซลล์ |
 | `/api/admin/schedule_config` | `admin_schedule_config` | admin: GET=อ่านตาราง, POST=บันทึก (เขียน sheet "ตั้งเวลาส่ง") |
@@ -93,6 +102,12 @@ python manage.py runserver
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) |
 | `/api/admin/update_release_date` | `update_release_date` | **admin (session) หรือเซลล์ (token/session + ownership)** POST: inline edit "วันปล่อย" เขียนกลับชีตยอดขายตรงเซลล์ — body `{tab,row,col(14\|18\|19\|21\|23),value,token?}` → `update_release_date()` PUT cell (เซ็น/ผล/เอกสาร/ปล่อย). เซลล์แก้ได้เฉพาะเคสตัวเอง (เช็คชื่อที่ marker ของแถว = `cell(r,0)`). ใช้จาก `saveReleaseDate` ทั้ง index.html (แอดมิน) + seller.html (เซลล์) |
 | `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership |
+| `/api/seller/scan_doc` | `scan_doc` | **ต้อง login (any)** POST: รับรูปเอกสาร (base64, ≤8MB) + `form` (`finance`\|`loan`) → Gemini OCR (`gemini_ocr.extract_finance_fields`/`extract_loan_fields`) → คืน `{ok, fields}` ให้ฟอร์มกรอกอัตโนมัติ (ฉบับร่างให้เซลล์ตรวจก่อนส่ง) |
+| `/api/seller/finance_check` | `finance_check_submit` | เซลล์ (token) POST: ส่งฟอร์ม "เช็คไฟแนนซ์ก่อนเซ็น" → สร้าง Flex (`build_finance_check_flex`) push เข้า `FINANCE_TEST_LINE_ID` (ช่วง test) + เก็บ Supabase `finance_checks` (best-effort) |
+| `/api/seller/loan_submit` | `loan_submit` | เซลล์ (token) POST: ส่งฟอร์มขอสินเชื่อ → สร้าง Flex (`build_loan_flex`) push เข้า `FINANCE_TEST_LINE_ID` + เก็บ Supabase `loan_applications` (best-effort) |
+| `/api/insights/seller` | `insights_seller` | **ต้อง login (any)** POST `{seller, stats}` → Gemini โค้ชเซลล์ (`gemini_insights.analyze_seller`) คืน `{ok, analysis}` (cache 30 นาที) |
+| `/api/insights/forecast` | `insights_forecast` | **admin/exec** POST `{summary}` → Gemini อธิบายเทรนด์ยอด+ปัจจัยตลาด (`gemini_insights.forecast_narrative`) คืน `{ok, narrative}` |
+| `/api/cron/sync` | `cron_sync` | public (`?secret=xxx`) — sync sheets → Supabase `sheet_cache` + precompute dashboard (cron tick ตัวเดียวก็พอ · นี่เป็น endpoint แยกสำรอง) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
 
@@ -110,7 +125,7 @@ python manage.py runserver
 
 **Login (แบบง่าย — ไม่มีสมัครสมาชิก)** — ทุกทางเก็บ session `oxlet_user = {user_id, nickname, display_name, position, seller_name?}`:
 0. **หลัก (PDPA): LINE Login (OAuth)** — ปุ่ม "เข้าสู่ระบบด้วย LINE" → `/auth/line/start` (redirect ไป LINE authorize, state ใน session) → `/auth/line/callback` แลก code→token→ดึง LINE userId (ยืนยันแล้ว) → `_login_with_line_user_id()` หา employee + set session (หมดอายุ 14 วัน) → exec/admin ไป `/dashboard/`, เซลล์ไป `/me/` (อิง session ไม่ใช่ token). ต้องตั้ง `LINE_LOGIN_CHANNEL_ID`/`LINE_LOGIN_CHANNEL_SECRET` (env) + Callback URL ใน LINE Login channel = `LINE_LOGIN_CALLBACK`
-1. **สำรอง: LINE user_id + รหัสรวม** — POST `/login/` ด้วย `token`(LINE user_id) + `password`. รหัสต้องตรง `OXLET_SELLER_PASSWORD` (env, default `OXletauto55555`) → หา user_id ใน employees sheet → role จาก [ชีตตั้งค่าแอดมิน/เซลล์แอดมิน](#-แอดมินจาก-line-user_id-2-ทาง) → exec/admin ไป `/dashboard/`, เซลล์ไป `/s/<user_id>/`
+1. **สำรอง: LINE user_id + รหัสรวม** — POST `/login/` ด้วย `token`(LINE user_id) + `password`. รหัสต้องตรง `OXLET_SELLER_PASSWORD` (env-only `OXletauto55555` · ตั้งบน Vercel — ไม่ inline แล้ว) → หา user_id ใน employees sheet → role จาก [ชีตตั้งค่าแอดมิน/เซลล์แอดมิน](#-แอดมินจาก-line-user_id-2-ทาง) → exec/admin ไป `/dashboard/`, เซลล์ไป `/s/<user_id>/`
 2. **แอดมินระบบ (สำรอง/break-glass)** — username/password จาก env `OXLET_ADMIN_USER` / `OXLET_ADMIN_PASSWORD`
 3. **เซลล์ (ลิงก์ตรง ไม่ต้อง login)** — `/s/<token>/` (token จาก seller_tokens.py) หรือ `/u/<token>/` (LINE user_id) — เซลล์ใช้ลิงก์ส่วนตัวเข้าได้เลย
 
@@ -214,7 +229,11 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 ### Date parsing
 [fetch_dashboard.py](dashboard/services/fetch_dashboard.py) มี `parse_date()` รองรับ:
 - Excel serial date (เลข 4-5 หลัก)
-- "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500)
+- "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500) — **ต้องมี 3 ส่วน (มีปี)** ไม่งั้นคืน None
+- **⚠️ ต้นเหตุ "วันที่ไม่มีปี" = `FORMATTED_VALUE` (ไม่ใช่แอดมินลืมพิมพ์ปี)**: ทุกการอ่านชีตใช้ `valueRenderOption=FORMATTED_VALUE` ([google_sheets.py](dashboard/services/google_sheets.py)) = คืนค่า **ตามที่แสดงในชีต**. เซลล์วันปล่อย (W/X) ของบางเซลล์เป็น **วันที่จริง (serial)** แต่ตั้ง custom format ให้โชว์แค่ `d/m` → API คืน `"10/2"` ปีหายไป (ค่าจริงคือ serial 46063 = 2026-02-10 · กดเข้าไปในชีตเห็นปีครบ). พิสูจน์ด้วย `UNFORMATTED_VALUE`. **ไม่ใช่ data เสีย** — แค่รูปแบบเซลล์
+- **`parse_month_day(s)` → `(month, day)` หรือ None** — รองรับทั้งวันเต็ม (ผ่าน `parse_date`) **และแบบไม่มีปี `"d/m"` (เช่น `"10/2"` ที่ได้จาก FORMATTED date)**. ใช้ใน daily bucket (กราฟ + KPI "ปิดได้") ให้นับเดือนเดียวกับ `get_month()` (ที่ใช้ใน monthlySummary) — **กันบั๊ก "9 vs 10"**: เดิม daily ใช้ `parse_date` ตรงๆ ซึ่งต้องมีปี → `"10/2"` parse ไม่ได้ → ตกไปนับตามวันจอง (คนละเดือน) ทำให้ KPI/`buildRangeMs` ≠ ตารางรายเดือน. `_parse_day()` (nested 2 จุด: daily หลัก + `fetch_seller_stats`) เรียก `parse_month_day` แล้ว · frontend `_effDate` (renderBookings) ก็เติมปีของช่วงให้วันปล่อย "d/m" เช่นกัน
+- **`get_month(s)`** lenient ดึงเลขเดือนจาก `parts[1]` ตรงๆ (ไม่ต้องมีปี/วันถูก) → ใช้ใน monthlySummary · ต่างจาก `parse_date` (strict) — 2 ตัวนี้เคยไม่ sync กันจนเกิด "9 vs 10" · **กฎ: daily ต้อง parse เดือนได้เท่า `get_month` เสมอ**
+- **ทางแก้ถาวร (ถ้าอยากได้ปีจริง)**: อ่านคอลัมน์วันที่แบบ `UNFORMATTED_VALUE` (ได้ serial → `parse_date` แปลงพร้อมปีจริง) แต่กระทบการ parse คอลัมน์อื่น (string/number) → ยังไม่ทำ · ตอนนี้ `parse_month_day` พอสำหรับการนับ (dashboard เป็น single-year อยู่แล้ว)
 
 ### Date filter (กรองเดือน / ช่วงวัน)
 - **`index.html` หน้าหลัก = ช่วงวันที่ (จาก-ถึง ข้ามเดือนได้)** — แทน month/today filter เดิม:
@@ -265,7 +284,7 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 ### Analytics tables (admin/exec only)
 ในหน้า dashboard หลัก มี 2 ตารางที่ guard ด้วย `if (canViewAll)` — เซลล์ทั่วไปไม่เห็น:
 
-> **📋 ตาราง "รายงานรายเซลล์ (ละเอียด)"** (gate `canViewAll`) — ใต้ตาราง "สรุปรายเซลล์" · แสดง **ทุกเซลล์ (13 + ADMIN, กรอง `!s.inactive` ตัด orphan)** ตามรูปแบบรายงานในชีต. คอลัมน์: ลำดับ·เซลล์·จองทั้งหมด·รอผล·รอปล่อย·ปล่อย·%การจอง·Lead·RJ·เฉลี่ยรับ Lead/วัน·ไลฟ์·คลิป·Lead ไลฟ์ + footer รวม. ค่า lead/จอง/ปล่อย/RJ มาจาก **`monthlySummary` รวมตามเดือนในช่วง** (`_msSum` — เพราะ ADMIN/orphan ไม่อยู่ใน `dailyBySeller`→`buildRangeMs`/`_sval` ใช้ไม่ได้ · keys เป็น string '1'-'12' JS coerce เลขเข้าได้) + **รอผล/รอปล่อย จาก `D.bookingCases` นับตาม "แท็บเดือน" (`_tabMonth(b.sheetTab)` ∈ เดือนในช่วง) ไม่ใช่วันจอง** — เพราะเคส pipeline จองปลายเดือนก่อนแต่อยู่ในแท็บเดือนนี้ (ถ้ากรองด้วยวันจองจะตก) + live/clip จาก `liveActivity` · **Lead ไลฟ์ = `leadLive`** (lead ที่ channel col H มีคำว่า "LIVE" — เพิ่มใน m_sellers ทั้ง 3 จุด: configured/orphan/ADMIN). แถวกรอง `lead\|\|booking\|\|done\|\|rj > 0` · เรียงตาม (รอปล่อย+ปล่อย) ก่อน (ตรงกับสีแถว) แล้ว ปล่อย→รอปล่อย→จอง. **เคส ADMIN**: ดู `fetch_sales_by_month_tabs` (อ่านบล็อก ADMIN + ย้ายเคส col27='ADMIN' มาเป็น ADMIN) → ADMIN มี รอผล/รอปล่อย จริง
+> _(เอาตาราง "รายงานรายเซลล์ (ละเอียด)" ออกแล้ว มิ.ย.69 — ข้อมูลซ้ำกับตาราง "สรุปรายเซลล์" ด้านบน · ถ้าจะกู้คืน ดู git history บล็อก `_aRows`/`_msSum`/`_tabMonth` ใน [index.html](dashboard/templates/dashboard/index.html))_
 
 1. **🚗 Lead รถรุ่นยอดนิยม** — top cars by lead count
    - ใช้ **คอลัมน์ M เท่านั้น** (car_formula) — clean normalized names
@@ -287,6 +306,19 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
    - **วันที่ปีผิด** (นอก 2020–2035 มักพิมพ์ 1969) · กรองตามวันจอง · กดแถว → `openBookingDetail(idx)`
    - **✏️ Inline edit วันที่ timeline** (เซ็น/ผล/ปล่อย) — ในหน้ารายละเอียดเคส (`openBookingDetail` → `_dateEditRow(label,val,col,idx,hint)`/`saveTimelineDate(idx,col)`) แต่ละแถวมี **`<input type=date>`** (แปลง d/m/yyyy ↔ YYYY-MM-DD ด้วย `_toISODate`/`_fromISODate`) + ปุ่มบันทึก → POST `/api/admin/update_release_date` (body `col`) → เขียนกลับชีตตรง cell. **col**: เซ็น=14(O) · ผล=19(T) · ปล่อย=`releaseCol`(23/21). **เอกสารครบ(18)/วันจอง อ่านอย่างเดียว**. ⚠ คอลัมน์ timeline ในชีตไม่สะอาด (col19 ผล แอดมินแทบไม่กรอก, col14 บางแถว='สด') แต่เขียนตรงที่ระบบอ่าน → consistent. ตำแหน่งมาจาก `bookingCases[].sheetTab`/`sheetRow`/`releaseCol` ที่ `fetch_sales_by_month_tabs` แนบไว้ (**col 28=tab name, col 29=แถวในชีต 1-based** ต่อท้าย flattened row · `releaseCol`=23(X พ.ค.+)/21(V เดือนก่อน) จาก `_release_col(r)`). optimistic อัปเดต local (mirror ตามทันรอบ sync ถัดไป) · `sheetTab` ว่าง → read-only
    - **มีทั้ง 2 หน้า**: `index.html` (แอดมิน) + **`seller.html` (เซลล์แก้เคสตัวเอง)** — seller.html มี banner "ปล่อยแล้วยังไม่ลงวันส่งมอบ" (เหนือ filter bar) ลิสต์เคส → กดเปิด `openBookingDetail` ลงวันได้เลย. เซลล์ส่ง `token` ใน body → endpoint เช็ค ownership (ชื่อที่ marker = ตัวเอง) ก่อนเขียน · `/me/` ใช้ session seller_name
+
+### 🤖 AI Insights (Gemini)
+ฟีเจอร์ช่วยเซลล์/แอดมินอ่านตัวเลขเป็นภาษาคน — เรียก Gemini ผ่าน REST (`requests`) ไม่มี SDK · cache ในหน่วยความจำ 30 นาที (กันยิงซ้ำ/เปลืองเงิน):
+- **โค้ชเซลล์** (`gemini_insights.analyze_seller(name, stats_text)`) — วิเคราะห์จุดแข็ง/จุดต้องแก้ + แผนรายสัปดาห์ของเซลล์คนเดียว → ผ่าน `/api/insights/seller` (login ใครก็ได้)
+- **พยากรณ์ยอด** (`forecast_narrative(summary_text)`) — อธิบายเทรนด์ยอด + ปัจจัยตลาด (น้ำมัน/EV/เศรษฐกิจ) + กลยุทธ์ 2-3 ข้อ สำหรับเจ้าของเต็นท์ → ผ่าน `/api/insights/forecast` (admin/exec)
+- env: `GEMINI_API_KEY` + `GEMINI_INSIGHTS_MODEL` (default `gemini-2.5-flash` — เบา/ถูก สำหรับงาน narrative)
+
+### 📸 OCR สแกนเอกสาร + ฟอร์ม finance/loan (ช่วงทดสอบ)
+เซลล์ในหน้า `seller.html` ถ่ายรูป/อัปโหลดเอกสาร → Gemini vision อ่าน field → กรอกฟอร์มอัตโนมัติ (ฉบับร่างให้ตรวจก่อนส่ง) → ส่ง LINE Flex:
+- **สแกน** (`/api/seller/scan_doc`) — base64 ≤8MB + `form`(`finance`\|`loan`) → `gemini_ocr.extract_finance_fields()` (27 field) / `extract_loan_fields()` (59 field) · JSON schema mode, temperature=0, field ที่ไม่เจอ=ค่าว่าง (ไม่เดา) · env `GEMINI_API_KEY` + `GEMINI_MODEL` (default `gemini-3.1-pro-preview` ใน settings.py)
+- **เช็คไฟแนนซ์ก่อนเซ็น** (`/api/seller/finance_check`) → `build_finance_check_flex` → push เข้า **`FINANCE_TEST_LINE_ID`** (ยังไม่ส่งเข้ากลุ่มจริง — ช่วง test) + เก็บ Supabase `finance_checks`
+- **ขอสินเชื่อ** (`/api/seller/loan_submit`) → `build_loan_flex` → push เข้า `FINANCE_TEST_LINE_ID` + เก็บ Supabase `loan_applications`
+- ⚠️ `FINANCE_TEST_LINE_ID` เป็น hard requirement (ไม่มี = 500) — กันส่งผิดปลายทางช่วง test · ต้องตั้ง `LINE_CHANNEL_ACCESS_TOKEN` ด้วย
 
 ## Google Sheets (7 sheets)
 
@@ -326,6 +358,13 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 - **ไม่แตะ Sheet เพิ่ม** — pre-compute อ่าน mirror (Supabase) ไม่ใช่ Sheet · Sheet ถูกอ่านแค่ตอน sync (~15-20 req ทุก ~5 นาที)
 - SQL: `create table if not exists dashboard_cache (key text primary key, data jsonb, updated_at timestamptz default now());`
 - ปลอดภัย: ไม่มี table = fallback คำนวณสดเหมือนเดิม (ไม่พัง)
+
+#### Supabase tables ทั้งหมด (`supabase_client.py`)
+- **`sheet_cache`** — mirror ของ 6 sheets หลัก (leads/sales_reports/bookings/live_sessions/live_followups/employees) · `upsert_sheet`/`get_sheet`/`sync_all_sheets_to_supabase` · lazy background sync ถ้าเก่า >120s
+- **`dashboard_cache`** — (1) pre-compute dashboard (key='main') (2) **kv** สถานะ/heartbeat (`set_kv`/`get_kv`): `cron_tick`, `cron_followup` log → หน้าสถานะระบบ
+- **`sheet_config`** — override แหล่งข้อมูล (ย้ายไฟล์/tab จากแอดมิน) — ดู section ย้าย spreadsheet ด้านบน
+- **`finance_checks` / `loan_applications`** — เก็บฟอร์ม finance/loan ที่เซลล์ส่ง (best-effort) · `ping()` เช็คว่ามี table ครบไหม
+- ทุก helper เป็น **silent-fail** — Supabase ล่ม/ไม่ตั้งค่า = ระบบ fallback อ่าน Sheet สด ไม่พัง
 
 **Helpers**:
 - `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG.
@@ -382,12 +421,14 @@ CRON_SECRET=xxx...
 - `build_seller_pipelines()` — group leads ของเดือนปัจจุบัน → called/notCalled/followUp/noStatus
 - `build_seller_flex(pipeline, base_url)` — สร้าง Flex JSON (header สี + 3 stat boxes + progress bar + rows + ปุ่ม `/s/<token>/`)
 - `push_line_message(uid, msgs, token)` — POST ไป LINE push endpoint
+- `build_followup_messages()` — ข้อความ "ตามด่วน" (plain text เฟส 2) รายเซลล์ (ดู section "ตามด่วน") — ใช้ทั้ง cron + ปุ่มส่งทันที
+- `build_finance_check_flex()` / `build_loan_flex()` — Flex ของฟอร์ม finance/loan (ดู section OCR) → push เข้า `FINANCE_TEST_LINE_ID`
 - `load_schedules()` — อ่าน schedule sheet
 - `schedule_matches_now(sched)` — เช็คว่าตาราง match เวลา BKK ปัจจุบัน
 
 ### Trigger 2 แบบ
 1. **Manual** — admin กดปุ่ม "📤 LINE Flex" → tab "ส่งทันที" → POST `/api/admin/send_line`
-2. **Auto** — cron-job.org ยิง `/api/cron/tick?secret=xxx` ทุก 1 นาที → `cron_tick` ส่ง **followup "ตามด่วน" รายเซลล์ ตามตารางในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · ข้อความธรรมดา · `build_followup_messages`) — **schedule sheet (เดิมคุม Flex) ตอนนี้คุม followup**: ถึงเวลาแถว enabled → ส่งตาม `test_target`/`sellers` ของแถวนั้น. manual `/api/admin/send_line` ยังใช้ Flex ได้ (`build_seller_flex`)
+2. **Auto** — **n8n** ยิง `/api/cron/tick?secret=xxx` ทุก 1 นาที → `cron_tick` ส่ง **followup "ตามด่วน" รายเซลล์ ตามตารางในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · ข้อความธรรมดา · `build_followup_messages`) — **schedule sheet (เดิมคุม Flex) ตอนนี้คุม followup**: ถึงเวลาแถว enabled → ส่งตาม `test_target`/`sellers` ของแถวนั้น. manual `/api/admin/send_line` ยังใช้ Flex ได้ (`build_seller_flex`)
 
 ### Schedule format (sheet "ตั้งเวลาส่ง")
 ```
@@ -428,7 +469,7 @@ CRON_SECRET=xxx...
 
 ### ตั้งเวลาส่งอัตโนมัติ
 1. ปุ่ม **📤 LINE Flex** → tab "📅 ตารางเวลา" → ➕ เพิ่ม → ใส่เวลา/วัน/เซลล์/enabled → Save
-2. ครั้งแรกต้องตั้ง cron-job.org ยิง `https://<your-app>.vercel.app/api/cron/tick?secret=<CRON_SECRET>` ทุก 1 นาที (one-time setup)
+2. ครั้งแรกต้องตั้ง **n8n** (Schedule Trigger → HTTP Request) ยิง `https://<your-app>.vercel.app/api/cron/tick?secret=<CRON_SECRET>` ทุก 1 นาที (one-time setup)
 
 ### Debug ข้อมูลผิด
 - **ปุ่ม 🔍 Log ข้อมูล** ใน admin header → เปิด modal โชว์เคสที่หาย (วันที่พัง, สถานะว่าง, "รอปล่อย" ที่อาจสับสนกับ "ปล่อย") + status breakdown
@@ -447,17 +488,17 @@ CRON_SECRET=xxx...
 
 ## Deploy บน Vercel
 
-1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 7 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
-   - **7 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`
+1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 8 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
+   - **8 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`, `OXLET_SELLER_PASSWORD` (รหัสรวม login `OXletauto55555` — **env-only แล้ว กันหลุด git · ไม่ตั้ง = เซลล์ login ไม่ได้**)
    - **LINE Login (PDPA)**: `LINE_LOGIN_CHANNEL_ID`, `LINE_LOGIN_CHANNEL_SECRET` (จาก LINE Login channel) + ตั้ง Callback URL ใน channel = `https://saleforce-oxletauto.vercel.app/auth/line/callback` (ตรงกับ `LINE_LOGIN_CALLBACK`)
-   - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `OXLET_SELLER_PASSWORD` (รหัสรวม login = OXletauto55555), `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
+   - **inline แล้ว (ไม่ต้องตั้ง)**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `SUPABASE_URL`, `USE_SUPABASE`, `GEMINI_MODEL`, `FINANCE_TEST_LINE_ID`, `OXLET_ADMIN_USER`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` — แก้ได้ใน settings.py
    - **ตัวเลือก**: `DEBUG` (default=False อยู่แล้ว ไม่ต้องตั้งก็ปลอดภัย)
    - **เลิกใช้แล้ว**: `GMAIL_APP_PASSWORD`, `EMAIL_*`, `APPROVAL_NOTIFY_EMAIL`, `SITE_URL` (ถอดระบบสมัครสมาชิก+เมลออกแล้ว มิ.ย.69)
    - **⚠️ `.env` ถูก gitignored แล้ว (ไม่ commit)** — ประวัติ git ถูกล้าง .env ออกหมดแล้ว (filter-repo + force-push มิ.ย.69). ห้ามเอา .env กลับเข้า git อีก
 
 2. **Use canonical URL** (`your-app.vercel.app`) ไม่ใช่ deployment-specific URL (`your-app-xxx.vercel.app`) — อันยาวมี Vercel Auth wall ป้องกันอยู่
 
-3. **cron-job.org** ตั้ง webhook URL = `https://your-app.vercel.app/api/cron/tick?secret=<CRON_SECRET>` schedule = `* * * * *` (ทุก 1 นาที)
+3. **n8n** (เปลี่ยนจาก cron-job.org) — workflow: Schedule Trigger (`* * * * *` ทุก 1 นาที) → HTTP Request GET `https://your-app.vercel.app/api/cron/tick?secret=<CRON_SECRET>`
 
 4. **Service account** ต้องมีสิทธิ์ **Editor** บน Google Spreadsheet (เพื่อเขียน config sheets)
 
@@ -467,6 +508,6 @@ CRON_SECRET=xxx...
 - **Sheets API quota** — ปกติ dashboard อ่าน **mirror/pre-compute (Supabase) ไม่แตะ Sheet** · Sheet ถูกอ่านแค่ตอน sync (~15-20 req ทุก ~5 นาที — ต่ำกว่า 300/min/project มาก)
 - **leads upsert ใหญ่** — 15k แถวเป็น jsonb ก้อนเดียว เคยชน Supabase statement timeout (8s) · บรรเทาด้วย `_trim_row` · ถ้ายังชนบ่อย → `alter role service_role set statement_timeout='30s'`
 - **Schedule precision = 1 นาที** (ตาม cron interval)
-- **No deduplication** — ถ้า cron-job.org ยิง 2 ครั้งใน 1 นาที (rare) จะส่ง Flex 2 ครั้ง
-- **Vercel Hobby** = 1 cron job/วัน (ใช้ external cron-job.org แทน)
+- **No deduplication** — ถ้า n8n ยิง 2 ครั้งใน 1 นาที (rare) จะส่ง Flex 2 ครั้ง
+- **Vercel Hobby** = 1 cron job/วัน (ใช้ external n8n แทน)
 - **เซลล์ใหม่** ที่เพิ่มผ่าน 🎯 ตั้งเป้า/ทีม จะใช้งานได้ทันที **ยกเว้น URL `/s/<token>/`** ที่ต้อง add token เองใน code

@@ -283,6 +283,28 @@ def get_month(date_str: str) -> int:
     return 0
 
 
+def parse_month_day(date_str: str):
+    """คืน (month, day) จากสตริงวันที่ — รองรับทั้งวันเต็ม (d/m/yy, Excel serial) และ **แบบไม่มีปี** (d/m เช่น "10/06").
+    เหตุผล: daily bucket (กราฟ + KPI "ปิดได้") เคยใช้ parse_date() ตรงๆ ซึ่งบังคับต้องมีปี (3 ส่วน) →
+    วันปล่อยที่แอดมินกรอกแบบ "10/06" (ไม่ใส่ปี) จะ parse ไม่ได้ → เคสตกไปนับตามวันจอง (คนละเดือน) หรือถูกทิ้ง
+    ทำให้ KPI ปิดได้ (รายวัน) ไม่ตรงกับ monthlySummary/ตารางละเอียด (ที่ใช้ get_month ซึ่งดึงเดือนได้แม้ไม่มีปี).
+    helper นี้ทำให้ทั้งสองทางนับเดือนเดียวกัน. ปีไม่จำเป็น — bucket อยู่ในปีของ dashboard อยู่แล้ว."""
+    d = parse_date(date_str)
+    if d and 1 <= d.day <= 31:
+        return (d.month, d.day)
+    s = (date_str or "").strip()
+    if s and s != "-":
+        parts = s.split("/")
+        if len(parts) == 2:   # "d/m" ไม่มีปี — get_month ดึงเดือนได้ ก็ต้อง bucket เดือนเดียวกัน
+            try:
+                day, mo = int(parts[0]), int(parts[1])
+                if 1 <= day <= 31 and 1 <= mo <= 12:
+                    return (mo, day)
+            except ValueError:
+                pass
+    return None
+
+
 # ── Main fetch function ──
 _dash_cache: dict = {"ts": 0.0, "data": None}
 _DASH_TTL = 30          # in-memory cache (warm lambda) — กันคำนวณซ้ำทุก request
@@ -1143,10 +1165,7 @@ def _compute_dashboard_data() -> dict:
 
     # Daily breakdown ภายในแต่ละเดือน — ใช้ตอน user เลือกเดือนเฉพาะแล้วกราฟต้องสลับเป็นรายวัน
     def _parse_day(date_str):
-        d = parse_date(date_str)
-        if not d or not (1 <= d.day <= 31):
-            return None
-        return (d.month, d.day)
+        return parse_month_day(date_str)   # รองรับ "d/m" ไม่มีปี → daily ตรงกับ monthlySummary
 
     def _parse_done_day(b):
         rd = b.get("releaseDate", "")
@@ -1721,8 +1740,7 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
 
     # ── 7) Daily breakdown (เฉพาะเซลล์, 12 เดือน × 32 วัน) ──
     def _parse_day(date_str: str):
-        d = parse_date(date_str)
-        return (d.month, d.day) if d else None
+        return parse_month_day(date_str)   # รองรับ "d/m" ไม่มีปี → กราฟ/นับหน้าเซลล์ไม่ทิ้งเคสวันปล่อยไม่มีปี
 
     my_daily = {
         m: {"leads": [0]*32, "leadRJ": [0]*32, "bookings": [0]*32, "dones": [0]*32, "dealValue": [0]*32}

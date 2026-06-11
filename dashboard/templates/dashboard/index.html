@@ -350,6 +350,15 @@
     }
     // จำนวนเดือนที่ช่วงครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วงที่เลือก
     const rangeMonthCount = () => ([...new Set(rangeDays().map(x => x[0]))].length || 1);
+    // คืนเลขเดือน (1-12) ถ้าช่วงที่เลือกพอดี = เดือนเต็มหนึ่งเดือน (วันที่ 1 ถึงสิ้นเดือน · ปีเดียวกัน) — ไม่งั้น 0
+    // ใช้เปิด MoM (เทียบเดือนก่อน) เมื่อกดปุ่ม "เดือนนี้" หรือเลือกช่วง = ทั้งเดือนพอดี
+    const selectedWholeMonth = () => {
+      const f = new Date(dfFrom+'T00:00:00'), t = new Date(dfTo+'T00:00:00');
+      if (isNaN(f) || isNaN(t)) return 0;
+      if (f.getFullYear() !== t.getFullYear() || f.getMonth() !== t.getMonth()) return 0;
+      const lastDay = new Date(f.getFullYear(), f.getMonth()+1, 0).getDate();
+      return (f.getDate() === 1 && t.getDate() === lastDay) ? (f.getMonth()+1) : 0;
+    };
     const rangeLabelTH = () => {
       const f = new Date(dfFrom+'T00:00:00'), t = new Date(dfTo+'T00:00:00');
       const o = {day:'numeric',month:'short'};
@@ -1488,9 +1497,15 @@
       const dvDone = ms.totalDone||0;
       const dvAvg  = dvDone ? Math.round(dvDeal/dvDone) : 0;
 
-      // ── MoM ปิดในโหมดช่วงวันที่ (เทียบเดือนไม่ได้) ──
-      const momActive = false;
-      const m_lead = null, m_follow = null, m_book = null, m_done = null, m_deal = null, m_rj = null;
+      // ── MoM: เทียบเดือนก่อน เมื่อช่วงที่เลือก = เดือนเต็มหนึ่งเดือน (กดปุ่ม "เดือนนี้" หรือเลือกทั้งเดือนพอดี) ──
+      const _moMonth  = selectedWholeMonth();   // 1-12 ถ้าเป็นเดือนเต็มเดียว · 0 ถ้าเป็นช่วงข้ามเดือน/บางส่วน
+      const momActive = _moMonth >= 2;          // เดือน 1 (ม.ค.) ไม่มีเดือนก่อนให้เทียบ
+      const m_lead    = momActive ? getMoM(_moMonth, 'totalLeads')     : null;
+      const m_follow  = momActive ? getMoM(_moMonth, 'totalFollow')    : null;
+      const m_book    = momActive ? getMoM(_moMonth, 'totalBookings')  : null;
+      const m_done    = momActive ? getMoM(_moMonth, 'totalDone')      : null;
+      const m_deal    = momActive ? getMoM(_moMonth, 'totalDealValue') : null;
+      const m_rj      = momActive ? getMoM(_moMonth, 'leadRJ')         : null;
       // KPI tooltips — อธิบายว่าแต่ละตัวคืออะไร นับยังไง
       const TIP = {
         lead:    "หลีดธรรมดา (ไม่รวม RJ) ที่รับเข้ามาในช่วงนี้\nRJ แยกดูที่การ์ด RJ (ขวาสุด) · Conv คิดจากหลีดธรรมดาเท่านั้น\nนับจาก leads sheet · กรองตามวันที่รับเคส",
@@ -1522,8 +1537,8 @@
 
       // MoM hint (ถ้ามี)
       if (momActive) {
-        const curMonthName = C.MONTHS_FULL[dfMonth-1] || '';
-        const prevFull = C.MONTHS_FULL[dfMonth-2] || '';
+        const curMonthName = C.MONTHS_FULL[_moMonth-1] || '';
+        const prevFull = C.MONTHS_FULL[_moMonth-2] || '';
         html += `<div style="font-size:11px;color:var(--t3);margin-bottom:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;display:inline-block">${ic('lucide:bar-chart-3',16)} % คือเทียบ <b style="color:var(--t1)">${curMonthName}</b> vs <b style="color:var(--t1)">${prevFull}</b></div>`;
       }
 
@@ -1567,8 +1582,8 @@
       function teamMoM(tid, key) {
         if (!momActive) return null;
         const ms_ = D.monthlySummary || {};
-        const cur  = ((ms_[dfMonth]   || ms_[String(dfMonth)]   || {}).teams || {})[tid] || {};
-        const prev = ((ms_[dfMonth-1] || ms_[String(dfMonth-1)] || {}).teams || {})[tid] || {};
+        const cur  = ((ms_[_moMonth]   || ms_[String(_moMonth)]   || {}).teams || {})[tid] || {};
+        const prev = ((ms_[_moMonth-1] || ms_[String(_moMonth-1)] || {}).teams || {})[tid] || {};
         const c = Number(cur[key] || 0);
         const p = Number(prev[key] || 0);
         if (c === 0 && p === 0) return null;
@@ -1838,71 +1853,7 @@
       });
       html += `</div>`;
 
-      // ── 📋 ตาราง "แอดมิน" — เซลล์/เคสที่ไม่นับในตารางหลัก (ADMIN เทเลเซลล์ + เซลล์นอก config) · แอดมิน+ผู้บริหาร ──
-      if (canViewAll) {
-        const _adm = (D.sellers||[]).filter(s => !s.inactive);   // 13 เซลล์ + ADMIN (ไม่รวม orphan inactive) — รายงานเต็มตามรูปแบบชีต
-        // เดือนในช่วงที่กรอง → ดึงค่าจาก monthlySummary (มีข้อมูล ADMIN/เซลล์นอกระบบ ที่ buildRangeMs/_sval ไม่มี)
-        const _rMonths = [];
-        if (dfFrom && dfTo) {
-          let _dd = new Date(dfFrom); _dd = new Date(_dd.getFullYear(), _dd.getMonth(), 1);
-          const _de = new Date(dfTo);
-          while (_dd <= _de) { _rMonths.push(_dd.getMonth()+1); _dd.setMonth(_dd.getMonth()+1); }
-        }
-        const _msSum = (name, key) => { let t=0; _rMonths.forEach(m => { const sm=((D.monthlySummary&&D.monthlySummary[m]&&D.monthlySummary[m].sellers)||{})[name]; if(sm && sm[key]!=null) t+=Number(sm[key])||0; }); return t; };
-        // รอผล/รอปล่อย จาก bookingCases — นับตาม "แท็บเดือน" ที่เคสอยู่ (ไม่ใช่วันจอง) เพราะ pipeline จองข้ามเดือนได้
-        const _THMON={'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12};
-        const _tabMonth=(t)=>{ for(const k in _THMON) if(String(t||'').indexOf(k)>=0) return _THMON[k]; return 0; };
-        const _stat = {};
-        (D.bookingCases||[]).forEach(b => {
-          if (!b.seller || !_rMonths.includes(_tabMonth(b.sheetTab))) return;
-          const e = _stat[b.seller] || (_stat[b.seller] = {wr:0, wrl:0});
-          if (b.status === 'รอผล') e.wr++;
-          else if (b.status === 'รอปล่อย') e.wrl++;
-        });
-        // ไลฟ์/คลิป รายเซลล์ ในช่วง
-        const _la = D.liveActivity || {};
-        const _liveBy = {}, _clipBy = {};
-        (_la.sessions||[]).filter(s=>ir(s.date||'')).forEach(s => (s.hosts||[]).forEach(hh => { if(hh) _liveBy[hh]=(_liveBy[hh]||0)+1; }));
-        if (Array.isArray(_la.clips)) _la.clips.filter(c=>ir(c.date||'')).forEach(c => { _clipBy[c.name]=(_clipBy[c.name]||0)+1; });
-        const _days = (dfFrom && dfTo) ? Math.max(1, Math.round((new Date(dfTo)-new Date(dfFrom))/86400000)+1) : 1;
-        const _aRows = _adm.map(s => {
-          const lead=_msSum(s.name,'leadNormal'), leadAll=_msSum(s.name,'lead'), booking=_msSum(s.name,'booking'), done=_msSum(s.name,'done');
-          const rj=Math.max(0, leadAll-lead);
-          const st=_stat[s.name]||{wr:0,wrl:0};
-          return {name:s.name, booking, wr:st.wr, wrl:st.wrl, done,
-                  pct: lead>0?Math.round(booking/lead*10000)/100:0, lead, rj,
-                  lpd: Math.round(lead/_days*100)/100, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, llead:_msSum(s.name,'leadLive')};
-        }).filter(r => r.lead>0||r.booking>0||r.done>0||r.rj>0).sort((a,b)=>((b.wrl+b.done)-(a.wrl+a.done))||(b.done-a.done)||(b.wrl-a.wrl)||(b.booking-a.booking));
-
-        html += `<div class="card">`;
-        html += `<div class="card-title">${ic('lucide:users',16)} รายงานรายเซลล์ (ละเอียด) <span style="font-size:11px;font-weight:400;color:var(--t3)">— ทุกเซลล์ + ADMIN · ${h(rangeLabelTH())}</span></div>`;
-        if (!_aRows.length) {
-          html += `<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px">ไม่มีข้อมูลในช่วงนี้</div>`;
-        } else {
-          html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:780px">`;
-          html += `<thead><tr style="background:var(--blue);color:#fff">`;
-          ['ลำดับ','เซลล์','จองทั้งหมด','รอผล','รอปล่อย','ปล่อย','% การจอง','Lead','RJ','เฉลี่ยรับ Lead/วัน','ไลฟ์สด','คลิป','Lead ไลฟ์'].forEach((hd,i)=>{
-            html += `<th style="padding:7px 8px;text-align:${i<2?'left':'center'};font-weight:600;white-space:nowrap">${hd}</th>`;
-          });
-          html += `</tr></thead><tbody>`;
-          const T={booking:0,wr:0,wrl:0,done:0,lead:0,rj:0,lpd:0,live:0,clip:0,llead:0};
-          _aRows.forEach((r,i)=>{
-            T.booking+=r.booking;T.wr+=r.wr;T.wrl+=r.wrl;T.done+=r.done;T.lead+=r.lead;T.rj+=r.rj;T.lpd+=r.lpd;T.live+=r.live;T.clip+=r.clip;T.llead+=r.llead;
-            const cells=[i+1, h(r.name), r.booking, r.wr, r.wrl, r.done, r.pct+'%', r.lead, r.rj, r.lpd, r.live, r.clip, r.llead];
-            const _cv = r.wrl + r.done;   // รอปล่อย + ปล่อย → สีแถว: ≥5 เขียว · 3-4 เหลือง · ≤2 แดง
-            const _rbg = _cv>=5 ? 'var(--green-bg)' : _cv>=3 ? 'var(--amber-bg)' : 'var(--red-bg)';
-            html += `<tr style="background:${_rbg};border-bottom:.5px solid var(--bd)">`;
-            cells.forEach((c,ci)=>{ html += `<td style="padding:6px 8px;text-align:${ci<2?'left':'center'}${ci===1?';font-weight:600':''}">${c}</td>`; });
-            html += `</tr>`;
-          });
-          const _tp=T.lead>0?Math.round(T.booking/T.lead*10000)/100:0;
-          const F=['','รวมทั้งหมด',T.booking,T.wr,T.wrl,T.done,_tp+'%',T.lead,T.rj,Math.round(T.lpd*100)/100,T.live,T.clip,T.llead];
-          html += `<tr style="background:var(--blue);color:#fff;font-weight:700">`;
-          F.forEach((c,ci)=>{ html += `<td style="padding:7px 8px;text-align:${ci<2?'left':'center'}">${c}</td>`; });
-          html += `</tr></tbody></table></div>`;
-        }
-        html += `</div>`;
-      }
+      // (เอาตาราง "รายงานรายเซลล์ (ละเอียด)" ออกแล้วตามที่ผู้ใช้ขอ — ข้อมูลซ้ำกับตาราง "สรุปรายเซลล์" ด้านบน)
 
       // ── 3-col panels: 🔴 ยังไม่อัพเดท · ${ic('lucide:wallet',16)} Top มูลค่าดีล · ${ic('lucide:trophy',16)} Top จอง ──
       // วางต่อท้าย "สรุปรายเซลล์" ทันที — แต่ละ card คลิกแถวเปิด modal ดูรายการเคส
@@ -3077,9 +3028,20 @@
     function renderBookings(sellerNames) {
       // base = กรอง seller + ช่วงวันที่ (ยังไม่กรองสถานะ — ไว้ทำแถบสรุป pipeline)
       // "ปล่อย" นับตามวันปล่อย (releaseDate) ให้ตรงกับ KPI "ปิดได้" · สถานะอื่นนับตามวันจอง
-      // "ปล่อย" นับตามวันปล่อย — แต่ต้อง parse ได้ (มีปี) ไม่งั้น fallback วันจอง
-      // (releaseDate เช่น "10/2" ไม่มีปี → _parseDmy=null → inRange คืน true เลยโผล่ทุก filter)
-      const _effDate = (b)=> (b.status==='ปล่อย' && _parseDmy(b.releaseDate)) ? b.releaseDate : b.date;
+      // releaseDate แบบ "10/6" (ไม่มีปี) → เติมปีของช่วงที่เลือกแล้ว parse → นับเดือนถูก (ตรงกับ backend parse_month_day)
+      // เดิม: _parseDmy ต้องมี 3 ส่วน → "10/6" = null → fallback วันจอง → นับคนละเดือน (KPI/ตารางได้ 10 แต่ตารางนี้ได้ 9)
+      const _dfYear = (new Date(dfTo+'T00:00:00')).getFullYear();
+      const _effDate = (b)=>{
+        if(b.status==='ปล่อย' && b.releaseDate){
+          if(_parseDmy(b.releaseDate)) return b.releaseDate;        // วันปล่อยมีปีครบ
+          const p = String(b.releaseDate).trim().split('/');         // "d/m" ไม่มีปี → เติมปีของช่วง
+          if(p.length===2){
+            const dd=parseInt(p[0]), mo=parseInt(p[1]);
+            if(dd>=1&&dd<=31&&mo>=1&&mo<=12) return `${dd}/${mo}/${_dfYear}`;
+          }
+        }
+        return b.date;                                               // อื่นๆ / parse ไม่ได้ → วันจอง
+      };
       let base = (FD.bookingCases||[]).filter(b=>ir(_effDate(b)));
       if(bkSel!=='all') base = base.filter(b=>b.seller===bkSel);
       const STAGES = ['จอง','รอเซ็นต์','รอผล','รอปล่อย','ปล่อย'];
