@@ -597,6 +597,21 @@ def admin_schedule_config(request):
     schedules = load_schedules()
     cfg = SHEET_CONFIG.get("schedule_config", {})
     sheet_url = f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit"
+    # cron log — รู้ว่า cron-job.org ยิงเข้ามาไหม (heartbeat) + followup ส่งล่าสุด (แทนปุ่มทดสอบในหน้าตาราง)
+    cron_tick = None
+    last_followup = None
+    try:
+        from .services.supabase_client import get_kv
+        from datetime import datetime as _dt, timezone as _tz
+        _ct = get_kv("cron_tick")
+        if _ct and _ct.get("updated_at"):
+            _age = (_dt.now(_tz.utc) - _dt.fromisoformat(_ct["updated_at"].replace("Z", "+00:00"))).total_seconds()
+            cron_tick = {"at": _ct["updated_at"], "ageSec": _age}
+        _fu = get_kv("cron_followup")
+        if _fu:
+            last_followup = {"at": _fu.get("updated_at"), **(_fu.get("data") or {})}
+    except Exception:
+        pass
     return JsonResponse({
         "ok": True,
         "schedules": schedules,
@@ -604,7 +619,9 @@ def admin_schedule_config(request):
         "enabled_count": sum(1 for s in schedules if s.get("enabled")),
         "sheet_url": sheet_url,
         "sheet_name": cfg.get("sheet_name", "ตั้งเวลาส่ง"),
-    })
+        "cronTick": cron_tick,
+        "lastFollowup": last_followup,
+    }, json_dumps_params={"ensure_ascii": False})
 
 
 @require_http_methods(["GET", "POST"])

@@ -4302,16 +4302,48 @@
       }
       html += `<button onclick="__schedAdd()" style="margin-top:10px;padding:9px 14px;border-radius:10px;border:.5px dashed var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;width:100%">${ic('lucide:plus',16)} เพิ่มตารางใหม่</button>`;
 
-      html += `<details style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px">
-        <summary style="cursor:pointer;font-weight:600;color:var(--t1)">${ic('lucide:flask-conical',16)} ทดสอบยิง tick endpoint ทันที</summary>
-        <input id="sched-test-secret" type="password" placeholder="CRON_SECRET" style="margin-top:8px;width:100%;padding:8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:11px;outline:none;box-sizing:border-box">
-        <button onclick="__schedTestTick()" style="margin-top:8px;padding:7px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-weight:700;font-size:11px;cursor:pointer">${ic('lucide:rocket',16)} ยิง tick</button>
-        <div id="sched-test-result" style="margin-top:8px"></div>
-      </details>`;
+      // ── Log สถานะ cron + followup (แทนปุ่มทดสอบเดิม) — รู้ว่าตัวตั้งเวลายิงเข้ามาไหม + ส่งล่าสุดเมื่อไหร่ ──
+      html += `<div style="margin-top:14px;padding:11px 13px;background:var(--bg2);border-radius:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-weight:700;color:var(--t1);font-size:12px">${ic('lucide:activity',15)} สถานะตัวตั้งเวลา (cron) + log การส่ง</span>
+          <button onclick="__schedRefreshLog()" style="font-size:10px;padding:4px 9px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">${ic('lucide:refresh-cw',14)} รีเฟรช</button>
+        </div>
+        <div id="sched-cron-log" style="font-size:11px">${__schedLogHtml(meta)}</div>
+      </div>`;
 
       html += `<div id="sched-msg" style="margin-top:10px"></div>`;
       modal.querySelector('#sched-body').innerHTML = html;
       modal.__schedMeta = meta;
+    }
+
+    // ── Log cron/followup: สร้าง HTML สถานะ (cron ยิงล่าสุด + followup ส่งล่าสุด) ──
+    function __schedLogHtml(meta) {
+      const ct = meta && meta.cronTick;
+      const age = ct ? ct.ageSec : null;
+      const cronTxt = age == null ? '❌ ยังไม่เคยยิงเข้ามา (ตั้ง cron-job.org หรือยัง?)'
+        : (age < 90 ? '✅ ทำงานปกติ (' + Math.round(age) + ' วิที่แล้ว)'
+        : age < 600 ? '⚠️ ' + Math.round(age/60) + ' นาทีที่แล้ว'
+        : '❌ หยุดยิง ' + Math.round(age/60) + ' นาที');
+      const cronCol = (age == null || age > 600) ? 'var(--red)' : (age > 180 ? 'var(--amber)' : 'var(--green)');
+      const fu = meta && meta.lastFollowup;
+      let fuTxt = 'ยังไม่เคยส่ง';
+      if (fu && fu.at) {
+        try {
+          fuTxt = new Date(fu.at).toLocaleString('th-TH', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+            + (fu.count != null ? ' · ' + fu.count + ' คน' : '')
+            + (fu.time ? ' (รอบ ' + fu.time + ')' : '');
+        } catch(e) {}
+      }
+      return `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0"><span style="color:var(--t3)">cron ยิงล่าสุด</span><span style="font-weight:700;color:${cronCol};text-align:right">${cronTxt}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:.5px solid var(--bd)"><span style="color:var(--t3)">followup ส่งล่าสุด</span><span style="font-weight:700;color:var(--t1);text-align:right">${h(fuTxt)}</span></div>`;
+    }
+    async function __schedRefreshLog() {
+      try {
+        const r = await fetch('/api/admin/schedule_config', { credentials:'same-origin' });
+        const j = await r.json();
+        const el = document.getElementById('sched-cron-log');
+        if (el && !j.error) el.innerHTML = __schedLogHtml(j);
+      } catch(e) {}
     }
 
     // ── helper: เปรียบเทียบ sellers list (handle '*' = all)
