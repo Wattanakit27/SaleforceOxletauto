@@ -1119,7 +1119,7 @@ def admin_send_followup(request):
         return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
 
     from .services.fetch_dashboard import build_followup_messages
-    from .services.line_notify import push_line_message
+    from .services.line_notify import push_line_message, get_nickname_to_user_id
     from .services.constants import normalize_seller
 
     try:
@@ -1127,24 +1127,38 @@ def admin_send_followup(request):
     except Exception as e:
         return JsonResponse({"error": f"สร้างข้อความล้มเหลว: {e}"}, status=500)
 
+    u2n = {v: k for k, v in get_nickname_to_user_id().items()}  # uid → ชื่อเล่น (ย่อยเทเลเซลล์รายคน)
     sel = set(normalize_seller(s) for s in sellers_filter) if sellers_filter else None
     results = []
     for m in msgs:
-        if sel is not None and m["seller"] not in sel:
+        if m.get("admin"):
+            continue  # ข้ามสรุปรวมทีม (overview) — ส่งแมนนวลส่งเฉพาะ "ตามด่วน" รายคน
+        seller = m["seller"]
+        if sel is not None and normalize_seller(seller) not in sel:
             continue
-        tgt = target if test else m["user_id"]
-        if not tgt:
-            results.append({"recipient": m["seller"], "sent": False, "error": "no user_id"})
+        # ผู้รับ = list ของ (uid, ชื่อ) · ADMIN ย่อย 5 เทเลเซลล์รายคน · เซลล์ปกติ 1 · test = id เดียว
+        if test:
+            recips = [(target, seller)]
+        elif seller == "ADMIN":
+            recips = [(uid, u2n.get(uid) or (uid[:10] + "...")) for uid in (m.get("recipients") or [])]
+        else:
+            _uid = m.get("user_id")
+            recips = [(_uid, seller)] if _uid else []
+        if not recips:
+            results.append({"seller": seller, "user_id": None, "sent": False, "error": "ไม่พบ LINE user_id"})
             continue
-        try:
-            code, text = push_line_message(tgt, [{"type": "text", "text": m["text"]}], channel_token)
-            results.append({
-                "recipient": m["seller"], "sent": code == 200,
-                "error": None if code == 200 else f"LINE {code}: {text[:120]}",
-            })
-        except Exception as e:
-            results.append({"recipient": m["seller"], "sent": False, "error": str(e)})
-    return JsonResponse({"ok": True, "results": results}, json_dumps_params={"ensure_ascii": False})
+        for uid, label in recips:
+            if not uid:
+                continue
+            try:
+                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], channel_token)
+                results.append({"seller": label, "user_id": uid, "sent": code == 200,
+                                **({"error": f"LINE {code}: {text[:120]}"} if code != 200 else {})})
+            except Exception as e:
+                results.append({"seller": label, "user_id": uid, "sent": False, "error": str(e)})
+    return JsonResponse({"ok": True, "count": len(results),
+                         "sent": sum(1 for r in results if r["sent"]), "test_mode": test,
+                         "results": results}, json_dumps_params={"ensure_ascii": False})
 
 
 @require_http_methods(["GET", "POST"])
