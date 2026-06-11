@@ -4356,7 +4356,7 @@
 
     function renderSchedCard(s, i) {
       const isOpen = __expandedSched.has(i);
-      const sellersData = (D.sellers || []).filter(x => x.team !== 'ADMIN');
+      const sellersData = (D.sellers || []);  // รวมกลุ่ม ADMIN (เทเลเซลล์) ด้วย
       const allNames = sellersData.map(x => x.name);
       const totalSellers = allNames.length;
       // Normalize: ถ้า sellers === ['*'] แสดงเป็นทั้งหมด
@@ -4417,7 +4417,7 @@
         Object.keys(teamGroups).sort().forEach(tid => {
           const color = teamColors[tid] || 'var(--t3)';
           html += `<div style="margin-bottom:6px;padding:8px 10px;background:var(--bg2);border-radius:8px;border-left:3px solid ${color}">
-            <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:4px">ทีม ${h(tid)} (${teamGroups[tid].length} คน)</div>
+            <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:4px">${tid === 'ADMIN' ? 'เทเลเซลล์ (แอดมิน)' : 'ทีม ' + h(tid)} (${teamGroups[tid].length} คน)</div>
             <div style="display:flex;gap:4px 10px;flex-wrap:wrap">`;
           teamGroups[tid].forEach(seller => {
             const isChecked = checkedSet.has(seller.name);
@@ -4469,7 +4469,7 @@
       __schedRedraw();
     }
     function __schedSetAllSellers(i, on) {
-      const allNames = (D.sellers || []).filter(x => x.team !== 'ADMIN').map(x => x.name);
+      const allNames = (D.sellers || []).map(x => x.name);
       __schedRows[i].sellers = on ? allNames.slice() : [];
       __schedRedraw();
     }
@@ -4477,7 +4477,7 @@
       const arr = __schedRows[i].sellers;
       // Expand '*' to explicit if currently '*'
       const expanded = arr.includes('*')
-        ? (D.sellers || []).filter(x => x.team !== 'ADMIN').map(x => x.name)
+        ? (D.sellers || []).map(x => x.name)
         : arr.slice();
       const idx = expanded.indexOf(name);
       if (on && idx === -1) expanded.push(name);
