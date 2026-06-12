@@ -165,9 +165,11 @@ python manage.py runserver
 
 ### Lead Status (คอลัม Z "สถานะลูกค้า" — layout ใหม่ มิ.ย.69+)
 ตั้งแต่ มิ.ย.69 สถานะหลักของ lead อยู่ที่ **คอลัม Z `customer_status`** (controlled vocab) ใช้คัดลำดับว่าเซลล์ตามเคสไหนก่อน:
-- **priority (`CUSTOMER_STATUS_PRIORITY`, สูง→ต่ำ)**: สนใจมาก(8) · ลังเล(7) · ไม่รับสาย(6) · รอเงิน(5) · รอเช็คเครดิต(4) · ดาวน์ไม่พอ(3) · จอง(2) · ส่งมอบ(1)
+- **dropdown 16 ค่า** (`Z_STATUSES` ใน seller.html · sync กับ sheet data validation) — ตัวกรองสถานะใน lead list (`STATUS_FILTERS`) ก็ gen จาก `Z_STATUSES` (เลิกใช้ ติดตาม/คืนเคส/ยกเลิก/จ่ายใหม่ จาก admin/sales)
+- **priority (`CUSTOMER_STATUS_PRIORITY`, สูง→ต่ำ)**: สนใจมาก(8) · ลังเล(7) · ไม่รับสาย(6) · **ลูกค้าไม่ตอบ(6)** · รอเงิน(5) · รอเช็คเครดิต(4) · ดาวน์ไม่พอ(3) · **เงินสดเงินไม่พอ(3)** · จอง(2) · ส่งมอบ(1) · **ได้รถแล้ว(1)**
+- **3 ค่าใหม่ (มิ.ย.69)**: `ได้รถแล้ว`=เคสจบ/ผลบวก (เหมือนส่งมอบ ไม่ remind · อยู่ใน `isBooked`/`_booked`/`should_follow` exclude) · `เงินสดเงินไม่พอ`=ยังตามต่อ (เหมือนดาวน์ไม่พอ · cadence 3) · `ลูกค้าไม่ตอบ`=ยังตามต่อ (เหมือนไม่รับสาย · cadence 1). แก้ต้อง sync 4 ที่: `Z_STATUSES`/`Z_PRIORITY`/`CADENCE` (seller.html) + `CUSTOMER_STATUS_PRIORITY`/`_FU_CADENCE` (fetch_dashboard.py)
 - **เคสเสีย (`CUSTOMER_STATUS_DEAD`) = "ไม่ต้องตาม"**: ยังไม่ออกเร็วๆนี้ · ติดแบล็คลิส · เครดิตไม่ผ่าน · ลูกค้าไม่สนใจแล้ว · **คืนเคส** (ผู้ใช้กำหนดว่าพวกนี้ในวงเล็บ = เคสเสีย)
-- **`should_follow(r)`**: ตามต่อ = active chase เท่านั้น (priority ≥3 = 6 สถานะบน). **จอง/ส่งมอบ = ไม่ remind ให้โทร** (เป็น outcome บวก ไม่ใช่เคสเสีย) · เคสเสีย = ไม่ตาม
+- **`should_follow(r)`**: ตามต่อ = active chase เท่านั้น (priority ≥3). **จอง/ส่งมอบ/ได้รถแล้ว = ไม่ remind ให้โทร** (outcome บวก ไม่ใช่เคสเสีย) · เคสเสีย = ไม่ตาม · **"ตามด่วน" (seller.html) ตัด "คืนเคส" (Z/admin/sales) ออกด้วย** (`_isReturned`)
 - **กลไก fallback**: row-level `should_follow(r)` / `is_lead_vacant(r)` ใช้คอลัม Z ถ้ามีค่า, **ไม่งั้น fallback ไป `is_follow(admin_status)` เดิม** (เดือนเก่า Z ว่าง → ผลเท่าเดิม ไม่ regression). `effective_status(r)` คืน Z ก่อน else admin_status
 - **คอลัม U–Y กรอกได้** (canonical 34-38): occupation(U อาชีพ) · income(V รายได้) · job_tenure(W อายุงาน) · payment_history(X ประวัติผ่อน) · customer_type(Y ประเภทลูกค้า) — เซลล์กรอกในหน้า LEAD → เขียนกลับชีต (ประเภทลูกค้า = dropdown preset + เพิ่มเองได้)
 - frontend [seller.html](dashboard/templates/dashboard/seller.html): `zVal(l)` + `Z_DEAD` (รวม คืนเคส) — `isSkipped`/`isBooked`/`isInHand`/KPI "ต้องโทรต่อ" ใช้ Z ถ้ามี; lead list default sort = `followPriority` (Z) ก่อน แล้วค่อย urgency. lead detail มีฟอร์มกรอก Z(dropdown)/N(toggle)/S(/-slots)/U-Y → `saveLeadField`/`onSelectField`/`onBlurField`
@@ -202,6 +204,8 @@ python manage.py runserver
 - **2 ที่ต้อง sync กัน**: JS `buildDilMap()` (scorecard ที่โชว์จริง, ใน [index.html](dashboard/templates/dashboard/index.html), const `DONE_TGT=15/JONG_TGT=30/CONV_TGT=5` + `VEL_STAGES`) + Python `compute_diligence_scores()` (สำหรับ export → sheet "leadscore"). แก้สูตรต้องแก้ทั้งคู่
 - **ข้อมูลแบน**: `fetch_ban_counts_by_month()` อ่าน tab **"รายงานแบน"** (`SHEET_CONFIG["ban_report"]`, ไฟล์ live) — log 1 แถว=1 ครั้ง (`BAN_COL`), นับตาม banDate. inject เข้า `sellers[].bans` + `monthlySummary[m].sellers[name]["bans"]`
 - เปิด modal คะแนน → ปุ่ม "ดูสูตรคะแนน" (`showScoreHelp`) อธิบาย 6 ด้าน
+- **แถวรวมท้ายตาราง** (มิ.ย.69): ปล่อย/จอง = ผลรวมทุกเซลล์ · คอลัมน์คะแนน = ค่าเฉลี่ย (เพราะคะแนนเป็น /30 /10 ต่อคน บวกกันจะเกินเพดาน) — ทั้ง index.html + seller.html
+- **🏆 leaderboard ในหน้าเซลล์ (มิ.ย.69)**: seller view (`/s/`, `/me/`) ก็โชว์ตารางคะแนนทุกเซลล์ (`renderScorecard()`) ไฮไลท์แถวตัวเอง · view ส่ง `data["scorecard"]` = `compute_diligence_scores()` (คะแนนเดือนนี้ · ส่งแค่ชื่อ+แต้ม ไม่ใช่เคสลูกค้า) — **ข้อยกเว้นเดียวที่ส่งข้อมูลคนอื่นไปหน้าเซลล์** (ปกติ seller.html มีแต่ข้อมูลตัวเอง · ผู้ใช้เลือก leaderboard)
 
 ### Seller page KPI structure (`seller.html`)
 หน้าเซลล์ (`/s/<token>/`) แบ่ง KPI เป็น 2 zones — ตัวเลขใหญ่ = ภาพรวม, chip = filter ลึกลง:
@@ -240,6 +244,7 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
   - State: `dfFrom`/`dfTo` ("YYYY-MM-DD") · `inRange(ds)` เช็ค dateIn อยู่ในช่วง · `ir = inRange`
   - `buildRangeMs()` = สร้าง summary+**sellers+teams** ของช่วง (รูปร่างเหมือน `monthlySummary[m]`) จาก **`dailyByMonth`/`dailyBySeller`** (lead/RJ/จอง/ปล่อย/ยอด รวมรายวัน) + **`followCases`** (ติดตาม) — bans/leadDist รวมรายเดือน (whole-month). cache ต่อ render (`_rmCache`)
   - **ทุกค่าที่โชว์ผูกกับช่วงวันที่**: KPI cards · scorecard(`buildDilMap`) · **ตารางรายเซลล์ (`_sval` ใช้ `ms.sellers` เสมอ ไม่เช็ค dfMonth)** · **team breakdown (`ms.teams`)** · team modal (filter `ir(b.date)`) · กราฟ (rangeDays) — แก้ bug เดิมที่ `_sval`/team อ่าน `dfMonth` (vestige=0) เลยโชว์รายปีเสมอ
+  - **★ ADMIN (เทเลเซลล์) ในตารางรวม (มิ.ย.69)**: ADMIN ไม่อยู่ใน `dailyBySeller` → `buildRangeMs` เคยใส่ entry เป็น **0 ทั้งหมด** (วน `D.sellers` ครบรวม ADMIN แต่ `_sumDaily({})`=0). แก้: `buildRangeMs` + `buildDilMap` + `_sval` เช็ค "ไม่มี dailyBySeller" → ดึงจาก **monthlySummary รวมเดือนในช่วง** แทน → ADMIN โผล่ทั้งตารางสรุป + ตารางคะแนน + ผ่าน `rangeActiveSellers` อัตโนมัติ. **Conv% ของ ADMIN ใช้ `จอง÷lead` (booking rate)** แทน `ปล่อย÷lead` (ป้าย "% จอง") เพราะ ADMIN จอง แต่ไม่ปิดเอง (ปล่อย=0)
   - **เป้า (target) รายเดือน → สเกล × `rangeMonthCount()`** (จำนวนเดือนที่ช่วงครอบ) เพราะ TARGETS ในชีตเป็นเป้า/เดือน (โอ๊ต 8, เฟิร์ส 12...)
   - **`daily_by_seller` รวม orphan/inactive ด้วย** (`_daily_names`) → เซลล์เก่ากรองตามช่วงวันได้ ไม่งั้นโชว์ 0
   - **กรองรายชื่อเซลล์ตามช่วง (`rangeActiveSellers()`)**: ใน `render()` มุมมองรวม (`canViewAll && !impersonate`) กรอง `sellers` ให้เหลือเฉพาะคนที่ **มีกิจกรรมในช่วงที่เลือก** (lead/จอง/ปิด/ยอด/ติดตาม จาก `ms.sellers` + คลิป `la.clips` + ไลฟ์ `la.sessions.hosts` filter `ir(date)`) → ทุกแท็บ (ภาพรวม/เซลล์/LEAD/ไลฟ์) ไม่โชว์เซลล์เก่าที่ไม่มีข้อมูลในช่วง. ดูคนเดียว/impersonate = ไม่กรอง (กันหน้าว่าง)
@@ -248,6 +253,8 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
   - vacant ไม่มีรายวัน → overview KPI ไม่ใช้ (มีแค่หน้า seller detail)
 - _(เดิม `<input type="month">` + `dfMonth` 0/-1/1-12 — เปลี่ยนเป็นช่วงวันแล้ว)_
   - `seller.html` ใช้ `fMonth` (เดือน) + `fDateFrom`/`fDateTo` (ช่วงวัน, "YYYY-MM-DD") — mutually exclusive (เลือก month → ล้าง range, เลือก range → ล้าง month). UI มี 2 แถว: เดือน + ช่วงวัน
+    - **ปุ่มลัด = เหมือนหน้าหลัก (มิ.ย.69)**: `setRangeMonth()` "เดือนนี้" = ต้นเดือน→**สิ้นเดือน** (default ก็ถึงสิ้นเดือน) · `setRangeYear()` "ทั้งปี" = ม.ค.→**31 ธ.ค.** (เดิมทั้งคู่ถึงแค่วันนี้)
+    - **UI หน้าเซลล์อื่นๆ (มิ.ย.69)**: ลบกราฟยอดปล่อย (เหลือ KPI ตัวเลข) · Pipeline funnel → 4 กล่อง KPI · KPI cards+chip โทร ย้ายลงไปติด lead list (ตัวกรอง อยู่ใกล้สิ่งที่กรอง) · banner "เคสไม่มีสถานะ X" (nudge เบาๆ ให้ใส่ Z) บนสุด
     - **กราฟอิงช่วงวันที่ (`buildRangeSeries()`)**: ≤45 วัน = รายวัน (label `d/m`) · >45 วัน = รายเดือนเฉพาะเดือนในช่วง — เลิก bug เดิมที่ `isDaily=fMonth>0` (fMonth=0 เสมอ) เลยตกไป else โชว์ 12 เดือนทั้งปีไม่อิง filter
     - **เป้าสเกลตามช่วง (`rangeMonthCount()`)**: header `เป้า = s.target × เดือนในช่วง` (เดือนละ 8 · ทั้งปี = ×เดือนในช่วง)
     - **รับ `?from=&to=` จาก URL**: ตอนต้นไฟล์ override `fDateFrom`/`fDateTo` ถ้ามี query — ใช้ตอนฝัง iframe ในแท็บ "เซลล์" ของ admin (`renderSeller` ส่ง `?from/to` เข้า iframe + ลิงก์เต็มจอ) ให้หน้าเซลล์อิงตัวกรองเดียวกับ admin
@@ -287,6 +294,7 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 > _(เอาตาราง "รายงานรายเซลล์ (ละเอียด)" ออกแล้ว มิ.ย.69 — ข้อมูลซ้ำกับตาราง "สรุปรายเซลล์" ด้านบน · ถ้าจะกู้คืน ดู git history บล็อก `_aRows`/`_msSum`/`_tabMonth` ใน [index.html](dashboard/templates/dashboard/index.html))_
 
 1. **🚗 Lead รถรุ่นยอดนิยม** — top cars by lead count
+   - **ไม่นับ RJ ทุกประเภท** (มิ.ย.69) — `lead_cars_by_month`/`lead_car_seller_month` skip `cell(r,L.type) in RJ_TYPES` (ทั้งตารางรวม + modal รายเซลล์) → ~10,680 เคส (จาก ~15k)
    - ใช้ **คอลัมน์ M เท่านั้น** (car_formula) — clean normalized names
    - มี pagination ไป/กลับ (20 รุ่น/หน้า) + 🔍 search + checkbox "ซ่อน 'ไม่ระบุ'"
    - กดที่แถวรถ → modal `openCarDetail(car)` แสดงเซลล์ที่รับเคสรถนั้น + จอง/ปล่อย/ยอดเงิน per seller
@@ -310,6 +318,7 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 ### 🤖 AI Insights (Gemini)
 ฟีเจอร์ช่วยเซลล์/แอดมินอ่านตัวเลขเป็นภาษาคน — เรียก Gemini ผ่าน REST (`requests`) ไม่มี SDK · cache ในหน่วยความจำ 30 นาที (กันยิงซ้ำ/เปลืองเงิน):
 - **โค้ชเซลล์** (`gemini_insights.analyze_seller(name, stats_text)`) — วิเคราะห์จุดแข็ง/จุดต้องแก้ + แผนรายสัปดาห์ของเซลล์คนเดียว → ผ่าน `/api/insights/seller` (login ใครก็ได้)
+  - **stats อิงตัวกรอง (มิ.ย.69)**: `aiStatsSummary()` ใช้ `_aiStats` (render() เซ็ตทุกครั้งจาก leadsInRange/bookingsInRange) → เลือกเดือนนี้/ช่วงไหน AI วิเคราะห์อันนั้น (เดิม hardcode เดือนปัจจุบัน+ทั้งปี). forecast ยังใช้ทั้งปี (เป็น "พยากรณ์เทรนด์")
 - **พยากรณ์ยอด** (`forecast_narrative(summary_text)`) — อธิบายเทรนด์ยอด + ปัจจัยตลาด (น้ำมัน/EV/เศรษฐกิจ) + กลยุทธ์ 2-3 ข้อ สำหรับเจ้าของเต็นท์ → ผ่าน `/api/insights/forecast` (admin/exec)
 - env: `GEMINI_API_KEY` + `GEMINI_INSIGHTS_MODEL` (default `gemini-2.5-flash` — เบา/ถูก สำหรับงาน narrative)
 
@@ -351,7 +360,9 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 ### ⚡ Pre-compute dashboard (แก้ "ยิ่งข้อมูลเยอะยิ่งช้า")
 แทนที่จะอ่าน 15k lead + aggregate สดทุกโหลด → **คำนวณล่วงหน้าเก็บผลไว้ คนเข้าเว็บอ่านผลสำเร็จรูป** (เร็วคงที่ ไม่ขึ้นกับจำนวนข้อมูล):
 - `precompute_dashboard()` ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) — คำนวณ `_compute_dashboard_data()` 1 ครั้ง → เก็บลง Supabase table **`dashboard_cache`** (1 แถว key='main', `data` jsonb)
-- `fetch_dashboard_data()` อ่านเร็ว→ช้า: **in-memory (30s)** → **ผล pre-compute Supabase (`_PRECOMPUTE_TTL`=5นาที)** → คำนวณสด+เก็บ (fallback)
+- `fetch_dashboard_data()` อ่านเร็ว→ช้า: **in-memory (30s)** → **ผล pre-compute Supabase** (fresh<5นาที ใช้เลย · **stale ก็ใช้** ดีกว่าคำนวณใหม่) → ของเก่าใน memory → คำนวณสด (cold เท่านั้น)
+  - **⚠️ stale-while-revalidate กันลูกโซ่ล่ม (มิ.ย.69)**: เดิมถ้าอ่าน cache ไม่ทัน (Supabase timeout) จะ **คำนวณสด 121 วิ ทันที** (อ่าน 15k + เขียนกลับ) → ยิ่งไปรุม DB ที่อ่อน (NANO) → ทุก request ตายลูกโซ่. ตอนนี้ **user request ห้าม trigger recompute ถ้ามีของเก่าเสิร์ฟ** — recompute เป็นงานของ cron/ปุ่มรีเฟรชเท่านั้น (ดู "บทเรียน NANO ล่ม" ในโค้ด)
+  - **followCases ผอมลง (มิ.ย.69)**: เก็บแค่ 8 field ที่ frontend+`compute_diligence_scores` ใช้ (ตัด phone/channel/adminStatus/customerStatus/followPriority/callProof/profile/timeIn) → precompute 3.3→2.35 MB เขียน NANO ได้ง่ายขึ้น. **อย่าเพิ่ม field ที่ไม่ได้ใช้กลับ** (seller.html ใช้ `D.leads` ไม่ใช่ followCases)
 - รีเฟรชโดย: **`cron_tick`** (cron ยิงทุก 1 นาที — ถ้าผลเก่า **>180 วิ** → sync+precompute · sync ทุก ~3-4 นาที) + `cron_sync`. ใช้ cron tick ตัวเดียว ไม่ต้องสร้าง cron sync แยก.
   - **⚠️ บทเรียน (7 มิ.ย.69 server ล่ม)**: เคยตั้ง threshold = **45 วิ** (< tick 60s) → ทุก tick ทำ full sync (upsert leads 15k) ~1440 ครั้ง/วัน + ถ้า sync ก่อนยังไม่เสร็จใน 60s ตัวใหม่เริ่ม**ซ้อน** → Supabase/Vercel โหลดพุ่ง **ล่ม** (commit 977eeae). แก้กลับเป็น **180** (sync ทุก ~3-4 นาที ~360 ครั้ง/วัน เทียบของเดิม 270วิ ~288 ครั้ง). **ห้ามลดต่ำกว่า ~120** — แต่ละ sync หนัก (leads 15k jsonb ก้อนเดียว เสี่ยง statement timeout). อยากเร็วกว่านี้แบบปลอดภัย → ต้องแยก sync leads (หนัก) ออกจาก sales/bookings/live (เล็ก) ให้ความถี่ต่างกัน
 - `upsert_sheet()` ตัด cell ว่างท้ายแถว (`_trim_row`) ลดขนาด jsonb — กัน leads (15k) เขียนชน Supabase statement timeout

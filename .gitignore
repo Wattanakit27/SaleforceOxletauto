@@ -49,6 +49,11 @@ staticfiles/
 .DS_Store
 Thumbs.db
 
+# Data exports — มีข้อมูลส่วนบุคคล (เบอร์/ชื่อลูกค้า) ห้ามขึ้น git (PDPA)
+exports/
+*.export.json
+test_render.html
+
 # Testing
 .pytest_cache/
 .coverage
