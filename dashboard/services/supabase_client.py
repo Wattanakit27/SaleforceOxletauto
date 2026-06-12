@@ -12,7 +12,7 @@ from django.conf import settings
 
 # ── Lazy background sync ──
 # เวลา dashboard อ่าน Supabase แล้วเจอข้อมูลเก่า > TTL → ยิง sync เบื้องหลัง (ไม่ block)
-# ทำให้ local สดเองโดยไม่ต้องมี external cron (บน Vercel ใช้ cron-job.org คู่กัน)
+# ทำให้ local สดเองโดยไม่ต้องมี external cron (บน Vercel ใช้ n8n คู่กัน)
 _STALE_TTL = 120  # วินาที
 _bg_lock = threading.Lock()
 _bg_syncing = False

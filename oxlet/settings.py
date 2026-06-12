@@ -98,7 +98,7 @@ SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
 USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
 
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
-# external cron service (cron-job.org, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
+# external cron service (n8n, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
 CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 ROOT_URLCONF = "oxlet.urls"

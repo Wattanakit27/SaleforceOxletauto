@@ -4266,7 +4266,7 @@
       const tickUrl = `${baseUrl}/api/cron/tick?secret=YOUR_CRON_SECRET`;
 
       let html = `<div style="padding:9px 12px;background:var(--blue-bg);border:.5px solid var(--blue);border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:12px;line-height:1.6">
-        ${ic('lucide:refresh-cw',16)} ต้องใช้คู่กับ cron-job.org ยิงเข้า URL ด้านล่างทุก 1 นาที — ถึงเวลาในตาราง ระบบจะส่ง "ตามด่วน" ให้เซลล์เอง
+        ${ic('lucide:refresh-cw',16)} ต้องใช้คู่กับ n8n ยิงเข้า URL ด้านล่างทุก 1 นาที — ถึงเวลาในตาราง ระบบจะส่ง "ตามด่วน" ให้เซลล์เอง
       </div>`;
       html += `<div style="position:relative;margin-bottom:14px">
         <input id="sched-tick-url" readonly value="${h(tickUrl)}" style="width:100%;padding:8px 70px 8px 11px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:10px;font-family:monospace;outline:none;box-sizing:border-box">
@@ -4301,7 +4301,7 @@
     function __schedLogHtml(meta) {
       const ct = meta && meta.cronTick;
       const age = ct ? ct.ageSec : null;
-      const cronTxt = age == null ? '❌ ยังไม่เคยยิงเข้ามา (ตั้ง cron-job.org หรือยัง?)'
+      const cronTxt = age == null ? '❌ ยังไม่เคยยิงเข้ามา (ตั้ง n8n หรือยัง?)'
         : (age < 90 ? '✅ ทำงานปกติ (' + Math.round(age) + ' วิที่แล้ว)'
         : age < 600 ? '⚠️ ' + Math.round(age/60) + ' นาทีที่แล้ว'
         : '❌ หยุดยิง ' + Math.round(age/60) + ' นาที');

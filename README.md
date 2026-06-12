@@ -16,7 +16,7 @@ UI ภาษาไทย, timezone Asia/Bangkok, deploy บน Vercel
 - 🚗 **Lead รถรุ่นยอดนิยม** — จัดอันดับรุ่นรถจาก lead, กดเข้าไปดูเซลล์ที่รับเคสรถนั้น (admin/exec only)
 - 📋 **เคสจองทุกสถานะ** — filter ตามสถานะ/เซลล์/อายุเคส, กดเข้าไปดูรายละเอียดเต็ม (admin/exec only)
 - 🎯 **ตั้งเป้า/ทีมเซลล์ใน UI** — admin แก้ผ่านปุ่มหรือใน Google Sheet ตรงๆ
-- 📤 **LINE Flex Notifications** — ส่ง pipeline แต่ละเซลล์ผ่าน LINE; manual + scheduled (ผ่าน cron-job.org)
+- 📤 **LINE Flex Notifications** — ส่ง pipeline แต่ละเซลล์ผ่าน LINE; manual + scheduled (ผ่าน n8n)
 - 🎩 **Executive Overview Flex** — สรุปยอดทีมทั้งหมดให้ผู้บริหารทาง LINE (เดือนปัจจุบัน)
 
 ---
@@ -32,7 +32,7 @@ UI ภาษาไทย, timezone Asia/Bangkok, deploy บน Vercel
 | Static | [WhiteNoise](http://whitenoise.evans.io/) (in-process) |
 | Notification | [LINE Messaging API](https://developers.line.biz/en/services/messaging-api/) push (Flex) |
 | Hosting | [Vercel](https://vercel.com) (`@vercel/python` builder) |
-| Cron | External — [cron-job.org](https://cron-job.org) ยิง webhook ทุก 1 นาที |
+| Cron | External — [n8n](https://n8n.io) ยิง webhook ทุก 1 นาที |
 
 ---
 
@@ -172,7 +172,7 @@ EXECUTIVE_USER_IDS=Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    - `CSRF_TRUSTED_ORIGINS=https://your-app.vercel.app`
    - `DEBUG=False`
 4. **Use canonical URL** (`your-app.vercel.app`) ไม่ใช่ deployment-specific URL (`your-app-xxx.vercel.app`) เพราะอันยาวมี Vercel Auth wall
-5. **Setup cron** — ไป [cron-job.org](https://cron-job.org) ตั้ง webhook:
+5. **Setup cron** — ตั้ง workflow ใน [n8n](https://n8n.io) (Schedule Trigger → HTTP Request):
    ```
    URL: https://your-app.vercel.app/api/cron/tick?secret=<CRON_SECRET>
    Schedule: * * * * *  (ทุก 1 นาที)
@@ -197,8 +197,8 @@ EXECUTIVE_USER_IDS=Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 - **Cold start** บน Vercel ~5-10s (request แรกหลังนิ่ง)
 - **Google Sheets API quota** = 60 reads/min — ทุก dashboard load = 7 reads
-- **Schedule precision** = 1 นาที (ตาม cron-job.org interval)
-- **No deduplication** — ถ้า cron-job.org ยิงซ้ำในนาทีเดียวกัน → Flex ซ้ำ (rare)
+- **Schedule precision** = 1 นาที (ตาม n8n interval)
+- **No deduplication** — ถ้า n8n ยิงซ้ำในนาทีเดียวกัน → Flex ซ้ำ (rare)
 - **Vercel Hobby** = 1 cron job/วัน → ต้องใช้ external cron แทน
 - เซลล์ใหม่ที่เพิ่มผ่าน 🎯 ตั้งเป้า/ทีม **ยกเว้น** URL `/s/<token>/` ต้อง add token เองในโค้ด
 

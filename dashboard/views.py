@@ -597,7 +597,7 @@ def admin_schedule_config(request):
     schedules = load_schedules()
     cfg = SHEET_CONFIG.get("schedule_config", {})
     sheet_url = f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit"
-    # cron log — รู้ว่า cron-job.org ยิงเข้ามาไหม (heartbeat) + followup ส่งล่าสุด (แทนปุ่มทดสอบในหน้าตาราง)
+    # cron log — รู้ว่า n8n ยิงเข้ามาไหม (heartbeat) + followup ส่งล่าสุด (แทนปุ่มทดสอบในหน้าตาราง)
     cron_tick = None
     last_followup = None
     try:
@@ -653,7 +653,7 @@ def cron_tick(request):
     from .services.fetch_dashboard import bangkok_now
 
     now = bangkok_now()
-    # heartbeat — บันทึกว่า cron ทำงานล่าสุดเมื่อไหร่ (โชว์ในหน้าสถานะระบบ → รู้ว่า cron-job.org ยิงถึงไหม)
+    # heartbeat — บันทึกว่า cron ทำงานล่าสุดเมื่อไหร่ (โชว์ในหน้าสถานะระบบ → รู้ว่า n8n ยิงถึงไหม)
     try:
         from .services.supabase_client import set_kv as _set_kv
         _set_kv("cron_tick", {"ok": True})
@@ -770,7 +770,7 @@ def cron_sync(request):
 
 @require_http_methods(["GET", "POST"])
 def cron_send_line(request):
-    """Public endpoint สำหรับ external cron (cron-job.org / Vercel cron) ยิงเข้ามา
+    """Public endpoint สำหรับ external cron (n8n / Vercel cron) ยิงเข้ามา
 
     ป้องกันด้วย CRON_SECRET — ใครไม่มี secret ถูกต้องจะได้ 401
     URL pattern: /api/cron/send_line?secret=xxx[&test=1&target=Uxxx&sellers=A,B]
@@ -787,7 +787,7 @@ def cron_send_line(request):
 
     # รองรับทั้ง 3 รูปแบบ:
     # 1) Vercel cron auto: Authorization: Bearer <CRON_SECRET>
-    # 2) External cron (cron-job.org): ?secret=xxx
+    # 2) External cron (n8n): ?secret=xxx
     # 3) Custom header: X-Cron-Secret: xxx
     auth_header = request.headers.get("Authorization", "")
     bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
@@ -1546,7 +1546,7 @@ def admin_system_health(request):
     elif today_leads == 0 and now.weekday() < 5 and now.hour >= 11:
         issues.append({"level": "warn", "msg": "วันนี้ยังไม่มี lead เข้าเลย (วันทำการ หลัง 11 โมง) — อาจมีปัญหา channel/ชีต"})
 
-    # ── cron heartbeat + followup log (รู้ว่า cron-job.org ยิงถึงไหม + followup ส่งล่าสุด) ──
+    # ── cron heartbeat + followup log (รู้ว่า n8n ยิงถึงไหม + followup ส่งล่าสุด) ──
     cron_tick_age = None
     last_followup = None
     try:
@@ -1561,7 +1561,7 @@ def admin_system_health(request):
     except Exception:
         pass
     if cron_tick_age is None or cron_tick_age > 600:
-        issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค URL ใน cron-job.org ให้เป็นโดเมน saleforce-oxletauto"})
+        issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค URL ใน n8n ให้เป็นโดเมน saleforce-oxletauto"})
 
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
