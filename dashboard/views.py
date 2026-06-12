@@ -202,23 +202,31 @@ def login_view(request):
             if is_ajax:
                 return JsonResponse({"ok": False, "error": err}, status=401)
             return render(request, "dashboard/login.html", {"next": next_url, "error": err})
+        # ได้สิทธิ์ admin จาก 3 ทาง (ยังนับเป็นเซลล์ปกติในสถิติ):
+        #  0) LINE user_id อยู่ใน SUPER_ADMIN_IDS (hardcode/break-glass) — login ได้แม้ไม่มีใน employees
+        #  1) LINE user_id อยู่ในชีต "ตั้งค่าแอดมิน" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)
+        #  2) เป็นเซลล์ใน TEAMS ที่ถูกติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์
+        from .services.constants import (
+            normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS, SUPER_ADMIN_IDS,
+            refresh_from_sheet, load_admin_user_ids,
+        )
         try:
-            employees = fetch_sheet("employees")
+            try:
+                employees = fetch_sheet("employees")
+            except Exception:
+                # แอดมินสูงสุด (hardcode) ต้อง login ได้แม้อ่าน employees ไม่ได้
+                if line_token not in SUPER_ADMIN_IDS:
+                    raise
+                employees = []
             for r in employees:
                 if cell(r, EM.user_id) == line_token:
                     position = (cell(r, EM.position) or "").strip().lower()
                     nickname = cell(r, EM.nickname)
                     display = cell(r, EM.display_name)
-                    # ได้สิทธิ์ admin จาก 2 ทาง (ยังนับเป็นเซลล์ปกติในสถิติ):
-                    #  1) LINE user_id อยู่ในชีต "ตั้งค่าแอดมิน" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)
-                    #  2) เป็นเซลล์ใน TEAMS ที่ถูกติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์
-                    from .services.constants import (
-                        normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS,
-                        refresh_from_sheet, load_admin_user_ids,
-                    )
                     refresh_from_sheet()
                     load_admin_user_ids()
-                    if line_token in ADMIN_USER_IDS or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
+                    if (line_token in SUPER_ADMIN_IDS or line_token in ADMIN_USER_IDS
+                            or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS):
                         position = "admin"
                     request.session["oxlet_user"] = {
                         "user_id": line_token,
@@ -236,6 +244,19 @@ def login_view(request):
                     if is_ajax:
                         return JsonResponse({"ok": True, "next": target})
                     return HttpResponseRedirect(target)
+            # ไม่พบใน employees — ถ้าเป็นแอดมินสูงสุด (hardcode) ก็ให้ login ได้ในฐานะ admin
+            if line_token in SUPER_ADMIN_IDS:
+                request.session["oxlet_user"] = {
+                    "user_id": line_token,
+                    "nickname": "แอดมิน",
+                    "display_name": "แอดมินสูงสุด",
+                    "position": "admin",
+                }
+                request.session.set_expiry(60 * 60 * 24 * 30)
+                target = next_url if next_url != "/dashboard/" else "/dashboard/"
+                if is_ajax:
+                    return JsonResponse({"ok": True, "next": target})
+                return HttpResponseRedirect(target)
         except Exception as e:
             err = f"ตรวจ user_id ล้มเหลว: {e}"
             if is_ajax:
@@ -253,12 +274,16 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
     if not line_user_id:
         return None, "ไม่ได้รับ LINE user_id"
     from .services.constants import (
-        normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS, refresh_from_sheet, load_admin_user_ids,
+        normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS, SUPER_ADMIN_IDS,
+        refresh_from_sheet, load_admin_user_ids,
     )
     try:
         employees = fetch_sheet("employees")
     except Exception as e:
-        return None, f"อ่านรายชื่อพนักงานไม่ได้: {e}"
+        # แอดมินสูงสุด (hardcode) ต้อง login ได้แม้อ่าน employees ไม่ได้
+        if line_user_id not in SUPER_ADMIN_IDS:
+            return None, f"อ่านรายชื่อพนักงานไม่ได้: {e}"
+        employees = []
     for r in employees:
         if cell(r, EM.user_id) == line_user_id:
             position = (cell(r, EM.position) or "").strip().lower()
@@ -266,7 +291,8 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
             display = cell(r, EM.display_name)
             refresh_from_sheet()
             load_admin_user_ids()
-            if line_user_id in ADMIN_USER_IDS or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS:
+            if (line_user_id in SUPER_ADMIN_IDS or line_user_id in ADMIN_USER_IDS
+                    or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS):
                 position = "admin"
             request.session["oxlet_user"] = {
                 "user_id": line_user_id,
@@ -279,6 +305,16 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
             if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
                 return (next_url or "/dashboard/"), None
             return "/me/", None   # เซลล์ → /me/ (อิง session ไม่ใช่ token ใน URL)
+    # ไม่พบใน employees — ถ้าเป็นแอดมินสูงสุด (hardcode) ก็ให้ login ได้ทันทีในฐานะ admin
+    if line_user_id in SUPER_ADMIN_IDS:
+        request.session["oxlet_user"] = {
+            "user_id": line_user_id,
+            "nickname": "แอดมิน",
+            "display_name": "แอดมินสูงสุด",
+            "position": "admin",
+        }
+        request.session.set_expiry(60 * 60 * 24 * 14)
+        return (next_url or "/dashboard/"), None
     return None, "ไม่พบบัญชี LINE นี้ในรายชื่อพนักงาน — แจ้งแอดมินเพิ่ม LINE ID ก่อน"
 
 

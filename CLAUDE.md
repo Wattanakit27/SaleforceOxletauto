@@ -142,8 +142,8 @@ python manage.py runserver
 - **เพิ่มเซลล์ใหม่**: แค่เพิ่มแถวใน sheet → ระบบ pickup auto (แต่ token ใน [seller_tokens.py](dashboard/services/seller_tokens.py) ต้องเพิ่มเองสำหรับ URL `/s/`)
 - **`SELLER_MAP`** = normalize ชื่อสะกดต่าง (เจเจ→เจ, กลอฟ→กอล์ฟ) — ใช้ผ่าน `normalize_seller()` เสมอ
 
-#### 👑 แอดมินจาก LINE user_id (2 ทาง — แก้ได้เองในแดชบอร์ด เพราะคนเป็นแอดมินเปลี่ยนบ่อย)
-ตอน login ด้วย LINE user_id (`login_view` LINE branch) → ได้ `position="admin"` ถ้าเข้าเงื่อนไขข้อใดข้อหนึ่ง (เรียก `refresh_from_sheet()` + `load_admin_user_ids()` ก่อนเช็ค) — **ทั้ง 2 แบบยังนับเป็นเซลล์ปกติในสถิติ** (ยอดมาจากชีต ไม่ขึ้นกับ role):
+#### 👑 แอดมินจาก LINE user_id (3 ทาง — แก้ได้เองในแดชบอร์ด เพราะคนเป็นแอดมินเปลี่ยนบ่อย)
+ตอน login ด้วย LINE user_id (`login_view` LINE branch + `_login_with_line_user_id` ทาง LINE Login OAuth) → ได้ `position="admin"` ถ้าเข้าเงื่อนไขข้อใดข้อหนึ่ง (เรียก `refresh_from_sheet()` + `load_admin_user_ids()` ก่อนเช็ค) — **ทั้ง 3 แบบยังนับเป็นเซลล์ปกติในสถิติ** (ยอดมาจากชีต ไม่ขึ้นกับ role):
 
 **1. เซลล์แอดมิน** — เซลล์ใน TEAMS ที่ติ๊ก "แอดมิน":
 - คอลัมน์ D `is_admin` ในชีต **"ตั้งค่าเซลล์"** (`SELLER_CONFIG_COL.is_admin=3`) = `TRUE`/ว่าง → `refresh_from_sheet()` สร้าง set **`ADMIN_SELLERS`**
@@ -154,6 +154,11 @@ python manage.py runserver
 - จัดการ: ปุ่ม **👑 จัดการแอดมิน** (เมนูจัดการ) → เลือกจาก employees หรือวาง user_id → เพิ่ม/ลบ (`admin_admin_config`: GET ส่ง admins+employees, POST เขียนชีต) · แก้ในชีตตรงๆ ก็ได้
 - ใช้เมื่อแอดมิน**ไม่ได้อยู่ใน 13 เซลล์** (เช่น ทีมโทร/ออฟฟิศ) — checkbox ในตั้งค่าเซลล์จะไม่มีให้ติ๊ก
 - **"ADMIN" seller = ศูนย์รวมเทเลเซลล์**: เคสที่ลงชื่อเซลล์ = "ADMIN" ในชีต ถูกรวมเป็น seller ชื่อ "ADMIN" (team="ADMIN"). ไอดีเทเลเซลล์ทั้ง 5 → `seller_from_token()` map เป็น "ADMIN" → เปิด `/s/<id>/` เห็นหน้ารวมเทเลเซลล์ (`fetch_seller_stats("ADMIN")`). dropdown แท็บเซลล์ใช้ `sellerTokens["ADMIN"]` = ไอดีเทเลเซลล์คนแรก (ตั้งใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py))
+
+**3. แอดมินสูงสุด hardcode (break-glass)** — set **`SUPER_ADMIN_IDS`** ([constants.py](dashboard/services/constants.py)):
+- LINE user_id ใน set นี้ได้ `position="admin"` เสมอ **และ login ผ่าน LINE ได้ทันทีแม้ไม่มีในชีต employees / อ่าน employees ไม่ได้** (ต่างจากทาง 1–2 ที่ admin-check อยู่ใน loop ของ employees → ต้องมีใน employees ก่อน)
+- ใช้กันเคส "แอดมินหลักล็อกตัวเองออก / เข้า UI จัดการแอดมินไม่ได้" — แก้ในโค้ดตรงๆ (ต้อง deploy) หรือเพิ่มผ่าน env `SUPER_ADMIN_IDS` (comma-separated, รวมกับ default)
+- ทาง LINE Login OAuth (`_login_with_line_user_id`) = ไม่ต้องรหัส · ทางรหัสรวม (`login_view`) = ยังต้องกรอกรหัสรวมให้ถูก
 
 - แอดมิน(เซลล์)ใช้ปุ่ม "ดูในฐานะ <ตัวเอง>" (impersonate) ดูหน้าเซลล์ตัวเองได้ · ต่างจาก **แอดมินสูงสุด** (env/`app_users role=admin`)
 

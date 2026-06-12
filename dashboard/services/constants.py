@@ -141,6 +141,18 @@ EXECUTIVE_USER_IDS = [
     ).split(",") if uid.strip()
 ]
 
+# แอดมินสูงสุด (hardcode/break-glass) — LINE user_id ที่เป็น "แอดมินใหญ่" เสมอ ไม่ขึ้นกับชีต
+# ใช้กันแอดมินหลักล็อกตัวเองออก หรือยังไม่มีใน employees → login ผ่าน LINE ได้ทันทีในฐานะ admin
+# เพิ่ม/แก้ได้ผ่าน env SUPER_ADMIN_IDS (comma-separated) — รวมกับ default ด้านล่าง
+SUPER_ADMIN_IDS: set[str] = {
+    "U6bf1d72cf1d7e237c3a5c9848dde9bf4",
+    "Ueac80f8644c5d1cfdbec61b1d91caee2",
+    "U481c3a42fd2f32cadea175131492d958",
+    "U1cb2b916b062d2ef42c6800d21165083",
+} | {
+    uid.strip() for uid in (_os.getenv("SUPER_ADMIN_IDS", "") or "").split(",") if uid.strip()
+}
+
 STATUS_COLOR = {
     "จอง": "#f59e0b",
     "รอเซ็นต์": "#3b82f6",
