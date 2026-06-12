@@ -124,8 +124,9 @@
   const _ymdS = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   let fMonth = 0;          // vestige (passFilter/กราฟ บางจุดอ้าง) — ใช้ช่วงวันแทน
   let fDay = 0;
+  let _aiStats = null;     // stats ของช่วงที่กรองอยู่ (render() เซ็ตทุกครั้ง) → AI โค้ชใช้ "วัดตามตัวกรอง"
   let fDateFrom = _ymdS(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
-  let fDateTo = _ymdS(new Date());                                                       // ถึงวันนี้
+  let fDateTo = _ymdS(new Date(new Date().getFullYear(), new Date().getMonth()+1, 0));   // ถึงสิ้นเดือนปัจจุบัน (เหมือนหน้าหลัก · เดิมถึงแค่วันนี้)
   // ฝังใน iframe หน้า admin หรือ deep link → รับช่วงวันที่จาก URL (?from=YYYY-MM-DD&to=YYYY-MM-DD)
   try {
     const _q = new URLSearchParams(location.search);
@@ -136,7 +137,7 @@
   let kpiFilter = 'inHand';
   let viewMode = 'leads';
   let bookStatusFilter = 'all';
-  let statusFilter = 'all';   // dropdown ในหัว lead list: all | follow | returned | cancelled | reassigned
+  let statusFilter = 'all';   // dropdown ในหัว lead list: all | z_<สถานะลูกค้า> (16 ค่า · มิ.ย.69)
   let sortOrder = '';         // '' (default urgency) | 'updates_desc' | 'updates_asc'
   let pageMode = 'dashboard'; // 'dashboard' | 'finance' — เลือกจาก dropdown โหมดบนหัว
   const __charts = {};
@@ -220,7 +221,7 @@
     return d == null ? 0 : Math.max(0, d);
   }
   // จังหวะตาม (cadence) — เว้นกี่วันก่อนตามอีก ตามสถานะลูกค้า · เพิ่งตามยังไม่ถึงรอบ = ยังไม่ต้องเด้งซ้ำ
-  const CADENCE = { 'สนใจมาก': 1, 'ลังเล': 2, 'ไม่รับสาย': 1, 'รอเงิน': 3, 'รอเช็คเครดิต': 2, 'ดาวน์ไม่พอ': 3 };
+  const CADENCE = { 'สนใจมาก': 1, 'ลังเล': 2, 'ไม่รับสาย': 1, 'รอเงิน': 3, 'รอเช็คเครดิต': 2, 'ดาวน์ไม่พอ': 3, 'เงินสดเงินไม่พอ': 3, 'ลูกค้าไม่ตอบ': 1 };
   const NOANS_CAP = 5;   // ไม่รับสายเกินนี้ = พักไว้ (ไม่สแปม)
   function cadenceDays(l) {
     const z = zVal(l);
@@ -319,6 +320,10 @@
   // คอลัม Z "สถานะลูกค้า" (layout ใหม่) — sync กับ backend customer_status logic
   // เคสเสีย (ในวงเล็บ): ยังไม่ออก/แบล็คลิส/เครดิตไม่ผ่าน/ไม่สนใจ/คืนเคส
   const Z_DEAD = ['ยังไม่ออก','แบล็คลิส','เครดิตไม่ผ่าน','ไม่สนใจ','คืนเคส'];
+  // 16 ค่าของ dropdown "สถานะลูกค้า" (มิ.ย.69) — ใช้ทั้งตัวกรองสถานะ (STATUS_FILTERS) + dropdown แก้ในเคส
+  const Z_STATUSES = ['สนใจมาก','ลังเล','ไม่รับสาย','รอเงิน','รอเช็คเครดิต','ดาวน์ไม่พอ','จอง','ส่งมอบ',
+                      'ยังไม่ออกเร็วๆนี้','ติดแบล็คลิส','เครดิตไม่ผ่าน','ลูกค้าไม่สนใจแล้ว','คืนเคส',
+                      'ได้รถแล้ว','เงินสดเงินไม่พอ','ลูกค้าไม่ตอบ'];
   const zVal = (l) => (l.customerStatus || '').trim();
   const isSkipped = (l) => {
     const z = zVal(l);
@@ -330,10 +335,10 @@
       return (a && a.includes(kw)) || (s && s.includes(kw));
     });
   };
-  // "จอง / ปล่อย / ส่งมอบ" = เคสที่จัดการแล้ว (ไม่ต้องเตือนให้โทรตามอีก)
+  // "จอง / ปล่อย / ส่งมอบ / ได้รถแล้ว" = เคสที่จัดการแล้ว (ไม่ต้องเตือนให้โทรตามอีก)
   const isBooked = (l) => {
     const z = zVal(l);
-    if (z) return z.includes('จอง') || z.includes('ส่งมอบ') || z.includes('ปล่อย');
+    if (z) return z.includes('จอง') || z.includes('ส่งมอบ') || z.includes('ปล่อย') || z.includes('ได้รถแล้ว');
     const a = (l.adminStatus||'').toLowerCase();
     const s = (l.salesStatus||'').toLowerCase();
     return a.includes('จอง') || s.includes('จอง') || a.includes('ปล่อย') || s.includes('ปล่อย');
@@ -388,16 +393,11 @@
       return a.includes(lk) || s.includes(lk);
     });
   }
+  // ตัวกรองสถานะ — กรองตาม "สถานะลูกค้า" (Z) 16 ค่าใหม่ (มิ.ย.69)
+  // เดิมมี ติดตาม/คืนเคส/ยกเลิก/จ่ายใหม่ (จาก admin/sales) → เปลี่ยนเป็น dropdown Z ตามที่ผู้ใช้กำหนด
   const STATUS_FILTERS = [
-    { key: 'all',        label: 'ทั้งหมด',   test: null },  // null = ใช้ kpiFilter test
-    { key: 'follow',     label: 'ติดตาม',    test: l => {
-        if (isSkipped(l)) return false;
-        const s = (l.salesStatus||'').toLowerCase();
-        return s && s !== '-' && FOLLOW_KEYWORDS.some(k => s.includes(k));
-    }},
-    { key: 'returned',   label: 'คืนเคส',    test: l => statusContains(l, 'คืนเคส') },
-    { key: 'cancelled',  label: 'ยกเลิก',    test: l => statusContains(l, 'ยกเลิก') },
-    { key: 'reassigned', label: 'จ่ายใหม่',  test: l => statusContains(l, 'จ่ายใหม่') },
+    { key: 'all', label: 'ทั้งหมด', test: null },  // null = ใช้ kpiFilter test
+    ...Z_STATUSES.map(z => ({ key: 'z_' + z, label: z, test: l => zVal(l).includes(z) })),
   ];
   const SORT_OPTIONS = [
     { key: '',             label: 'เรียงปกติ'  },
@@ -423,6 +423,44 @@
       }
       return dateMatchesFilter(b.date);
     });
+  }
+
+  // 🏆 ตารางคะแนนเซลล์ (leaderboard) — คะแนนเดือนนี้ของทุกเซลล์ · ไฮไลท์แถวตัวเอง
+  function renderScorecard() {
+    const sc = (D.scorecard || []).slice().sort((a,b) => (b.total||0) - (a.total||0));
+    if (!sc.length) return '';
+    const f1 = (n) => (Math.round(Number(n||0)*10)/10).toFixed(1);
+    const medals = ['🥇','🥈','🥉'];
+    const cols = '.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .8fr .85fr .7fr .8fr';
+    let s = `<div class="section" style="margin-bottom:14px">
+      <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:trophy',16)} ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(100 คะแนน · เดือนนี้)</span></h2>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:8px">อันดับคะแนนทุกเซลล์ของเดือนนี้ — <b style="color:var(--blue)">แถวสีน้ำเงิน = ของคุณ</b></div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div style="min-width:720px">
+        <div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:9.5px;color:var(--t3);padding:5px 6px;border-bottom:.5px solid var(--bd);font-weight:600">
+          <span>#</span><span>เซลล์</span><span style="text-align:right">ปล่อย</span><span style="text-align:right">จอง</span><span style="text-align:right">Conv%</span>
+          <span style="text-align:right">จบ/30</span><span style="text-align:right">จอง/10</span><span style="text-align:right">Conv/20</span><span style="text-align:right">เวลา/10</span><span style="text-align:right">ตาม/20</span><span style="text-align:right">แบน/10</span><span style="text-align:right">รวม</span>
+        </div>`;
+    sc.forEach((e, i) => {
+      const me = e.name === SELLER_NAME;
+      const rank = medals[i] || (i + 1);
+      const tc = e.total >= 70 ? 'var(--green)' : e.total >= 50 ? 'var(--blue)' : e.total >= 30 ? 'var(--amber)' : 'var(--red)';
+      s += `<div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:11px;padding:6px;border-bottom:.5px solid var(--bd);${me?'background:var(--blue-bg,#eef2ff);border-radius:6px':''}">
+        <span style="${i<3?'font-size:13px':'color:var(--t3)'}">${rank}</span>
+        <span style="font-weight:${me?'800':i<3?'700':'500'};${me?'color:var(--blue)':''}">${h(e.name)}${me?' (คุณ)':''}</span>
+        <span style="text-align:right;color:var(--t2)">${e.dones}</span>
+        <span style="text-align:right;color:var(--t2)">${e.jongs}</span>
+        <span style="text-align:right;color:var(--t3);font-size:10px">${f1(e.conv)}</span>
+        <span style="text-align:right;color:var(--green-mid)">${f1(e.sDone)}</span>
+        <span style="text-align:right;color:var(--blue)">${f1(e.sJong)}</span>
+        <span style="text-align:right;color:var(--blue)">${f1(e.sConv)}</span>
+        <span style="text-align:right;color:#7c3aed">${f1(e.sVel)}</span>
+        <span style="text-align:right;color:var(--amber)">${f1(e.sFollow)}</span>
+        <span style="text-align:right;color:${e.sBan<10?'var(--red)':'var(--t2)'}">${f1(e.sBan)}</span>
+        <span style="text-align:right;color:${tc};font-weight:800;font-size:12.5px">${f1(e.total)}</span>
+      </div>`;
+    });
+    s += `</div></div></div>`;
+    return s;
   }
 
   // จำนวนเดือนที่ช่วงวันที่ครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วง (เดือนละ 8 · กรองทั้งปี = ×เดือนในช่วง)
@@ -639,8 +677,16 @@
 
     // เคสในมือ breakdown — จาก leads ที่ผ่าน isInHand (mutual exclusive bucket)
     // priority: ปล่อย > จอง > ติดตาม → sum = kpiCounts['inHand']
+    // ★ ใช้สถานะลูกค้า (Z) ก่อน — ได้รถแล้ว/ส่งมอบ/ปล่อย=จบ · จอง=จอง · อื่นๆ=ติดตาม · ไม่มี Z → admin/sales เดิม
     let h_follow = 0, h_booking = 0, h_released = 0;
     allLeads.filter(isInHand).forEach(l => {
+      const z = zVal(l);
+      if (z) {
+        if (z.includes('ปล่อย') || z.includes('ส่งมอบ') || z.includes('ได้รถแล้ว')) h_released++;
+        else if (z.includes('จอง')) h_booking++;
+        else h_follow++;
+        return;
+      }
       const a = (l.adminStatus||'').toLowerCase();
       const s = (l.salesStatus||'').toLowerCase();
       if (a.includes('ปล่อย') || s.includes('ปล่อย')) h_released++;
@@ -661,6 +707,18 @@
       const mm = fMonth > 0 ? `เดือน${(C.MONTHS_FULL||[])[fMonth-1] || fMonth}` : 'ทั้งปี';
       return mm;
     })();
+
+    // 🤖 เก็บ stats ของ "ช่วงที่กรองอยู่" ให้ AI โค้ชใช้ → AI วัดตามตัวกรอง (เลือกเดือนนี้ = วิเคราะห์เดือนนี้)
+    _aiStats = {
+      periodLabel,
+      lead: allLeads.length,
+      called: kpiCounts['called'] || 0,
+      notCalled: kpiCounts['notCalled'] || 0,
+      follow: kpiCounts['follow'] || 0,
+      booking: bookingCount,
+      done: doneCount,
+      dealValue: dealValueRange,
+    };
 
     // ฿ แบบกระชับ
     const fmtBaht = (n) => {
@@ -719,6 +777,19 @@
       })()}
 
       ${(() => {
+        // 🔔 nudge เบาๆ: เคสที่ยังไม่ลงสถานะลูกค้า (Z ว่าง) — เร่งให้เซลล์ใส่ (ไม่สำคัญมาก · info สีฟ้า)
+        const noStatus = leadsInCurrentMonth().filter(l => !zVal(l) && !isSkipped(l) && !isBooked(l)).length;
+        if (noStatus === 0) return '';
+        return `
+        <div style="background:var(--bg2);border:.5px solid var(--bd);border-left:3px solid var(--blue);border-radius:8px;padding:9px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;font-size:12px">
+          <span style="color:var(--blue);flex-shrink:0">${ic('lucide:bell',16)}</span>
+          <span style="color:var(--t2)"><b style="color:var(--blue)">${noStatus}</b> เคสยังไม่ลงสถานะลูกค้า — กดเปิดเคสแล้วเลือกสถานะหน่อย จะช่วยจัดลำดับการตามให้แม่นขึ้น</span>
+        </div>`;
+      })()}
+
+      ${renderScorecard()}
+
+      ${(() => {
         // ✏️ แจ้งเตือน "ปล่อยแล้วยังไม่ลงวันส่งมอบ" — เคสของตัวเอง (กดลงวันได้เลย · มีผลกับคะแนนความเร็ว)
         const relBlank = bookingsInRange().map((b,i)=>({b,i})).filter(o =>
           o.b.status === 'ปล่อย' && (!o.b.releaseDatePrimary || o.b.releaseDatePrimary === '' || o.b.releaseDatePrimary === '-') && o.b.sheetTab);
@@ -741,29 +812,6 @@
         <button class="f-btn" onclick="setRangeMonth()">เดือนนี้</button>
         <button class="f-btn" onclick="setRangeYear()">ทั้งปี</button>
         <button class="f-btn ${(fDateFrom&&fDateFrom===fDateTo)?'on':''}" onclick="setRangeToday()">วันนี้</button>
-      </div>
-
-      <div class="kgrid" style="grid-template-columns:repeat(5,minmax(0,1fr))">
-        ${KPI_DEFS.map(k => {
-          // เคสในมือ → override hint ให้แสดง breakdown (ใช้ตัวเลขจาก leads sheet ให้ sum ตรงกับ count)
-          const hint = k.key === 'inHand'
-            ? `ติดตาม ${h_follow} · จอง ${h_booking} · ปล่อย ${h_released}`
-            : k.hint;
-          return `
-          <div class="kpi-card ${kpiFilter===k.key?'active':''}" onclick="setKpi('${k.key}')">
-            <div class="kl">${k.label}</div>
-            <div class="kv" style="color:${k.color}">${kpiCounts[k.key]}</div>
-            <div class="ks">${hint}</div>
-          </div>
-        `;}).join('')}
-      </div>
-
-      <div class="filter-bar" style="margin-bottom:10px">
-        <span class="lbl">จำนวนครั้งที่โทร</span>
-        ${CALL_FILTERS.map(k => {
-          const on = kpiFilter === k.key;
-          return `<button class="f-btn ${on?'on':''}" onclick="setKpi('${k.key}')" style="${on?`background:${k.color};color:#fff;border-color:${k.color};font-weight:600`:''}">${h(k.label)} <b>${kpiCounts[k.key]}</b></button>`;
-        }).join('')}
       </div>
 
       ${(() => {
@@ -832,8 +880,9 @@
         // filter: ยังต้องตาม (!isSkipped + !isBooked) + มีคะแนน
         // จอง/ปล่อยแล้ว = จัดการแล้ว ไม่ต้องเตือนให้โทร
         // sort: คะแนนสูงสุดก่อน (hot → warm → cold)
+        const _isReturned = (l) => zVal(l).includes('คืนเคส') || (l.adminStatus||'').includes('คืนเคส') || (l.salesStatus||'').includes('คืนเคส');
         const priorityLeads = allLeads
-          .filter(l => !isSkipped(l) && !isBooked(l) && (l.leadScore !== undefined && l.leadScore !== null))
+          .filter(l => !isSkipped(l) && !isBooked(l) && !_isReturned(l) && (l.leadScore !== undefined && l.leadScore !== null))   // ★ คืนเคส (Z/admin/sales) ไม่ต้องตาม
           .filter(l => followUrgency(l) > 0)   // ตัดเคสที่ "พักไว้" (ไม่รับสายเกิน cap)
           .sort((a,b) => followUrgency(b) - followUrgency(a))
           .slice(0, 10);
@@ -954,10 +1003,6 @@
           <div class="chart-box"><canvas id="chart-bd"></canvas></div>
         </div>
         <div class="chart-card span2">
-          <div class="chart-title">ยอดปล่อย ${h(periodLabel)} · รวม ${fmtBahtChart(dealValueRange)}</div>
-          <div class="chart-box"><canvas id="chart-deal-value"></canvas></div>
-        </div>
-        <div class="chart-card span2">
           <div class="chart-title">สถานะดีล ${h(periodLabel)} (${bookings.length} เคส)</div>
           <div class="chart-box"><canvas id="chart-pipe"></canvas></div>
         </div>
@@ -999,50 +1044,30 @@
           <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:filter',16)} Pipeline ของคุณ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
           <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เห็นว่าเคสหายไปตรง stage ไหน → ช่วยรู้ว่าควรพัฒนาตรงไหน (รับเยอะแต่ตามไม่ครบ? ตามได้แต่จองไม่ลง?)</div>
 
-          <div style="display:grid;gap:6px;margin-bottom:10px">
-
-            <!-- Stage 1: รับ -->
-            <div>
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">${ic('lucide:clipboard-list',16)} รับเข้ามา</span>
-                <span style="font-weight:700;color:var(--t1)">${received} เคส</span>
-              </div>
-              <div style="height:22px;background:var(--blue);border-radius:5px;width:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">100%</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
+            <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
+              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:clipboard-list',16)} รับเข้ามา</div>
+              <div style="font-size:21px;font-weight:800;color:var(--blue)">${received}</div>
+              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">100%</div>
             </div>
-
-            <!-- arrow + % -->
-            <div style="text-align:center;font-size:10.5px;color:${rateColor(callRate, 80, 60)};font-weight:600;padding:1px 0">▼ ${callRate}% โทร</div>
-
-            <!-- Stage 2: โทรตาม -->
-            <div>
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">${ic('lucide:phone',16)} โทรตามแล้ว</span>
-                <span style="font-weight:700;color:var(--t1)">${called} เคส</span>
-              </div>
-              <div style="height:22px;background:var(--amber);border-radius:5px;width:${widthOf(called)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((called/received)*100)}%</div>
+            <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
+              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:phone',16)} โทรตามแล้ว</div>
+              <div style="font-size:21px;font-weight:800;color:var(--amber)">${called}</div>
+              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((called/received)*100):0}%</div>
             </div>
-
-            <div style="text-align:center;font-size:10.5px;color:${rateColor(bookRate, 25, 15)};font-weight:600;padding:1px 0">▼ ${bookRate}% จองได้</div>
-
-            <!-- Stage 3: จอง -->
-            <div>
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">${ic('lucide:file-pen',16)} จอง</span>
-                <span style="font-weight:700;color:var(--t1)">${booked} เคส</span>
-              </div>
-              <div style="height:22px;background:var(--green);border-radius:5px;width:${widthOf(booked)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${Math.round((booked/received)*100)}%</div>
+            <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
+              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:file-pen',16)} จอง</div>
+              <div style="font-size:21px;font-weight:800;color:var(--green)">${booked}</div>
+              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((booked/received)*100):0}%</div>
             </div>
-
-            <div style="text-align:center;font-size:10.5px;color:${rateColor(releaseRate, 70, 40)};font-weight:600;padding:1px 0">▼ ${releaseRate}% ปิดดีล</div>
-
-            <!-- Stage 4: ปล่อย -->
-            <div>
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:2px">
-                <span style="color:var(--t2);font-weight:600">${ic('lucide:car-front',16)} ปล่อยรถ</span>
-                <span style="font-weight:700;color:var(--t1)">${released} เคส</span>
-              </div>
-              <div style="height:22px;background:#3a8a3a;border-radius:5px;width:${widthOf(released)}%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${received>0?Math.round((released/received)*100):0}%</div>
+            <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
+              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:car-front',16)} ปล่อยรถ</div>
+              <div style="font-size:21px;font-weight:800;color:#3a8a3a">${released}</div>
+              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((released/received)*100):0}%</div>
             </div>
+          </div>
+          <div style="text-align:center;font-size:10.5px;color:var(--t3);margin-bottom:10px">
+            Conversion: โทร <b style="color:${rateColor(callRate, 80, 60)}">${callRate}%</b> → จอง <b style="color:${rateColor(bookRate, 25, 15)}">${bookRate}%</b> → ปิด <b style="color:${rateColor(releaseRate, 70, 40)}">${releaseRate}%</b>
           </div>
 
           ${insights.length > 0 ? `
@@ -1058,6 +1083,29 @@
         </div>
         `;
       })()}
+
+      <!-- 📊 KPI cards + chip จำนวนครั้งโทร — ตัวกรอง lead list · ย้ายลงมาไว้ใกล้ list ที่มันกรอง (มิ.ย.69) -->
+      <div class="kgrid" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+        ${KPI_DEFS.map(k => {
+          const hint = k.key === 'inHand'
+            ? `ติดตาม ${h_follow} · จอง ${h_booking} · ปล่อย ${h_released}`
+            : k.hint;
+          return `
+          <div class="kpi-card ${kpiFilter===k.key?'active':''}" onclick="setKpi('${k.key}')">
+            <div class="kl">${k.label}</div>
+            <div class="kv" style="color:${k.color}">${kpiCounts[k.key]}</div>
+            <div class="ks">${hint}</div>
+          </div>
+        `;}).join('')}
+      </div>
+
+      <div class="filter-bar" style="margin-bottom:10px">
+        <span class="lbl">จำนวนครั้งที่โทร</span>
+        ${CALL_FILTERS.map(k => {
+          const on = kpiFilter === k.key;
+          return `<button class="f-btn ${on?'on':''}" onclick="setKpi('${k.key}')" style="${on?`background:${k.color};color:#fff;border-color:${k.color};font-weight:600`:''}">${h(k.label)} <b>${kpiCounts[k.key]}</b></button>`;
+        }).join('')}
+      </div>
 
       <div style="display:flex;gap:6px;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:10px">
         <button onclick="setViewMode('leads')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='leads'?'var(--blue)':'transparent'};color:${viewMode==='leads'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">รายการ Lead <span style="opacity:.85;font-weight:400">(${allLeads.length})</span></button>
@@ -1213,9 +1261,9 @@
 
   // ── สถานะลูกค้า (คอลัม Z) — รายการ + priority (sync กับ backend) ──
   // 8 ตัวบนตามลำดับสำคัญ → 5 ตัวล่างในวงเล็บ = เคสเสีย (ไม่ต้องตาม)
-  const Z_STATUSES = ['สนใจมาก','ลังเล','ไม่รับสาย','รอเงิน','รอเช็คเครดิต','ดาวน์ไม่พอ','จอง','ส่งมอบ',
-                      'ยังไม่ออกเร็วๆนี้','ติดแบล็คลิส','เครดิตไม่ผ่าน','ลูกค้าไม่สนใจแล้ว','คืนเคส'];
-  const Z_PRIORITY = {'สนใจมาก':8,'ลังเล':7,'ไม่รับสาย':6,'รอเงิน':5,'รอเช็คเครดิต':4,'ดาวน์ไม่พอ':3,'จอง':2,'ส่งมอบ':1};
+  // Z_STATUSES ย้ายขึ้นไปนิยามใกล้ Z_DEAD แล้ว (ใช้ร่วมกับ STATUS_FILTERS)
+  const Z_PRIORITY = {'สนใจมาก':8,'ลังเล':7,'ไม่รับสาย':6,'รอเงิน':5,'รอเช็คเครดิต':4,'ดาวน์ไม่พอ':3,'จอง':2,'ส่งมอบ':1,
+                      'ได้รถแล้ว':1,'เงินสดเงินไม่พอ':3,'ลูกค้าไม่ตอบ':6};
   function zPriority(z) { if (!z) return 0; for (const k in Z_PRIORITY) if (z.includes(k)) return Z_PRIORITY[k]; return 0; }
   // ประเภทลูกค้า (คอลัม Y) — preset + เพิ่มเองได้
   const CUSTOMER_TYPE_PRESETS = ['พนักงานบริษัท','เจ้าของธุรกิจส่วนตัว','อาชีพอื่นๆ','ไม่แจ้งอาชีพ'];
@@ -1609,8 +1657,8 @@
   function clearDateRange() { fDateFrom = ''; fDateTo = ''; render(); }
   function resetFilter() { fMonth = 0; fDay = 0; fDateFrom = ''; fDateTo = ''; render(); }
   // ปุ่มลัดช่วงวัน
-  function setRangeMonth() { const d=new Date(); fDateFrom=_ymdS(new Date(d.getFullYear(),d.getMonth(),1)); fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
-  function setRangeYear() { const d=new Date(); fDateFrom=`${d.getFullYear()}-01-01`; fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
+  function setRangeMonth() { const d=new Date(); fDateFrom=_ymdS(new Date(d.getFullYear(),d.getMonth(),1)); fDateTo=_ymdS(new Date(d.getFullYear(),d.getMonth()+1,0)); fMonth=0; fDay=0; render(); }  // เดือนนี้ = ต้นเดือน→สิ้นเดือน (เหมือนหน้าหลัก)
+  function setRangeYear() { const d=new Date(); fDateFrom=`${d.getFullYear()}-01-01`; fDateTo=`${d.getFullYear()}-12-31`; fMonth=0; fDay=0; render(); }  // ทั้งปี = ม.ค.–ธ.ค.
   function setRangeToday() { const d=new Date(); fDateFrom=_ymdS(d); fDateTo=_ymdS(d); fMonth=0; fDay=0; render(); }
   function setKpi(k) { kpiFilter = k; viewMode = 'leads'; statusFilter = 'all'; render(); }
   function setViewMode(m) { viewMode = m; render(); }
@@ -2180,13 +2228,15 @@ ${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
       </div>`;
   }
   function aiStatsSummary() {
-    const s = D.seller; const cm = new Date().getMonth() + 1;
-    const m = (D.monthly && (D.monthly[cm] || D.monthly[String(cm)])) || {};
-    const MF = C.MONTHS_FULL || [];
+    // 🤖 วัดตาม "ตัวกรองที่เลือกอยู่" — เลือกเดือนนี้ = วิเคราะห์เดือนนี้ · เลือกช่วง = วิเคราะห์ช่วงนั้น
+    const s = D.seller;
     const num = (n) => Math.round(Number(n||0)).toLocaleString();
+    const c = _aiStats || { periodLabel: 'ทั้งปี', lead: s.lead, called: 0, notCalled: 0, follow: 0, booking: 0, done: s.done, dealValue: s.dealValue };
     return `ทีม ${s.team} · เป้าเดือนละ ${s.target} คัน
-ทั้งปี: lead ${s.lead}, ปล่อย ${s.done}, ยอดปล่อย ${num(s.dealValue)} บาท
-เดือน${MF[cm-1]||cm}: lead ${m.lead||0}, ติดตาม ${m.follow||0}, จอง ${m.booking||0}, ปล่อย ${m.done||0}/${s.target}, ยอด ${num(m.dealValue)} บาท`;
+ช่วงที่กำลังดู: ${c.periodLabel}
+- หลีดที่รับ: ${c.lead} (โทรแล้ว ${c.called} · ยังไม่โทร ${c.notCalled} · ต้องโทรต่อ ${c.follow})
+- จอง: ${c.booking} · ปล่อย: ${c.done} · ยอดปล่อย: ${num(c.dealValue)} บาท
+ภาพรวมทั้งปี (อ้างอิง): lead ${s.lead}, ปล่อย ${s.done}, ยอด ${num(s.dealValue)} บาท`;
   }
   function aiMarkdown(t) {
     return h(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[-*] /gm, '• ').replace(/\n/g, '<br>');

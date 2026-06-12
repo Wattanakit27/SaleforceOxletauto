@@ -309,13 +309,22 @@
       const monthsIn = [...new Set(rangeDays().map(x => x[0]))];
       const sellers = {};
       (D.sellers || []).forEach(s => {
-        const x = _sumDaily((D.dailyBySeller || {})[s.name] || {});
+        const hasDaily = (D.dailyBySeller || {})[s.name];
+        const x = _sumDaily(hasDaily || {});
         // bans/leadDist ไม่มีรายวัน → รวมรายเดือน (whole-month) ของเดือนในช่วง
-        let bans = 0, leadDist = 0;
-        monthsIn.forEach(m => { const md = (D.monthlySummary && D.monthlySummary[m] && D.monthlySummary[m].sellers && D.monthlySummary[m].sellers[s.name]) || {}; bans += md.bans||0; leadDist += md.leadDist||0; });
-        sellers[s.name] = { lead:x.lead+x.leadRJ, leadNormal:x.lead, leadRJ:x.leadRJ,
-          booking:x.booking, done:x.done, dealValue:x.deal, follow:0, notCalled:0, vacant:0,
-          bans, leadDist, target:s.target||0, team:s.team };
+        // ★ ADMIN/เซลล์นอก config ไม่อยู่ใน dailyBySeller → ดึง lead/จอง/ปล่อย/ยอด จาก monthlySummary ด้วย
+        //   (ไม่งั้น entry เป็น 0 หมด → ตารางคะแนน + Conv ของ ADMIN ผิด · rangeActiveSellers ก็ตัด ADMIN ออก)
+        let bans = 0, leadDist = 0, mL=0, mLN=0, mRJ=0, mBk=0, mDn=0, mDv=0;
+        monthsIn.forEach(m => {
+          const md = (D.monthlySummary && D.monthlySummary[m] && D.monthlySummary[m].sellers && D.monthlySummary[m].sellers[s.name]) || {};
+          bans += md.bans||0; leadDist += md.leadDist||0;
+          if (!hasDaily) { mL+=md.lead||0; mLN+=md.leadNormal||0; mRJ+=md.leadRJ||0; mBk+=md.booking||0; mDn+=md.done||0; mDv+=md.dealValue||0; }
+        });
+        sellers[s.name] = hasDaily
+          ? { lead:x.lead+x.leadRJ, leadNormal:x.lead, leadRJ:x.leadRJ, booking:x.booking, done:x.done, dealValue:x.deal,
+              follow:0, notCalled:0, vacant:0, bans, leadDist, target:s.target||0, team:s.team }
+          : { lead:mL, leadNormal:mLN, leadRJ:mRJ, booking:mBk, done:mDn, dealValue:mDv,
+              follow:0, notCalled:0, vacant:0, bans, leadDist, target:s.target||0, team:s.team };
       });
       let totalFollow = 0;
       (D.followCases || []).forEach(c => { if(!inRange(c.dateIn)) return; totalFollow++; if(sellers[c.seller]){ sellers[c.seller].follow++; if((c.updateCount||0)===0) sellers[c.seller].notCalled++; } });
@@ -1397,7 +1406,7 @@
     }
 
     // ── Date filter bar (${ic('lucide:calendar',16)} กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
-    function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', _ymd(new Date())); }
+    function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', y+'-12-31'); }  // ทั้งปี = ม.ค.–ธ.ค. (เดิมถึงแค่วันนี้)
     function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(new Date(d.getFullYear(),d.getMonth()+1,0))); }
     const _inp = 'padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer';
     function renderDateFilterBar() {
@@ -1408,7 +1417,7 @@
       html += `<span style="font-size:11px;color:var(--t3)">ถึง</span>`;
       html += `<input type="date" value="${dfTo}" onchange="setDfRange(undefined, this.value)" style="${_inp}">`;
       html += `<button class="df-btn" onclick="dfThisMonth()" title="เดือนนี้">เดือนนี้</button>`;
-      html += `<button class="df-btn" onclick="dfThisYear()" title="ทั้งปี (ม.ค.–วันนี้)">ทั้งปี</button>`;
+      html += `<button class="df-btn" onclick="dfThisYear()" title="ทั้งปี (ม.ค.–ธ.ค.)">ทั้งปี</button>`;
       html += `<span style="font-size:11px;color:var(--blue);font-weight:500;margin-left:4px">${cnt} เคสติดตามในช่วง</span>`;
       html += `</div>`;
       return html;
@@ -1700,8 +1709,28 @@
           <span style="text-align:right;color:${totalColor};font-weight:800;font-size:13px">${_f1(e.total)}</span>
         </div>`;
       });
+      // ── แถวรวมท้ายตาราง: ปล่อย/จอง = ผลรวมทุกเซลล์ · คอลัมน์คะแนน = ค่าเฉลี่ย ──
+      const _scN = scoreEntries.length || 1;
+      const _scSum = (k) => scoreEntries.reduce((a,e)=>a+(Number(e[k])||0),0);
+      const _scAvg = (k) => _scSum(k)/_scN;
+      const _tLead = _scSum('leads');
+      const _tConv = _tLead>0 ? (_scSum('dones')/_tLead*100) : 0;
+      html += `<div class="srow" style="grid-template-columns:.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .8fr .85fr .7fr .8fr;font-size:11.5px;background:var(--bg2);border-top:1.5px solid var(--bd2);font-weight:700;cursor:default">
+        <span></span>
+        <span>รวม (${scoreEntries.length})</span>
+        <span style="text-align:right;color:var(--green-mid)">${_scSum('dones')}</span>
+        <span style="text-align:right;color:var(--green)">${_scSum('jongs')}</span>
+        <span style="text-align:right;color:var(--t3);font-size:10px">${_f1(_tConv)}</span>
+        <span style="text-align:right;color:var(--green)">${_f1(_scAvg('sDone'))}</span>
+        <span style="text-align:right;color:var(--blue)">${_f1(_scAvg('sJong'))}</span>
+        <span style="text-align:right;color:var(--blue)">${_f1(_scAvg('sConv'))}</span>
+        <span style="text-align:right;color:var(--purple)">${_f1(_scAvg('sVel'))}</span>
+        <span style="text-align:right;color:var(--amber)">${_f1(_scAvg('sFollow'))}</span>
+        <span style="text-align:right;color:var(--red)">${_f1(_scAvg('sBan'))}</span>
+        <span style="text-align:right;font-size:13px">${_f1(_scAvg('total'))}</span>
+      </div>`;
       html += `</div></div>`;
-      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 30 · จอง 10 · Conv 20 · สถานะ 10 · ติดตาม 20 · โดนแบน 10 = 100 · ข้อมูลแบนจาก "รายงานแบน" · กดแถวดูรายละเอียด</div>`;
+      html += `<div style="margin-top:8px;font-size:10px;color:var(--t3)">น้ำหนัก: จบ 30 · จอง 10 · Conv 20 · สถานะ 10 · ติดตาม 20 · โดนแบน 10 = 100 · ข้อมูลแบนจาก "รายงานแบน" · กดแถวดูรายละเอียด · <b>แถวรวม</b>: ปล่อย/จอง = ผลรวม · คอลัมน์คะแนน = ค่าเฉลี่ย</div>`;
       html += `</div>`;
 
       // ════════════════════════════════════════════════════════════════
@@ -1848,7 +1877,8 @@
         const sLeadRJ=_sval(s,'leadRJ');
         const sDealVal = _sval(s, 'dealValue');
         // Conv% = ปล่อย ÷ lead ปกติ (ไม่เอา RJ มาถ่วง)
-        const conv=pct(sDone, sLeadNormal);
+        // ★ ADMIN (เทเลเซลล์) special: ใช้ จอง ÷ lead แทน (งานคือ "จอง" ไม่ใช่ "ปิดเอง" → ปล่อย=0 จะดูแย่เกินจริง)
+        const conv = (s.name === 'ADMIN') ? pct(sBooking, sLeadNormal) : pct(sDone, sLeadNormal);
         const tC=conv>=5?'var(--green)':conv>=2?'var(--amber)':'var(--red)';
         const tBg=conv>=5?'var(--green-bg)':conv>=2?'var(--amber-bg)':'var(--red-bg)';
         const d=dilMap[s.name]; const avg=d&&d.cnt?Math.round((d.tot/d.cnt)*10)/10:0;
@@ -1867,7 +1897,8 @@
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
-        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}">${conv}% Conv</span><span style="font-size:10px;color:var(--t3)">${ic('lucide:repeat',16)}${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
+        const _convLbl = (s.name === 'ADMIN') ? '% จอง' : '% Conv';   // ADMIN วัด จอง/lead → ป้ายต่าง
+        html += `<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}" title="${s.name==='ADMIN'?'ADMIN: จอง ÷ lead × 100':'ปล่อย ÷ lead ปกติ × 100'}">${conv}${_convLbl}</span><span style="font-size:10px;color:var(--t3)">${ic('lucide:repeat',16)}${avg}x</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
