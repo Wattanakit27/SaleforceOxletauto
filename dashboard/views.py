@@ -2099,6 +2099,20 @@ def _render_seller_page(request, seller_name):
             "scoreBreakdown": ls["breakdown"],
         })
 
+    # ── 🏆 ตารางคะแนนเซลล์ (leaderboard) — คะแนนสรุป "เดือนนี้" ของทุกเซลล์ ให้เซลล์เห็นอันดับตัวเอง ──
+    #    ส่งแค่คะแนน (ชื่อ+แต้ม) ไม่ใช่เคส/ข้อมูลลูกค้าของคนอื่น (ผู้ใช้เลือก leaderboard มิ.ย.69)
+    from .services.fetch_dashboard import compute_diligence_scores
+    try:
+        scorecard = [{
+            "name": e.get("name"), "team": e.get("team", ""),
+            "dones": e.get("dones", 0), "jongs": e.get("jongs", 0), "conv": e.get("conv", 0),
+            "sDone": e.get("sDone", 0), "sJong": e.get("sJong", 0), "sConv": e.get("sConv", 0),
+            "sVel": e.get("sVel", 0), "sFollow": e.get("sFollow", 0), "sBan": e.get("sBan", 0),
+            "total": e.get("score", 0),
+        } for e in compute_diligence_scores()]
+    except Exception:
+        scorecard = []
+
     filtered = {
         "meta": data["meta"],
         "seller": data["seller"],
@@ -2109,6 +2123,7 @@ def _render_seller_page(request, seller_name):
         "mustCallCount": must_call_count,
         "daily": data["daily"],
         "monthly": data["monthly"],
+        "scorecard": scorecard,
     }
 
     constants = {

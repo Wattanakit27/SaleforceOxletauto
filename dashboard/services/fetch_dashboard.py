@@ -41,11 +41,14 @@ CUSTOMER_STATUS_PRIORITY = {
     "สนใจมาก": 8,
     "ลังเล": 7,
     "ไม่รับสาย": 6,
+    "ลูกค้าไม่ตอบ": 6,   # มิ.ย.69 เพิ่ม — ยังตามต่อ (เหมือนไม่รับสาย)
     "รอเงิน": 5,
     "รอเช็คเครดิต": 4,
     "ดาวน์ไม่พอ": 3,
+    "เงินสดเงินไม่พอ": 3,  # มิ.ย.69 เพิ่ม — ยังตามต่อ (เหมือนดาวน์ไม่พอ)
     "จอง": 2,
     "ส่งมอบ": 1,
+    "ได้รถแล้ว": 1,       # มิ.ย.69 เพิ่ม — เคสจบ (ได้รถ) ไม่ remind เหมือนส่งมอบ
 }
 # Z ที่ "เคสเสีย" (ในวงเล็บ) — ไม่ต้องตาม + ไม่ remind (คืนเคส = เพิ่มใหม่)
 CUSTOMER_STATUS_DEAD = [
@@ -83,8 +86,8 @@ def should_follow(r) -> bool:
     if z:
         if is_nofollow_z(z):
             return False                          # เคสเสีย (ในวงเล็บ)
-        if "จอง" in z or "ส่งมอบ" in z:
-            return False                          # booked/done — ไม่ remind ให้โทร
+        if "จอง" in z or "ส่งมอบ" in z or "ได้รถแล้ว" in z:
+            return False                          # booked/done (รวม "ได้รถแล้ว") — ไม่ remind ให้โทร
         return True                               # active chase (หรือ status ที่ไม่รู้จัก)
     return is_follow(cell(r, L.admin_status))
 
@@ -328,32 +331,43 @@ def precompute_dashboard() -> dict:
 
 
 def fetch_dashboard_data() -> dict:
-    """อ่านผล dashboard — เร็วสุด→ช้าสุด:
+    """อ่านผล dashboard — เร็วสุด→ช้าสุด + กันลูกโซ่ล่ม (stale-while-revalidate):
     1) in-memory cache (warm lambda, 30 วิ)
-    2) ผล pre-compute ใน Supabase (cold lambda — อ่านผลสำเร็จรูป ไม่คำนวณสด)
-    3) คำนวณสด + เก็บ (fallback ถ้า cache หาย/เก่า)
+    2) precompute Supabase: fresh → ใช้เลย · เก่า → ก็ยังใช้ (ดีกว่าคำนวณใหม่ที่ไปรุม DB)
+    3) Supabase ล่ม/อ่านไม่ได้ (timeout) → ใช้ของเก่าใน memory ถ้ามี — **ไม่คำนวณใหม่ทันที** (กันลูกโซ่ล่ม)
+    4) ไม่มีข้อมูลเลยจริงๆ (cold + Supabase ล่ม) → จำใจคำนวณสด 1 ครั้ง
+
+    ⚠️ บทเรียน NANO ล่ม (มิ.ย.69): เดิมถ้าอ่าน cache ไม่ทัน (Supabase timeout) จะ "คำนวณสด 121 วิ"
+    ทันที → อ่าน 15k จากชีต+เขียนกลับ → ยิ่งไปรุม DB ที่อ่อนอยู่แล้ว → ทุก request ตายลูกโซ่.
+    ตอนนี้ user request **ห้าม** trigger recompute ถ้ามีของเก่าให้เสิร์ฟ — recompute เป็นงานของ cron/ปุ่มรีเฟรชเท่านั้น.
     """
     import time
     from datetime import datetime as _dt, timezone as _tz
     c = _dash_cache
-    if c["data"] is not None and (time.time() - c["ts"]) < _DASH_TTL:
+    now = time.time()
+    if c["data"] is not None and (now - c["ts"]) < _DASH_TTL:
         return c["data"]
 
-    # 2) ผล pre-compute จาก Supabase (ถ้า fresh) — ไม่ต้องอ่าน 15k lead + aggregate
+    # 2) precompute จาก Supabase — fresh หรือ stale ก็ใช้ (ไม่ปล่อยให้ user-load ไป recompute)
     try:
         from .supabase_client import get_dashboard_cache
         cached = get_dashboard_cache()
         if cached and cached.get("data"):
             ts = cached.get("updated_at", "").replace("Z", "+00:00")
             age = (_dt.now(_tz.utc) - _dt.fromisoformat(ts)).total_seconds() if ts else 1e9
-            if age < _PRECOMPUTE_TTL:
-                c["ts"] = time.time()
-                c["data"] = cached["data"]
-                return cached["data"]
+            c["data"] = cached["data"]
+            # fresh → cache เต็ม 30 วิ · stale → cache สั้น (เช็ค Supabase ใหม่เร็วขึ้น เผื่อ cron อัปแล้ว)
+            c["ts"] = now if age < _PRECOMPUTE_TTL else (now - _DASH_TTL + 5)
+            return cached["data"]
     except Exception:
         pass
 
-    # 3) ไม่มี/เก่า → คำนวณสด + เก็บผลไว้ (ครั้งถัดไปเร็ว)
+    # 3) Supabase อ่านไม่ได้ (timeout/ล่ม) → ใช้ของเก่าใน memory ถ้ามี (กันลูกโซ่ recompute ที่ไปรุม DB ซ้ำ)
+    if c["data"] is not None:
+        c["ts"] = now - _DASH_TTL + 5   # เสิร์ฟของเก่าต่อ แต่ลองเช็ค Supabase ใหม่อีกใน ~5 วิ
+        return c["data"]
+
+    # 4) ไม่มีข้อมูลเลย (cold start + Supabase ล่ม) → จำใจคำนวณสด 1 ครั้ง
     return precompute_dashboard()
 
 
@@ -798,21 +812,17 @@ def _compute_dashboard_data() -> dict:
             continue
         note_raw = cell(r, L.fill_sheet_note) or "-"
         note = re.sub(r"^\d{4,5}\s*", "", note_raw) or "-"
+        # ⚡ เก็บเฉพาะ field ที่ frontend (index.html) + compute_diligence_scores ใช้จริง (8 ตัว)
+        # — ตัด phone/channel/adminStatus/customerStatus/followPriority/callProof/profile/timeIn ออก
+        #   (ไม่มีใครอ่านจาก followCases · seller.html ใช้ D.leads แทน) → ลดก้อน precompute ~0.7 MB
+        #   เขียน Supabase NANO ได้ไม่ timeout + อ่านเร็วขึ้น. **อย่าเพิ่ม field ที่ไม่ได้ใช้กลับมา**
         follow_cases.append({
             "code": cell(r, L.lead_code) or "-",
             "seller": seller,
-            "phone": cell(r, L.phone) or "-",
-            "channel": cell(r, L.channel) or "-",
             "leadType": cell(r, L.type),
             "car": cell(r, L.car_inquiry) or cell(r, L.car_formula) or "-",
-            "adminStatus": cell(r, L.admin_status) or "ติดตาม",
-            "customerStatus": cell(r, L.customer_status),
-            "followPriority": customer_status_priority(cell(r, L.customer_status)),
-            "callProof": cell(r, L.call_proof) or "-",
-            "profile": cell(r, L.customer_profile) or "",
             "dateIn": cell(r, L.received_date) or "-",
-            "timeIn": cell(r, L.time),
-            "note": note,
+            "note": note[:120],   # frontend โชว์แค่ 80 ตัวอักษร → เก็บ 120 พอ (ลดขนาด)
             "lastUpdate": cell(r, L.last_updated_at) or "-",
             "updateCount": int(cell_num(r, L.update_count)),
         })
@@ -1146,6 +1156,8 @@ def _compute_dashboard_data() -> dict:
     # โครงสร้าง: {car: {seller: {"total": N, "byMonth": [0]*13}}}
     lead_car_seller_month: dict[str, dict[str, dict]] = {}
     for r in year_leads:
+        if cell(r, L.type) in RJ_TYPES:   # ★ Lead-by-Car ไม่นับ RJ ทุกประเภท (RJ/Hot RJ/Hot RB)
+            continue
         car = _normalize_car(cell(r, L.car_formula))
         m = get_month(cell(r, L.received_date))
         lead_cars_by_month[0][car] = lead_cars_by_month[0].get(car, 0) + 1
@@ -2062,7 +2074,7 @@ def attach_lead_scores(follow_cases: list[dict],
 # cron_tick ยิงเช้า/บ่าย → ส่ง LINE ข้อความธรรมดา top N ให้เซลล์แต่ละคน · pass เดียว (group ตาม seller)
 # ════════════════════════════════════════════════════════════════
 _FU_BASE = "https://saleforce-oxletauto.vercel.app"
-_FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่รับสาย": 1, "รอเงิน": 3, "รอเช็คเครดิต": 2, "ดาวน์ไม่พอ": 3}
+_FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่รับสาย": 1, "ลูกค้าไม่ตอบ": 1, "รอเงิน": 3, "รอเช็คเครดิต": 2, "ดาวน์ไม่พอ": 3, "เงินสดเงินไม่พอ": 3}
 _FU_DEAD = ["ยังไม่ออก", "ติดแบล็คลิส", "เครดิตไม่ผ่าน", "ไม่สนใจแล้ว", "คืนเคส"]
 _FU_SKIP = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 _FU_NOANS_CAP = 5
@@ -2119,7 +2131,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
 
     def _booked(l):
         z = l["customerStatus"] or ""
-        return "จอง" in z or "ส่งมอบ" in z
+        return "จอง" in z or "ส่งมอบ" in z or "ได้รถแล้ว" in z
 
     def _urg(l):
         score = l["leadScore"] or 0
