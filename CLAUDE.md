@@ -153,7 +153,10 @@ python manage.py runserver
 - ชีต **"ตั้งค่าแอดมิน"** (`SHEET_CONFIG["admin_config"]`, cols: LINE user_id | ชื่อ | หมายเหตุ) → `load_admin_user_ids()` สร้าง set **`ADMIN_USER_IDS`** ([constants.py](dashboard/services/constants.py))
 - จัดการ: ปุ่ม **👑 จัดการแอดมิน** (เมนูจัดการ) → เลือกจาก employees หรือวาง user_id → เพิ่ม/ลบ (`admin_admin_config`: GET ส่ง admins+employees, POST เขียนชีต) · แก้ในชีตตรงๆ ก็ได้
 - ใช้เมื่อแอดมิน**ไม่ได้อยู่ใน 13 เซลล์** (เช่น ทีมโทร/ออฟฟิศ) — checkbox ในตั้งค่าเซลล์จะไม่มีให้ติ๊ก
-- **"ADMIN" seller = ศูนย์รวมเทเลเซลล์**: เคสที่ลงชื่อเซลล์ = "ADMIN" ในชีต ถูกรวมเป็น seller ชื่อ "ADMIN" (team="ADMIN"). ไอดีเทเลเซลล์ทั้ง 5 → `seller_from_token()` map เป็น "ADMIN" → เปิด `/s/<id>/` เห็นหน้ารวมเทเลเซลล์ (`fetch_seller_stats("ADMIN")`). dropdown แท็บเซลล์ใช้ `sellerTokens["ADMIN"]` = ไอดีเทเลเซลล์คนแรก (ตั้งใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py))
+- **⚠️ แยกเทเลเซลล์ออกจากแอดมิน (มิ.ย.69)**: เทเลเซลล์ (ทีมโทร) ย้ายไปชีตใหม่ **"ตั้งค่าเทเลเซลล์"** (`SHEET_CONFIG["tele_config"]`) → set **`TELE_USER_IDS`** (`load_tele_user_ids()` · จัดการผ่านปุ่ม **📞 จัดการเทเลเซลล์** / `admin_tele_config`). **`ADMIN_USER_IDS` (ชีตตั้งค่าแอดมิน) = สิทธิ์แอดมินอย่างเดียว** · **`TELE_USER_IDS` = ทีมโทร (เคสรวมเป็น seller "ADMIN" + ผู้รับ followup กลุ่ม ADMIN) ไม่ได้สิทธิ์แอดมิน**
+  - **precedence: อยู่ทั้ง 2 ลิสต์ → แอดมินชนะ** — login: ถ้าเป็นแอดมิน (ADMIN_USER_IDS/SUPER_ADMIN_IDS/ADMIN_SELLERS) → `/dashboard/` · ถ้าเป็นเทเลเซลล์ล้วน (ไม่ใช่แอดมิน) → `/s/<id>/` (หน้ารวม ADMIN) · เซลล์ทั่วไป → `/me/`
+  - ที่ใช้ `TELE_USER_IDS` (ไม่ใช่ ADMIN_USER_IDS แล้ว): `seller_from_token()`, `sellerTokens["ADMIN"]`, `build_followup_messages` admin_recip, `admin_send_followup`
+- **"ADMIN" seller = ศูนย์รวมเทเลเซลล์**: เคสที่ลงชื่อเซลล์ = "ADMIN" ในชีต ถูกรวมเป็น seller ชื่อ "ADMIN" (team="ADMIN"). ไอดีเทเลเซลล์ใน `TELE_USER_IDS` → `seller_from_token()` map เป็น "ADMIN" → เปิด `/s/<id>/` เห็นหน้ารวมเทเลเซลล์ (`fetch_seller_stats("ADMIN")`). dropdown แท็บเซลล์ใช้ `sellerTokens["ADMIN"]` = ไอดีเทเลเซลล์คนแรก (ตั้งใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py))
   - **⚠️ ชื่อที่แสดง (มิ.ย.69)**: key ภายในยังเป็น **"ADMIN"** (ตรงกับชีต — อย่าเปลี่ยน) แต่ **UI โชว์เป็น "เทเลเซลล์"** ทุกที่ (กันสับสนกับบทบาทแอดมิน position="admin"). ใช้ helper `sname(n)` (`n==='ADMIN'?'เทเลเซลล์':n`) ใน [index.html](dashboard/templates/dashboard/index.html) + [seller.html](dashboard/templates/dashboard/seller.html) ตอน render ชื่อเซลล์ (ตาราง/leaderboard/dropdown/team card) · Python `build_followup_messages` ก็ใช้ "เทเลเซลล์" ในข้อความ LINE. **value/onclick ยังส่ง "ADMIN"** (filter/lookup ใช้ key เดิม) — เปลี่ยนแค่ข้อความที่ตา user เห็น. เพิ่ม render ชื่อเซลล์ใหม่ → ห่อด้วย `sname()` (ยกเว้นช่อง input แก้ config ที่ต้องคงค่า key)
 - **followup overview (สรุปทีมใน LINE)**: นอกจาก "ต้องตามรวม/ดีลค้าง" เพิ่ม 3 ตัวเลขภาพรวม + รายเซลล์: **ยังไม่โทร** (updateCount=0) · **ค้างเกิน 7 วัน** (idle>7) · **ยังไม่ใส่สถานะ** (Z ว่าง) — นับจากเคส active (ตัด skip/booked). ไม่ใช้อิโมจิ คั่นด้วย `-` (ดู `build_followup_messages` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py))
 
@@ -348,7 +351,8 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 | `employees` | `1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A` | "เก็บข้อมูลพนักงาน..." | นิยามพนักงาน + LINE user_id |
 | `sellers_config` | (เดียวกับ employees) | **"ตั้งค่าเซลล์"** | เป้า/ทีม dynamic — admin แก้ผ่าน UI หรือ Sheet ตรงๆ |
 | `schedule_config` | (เดียวกับ employees) | **"ตั้งเวลาส่ง"** | ตารางเวลาส่ง LINE Flex อัตโนมัติ |
-| `admin_config` | (เดียวกับ employees) | **"ตั้งค่าแอดมิน"** | รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์) — `ADMIN_USER_IDS` |
+| `admin_config` | (เดียวกับ employees) | **"ตั้งค่าแอดมิน"** | รายชื่อ LINE user_id ที่เป็นแอดมิน (สิทธิ์แอดมิน) — `ADMIN_USER_IDS` |
+| `tele_config` | (เดียวกับ employees) | **"ตั้งค่าเทเลเซลล์"** | รายชื่อ LINE user_id ของเทเลเซลล์ (ทีมโทร · เคสรวมเป็น seller "ADMIN" · ไม่ใช่สิทธิ์แอดมิน) — `TELE_USER_IDS` |
 
 **OAuth scope**: `https://www.googleapis.com/auth/spreadsheets` (read+write — เปลี่ยนมาจาก readonly เพราะ admin ต้องเขียน config)
 
