@@ -1016,12 +1016,9 @@
         // ใช้ allLeads (in range) + bookings (in range) ที่คำนวณไว้แล้ว
         const received = allLeads.filter(l => !isSkipped(l)).length;
         const called   = allLeads.filter(l => !isSkipped(l) && l.updateCount > 0).length;
-        const booked   = allLeads.filter(l => {
-          if (isSkipped(l)) return false;
-          const a = (l.adminStatus||'').toLowerCase();
-          const s = (l.salesStatus||'').toLowerCase();
-          return a.includes('จอง') || s.includes('จอง') || a.includes('ปล่อย') || s.includes('ปล่อย');
-        }).length;
+        // จอง = ดีลที่จองได้จริงจาก sales_reports (ทุกสถานะที่ผ่านการจอง ยกเว้นรีเจ็ก) — ตรงกับโดนัท "สถานะดีล"
+        //   (เดิมนับจาก leads admin/sales ซึ่งบางเซลล์ไม่กรอก "จอง" ในชีต lead → กล่องขึ้น 0 ทั้งที่มีจองใน sales)
+        const booked   = bookings.filter(b => b.status && b.status !== 'รีเจ็ก').length;
         const released = doneCount;  // จาก bookings (status=ปล่อย)
 
         if (received === 0) return '';
