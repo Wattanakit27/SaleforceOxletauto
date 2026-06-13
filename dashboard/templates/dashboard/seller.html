@@ -1268,7 +1268,7 @@
                       'ได้รถแล้ว':1,'เงินสดเงินไม่พอ':3,'ลูกค้าไม่ตอบ':6};
   function zPriority(z) { if (!z) return 0; for (const k in Z_PRIORITY) if (z.includes(k)) return Z_PRIORITY[k]; return 0; }
   // ประเภทลูกค้า (คอลัม Y) — preset + เพิ่มเองได้
-  const CUSTOMER_TYPE_PRESETS = ['พนักงานบริษัท','เจ้าของธุรกิจส่วนตัว','อาชีพอื่นๆ','ไม่แจ้งอาชีพ'];
+  const CUSTOMER_TYPE_PRESETS = ['พนักงานบริษัท','เจ้าของธุรกิจส่วนตัว','อาชีพอื่นๆ','ไม่แจ้งอาชีพ','ข้าราชการ/รัฐวิสาหกิจ','เกษตกร/ปศุสัตว์','ไม่มีอาชีพ','ค้าขาย','Rider/driver','ฟรีแลนด์'];
   function customerTypeOptions(cur) {
     const seen = (D.leads || []).map(x => (x.customerType || '').trim()).filter(Boolean);
     const all = [...new Set([...CUSTOMER_TYPE_PRESETS, ...seen, (cur || '').trim()].filter(Boolean))];
