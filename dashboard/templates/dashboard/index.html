@@ -2050,7 +2050,10 @@
       const _bell = document.getElementById('alerts-bell');
       const _r = _bell ? _bell.getBoundingClientRect() : null;
       const _top = _r ? Math.round(_r.bottom + 6) : 54;
-      const _right = _r ? Math.max(8, Math.round(window.innerWidth - _r.right)) : 12;
+      let _right = _r ? Math.max(8, Math.round(window.innerWidth - _r.right)) : 12;
+      // กันหลุดขอบซ้ายบนจอแคบ: panel กว้าง min(340,92vw) → clamp _right ให้ panel อยู่ในจอเสมอ
+      const _pw = Math.min(340, window.innerWidth * 0.92);
+      _right = Math.min(_right, Math.max(8, Math.round(window.innerWidth - _pw - 8)));
 
       let bd = '';
       if (!tot) bd += `<div style="text-align:center;color:var(--green);padding:44px 12px"><div>${ic('lucide:circle-check',32)}</div><div style="margin-top:8px;font-weight:700;font-size:13px">ไม่มีอะไรต้องเติม/แก้ ✓</div></div>`;

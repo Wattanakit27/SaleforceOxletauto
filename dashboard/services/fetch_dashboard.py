@@ -2254,7 +2254,9 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         _active = [l for l in leads if not _skip(l) and not _booked(l)]
         n_nc = sum(1 for l in _active if (l["updateCount"] or 0) == 0)            # ยังไม่โทร
         n_st = sum(1 for l in _active if _idle(l) > 7)                            # ค้างเกิน 7 วัน
-        n_ns = sum(1 for l in _active if not (l["customerStatus"] or "").strip()) # ยังไม่ใส่สถานะ
+        n_ns = sum(1 for l in _active if not (l["customerStatus"] or "").strip()
+                   and not (l["adminStatus"] or "").strip()
+                   and not (l["salesStatus"] or "").strip())  # ไม่มีสถานะเลย (Z + คอลัมเก่าว่างหมด)
         urgent_all = [l for l in _active if _urg(l) > 0]
         urgent_all.sort(key=_urg, reverse=True)
         sd_all = _stuck(bookings_by_seller.get(name, []))
