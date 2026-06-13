@@ -12,7 +12,7 @@
     body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; }
     .login-box { background:var(--bg); border:.5px solid var(--bd); border-radius:16px; padding:28px 26px; max-width:380px; width:100%; box-shadow:var(--shadow-modal); }
     .login-hd { text-align:center; margin-bottom:20px; }
-    .login-hd img { height:44px; margin-bottom:10px; }
+    .login-hd img { height:72px; margin-bottom:12px; }
     .login-hd h1 { font-size:18px; font-weight:800; color:var(--t1); margin:0 0 4px; }
     .login-hd .sub { font-size:12px; color:var(--t3); }
     .field { margin-bottom:14px; }
@@ -54,12 +54,12 @@
   <div class="err">ยังไม่ได้ตั้งค่า LINE Login (LINE_LOGIN_CHANNEL_ID) — ใช้ทางสำรองแอดมินระบบด้านล่าง</div>
   {% endif %}
 
-  {% if show_breakglass or not line_login %}
-  <!-- ทางสำรอง (break-glass): แอดมินระบบ env user/password — ซ่อนไว้ เปิดด้วย /login/?bg=1 -->
-  <details open>
-    <summary>▸ เข้าสู่ระบบแอดมินระบบ (สำรอง)</summary>
+  <!-- ทางสำรอง (break-glass): แอดมินระบบ env user/password (OXLET_ADMIN_USER/PASSWORD) — เผื่อ LINE ใช้ไม่ได้/ฉุกเฉิน -->
+  <!-- โชว์เสมอ · พับเก็บไว้ (กดเพื่อเปิด) · เปิดอัตโนมัติถ้ายังไม่ได้ตั้ง LINE Login -->
+  <details {% if not line_login %}open{% endif %}>
+    <summary>▸ เข้าสู่ระบบแอดมินระบบ (สำรอง — กรณีฉุกเฉิน)</summary>
     <div class="sub-box">
-      <form method="post" action="/login/?bg=1">
+      <form method="post" action="/login/">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next|default:'/dashboard/' }}">
         <div class="field">
@@ -74,7 +74,6 @@
       </form>
     </div>
   </details>
-  {% endif %}
 </div>
 <script>
   // จำ LINE user_id ล่าสุด — เซลล์ไม่ต้องพิมพ์ id ยาวทุกครั้ง (แค่ใส่รหัส)
