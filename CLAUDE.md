@@ -52,7 +52,7 @@ dashboard/
     magic_link.html      # /u/<token>/ — set cookie แล้ว redirect ไป /dashboard/
     seller.html          # /s/<token>/ — หน้าส่วนตัวของเซลล์ (filter+charts+KPI+lead detail modal + ฟอร์ม finance/loan + สแกนเอกสาร)
   static/dashboard/      # CSS + image (โลโก้บริษัท)
-README.md · SYSTEM-DESIGN.md  # เอกสารประกอบ (overview + design notes)
+README.md                # เอกสารประกอบ (overview)
 ```
 
 ## รันโปรเจกต์ (Dev)
