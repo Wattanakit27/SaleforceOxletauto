@@ -57,7 +57,7 @@
   <!-- ทางสำรอง (break-glass): แอดมินระบบ env user/password (OXLET_ADMIN_USER/PASSWORD) — เผื่อ LINE ใช้ไม่ได้/ฉุกเฉิน -->
   <!-- โชว์เสมอ · พับเก็บไว้ (กดเพื่อเปิด) · เปิดอัตโนมัติถ้ายังไม่ได้ตั้ง LINE Login -->
   <details {% if not line_login %}open{% endif %}>
-    <summary>▸ เข้าสู่ระบบแอดมินระบบ (สำรอง — กรณีฉุกเฉิน)</summary>
+    <summary>▸ เข้าสู่ระบบแอดมินระบบ</summary>
     <div class="sub-box">
       <form method="post" action="/login/">
         {% csrf_token %}

@@ -63,11 +63,12 @@ def seller_from_token(token: str) -> str | None:
     if token in TOKEN_TO_SELLER:
         return TOKEN_TO_SELLER[token]
 
-    # 1.5 เทเลเซลล์ — ไอดีในชีต "ตั้งค่าแอดมิน" → เห็นหน้า "ADMIN" (ศูนย์รวมเทเลเซลล์ที่ลงชื่อ ADMIN ในชีต)
+    # 1.5 เทเลเซลล์ — ไอดีในชีต "ตั้งค่าเทเลเซลล์" → เห็นหน้า "ADMIN" (ศูนย์รวมเคสที่ลงชื่อ ADMIN ในชีต)
+    #     (แอดมินจริงไม่มาทางนี้ — login route ไป /dashboard/ ก่อน · ดู precedence ใน views login)
     try:
-        from .constants import load_admin_user_ids, ADMIN_USER_IDS
-        load_admin_user_ids()   # fetch_sheet มี cache → ไม่ช้า
-        if token in ADMIN_USER_IDS:
+        from .constants import load_tele_user_ids, TELE_USER_IDS
+        load_tele_user_ids()   # fetch_sheet มี cache → ไม่ช้า
+        if token in TELE_USER_IDS:
             return "ADMIN"
     except Exception:
         pass

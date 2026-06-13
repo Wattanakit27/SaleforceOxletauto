@@ -243,8 +243,13 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
             }
             request.session.set_expiry(60 * 60 * 24 * 14)   # 14 วัน — session หมดอายุ (PDPA)
             if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
-                return (next_url or "/dashboard/"), None
-            return "/me/", None   # เซลล์ → /me/ (อิง session ไม่ใช่ token ใน URL)
+                return (next_url or "/dashboard/"), None   # แอดมิน/ผู้บริหารชนะเสมอ → หน้ารวม
+            # เทเลเซลล์ (ไม่ใช่แอดมิน) → หน้ารวมเทเลเซลล์ (seller_from_token map ไอดี → "ADMIN")
+            from .services.constants import TELE_USER_IDS, load_tele_user_ids
+            load_tele_user_ids()
+            if line_user_id in TELE_USER_IDS:
+                return f"/s/{line_user_id}/", None
+            return "/me/", None   # เซลล์ทั่วไป → /me/ (อิง session ไม่ใช่ token ใน URL)
     # ไม่พบใน employees — ถ้าเป็นแอดมินสูงสุด (hardcode) ก็ให้ login ได้ทันทีในฐานะ admin
     if line_user_id in SUPER_ADMIN_IDS:
         request.session["oxlet_user"] = {
@@ -510,6 +515,79 @@ def admin_admin_config(request):
         "employees": employees,
         "sheet_url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
         "sheet_name": cfg.get("sheet_name", "ตั้งค่าแอดมิน"),
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def admin_tele_config(request):
+    """Admin endpoint — จัดการ "เทเลเซลล์ (ทีมโทร)" (ชีต "ตั้งค่าเทเลเซลล์")
+    เหมือน admin_admin_config แต่คนละชีต · เทเลเซลล์ = เคสรวมเป็น seller "ADMIN" · **ไม่ได้สิทธิ์แอดมิน**
+    GET → รายชื่อเทเลเซลล์ + employees · POST body {"admins":[{user_id,name,note}]} → เขียนชีต
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+
+    from .services.google_sheets import (
+        SHEET_CONFIG, write_sheet, fetch_sheet, cell,
+        ADMIN_CONFIG_COL as AC, EMPLOYEE_COL as EM,
+    )
+    from .services.constants import load_tele_user_ids
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+        incoming = body.get("admins") or []
+        if not isinstance(incoming, list):
+            return JsonResponse({"error": "ข้อมูลต้องเป็น list"}, status=400)
+        cleaned = []
+        seen = set()
+        for idx, a in enumerate(incoming):
+            uid = str(a.get("user_id", "") or "").strip()
+            if not uid:
+                continue
+            if not uid.startswith("U") or len(uid) < 20:
+                return JsonResponse({"error": f"แถวที่ {idx+1}: LINE user_id ไม่ถูกต้อง (ต้องขึ้นต้น U)"}, status=400)
+            if uid in seen:
+                continue
+            seen.add(uid)
+            cleaned.append([uid, str(a.get("name", "") or "").strip(), str(a.get("note", "") or "").strip()])
+        values = [["LINE user_id", "ชื่อ", "หมายเหตุ"]] + cleaned
+        try:
+            write_sheet("tele_config", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+        load_tele_user_ids()  # โหลดใหม่ทันที
+        return JsonResponse({"ok": True, "saved": len(cleaned)})
+
+    # GET
+    cfg = SHEET_CONFIG.get("tele_config", {})
+    try:
+        rows = fetch_sheet("tele_config")
+    except Exception:
+        rows = []
+    admins = []
+    for r in rows:
+        uid = cell(r, AC.user_id).strip()
+        if not uid.startswith("U") or len(uid) < 20:
+            continue
+        admins.append({"user_id": uid, "name": cell(r, AC.name).strip(), "note": cell(r, AC.note).strip()})
+    employees = []
+    try:
+        for r in fetch_sheet("employees"):
+            uid = cell(r, EM.user_id).strip()
+            if not uid.startswith("U") or len(uid) < 20:
+                continue
+            employees.append({"user_id": uid, "nickname": cell(r, EM.nickname).strip(),
+                              "display": cell(r, EM.display_name).strip(), "dept": cell(r, EM.position).strip()})
+    except Exception:
+        pass
+    return JsonResponse({
+        "ok": True, "admins": admins, "employees": employees,
+        "sheet_url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
+        "sheet_name": cfg.get("sheet_name", "ตั้งค่าเทเลเซลล์"),
     })
 
 
@@ -1195,9 +1273,9 @@ def admin_send_line(request):
             uid_map = get_nickname_to_user_id()
         except Exception as e:
             return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
-        from .services.constants import ADMIN_USER_IDS, load_admin_user_ids
-        load_admin_user_ids()
-        _admin_ids = sorted(ADMIN_USER_IDS)
+        from .services.constants import TELE_USER_IDS, load_tele_user_ids
+        load_tele_user_ids()
+        _admin_ids = sorted(TELE_USER_IDS)   # ผู้รับ followup กลุ่ม ADMIN = เทเลเซลล์ (ทีมโทร)
         result = []
         for p in pipelines:
             _is_adm = p["seller"] == "ADMIN"
@@ -1241,9 +1319,9 @@ def admin_send_line(request):
         uid_map = get_nickname_to_user_id()
     except Exception as e:
         return JsonResponse({"error": f"ดึงข้อมูลล้มเหลว: {e}"}, status=500)
-    from .services.constants import ADMIN_USER_IDS, load_admin_user_ids
-    load_admin_user_ids()
-    _admin_ids = sorted(ADMIN_USER_IDS)
+    from .services.constants import TELE_USER_IDS, load_tele_user_ids
+    load_tele_user_ids()
+    _admin_ids = sorted(TELE_USER_IDS)   # ผู้รับ followup กลุ่ม ADMIN = เทเลเซลล์ (ทีมโทร)
 
     if only_sellers:
         wanted = set(only_sellers)

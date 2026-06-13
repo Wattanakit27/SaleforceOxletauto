@@ -49,9 +49,14 @@ for tid, members in TEAMS.items():
 # mutate in-place เท่านั้น (.clear()/.update()) — กัน import binding หาย
 ADMIN_SELLERS: set[str] = set()
 
-# รายชื่อ LINE user_id ที่เป็นแอดมิน "โดยตรง" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์ใน TEAMS)
+# รายชื่อ LINE user_id ที่เป็นแอดมิน "โดยตรง" (ออฟฟิศ/คนที่ไม่ใช่เซลล์ใน TEAMS) — มีสิทธิ์แอดมิน
 # อ่านจากชีต "ตั้งค่าแอดมิน" — แก้ผ่านปุ่ม 👑 จัดการแอดมิน หรือแก้ในชีตตรงๆ
 ADMIN_USER_IDS: set[str] = set()
+
+# รายชื่อ LINE user_id ของ "เทเลเซลล์ (ทีมโทร)" — เคสรวมเป็น seller "ADMIN" · login เห็นหน้ารวมเทเลเซลล์
+# **ไม่ได้สิทธิ์แอดมิน** (ต่างจาก ADMIN_USER_IDS) เว้นแต่จะอยู่ใน ADMIN_USER_IDS/SUPER_ADMIN_IDS ด้วย (แอดมินชนะ)
+# อ่านจากชีต "ตั้งค่าเทเลเซลล์" — แก้ผ่านปุ่ม 📞 จัดการเทเลเซลล์ หรือแก้ในชีตตรงๆ
+TELE_USER_IDS: set[str] = set()
 
 
 def _is_truthy_flag(v: str) -> bool:
@@ -75,6 +80,25 @@ def load_admin_user_ids() -> set[str]:
     ADMIN_USER_IDS.clear()
     ADMIN_USER_IDS.update(new_ids)
     return ADMIN_USER_IDS
+
+
+def load_tele_user_ids() -> set[str]:
+    """อ่านชีต 'ตั้งค่าเทเลเซลล์' → set ของ LINE user_id ทีมโทร. mutate TELE_USER_IDS in-place.
+    ถ้าชีตยังไม่มี/error → คงค่าเดิม (ไม่ล้าง). ใช้ map ไอดี→seller 'ADMIN' + ผู้รับ followup เทเลเซลล์
+    (ไม่ให้สิทธิ์แอดมิน — สิทธิ์อยู่ที่ ADMIN_USER_IDS/SUPER_ADMIN_IDS เท่านั้น)."""
+    try:
+        from .google_sheets import fetch_sheet, cell, ADMIN_CONFIG_COL as AC
+        rows = fetch_sheet("tele_config")
+    except Exception:
+        return TELE_USER_IDS
+    new_ids = set()
+    for r in rows:
+        uid = cell(r, AC.user_id).strip()
+        if uid.startswith("U") and len(uid) >= 20:
+            new_ids.add(uid)
+    TELE_USER_IDS.clear()
+    TELE_USER_IDS.update(new_ids)
+    return TELE_USER_IDS
 
 
 def refresh_from_sheet() -> bool:

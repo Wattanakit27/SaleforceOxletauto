@@ -465,10 +465,10 @@ def _compute_dashboard_data() -> dict:
     # ตั้ง token ของ "ADMIN" = LINE user_id ของเทเลเซลล์คนแรก → dropdown หน้าเซลล์เปิด /s/ ได้
     # (seller_from_token map ทุกไอดีเทเลเซลล์ → "ADMIN" อยู่แล้ว)
     try:
-        from .constants import load_admin_user_ids, ADMIN_USER_IDS
-        load_admin_user_ids()
-        if ADMIN_USER_IDS:
-            seller_tokens["ADMIN"] = sorted(ADMIN_USER_IDS)[0]
+        from .constants import load_tele_user_ids, TELE_USER_IDS
+        load_tele_user_ids()
+        if TELE_USER_IDS:
+            seller_tokens["ADMIN"] = sorted(TELE_USER_IDS)[0]
     except Exception:
         pass
 
@@ -2100,11 +2100,13 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     from datetime import timedelta
     from .google_sheets import fetch_all_sheets, cell, cell_num, LEADS_COL as L, SALES_COL as S
     from .constants import (normalize_seller, ALL_SELLERS, refresh_from_sheet,
-                            ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids)
+                            ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids,
+                            TELE_USER_IDS, load_tele_user_ids)
     from .line_notify import get_nickname_to_user_id
 
     refresh_from_sheet()
     load_admin_user_ids()
+    load_tele_user_ids()
     raw = fetch_all_sheets()
     raw_leads = raw.get("leads") or []
     sales_reports = raw.get("sales_reports") or []
@@ -2253,7 +2255,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     out = []
     # summary: (name, n_follow, n_stuck, n_notcalled, n_stale7, n_nostatus) — กลุ่มที่มีงานค้าง (รวม ADMIN)
     summary = []
-    admin_recip = sorted(r for r in ADMIN_USER_IDS if r)  # ไอดีเทเลเซลล์ (ชีต "ตั้งค่าแอดมิน")
+    admin_recip = sorted(r for r in TELE_USER_IDS if r)  # ไอดีเทเลเซลล์ (ชีต "ตั้งค่าเทเลเซลล์") — ผู้รับ followup กลุ่ม ADMIN
     for name in sorted(ALL_SELLERS) + ["ADMIN"]:
         leads = leads_by_seller.get(name, [])
         _active = [l for l in leads if not _skip(l) and not _booked(l)]

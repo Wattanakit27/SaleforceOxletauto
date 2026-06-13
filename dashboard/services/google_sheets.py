@@ -74,9 +74,13 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "ตั้งเวลาส่ง",
     },
-    "admin_config": {   # รายชื่อ LINE user_id ที่เป็นแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์ใน TEAMS)
+    "admin_config": {   # รายชื่อ LINE user_id ที่เป็นแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ใน TEAMS) — มีสิทธิ์แอดมิน
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "ตั้งค่าแอดมิน",
+    },
+    "tele_config": {   # รายชื่อ LINE user_id ของเทเลเซลล์ (ทีมโทร) — เคสรวมเป็น seller "ADMIN" · ไม่ใช่สิทธิ์แอดมิน
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "ตั้งค่าเทเลเซลล์",
     },
     "leadscore": {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",

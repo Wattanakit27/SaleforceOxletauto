@@ -1135,7 +1135,8 @@
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bell',16)} แจ้งเตือนตามด่วน</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:target',16)} ตั้งเป้า / ทีม</button>
-            <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
+            <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
+            <button onclick="openTeleConfigPanel()" title="จัดการเทเลเซลล์ (ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:phone-call',16)} จัดการเทเลเซลล์</button>
             <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:search',16)} ตรวจ Log ข้อมูล</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:save',16)} ส่งคะแนนเข้าชีต</button>
@@ -4242,6 +4243,62 @@
       } finally {
         btn.disabled = false; btn.textContent = '💾 บันทึก';
       }
+    }
+
+    // ── 📞 จัดการเทเลเซลล์ (ทีมโทร) — แยกจากแอดมิน · ชีต "ตั้งค่าเทเลเซลล์" · ไม่ให้สิทธิ์แอดมิน ──
+    let __teleList = [], __teleEmps = [];
+    async function openTeleConfigPanel() {
+      if (!isAdmin) return;
+      const o = document.getElementById('teleconfig-overlay'); if (o) o.remove();
+      const ov = document.createElement('div');
+      ov.id = 'teleconfig-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      const m = document.createElement('div');
+      m.style.cssText = 'background:var(--bg);border-radius:14px;max-width:600px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden';
+      m.onclick = (e) => e.stopPropagation();
+      m.innerHTML = `<div style="padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center"><div style="font-size:15px;font-weight:700;color:var(--t1)">${ic('lucide:phone-call',16)} จัดการเทเลเซลล์ (ทีมโทร)</div><button onclick="document.getElementById('teleconfig-overlay').remove()" style="background:transparent;border:none;font-size:20px;color:var(--t3);cursor:pointer">✕</button></div><div id="tele-body" style="overflow-y:auto;padding:16px;flex:1"><div style="text-align:center;padding:24px;color:var(--t3)"><div class="spin" style="margin:0 auto 10px"></div>กำลังโหลด...</div></div>`;
+      ov.appendChild(m); document.body.appendChild(ov);
+      try {
+        const res = await fetch('/api/admin/tele_config', { credentials:'same-origin' });
+        const d = await res.json();
+        if (!res.ok || d.error) throw new Error(d.error || 'load failed');
+        __teleList = (d.admins || []).map(a => ({...a})); __teleEmps = d.employees || [];
+        m.__teleData = d; drawTele(m, d);
+      } catch (e) {
+        m.querySelector('#tele-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
+      }
+    }
+    function drawTele(m, d) {
+      const have = new Set(__teleList.map(a => a.user_id));
+      const avail = __teleEmps.filter(e => !have.has(e.user_id));
+      let html = `<div style="padding:8px 12px;background:var(--blue-bg);color:var(--blue);border:.5px solid var(--blue);border-radius:8px;font-size:11px;margin-bottom:12px;line-height:1.6">เทเลเซลล์ = ทีมโทร · เคสรวมเป็น seller "ADMIN" · login เห็นหน้ารวมเทเลเซลล์ — <b>ไม่ได้สิทธิ์แอดมิน</b> (ถ้าอยู่ในจัดการแอดมินด้วย → แอดมินชนะ) <a href="${h(d.sheet_url)}" target="_blank" style="color:var(--blue);float:right;text-decoration:none">${ic('lucide:bar-chart-3',16)} ดูใน Sheet</a></div>`;
+      html += `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">${ic('lucide:plus',16)} เพิ่มเทเลเซลล์</div><div style="display:flex;gap:6px;margin-bottom:8px"><select id="tele-sel" style="flex:1;padding:8px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;outline:none"><option value="">— เลือกจากรายชื่อพนักงาน —</option>${avail.map(e => `<option value="${h(e.user_id)}">${h(e.nickname || e.display || '(ไม่มีชื่อ)')}${e.dept ? ' · '+h(e.dept) : ''}</option>`).join('')}</select><button onclick="__teleAdd()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">เพิ่ม</button></div><div style="display:flex;gap:6px;align-items:center"><input id="tele-uid" placeholder="หรือวาง LINE user_id (U...)" style="flex:1;padding:8px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box"><button onclick="__teleAddManual()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap">วางเอง</button></div></div>`;
+      html += `<div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">เทเลเซลล์ปัจจุบัน (${__teleList.length})</div>`;
+      if (!__teleList.length) html += `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;background:var(--bg2);border-radius:8px">ยังไม่มีเทเลเซลล์ในรายชื่อ</div>`;
+      else { html += `<div style="display:flex;flex-direction:column;gap:6px">`; __teleList.forEach((a,i) => { html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--t1)">${h(a.name || '(ไม่ระบุชื่อ)')}</div><code style="font-size:10px;color:var(--t3)" title="${h(a.user_id)}">${h(a.user_id.slice(0,12))}...${h(a.user_id.slice(-4))}</code></div><button onclick="__teleRemove(${i})" title="เอาออก" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:4px 8px">ลบ</button></div>`; }); html += `</div>`; }
+      html += `<div id="tele-msg" style="margin-top:10px"></div>`;
+      m.querySelector('#tele-body').innerHTML = html;
+      let f = m.querySelector('#tele-footer');
+      if (!f) { f = document.createElement('div'); f.id = 'tele-footer'; f.style.cssText = 'padding:12px 16px;border-top:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px'; m.appendChild(f); }
+      f.innerHTML = `<div style="font-size:11px;color:var(--t3)">${ic('lucide:triangle-alert',16)} บันทึก = เขียนทับชีต "ตั้งค่าเทเลเซลล์"</div><div style="display:flex;gap:8px"><button onclick="document.getElementById('teleconfig-overlay').remove()" style="padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;cursor:pointer">ปิด</button><button id="tele-save" onclick="__teleSave()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึก</button></div>`;
+    }
+    function __teleRedraw() { const m = document.querySelector('#teleconfig-overlay > div'); if (m && m.__teleData) drawTele(m, m.__teleData); }
+    function __teleAdd() { const s = document.getElementById('tele-sel'); const uid = s.value; if (!uid) return; if (__teleList.some(a => a.user_id === uid)) return; const e = __teleEmps.find(x => x.user_id === uid); __teleList.push({ user_id: uid, name: e ? (e.nickname || e.display) : '', note: '' }); __teleRedraw(); }
+    function __teleAddManual() { const inp = document.getElementById('tele-uid'); const uid = (inp.value || '').trim(); const msg = document.getElementById('tele-msg'); if (!uid) return; if (!uid.startsWith('U') || uid.length < 20) { msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} LINE user_id ต้องขึ้นต้นด้วย U</div>`; return; } if (__teleList.some(a => a.user_id === uid)) { msg.innerHTML = `<div style="padding:8px 12px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:11px">มีไอดีนี้อยู่แล้ว</div>`; return; } const e = __teleEmps.find(x => x.user_id === uid); __teleList.push({ user_id: uid, name: e ? (e.nickname || e.display) : '', note: '' }); __teleRedraw(); }
+    function __teleRemove(i) { const n = __teleList[i]?.name || __teleList[i]?.user_id || ''; if (!confirm(`เอา "${n}" ออกจากเทเลเซลล์?`)) return; __teleList.splice(i, 1); __teleRedraw(); }
+    async function __teleSave() {
+      const btn = document.getElementById('tele-save'); const msg = document.getElementById('tele-msg');
+      if (!confirm(`บันทึกเทเลเซลล์ ${__teleList.length} คน? (เขียนทับชีต)`)) return;
+      btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+      try {
+        const res = await fetch('/api/admin/tele_config', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify({ admins: __teleList }) });
+        const d = await res.json();
+        if (!res.ok || d.error) msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(d.error || 'บันทึกล้มเหลว')}</div>`;
+        else msg.innerHTML = `<div style="padding:8px 12px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:11px;font-weight:600">${ic('lucide:circle-check',16)} บันทึก ${d.saved} เทเลเซลล์เรียบร้อย</div>`;
+      } catch (e) {
+        msg.innerHTML = `<div style="padding:8px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:11px">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
+      } finally { btn.disabled = false; btn.textContent = '💾 บันทึก'; }
     }
 
     // ── Cron Schedule Panel (admin only) ──
