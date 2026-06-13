@@ -1125,12 +1125,12 @@
         html += `<span style="background:var(--blue-bg);color:var(--blue);padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:.5px solid var(--blue)">${h(employee.nickname)}</span>`;
       }
       html += `</div>`;
-      html += `<div style="display:flex;align-items:center;gap:8px">`;
+      html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">`;
       // Admin-only: เมนูจัดการ — รวม admin tools ใน dropdown เดียว
       if(isAdmin) {
         html += `<details class="admin-nav-menu" style="position:relative">
           <summary style="font-size:11px;padding:4px 10px;border-radius:14px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;list-style:none;font-weight:600;display:inline-block">เมนูจัดการ ▾</summary>
-          <div style="position:absolute;top:calc(100% + 4px);right:0;background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;min-width:170px;display:flex;flex-direction:column;gap:3px">
+          <div style="position:absolute;top:calc(100% + 4px);left:0;background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;min-width:170px;display:flex;flex-direction:column;gap:3px">
             <button onclick="openHealthPanel()" title="เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap;font-weight:700" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:circle-check',16)} สถานะระบบ</button>
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bell',16)} แจ้งเตือนตามด่วน</button>
