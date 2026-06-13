@@ -1099,6 +1099,11 @@ def _compute_dashboard_data() -> dict:
                     and ("จอง" in (cell(r, L.admin_status) or "") or "จอง" in (cell(r, L.sales_status) or ""))
                 ])
             m_admin_astats = activity_stats(m_admin_leads)
+            # ยอดเงินจอง (pipeline) ของ ADMIN รายเดือน — จาก booking_cases เดือนนั้น (จอง/รอเซ็น/รอผล/รอปล่อย)
+            m_admin_pipeline = sum(
+                b["price"] for b in m_bookings
+                if b["seller"] == "ADMIN" and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+            )
             m_sellers["ADMIN"] = {
                 "lead": len(m_admin_leads),
                 "leadNormal": len([r for r in m_admin_leads if cell(r, L.type) not in RJ_TYPES]),
@@ -1109,7 +1114,7 @@ def _compute_dashboard_data() -> dict:
                 "done": len(m_admin_done),
                 "booking": m_admin_booking,
                 "dealValue": m_admin_dv,
-                "pipelineValue": 0,
+                "pipelineValue": m_admin_pipeline,
                 "avgDealValue": (m_admin_dv / len(m_admin_done)) if m_admin_done else 0,
                 "leadTypes": {},
                 "updateSum": m_admin_astats["updateSum"],

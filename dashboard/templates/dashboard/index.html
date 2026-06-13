@@ -1905,6 +1905,32 @@
       });
       html += `</div>`;
 
+      // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──
+      {
+        const _adm = (D.sellers || []).find(s => s.name === 'ADMIN');
+        if (_adm) {
+          const aLead = _sval(_adm, 'leadNormal') || _sval(_adm, 'lead');
+          const aBook = _sval(_adm, 'booking');
+          const aFollow = _sval(_adm, 'follow');
+          const aPipe = _sval(_adm, 'pipelineValue');
+          if (aLead || aBook || aFollow) {
+            const aConv = pct(aBook, aLead);
+            const _tc = (lb, v, c) => `<div style="background:var(--bg2);border-radius:9px;padding:9px 10px;text-align:center"><div style="font-size:10px;color:var(--t3)">${lb}</div><div style="font-size:17px;font-weight:800;color:${c||'var(--t1)'}">${v}</div></div>`;
+            html += `<div class="card">
+              <div class="card-title" style="margin:0;display:flex;align-items:center;gap:6px">${ic('lucide:phone-call',16)} เทเลเซลล์ (ทีมโทร)<span class="info-tip" tabindex="0" data-tip="กลุ่มเทเลเซลล์: หาลีด/จอง แล้วส่งต่อให้เซลล์ปิด → ปล่อย=0 เป็นปกติ จึงวัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล">?</span></div>
+              <div class="card-sub">งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด — ไม่นับปล่อย/คะแนนปิดดีล (ตามช่วงวันที่ที่เลือก)</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-top:8px">
+                ${_tc('Lead', aLead, 'var(--blue)')}
+                ${_tc('จอง', aBook, 'var(--green)')}
+                ${_tc('% จอง', aConv + '%', 'var(--green-mid)')}
+                ${_tc('ติดตาม', aFollow, 'var(--amber)')}
+                ${_tc('฿ ยอดจอง', fmtBaht(aPipe), 'var(--green-mid)')}
+              </div>
+            </div>`;
+          }
+        }
+      }
+
       // (เอาตาราง "รายงานรายเซลล์ (ละเอียด)" ออกแล้วตามที่ผู้ใช้ขอ — ข้อมูลซ้ำกับตาราง "สรุปรายเซลล์" ด้านบน)
 
       // ── 3-col panels: 🔴 ยังไม่อัพเดท · ${ic('lucide:wallet',16)} Top มูลค่าดีล · ${ic('lucide:trophy',16)} Top จอง ──
