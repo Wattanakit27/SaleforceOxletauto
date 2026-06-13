@@ -842,6 +842,10 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     # col 0=ชื่อเซลล์, col 1-27=ตรง tab · col 28=tab name, col 29=แถวในชีต (1-based) — ใช้ inline edit เขียนกลับ
                     # เคสที่มาร์ค "ADMIN" ในคอลัมน์ AB (idx 27) = เคสของแอดมิน แม้อยู่ใต้บล็อกเซลล์อื่น → ย้ายเป็น ADMIN (ตัดจากเซลล์)
                     admin_flag = any(str(row[c] if c < len(row) else "").strip().upper() == "ADMIN" for c in range(24, 30))
+                    # ★ ยกเว้นสถานะ "ปล่อย" (ปิดดีลแล้ว) — เครดิตปล่อยอยู่กับเซลล์เจ้าของบล็อกที่ปิดเอง ไม่ย้ายไป ADMIN
+                    #   (เทเลเซลล์หาลีด/จองให้ แต่ "ปล่อย" = เซลล์ปิด → เทเลเซลล์ไม่มีปล่อย · ไม่รวม "รอปล่อย")
+                    if admin_flag and status.replace(" (ซื้อสด)", "").strip().startswith("ปล่อย"):
+                        admin_flag = False
                     seller_out = "ADMIN" if admin_flag else name
                     all_rows.append([seller_out] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
         _cache_set(cache_key, all_rows)
