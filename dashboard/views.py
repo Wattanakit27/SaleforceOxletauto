@@ -169,7 +169,7 @@ def login_view(request):
         line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
         return render(request, "dashboard/login.html", {
             "next": next_url, "error": None, "line_login": line_login,
-            "uid": (request.GET.get("uid") or "").strip(),   # pre-fill LINE user_id จากลิงก์
+            "show_breakglass": bool(request.GET.get("bg")),   # ฟอร์มแอดมินระบบ (สำรอง) โผล่เฉพาะ /login/?bg=1
         })
 
     # POST
@@ -194,79 +194,19 @@ def login_view(request):
             return JsonResponse({"ok": True, "next": next_url})
         return HttpResponseRedirect(next_url)
 
-    # ทาง 2: LINE user_id + รหัสรวม (เซลล์/ผู้บริหาร/แอดมิน-เซลล์) → ตรวจ employees sheet + set session
-    if line_token:
-        shared_pw = (getattr(settings, "OXLET_SELLER_PASSWORD", "") or "").strip()
-        if not password or password != shared_pw:
-            err = "รหัสผ่านไม่ถูกต้อง"
-            if is_ajax:
-                return JsonResponse({"ok": False, "error": err}, status=401)
-            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
-        # ได้สิทธิ์ admin จาก 3 ทาง (ยังนับเป็นเซลล์ปกติในสถิติ):
-        #  0) LINE user_id อยู่ใน SUPER_ADMIN_IDS (hardcode/break-glass) — login ได้แม้ไม่มีใน employees
-        #  1) LINE user_id อยู่ในชีต "ตั้งค่าแอดมิน" (เทเลเซลล์/ออฟฟิศ ที่ไม่ใช่เซลล์)
-        #  2) เป็นเซลล์ใน TEAMS ที่ถูกติ๊ก "แอดมิน" ในชีตตั้งค่าเซลล์
-        from .services.constants import (
-            normalize_seller, ADMIN_SELLERS, ADMIN_USER_IDS, SUPER_ADMIN_IDS,
-            refresh_from_sheet, load_admin_user_ids,
-        )
-        try:
-            try:
-                employees = fetch_sheet("employees")
-            except Exception:
-                # แอดมินสูงสุด (hardcode) ต้อง login ได้แม้อ่าน employees ไม่ได้
-                if line_token not in SUPER_ADMIN_IDS:
-                    raise
-                employees = []
-            for r in employees:
-                if cell(r, EM.user_id) == line_token:
-                    position = (cell(r, EM.position) or "").strip().lower()
-                    nickname = cell(r, EM.nickname)
-                    display = cell(r, EM.display_name)
-                    refresh_from_sheet()
-                    load_admin_user_ids()
-                    if (line_token in SUPER_ADMIN_IDS or line_token in ADMIN_USER_IDS
-                            or normalize_seller((nickname or "").strip()) in ADMIN_SELLERS):
-                        position = "admin"
-                    request.session["oxlet_user"] = {
-                        "user_id": line_token,
-                        "nickname": nickname,
-                        "display_name": display,
-                        "position": position or "seller",
-                        "seller_name": (nickname or "").strip(),
-                    }
-                    request.session.set_expiry(60 * 60 * 24 * 30)
-                    # เซลล์ทั่วไป → /s/<user_id>/, ผู้บริหาร → /dashboard/
-                    if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
-                        target = next_url if next_url != "/dashboard/" else "/dashboard/"
-                    else:
-                        target = f"/s/{line_token}/"
-                    if is_ajax:
-                        return JsonResponse({"ok": True, "next": target})
-                    return HttpResponseRedirect(target)
-            # ไม่พบใน employees — ถ้าเป็นแอดมินสูงสุด (hardcode) ก็ให้ login ได้ในฐานะ admin
-            if line_token in SUPER_ADMIN_IDS:
-                request.session["oxlet_user"] = {
-                    "user_id": line_token,
-                    "nickname": "แอดมิน",
-                    "display_name": "แอดมินสูงสุด",
-                    "position": "admin",
-                }
-                request.session.set_expiry(60 * 60 * 24 * 30)
-                target = next_url if next_url != "/dashboard/" else "/dashboard/"
-                if is_ajax:
-                    return JsonResponse({"ok": True, "next": target})
-                return HttpResponseRedirect(target)
-        except Exception as e:
-            err = f"ตรวจ user_id ล้มเหลว: {e}"
-            if is_ajax:
-                return JsonResponse({"ok": False, "error": err}, status=500)
-            return render(request, "dashboard/login.html", {"next": next_url, "error": err})
+    # (ถอดออกแล้ว — มิ.ย.69) ทาง "LINE user_id + รหัสรวม" เลิกใช้เพื่อความปลอดภัย (รหัสรวมเป็นช่องโหว่คนนอก)
+    # เหลือ login ผ่าน LINE Login (OAuth) เท่านั้น — เซลล์/แอดมิน/ผู้บริหาร + SUPER_ADMIN_IDS
+    # เข้าผ่านปุ่ม "เข้าสู่ระบบด้วย LINE" (_login_with_line_user_id)
+    # ทางสำรอง (break-glass) = แอดมินระบบ user/password ด้านบน (ฟอร์มซ่อน — เปิดด้วย /login/?bg=1)
 
+    line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
     error = "ข้อมูลไม่ถูกต้อง" if (username or password or line_token) else "กรุณากรอกข้อมูล"
     if is_ajax:
         return JsonResponse({"ok": False, "error": error}, status=401)
-    return render(request, "dashboard/login.html", {"next": next_url, "error": error})
+    return render(request, "dashboard/login.html", {
+        "next": next_url, "error": error, "line_login": line_login,
+        "show_breakglass": bool(request.GET.get("bg")),
+    })
 
 
 def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):

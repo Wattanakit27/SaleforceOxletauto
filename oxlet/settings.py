@@ -66,9 +66,8 @@ SECURE_SSL_REDIRECT = not DEBUG
 OXLET_ADMIN_USER = os.getenv("OXLET_ADMIN_USER", "admin")
 OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 
-# รหัสรวมสำหรับ login ด้วย LINE user_id (เซลล์/ผู้บริหาร/แอดมิน-เซลล์)
-# ⚠️ env-only — เลิก inline default แล้ว (กันรหัสหลุดในโค้ด/git history) → ต้องตั้ง OXLET_SELLER_PASSWORD บน Vercel
-# ว่าง = ปิด login รหัสรวม (fail-safe — ไม่เปิดทิ้งให้ใครเข้า). login_view เช็ค `not password or password != shared_pw`
+# (เลิกใช้แล้ว — มิ.ย.69) รหัสรวม login ด้วย LINE user_id — ถอด path ออกจาก login_view กันคนนอก
+# เหลือ login ผ่าน LINE Login (OAuth) อย่างเดียว · ตัวแปรนี้ไม่ถูกอ้างถึงในโค้ดแล้ว (เก็บไว้กัน import พัง/อ้างอิงเก่า)
 OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "")
 
 # LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
