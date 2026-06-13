@@ -2084,6 +2084,7 @@ _FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่ร�
 _FU_DEAD = ["ยังไม่ออก", "ติดแบล็คลิส", "เครดิตไม่ผ่าน", "ไม่สนใจแล้ว", "คืนเคส"]
 _FU_SKIP = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 _FU_NOANS_CAP = 5
+_FU_TH_MON = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
 
 
 def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict]:
@@ -2106,6 +2107,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     nick2uid = get_nickname_to_user_id()
     today = bangkok_now().date()
     win_start = today.replace(day=1) - timedelta(days=7)
+    date_str = f"{today.day} {_FU_TH_MON[today.month]} {(today.year + 543) % 100:02d}"  # เช่น "13 มิ.ย. 69"
 
     def _ds(s):
         d = parse_date(str(s or "").split(" ")[0].strip())
@@ -2244,19 +2246,20 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         return out
 
     out = []
-    summary = []  # (name, urgent_count, stuck_count) — ทุกกลุ่มที่มีงานค้าง (รวม ADMIN) สำหรับสรุปแอดมิน
-    u2n = {v: k for k, v in nick2uid.items()}  # uid → ชื่อเล่น
-    admin_recip = sorted(r for r in ADMIN_USER_IDS if r)  # 5 เทเลเซลล์
-    admin_names = [u2n[u] for u in admin_recip if u in u2n]
-    admin_label = ", ".join(admin_names) if admin_names else "เทเลเซลล์"
-    admin_slash = "/".join(admin_names) if admin_names else "เทเลเซลล์"
+    # summary: (name, n_follow, n_stuck, n_notcalled, n_stale7, n_nostatus) — กลุ่มที่มีงานค้าง (รวม ADMIN)
+    summary = []
+    admin_recip = sorted(r for r in ADMIN_USER_IDS if r)  # ไอดีเทเลเซลล์ (ชีต "ตั้งค่าแอดมิน")
     for name in sorted(ALL_SELLERS) + ["ADMIN"]:
         leads = leads_by_seller.get(name, [])
-        urgent_all = [l for l in leads if not _skip(l) and not _booked(l) and _urg(l) > 0]
+        _active = [l for l in leads if not _skip(l) and not _booked(l)]
+        n_nc = sum(1 for l in _active if (l["updateCount"] or 0) == 0)            # ยังไม่โทร
+        n_st = sum(1 for l in _active if _idle(l) > 7)                            # ค้างเกิน 7 วัน
+        n_ns = sum(1 for l in _active if not (l["customerStatus"] or "").strip()) # ยังไม่ใส่สถานะ
+        urgent_all = [l for l in _active if _urg(l) > 0]
         urgent_all.sort(key=_urg, reverse=True)
         sd_all = _stuck(bookings_by_seller.get(name, []))
         if urgent_all or sd_all:
-            summary.append((name, len(urgent_all), len(sd_all)))
+            summary.append((name, len(urgent_all), len(sd_all), n_nc, n_st, n_ns))
         # ผู้รับ: เซลล์ปกติ = uid ตัวเอง · "ADMIN" (เทเลเซลล์) = 5 ไอดีในชีต "ตั้งค่าแอดมิน"
         if name == "ADMIN":
             recips, link_uid = admin_recip, (admin_recip[0] if admin_recip else "")
@@ -2270,9 +2273,9 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         if not urgent and not sd:
             continue
         if name == "ADMIN":
-            lines = ["🔔 ตามด่วนวันนี้ (เคส ADMIN)", f"👥 {admin_label} (แอดมิน)", ""]
+            lines = [f"ตามด่วนวันนี้ (กลุ่มเทเลเซลล์) - {date_str}", ""]
         else:
-            lines = ["🔔 ตามด่วนวันนี้", ""]
+            lines = [f"ตามด่วนวันนี้ - {date_str}", ""]
         if urgent:
             lines.append("ลีดต้องตาม")
             for l in urgent:
@@ -2283,7 +2286,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
             for b, rs, d in sd:
                 lines.append(f"- {b.get('customer') or '-'} · ทะเบียน {b.get('plate') or '-'} — {rs} {d} วัน")
             lines.append("")
-        lines.append("เปิดหน้ากลุ่ม ADMIN:" if name == "ADMIN" else "เปิดหน้าตัวเอง:")
+        lines.append("เปิดหน้ากลุ่มเทเลเซลล์:" if name == "ADMIN" else "เปิดหน้าตัวเอง:")
         lines.append(f"{_FU_BASE}/s/{link_uid}/")
         out.append({"seller": name, "user_id": link_uid, "recipients": recips, "text": "\n".join(lines)})
 
@@ -2292,16 +2295,26 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         summary.sort(key=lambda x: -(x[1] + x[2]))
         tot_f = sum(x[1] for x in summary)
         tot_s = sum(x[2] for x in summary)
-        olines = ["🔔 สรุปตามด่วนวันนี้ (ทีม)", "",
-                  f"ต้องตามรวม {tot_f} เคส · ดีลค้าง {tot_s} ดีล", ""]
-        for nm, nf, ns in summary:
+        tot_nc = sum(x[3] for x in summary)
+        tot_st = sum(x[4] for x in summary)
+        tot_ns = sum(x[5] for x in summary)
+        olines = [f"สรุปตามด่วนวันนี้ (ทีม) - {date_str}", "",
+                  f"ต้องตามรวม {tot_f} เคส - ดีลค้าง {tot_s} ดีล",
+                  f"- ยังไม่โทร {tot_nc} เคส",
+                  f"- ค้างเกิน 7 วัน {tot_st} เคส",
+                  f"- ยังไม่ใส่สถานะ {tot_ns} เคส", ""]
+        for nm, nf, ns, nc, nd, nx in summary:
             parts = []
-            if nf:
-                parts.append(f"{nf} เคสตาม")
             if ns:
                 parts.append(f"{ns} ดีลค้าง")
-            _lbl = f"ADMIN ({admin_slash})" if nm == "ADMIN" else nm
-            olines.append(f"• {_lbl} — {' · '.join(parts)}")
+            if nc:
+                parts.append(f"ยังไม่โทร ({nc} เคส)")
+            if nx:
+                parts.append(f"ไม่มีสถานะ ({nx} เคส)")
+            if not parts:
+                continue
+            _lbl = "เทเลเซลล์" if nm == "ADMIN" else nm
+            olines.append(f"- {_lbl}: {' - '.join(parts)}")
         olines.append("")
         olines.append(f"ดูภาพรวม: {_FU_BASE}/dashboard/")
         # ผู้รับสรุป = แอดมินเทเลเซลล์ (ADMIN_USER_IDS) + เซลล์ที่ติ๊กแอดมิน 👑 (ADMIN_SELLERS → uid)

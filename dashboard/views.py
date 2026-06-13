@@ -588,8 +588,14 @@ def admin_schedule_config(request):
             last_followup = {"at": _fu.get("updated_at"), **(_fu.get("data") or {})}
     except Exception:
         pass
+    try:
+        from .services.supabase_client import is_configured as _sbcfg
+        _sb_ok = _sbcfg()
+    except Exception:
+        _sb_ok = False
     return JsonResponse({
         "ok": True,
+        "supabaseOk": _sb_ok,   # False = โหมดอ่าน Google ตรง → heartbeat ไม่ติดตาม (cron ยังทำงาน)
         "schedules": schedules,
         "count": len(schedules),
         "enabled_count": sum(1 for s in schedules if s.get("enabled")),
@@ -1508,13 +1514,14 @@ def admin_system_health(request):
     today_leads = int(today.get("totalLeads", 0))
 
     # ── เช็กข้อมูลผิดอัตโนมัติ ──
+    # โหมด stopgap (Supabase ปิด มิ.ย.69): เว็บอ่าน Google ตรง+cache เอง ไม่พึ่ง Supabase/cron sync
+    # → ไม่ต้องเตือน sync/cron/Supabase (เป็นโหมดที่ตั้งใจ ไม่ใช่ error)
     issues = []
-    if age is None:
-        issues.append({"level": "warn", "msg": "ยังไม่เคย sync (อ่านสด) — รอ cron รอบแรก หรือกดรีเฟรช"})
-    elif age > 600:
-        issues.append({"level": "err", "msg": f"ข้อมูลค้าง — sync ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~3-4 นาที) · cron อาจหยุด"})
-    if not sb_ok:
-        issues.append({"level": "err", "msg": "Supabase ติดต่อไม่ได้ / ยังไม่ตั้งค่า — dashboard อาจช้าหรือไม่อัปเดต"})
+    if sb_ok:
+        if age is None:
+            issues.append({"level": "warn", "msg": "ยังไม่เคย sync (อ่านสด) — รอ cron รอบแรก หรือกดรีเฟรช"})
+        elif age > 600:
+            issues.append({"level": "err", "msg": f"ข้อมูลค้าง — sync ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~3-4 นาที) · cron อาจหยุด"})
     if not line_ok:
         issues.append({"level": "warn", "msg": "LINE token ไม่ได้ตั้ง — แจ้งเตือนเข้าไลน์จะไม่ทำงาน"})
     if total_leads == 0:
@@ -1536,7 +1543,8 @@ def admin_system_health(request):
             last_followup = {"at": _fu.get("updated_at"), **(_fu.get("data") or {})}
     except Exception:
         pass
-    if cron_tick_age is None or cron_tick_age > 600:
+    # heartbeat ติดตามได้เฉพาะตอนเปิด Supabase (kv เก็บใน Supabase) — โหมด stopgap ไม่ track (ไม่เตือน)
+    if sb_ok and (cron_tick_age is None or cron_tick_age > 600):
         issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค URL ใน n8n ให้เป็นโดเมน saleforce-oxletauto"})
 
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
