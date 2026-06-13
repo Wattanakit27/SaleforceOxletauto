@@ -375,6 +375,33 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 - SQL: `create table if not exists dashboard_cache (key text primary key, data jsonb, updated_at timestamptz default now());`
 - ปลอดภัย: ไม่มี table = fallback คำนวณสดเหมือนเดิม (ไม่พัง)
 
+#### 🆕 แผนสถาปัตยกรรม sync ถัดไป (ตัดสินใจแล้ว มิ.ย.69 — ยังไม่ลงมือ · รอทำ)
+**สรุปการตัดสินใจ**: เก็บใน Supabase แค่ **"ผลคำนวณสำเร็จรูป" (dashboard_cache ~3MB)** · **ไม่ mirror leads 15k แถวดิบ** · ใช้ **timer (n8n) ทุก ~5-10 นาที** เป็นตัวสั่งคำนวณ · เว็บอ่าน Supabase อย่างเดียว
+
+**ทำไม (ต้นเหตุเว็บ 3 นาที + Supabase ล่ม มิ.ย.69)**:
+- ตัวที่ทำ CPU Supabase เต็ม/ค้าง = upsert **leads 15k แถวดิบ** เข้า `sheet_cache` ทุกไม่กี่นาที (jsonb ก้อนใหญ่ + sync ซ้อนไม่มี lock) — **ไม่ใช่** "อ่าน Sheet สดทุก visit" (เว็บอ่าน precompute อยู่แล้ว)
+- เว็บช้า 3 นาทีเพราะ **รอ Supabase timeout (30+60+90 วิ)** ตอน DB ป่วย ไม่ใช่เพราะการคำนวณ — วัดจริง: คำนวณสดจาก Google = **8.5 วิ** · ผล precompute ~3MB
+
+**สถาปัตยกรรมเป้าหมาย**:
+- timer (n8n ~5-10 นาที) → ยิง endpoint เบา → `_compute_dashboard_data()` (อ่าน Google ~8.5 วิ) → เก็บ **เฉพาะผลสรุป** ลง `dashboard_cache`
+- **เลิก `sheet_cache` (mirror 15k ดิบ)** — ตอน sync ให้ `_compute_dashboard_data` อ่าน Google ตรง (`USE_SUPABASE=False` ทำให้ `fetch_all_sheets` อ่าน Google อยู่แล้ว) ไม่อ่าน mirror อีก
+- เว็บอ่าน `dashboard_cache` ก้อนเดียว → ~1-2 วิ · ไม่แตะ Sheet · ไม่คำนวณเอง · CPU Supabase แทบไม่ขยับ → **free tier อยู่ได้ยาว**
+- เปลี่ยนไฟล์ปีใหม่ = แก้ `sheet_config` แถวเดียว (ไม่ต้อง deploy / ไม่ต้องติดตั้งสคริปต์อะไร)
+
+**ห้ามทำ (บทเรียน + ที่ประเมินแล้วไม่เข้ากับแอปนี้)**:
+- ❌ อย่า mirror leads 15k แถวดิบเข้า Supabase อีก = ต้นเหตุ CPU เต็มโดยตรง
+- ❌ อย่าให้เว็บอ่านแถวดิบมา aggregate เอง / pagination ราย 50-100 แถว — แอปนี้เป็น dashboard **"สรุปยอด"** ต้องใช้ครบทุกแถวมาคำนวณ KPI → pagination ใช้ไม่ได้ (ต้นทุนจริงคือ "การรวมยอด" ไม่ใช่ "การดึงแถว")
+- ❌ ไม่ต้องคิดเรื่อง connection pooler / port 6543 — ระบบคุย Supabase ผ่าน **REST (PostgREST)** ไม่เปิด Postgres connection ตรง (`DATABASES={}`)
+- ❌ อย่ายัดหลายปีในไฟล์เดียว (5 ปี ≈ 7.5M cell ใกล้ชน 10M + ไฟล์ ~180k แถว อืดทั้งคนกรอกและ API) → แยกไฟล์รายปีตามเดิม
+- Apps Script `onEdit` (sync ทันทีที่แก้) = ทำได้แต่ซับซ้อน (ติดตั้งทุกไฟล์ข้อมูล + ตั้งใหม่ทุกปี + พลาด edit ที่มาจากสูตร/API/import + ต้อง debounce + ต้องมี timer สำรองอยู่ดี) → เก็บเป็น **option เสริมทีหลัง** ไม่ใช่ตัวหลัก · งานเบื้องหลัง (คำนวณ+เก็บผล) เหมือน timer เป๊ะ ต่างแค่ "ตัวกดปุ่ม"
+
+**ไฟล์ต้นทางปัจจุบัน = 5 ไฟล์** (ข้อมูล 4: leads/sales_reports/bookings/live · ตั้งค่า 1: employees) — Apps Script ถ้าทำต้องติดตั้งในไฟล์ข้อมูล 4 ไฟล์
+
+**สถานะ**:
+- ✅ **Stopgap ทำแล้ว (มิ.ย.69)** — ลบ Supabase project ทิ้ง → ระบบอ่าน Google ตรง: `USE_SUPABASE` default = **False** ([settings.py](oxlet/settings.py)) · `is_configured()` คืน False เมื่อ USE_SUPABASE ปิด → ทุก Supabase call short-circuit ไม่ค้าง · `fetch_dashboard_data()` เพิ่มทาง "ไม่มี Supabase = อ่าน Google + cache memory `_LOCAL_TTL`=180s (หมดอายุ→คำนวณใหม่)". วัดจริง: cold ~8s · warm ~0s · ไม่มี timeout 15s แล้ว
+- ⬜ **Phase 2 (ยังไม่ทำ)** — ถ้าอยากได้ sub-second + อุ่นตลอด: สร้าง Supabase free ใหม่ (เก็บแค่ผลสรุป ~3MB) + timer (n8n) สั่งคำนวณ → เปิดด้วย env `USE_SUPABASE=True` (โครงโค้ดรองรับแล้ว) · **อย่า mirror leads ดิบกลับ**
+- งานแก้ login (เหลือ LINE Login) deploy ไปแล้ว (ไม่เกี่ยวกับงานนี้)
+
 #### Supabase tables ทั้งหมด (`supabase_client.py`)
 - **`sheet_cache`** — mirror ของ 6 sheets หลัก (leads/sales_reports/bookings/live_sessions/live_followups/employees) · `upsert_sheet`/`get_sheet`/`sync_all_sheets_to_supabase` · lazy background sync ถ้าเก่า >120s
 - **`dashboard_cache`** — (1) pre-compute dashboard (key='main') (2) **kv** สถานะ/heartbeat (`set_kv`/`get_kv`): `cron_tick`, `cron_followup` log → หน้าสถานะระบบ

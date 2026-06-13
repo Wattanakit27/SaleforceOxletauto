@@ -93,8 +93,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ydscbkpnexgwircqcczv.supabase.
 # SECRET (service_role ข้าม RLS) — ต้องตั้งบน Vercel เท่านั้น
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
 # (ลบ SUPABASE_PUBLISHABLE_KEY ออก — ไม่มีโค้ดไหนอ่าน)
-# default True — ระบบใช้ Supabase เป็นหลัก
-USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
+# (มิ.ย.69) default False — ลบ Supabase project ทิ้งชั่วคราว → อ่าน Google Sheet ตรง (stopgap)
+# False = ทุก Supabase call short-circuit (is_configured คืน False) ไม่ค้าง · เปิดกลับด้วย env USE_SUPABASE=True
+USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes")
 
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (n8n, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย

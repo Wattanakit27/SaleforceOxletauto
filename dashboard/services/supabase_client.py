@@ -38,6 +38,10 @@ def _trigger_bg_sync():
 
 
 def is_configured() -> bool:
+    # ปิด Supabase ทั้งระบบเมื่อ USE_SUPABASE=False → ทุก read/write short-circuit (ไม่ยิงเน็ต/ไม่ค้าง)
+    # (มิ.ย.69) ลบ Supabase project ทิ้งชั่วคราว → อ่าน Google ตรง · เปิดกลับด้วย USE_SUPABASE=True + ตั้ง URL/SECRET ใหม่
+    if not getattr(settings, "USE_SUPABASE", False):
+        return False
     return bool(getattr(settings, "SUPABASE_URL", "") and getattr(settings, "SUPABASE_SECRET_KEY", ""))
 
 
