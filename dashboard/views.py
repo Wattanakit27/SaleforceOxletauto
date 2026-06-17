@@ -769,10 +769,11 @@ def cron_tick(request):
             )
             if is_configured():
                 age = get_dashboard_cache_age()
-                # ⚠️ ห้ามลดต่ำกว่า ~120! sync 1 ครั้ง = upsert leads 15k แถวเข้า Supabase (หนัก)
-                # เคยตั้ง 45 (มิ.ย.69) → sync ทุก tick (~1440/วัน) + ถ้า sync ก่อนยังไม่เสร็จใน 60s ตัวใหม่เริ่มซ้อน
-                #   → Supabase/Vercel โหลดพุ่ง server ล่ม. 180 = sync ทุก ~3-4 นาที (~360/วัน) เสถียร + ยังสดพอ
-                if age is None or age > 180:
+                # (Phase 2 มิ.ย.69) sync เป็น no-op แล้ว (ไม่มี raw mirror) → recompute = precompute (อ่าน Google + เขียนผล 3MB)
+                # 30 = recompute ~ทุก 1 นาที (cron ยิง 1 นาที · recompute ~15-23s < 60s → ไม่ซ้อน)
+                # โหลดหลัก = Vercel function time + Google API (~3 เท่าของ 180) · Supabase เขียนผลก้อนเดียว เบา (ไม่ใช่ CPU เต็มแบบ raw)
+                # ถ้า Vercel quota ตึง → ขยับขึ้น (90 = ~2 นาที · 180 = ~3 นาที)
+                if age is None or age > 30:
                     sync_all_sheets_to_supabase()
                     from .services.fetch_dashboard import precompute_dashboard, _dash_cache
                     _dash_cache["data"] = None
