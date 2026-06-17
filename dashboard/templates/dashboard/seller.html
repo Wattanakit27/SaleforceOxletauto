@@ -764,10 +764,8 @@
         // exclude junk (คืน/ยกเลิก/จ่ายใหม่/...) + จอง/ปล่อย — ไม่ remind เคสที่จัดการแล้ว
         const curMonthLeads = leadsInCurrentMonth().filter(l => !isSkipped(l) && !isBooked(l));
         const curNotCalled = curMonthLeads.filter(l => !l.updateCount).length;
-        const curFollow = curMonthLeads.filter(l => {
-          const s = (l.salesStatus||'').toLowerCase();
-          return s && s !== '-' && ['ติดตาม','รอตอบ','รอลูกค้า','รอ','โทรไม่รับ','ผิดนัด','นัดหมาย'].some(k => s.includes(k));
-        }).length;
+        // ใช้ predicate เดียวกับ KPI "ต้องโทรต่อ" (Z-aware) — เดิมเช็คแค่ salesStatus ซึ่ง มิ.ย.+ มักว่าง (สถานะอยู่ที่ Z/admin) → นับขาด
+        const curFollow = curMonthLeads.filter(findFilter('follow').test).length;
         const curMonthName = (C.MONTHS_FULL||[])[new Date().getMonth()] || '';
         if (curNotCalled === 0 && curFollow === 0) return '';
         return `
@@ -1930,9 +1928,14 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     if (el.tagName === 'SELECT') {
       const opts = Array.from(el.options).filter(o => o.value);
       const norm = (s) => (s||'').replace(/[^฀-๿a-zA-Z0-9]/g, '').toLowerCase();
-      let m = opts.find(o => o.value === val)
-           || opts.find(o => o.value.includes(val) || val.includes(o.value))
-           || opts.find(o => norm(o.value) && (norm(o.value).includes(norm(val)) || norm(val).includes(norm(o.value))));
+      const nv = norm(val);
+      // 1) exact / normalized-exact ก่อน
+      let m = opts.find(o => o.value === val) || opts.find(o => norm(o.value) === nv);
+      // 2) substring เฉพาะเมื่อ token ยาวพอ (≥3) และ match ชัดตัวเดียว — กัน OCR token สั้นเลือกบริษัทผิดเงียบๆ
+      if (!m && nv.length >= 3) {
+        const subs = opts.filter(o => norm(o.value).length >= 3 && (norm(o.value).includes(nv) || nv.includes(norm(o.value))));
+        if (subs.length === 1) m = subs[0];   // ชัดตัวเดียวเท่านั้น · กำกวม → ปล่อยว่างให้เซลล์เลือกเอง
+      }
       if (m) el.value = m.value;
     } else {
       el.value = val;

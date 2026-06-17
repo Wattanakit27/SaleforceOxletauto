@@ -540,6 +540,7 @@
     function _stageScore(dFrom, dTo, deadline) {
       const days = _daysBetween(dFrom, dTo);
       if (days === null) return 0;
+      if (days < 0) return 0;   // วันกลับหัว (กรอกสลับ เช่น ผล<เซ็น) — ไม่ให้คะแนน (sync กับ Python _stage_score)
       if (days <= deadline) return 1;
       return Math.max(0, 1 - (days - deadline) / (2 * deadline));
     }
@@ -1085,6 +1086,35 @@
     // ── Render engine ──
     const root = document.getElementById('dashboard-root');
 
+    // มือถือ: ทำให้ทุกตาราง .shdr/.srow เลื่อนแนวนอนเห็นครบ (ห่อด้วย .hscroll) แทนการยุบ/ซ่อนคอลัมน์
+    // ครอบทั้ง main dashboard + overlay/modal · idempotent (guard dataset.hw / .hscroll) · min-width ตามจำนวนคอลัมน์
+    function makeTablesScrollable(scope){
+      const r = (scope && scope.querySelectorAll) ? scope : document;
+      r.querySelectorAll('.shdr').forEach(hdr => {
+        if (hdr.dataset.hw || hdr.closest('.hscroll')) return;   // ทำแล้ว / scorecard ห่อมือแล้ว
+        const group = [hdr]; let n = hdr.nextElementSibling;
+        while (n) {
+          if (n.classList.contains('shdr') || n.classList.contains('card')) break;
+          const isRow = n.classList.contains('srow');
+          const hasRows = !isRow && n.querySelector && !!n.querySelector('.srow');
+          const isEmpty = !isRow && !hasRows && /ยังไม่มี|ไม่มีข้อมูล|ไม่มีเคส|ไม่พบ/.test(n.textContent||'');
+          if (isRow || hasRows || isEmpty) { group.push(n); n = n.nextElementSibling; } else break;
+        }
+        hdr.dataset.hw = '1';
+        if (group.length === 1) return;   // ไม่เจอแถว (header ที่แถวเป็น grid อื่น) — ไม่ห่อ กันหัวตารางลอยเดี่ยว
+        const cols = (hdr.style.gridTemplateColumns||'').trim().split(/\s+/).filter(Boolean).length || 5;
+        const minW = Math.max(440, cols * 92);
+        const outer = document.createElement('div'); outer.style.cssText = 'overflow-x:auto;-webkit-overflow-scrolling:touch';
+        const inner = document.createElement('div'); inner.className = 'hscroll'; inner.style.minWidth = minW + 'px';
+        hdr.parentNode.insertBefore(outer, hdr); outer.appendChild(inner);
+        group.forEach(el => inner.appendChild(el));
+      });
+    }
+    // auto-ครอบเมื่อ DOM เปลี่ยน (modal/overlay เปิดทีหลัง) — debounce ด้วย rAF · idempotent กัน loop
+    let __hwRaf = 0;
+    new MutationObserver(() => { if (__hwRaf) return; __hwRaf = requestAnimationFrame(() => { __hwRaf = 0; makeTablesScrollable(document); }); })
+      .observe(document.body, { childList: true, subtree: true });
+
     function render() {
       // เก็บ focus + cursor ก่อน rebuild DOM — ไม่งั้น input search/edit ที่กำลังพิมพ์อยู่จะ lose focus
       // (ทุก oninput="...;render()" จะ rebuild root.innerHTML ทำให้ element ใหม่ไม่มี focus)
@@ -1196,6 +1226,7 @@
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
 
       root.innerHTML = html;
+      makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
       if(tab==='o') initCharts();
       requestAnimationFrame(positionNavInd);
 
@@ -1678,7 +1709,7 @@
         </div>
         <div class="card-sub">6 ด้าน เทียบกับเป้า (ถึงเป้า=เต็ม) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <div style="min-width:780px">
+        <div class="hscroll" style="min-width:780px">
         <div class="shdr" style="grid-template-columns:.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .8fr .85fr .7fr .8fr;font-size:10px">
           <span>#</span>
           <span>เซลล์</span>
@@ -2336,7 +2367,7 @@
           html += `<div class="srow" style="grid-template-columns:.85fr .7fr .8fr 2fr .85fr .9fr;cursor:pointer" onclick="openBookingDetail(${b._idx})">`;
           html += `<span style="font-size:11px;color:var(--t2)">${h(dispDate)}${releasedStatus==='all'?`<br><span style='display:inline-block;padding:1px 5px;border-radius:6px;background:${stColor};color:#fff;font-size:9px;margin-top:2px'>${h(b.status)}</span>`:''}</span>`;
           html += `<span style="font-size:11px">${ageBadge}</span>`;
-          html += `<span style="font-weight:600;color:${teamCol}">${h(b.seller||'-')}</span>`;
+          html += `<span style="font-weight:600;color:${teamCol}">${h(sname(b.seller||'-'))}</span>`;
           html += `<span style="font-size:12px">${h(carLbl).slice(0,60)}</span>`;
           html += `<span style="font-size:11px;color:var(--t3)">${h(b.plate||'-')}</span>`;
           html += `<span style="text-align:right;font-weight:600;color:${b.status==='ปล่อย'?'var(--green-mid)':'var(--t2)'}">${fmtBaht(b.price||0)}</span>`;
@@ -2758,7 +2789,7 @@
         rows.forEach(r => {
           const tCol = C.TEAM_COLORS[r.team] || 'var(--t3)';
           inner += `<div class="srow" style="grid-template-columns:1.4fr .8fr .7fr .7fr 1fr 1fr;cursor:pointer" onclick="document.getElementById('car-detail-overlay').remove();switchToSeller('${h(r.seller)}')">`;
-          inner += `<span style="font-weight:600">${h(r.seller)}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${tCol};color:#fff;margin-left:4px">${r.team}</span></span>`;
+          inner += `<span style="font-weight:600">${h(sname(r.seller))}<span style="font-size:9px;padding:1px 4px;border-radius:4px;background:${tCol};color:#fff;margin-left:4px">${r.team}</span></span>`;
           inner += `<span style="text-align:right;color:var(--blue);font-weight:600">${r.lead}</span>`;
           inner += `<span style="text-align:right;color:var(--amber)">${r.booked||'-'}</span>`;
           inner += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${r.done||'-'}</span>`;
@@ -2852,7 +2883,7 @@
         inner += `<div style="display:grid;grid-template-columns:.7fr 1fr 1.4fr .8fr .8fr;gap:6px;padding:6px 10px;font-size:10px;color:var(--t3);font-weight:600;background:var(--bg2);border-bottom:.5px solid var(--bd);position:sticky;top:0"><span>เซลล์</span><span>ลูกค้า</span><span>รถ</span><span>วันปล่อย</span><span style="text-align:right">ราคา</span></div>`;
         releasedCases.forEach(b => {
           inner += `<div style="display:grid;grid-template-columns:.7fr 1fr 1.4fr .8fr .8fr;gap:6px;padding:6px 10px;font-size:11px;border-bottom:.5px solid var(--bd);align-items:center">`;
-          inner += `<span style="font-weight:600">${h(b.seller||'-')}</span>`;
+          inner += `<span style="font-weight:600">${h(sname(b.seller||'-'))}</span>`;
           inner += `<span style="color:var(--t2)">${h((b.customer||'').slice(0,18))}</span>`;
           inner += `<span style="color:var(--t2)">${h((b.car||'').slice(0,30))}</span>`;
           inner += `<span style="font-family:monospace;color:var(--t3)">${h(b.releaseDate || b.date || '-')}</span>`;
@@ -2971,7 +3002,7 @@
         const cls = l.updateCount===0?'lfrow hr':nc(l.updateCount)>=2?'lfrow ha':l.updateCount>=3?'lfrow hb':'lfrow';
         const carHas = !nocar(l.car);
         html += `<div class="${cls}" onclick="openCaseFromOverview('${h(l.code)}','${h(l.seller)}')">`;
-        html += `<div><div style="font-weight:700;font-size:11px;color:var(--blue)">${h(l.code)}</div><div style="font-size:10px;color:var(--t2);margin-top:1px">${h(l.seller)}</div><div style="font-size:10px;color:var(--t3)">${l.lastUpdate&&l.lastUpdate!=='-'?h(l.lastUpdate):'ยังไม่อัพเดท'}</div></div>`;
+        html += `<div><div style="font-weight:700;font-size:11px;color:var(--blue)">${h(l.code)}</div><div style="font-size:10px;color:var(--t2);margin-top:1px">${h(sname(l.seller))}</div><div style="font-size:10px;color:var(--t3)">${l.lastUpdate&&l.lastUpdate!=='-'?h(l.lastUpdate):'ยังไม่อัพเดท'}</div></div>`;
         html += `<div><div style="font-size:11px;color:var(--t2);line-height:1.5">${h((l.note||'-').slice(0,80))}</div>`;
         if(carHas) html += `<div style="font-size:10px;color:var(--t3);margin-top:2px">${ic('lucide:car-front',16)} ${h(l.car)}</div>`;
         html += `<div style="margin-top:3px">${urgBadge(l)}</div></div>`;
@@ -2998,7 +3029,7 @@
         const c=l.updateCount>=C.UPD_TGT?'var(--green)':l.updateCount>=3?'var(--green-mid)':'var(--amber)';
         html += `<div class="hlrow" onclick="openCaseFromOverview('${h(l.code)}','${h(l.seller)}')">`;
         html += `<div><div style="font-weight:700;font-size:11px;color:var(--blue)">${h(l.code)}</div><div style="font-size:10px;color:var(--t3)">${l.lastUpdate&&l.lastUpdate!=='-'?h(l.lastUpdate):'—'}</div></div>`;
-        html += `<span style="color:var(--blue);font-weight:500">${h(l.seller)}</span>`;
+        html += `<span style="color:var(--blue);font-weight:500">${h(sname(l.seller))}</span>`;
         html += `<span style="color:var(--t2);line-height:1.4">${h((l.note||'').slice(0,55))}</span>`;
         html += `<span style="color:var(--t2);font-size:10px">${nocar(l.car)?'—':h(l.car.slice(0,14))}</span>`;
         html += `<span style="text-align:right;font-size:13px;font-weight:700;color:${c}">${l.updateCount}<span style="font-size:10px;font-weight:400;color:var(--t3)">/${C.UPD_TGT}</span></span>`;
@@ -3076,7 +3107,7 @@
       html += `<div class="act-hdr"><span>เซลล์</span><span>คลิป/เป้า</span><span style="text-align:right">สถานะ</span></div>`;
       [...sellers].map(s=>({name:s.name,_clip:clipByHost[s.name]||0})).sort((a,b)=>b._clip-a._clip).forEach(s=>{
         const ok=s._clip>=clipTarget; const p=clipTarget>0?Math.min((s._clip/clipTarget)*100,100):0;
-        html += `<div class="act-row" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${h(s.name)}</span><div style="display:flex;align-items:center;gap:5px"><div style="flex:1;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;border-radius:3px;width:${p}%;background:${ok?'var(--green-mid)':'var(--purple-mid)'}"></div></div><span style="font-size:10px;color:${ok?'var(--green)':'var(--amber)'}">${s._clip}/${clipTarget}</span></div><span style="text-align:right;font-size:11px">${ok?'ครบ':'ขาด '+(clipTarget-s._clip)}</span></div>`;
+        html += `<div class="act-row" onclick="switchToSeller('${h(s.name)}')"><span style="font-weight:500">${h(sname(s.name))}</span><div style="display:flex;align-items:center;gap:5px"><div style="flex:1;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;border-radius:3px;width:${p}%;background:${ok?'var(--green-mid)':'var(--purple-mid)'}"></div></div><span style="font-size:10px;color:${ok?'var(--green)':'var(--amber)'}">${s._clip}/${clipTarget}</span></div><span style="text-align:right;font-size:11px">${ok?'ครบ':'ขาด '+(clipTarget-s._clip)}</span></div>`;
       });
       html += `</div></div>`;
 
@@ -3444,8 +3475,11 @@
     // ── ${ic('lucide:search',16)} Diagnostics Panel (admin only) — ดู log การกรองข้อมูล + เคสที่หาย ──
     // ── Export Diligence Score ลง Google Sheet ──
     async function exportLeadScore() {
-      const now = new Date();
-      const month = (dfMonth > 0) ? dfMonth : now.getMonth() + 1;
+      // derive เดือนจากตัวกรองวันที่ (dfFrom/dfTo) — dfMonth เป็น vestige (=0 เสมอ) ใช้ไม่ได้
+      // ช่วงอยู่เดือนไหน → ส่งคะแนนเดือนนั้น (ใช้เดือนของ dfTo ปลายช่วง · ไม่มี filter → เดือนปัจจุบัน)
+      const _p = dfTo || dfFrom;
+      let month = new Date().getMonth() + 1;
+      if (_p) { const mm = parseInt(String(_p).slice(5, 7), 10); if (mm >= 1 && mm <= 12) month = mm; }
       const monthName = (C.MONTHS_FULL||[])[month-1] || ('เดือน'+month);
       if (!confirm(`เขียน Diligence Score ของ "${monthName}" ลง sheet 'leadscore'?\n(จะ overwrite ข้อมูลเดิมในชีต)`)) return;
       try {

@@ -291,6 +291,9 @@ select { border-radius: 20px; cursor: pointer; }
   .g2 { grid-template-columns: 1fr; }
   .shdr, .srow { grid-template-columns: 78px 34px 42px 1fr; }
   .shdr span:nth-child(n + 5), .srow span:nth-child(n + 5), .srow div:nth-child(n + 5) { display: none; }
+  /* ตารางที่เลื่อนแนวนอนได้ (ห่อด้วย .hscroll เช่น ตารางคะแนน 12 คอลัมน์) — ไม่ยุบ/ไม่ซ่อนคอลัมน์ ให้เลื่อนดูครบแทน */
+  .hscroll .shdr, .hscroll .srow { grid-template-columns: unset; }
+  .hscroll .shdr span:nth-child(n + 5), .hscroll .srow span:nth-child(n + 5), .hscroll .srow div:nth-child(n + 5) { display: revert; }
   .cd-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .act-hdr, .act-row { grid-template-columns: 64px 1fr 42px; }
 }
