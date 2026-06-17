@@ -1459,6 +1459,8 @@ def compute_diligence_scores(target_month: int | None = None,
         if not a or not b:
             return 0.0
         days = (b - a).days
+        if days < 0:
+            return 0.0   # วันกลับหัว (กรอกสลับ เช่น ผล<เซ็น) — ไม่ให้คะแนน ไม่งั้น days<=deadline เป็นจริงได้เต็ม
         if days <= deadline:
             return 1.0
         return max(0.0, 1 - (days - deadline) / (2 * deadline))
@@ -2086,7 +2088,8 @@ def attach_lead_scores(follow_cases: list[dict],
 # ════════════════════════════════════════════════════════════════
 _FU_BASE = "https://saleforce-oxletauto.vercel.app"
 _FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่รับสาย": 1, "ลูกค้าไม่ตอบ": 1, "รอเงิน": 3, "รอเช็คเครดิต": 2, "ดาวน์ไม่พอ": 3, "เงินสดเงินไม่พอ": 3}
-_FU_DEAD = ["ยังไม่ออก", "ติดแบล็คลิส", "เครดิตไม่ผ่าน", "ไม่สนใจแล้ว", "คืนเคส"]
+# อ้าง CUSTOMER_STATUS_DEAD (นิยาม "เคสเสีย" ของ dashboard) ตัวเดียวกัน — กัน followup ดันเคสที่ dashboard ถือว่าตายแล้ว (เดิมลิสต์แยกกันคำไม่ตรง)
+_FU_DEAD = CUSTOMER_STATUS_DEAD
 _FU_SKIP = ["จบ", "ส่งมอบ", "คืนเคส", "คืน", "ยกเลิก", "ไม่สนใจ", "dead", "จ่ายใหม่"]
 _FU_NOANS_CAP = 5
 _FU_TH_MON = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]

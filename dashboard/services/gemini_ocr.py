@@ -116,6 +116,10 @@ def _call_gemini(image_bytes: bytes, mime_type: str, schema: dict, prompt: str) 
     except json.JSONDecodeError:
         raise Exception("Gemini คืนรูปแบบไม่ถูกต้อง")
 
+    # โมเดลอาจคืน JSON ที่ valid แต่ไม่ใช่ object (array/scalar) → fields.items() จะพัง → กันไว้
+    if not isinstance(fields, dict):
+        raise Exception("Gemini คืนรูปแบบไม่ถูกต้อง (ไม่ใช่ object)")
+
     return {k: (str(v).strip() if v is not None else "") for k, v in fields.items()}
 
 
