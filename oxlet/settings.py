@@ -89,13 +89,12 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 
 # Supabase — mirror Sheet + เก็บฟอร์ม (server-side)
 # URL = ไม่ลับ (public REST endpoint, ป้องกันด้วย key+RLS) → inline ได้
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ydscbkpnexgwircqcczv.supabase.co").rstrip("/")
-# SECRET (service_role ข้าม RLS) — ต้องตั้งบน Vercel เท่านั้น
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qtavqquhjstrgrzauvsd.supabase.co").rstrip("/")
+# SECRET key (ข้าม RLS) — env-only เท่านั้น (อย่า hardcode/commit) · ต้องตั้งบน Vercel
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
-# (ลบ SUPABASE_PUBLISHABLE_KEY ออก — ไม่มีโค้ดไหนอ่าน)
-# (มิ.ย.69) default False — ลบ Supabase project ทิ้งชั่วคราว → อ่าน Google Sheet ตรง (stopgap)
-# False = ทุก Supabase call short-circuit (is_configured คืน False) ไม่ค้าง · เปิดกลับด้วย env USE_SUPABASE=True
-USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes")
+# (Phase 2 มิ.ย.69) default True — Supabase เก็บแค่ "ผลสรุป" (dashboard_cache) ไม่ mirror leads ดิบ
+# active เมื่อ is_configured() = True (มี URL + SECRET_KEY) · ถ้า SECRET_KEY ว่าง → fallback อ่าน Google ตรง (ไม่พัง)
+USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
 
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (n8n, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
