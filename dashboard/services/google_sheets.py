@@ -999,17 +999,7 @@ def fetch_all_sheets() -> dict[str, list[list[str]]]:
     if cached is not None:
         return cached
 
-    # ถ้าเปิด USE_SUPABASE → อ่านจาก sheet_cache (mirror) แทน Google
-    # ถ้า cache ขาด/error → fallback ไปอ่าน Google ตรง (ปลอดภัย)
-    if getattr(settings, "USE_SUPABASE", False):
-        try:
-            from .supabase_client import fetch_all_from_supabase
-            result = fetch_all_from_supabase()
-            _cache_set("all_sheets", result)
-            return result
-        except Exception:
-            pass
-
+    # (Phase 2 มิ.ย.69) อ่าน Google ตรงเสมอ — เลิก mirror sheet_cache แล้ว (Supabase เก็บแค่ผลสรุป dashboard_cache)
     # sales_reports + bookings อ่านจากแท็บรายเดือนตรง — เลิกพึ่ง 'รวม sheet' (เก่า/สูตร)
     other_keys = ["live_followups", "employees"]
     results: dict[str, list[list[str]]] = {}

@@ -146,7 +146,9 @@ def get_sheet(sheet_key: str) -> list | None:
 
 
 def sync_all_sheets_to_supabase() -> dict:
-    """อ่าน Google Sheets ทั้งหมด → upsert ลง sheet_cache. คืนสรุปจำนวนแถวต่อ sheet."""
+    """(Phase 2 มิ.ย.69) เลิก mirror leads ดิบเข้า sheet_cache — Supabase เก็บแค่ผลสรุป (dashboard_cache) → no-op.
+    รีเฟรช dashboard ใช้ precompute_dashboard() อ่าน Google ตรงแทน (กัน CPU เต็มจากการยัด 15k แถว)."""
+    return {"skipped": "raw mirror disabled (Phase 2 — เก็บแค่ dashboard_cache)"}
     from .google_sheets import (
         fetch_sheet, fetch_leads_by_month_tabs, fetch_sales_by_month_tabs,
         fetch_bookings_by_month_tabs, fetch_live_by_month_tabs,
