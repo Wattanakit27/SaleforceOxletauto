@@ -790,15 +790,23 @@
       ${renderScorecard()}
 
       ${(() => {
-        // ✏️ แจ้งเตือน "ปล่อยแล้วยังไม่ลงวันส่งมอบ" — เคสของตัวเอง (กดลงวันได้เลย · มีผลกับคะแนนความเร็ว)
-        const relBlank = bookingsInRange().map((b,i)=>({b,i})).filter(o =>
-          o.b.status === 'ปล่อย' && (!o.b.releaseDatePrimary || o.b.releaseDatePrimary === '' || o.b.releaseDatePrimary === '-') && o.b.sheetTab);
+        // ✏️ แจ้งเตือน "ปล่อยแล้วลงวันไม่ครบ" — เคสของตัวเอง · เช็คครบ 3 วัน (เซ็น/ผล/ปล่อย) ที่กระทบคะแนนเวลาปิด
+        const _e = (v) => !v || v === '' || v === '-';
+        const relBlank = bookingsInRange().map((b,i)=>({b,i})).filter(o => {
+          if (o.b.status !== 'ปล่อย' || !o.b.sheetTab) return false;
+          const miss = [];
+          if (_e(o.b.signDate)) miss.push('เซ็น');
+          if (_e(o.b.resultDate)) miss.push('ผล');
+          if (_e(o.b.releaseDatePrimary)) miss.push('ปล่อย');
+          o._miss = miss;
+          return miss.length > 0;
+        });
         if (!relBlank.length) return '';
         return `
         <div style="background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber,#ef9f27);border-radius:8px;padding:10px 14px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--amber,#b07005);margin-bottom:6px">${ic('lucide:calendar',15)} ปล่อยแล้วยังไม่ลงวันส่งมอบ · ${relBlank.length} เคส <span style="font-weight:400;color:var(--t3)">— กดลงวันเพื่อให้คะแนนความเร็วถูกต้อง</span></div>
+          <div style="font-size:12px;font-weight:700;color:var(--amber,#b07005);margin-bottom:6px">${ic('lucide:calendar',15)} ปล่อยแล้วลงวันไม่ครบ · ${relBlank.length} เคส <span style="font-weight:400;color:var(--t3)">— กดลงวัน เซ็น/ผล/ปล่อย ให้ครบ คะแนนเวลาปิดจะขึ้น</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${relBlank.slice(0,8).map(o => `<button onclick="openBookingDetail(${o.i})" style="font-size:11px;background:var(--bg);border:.5px solid var(--amber-mid,#f0c787);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--t1)">${h((o.b.customer||'-').slice(0,16))}</button>`).join('')}
+            ${relBlank.slice(0,8).map(o => `<button onclick="openBookingDetail(${o.i})" style="font-size:11px;background:var(--bg);border:.5px solid var(--amber-mid,#f0c787);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--t1)" title="ขาด: ${o._miss.join('/')}">${h((o.b.customer||'-').slice(0,16))} <span style="color:var(--amber);font-size:9px">(${o._miss.join('/')})</span></button>`).join('')}
             ${relBlank.length>8 ? `<span style="font-size:11px;color:var(--t3);align-self:center">… อีก ${relBlank.length-8}</span>` : ''}
           </div>
         </div>`;

@@ -1177,7 +1177,7 @@
         const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length;
         const _alBadge = _alTot > 0 ? `<span style="position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:9px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)">${_alTot>99?'99+':_alTot}</span>` : '';
         const _alColor = _al.blankRel.length > 0 ? 'var(--amber)' : (_alTot > 0 ? 'var(--blue)' : 'var(--t3)');
-        html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: เคสปล่อยไม่ลงวันปล่อย / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:13px;padding:5px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
+        html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:13px;padding:5px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
       if(canViewAll && D.sellers) {
@@ -2077,9 +2077,17 @@
         // เคสปล่อยไม่ลงวันปล่อย: เช็คช่องหลัก (releaseDatePrimary, fallback releaseDate ช่วง deploy)
         // ★ ไม่กรองช่วง (catch-all) — เป็น cleanup ต้องเห็นครบ · แต่เริ่มนับตั้งแต่ พ.ค.69 (_ALERT_START) ตัด backlog เก่าออก
         const _rel = ('releaseDatePrimary' in b) ? b.releaseDatePrimary : b.releaseDate;
-        if (b.status === 'ปล่อย' && (!_rel || _rel === '' || _rel === '-')) {
-          const _bd = _parseDmy(b.date);
-          if (!_bd || _bd.getTime() >= _ALERT_START) blankRel.push({b, idx});
+        if (b.status === 'ปล่อย') {
+          // เคสปล่อยต้องลงวันครบ 3 ช่อง (เซ็น/ผล/ปล่อย) — ขาดช่องไหน คะแนน "เวลาปิด" ช่วงนั้น = 0
+          const _e = (v) => !v || v === '' || v === '-';
+          const miss = [];
+          if (_e(b.signDate)) miss.push('เซ็น');
+          if (_e(b.resultDate)) miss.push('ผล');
+          if (_e(_rel)) miss.push('ปล่อย');
+          if (miss.length) {
+            const _bd = _parseDmy(b.date);
+            if (!_bd || _bd.getTime() >= _ALERT_START) blankRel.push({b, idx, miss});
+          }
         }
         // วันที่ปีผิด: กรองตามวันจอง
         if (!_inRangeStr(b.date)) return;
@@ -2116,13 +2124,13 @@
       let bd = '';
       if (!tot) bd += `<div style="text-align:center;color:var(--green);padding:44px 12px"><div>${ic('lucide:circle-check',32)}</div><div style="margin-top:8px;font-weight:700;font-size:13px">ไม่มีอะไรต้องเติม/แก้ ✓</div></div>`;
 
-      // ── เน้น: เคสปล่อยไม่ลงวันปล่อย ──
+      // ── เน้น: เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) ──
       if (a.blankRel.length) {
         bd += `<div style="margin-bottom:15px">`;
-        bd += `<div style="font-size:12.5px;font-weight:800;color:var(--amber)">${ic('lucide:calendar',15)} ปล่อยแล้วไม่ลงวันปล่อย · ${a.blankRel.length} <span style="font-weight:400;color:var(--t3)">(ตั้งแต่ พ.ค.)</span></div>`;
-        bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">ช่องวันปล่อยจริงว่าง → กระทบการนับเดือน/คะแนน · นับตั้งแต่ พ.ค.69 (ตัด backlog เก่า) · แตะไปเติม</div>`;
+        bd += `<div style="font-size:12.5px;font-weight:800;color:var(--amber)">${ic('lucide:calendar',15)} ปล่อยแล้วลงวันไม่ครบ (เซ็น/ผล/ปล่อย) · ${a.blankRel.length} <span style="font-weight:400;color:var(--t3)">(ตั้งแต่ พ.ค.)</span></div>`;
+        bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">เคสปล่อยที่ยังลงวันไม่ครบ → คะแนน "เวลาปิด" ช่วงที่ขาด = 0 · นับตั้งแต่ พ.ค.69 (ตัด backlog เก่า) · แตะไปเติม</div>`;
         a.blankRel.slice(0, 60).forEach(o => {
-          bd += `<div onclick="${_close};openBookingDetail(${o.idx})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11.5px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h(o.b.seller||'-')}</b> <span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,20))}</span></span><span style="color:var(--amber);font-weight:600;white-space:nowrap;font-size:10.5px">${h(o.b.date||'-')}</span></div>`;
+          bd += `<div onclick="${_close};openBookingDetail(${o.idx})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11.5px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h(o.b.seller||'-')}</b> <span style="color:var(--t2)">${h((o.b.customer||'-').slice(0,20))}</span></span><span style="color:var(--amber);font-weight:600;white-space:nowrap;font-size:10.5px">ขาด ${h((o.miss||[]).join('/'))}</span></div>`;
         });
         if (a.blankRel.length > 60) bd += `<div style="font-size:10px;color:var(--t3);padding:5px 0">… อีก ${a.blankRel.length-60} เคส</div>`;
         bd += `</div>`;
