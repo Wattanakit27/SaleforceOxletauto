@@ -145,7 +145,9 @@ def activity_stats(rows: list) -> dict:
         # ใช้เฉพาะ "จัดสรร Lead อนาคต" — ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
         _ch = cell(r, L.channel).strip().upper()
         _ty = cell(r, L.type).strip().upper().replace(" ", "")
-        if not _ch.startswith("LIVE") and _ty not in ("RJ", "HOTRJ", "HOTRB"):
+        # LIVE = ไม่นับเป็น lead ที่แจกจ่ายได้ — ใช้ "LIVE" in (contains) ให้ตรงกับ leadLive
+        # (เดิม startswith → "FB LIVE" หลุดเป็น distributable ทั้งที่นับเป็น leadLive)
+        if "LIVE" not in _ch and _ty not in ("RJ", "HOTRJ", "HOTRB"):
             dist += 1
     return {"updateSum": upd_sum, "proofCount": proof,
             "returnCount": ret, "cancelCount": cancel, "leadDist": dist}
@@ -196,8 +198,8 @@ _EMBED_DATE_RE = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
 
 
 def extract_release_date(r) -> str:
-    """วันที่ปล่อยรถ — convention การกรอก: เดือน พ.ค.+ อยู่ X(23), เดือนก่อนหน้าอยู่ W(22)
-    (เผื่อ scan V/U ถ้าตัวหลักว่าง). ค่ามักปนข้อความ ('รับรถ 20/3/69') → ดึงวันที่ออกมา
+    """วันที่ปล่อยรถ — convention การกรอก: เดือน พ.ค.+ อยู่ X(23), เดือนก่อนหน้าอยู่ V(21)
+    (เผื่อ scan W/X/U ถ้าตัวหลักว่าง). ค่ามักปนข้อความ ('รับรถ 20/3/69') → ดึงวันที่ออกมา
     กรองปี 2020-2035 กัน data เสีย (เช่น 1/2/1969). คืน '' ถ้าไม่เจอ → caller fallback วันจอง
     """
     def _ok(d):
@@ -220,8 +222,10 @@ def extract_release_date(r) -> str:
 
     bd = parse_date(cell(r, S.date))          # วันจอง (เชื่อถือได้) ใช้ดูว่าเป็นเดือน พ.ค.+ ไหม
     is_may = bool(bd and bd.month >= 5)
-    # X=23, W=22, V=21, U=20 ; พ.ค.+ เริ่มที่ X, เดือนอื่นเริ่มที่ W แล้วค่อย scan ที่เหลือ
-    order = (23, 22, 21, 20) if is_may else (22, 23, 21, 20)
+    # X=23, W=22, V=21, U=20 ; พ.ค.+ release อยู่ X(23) · เดือนก่อน release อยู่ V(21) (ตรงกับ _release_col + CLAUDE.md)
+    # ★ เดือนก่อนต้องอ่าน V(21) "ก่อน" W(22) ไม่งั้นค่าที่ inline edit เขียนลง V ถูก W (โน้ต) บังตอนอ่าน → "บันทึกแล้วไม่ติด"
+    #   (V ว่าง → fall through ไป W/X/U เหมือนเดิม ไม่ regression)
+    order = (23, 22, 21, 20) if is_may else (21, 22, 23, 20)
     # รอบ 1: หาวันที่ "สะอาด" (ทั้งช่องเป็นวันที่) ก่อน — กันไปคว้าวันที่ฝังในโน้ต
     # (เช่น W = 'นัดเซ็น 29/04/69' ทั้งที่ X มีวันปล่อยจริง '19/5/2026' สะอาดอยู่)
     for col in order:
@@ -254,6 +258,21 @@ def _release_col(r) -> int:
     """คอลัมน์ 'วันปล่อยจริง' (0-based) สำหรับ inline edit เขียนกลับ: พ.ค.+ = 23(X) · เดือนก่อน = 21(V)."""
     d = parse_date(cell(r, S.date))
     return 23 if (d and d.month >= 5) else 21
+
+
+def result_date_for(r) -> str:
+    """วันผล (อนุมัติเครดิต) — layout ย้ายตามเดือนเหมือนวันปล่อย: พ.ค.+ = U(20) · เดือนก่อน = T(19).
+    ★ เดิม fix ที่ T(19) เสมอ → เดือนปัจจุบัน (พ.ค.+) ได้ค่าว่างทุกเคส เพราะผลย้ายไป U(20)
+      → velocity ช่วง 2-3 (เซ็น→ผล, ผล→ปล่อย) = 0 → ตัน 3.3. อ่านคอลัมน์ตามเดือนให้ตรง layout จริง."""
+    d = parse_date(cell(r, S.date))
+    return cell(r, 20) if (d and d.month >= 5) else cell(r, 19)
+
+
+def result_col_for(r) -> int:
+    """คอลัมน์ 'วันผล' (0-based) สำหรับ inline edit เขียนกลับ: พ.ค.+ = 20(U) · เดือนก่อน = 19(T)
+    (ต้องตรงกับ result_date_for ที่อ่าน ไม่งั้นเขียนแล้วถูกอ่านคนละช่อง = 'บันทึกแล้วไม่ติด')."""
+    d = parse_date(cell(r, S.date))
+    return 20 if (d and d.month >= 5) else 19
 
 
 def is_this_year(date_str: str) -> bool:
@@ -554,11 +573,11 @@ def _compute_dashboard_data() -> dict:
             "leadDate": lead_received_map.get(lead_code, ""),  # วันรับหลีดเดิม (Velocity Phase 1)
             "date": cell(r, S.date),
             "signDate": cell(r, S.sign_date),
-            "resultDate": cell(r, S.result_date),
+            "resultDate": result_date_for(r),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
             "releaseDatePrimary": release_date_primary(r),
-            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันปล่อย)   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันผล/ปล่อย — คอลัมน์ตามเดือน)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -1667,17 +1686,17 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "leadDate": my_lead_received_map.get(lead_code, ""),  # วันรับหลีดเดิม (Velocity Phase 1)
             "date": cell(r, S.date),
             "signDate": cell(r, S.sign_date),
-            "resultDate": cell(r, S.result_date),
+            "resultDate": result_date_for(r),
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
             "releaseDatePrimary": release_date_primary(r),
-            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันปล่อย)   # วันปล่อยจากคอลัมน์หลักเท่านั้น (กระดิ่งใช้เช็คเข้ม)
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันผล/ปล่อย — คอลัมน์ตามเดือน)
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
         })
 
-    # ── 3) Year jongs ของเซลล์ (จาก bookings sheet — source of truth) ──
+    # ── 3) Year jongs ของเซลล์ (จาก bookings sheet — source of truth สำหรับเซลล์ทั่วไป) ──
     my_year_jongs = []
     for r in raw_bookings:
         date_str = cell(r, B.date)
@@ -1693,6 +1712,18 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "date": date_str,
             "code": cell(r, B.code),
         })
+    # ★ ADMIN (เทเลเซลล์): bookings sheet ไม่มี ADMIN → derive "จอง" จาก leads (admin/sales_status มี "จอง" + ไม่ skip)
+    #   mirror logic หน้ารวม (admin_booking fallback ~บรรทัด 763) → กราฟจอง/รายเดือนของ ADMIN ไม่แบน 0 (ตรงกับกล่อง KPI จอง)
+    if seller_name == "ADMIN" and not my_year_jongs:
+        for r in my_year_leads:
+            a, s = cell(r, L.admin_status) or "", cell(r, L.sales_status) or ""
+            if is_skipped(a) or is_skipped(s):
+                continue
+            if "จอง" in a or "จอง" in s:
+                my_year_jongs.append({
+                    "date": cell(r, L.received_date),
+                    "code": cell(r, L.lead_code),
+                })
 
     # ── 4) Follow cases ของเซลล์ ──
     my_follow_cases = []
@@ -2227,7 +2258,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         bookings_by_seller[seller].append({
             "status": status.replace(" (ซื้อสด)", "").strip(),
             "customer": cell(r, S.customer_name), "plate": cell(r, S.license_plate),
-            "date": cell(r, S.date), "signDate": cell(r, S.sign_date), "resultDate": cell(r, S.result_date),
+            "date": cell(r, S.date), "signDate": cell(r, S.sign_date), "resultDate": result_date_for(r),
         })
 
     def _stuck(bcs):

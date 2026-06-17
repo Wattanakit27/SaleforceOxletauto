@@ -176,6 +176,16 @@ def _resolve_lead_colmap(header: list) -> dict:
             if hv and hv in targets:
                 colmap[canon_idx] = src_idx
                 break
+    # เตือนเมื่อ match ไม่เจอ "เกินครึ่ง" ของ field → header เปลี่ยนชื่อ/ผิด tab → _normalize_lead_row จะล้างคอลัมน์เงียบๆ
+    # (ไม่เตือนตอนขาดไม่กี่ field เพราะเดือนเก่าไม่มีคอลัมน์ใหม่ Z/U-Y เป็นปกติ)
+    _missing = len(_LEAD_FIELD_ALIASES) - len(colmap)
+    if _missing > len(_LEAD_FIELD_ALIASES) // 2:
+        import logging
+        logging.getLogger("oxlet.sheets").warning(
+            "lead colmap: header match ไม่เจอ %d/%d field — คอลัมน์ถูกเคลียร์ว่างเยอะผิดปกติ "
+            "(header เปลี่ยนชื่อ/ผิด tab?) เช็คหัวตาราง หรือเพิ่ม alias ใน _LEAD_FIELD_ALIASES",
+            _missing, len(_LEAD_FIELD_ALIASES),
+        )
     return colmap
 
 

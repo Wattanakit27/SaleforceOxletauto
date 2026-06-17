@@ -794,9 +794,10 @@
         const _e = (v) => !v || v === '' || v === '-';
         const relBlank = bookingsInRange().map((b,i)=>({b,i})).filter(o => {
           if (o.b.status !== 'ปล่อย' || !o.b.sheetTab) return false;
+          const _cash = o.b.isCash || (o.b.signDate||'').includes('สด') || (o.b.grade||'').includes('สด');   // เคสสด ไม่มีเซ็น/ผล
           const miss = [];
-          if (_e(o.b.signDate)) miss.push('เซ็น');
-          if (_e(o.b.resultDate)) miss.push('ผล');
+          if (!_cash && _e(o.b.signDate)) miss.push('เซ็น');
+          if (!_cash && _e(o.b.resultDate)) miss.push('ผล');
           if (_e(o.b.releaseDatePrimary)) miss.push('ปล่อย');
           o._miss = miss;
           return miss.length > 0;
@@ -1578,9 +1579,9 @@
           ${row('เกรด', b.grade)}
 
           <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">ไทม์ไลน์</div>
-          ${row('วันที่จอง', b.date)}
+          ${_canEdit ? _dateEditRow('วันที่จอง', b.date, 2, idx, 'แก้วันจองถ้าปีผิด (เช่น 1969) → บันทึก') : row('วันที่จอง', b.date)}
           ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, 14, idx) : row('วันที่เซ็นต์', b.signDate)}
-          ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, 19, idx) : row('วันที่รู้ผล', b.resultDate)}
+          ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, b.resultCol||19, idx) : row('วันที่รู้ผล', b.resultDate)}
           ${row('เอกสารครบ', b.docsDate)}
           ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
 
@@ -1620,9 +1621,10 @@
       }
       if (msg) { msg.textContent = '✓ บันทึกลงชีตแล้ว'; msg.style.color = 'var(--green-mid)'; }
       // optimistic — map col → field
-      if (col === 14) b.signDate = val;
+      if (col === 2) b.date = val;
+      else if (col === 14) b.signDate = val;
       else if (col === 18) b.docsDate = val;
-      else if (col === 19) b.resultDate = val;
+      else if (col === 19 || col === 20) b.resultDate = val;
       else { b.releaseDatePrimary = val; if (val) b.releaseDate = val; }
       if (typeof renderReleaseAlert === 'function') renderReleaseAlert();
     } catch (e) {

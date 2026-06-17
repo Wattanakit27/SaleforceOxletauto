@@ -1714,8 +1714,8 @@ def update_release_date(request):
         return JsonResponse({"error": "ตำแหน่งในชีตไม่ถูกต้อง"}, status=400)
     if not tab or row < 1:
         return JsonResponse({"error": "ไม่รู้ตำแหน่งในชีต — ลองกด 'รีเฟรชข้อมูลเดี๋ยวนี้' ก่อน"}, status=400)
-    # คอลัมน์วันที่ timeline ที่อนุญาตให้เขียน: 14=O เซ็น · 18=S เอกสารครบ · 19=T ผล · 21=V/23=X ปล่อย
-    if col not in (14, 18, 19, 21, 23):
+    # คอลัมน์วันที่ timeline ที่อนุญาตให้เขียน: 2=C วันจอง · 14=O เซ็น · 18=S เอกสารครบ · 19=T/20=U ผล · 21=V/23=X ปล่อย
+    if col not in (2, 14, 18, 19, 20, 21, 23):
         return JsonResponse({"error": "คอลัมน์ไม่ใช่ช่องวันที่ timeline"}, status=400)
     if value and not _re.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", value):
         return JsonResponse({"error": "วันที่ต้องเป็น d/m/yyyy (เช่น 2/6/2026)"}, status=400)
@@ -2039,9 +2039,14 @@ def seller_dashboard(request, token):
         return HttpResponseRedirect(f"/login/?next=/s/{token}/{uid_q}")
     if not _can_view_all(user):
         # เซลล์ดูได้เฉพาะของตัวเอง — ของคนอื่น → เด้งไปหน้าตัวเอง
-        from .services.constants import normalize_seller
+        from .services.constants import normalize_seller, TELE_USER_IDS, load_tele_user_ids
         own = normalize_seller((user.get("seller_name") or user.get("nickname") or "").strip())
-        if own and normalize_seller(seller_name) != own:
+        # ★ เทเลเซลล์ (ทีมโทร) เปิดหน้ารวม "ADMIN" ของตัวเองได้ — seller_from_token แมป line_id → "ADMIN"
+        #   own (ชื่อเล่นเทเลเซลล์ เช่น "ส้ม") != "ADMIN" เสมอ จึงต้องยกเว้น ไม่งั้นเด้งไป /me/ (ว่างเปล่า)
+        load_tele_user_ids()   # fetch_sheet มี cache → ไม่ช้า
+        _uid = (user.get("user_id") or "").strip()
+        _is_tele_hub = seller_name == "ADMIN" and _uid in TELE_USER_IDS
+        if own and not _is_tele_hub and normalize_seller(seller_name) != own:
             return HttpResponseRedirect("/me/")
     return _render_seller_page(request, seller_name)
 

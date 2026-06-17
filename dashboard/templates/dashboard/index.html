@@ -272,9 +272,11 @@
     };
     // เช็ค dateIn (d/m/yy) อยู่ในช่วง [dfFrom, dfTo] ไหม (เทียบ string YYYY-MM-DD)
     function inRange(ds){
-      if(!ds) return true;
+      // วันที่ว่าง/parse ไม่ได้ → ไม่นับเข้าช่วง (เดิม return true ทำให้ followCase ไร้วันที่ inflate KPI ไม่ยุบตามช่วง)
+      // sync กับ seller.html dateMatchesFilter (range mode: parse ไม่ได้ = ตัดออก) · กฎเหล็ก: ทุกอย่างกรองตามช่วง
+      if(!ds) return false;
       const d = _parseDmy(ds);
-      if(!d) return true;
+      if(!d) return false;
       const t = _ymd(d);
       return t >= dfFrom && t <= dfTo;
     }
@@ -2080,9 +2082,10 @@
         if (b.status === 'ปล่อย') {
           // เคสปล่อยต้องลงวันครบ 3 ช่อง (เซ็น/ผล/ปล่อย) — ขาดช่องไหน คะแนน "เวลาปิด" ช่วงนั้น = 0
           const _e = (v) => !v || v === '' || v === '-';
+          const _cash = b.isCash || (b.signDate||'').includes('สด') || (b.grade||'').includes('สด');   // เคสสด ไม่มีเซ็น/ผล → ไม่เตือน 2 ช่องนี้
           const miss = [];
-          if (_e(b.signDate)) miss.push('เซ็น');
-          if (_e(b.resultDate)) miss.push('ผล');
+          if (!_cash && _e(b.signDate)) miss.push('เซ็น');
+          if (!_cash && _e(b.resultDate)) miss.push('ผล');
           if (_e(_rel)) miss.push('ปล่อย');
           if (miss.length) {
             const _bd = _parseDmy(b.date);
@@ -2672,9 +2675,9 @@
             ${row('เกรด', b.grade)}
 
             <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">${ic('lucide:calendar',16)} ไทม์ไลน์</div>
-            ${row('วันที่จอง', b.date)}
+            ${_canEdit ? _dateEditRow('วันที่จอง', b.date, 2, idx, 'แก้วันจองถ้าปีผิด (เช่น 1969) → บันทึก') : row('วันที่จอง', b.date)}
             ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, 14, idx) : row('วันที่เซ็นต์', b.signDate)}
-            ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, 19, idx) : row('วันที่รู้ผล', b.resultDate)}
+            ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, b.resultCol||19, idx) : row('วันที่รู้ผล', b.resultDate)}
             ${row('เอกสารครบ', b.docsDate)}
             ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
 
@@ -2713,9 +2716,10 @@
         }
         if (msg) { msg.textContent = '✓ บันทึกลงชีตแล้ว'; msg.style.color = 'var(--green-mid)'; }
         // optimistic — map col → field
-        if (col === 14) b.signDate = val;
+        if (col === 2) b.date = val;
+        else if (col === 14) b.signDate = val;
         else if (col === 18) b.docsDate = val;
-        else if (col === 19) b.resultDate = val;
+        else if (col === 19 || col === 20) b.resultDate = val;
         else { b.releaseDatePrimary = val; if (val) b.releaseDate = val; }
       } catch (e) {
         if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
