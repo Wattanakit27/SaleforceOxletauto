@@ -1844,8 +1844,14 @@
       // ใช้ leadDist (lead แจกจ่ายได้ = ไม่ใช่ไลฟ์สด + ไม่ใช่ RJ) ÷ จำนวนวันที่ผ่าน
       // → เฉพาะการจัดสรรอนาคต ไม่กระทบ KPI/เคส/RJ ที่นับเต็ม
       const _totalLeadsMonth = scoreEntries.reduce((a, e) => a + (e.leadDist || 0), 0);
-      // ${ic('lucide:calendar',16)} จำนวนวันในช่วงที่กรอง (leadDist ก็เป็น range แล้ว → pace ตรงกัน)
-      const _daysElapsed = Math.max(1, rangeDays().length);
+      // ${ic('lucide:calendar',16)} จำนวน "วันที่ผ่านจริง" — ไม่ใช่จำนวนวันทั้งช่วง
+      // ★ ช่วงเดือนนี้ default = ต้นเดือน→สิ้นเดือน (เช่น 1–30) แต่ถ้าวันนี้ 18 → lead มีแค่ 18 วัน
+      //   หารด้วย 30 (รวมวันอนาคตที่ยังไม่มี lead) จะได้ /วัน ต่ำเกินจริง → ตัดวันอนาคตทิ้ง
+      const _todayYmd = _ymd(new Date());
+      const _effTo = dfTo < _todayYmd ? dfTo : _todayYmd;   // min(dfTo, วันนี้)
+      const _daysElapsed = _effTo < dfFrom
+        ? Math.max(1, rangeDays().length)                   // ช่วงอนาคตล้วน → fallback จำนวนวันทั้งช่วง
+        : Math.max(1, Math.round((new Date(_effTo + 'T00:00:00') - new Date(dfFrom + 'T00:00:00')) / 86400000) + 1);
       const _avgRaw = _totalLeadsMonth / _daysElapsed;     // เช่น 59.65
       const _autoPerDay = Math.max(1, Math.round(_avgRaw)); // ตีเป็น 60
       // ค่าที่ใช้จริง: ถ้าผู้ใช้ตั้งเอง (leadPerDay != null) ใช้ค่านั้น, ไม่งั้น auto
