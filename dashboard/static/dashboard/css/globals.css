@@ -1,3 +1,6 @@
+/* ฟอนต์ไทยหลัก — Noto Sans Thai (อ่านง่าย x-height ใหญ่ ดูไม่เล็ก) · display=swap = โชว์ทันทีแล้วค่อยสลับ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap');
+
 :root {
   /* ══ ธีม "ม่วงขาว" (Purple-White) — โทนหลักของทั้งแอป ══ */
   --bg: #ffffff;
@@ -90,11 +93,11 @@ html[data-theme="dark"] {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, "Helvetica Neue", sans-serif;
+  font-family: 'Noto Sans Thai', -apple-system, "Helvetica Neue", sans-serif;
   background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 40%);
   background-attachment: fixed;
   color: var(--t1);
-  font-size: 14px;
+  font-size: 15px;
   min-height: 100vh;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
