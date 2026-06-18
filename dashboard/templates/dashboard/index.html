@@ -951,20 +951,21 @@
       // ── รายเคส "ติดตาม" (follow) — code + จำนวนครั้งโทร + คะแนนที่นับ (cap 4/เคส) ──
       const followCases = (FD.followCases||[]).filter(l => l.seller === name && ir(l.dateIn)).sort((a,b)=>(b.updateCount||0)-(a.updateCount||0));
       const folRows = followCases.slice(0,60).map(l => {
-        const cap = Math.min(l.updateCount||0, 4);
+        const uc = l.updateCount||0;
+        const cap = Math.min(uc, 4);
         const cc = cap>=4?'var(--green)':cap>=2?'var(--amber)':'var(--red)';
         return `<tr>
-          <td style="padding:4px 7px;border-bottom:.5px solid var(--bd);font-size:10.5px;color:var(--blue);font-weight:600">${h(l.code||'-')}</td>
-          <td style="padding:4px 7px;border-bottom:.5px solid var(--bd);text-align:center">${l.updateCount||0}</td>
-          <td style="padding:4px 7px;border-bottom:.5px solid var(--bd);text-align:right;color:${cc};font-weight:700">${cap}</td>
+          <td style="padding:4px 9px;border-bottom:.5px solid var(--bd);font-size:10.5px;color:var(--blue);font-weight:600">${h(l.code||'-')}</td>
+          <td style="padding:4px 9px;border-bottom:.5px solid var(--bd)">${dotsHtml(uc)}</td>
+          <td style="padding:4px 9px;border-bottom:.5px solid var(--bd);text-align:right;font-size:11px"><span style="color:${cc};font-weight:700">${cap}/4</span>${uc>4?` <span style="color:var(--t3);font-size:9px">(โทร ${uc})</span>`:''}</td>
         </tr>`;
       }).join('');
       const followTableHtml = followCases.length ? `
         <div id="brk-follow" style="margin-bottom:14px">
           <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:3px">${ic('lucide:phone',16)} ติดตาม — รายเคส (${followCases.length})</div>
-          <div style="font-size:9.5px;color:var(--t3);margin-bottom:6px">นับอัพเดทต่อเคส สูงสุด 4/เคส · คะแนน = Σนับ ÷ (4 × จำนวนเคส) × 20</div>
+          <div style="font-size:9.5px;color:var(--t3);margin-bottom:6px">แต่ละเคสควรอัพเดท <b>4 ครั้ง</b> ถึงเต็ม (● = ครั้งที่นับ · เกิน 4 นับแค่ 4) · คะแนน = Σนับ ÷ (4 × เคส) × 20</div>
           <div style="max-height:240px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead><tr style="background:var(--bg2);color:var(--t3)"><th style="padding:5px 7px;text-align:left;font-weight:600">Code</th><th style="padding:5px 7px;font-weight:600">โทร (ครั้ง)</th><th style="padding:5px 7px;text-align:right;font-weight:600">นับ (≤4)</th></tr></thead>
+            <thead><tr style="background:var(--bg2);color:var(--t3)"><th style="padding:5px 9px;text-align:left;font-weight:600">Code</th><th style="padding:5px 9px;text-align:left;font-weight:600">อัพเดท (เป้า 4)</th><th style="padding:5px 9px;text-align:right;font-weight:600">นับ/เป้า</th></tr></thead>
             <tbody>${folRows}</tbody>
           </table></div>
           ${followCases.length>60?`<div style="font-size:10px;color:var(--t3);margin-top:3px">… แสดง 60 จาก ${followCases.length} เคส</div>`:''}
