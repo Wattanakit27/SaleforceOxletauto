@@ -156,8 +156,8 @@ def refresh_from_sheet() -> bool:
 
 RJ_TYPES = ["RJ", "Hot RJ", "Hot RB"]
 
-# Executive LINE user_ids — รับ Overview Flex (สรุปยอดรวมทีม)
-# เปลี่ยนได้ผ่าน env var EXECUTIVE_USER_IDS (comma-separated)
+# (เลิกใช้แล้ว — มิ.ย.69 ยุบ "ผู้บริหาร" เข้า admin) Overview Flex ส่งให้ ADMIN_USER_IDS + SUPER_ADMIN_IDS แทน (ดู cron_tick)
+# คงตัวแปรไว้กัน import เก่า/finance_check fallback พัง — ไม่ต้องตั้ง env EXECUTIVE_USER_IDS อีกแล้ว
 import os as _os
 EXECUTIVE_USER_IDS = [
     uid.strip() for uid in (

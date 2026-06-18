@@ -116,10 +116,10 @@ python manage.py runserver
 | Role | position | สมัครได้ในชื่อ | ทำได้ | UI badge |
 |------|---------|----|------|----------|
 | **แอดมินสูงสุด** | `admin` | "แอดมินสูงสุด" | เห็นทุกอย่าง + 🚗 Lead รถ + 📋 เคสจอง + impersonate + ปุ่ม 📋 LINE ID / 📤 LINE Flex / 🎯 ตั้งเป้า | 👑 Admin (อำพัน) |
-| **ผู้บริหาร** | `executive` / `ผู้บริหาร` / `manager` / `exec` | "ผู้บริหาร" | เห็นทุกอย่าง + 🚗 Lead รถ + 📋 เคสจอง + impersonate (ไม่มีเครื่องมือ admin) | 🎩 ผู้บริหาร (ม่วง) |
+| **ผู้บริหาร (ยุบเข้า admin มิ.ย.69)** | `executive`/`ผู้บริหาร`/`manager`/`exec` → **normalize เป็น `admin` ตอน login** | "ผู้บริหาร" (ในชีต) | = admin เต็มตัว (เครื่องมือ admin ครบ + รับ Overview Flex) | 👑 Admin |
 | **เซลล์** | `seller` / อื่นๆ | "เซลล์" | เห็นเฉพาะตัวเอง (ไม่เห็น Analytics tables) — login แล้ว → `/me/` | 👤 ชื่อเล่น (น้ำเงิน) |
 
-ใน [index.html](dashboard/templates/dashboard/index.html) `isAdmin`=`position==='admin'` · `isExecutive`=position ∈ {executive,ผู้บริหาร,manager,exec} · `canViewAll`=isAdmin||isExecutive. ตาราง Lead-by-Car และ Released-Cars ห่อด้วย `if (canViewAll)`
+**(มิ.ย.69 ยุบ "ผู้บริหาร" → admin)** ใน [index.html](dashboard/templates/dashboard/index.html) `isAdmin`=`position==='admin'` **หรือ exec-type (executive/ผู้บริหาร/manager/exec)** · `isExecutive`=`false` (เลิกใช้ คงตัวแปรกัน ref เก่า) · `canViewAll`=`isAdmin`. backend `_login_with_line_user_id` normalize exec-position → `"admin"`. **Overview Flex** (schedule ติ๊ก `include_executive`) → cron ส่งให้ `ADMIN_USER_IDS + SUPER_ADMIN_IDS` (เลิกพึ่ง env `EXECUTIVE_USER_IDS`). ตาราง Lead-by-Car/Released-Cars ห่อ `if (canViewAll)`
 
 **⚠️ บังคับ login ทุกหน้า (ไม่มี default test user แล้ว)** — `dashboard_page`/`admin_page`/`api_dashboard` เช็ค session ก่อนเสมอ ([views.py](dashboard/views.py) helper `_session_user`/`_can_view_all`/`_is_admin`). เซลล์ที่เผลอเข้า `/dashboard/` → redirect `/me/` (กันเปิด DevTools เห็น data รวมของทุกคน)
 

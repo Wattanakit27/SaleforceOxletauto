@@ -150,10 +150,10 @@
       return { id:'', user_id:'', display_name:'', nickname:'', position:'seller' };
     }
     const employee = getEmployee();
-    const isAdmin = employee.position === 'admin';
-    // ผู้บริหาร — เห็นทุกอย่างเหมือน admin ปัจจุบัน + impersonate ได้ แต่ไม่มีเครื่องมือ admin-only (LINE, schedule ฯลฯ)
-    const isExecutive = ['executive','ผู้บริหาร','manager','exec'].includes((employee.position||'').toLowerCase()) || employee.position === 'ผู้บริหาร';
-    const canViewAll = isAdmin || isExecutive;
+    // ยุบ role "ผู้บริหาร" เข้า admin (มิ.ย.69) — exec-type = admin เต็มตัว (backend normalize ตอน login แล้ว · frontend เผื่อ session เก่า)
+    const isAdmin = employee.position === 'admin' || ['executive','ผู้บริหาร','manager','exec'].includes((employee.position||'').toLowerCase());
+    const isExecutive = false;   // ยุบเข้า admin แล้ว (คงตัวแปรไว้กัน reference เก่าพัง)
+    const canViewAll = isAdmin;
 
     // ── State ──
     let tab = new URLSearchParams(location.search).get('tab') || 'o';
@@ -4574,7 +4574,7 @@
 
       const daysLbl = ({'*':'ทุกวัน','1-5':'จ-ศ','0,6':'ส-อา','1':'จันทร์','5':'ศุกร์'})[s.days] || s.days;
       const recCount = (isAll ? totalSellers : s.sellers.filter(x => x !== '*').length) + (s.include_executive ? 1 : 0);
-      const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + ผู้บริหาร' : ''}`;
+      const recDesc = `${__schedSellersDisplay(s.sellers, totalSellers)}${s.include_executive ? ' + แอดมิน' : ''}`;
       const modeDesc = s.test_target ? `${ic('lucide:flask-conical',16)} test → ${s.test_target.slice(0,12)}...` : 'ส่งจริง';
 
       let html = `<div style="border:.5px solid var(--bd);border-radius:10px;margin-bottom:8px;overflow:hidden;${s.enabled?'':'opacity:.6'}">`;
@@ -4642,9 +4642,9 @@
         html += `<div style="margin-top:6px;padding:9px 11px;background:${execChecked?'var(--purple-bg)':'var(--bg2)'};border-radius:8px;border:.5px solid ${execChecked?'var(--purple-mid)':'var(--bd)'}">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" ${execChecked?'checked':''} onchange="__schedRows[${i}].include_executive=this.checked;__schedRedraw()">
-            <span style="font-size:12px;font-weight:700;color:${execChecked?'var(--purple)':'var(--t1)'}">ผู้บริหาร — รับ Overview Flex (สรุปยอดรวมทีม)</span>
+            <span style="font-size:12px;font-weight:700;color:${execChecked?'var(--purple)':'var(--t1)'}">แอดมิน — รับ Overview Flex (สรุปยอดรวมทีม)</span>
           </label>
-          <div style="font-size:10px;color:var(--t3);margin-top:3px;margin-left:24px;font-family:monospace">user_id (จาก env): ดู EXECUTIVE_USER_IDS</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:3px;margin-left:24px">ส่งให้แอดมินทุกคนในชีต "ตั้งค่าแอดมิน" (จัดการที่ปุ่ม 👑 จัดการแอดมิน)</div>
         </div>`;
 
         html += `</div>`; // close ผู้รับ section
@@ -5010,7 +5010,7 @@
       const posChip = (p) => {
         const x = (p||'').toLowerCase();
         if (x === 'admin') return `<span style="background:var(--amber-bg);color:var(--amber);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">Admin</span>`;
-        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return `<span style="background:var(--purple-bg);color:var(--purple);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">ผู้บริหาร</span>`;
+        if (['executive','ผู้บริหาร','manager','exec'].includes(x) || p === 'ผู้บริหาร') return `<span style="background:var(--amber-bg);color:var(--amber);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700">Admin</span>`;
         if (!p) return `<span style="background:var(--bg2);color:var(--t3);padding:1px 7px;border-radius:8px;font-size:10px">—</span>`;
         return `<span style="background:var(--blue-bg);color:var(--blue);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600">${h(p)}</span>`;
       };
