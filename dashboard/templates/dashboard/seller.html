@@ -332,17 +332,26 @@
       o.miss = miss;
       return miss.length > 0;
     });
+    // วันที่ปีผิด (เคสตัวเอง) — ปีนอก 2020–2035 (มักพิมพ์ 1969) → อายุเคส/คะแนนเวลาเพี้ยน · สแกนทุกเคส (อาจหลุดช่วงวันที่)
+    const _badY = (s) => { const d = sheetDateToJS(parseSheetDate(s)); if (!d) return false; const y = d.getFullYear(); return y < 2020 || y > 2035; };
+    const _yf = [['วันจอง', 'date'], ['วันเซ็น', 'signDate'], ['วันผล', 'resultDate'], ['วันปล่อย', 'releaseDate']];
+    const badYr = [];
+    (D.bookingCases || []).forEach((b, gi) => {
+      const errs = [];
+      _yf.forEach(([lbl, k]) => { if (b[k] && _badY(b[k])) errs.push(lbl + '=' + b[k]); });
+      if (errs.length) badYr.push({ b, gi, errs });
+    });
     const curMonthName = (C.MONTHS_FULL || [])[new Date().getMonth()] || '';
-    // badge = งานด่วน/finite: ยังไม่โทร (speed-to-lead) + ปล่อยลงวันไม่ครบ (กระทบคะแนน)
+    // badge = งานด่วน/finite: ยังไม่โทร (speed-to-lead) + ปล่อยลงวันไม่ครบ + วันที่ปีผิด (กระทบคะแนน)
     // ไม่รวม follow/noStatus (pipeline/nudge ก้อนใหญ่ → badge จะบวม 99+ ตลอด) — ยังโชว์เป็นปุ่มในกระดิ่ง
-    return { notCalled, follow, noStatus, relBlank, curMonthName, total: notCalled + relBlank.length };
+    return { notCalled, follow, noStatus, relBlank, badYr, curMonthName, total: notCalled + relBlank.length + badYr.length };
   }
 
   function sellerBellHtml() {
     const a = computeSellerAlerts();
     const tot = a.total;
     const badge = tot > 0 ? `<span style="position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:9px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)">${tot > 99 ? '99+' : tot}</span>` : '';
-    const color = a.relBlank.length > 0 ? 'var(--amber)' : (tot > 0 ? 'var(--blue)' : 'var(--t3)');
+    const color = a.badYr.length > 0 ? 'var(--red)' : (a.relBlank.length > 0 ? 'var(--amber)' : (tot > 0 ? 'var(--blue)' : 'var(--t3)'));
     return `<button id="seller-alerts-bell" onclick="openSellerAlertsPanel()" title="แจ้งเตือน: งานที่ต้องทำ / เคสปล่อยลงวันไม่ครบ" style="margin-left:auto;position:relative;font-size:15px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:${color};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell', 17)}${badge}</button>`;
   }
 
@@ -394,6 +403,18 @@
       bd += `<div style="font-size:12.5px;font-weight:800;color:var(--blue)">${ic('lucide:bell', 15)} ยังไม่ลงสถานะลูกค้า · ${a.noStatus}</div>`;
       bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">กดเปิดเคสแล้วเลือกสถานะ จะช่วยจัดลำดับการตามให้แม่นขึ้น</div>`;
       bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('notCalled')" style="font-size:11px;padding:5px 11px;border-radius:9px;border:.5px solid var(--blue,#3b82f6);background:var(--blue-bg,#eaf2fe);color:var(--blue,#3b82f6);font-weight:700;cursor:pointer">ดูรายการเคส →</button>`;
+      bd += `</div>`;
+    }
+
+    // ── วันที่ปีผิด (เคสตัวเอง) — แตะไปแก้ ──
+    if (a.badYr.length) {
+      bd += `<div style="margin-bottom:6px">`;
+      bd += `<div style="font-size:12.5px;font-weight:800;color:var(--red)">${ic('lucide:triangle-alert', 15)} วันที่ปีผิด · ${a.badYr.length}</div>`;
+      bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">ปีนอก 2020–2035 (มักพิมพ์ 1969) ทำให้อายุเคส/คะแนนเวลาเพี้ยน → แตะไปแก้</div>`;
+      a.badYr.slice(0, 40).forEach(o => {
+        bd += `<div onclick="${_close};openBadYrCase(${o.gi})" style="padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h((o.b.customer || '-').slice(0, 22))}</b></div><div style="color:var(--red);font-size:10px;margin-top:1px">${h(o.errs.join(' · '))}</div></div>`;
+      });
+      if (a.badYr.length > 40) bd += `<div style="font-size:10px;color:var(--t3);padding:5px 0">… อีก ${a.badYr.length - 40} เคส</div>`;
       bd += `</div>`;
     }
 
@@ -1562,8 +1583,12 @@
           </div>`;
   }
 
-  function openBookingDetail(idx) {
-    const allBookings = bookingsInRange();
+  let _bdArr = null;   // array ที่ openBookingDetail เปิดล่าสุด — saveTimelineDate ใช้ตัวนี้หา case (ปกติ=bookingsInRange · เคสปีผิดที่หลุดช่วง=D.bookingCases)
+  // เปิดเคสปีผิด (index เป็น global D.bookingCases) — ผ่านฟังก์ชันเพราะ onclick inline เข้าถึง const D ไม่ได้
+  function openBadYrCase(gi) { openBookingDetail(gi, D.bookingCases); }
+  function openBookingDetail(idx, arr) {
+    const allBookings = arr || bookingsInRange();
+    _bdArr = allBookings;
     const b = allBookings[idx];
     if (!b) return;
     const old = document.getElementById('book-detail-overlay');
@@ -1643,7 +1668,7 @@
 
   // บันทึกวันที่ timeline กลับชีต (เซ็น/ผล/ปล่อย — col=คอลัมน์) · เคสของตัวเอง (server เช็ค ownership)
   async function saveTimelineDate(idx, col) {
-    const b = bookingsInRange()[idx];
+    const b = (_bdArr || bookingsInRange())[idx];
     if (!b) return;
     const inp = document.getElementById('td-' + col);
     const msg = document.getElementById('tdmsg-' + col);
