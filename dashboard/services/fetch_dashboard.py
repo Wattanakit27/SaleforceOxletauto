@@ -2183,7 +2183,11 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
 
     def _booked(l):
         z = l["customerStatus"] or ""
-        return "จอง" in z or "ส่งมอบ" in z or "ได้รถแล้ว" in z
+        if z:
+            return "จอง" in z or "ส่งมอบ" in z or "ได้รถแล้ว" in z or "ปล่อย" in z
+        # Z ว่าง (เดือนยังไม่กรอก Z) → fallback admin/sales (เคส ANLD-9921: Z ว่าง แต่ admin/sales=จอง ก็ booked) — ตรงกับ seller.html isBooked
+        a = (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")
+        return "จอง" in a or "ส่งมอบ" in a or "ได้รถแล้ว" in a or "ปล่อย" in a
 
     def _urg(l):
         score = l["leadScore"] or 0
