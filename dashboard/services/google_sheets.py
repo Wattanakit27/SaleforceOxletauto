@@ -329,7 +329,8 @@ def write_sheet(config_key: str, values: list[list]) -> None:
     headers = {"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"}
 
     import urllib.parse
-    encoded = urllib.parse.quote(f"'{tab}'!A:Z")
+    # A:ZZ (ไม่ใช่ A:Z) — กันข้อมูลคอลัมน์เกิน Z ค้างไม่ถูกล้าง (write_sheet = เขียนทับทั้ง tab)
+    encoded = urllib.parse.quote(f"'{tab}'!A:ZZ")
 
     # Clear ก่อน
     r = requests.post(

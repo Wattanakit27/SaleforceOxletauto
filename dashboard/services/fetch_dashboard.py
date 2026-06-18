@@ -2010,7 +2010,7 @@ def compute_lead_score(lead_row: list,
 
     # 5) Channel
     channel = cell(lead_row, L.channel).lower()
-    if "facebook" in channel or "fb" in channel:
+    if "facebook" in channel or "fb" in channel.split():   # "fb" แบบ token (กัน substring เช่นคำที่บังเอิญมี fb)
         _apply("มาจาก Facebook Ads")
     elif "tiktok" in channel or "ไลฟ์" in channel or "live" in channel:
         _apply("มาจาก TikTok / ไลฟ์สด")

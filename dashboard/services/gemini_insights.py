@@ -3,6 +3,7 @@
 ใช้ Gemini text generation (server-side, ใช้ key + model จาก settings)
 cache ผล 30 นาที (Gemini ช้า + มีค่าใช้จ่าย — ไม่ต้องเรียกซ้ำทุกครั้ง)
 """
+import hashlib
 import time
 
 import requests
@@ -12,6 +13,12 @@ _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:g
 
 _cache: dict = {}      # key → (ts, text)
 _TTL = 1800            # 30 นาที
+
+
+def _hk(s: str) -> str:
+    """cache key ที่ stable ข้าม process — hash() builtin สุ่มตาม PYTHONHASHSEED ทุก process
+    → บน serverless (process ใหม่ทุก request) cache แทบไม่ hit. ใช้ sha1 แทน."""
+    return hashlib.sha1((s or "").encode("utf-8")).hexdigest()[:16]
 
 
 def _gemini_text(prompt: str, max_tokens: int = 2048) -> str:
@@ -61,7 +68,7 @@ def analyze_seller(name: str, stats_text: str) -> str:
 **⚠️ ต้องพัฒนา** — 1-2 ข้อ (ชี้ตัวเลขที่อ่อน)
 **🎯 ทำสัปดาห์นี้** — 2-3 ข้อ รูปธรรม ทำได้จริง
 สั้น กระชับ ไม่เกิน 12 บรรทัด ใช้ bullet"""
-    return _cached(f"seller:{name}:{hash(stats_text)}", _p, 2048)
+    return _cached(f"seller:{name}:{_hk(stats_text)}", _p, 2048)
 
 
 def forecast_narrative(summary_text: str) -> str:
@@ -88,4 +95,4 @@ def forecast_narrative(summary_text: str) -> str:
 
 กระชับ ใช้ bullet ภายใต้แต่ละหัวข้อ — เป็นที่ปรึกษาที่ตรงไปตรงมา ไม่เยิ่นเย้อ
 หมายเหตุ: คุณไม่มีข้อมูล real-time ราคาน้ำมัน/สงครามล่าสุด ให้วิเคราะห์เชิงกลยุทธ์/ทิศทางจากความรู้ตลาดที่มี"""
-    return _cached(f"forecast:{hash(summary_text)}", _p, 2048)
+    return _cached(f"forecast:{_hk(summary_text)}", _p, 2048)

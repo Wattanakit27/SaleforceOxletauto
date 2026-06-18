@@ -1962,6 +1962,9 @@ def scan_doc(request):
     else:
         b64 = img
 
+    # เช็คขนาด base64 ก่อน decode (กัน OOM — b64 ~1.33× ของ bytes · 8MB → ~11MB b64)
+    if len(b64) > 12 * 1024 * 1024:
+        return JsonResponse({"error": "รูปใหญ่เกิน 8MB — ถ่ายใหม่หรือย่อก่อน"}, status=400)
     import base64 as _b64
     try:
         img_bytes = _b64.b64decode(b64)

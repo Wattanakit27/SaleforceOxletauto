@@ -1673,7 +1673,7 @@
           ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, 14, idx) : row('วันที่เซ็นต์', b.signDate)}
           ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, b.resultCol||19, idx) : row('วันที่รู้ผล', b.resultDate)}
           ${row('เอกสารครบ', b.docsDate)}
-          ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
+          ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol||23, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
 
           ${b.note && b.note !== '-' ? `
             <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">หมายเหตุ</div>
@@ -1716,7 +1716,7 @@
       else if (col === 18) b.docsDate = val;
       else if (col === 19 || col === 20) b.resultDate = val;
       else { b.releaseDatePrimary = val; if (val) b.releaseDate = val; }
-      if (typeof renderReleaseAlert === 'function') renderReleaseAlert();
+      render();   // refresh กระดิ่ง/badge/ลิสต์ (modal อยู่บน body ไม่หาย · เดิมเรียก renderReleaseAlert ที่ไม่มีจริง)
     } catch (e) {
       if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
     }
@@ -1742,6 +1742,7 @@
       }
       if (msg) { msg.textContent = '✓ บันทึกลงชีตแล้ว'; msg.style.color = 'var(--green-mid)'; }
       b.status = val;   // optimistic (mirror ตามทันรอบ sync ถัดไป)
+      render();   // refresh กระดิ่ง/badge (status กระทบ relBlank/นับ)
     } catch (e) {
       if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
     }
