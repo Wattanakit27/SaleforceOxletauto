@@ -1728,10 +1728,15 @@ def update_release_date(request):
         return JsonResponse({"error": "ตำแหน่งในชีตไม่ถูกต้อง"}, status=400)
     if not tab or row < 1:
         return JsonResponse({"error": "ไม่รู้ตำแหน่งในชีต — ลองกด 'รีเฟรชข้อมูลเดี๋ยวนี้' ก่อน"}, status=400)
-    # คอลัมน์วันที่ timeline ที่อนุญาตให้เขียน: 2=C วันจอง · 14=O เซ็น · 18=S เอกสารครบ · 19=T/20=U ผล · 21=V/23=X ปล่อย
-    if col not in (2, 14, 18, 19, 20, 21, 23):
-        return JsonResponse({"error": "คอลัมน์ไม่ใช่ช่องวันที่ timeline"}, status=400)
-    if value and not _re.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", value):
+    # คอลัมน์ที่อนุญาตเขียน: 2=C วันจอง · 13=N สถานะเคส · 14=O เซ็น · 18=S เอกสารครบ · 19=T/20=U ผล · 21=V/23=X ปล่อย
+    if col not in (2, 13, 14, 18, 19, 20, 21, 23):
+        return JsonResponse({"error": "คอลัมน์ไม่อนุญาตให้แก้"}, status=400)
+    if col == 13:
+        # สถานะเคส (คอลัมน์ N) — ต้องเป็นค่าที่ระบบรู้จัก (ตัด "(ซื้อสด)" ออกก่อนเช็ค)
+        _base = value.replace(" (ซื้อสด)", "").replace("(ซื้อสด)", "").strip()
+        if _base not in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย", "ปล่อย", "รีเจ็ก"):
+            return JsonResponse({"error": "สถานะไม่ถูกต้อง"}, status=400)
+    elif value and not _re.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", value):
         return JsonResponse({"error": "วันที่ต้องเป็น d/m/yyyy (เช่น 2/6/2026)"}, status=400)
 
     # auth: แอดมิน (session) หรือ เซลล์ (token + เคสนั้นเป็นของตัวเอง)

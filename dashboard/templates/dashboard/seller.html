@@ -518,6 +518,9 @@
   // เดิมมี ติดตาม/คืนเคส/ยกเลิก/จ่ายใหม่ (จาก admin/sales) → เปลี่ยนเป็น dropdown Z ตามที่ผู้ใช้กำหนด
   const STATUS_FILTERS = [
     { key: 'all', label: 'ทั้งหมด', test: null },  // null = ใช้ kpiFilter test
+    // ตัวกรองข้ามหมวด (ไม่ใช่ค่า Z) — ตัด junk/จอง ออกให้ตรงกับ KPI "ยังไม่โทร"/banner ไม่มีสถานะ
+    { key: 'f_nocall',   label: 'ยังไม่โทร',     test: l => !l.updateCount && !isSkipped(l) && !isBooked(l) },
+    { key: 'f_nostatus', label: 'ยังไม่มีสถานะ', test: l => !zVal(l) && !isSkipped(l) && !isBooked(l) },
     ...Z_STATUSES.map(z => ({ key: 'z_' + z, label: z, test: l => zVal(l).includes(z) })),
   ];
   const SORT_OPTIONS = [
@@ -1649,6 +1652,22 @@
           ${row('ไฟแนนซ์', b.finance)}
           ${row('เกรด', b.grade)}
 
+          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">สถานะเคส</div>
+          ${_canEdit ? (() => {
+            const opts = ['จอง', 'จอง (ซื้อสด)', 'รอเซ็นต์', 'รอผล', 'รอปล่อย', 'ปล่อย', 'รีเจ็ก'];
+            const cur = (b.status || '').trim();
+            const known = opts.includes(cur);
+            return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:.5px solid var(--bd)">
+              <div style="font-size:11px;color:var(--t3);font-weight:600;width:90px;flex-shrink:0">สถานะ</div>
+              <select onchange="saveCaseStatus(${idx}, this)" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+                ${opts.map(s => `<option value="${h(s)}" ${cur === s ? 'selected' : ''}>${h(s)}</option>`).join('')}
+                ${known ? '' : `<option value="${h(cur)}" selected>${h(cur || '(ไม่ระบุ)')}</option>`}
+              </select>
+              <span id="stmsg" style="font-size:10.5px;color:var(--t3);white-space:nowrap"></span>
+            </div>
+            <div style="font-size:10px;color:var(--t3);margin:3px 0 0">เปลี่ยนแล้วบันทึกลงชีตอัตโนมัติ · แก้ได้เฉพาะเคสของตัวเอง</div>`;
+          })() : row('สถานะ', b.status)}
+
           <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">ไทม์ไลน์</div>
           ${_canEdit ? _dateEditRow('วันที่จอง', b.date, 2, idx, 'แก้วันจองถ้าปีผิด (เช่น 1969) → บันทึก') : row('วันที่จอง', b.date)}
           ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, 14, idx) : row('วันที่เซ็นต์', b.signDate)}
@@ -1698,6 +1717,31 @@
       else if (col === 19 || col === 20) b.resultDate = val;
       else { b.releaseDatePrimary = val; if (val) b.releaseDate = val; }
       if (typeof renderReleaseAlert === 'function') renderReleaseAlert();
+    } catch (e) {
+      if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
+    }
+  }
+
+  // บันทึกสถานะเคสกลับชีต (คอลัมน์ N=13) · เคสของตัวเอง (server เช็ค ownership)
+  async function saveCaseStatus(idx, sel) {
+    const b = (_bdArr || bookingsInRange())[idx];
+    if (!b) return;
+    const msg = document.getElementById('stmsg');
+    const val = sel.value;
+    if (msg) { msg.textContent = 'กำลังบันทึก...'; msg.style.color = 'var(--t3)'; }
+    const token = location.pathname.split('/').filter(Boolean)[1] || '';
+    try {
+      const res = await fetch('/api/admin/update_release_date', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tab: b.sheetTab, row: parseInt(b.sheetRow), col: 13, value: val, token })
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) {
+        if (msg) { msg.textContent = '⚠ ' + (d.error || 'บันทึกไม่สำเร็จ'); msg.style.color = 'var(--red)'; }
+        return;
+      }
+      if (msg) { msg.textContent = '✓ บันทึกลงชีตแล้ว'; msg.style.color = 'var(--green-mid)'; }
+      b.status = val;   // optimistic (mirror ตามทันรอบ sync ถัดไป)
     } catch (e) {
       if (msg) { msg.textContent = '⚠ error: ' + e; msg.style.color = 'var(--red)'; }
     }
