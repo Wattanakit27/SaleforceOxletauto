@@ -737,10 +737,21 @@ def cron_tick(request):
             _test_tgt = (_sched.get("test_target") or "").strip()
             _sel = _sched.get("sellers") or ["*"]
             _sel_norm = None if _sel == ["*"] else {normalize_seller(x) for x in _sel}
+            # include_executive (ติ๊ก "แอดมิน — รับสรุปทีม") → ส่ง "สรุปตามด่วน (ทีม)" ให้แอดมินด้วย
+            # (มิ.ย.69 ยุบ "ผู้บริหาร" → admin · ใช้ข้อความ followup ทีมตัวเดิม ไม่ใช่ Flex แยก · ผู้รับ = ADMIN_USER_IDS ปุ่มจัดการแอดมิน + SUPER_ADMIN_IDS)
+            _adm_recips = []
+            if _sched.get("include_executive"):
+                try:
+                    from .services.constants import ADMIN_USER_IDS, SUPER_ADMIN_IDS, load_admin_user_ids
+                    load_admin_user_ids()
+                    _adm_recips = sorted(set(ADMIN_USER_IDS) | set(SUPER_ADMIN_IDS))
+                except Exception:
+                    _adm_recips = []
             for _m in build_followup_messages():
                 if _m.get("admin"):
-                    # สรุปรวมทีม → แอดมิน (เทเลเซลล์ + เซลล์ที่ติ๊กแอดมิน · จาก recipients) · test = test_target
-                    for _at in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
+                    # สรุปรวมทีม → เทเลเซลล์ (recipients) + แอดมิน (ถ้าติ๊ก include_executive) · test = test_target · dedup รักษาลำดับ
+                    _admin_targets = [_test_tgt] if _test_tgt else list(dict.fromkeys((_m.get("recipients") or []) + _adm_recips))
+                    for _at in _admin_targets:
                         if not _at:
                             continue
                         _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], channel_token)
@@ -755,25 +766,6 @@ def cron_tick(request):
                     _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], channel_token)
                     if _code == 200:
                         followup_sent += 1
-            # ส่ง Overview Flex (สรุปยอดรวมทีม) ให้แอดมินทุกคน เมื่อ schedule แถวนี้ติ๊ก include_executive
-            # (มิ.ย.69 ยุบ "ผู้บริหาร" → admin · ผู้รับ = ADMIN_USER_IDS (ปุ่มจัดการแอดมิน) + SUPER_ADMIN_IDS · เลิกพึ่ง env EXECUTIVE)
-            if _sched.get("include_executive"):
-                try:
-                    from .services.line_notify import build_seller_pipelines, build_overview_flex
-                    from .services.fetch_dashboard import fetch_dashboard_data
-                    from .services.constants import ADMIN_USER_IDS, SUPER_ADMIN_IDS, load_admin_user_ids
-                    load_admin_user_ids()
-                    _ov = build_overview_flex(build_seller_pipelines(), fetch_dashboard_data(),
-                                              "https://saleforce-oxletauto.vercel.app")
-                    _ov_recips = [_test_tgt] if _test_tgt else sorted(set(ADMIN_USER_IDS) | set(SUPER_ADMIN_IDS))
-                    for _ar in _ov_recips:
-                        if not _ar:
-                            continue
-                        _code, _ = push_line_message(_ar, [_ov], channel_token)
-                        if _code == 200:
-                            followup_sent += 1
-                except Exception:
-                    pass
             try:
                 from .services.supabase_client import set_kv as _set_kv
                 _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})
