@@ -643,8 +643,10 @@
         const sJong = Math.min((e.jongs || 0) / JONG_TGT, 1) * 10;
         const _ln = e.leadsNormal || 0; const conv = _ln > 0 ? (e.dones || 0) / _ln * 100 : 0;   // Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ)
         const sConv = Math.min(conv / CONV_TGT, 1) * 20;
-        const vel = (e.velCnt || 0) > 0 ? (e.velSum / e.velCnt) : 0;
-        const sVel = vel * 10;
+        const vel = (e.velCnt || 0) > 0 ? (e.velSum / e.velCnt) : 0;   // % จริง (velPct)
+        // คะแนน velocity ถ่วงตามจำนวนเคส (shrink k=1 เข้าหากลาง 0.5) — sync กับ Python · ปล่อย 1=7.5 · 4=9.0
+        const velAdj = (e.velCnt || 0) > 0 ? ((e.velSum + 0.5) / (e.velCnt + 1)) : 0;
+        const sVel = velAdj * 10;
         const completion = (e.cnt || 0) > 0 ? (e.capUpd || 0) / (4 * e.cnt) : 0;
         const sFollow = completion * 20;
         const sBan = Math.max(0, 10 - (e.bans || 0));
@@ -1061,7 +1063,7 @@
             <!-- หมายเหตุ -->
             <div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:8px;font-size:11px;color:var(--t1);line-height:1.6;margin-bottom:10px">
               <b style="color:var(--purple)">สถานะ</b> วัดจาก<b>เคสที่ปล่อยแล้ว</b> — ยิ่งจอง→เซ็น→ผล→ปล่อยทันกำหนด ยิ่งได้เต็ม<br>
-              <span style="color:var(--t3)">ต้องกรอก "วันเซ็น" + "วันผลออก" ในชีตยอดขายให้ครบ ไม่งั้นช่วงที่ว่างจะได้ 0</span>
+              <span style="color:var(--t3)">ต้องกรอก "วันเซ็น" + "วันผลออก" ในชีตยอดขายให้ครบ ไม่งั้นช่วงที่ว่างจะได้ 0 · <b>ถ่วงตามจำนวนเคส</b>: ปล่อยน้อยถ่วงเข้าหากลาง (ปล่อย 1 เร็ว=7.5 · 4=9.0) กันเคสเดียวเร็วได้เต็ม 10</span>
             </div>
 
             <div style="margin-top:10px;font-size:10px;color:var(--t3);line-height:1.5">
@@ -1695,7 +1697,7 @@
           return {
             n: s.name, team: s.team, leadDist,
             dones: e.dones||0, jongs: e.jongs||0, leads: e.leads||0, bans: e.bans||0,
-            conv: e.conv||0, completion: e.completion||0, cnt: e.cnt||0, velPct: e.velPct||0,
+            conv: e.conv||0, completion: e.completion||0, cnt: e.cnt||0, velPct: e.velPct||0, velN: e.velCnt||0,
             sDone: e.sDone||0, sJong: e.sJong||0, sConv: e.sConv||0, sVel: e.sVel||0,
             sFollow: e.sFollow||0, sBan: (e.sBan==null?10:e.sBan),
             total: e.score||0,
@@ -1739,7 +1741,7 @@
           <span style="text-align:right;color:var(--green);font-weight:600">${_f1(e.sDone)}</span>
           <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sJong)}</span>
           <span style="text-align:right;color:var(--blue);font-weight:600">${_f1(e.sConv)}</span>
-          <span style="text-align:right;color:var(--purple);font-weight:600" title="${e.velPct}% ปิดทันกำหนด">${_f1(e.sVel)}</span>
+          <span style="text-align:right;color:var(--purple);font-weight:600" title="ปิดทันกำหนด ${e.velPct}% · คะแนนถ่วงตามจำนวนเคส (ปล่อย ${e.velN||0} เคส → ปล่อยน้อยถ่วงเข้ากลาง)">${_f1(e.sVel)}</span>
           <span style="text-align:right;color:var(--amber);font-weight:600">${_f1(e.sFollow)}</span>
           <span style="text-align:right;color:${e.bans>0?'var(--red)':'var(--t2)'};font-weight:600">${_f1(e.sBan)}</span>
           <span style="text-align:right;color:${totalColor};font-weight:800;font-size:13px">${_f1(e.total)}</span>

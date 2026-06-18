@@ -1517,9 +1517,12 @@ def compute_diligence_scores(target_month: int | None = None,
         e["sConv"] = round(min(conv / 5, 1) * 20, 1)
         fr = vel_acc.get(e["name"], [])
         e["velN"] = len(fr)
-        vel = (sum(fr) / len(fr)) if fr else 0
+        vel = (sum(fr) / len(fr)) if fr else 0          # ความเร็วเฉลี่ยจริง — ใช้โชว์ velPct (% ปิดทันกำหนด)
+        # คะแนน sVel ถ่วงตามจำนวนเคส (Bayesian shrink k=1 เข้าหากลาง 0.5): ปล่อยน้อย=ถ่วงเข้ากลาง · ปล่อยเยอะ=เชื่อค่าจริง
+        # กันคนปล่อย 1 เคสเร็วได้ 10 เท่าคนปล่อย 4 (ปล่อย 1=7.5 · 4=9.0 · 8=9.4) · sync กับ JS buildDilMap
+        adj = ((sum(fr) + 0.5) / (len(fr) + 1)) if fr else 0
         e["velPct"] = round(vel * 100)
-        e["sVel"] = round(vel * 10, 1)
+        e["sVel"] = round(adj * 10, 1)
         completion = (e["capUpd"] / (4 * e["cnt"])) if e["cnt"] else 0
         e["completion"] = round(completion * 100)
         e["sFollow"] = round(completion * 20, 1)
