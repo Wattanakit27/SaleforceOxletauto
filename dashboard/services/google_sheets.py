@@ -761,6 +761,28 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
         # ดึง parse_date จาก fetch_dashboard (avoid circular import — late import)
         from .fetch_dashboard import parse_date
 
+        # ── overlay สถานะ Z (customer_status) จากแท็บล่าสุดที่กรอก ──
+        # เคสเก่า (วันที่เดือนก่อน) ถูกเอามาทำต่อในแท็บปัจจุบัน (layout ใหม่มีคอลัม Z) แต่ date-filter เก็บ copy เดือนเก่า
+        # (layout เก่าไม่มีคอลัม Z) → สถานะ Z ที่อัปเดต (คืนเคส/จอง/ฯลฯ) หาย → ตามผิด/นับผิด.
+        # รวบ Z จาก "เดือนล่าสุด" ที่กรอก ต่อ lead_code มา overlay ทับ (การนับเดือนยังอิงวันที่เหมือนเดิม — overlay แค่สถานะ)
+        latest_z: dict[str, str] = {}
+        latest_z_m: dict[str, int] = {}
+        for m_int, tab in monthly_tabs:
+            _, vals = tab_rows.get(tab, (m_int, []))
+            if not vals:
+                continue
+            cmz = _resolve_lead_colmap(vals[0])
+            zsrc = cmz.get(LEADS_COL.customer_status)
+            csrc = cmz.get(LEADS_COL.lead_code)
+            if zsrc is None or csrc is None:
+                continue
+            for raw in vals[1:]:
+                code = (raw[csrc] if csrc < len(raw) else "").strip()
+                z = (raw[zsrc] if zsrc < len(raw) else "").strip()
+                if code and z and m_int >= latest_z_m.get(code, 0):
+                    latest_z[code] = z
+                    latest_z_m[code] = m_int
+
         all_rows: list[list[str]] = []
         for m_int, tab in monthly_tabs:
             _, vals = tab_rows.get(tab, (m_int, []))
@@ -772,6 +794,9 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
                 row = _normalize_lead_row(raw, colmap)
                 d = parse_date(cell(row, LEADS_COL.received_date))
                 if d and d.month == m_int:
+                    _code = cell(row, LEADS_COL.lead_code).strip()
+                    if _code in latest_z:
+                        row[LEADS_COL.customer_status] = latest_z[_code]   # สถานะ Z ล่าสุดจากทุกแท็บ
                     all_rows.append(row)
         _cache_set(cache_key, all_rows)
         return all_rows
