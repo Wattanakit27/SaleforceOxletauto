@@ -3311,7 +3311,9 @@
       const bkCount = (FD.bookingCases||[]).filter(b=>b.seller===effectiveCurS).length;
 
       // ── ฝังหน้าจริงที่เซลล์เห็น (/s/<token>/) — รายชื่อเซลล์กรองตามช่วงแล้ว (sellerNames จาก rangeActiveSellers) ──
-      const monthNames = sellerNames;
+      const _hasTok = (n) => !!((D.sellerTokens || {})[n]);
+      // เรียง dropdown: คนมี LINE id (ดูหน้าได้/ยังอยู่) ขึ้นก่อน · คนไม่มีไอดี (มักออกไปแล้ว) ลงล่าง — stable ภายในกลุ่ม
+      const monthNames = sellerNames.slice().sort((a, b) => (_hasTok(b) ? 1 : 0) - (_hasTok(a) ? 1 : 0));
       let curSeller = (curS && monthNames.includes(curS)) ? curS : (curS || monthNames[0] || '');
       if (curS !== curSeller) curS = curSeller;
       const token = (D.sellerTokens || {})[curSeller] || '';
@@ -3325,7 +3327,7 @@
       html += `<div style="flex:1;min-width:100px"><div style="font-size:15px;font-weight:700">${h(curSeller)}</div><div style="font-size:11px;color:var(--t2)">หน้าจริงที่เซลล์เห็น</div></div>`;
       html += `<select onchange="curS=this.value;showCase=null;updateUrl();render()" title="เลือกเซลล์ (เฉพาะคนที่มีข้อมูลในช่วงที่กรอง)" style="max-width:160px">`;
       if (curSeller && !monthNames.includes(curSeller)) html += `<option value="${h(curSeller)}" selected>${h(curSeller)} (ไม่มีข้อมูลในช่วง)</option>`;
-      monthNames.forEach(n => { html += `<option value="${h(n)}" ${curSeller===n?'selected':''}>${h(n)}</option>`; });
+      monthNames.forEach(n => { html += `<option value="${h(n)}" ${curSeller===n?'selected':''}>${h(n)}${_hasTok(n)?'':' (ไม่มีไอดี)'}</option>`; });
       html += `</select>`;
       if (token) html += `<a href="/s/${h(token)}/${_ifq}" target="_blank" class="bbtn" style="text-decoration:none">${ic('lucide:arrow-up-right',13)} เต็มจอ</a>`;
       html += `</div>`;
