@@ -3298,7 +3298,7 @@
     // ── SELLER TAB ──
     function renderSeller(sellers, sellerNames, dilMap) {
       const effectiveCurS = curS || (sellers[0]?.name??'');
-      if(!curS && effectiveCurS) curS = effectiveCurS;
+      // หมายเหตุ: ไม่ตั้ง curS ตรงนี้แล้ว — ปล่อยให้ logic dropdown (ที่เรียงคนมี LINE id ก่อน) เป็นคนเลือก default
       const sdYear = sellers.find(s=>s.name===effectiveCurS) || {};
       // ถ้ามี filter เดือน → ใช้ค่ารายเดือนจาก monthlySummary (overlay บน sdYear เพื่อคง target/team)
       const sdMonth = (dfMonth > 0 && D.monthlySummary?.[dfMonth]?.sellers?.[effectiveCurS]) || null;
@@ -3314,7 +3314,10 @@
       const _hasTok = (n) => !!((D.sellerTokens || {})[n]);
       // เรียง dropdown: คนมี LINE id (ดูหน้าได้/ยังอยู่) ขึ้นก่อน · คนไม่มีไอดี (มักออกไปแล้ว) ลงล่าง — stable ภายในกลุ่ม
       const monthNames = sellerNames.slice().sort((a, b) => (_hasTok(b) ? 1 : 0) - (_hasTok(a) ? 1 : 0));
-      let curSeller = (curS && monthNames.includes(curS)) ? curS : (curS || monthNames[0] || '');
+      // เปิดแท็บเข้ามา / เซลล์ที่ค้างไว้ไม่อยู่ในช่วง → default เป็นเซลล์ที่ "ดูหน้าได้จริง" (มี LINE id) คนแรก
+      // ถ้า curS อยู่ในรายชื่อช่วงนี้ (เลือกเองจาก dropdown แม้ไม่มีไอดี) ยังเคารพการเลือกเสมอ
+      const _firstViewable = monthNames.find(_hasTok) || monthNames[0] || '';
+      let curSeller = (curS && monthNames.includes(curS)) ? curS : (_firstViewable || '');
       if (curS !== curSeller) curS = curSeller;
       const token = (D.sellerTokens || {})[curSeller] || '';
       const monthLbl = rangeLabelTH();   // 📅 ตามตัวกรองวันที่
