@@ -146,7 +146,8 @@ WSGI_APPLICATION = "oxlet.wsgi.application"
 # ⚠️ Vercel serverless ต้องต่อผ่าน pooler + CONN_MAX_AGE=0 + DISABLE_SERVER_SIDE_CURSORS=True
 #    (pgbouncer transaction mode ใช้ server-side cursor ไม่ได้) · migrate ใช้ direct conn (5432)
 # ──────────────────────────────────────────────────────────────────────
-_DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+# รองรับทั้ง Supabase (DATABASE_URL) และ Vercel Postgres (POSTGRES_URL — Vercel ฉีดให้อัตโนมัติ)
+_DATABASE_URL = (os.getenv("DATABASE_URL", "") or os.getenv("POSTGRES_URL", "")).strip()
 if _DATABASE_URL:
     from urllib.parse import urlparse, unquote
     _u = urlparse(_DATABASE_URL)
