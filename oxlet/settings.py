@@ -35,9 +35,15 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
 ).split(",") if o.strip()]
 
 INSTALLED_APPS = [
+    # auth/admin/contenttypes/messages — ต้องมีเพราะแอป cars/ (tracking) ใช้ Django auth + admin
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sessions",
     "dashboard",
+    "cars",  # ระบบติดตามรถ (tracking) — DB จริง, แยกจาก sales ที่อ่าน Sheets
 ]
 
 MIDDLEWARE = [
@@ -47,7 +53,14 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # เพิ่มสำหรับ cars/ (tracking) — auth + messages + clickjacking
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# sales ฝัง seller.html เป็น iframe (same-origin) → SAMEORIGIN ไม่งั้น admin tab "เซลล์" พัง
+X_FRAME_OPTIONS = "SAMEORIGIN"
 
 # Session ใช้ signed-cookie backend — ไม่ต้องมี DB, ปลอดภัยเพราะ sign ด้วย SECRET_KEY
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
@@ -105,12 +118,17 @@ ROOT_URLCONF = "oxlet.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        # templates/ ระดับ root = เทมเพลตของแอป cars/ (tracking) · dashboard ใช้ app dirs
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.template.context_processors.static",
+                # cars/ (tracking) ต้องการ auth + messages + nav
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "cars.context.nav",
             ],
         },
     },
@@ -118,7 +136,46 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "oxlet.wsgi.application"
 
-DATABASES = {}
+# ──────────────────────────────────────────────────────────────────────
+# ฐานข้อมูล — sales เดิมไม่ใช้ DB (อ่าน Google Sheets). เพิ่ม Postgres ให้แอป cars/ (tracking)
+#   • DATABASE_URL = Supabase pooled (port 6543, transaction mode) → ใช้ตอน runtime
+#   • DB_HOST/DB_NAME/... แยกตัว → ก็ได้
+#   • ไม่ตั้งอะไรเลย → SQLite (local dev เท่านั้น)
+# ⚠️ Vercel serverless ต้องต่อผ่าน pooler + CONN_MAX_AGE=0 + DISABLE_SERVER_SIDE_CURSORS=True
+#    (pgbouncer transaction mode ใช้ server-side cursor ไม่ได้) · migrate ใช้ direct conn (5432)
+# ──────────────────────────────────────────────────────────────────────
+_DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if _DATABASE_URL:
+    from urllib.parse import urlparse, unquote
+    _u = urlparse(_DATABASE_URL)
+    DATABASES = {"default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": (_u.path or "/postgres").lstrip("/") or "postgres",
+        "USER": unquote(_u.username or ""),
+        "PASSWORD": unquote(_u.password or ""),
+        "HOST": _u.hostname or "",
+        "PORT": str(_u.port or 5432),
+        "CONN_MAX_AGE": 0,
+        "DISABLE_SERVER_SIDE_CURSORS": True,
+        "OPTIONS": {"sslmode": os.getenv("DB_SSLMODE", "require")},
+    }}
+elif os.getenv("DB_HOST"):
+    DATABASES = {"default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("DB_NAME", "postgres"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "HOST": os.getenv("DB_HOST"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        "CONN_MAX_AGE": 0,
+        "DISABLE_SERVER_SIDE_CURSORS": True,
+        "OPTIONS": {"sslmode": os.getenv("DB_SSLMODE", "require")},
+    }}
+else:
+    DATABASES = {"default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }}
 
 LANGUAGE_CODE = "th"
 TIME_ZONE = "Asia/Bangkok"
@@ -151,3 +208,32 @@ if GOOGLE_PRIVATE_KEY.startswith('"') and GOOGLE_PRIVATE_KEY.endswith('"'):
     GOOGLE_PRIVATE_KEY = GOOGLE_PRIVATE_KEY[1:-1]
 if GOOGLE_PRIVATE_KEY.startswith("'") and GOOGLE_PRIVATE_KEY.endswith("'"):
     GOOGLE_PRIVATE_KEY = GOOGLE_PRIVATE_KEY[1:-1]
+
+# ──────────────────────────────────────────────────────────────────────
+# ระบบติดตามรถ (cars/) — auth / QR / LINE / media
+# ──────────────────────────────────────────────────────────────────────
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+]
+
+# โดเมนที่ QR ชี้ไป (หน้า /track/scan/<code>/) — ต้องตรง prod ก่อนปริ้น QR
+SITE_URL = os.getenv("SITE_URL", "https://saleforce-oxletauto.vercel.app").rstrip("/")
+
+# LINE push ของ tracking (แยกจาก sales LINE_CHANNEL_ACCESS_TOKEN) — ไม่ตั้ง = ไม่ push เงียบ ๆ
+LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN", "")
+LINE_GROUP_ID = os.getenv("LINE_GROUP_ID", "")
+
+# Django auth ของ cars/ (sales ใช้ LINE/signed-cookie แยกต่างหาก ไม่กระทบ)
+LOGIN_URL = "/track/login/"
+LOGIN_REDIRECT_URL = "track_dashboard"
+LOGOUT_REDIRECT_URL = "track_login"
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# รูป/ไฟล์ของ cars/ → Supabase Storage (Vercel serverless เก็บไฟล์ถาวรไม่ได้)
+# เปิดใช้เมื่อ: ตั้ง SUPABASE_STORAGE_BUCKET (env) + มี SUPABASE_URL + SUPABASE_SECRET_KEY
+# ไม่ตั้ง → fallback FileSystemStorage (local dev เท่านั้น · บน prod รูปจะไม่ persist)
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "")
+if SUPABASE_URL and SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET:
+    STORAGES["default"]["BACKEND"] = "cars.storage.SupabaseStorage"

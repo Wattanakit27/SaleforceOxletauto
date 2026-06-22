@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}แดชบอร์ด · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<h1>แดชบอร์ด</h1>
+<p class="mut sm">ภาพรวมรถทั้งหมด {{ total }} คัน</p>
+
+<div class="cols" style="margin:14px 0">
+  <div class="card"><div class="mut sm">รถทั้งหมด</div><div style="font-size:28px;font-weight:700">{{ total }}</div></div>
+  <div class="card"><div class="mut sm">ปกติ</div><div style="font-size:28px;font-weight:700" class="tag-ok">{{ flags.ok }}</div></div>
+  <div class="card"><div class="mut sm">ใกล้ค้าง (≥2 วัน)</div><div style="font-size:28px;font-weight:700" class="tag-amber">{{ flags.amber }}</div></div>
+  <div class="card"><div class="mut sm">ค้างนาน (&gt;3 วัน)</div><div style="font-size:28px;font-weight:700" class="tag-red">{{ flags.red }}</div></div>
+  <div class="card"><div class="mut sm">T2L เฉลี่ย (เป้า ≤{{ t2l_target }})</div>
+    <div style="font-size:28px;font-weight:700">{% if avg_t2l %}{{ avg_t2l }} <span class="mut sm">วัน</span>{% else %}—{% endif %}</div></div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr;gap:14px">
+  <div class="card">
+    <h2>จำนวนรถตามสเตป (5 เฟส)</h2>
+    {% for ph in phase_rows %}
+      <div class="sm mut" style="margin:10px 0 6px">{{ ph.name }}</div>
+      <div class="row">
+        {% for s in ph.stages %}
+          <a href="{% url 'car_list' %}?stage={{ s.key }}" class="pill" style="padding:7px 12px">
+            <i data-lucide="{{ s.icon }}"></i> {{ s.name }}
+            <b style="margin-left:4px">{{ s.n }}</b>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2><span class="tag-red">รถค้างนาน</span> (ต้องเร่ง)</h2>
+    {% if stuck %}
+    <table>
+      <tr><th>รหัส</th><th>รถ</th><th>สเตป</th><th>ค้าง</th><th>สาขา</th></tr>
+      {% for c in stuck %}
+      <tr>
+        <td><a href="{% url 'car_detail' c.code %}"><b>{{ c.code }}</b></a></td>
+        <td>{{ c.title }}</td>
+        <td><span class="pill"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
+        <td class="tag-red"><b>{{ c.days_in_stage }} วัน</b></td>
+        <td class="mut">{{ c.branch_name }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="mut sm">ไม่มีรถค้างนาน 🎉</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

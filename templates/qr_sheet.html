@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>แผ่นพิมพ์ QR</title>
+<style>
+  body{font-family:"Segoe UI",Tahoma,sans-serif;margin:0;padding:10mm;color:#000}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
+  .lbl{border:1px dashed #999;border-radius:8px;padding:6mm;text-align:center;page-break-inside:avoid}
+  .lbl img{width:42mm;height:42mm}
+  .code{font-size:18pt;font-weight:700;margin-top:3mm}
+  .sub{font-size:10pt;color:#444}
+  .bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8mm}
+  @media print{.bar{display:none} body{padding:0}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <h2>แผ่นพิมพ์ QR ({{ cars|length }} คัน)</h2>
+  <button onclick="window.print()">🖨️ พิมพ์</button>
+</div>
+<div class="grid">
+  {% for c in cars %}
+  <div class="lbl">
+    <img src="{% url 'qr_png' c.code %}" alt="{{ c.code }}">
+    <div class="code">{{ c.code }}</div>
+    <div class="sub">{{ c.brand }} {{ c.model }} · {{ c.plate }}</div>
+    <div class="sub">{{ c.branch_name }}</div>
+  </div>
+  {% empty %}<p>ไม่ได้เลือกรถ</p>{% endfor %}
+</div>
+</body>
+</html>

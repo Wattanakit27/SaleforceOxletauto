@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}เข้าสู่ระบบ · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:380px;margin:8vh auto">
+  <div class="card">
+    <h1 style="display:flex;align-items:center;gap:8px"><i data-lucide="car-front"></i> Oxlet Auto</h1>
+    <p class="mut sm">เข้าสู่ระบบเพื่อจัดการและติดตามสถานะรถ</p>
+    {% if form.errors %}<div class="msg error">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>{% endif %}
+
+    <!-- LINE Login (ใช้ channel เดิมของ sales · ครั้งแรกแอดมินต้องกำหนดบทบาทที่ /track/users/) -->
+    <a class="btn pri" href="/auth/line/start?next=/track/"
+       style="width:100%;justify-content:center;background:#06c755;border-color:#06c755;margin-top:8px">
+      <i data-lucide="message-circle"></i> เข้าสู่ระบบด้วย LINE
+    </a>
+    <div class="mut sm" style="text-align:center;margin:12px 0 4px">— หรือ เข้าด้วยชื่อผู้ใช้ (แอดมิน/บัญชีระบบ) —</div>
+
+    <form method="post" class="grid" style="gap:11px;margin-top:4px">
+      {% csrf_token %}
+      <div><label class="sm mut">ชื่อผู้ใช้</label>{{ form.username }}</div>
+      <div><label class="sm mut">รหัสผ่าน</label>{{ form.password }}</div>
+      <button class="btn" type="submit"><i data-lucide="log-in"></i> เข้าสู่ระบบ</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

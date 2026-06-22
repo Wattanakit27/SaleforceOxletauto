@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}ลบรถ {{ car.code }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;margin:6vh auto">
+  <h1 class="tag-red"><i data-lucide="trash-2"></i> ลบรถ {{ car.code }}</h1>
+  <p>ต้องการลบ <b>{{ car.code }} · {{ car.title }}</b> และประวัติการสแกนทั้งหมดใช่ไหม?</p>
+  <p class="mut sm">การลบนี้ย้อนกลับไม่ได้</p>
+  <form method="post" class="row">
+    {% csrf_token %}
+    <button class="btn danger"><i data-lucide="trash-2"></i> ยืนยันลบ</button>
+    <a class="btn" href="{% url 'car_detail' car.code %}">ยกเลิก</a>
+  </form>
+</div>
+{% endblock %}

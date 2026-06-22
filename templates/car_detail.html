@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ car.code }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between">
+  <h1>{{ car.code }} <span class="mut">· {{ car.title }}</span></h1>
+  <div class="row">
+    {% if can_edit %}<a class="btn" href="{% url 'car_edit' car.code %}"><i data-lucide="pencil"></i> แก้ไข</a>{% endif %}
+    {% if can_delete %}<a class="btn danger" href="{% url 'car_delete' car.code %}"><i data-lucide="trash-2"></i> ลบ</a>{% endif %}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1.6fr 1fr;gap:14px;margin-top:12px">
+  <div class="grid" style="gap:14px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <span class="pill" style="font-size:14px"><i data-lucide="{{ car.stage_icon }}"></i> {{ car.stage_name }}</span>
+        <span class="pill"><span class="dot {{ car.flag }}"></span> ค้าง {{ car.days_in_stage }} วัน</span>
+      </div>
+      <div class="cols" style="margin-top:14px">
+        <div><div class="mut sm">ทะเบียน</div>{{ car.plate|default:"—" }}</div>
+        <div><div class="mut sm">ยี่ห้อ/รุ่น</div>{{ car.brand }} {{ car.model }}</div>
+        <div><div class="mut sm">ปี / สี</div>{{ car.year|default:"—" }} / {{ car.color|default:"—" }}</div>
+        <div><div class="mut sm">เลขไมล์</div>{{ car.km|default:"—" }}</div>
+        <div><div class="mut sm">สาขา</div>{{ car.branch_name }}</div>
+        <div><div class="mut sm">สถานะ</div>{{ car.get_status_display }}</div>
+        <div><div class="mut sm">สถานะเล่ม</div>{{ car.get_book_status_display|default:"—" }}</div>
+        <div><div class="mut sm">ครบกำหนดภาษี</div>{{ car.tax_due_date|default:"—" }}</div>
+        <div><div class="mut sm">รับเข้า</div>{{ car.date_in|date:"d/m/Y" }}</div>
+        <div><div class="mut sm">T2L</div>{% if car.t2l %}{{ car.t2l }} วัน{% else %}ยังไม่ขึ้นหน้าร้าน{% endif %}</div>
+      </div>
+      {% if car.note %}<div style="margin-top:12px"><div class="mut sm">หมายเหตุ</div>{{ car.note }}</div>{% endif %}
+    </div>
+
+    {% if direct_stages %}
+    <div class="card">
+      <h2>เปลี่ยนสเตป (ผ่าน UI)</h2>
+      <form method="post" action="{% url 'car_stage' car.code %}" class="row">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'car_detail' car.code %}">
+        <select name="stage" style="width:auto">
+          {% for k,n,i in direct_stages %}<option value="{{ k }}" {% if k == car.stage %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+        <button class="btn pri"><i data-lucide="arrow-right"></i> เปลี่ยน</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>ประวัติการสแกน</h2>
+      <table>
+        <tr><th>เวลา</th><th>สเตป</th><th>ผู้ทำ</th><th>หมายเหตุ</th></tr>
+        {% for l in logs %}
+        <tr>
+          <td class="mut sm">{{ l.created_at|date:"d/m/Y H:i" }}</td>
+          <td><span class="pill"><i data-lucide="{{ l.stage_icon }}"></i> {{ l.stage_name }}</span></td>
+          <td>{{ l.worker_name|default:"—" }}</td>
+          <td class="mut sm">{{ l.note|default:"" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="mut">ยังไม่มีประวัติ</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <div class="grid" style="gap:14px">
+    <div class="card" style="text-align:center">
+      <h2>QR แปะรถ</h2>
+      <img src="{% url 'qr_png' car.code %}" alt="QR {{ car.code }}" style="width:200px;height:200px;background:#fff;border-radius:10px;padding:8px">
+      <div class="mut sm" style="margin-top:8px">สแกนเพื่อเปลี่ยนสเตป</div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <a class="btn sm" href="{% url 'qr_png' car.code %}" target="_blank"><i data-lucide="download"></i> เปิดรูป</a>
+        <a class="btn sm" href="{% url 'scan' car.code %}"><i data-lucide="scan-line"></i> หน้าสแกน</a>
+      </div>
+    </div>
+    {% if car.photo %}
+    <div class="card"><img src="{{ car.photo.url }}" style="width:100%;border-radius:10px"></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

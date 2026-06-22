@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}จัดการผู้ใช้/บทบาท · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<h1><i data-lucide="users"></i> จัดการผู้ใช้ / บทบาท</h1>
+<p class="mut sm">1 คน = 1 บทบาท · เซ็ตได้เองโดยไม่ต้องเข้า Django admin</p>
+
+<div class="grid" style="grid-template-columns:1fr;gap:16px;margin-top:14px">
+
+  <!-- เพิ่มผู้ใช้ใหม่ -->
+  <div class="card">
+    <h2><i data-lucide="user-plus"></i> เพิ่มผู้ใช้</h2>
+    <form method="post" class="cols" style="align-items:end">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div><label class="sm mut">ชื่อผู้ใช้ (login)</label><input name="username" required></div>
+      <div><label class="sm mut">ชื่อ-สกุล</label><input name="full_name"></div>
+      <div><label class="sm mut">รหัสผ่าน</label><input name="password" type="text" required></div>
+      <div><label class="sm mut">บทบาท</label>
+        <select name="role">
+          <option value="">— ไม่มีบทบาท —</option>
+          {% for key, label in roles %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><button class="btn pri" type="submit"><i data-lucide="plus"></i> เพิ่ม</button></div>
+    </form>
+  </div>
+
+  <!-- รายชื่อผู้ใช้ -->
+  <div class="card">
+    <h2><i data-lucide="list"></i> ผู้ใช้ทั้งหมด ({{ rows|length }})</h2>
+    <table>
+      <thead><tr>
+        <th>ผู้ใช้</th><th>บทบาท</th><th>เปลี่ยนบทบาท</th><th>รหัสผ่าน</th><th>สถานะ</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr style="{% if not r.u.is_active %}opacity:.5{% endif %}">
+          <td>
+            <b>{{ r.u.username }}</b>
+            {% if r.u.get_full_name %}<div class="sm mut">{{ r.u.get_full_name }}</div>{% endif %}
+            {% if r.u.is_superuser %}<span class="pill" style="background:#3a2d52">superuser</span>{% endif %}
+          </td>
+          <td><span class="pill">{{ r.role_label }}</span></td>
+          <td>
+            {% if r.u.is_superuser %}
+              <span class="sm mut">ผู้บริหารเสมอ</span>
+            {% else %}
+            <form method="post" class="row" style="gap:6px">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_role">
+              <input type="hidden" name="user_id" value="{{ r.u.pk }}">
+              <select name="role" style="width:auto">
+                <option value="" {% if not r.role %}selected{% endif %}>— ไม่มี —</option>
+                {% for key, label in roles %}<option value="{{ key }}" {% if r.role == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+              <button class="btn sm" type="submit">บันทึก</button>
+            </form>
+            {% endif %}
+          </td>
+          <td>
+            {% if not r.u.is_superuser %}
+            <form method="post" class="row" style="gap:6px">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="reset_password">
+              <input type="hidden" name="user_id" value="{{ r.u.pk }}">
+              <input name="password" placeholder="รหัสใหม่" style="width:120px">
+              <button class="btn sm" type="submit">รีเซ็ต</button>
+            </form>
+            {% endif %}
+          </td>
+          <td>
+            {% if not r.u.is_superuser %}
+            <form method="post" style="display:inline;width:auto">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_active">
+              <input type="hidden" name="user_id" value="{{ r.u.pk }}">
+              <button class="btn sm {% if r.u.is_active %}danger{% endif %}" type="submit">
+                {% if r.u.is_active %}ปิด{% else %}เปิด{% endif %}
+              </button>
+            </form>
+            {% else %}<span class="tag-ok sm">active</span>{% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="mut">ยังไม่มีผู้ใช้</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}บอร์ด · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<h1>บอร์ดสถานะรถ</h1>
+<p class="mut sm">กำลังดำเนินการ {{ total }} คัน (ไม่รวมขายแล้ว)</p>
+
+<div style="overflow-x:auto;padding-bottom:12px">
+  <div style="display:flex;gap:12px;min-width:max-content">
+    {% for col in columns %}
+    <div class="card" style="width:230px;flex:0 0 auto;background:#161b2e">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <span style="display:flex;align-items:center;gap:6px;font-weight:600">
+          <i data-lucide="{{ col.icon }}"></i> {{ col.name }}</span>
+        <span class="pill">{{ col.cars|length }}</span>
+      </div>
+      <div class="grid" style="gap:8px">
+        {% for c in col.cars %}
+        <a href="{% url 'car_detail' c.code %}" class="card" style="padding:10px;background:#1c2238">
+          <div class="row" style="justify-content:space-between">
+            <b class="sm">{{ c.code }}</b>
+            <span class="dot {{ c.flag }}"></span>
+          </div>
+          <div class="sm">{{ c.title }}</div>
+          <div class="mut sm">{{ c.branch_name }} · ค้าง {{ c.days_in_stage }} วัน</div>
+        </a>
+        {% empty %}
+        <div class="mut sm">—</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

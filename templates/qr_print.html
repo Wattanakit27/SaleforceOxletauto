@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}พิมพ์ QR · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<h1><i data-lucide="qr-code"></i> พิมพ์ QR แปะรถ</h1>
+<p class="mut sm">เลือกรถที่ต้องการ แล้วกด "สร้างแผ่นพิมพ์"</p>
+
+<form method="get" class="card row" style="margin:12px 0">
+  <select name="branch" style="width:auto">
+    <option value="">— ทุกสาขา —</option>
+    {% for code,name in branch_choices %}<option value="{{ code }}" {% if code == cur_branch %}selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <select name="stage" style="width:auto">
+    <option value="">— ทุกสเตป —</option>
+    {% for k,n,i in stage_choices %}<option value="{{ k }}" {% if k == cur_stage %}selected{% endif %}>{{ n }}</option>{% endfor %}
+  </select>
+  <button class="btn"><i data-lucide="filter"></i> กรอง</button>
+</form>
+
+<form method="get" action="{% url 'qr_print_sheet' %}" target="_blank">
+  <div class="row" style="justify-content:space-between;margin-bottom:10px">
+    <label class="row sm"><input type="checkbox" id="all" style="width:auto"> เลือกทั้งหมด ({{ cars|length }})</label>
+    <button class="btn pri"><i data-lucide="printer"></i> สร้างแผ่นพิมพ์</button>
+  </div>
+  <div class="card cols">
+    {% for c in cars %}
+    <label class="row sm" style="border:1px solid var(--line);border-radius:9px;padding:9px">
+      <input type="checkbox" name="code" value="{{ c.code }}" class="ck" style="width:auto">
+      <span><b>{{ c.code }}</b><br><span class="mut">{{ c.title }}</span></span>
+    </label>
+    {% empty %}<div class="mut">ไม่มีรถตามเงื่อนไข</div>{% endfor %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('all')?.addEventListener('change',e=>{
+    document.querySelectorAll('.ck').forEach(c=>c.checked=e.target.checked);
+  });
+</script>
+{% endblock %}

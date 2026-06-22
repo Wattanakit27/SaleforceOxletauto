@@ -1,0 +1,75 @@
+{% load static %}
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root{--bg:#0f1220;--card:#1a1f33;--mut:#8b93a7;--line:#2a3147;--fg:#e8ebf5;
+        --ok:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;--accent:#6366f1}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--fg)}
+  a{color:inherit;text-decoration:none}
+  .top{display:flex;align-items:center;gap:18px;padding:12px 20px;background:var(--card);
+       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;flex-wrap:wrap}
+  .top .brand{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px}
+  .top nav{display:flex;gap:6px;flex-wrap:wrap}
+  .top nav a{padding:7px 12px;border-radius:8px;color:var(--mut);font-size:14px;display:flex;align-items:center;gap:6px}
+  .top nav a:hover,.top nav a.on{background:#252b42;color:var(--fg)}
+  .top .me{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:13px;color:var(--mut)}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .grid{display:grid;gap:14px}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:0 0 12px}
+  .mut{color:var(--mut)} .sm{font-size:13px}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:9px;border:1px solid var(--line);
+       background:#252b42;color:var(--fg);cursor:pointer;font-size:14px}
+  .btn:hover{border-color:var(--accent)}
+  .btn.pri{background:var(--accent);border-color:var(--accent)}
+  .btn.danger{background:var(--red);border-color:var(--red)}
+  .inp,select,textarea,input{width:100%;padding:9px 11px;border-radius:9px;border:1px solid var(--line);
+       background:#11152400;background:#141a2c;color:var(--fg);font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:12px}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12px;background:#252b42}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .ok{background:var(--ok)} .amber{background:var(--amber)} .red{background:var(--red)} .blue{background:var(--blue)}
+  .tag-ok{color:var(--ok)} .tag-amber{color:var(--amber)} .tag-red{color:var(--red)}
+  .msg{padding:11px 14px;border-radius:10px;margin-bottom:12px;border:1px solid var(--line);background:#1c2540}
+  .msg.success{border-color:var(--ok)} .msg.error{border-color:var(--red)}
+  i[data-lucide]{width:16px;height:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+</style>
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="top">
+  <div class="brand"><i data-lucide="car-front"></i> Oxlet</div>
+  <nav>
+    <a href="{% url 'track_dashboard' %}" class="{% if request.resolver_match.url_name == 'track_dashboard' %}on{% endif %}"><i data-lucide="layout-dashboard"></i> แดชบอร์ด</a>
+    <a href="{% url 'kanban' %}" class="{% if request.resolver_match.url_name == 'kanban' %}on{% endif %}"><i data-lucide="columns-3"></i> บอร์ด</a>
+    <a href="{% url 'car_list' %}" class="{% if request.resolver_match.url_name == 'car_list' %}on{% endif %}"><i data-lucide="list"></i> รถทั้งหมด</a>
+    {% if can_add_car %}<a href="{% url 'car_create' %}"><i data-lucide="plus"></i> เพิ่มรถ</a>{% endif %}
+    {% if can_view_admin %}<a href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
+    {% if can_manage_users %}<a href="{% url 'manage_users' %}" class="{% if request.resolver_match.url_name == 'manage_users' %}on{% endif %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>{% endif %}
+  </nav>
+  <div class="me">
+    <span class="pill"><i data-lucide="user"></i> {{ user.get_full_name|default:user.username }} · {{ my_role }}</span>
+    <form method="post" action="{% url 'track_logout' %}" style="display:inline;width:auto">{% csrf_token %}<button class="btn sm" type="submit"><i data-lucide="log-out"></i> ออก</button></form>
+  </div>
+</header>
+{% endif %}
+<div class="wrap">
+  {% if messages %}{% for m in messages %}
+    <div class="msg {{ m.tags }}">{{ m }}</div>
+  {% endfor %}{% endif %}
+  {% block content %}{% endblock %}
+</div>
+<script>lucide.createIcons();</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

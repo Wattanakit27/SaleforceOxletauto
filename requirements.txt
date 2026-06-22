@@ -3,3 +3,7 @@ google-auth>=2.20.0
 requests>=2.31.0
 python-dotenv>=1.0.0
 whitenoise>=6.6.0
+# ── ระบบติดตามรถ (cars/) — ต้องมี DB จริง + QR + รูป ──
+psycopg2-binary>=2.9        # Postgres driver (Supabase) สำหรับแอป cars/
+qrcode[pil]>=7.4            # gen QR แปะหน้ารถ
+Pillow>=10.0               # ImageField/FileField ของ cars/ + render QR PNG

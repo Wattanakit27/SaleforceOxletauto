@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}สแกน {{ car.code }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:480px;margin:0 auto">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h1 style="font-size:20px">{{ car.code }}</h1>
+      <span class="pill"><i data-lucide="{{ car.stage_icon }}"></i> {{ car.stage_name }}</span>
+    </div>
+    <div class="mut sm">{{ car.title }} · {{ car.plate }} · {{ car.branch_name }}</div>
+
+    {% if stages %}
+    <form method="post" action="{% url 'scan_submit' car.code %}" enctype="multipart/form-data" class="grid" style="gap:12px;margin-top:14px">
+      {% csrf_token %}
+      <div>
+        <label class="sm mut">เปลี่ยนเป็นสเตป</label>
+        <select name="stage" required>
+          {% for k,n,i in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label class="sm mut">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="2"></textarea></div>
+      <div><label class="sm mut">แนบรูป (ถ้ามี)</label><input type="file" name="photo" accept="image/*" capture="environment"></div>
+      <button class="btn pri" type="submit"><i data-lucide="check"></i> บันทึกเปลี่ยนสเตป</button>
+      <div class="mut sm">ผู้ทำ: {{ actor }}</div>
+    </form>
+    {% else %}
+    <div class="msg" style="margin-top:14px">บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้</div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>ประวัติล่าสุด</h2>
+    {% for l in logs %}
+    <div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0">
+      <span class="pill"><i data-lucide="{{ l.stage_icon }}"></i> {{ l.stage_name }}</span>
+      <span class="mut sm">{{ l.created_at|date:"d/m H:i" }} · {{ l.worker_name }}</span>
+    </div>
+    {% empty %}<p class="mut sm">ยังไม่มีประวัติ</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

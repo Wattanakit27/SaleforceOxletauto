@@ -564,9 +564,31 @@ CRON_SECRET=xxx...
 
 4. **Service account** ต้องมีสิทธิ์ **Editor** บน Google Spreadsheet (เพื่อเขียน config sheets)
 
+## ระบบติดตามรถ (cars/ — tracking) — merge เข้ามา มิ.ย.69
+
+แอป Django ตัวที่ 2 ในโปรเจกต์เดียวกัน (port จาก oxlet_tracking) — ติดตามรถมือสองตั้งแต่ **รถเข้า → ทำสภาพ → ตรวจ → ทะเบียน → ขาย** (16 สเตป/5 เฟส) ด้วย QR สแกนเปลี่ยนสเตป. **ต่างจาก sales โดยสิ้นเชิง: ใช้ DB จริง (Postgres) + Django auth/admin** — ไม่ใช่ Sheets
+
+- **แยกขาดจาก sales**: sales (dashboard/) ยังอ่าน Google Sheets ไม่ใช้ DB เหมือนเดิม · cars/ มีตารางของตัวเอง (Car/ScanLog/Branch) ใน Postgres · 2 ระบบอยู่ deploy เดียวกันบน Vercel แต่ข้อมูล/auth แยกกัน
+- **URL ทั้งหมดอยู่ใต้ `/track/`** (กันชน login/logout/หน้าแรกของ sales) — `/track/`(dashboard), `/track/kanban/`, `/track/cars/`, `/track/scan/<code>/`, `/track/qr/<code>.png`, `/track/users/`(จัดการบทบาท), `/track/login/`,`/track/logout/`. Django admin ย้ายไป **`/dj-admin/`** (เพราะ sales ใช้ `/admin/` แล้ว)
+- **url name ที่ rename กันชน sales**: `dashboard→track_dashboard`, `login→track_login`, `logout→track_logout` (ใน [cars/urls.py](cars/urls.py)) · ชื่ออื่น (car_*/scan/qr_*/kanban/manage_users) ไม่ชน · **ไม่ใช้ app_namespace** (rename ตรงๆ ง่ายกว่า) — เพิ่ม url ใหม่ที่อาจชนกับ sales ต้อง rename ด้วย
+- **auth = Django auth + Group** (7 บทบาท: Executive/Purchasing/Admin/Sales/Technician/Vendor/Registration ใน [cars/roles.py](cars/roles.py)) · login ที่ `/track/login/`
+- **★ LINE Login (ใช้ channel เดิมของ sales — มิ.ย.69)**: หน้า `/track/login/` มีปุ่ม "เข้าสู่ระบบด้วย LINE" → `/auth/line/start?next=/track/` (LINE channel + callback **เดิม** ของ sales — ไม่ต้องตั้ง callback ใหม่ใน LINE console). `line_login_callback` ([views.py](dashboard/views.py)) แยกทางด้วย `next` ขึ้นต้น `/track/` → เรียก `_bridge_line_to_django_user()` get_or_create Django User `line_<userId>` (เก็บ displayName ใน first_name) + `auth.login()` → tracking ใช้ `request.user` ได้ · best-effort set sales session ด้วยถ้าเป็นพนักงาน (ไม่โชว์ error ถ้าไม่ใช่)
+  - **⚠️ ผู้ใช้ LINE ใหม่ = ยังไม่มีบทบาท** (login ได้แต่สิทธิ์ว่าง) → แอดมินต้องไปกำหนดบทบาทที่ `/track/users/` ก่อนถึงใช้งานได้เต็ม (LINE auth ยืนยันตัวตน · role แยกกำหนด เพราะ role tracking ≠ role sales)
+  - username/password ที่ `/track/login/` ยังใช้ได้ (break-glass: superuser + บัญชีที่สร้างใน /track/users/)
+- **จัดการบทบาทในเว็บ**: หน้า **`/track/users/`** (`manage_users` ใน [cars/views.py](cars/views.py) · เข้าได้เฉพาะ Executive/Admin) — เพิ่มผู้ใช้/เปลี่ยนบทบาท/รีเซ็ตรหัส/ปิด-เปิด โดยไม่ต้องเข้า Django admin · superuser = Executive เสมอ (แก้บทบาทไม่ได้) · `/dj-admin/` เก็บเป็น break-glass
+- **DB (Postgres ผ่าน Supabase)**: [settings.py](oxlet/settings.py) อ่าน `DATABASE_URL` (Supabase **pooled 6543 transaction mode** สำหรับ runtime) → ตั้ง `CONN_MAX_AGE=0` + `DISABLE_SERVER_SIDE_CURSORS=True` (จำเป็นกับ pgbouncer) · ไม่ตั้ง = SQLite (local dev). **migrate ใช้ direct conn (5432)** ไม่ใช่ pooler · **⚠️ ขัดโน้ตเก่า** ที่ว่า "ไม่ต้องใช้ pooler" — อันนั้นจริงเฉพาะตอนคุย Supabase ผ่าน REST · ORM ต้องใช้ pooler
+- **รูป/ไฟล์ → Supabase Storage**: [cars/storage.py](cars/storage.py) `SupabaseStorage` อัปผ่าน REST (requests, ไม่มี SDK) · เปิดใช้เมื่อตั้ง `SUPABASE_STORAGE_BUCKET` + มี `SUPABASE_URL`/`SUPABASE_SECRET_KEY` · bucket ต้อง public read · ไม่ตั้ง = FileSystemStorage (local เท่านั้น — Vercel เก็บไฟล์ถาวรไม่ได้)
+- **QR**: gen PNG ต่อ request ด้วย `qrcode`+`Pillow` (ไม่เก็บไฟล์) ชี้ไป `{SITE_URL}/track/scan/<code>/` → ต้องตั้ง **`SITE_URL`** เป็นโดเมน prod **ก่อนปริ้น QR**
+- **deps เพิ่ม** ([requirements.txt](requirements.txt)): `psycopg2-binary`, `qrcode[pil]`, `Pillow` · **[vercel.json](vercel.json) ขยาย `maxLambdaSize` 15→50mb** (ไม่งั้น build ไม่ผ่าน)
+- **settings ที่เพิ่มเข้า sales เดิม**: INSTALLED_APPS (+admin/auth/contenttypes/messages/cars) · MIDDLEWARE (+Authentication/Message/XFrameOptions) · `X_FRAME_OPTIONS="SAMEORIGIN"` (กัน iframe เซลล์ของ sales พัง) · TEMPLATES DIRS (+`templates/`) + context_processors (auth/messages/cars.context.nav) · sales ใช้ signed-cookie session เหมือนเดิม (Django auth ทำงานบน signed_cookies ได้)
+- **Django 5.0**: `LogoutView` รับเฉพาะ POST → [base.html](templates/base.html) ปุ่มออกเป็น form POST (ไม่ใช่ลิงก์ GET)
+- **env ที่ต้องตั้งบน Vercel (ใหม่)**: `DATABASE_URL` (pooled 6543, SECRET), `SUPABASE_STORAGE_BUCKET` (เช่น `car-photos`), `SITE_URL` (โดเมน canonical) · ออปชั่น: `LINE_CHANNEL_TOKEN`/`LINE_GROUP_ID` (push tracking แยกจาก sales)
+- **ขั้นตอนเปิดใช้ (ยังไม่ทำ — รอ Supabase)**: สร้าง Supabase project → เปิด Postgres + bucket `car-photos` (public) → ตั้ง `DATABASE_URL`=direct(5432) ในเครื่อง → `python manage.py migrate` + `createsuperuser` + `seed_demo` (สาขา+7 บทบาท+รถตัวอย่าง) → ตั้ง env บน Vercel (DATABASE_URL=pooled 6543) → deploy
+- **ตรวจแล้ว (local, sqlite)**: `manage.py check` ผ่าน · migrate ผ่าน · ทุกหน้า /track/* render 200 + QR PNG ออก · sales เดิมไม่กระทบ (/login/ 200, /dashboard/ redirect ปกติ)
+
 ## Known issues / limitations
 
-- **Cold start ช้า** บน Vercel — request แรกหลังนิ่งนาน ~5-10s (pip install + Django boot + auth)
+- **Cold start ช้า** บน Vercel — request แรกหลังนิ่งนาน ~5-10s (pip install + Django boot + auth) · **หน้าสแกน /track/scan/ ก็โดน** — คนงานยืนหน้ารถอาจรอ ~10s (trade-off ของการอยู่บน serverless)
 - **Sheets API quota** — ปกติ dashboard อ่าน **mirror/pre-compute (Supabase) ไม่แตะ Sheet** · Sheet ถูกอ่านแค่ตอน sync (~15-20 req ทุก ~5 นาที — ต่ำกว่า 300/min/project มาก)
 - **leads upsert ใหญ่** — 15k แถวเป็น jsonb ก้อนเดียว เคยชน Supabase statement timeout (8s) · บรรเทาด้วย `_trim_row` · ถ้ายังชนบ่อย → `alter role service_role set statement_timeout='30s'`
 - **Schedule precision = 1 นาที** (ตาม cron interval)

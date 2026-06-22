@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}รถทั้งหมด · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between">
+  <h1>รถทั้งหมด <span class="mut sm">({{ total }})</span></h1>
+  {% if can_add_car %}<a class="btn pri" href="{% url 'car_create' %}"><i data-lucide="plus"></i> เพิ่มรถ</a>{% endif %}
+</div>
+
+<form method="get" class="card row" style="margin:12px 0">
+  <select name="branch" style="width:auto">
+    <option value="">— ทุกสาขา —</option>
+    {% for code,name in branch_choices %}<option value="{{ code }}" {% if code == cur_branch %}selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <select name="stage" style="width:auto">
+    <option value="">— ทุกสเตป —</option>
+    {% for k,n,i in stage_choices %}<option value="{{ k }}" {% if k == cur_stage %}selected{% endif %}>{{ n }}</option>{% endfor %}
+  </select>
+  <select name="sort" style="width:auto">
+    <option value="updated" {% if cur_sort == 'updated' %}selected{% endif %}>ล่าสุด</option>
+    <option value="stuck" {% if cur_sort == 'stuck' %}selected{% endif %}>ค้างนานสุด</option>
+    <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>รับเข้าใหม่สุด</option>
+    <option value="code" {% if cur_sort == 'code' %}selected{% endif %}>รหัสรถ</option>
+  </select>
+  <button class="btn"><i data-lucide="filter"></i> กรอง</button>
+</form>
+
+<div class="card">
+<table>
+  <tr><th></th><th>รหัส</th><th>รถ</th><th>ทะเบียน</th><th>สเตป</th><th>ค้าง</th><th>T2L</th><th>สาขา</th><th></th></tr>
+  {% for c in cars %}
+  <tr>
+    <td><span class="dot {{ c.flag }}" title="{{ c.flag }}"></span></td>
+    <td><a href="{% url 'car_detail' c.code %}"><b>{{ c.code }}</b></a></td>
+    <td>{{ c.title }}</td>
+    <td class="mut">{{ c.plate|default:"—" }}</td>
+    <td><span class="pill"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
+    <td class="{% if c.flag == 'red' %}tag-red{% elif c.flag == 'amber' %}tag-amber{% endif %}">{{ c.days_in_stage }} วัน</td>
+    <td class="mut">{% if c.t2l %}{{ c.t2l }}{% else %}—{% endif %}</td>
+    <td class="mut">{{ c.branch_name }}</td>
+    <td><a class="btn sm" href="{% url 'qr_png' c.code %}" target="_blank"><i data-lucide="qr-code"></i></a></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="9" class="mut" style="text-align:center;padding:24px">ไม่มีรถตามเงื่อนไข</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}
