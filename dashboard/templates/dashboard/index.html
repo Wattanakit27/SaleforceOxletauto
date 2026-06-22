@@ -1232,6 +1232,7 @@
             <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:search',16)} ตรวจ Log ข้อมูล</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:save',16)} ส่งคะแนนเข้าชีต</button>
+            <button onclick="window.open('/track/','_blank')" title="ระบบติดตามรถ — จัดการรถ/สเตป/QR + จัดการผู้ใช้และบทบาท (เปิดเต็มจอ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;border-top:.5px solid var(--bd);margin-top:2px;padding-top:9px;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:car-front',16)} จัดการระบบติดตามรถ</button>
           </div>
         </details>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
@@ -1270,15 +1271,16 @@
         'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
+        't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:qr-code',l:'สถานะรถ'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
       html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
-      // Date filter bar (ซ่อนในแท็บ "เซลล์" เพราะ iframe มี filter ของตัวเอง)
-      if(tab!=='s') html += renderDateFilterBar();
+      // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ" เพราะ iframe มี UI ของตัวเอง)
+      if(tab!=='s' && tab!=='t') html += renderDateFilterBar();
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
@@ -1286,6 +1288,7 @@
       else if(tab==='a') html += renderActivity(sellers);
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
+      else if(tab==='t') html += renderTracking();
 
       root.innerHTML = html;
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
@@ -3511,6 +3514,17 @@
 
     // ── Actions ──
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
+
+    // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
+    function renderTracking(){
+      return `<div style="border:.5px solid var(--bd);border-radius:14px;overflow:hidden;background:var(--bg2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:.5px solid var(--bd);font-size:12px;color:var(--t2)">
+          <span style="display:inline-flex;align-items:center;gap:6px">${ic('lucide:qr-code',14)} ระบบติดตามรถ — รถเข้า → ทำสภาพ → ทะเบียน → ขาย</span>
+          <a href="/track/" target="_blank" style="color:var(--blue);font-weight:600">เปิดเต็มจอ ↗</a>
+        </div>
+        <iframe src="/track/" title="ระบบติดตามรถ" style="width:100%;height:calc(100vh - 250px);min-height:540px;border:0;display:block;background:#fff"></iframe>
+      </div>`;
+    }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น
     // (ใช้ตอนกดบาร์เดือนในกราฟ drill-in)

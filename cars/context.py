@@ -3,11 +3,19 @@ from . import roles
 
 
 def nav(request):
-    user = getattr(request, "user", None)
-    return {
-        "SITE_NAME": "Oxlet Auto · ระบบติดตามรถ",
-        "my_role": roles.role_label(user) if user and user.is_authenticated else "",
-        "can_add_car": user.is_authenticated and roles.can_add_car(user) if user else False,
-        "can_view_admin": user.is_authenticated and roles.can_view_admin(user) if user else False,
-        "can_manage_users": user.is_authenticated and roles.can_manage_users(user) if user else False,
-    }
+    # context processor นี้ run ทุกหน้า (รวม sales) → ต้องทน DB ล่ม/ไม่ตั้งค่า ไม่งั้น sales พังตาม
+    base = {"SITE_NAME": "Oxlet Auto · ระบบติดตามรถ", "my_role": "",
+            "can_add_car": False, "can_view_admin": False, "can_manage_users": False}
+    try:
+        user = getattr(request, "user", None)
+        if not (user and user.is_authenticated):
+            return base
+        base.update({
+            "my_role": roles.role_label(user),
+            "can_add_car": roles.can_add_car(user),
+            "can_view_admin": roles.can_view_admin(user),
+            "can_manage_users": roles.can_manage_users(user),
+        })
+    except Exception:
+        pass
+    return base

@@ -266,18 +266,23 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
     return None, "ไม่พบบัญชี LINE นี้ในรายชื่อพนักงาน — แจ้งแอดมินเพิ่ม LINE ID ก่อน"
 
 
-def _bridge_line_to_django_user(request, line_user_id, display_name=""):
+def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exec=False):
     """ผูก LINE user_id → Django User (แอป cars/ tracking ใช้ Django auth) + login.
-    ใช้ LINE channel เดิมของ sales — แยกทางด้วย next=/track/ ใน callback.
-    ผู้ใช้ใหม่ = บัญชี "ยังไม่มีบทบาท" → แอดมินกำหนดบทบาทที่ /track/users/ ก่อนถึงใช้งานได้เต็ม.
+    ใช้ LINE channel เดิมของ sales — เพื่อให้เข้า /track/ (เช่น iframe แท็บ "สถานะรถ") ได้ไม่ต้อง login ซ้ำ.
+    make_exec=True (sales-admin) + ผู้ใช้เพิ่งสร้าง → ตั้งเป็น Executive ให้จัดการ tracking ได้เต็มทันที.
+    ผู้ใช้ใหม่ที่ไม่ใช่แอดมิน = "ยังไม่มีบทบาท" → แอดมินกำหนดบทบาทที่ /track/users/ ก่อนถึงใช้งานได้เต็ม.
     """
     from django.contrib.auth import login as auth_login
     from django.contrib.auth.models import User
     username = f"line_{line_user_id}"
-    user, _created = User.objects.get_or_create(username=username)
+    user, created = User.objects.get_or_create(username=username)
     if display_name and (user.first_name or "") != display_name[:150]:
         user.first_name = display_name[:150]
         user.save(update_fields=["first_name"])
+    # sales-admin ครั้งแรก → Executive (ไม่ทับ role ที่ตั้งทีหลังใน /track/users/)
+    if make_exec and created and not user.is_superuser:
+        from cars import roles as _troles
+        _troles.set_user_role(user, _troles.EXEC)
     auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     return user
 
@@ -336,19 +341,30 @@ def line_login_callback(request):
     except Exception as e:
         return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"LINE Login error: {str(e)[:200]}"})
 
+    # ตั้ง session sales (best-effort) — ถ้าเป็นพนักงาน/แอดมิน จะได้ oxlet_user + รู้ position
+    sales_target, sales_err = _login_with_line_user_id(request, line_user_id, next_url)
+    is_admin_user = ((request.session.get("oxlet_user") or {}).get("position") == "admin")
+
     # tracking (cars/) ใช้ Django auth — ถ้า next ชี้ /track/ → bridge LINE → Django user + login
-    # (ใช้ LINE channel + callback เดิมของ sales · ไม่ต้องตั้ง callback ใหม่)
+    # (ใช้ LINE channel + callback เดิมของ sales · ไม่ต้องตั้ง callback ใหม่ใน LINE console)
     if (next_url or "").startswith("/track/"):
         if not line_user_id:
             return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": "ไม่ได้รับ LINE user_id"})
-        _bridge_line_to_django_user(request, line_user_id, line_display)
-        _login_with_line_user_id(request, line_user_id, next_url)  # best-effort sales session (ไม่โชว์ error ถ้าไม่ใช่พนักงาน)
+        try:
+            _bridge_line_to_django_user(request, line_user_id, line_display, make_exec=is_admin_user)
+        except Exception as e:
+            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"เชื่อมฐานข้อมูล tracking ไม่ได้: {str(e)[:160]}"})
         return HttpResponseRedirect(next_url)
 
-    target, err = _login_with_line_user_id(request, line_user_id, next_url)
-    if err:
-        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": err})
-    return HttpResponseRedirect(target)
+    # sales (ปกติ)
+    if sales_err:
+        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": sales_err})
+    # bridge เผื่อดูแท็บ "สถานะรถ" (iframe /track/) ได้ไม่ต้อง login ซ้ำ — best-effort (DB ล่มก็ไม่พัง sales)
+    try:
+        _bridge_line_to_django_user(request, line_user_id, line_display, make_exec=is_admin_user)
+    except Exception:
+        pass
+    return HttpResponseRedirect(sales_target)
 
 
 @require_GET
