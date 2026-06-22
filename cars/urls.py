@@ -1,14 +1,13 @@
-from django.contrib.auth import views as auth_views
 from django.urls import path
+from django.views.generic.base import RedirectView
 
 from . import views
 
-# หมายเหตุ: ไม่ใช้ app_namespace — แต่ rename ชื่อที่ชนกับ sales (login/logout/dashboard)
-# เป็น track_login / track_logout / track_dashboard · ชื่ออื่น (car_*/scan/qr_*/kanban) ไม่ชน
+# ยุบเหลือ login เดียว: /track/login/ และ /track/logout/ ส่งต่อไปหน้า login/logout หลักของ sales
+# (sales bridge session → Django auth ให้ · ชื่ออื่น car_*/scan/qr_*/kanban ไม่ชนกับ sales)
 urlpatterns = [
-    # auth (ของ tracking เอง — แยกจาก LINE login ของ sales)
-    path("login/", auth_views.LoginView.as_view(template_name="login.html"), name="track_login"),
-    path("logout/", auth_views.LogoutView.as_view(), name="track_logout"),
+    path("login/", RedirectView.as_view(url="/login/?next=/track/", query_string=False, permanent=False), name="track_login"),
+    path("logout/", RedirectView.as_view(url="/logout/", query_string=False, permanent=False), name="track_logout"),
 
     # หน้าเว็บ
     path("", views.dashboard, name="track_dashboard"),

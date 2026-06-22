@@ -194,6 +194,22 @@ def login_view(request):
             return JsonResponse({"ok": True, "next": next_url})
         return HttpResponseRedirect(next_url)
 
+    # ทาง 1.5: บัญชี worker ของ tracking (Django auth) — ช่าง/ฝ่ายทะเบียน ฯลฯ ใช้ login หน้าเดียวกัน
+    # (login เดียว — ตามที่ยุบ /track/login/ มารวมที่นี่) · DB ล่ม = ข้ามเงียบ ๆ ไม่พัง sales
+    if username and password:
+        try:
+            from django.contrib.auth import authenticate, login as auth_login
+            duser = authenticate(request, username=username, password=password)
+        except Exception:
+            duser = None
+        if duser is not None:
+            from django.contrib.auth import login as auth_login
+            auth_login(request, duser)
+            dest = next_url if (next_url or "").startswith("/track/") else "/track/"
+            if is_ajax:
+                return JsonResponse({"ok": True, "next": dest})
+            return HttpResponseRedirect(dest)
+
     # (ถอดออกแล้ว — มิ.ย.69) ทาง "LINE user_id + รหัสรวม" เลิกใช้เพื่อความปลอดภัย (รหัสรวมเป็นช่องโหว่คนนอก)
     # เหลือ login ผ่าน LINE Login (OAuth) เท่านั้น — เซลล์/แอดมิน/ผู้บริหาร + SUPER_ADMIN_IDS
     # เข้าผ่านปุ่ม "เข้าสู่ระบบด้วย LINE" (_login_with_line_user_id)

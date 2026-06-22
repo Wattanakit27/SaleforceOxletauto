@@ -59,7 +59,7 @@
   </nav>
   <div class="me">
     <span class="pill"><i data-lucide="user"></i> {{ user.get_full_name|default:user.username }} · {{ my_role }}</span>
-    <form method="post" action="{% url 'track_logout' %}" style="display:inline;width:auto">{% csrf_token %}<button class="btn sm" type="submit"><i data-lucide="log-out"></i> ออก</button></form>
+    <a class="btn sm" href="/logout/"><i data-lucide="log-out"></i> ออก</a>
   </div>
 </header>
 {% endif %}

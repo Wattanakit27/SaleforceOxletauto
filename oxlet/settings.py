@@ -225,10 +225,11 @@ SITE_URL = os.getenv("SITE_URL", "https://saleforce-oxletauto.vercel.app").rstri
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN", "")
 LINE_GROUP_ID = os.getenv("LINE_GROUP_ID", "")
 
-# Django auth ของ cars/ (sales ใช้ LINE/signed-cookie แยกต่างหาก ไม่กระทบ)
-LOGIN_URL = "/track/login/"
-LOGIN_REDIRECT_URL = "track_dashboard"
-LOGOUT_REDIRECT_URL = "track_login"
+# ยุบเหลือ login เดียว — tracking ใช้หน้า login หลักของ sales (/login/)
+# login_required ของ cars/ → เด้งไป /login/?next=... · sales bridge session → Django auth ให้เอง
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/track/"
+LOGOUT_REDIRECT_URL = "/login/"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
