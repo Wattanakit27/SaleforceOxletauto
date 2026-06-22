@@ -55,6 +55,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     # เพิ่มสำหรับ cars/ (tracking) — auth + messages + clickjacking
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # ผูก session sales → Django auth ให้ /track/ (เข้าแท็บ "สถานะรถ" ไม่ต้อง login ซ้ำ) · ต้องอยู่หลัง AuthenticationMiddleware
+    "cars.middleware.TrackSessionBridgeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
