@@ -35,6 +35,7 @@ class SupabaseStorage(Storage):
 
     # ---- Django Storage API ----
     def _save(self, name, content):
+        name = name.replace("\\", "/")  # กัน path Windows (\) — Supabase key ต้องเป็น /
         content.seek(0)
         data = content.read()
         ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
@@ -53,7 +54,8 @@ class SupabaseStorage(Storage):
         return False
 
     def get_available_name(self, name, max_length=None):
-        # กันชื่อชน: แทรก uuid สั้น ๆ หน้าไฟล์
+        # กันชื่อชน: แทรก uuid สั้น ๆ หน้าไฟล์ · normalize \ → / (Windows)
+        name = name.replace("\\", "/")
         folder = posixpath.dirname(name)
         base = posixpath.basename(name)
         newbase = f"{uuid.uuid4().hex[:8]}-{base}"
