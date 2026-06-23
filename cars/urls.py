@@ -31,5 +31,6 @@ urlpatterns = [
     path("cars/<str:code>/edit/", views.car_edit, name="car_edit"),
     path("cars/<str:code>/delete/", views.car_delete, name="car_delete"),
     path("cars/<str:code>/stage/", views.car_stage, name="car_stage"),
+    path("cars/<str:code>/json", views.car_json, name="car_json"),
     path("cars/<str:code>/", views.car_detail, name="car_detail"),
 ]

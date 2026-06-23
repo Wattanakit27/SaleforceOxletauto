@@ -8,8 +8,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from . import constants as C
 from . import roles
@@ -41,13 +42,12 @@ def _stage_options(keys):
 # =========================================================
 @login_required
 def dashboard(request):
-    cars = list(Car.objects.all())
+    """หน้าเดียวจบ: ตัวเลขสรุปต่อสเตป + ตารางรถทั้งหมด (มีตัวกรอง) · กดรถ = popup (car_json)."""
+    all_cars = list(Car.objects.all())
     flags = {"red": 0, "amber": 0, "ok": 0}
-    for c in cars:
-        flags[c.flag] += 1
-    # นับรถต่อสเตป
     counts = {k: 0 for k in C.STAGE_KEYS}
-    for c in cars:
+    for c in all_cars:
+        flags[c.flag] += 1
         counts[c.stage] = counts.get(c.stage, 0) + 1
     phase_rows = [
         {"name": pname, "stages": [
@@ -56,21 +56,59 @@ def dashboard(request):
         ]}
         for _, pname, keys in C.PHASES
     ]
-    # รถค้างนาน (แดง) เรียงตามวันค้าง
-    stuck = sorted([c for c in cars if c.flag == "red"],
-                   key=lambda c: c.days_in_stage, reverse=True)[:10]
-    # T2L เฉลี่ย (เฉพาะที่ขึ้นหน้าร้านแล้ว)
-    t2ls = [c.t2l for c in cars if c.t2l is not None]
+    t2ls = [c.t2l for c in all_cars if c.t2l is not None]
     avg_t2l = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
 
+    # ตารางรถ (รวม car_list เดิมมาไว้หน้าเดียว) — ตัวกรอง สาขา/สเตป + เรียง
+    branch = request.GET.get("branch", "")
+    stage = request.GET.get("stage", "")
+    sort = request.GET.get("sort", "updated")
+    qs = Car.objects.all()
+    if branch:
+        qs = qs.filter(branch=branch)
+    if stage:
+        qs = qs.filter(stage=stage)
+    cars = list(qs.order_by(*SORT_MAP.get(sort, ("-updated_at",))))
+
     return render(request, "dashboard.html", {
-        "total": len(cars),
-        "flags": flags,
-        "phase_rows": phase_rows,
-        "stuck": stuck,
-        "avg_t2l": avg_t2l,
-        "t2l_target": C.T2L_TARGET_DAYS,
+        "total": len(all_cars), "flags": flags, "phase_rows": phase_rows,
+        "avg_t2l": avg_t2l, "t2l_target": C.T2L_TARGET_DAYS,
+        "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
+        "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
+        "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
     })
+
+
+@login_required
+def car_json(request, code):
+    """รายละเอียดรถ (สำหรับ popup ในหน้าเดียว) — ฟิลด์ + ประวัติสแกน + สเตปที่เปลี่ยนได้."""
+    car = get_object_or_404(Car, code=code)
+    logs = [{
+        "stage": l.stage_name, "worker": l.worker_name,
+        "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
+    } for l in car.logs.all()[:50]]
+    # สเตปที่ "เปลี่ยนตรงผ่าน UI" ได้ (Exec/Purchasing) · บทบาททำงานเปลี่ยนผ่านสแกนเท่านั้น
+    if roles.is_worker(request.user) or not roles.can_view_admin(request.user):
+        direct = []
+    else:
+        direct = [{"key": k, "name": n} for k, n, _ in _stage_options(roles.allowed_stages(request.user))]
+    return JsonResponse({
+        "code": car.code, "title": car.title, "plate": car.plate,
+        "brand": car.brand, "model": car.model, "year": car.year,
+        "color": car.color, "km": car.km, "branch": car.branch_name,
+        "stage": car.stage, "stageName": car.stage_name, "stageIcon": car.stage_icon,
+        "status": car.get_status_display(),
+        "bookStatus": car.get_book_status_display() if car.book_status else "",
+        "taxDue": car.tax_due_date.strftime("%d/%m/%Y") if car.tax_due_date else "",
+        "note": car.note,
+        "dateIn": timezone.localtime(car.date_in).strftime("%d/%m/%Y") if car.date_in else "",
+        "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
+        "qrUrl": f"/track/qr/{car.code}.png",
+        "photo": car.photo.url if car.photo else "",
+        "scanUrl": f"/track/scan/{car.code}/",
+        "editUrl": f"/track/cars/{car.code}/edit/",
+        "logs": logs, "direct": direct, "canEdit": roles.can_edit_car(request.user),
+    }, json_dumps_params={"ensure_ascii": False})
 
 
 @login_required
@@ -135,7 +173,7 @@ def car_create(request):
         if form.is_valid():
             car = form.save()
             messages.success(request, f"เพิ่มรถ {car.code} เรียบร้อย — อย่าลืมปริ้น QR แปะรถ")
-            return redirect("car_detail", code=car.code)
+            return redirect("track_dashboard")
     else:
         form = CarForm()
     return render(request, "car_form.html", {"form": form, "mode": "create"})
@@ -149,7 +187,7 @@ def car_edit(request, code):
         if form.is_valid():
             car = form.save()
             messages.success(request, f"บันทึกข้อมูลรถ {car.code} แล้ว")
-            return redirect("car_detail", code=car.code)
+            return redirect("track_dashboard")
     else:
         form = CarForm(instance=car)
     return render(request, "car_form.html", {"form": form, "mode": "edit", "car": car})
@@ -179,7 +217,7 @@ def car_stage(request, code):
         if should_notify:
             notify_stage_change(car, worker_name=actor)
         messages.success(request, f"{car.code} → {car.stage_name}")
-    return redirect(request.POST.get("next") or "car_detail", code=code)
+    return redirect("track_dashboard")
 
 
 # =========================================================

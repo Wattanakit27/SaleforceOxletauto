@@ -48,15 +48,7 @@
 <body>
 {% if user.is_authenticated %}
 <header class="top">
-  <div class="brand"><i data-lucide="car-front"></i> Oxlet</div>
-  <nav>
-    <a href="{% url 'track_dashboard' %}" class="{% if request.resolver_match.url_name == 'track_dashboard' %}on{% endif %}"><i data-lucide="layout-dashboard"></i> แดชบอร์ด</a>
-    <a href="{% url 'kanban' %}" class="{% if request.resolver_match.url_name == 'kanban' %}on{% endif %}"><i data-lucide="columns-3"></i> บอร์ด</a>
-    <a href="{% url 'car_list' %}" class="{% if request.resolver_match.url_name == 'car_list' %}on{% endif %}"><i data-lucide="list"></i> รถทั้งหมด</a>
-    {% if can_add_car %}<a href="{% url 'car_create' %}"><i data-lucide="plus"></i> เพิ่มรถ</a>{% endif %}
-    {% if can_view_admin %}<a href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
-    {% if can_manage_users %}<a href="{% url 'manage_users' %}" class="{% if request.resolver_match.url_name == 'manage_users' %}on{% endif %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>{% endif %}
-  </nav>
+  <a href="{% url 'track_dashboard' %}" class="brand"><i data-lucide="car-front"></i> Oxlet · สถานะรถ</a>
   <div class="me">
     <span class="pill"><i data-lucide="user"></i> {{ user.get_full_name|default:user.username }} · {{ my_role }}</span>
     <a class="btn sm" href="/logout/"><i data-lucide="log-out"></i> ออก</a>

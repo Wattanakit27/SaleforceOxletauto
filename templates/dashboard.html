@@ -1,50 +1,172 @@
 {% extends "base.html" %}
-{% block title %}แดชบอร์ด · {{ SITE_NAME }}{% endblock %}
+{% block title %}สถานะรถ · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<h1>แดชบอร์ด</h1>
-<p class="mut sm">ภาพรวมรถทั้งหมด {{ total }} คัน</p>
+<style>
+  .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:24px;overflow:auto}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:600px;width:100%}
+  .modal h2{margin:0 0 12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .kpi .n{font-size:26px;font-weight:800}
+  .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:#252b42;border:.5px solid var(--line)}
+  .chip.on{border-color:var(--accent);color:var(--fg)}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:.5px solid var(--line);font-size:13px}
+  .kv span:first-child{color:var(--mut)}
+</style>
 
-<div class="cols" style="margin:14px 0">
-  <div class="card"><div class="mut sm">รถทั้งหมด</div><div style="font-size:28px;font-weight:700">{{ total }}</div></div>
-  <div class="card"><div class="mut sm">ปกติ</div><div style="font-size:28px;font-weight:700" class="tag-ok">{{ flags.ok }}</div></div>
-  <div class="card"><div class="mut sm">ใกล้ค้าง (≥2 วัน)</div><div style="font-size:28px;font-weight:700" class="tag-amber">{{ flags.amber }}</div></div>
-  <div class="card"><div class="mut sm">ค้างนาน (&gt;3 วัน)</div><div style="font-size:28px;font-weight:700" class="tag-red">{{ flags.red }}</div></div>
-  <div class="card"><div class="mut sm">T2L เฉลี่ย (เป้า ≤{{ t2l_target }})</div>
-    <div style="font-size:28px;font-weight:700">{% if avg_t2l %}{{ avg_t2l }} <span class="mut sm">วัน</span>{% else %}—{% endif %}</div></div>
+<!-- แถบหัว + ปุ่มจัดการ (รวมไว้หน้าเดียว) -->
+<div class="row" style="justify-content:space-between;margin-bottom:14px">
+  <div><h1 style="margin:0">สถานะรถ</h1><span class="mut sm">ทั้งหมด {{ total }} คัน</span></div>
+  <div class="row" style="gap:8px">
+    {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
+    {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
+    {% if can_manage_users %}<a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>{% endif %}
+  </div>
 </div>
 
-<div class="grid" style="grid-template-columns:1fr;gap:14px">
-  <div class="card">
-    <h2>จำนวนรถตามสเตป (5 เฟส)</h2>
-    {% for ph in phase_rows %}
-      <div class="sm mut" style="margin:10px 0 6px">{{ ph.name }}</div>
-      <div class="row">
-        {% for s in ph.stages %}
-          <a href="{% url 'car_list' %}?stage={{ s.key }}" class="pill" style="padding:7px 12px">
-            <i data-lucide="{{ s.icon }}"></i> {{ s.name }}
-            <b style="margin-left:4px">{{ s.n }}</b>
-          </a>
-        {% endfor %}
-      </div>
-    {% endfor %}
-  </div>
+<!-- KPI -->
+<div class="cols" style="margin-bottom:12px">
+  <div class="kpi"><div class="mut sm">รถทั้งหมด</div><div class="n">{{ total }}</div></div>
+  <div class="kpi"><div class="mut sm">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div></div>
+  <div class="kpi"><div class="mut sm">ค้างนาน (&gt;3 วัน)</div><div class="n tag-red">{{ flags.red }}</div></div>
+  <div class="kpi"><div class="mut sm">T2L เฉลี่ย (เป้า ≤{{ t2l_target }})</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}{% else %}—{% endif %}</div></div>
+</div>
 
-  <div class="card">
-    <h2><span class="tag-red">รถค้างนาน</span> (ต้องเร่ง)</h2>
-    {% if stuck %}
-    <table>
-      <tr><th>รหัส</th><th>รถ</th><th>สเตป</th><th>ค้าง</th><th>สาขา</th></tr>
-      {% for c in stuck %}
-      <tr>
-        <td><a href="{% url 'car_detail' c.code %}"><b>{{ c.code }}</b></a></td>
-        <td>{{ c.title }}</td>
-        <td><span class="pill"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
-        <td class="tag-red"><b>{{ c.days_in_stage }} วัน</b></td>
-        <td class="mut">{{ c.branch_name }}</td>
-      </tr>
+<!-- จำนวนตามสเตป (กดเพื่อกรอง) -->
+<div class="card" style="margin-bottom:12px">
+  {% for ph in phase_rows %}
+    <div class="sm mut" style="margin:8px 0 6px">{{ ph.name }}</div>
+    <div class="row" style="gap:6px">
+      {% for s in ph.stages %}
+        <a href="?stage={{ s.key }}" class="chip{% if cur_stage == s.key %} on{% endif %}"><i data-lucide="{{ s.icon }}"></i> {{ s.name }} <b>{{ s.n }}</b></a>
       {% endfor %}
-    </table>
-    {% else %}<p class="mut sm">ไม่มีรถค้างนาน 🎉</p>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<!-- ตัวกรอง + ตารางรถ -->
+<div class="card" style="padding:14px">
+  <form method="get" class="row" style="gap:8px;margin-bottom:10px">
+    <select name="branch" onchange="this.form.submit()" style="width:auto">
+      <option value="">ทุกสาขา</option>
+      {% for code, name in branch_choices %}<option value="{{ code }}" {% if cur_branch == code %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+    <select name="stage" onchange="this.form.submit()" style="width:auto">
+      <option value="">ทุกสเตป</option>
+      {% for k, n, i in stage_choices %}<option value="{{ k }}" {% if cur_stage == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+    <select name="sort" onchange="this.form.submit()" style="width:auto">
+      <option value="updated" {% if cur_sort == 'updated' %}selected{% endif %}>อัปเดตล่าสุด</option>
+      <option value="stuck" {% if cur_sort == 'stuck' %}selected{% endif %}>ค้างนานสุด</option>
+      <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>เข้าใหม่สุด</option>
+      <option value="code" {% if cur_sort == 'code' %}selected{% endif %}>รหัสรถ</option>
+    </select>
+    {% if cur_branch or cur_stage %}<a class="btn sm" href="?">ล้างตัวกรอง</a>{% endif %}
+    <span class="mut sm" style="margin-left:auto">{{ cars|length }} คัน · กดแถวดูรายละเอียด</span>
+  </form>
+
+  <div style="overflow:auto">
+  <table>
+    <thead><tr><th>รหัส</th><th>รถ</th><th>สาขา</th><th>สเตป</th><th>ค้าง</th><th></th></tr></thead>
+    <tbody>
+    {% for c in cars %}
+      <tr class="clickrow" onclick="openCar('{{ c.code }}')">
+        <td><b>{{ c.code }}</b></td>
+        <td>{{ c.title }}{% if c.plate %}<div class="sm mut">{{ c.plate }}</div>{% endif %}</td>
+        <td class="sm mut">{{ c.branch_name }}</td>
+        <td><span class="pill"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
+        <td><span class="dot {{ c.flag }}"></span> {{ c.days_in_stage }} วัน</td>
+        <td class="mut">›</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="mut" style="text-align:center;padding:24px">ยังไม่มีรถ{% if can_add %} — กด "เพิ่มรถ" เพื่อเริ่ม{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
   </div>
 </div>
+
+<!-- Modal: เพิ่มรถ -->
+{% if can_add %}
+<div id="addModal" class="ov" onclick="if(event.target===this)closeAdd()">
+  <div class="modal">
+    <h2><i data-lucide="plus"></i> เพิ่มรถ</h2>
+    <form method="post" action="{% url 'car_create' %}" enctype="multipart/form-data" class="grid" style="gap:10px">
+      {% csrf_token %}
+      {{ add_form.as_p }}
+      <div class="row" style="justify-content:flex-end;gap:8px">
+        <button type="button" class="btn" onclick="closeAdd()">ยกเลิก</button>
+        <button type="submit" class="btn pri">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal: รายละเอียดรถ (popup) -->
+<div id="carModal" class="ov" onclick="if(event.target===this)closeCar()">
+  <div class="modal" id="carBody"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const CSRF='{{ csrf_token }}';
+  function openAdd(){document.getElementById('addModal').style.display='flex';}
+  function closeAdd(){document.getElementById('addModal').style.display='none';}
+  function closeCar(){document.getElementById('carModal').style.display='none';}
+
+  async function openCar(code){
+    const m=document.getElementById('carModal'), b=document.getElementById('carBody');
+    b.innerHTML='<p class="mut">กำลังโหลด...</p>'; m.style.display='flex';
+    let d;
+    try{ d=await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json')).json(); }
+    catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }
+    const kv=(k,v)=> v?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
+    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||'<span class="mut sm">ยังไม่มีประวัติ</span>';
+    let stageBtns;
+    if(d.direct && d.direct.length){
+      stageBtns=d.direct.map(s=>`<button class="btn sm" onclick="setStage('${d.code}','${s.key}')">${s.name}</button>`).join(' ');
+    }else{
+      stageBtns=`<a class="btn sm" href="${d.scanUrl}">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+    }
+    const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
+    b.innerHTML=`
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div><h2 style="margin:0">${d.code}</h2><div class="mut sm">${d.title||''} ${d.plate?'· '+d.plate:''}</div></div>
+        <button class="btn sm" onclick="closeCar()">✕</button>
+      </div>
+      <div class="row" style="gap:6px;margin:8px 0 12px">
+        <span class="pill">${d.stageName}</span>
+        <span class="pill"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
+        ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
+      </div>
+      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px">`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}
+        ${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}
+        ${kv('สี',d.color)}${kv('เลขไมล์',d.km)}
+        ${kv('วันรับเข้า',d.dateIn)}${kv('สถานะเล่ม',d.bookStatus)}
+        ${kv('ครบกำหนดภาษี',d.taxDue)}${kv('หมายเหตุ',d.note)}
+      </div>
+      <div class="sm mut" style="margin:14px 0 6px">เปลี่ยนสเตป</div>
+      <div class="row" style="gap:6px">${stageBtns}</div>
+      <div class="sm mut" style="margin:14px 0 6px">ประวัติการสแกน</div>
+      <div style="max-height:160px;overflow:auto">${logs}</div>
+      <div class="row" style="justify-content:space-between;gap:8px;margin-top:14px;align-items:center">
+        <a href="${d.qrUrl}" target="_blank" class="btn sm"><i data-lucide="qr-code"></i> เปิด QR</a>
+        ${d.canEdit?`<a href="${d.editUrl}" class="btn sm">แก้ไขข้อมูล</a>`:''}
+      </div>`;
+    if(window.lucide)lucide.createIcons();
+  }
+
+  function setStage(code,stage){
+    const f=document.createElement('form');
+    f.method='post'; f.action='/track/cars/'+encodeURIComponent(code)+'/stage/';
+    f.innerHTML='<input type="hidden" name="csrfmiddlewaretoken" value="'+CSRF+'"><input type="hidden" name="stage" value="'+stage+'">';
+    document.body.appendChild(f); f.submit();
+  }
+
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();} });
+</script>
 {% endblock %}
