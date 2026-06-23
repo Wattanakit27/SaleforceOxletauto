@@ -112,13 +112,14 @@
 {% block scripts %}
 <script>
   const CSRF='{{ csrf_token }}';
-  function openAdd(){document.getElementById('addModal').style.display='flex';}
+  function _scrollParent(){ try{ if(window.self!==window.top) parent.postMessage({oxletScrollTop:true},'*'); }catch(e){} }
+  function openAdd(){document.getElementById('addModal').style.display='flex'; _scrollParent();}
   function closeAdd(){document.getElementById('addModal').style.display='none';}
   function closeCar(){document.getElementById('carModal').style.display='none';}
 
   async function openCar(code){
     const m=document.getElementById('carModal'), b=document.getElementById('carBody');
-    b.innerHTML='<p class="mut">กำลังโหลด...</p>'; m.style.display='flex';
+    b.innerHTML='<p class="mut">กำลังโหลด...</p>'; m.style.display='flex'; _scrollParent();
     let d;
     try{ d=await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json')).json(); }
     catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }

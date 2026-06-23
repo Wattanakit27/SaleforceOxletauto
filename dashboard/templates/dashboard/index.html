@@ -1331,6 +1331,15 @@
     }
     window.addEventListener('resize', positionNavInd);
 
+    // แท็บ "สถานะรถ" (iframe /track/) — ปรับความสูง iframe เท่าเนื้อหา (ไม่มีสกรอลล์ใน) + เลื่อนหา popup
+    window.addEventListener('message', function(e){
+      const d = e.data || {};
+      const f = document.getElementById('trackFrame');
+      if (!f) return;
+      if (d.oxletTrackHeight) f.style.height = (d.oxletTrackHeight + 4) + 'px';
+      if (d.oxletScrollTop) { try { f.scrollIntoView({behavior:'smooth', block:'start'}); } catch(_){ window.scrollTo(0, f.offsetTop); } }
+    });
+
     // ── Charts (Chart.js) ──
     const __charts = {};
     function destroyChart(id) {
@@ -3517,13 +3526,10 @@
 
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
     function renderTracking(){
-      return `<div style="border:.5px solid var(--bd);border-radius:14px;overflow:hidden;background:var(--bg2)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:.5px solid var(--bd);font-size:12px;color:var(--t2)">
-          <span style="display:inline-flex;align-items:center;gap:6px">${ic('lucide:qr-code',14)} ระบบติดตามรถ — รถเข้า → ทำสภาพ → ทะเบียน → ขาย</span>
-          <a href="/track/" target="_blank" style="color:var(--blue);font-weight:600">เปิดเต็มจอ ↗</a>
-        </div>
-        <iframe src="/track/" title="ระบบติดตามรถ" style="width:100%;height:calc(100vh - 250px);min-height:540px;border:0;display:block;background:#fff"></iframe>
-      </div>`;
+      // iframe ขยายสูงเท่าเนื้อหา (ไม่มีสกรอลล์ใน/ไม่มีกรอบ) → เลื่อนเป็นหน้าเดียวกับ sales
+      // ความสูงปรับอัตโนมัติจาก postMessage ของ /track/ (ดู listener ด้านล่าง)
+      return `<div style="text-align:right;margin-bottom:6px"><a href="/track/" target="_blank" style="color:var(--blue);font-weight:600;font-size:12px">เปิดเต็มจอ ↗</a></div>
+        <iframe id="trackFrame" src="/track/" title="สถานะรถ" scrolling="no" style="width:100%;border:0;display:block;min-height:600px;background:transparent"></iframe>`;
     }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น

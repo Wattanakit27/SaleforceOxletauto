@@ -71,5 +71,16 @@
 </div>
 <script>lucide.createIcons();</script>
 {% block scripts %}{% endblock %}
+<script>
+  // ฝังใน iframe (แท็บสถานะรถ) → ส่งความสูงเนื้อหาให้ parent ปรับ iframe (ไม่มีสกรอลล์ใน = เลื่อนหน้าเดียว)
+  if (window.self !== window.top) {
+    var _postH = function(){ try { parent.postMessage({oxletTrackHeight: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)}, '*'); } catch(e){} };
+    window.addEventListener('load', _postH);
+    window.addEventListener('resize', _postH);
+    if (window.ResizeObserver) { try { new ResizeObserver(_postH).observe(document.body); } catch(e){} }
+    setInterval(_postH, 1200);
+    _postH();
+  }
+</script>
 </body>
 </html>
