@@ -16,6 +16,12 @@ urlpatterns = [
     # จัดการผู้ใช้/บทบาท (Executive/Admin)
     path("users/", views.manage_users, name="manage_users"),
 
+    # JSON API — ให้หน้า sales เรนเดอร์ "สถานะรถ" เองด้วยธีมเดียวกัน (ไม่ใช้ iframe)
+    path("api/cars", views.cars_api, name="cars_api"),
+    path("api/set_stage", views.api_set_stage, name="api_set_stage"),
+    path("api/add_car", views.api_add_car, name="api_add_car"),
+    path("api/users", views.api_users, name="api_users"),
+
     # QR
     path("qr/<str:code>.png", views.qr_png, name="qr_png"),
     path("cars/qr-print/", views.qr_print, name="qr_print"),

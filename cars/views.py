@@ -2,6 +2,7 @@
 วิวระบบติดตามรถ: dashboard / kanban / รายการรถ / เพิ่ม-แก้-ลบ / สแกนเปลี่ยนสเตป / QR
 """
 import io
+import json
 
 import qrcode
 from django.contrib import messages
@@ -11,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from . import constants as C
 from . import roles
@@ -368,3 +370,133 @@ def manage_users(request):
         for u in User.objects.order_by("-is_active", "username")
     ]
     return render(request, "manage_users.html", {"rows": rows, "roles": roles.ROLES})
+
+
+# =========================================================
+#  JSON API — สำหรับเรนเดอร์ "สถานะรถ" ในหน้า sales (native, ไม่ใช้ iframe)
+# =========================================================
+def _to_int(s):
+    if s in (None, ""):
+        return None
+    try:
+        import re as _re
+        return int(_re.sub(r"[^\d]", "", str(s)) or 0) or None
+    except (ValueError, TypeError):
+        return None
+
+
+@login_required
+def cars_api(request):
+    """ข้อมูล dashboard ติดตามรถ (counts + รายการรถ) เป็น JSON → sales เรนเดอร์เองด้วยธีมเดียวกัน."""
+    all_cars = list(Car.objects.all())
+    flags = {"red": 0, "amber": 0, "ok": 0}
+    counts = {k: 0 for k in C.STAGE_KEYS}
+    for c in all_cars:
+        flags[c.flag] += 1
+        counts[c.stage] = counts.get(c.stage, 0) + 1
+    phase_rows = [
+        {"name": pn, "stages": [
+            {"key": k, "name": C.STAGE_NAME[k], "icon": C.STAGE_ICON[k], "n": counts.get(k, 0)}
+            for k in keys
+        ]} for _, pn, keys in C.PHASES
+    ]
+    t2ls = [c.t2l for c in all_cars if c.t2l is not None]
+    avg = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
+    cars = [{
+        "code": c.code, "title": c.title, "plate": c.plate, "branch": c.branch_name,
+        "brand": c.brand, "model": c.model, "stage": c.stage, "stageName": c.stage_name,
+        "stageIcon": c.stage_icon, "flag": c.flag, "days": c.days_in_stage,
+        "price": (c.extra or {}).get("price"),
+    } for c in all_cars]
+    return JsonResponse({
+        "total": len(all_cars), "flags": flags, "phaseRows": phase_rows,
+        "avgT2l": avg, "t2lTarget": C.T2L_TARGET_DAYS,
+        "branches": branch_pairs(), "stages": [[k, n] for k, n, _ in C.STAGES], "cars": cars,
+        "canAdd": roles.can_add_car(request.user),
+        "canManageUsers": roles.can_manage_users(request.user),
+        "canViewAdmin": roles.can_view_admin(request.user),
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+@login_required
+@require_POST
+def api_set_stage(request):
+    """เปลี่ยนสเตปจากหน้า sales (POST JSON {code, stage}) — Exec/Purchasing เท่านั้น (direct)."""
+    data = json.loads(request.body or "{}")
+    car = get_object_or_404(Car, code=data.get("code"))
+    stage = data.get("stage", "")
+    if not roles.can_set_stage_direct(request.user, stage):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (บทบาททำงานต้องสแกน QR)"}, status=403)
+    actor = _actor(request.user)
+    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor)
+    if should_notify:
+        notify_stage_change(car, worker_name=actor)
+    return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,
+                         "flag": car.flag, "days": car.days_in_stage})
+
+
+@login_required
+@require_POST
+def api_add_car(request):
+    """เพิ่มรถจากหน้า sales (POST JSON) — gen code อัตโนมัติ."""
+    if not roles.can_add_car(request.user):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เพิ่มรถ"}, status=403)
+    d = json.loads(request.body or "{}")
+    car = Car(
+        branch=(d.get("branch") or C.DEFAULT_BRANCH),
+        plate=(d.get("plate") or "")[:20], brand=(d.get("brand") or "")[:40],
+        model=(d.get("model") or "")[:60], color=(d.get("color") or "")[:30],
+        year=_to_int(d.get("year")), km=_to_int(d.get("km")),
+        note=(d.get("note") or "")[:5000],
+    )
+    car.save()
+    return JsonResponse({"ok": True, "code": car.code})
+
+
+@login_required
+def api_users(request):
+    """จัดการผู้ใช้/บทบาทระบบรถ จากเมนูจัดการของ sales (GET=list, POST=action) — Exec/Admin."""
+    if not roles.can_manage_users(request.user):
+        return JsonResponse({"ok": False, "error": "ต้องเป็น Executive/Admin"}, status=403)
+
+    if request.method == "POST":
+        d = json.loads(request.body or "{}")
+        action = d.get("action", "")
+        if action == "create":
+            username = (d.get("username") or "").strip()
+            password = d.get("password") or ""
+            if not username or not password:
+                return JsonResponse({"ok": False, "error": "ต้องกรอกชื่อผู้ใช้+รหัสผ่าน"}, status=400)
+            if User.objects.filter(username__iexact=username).exists():
+                return JsonResponse({"ok": False, "error": f"มีผู้ใช้ '{username}' แล้ว"}, status=400)
+            u = User.objects.create_user(username=username, password=password)
+            if d.get("full_name"):
+                u.first_name = d["full_name"][:150]
+                u.save(update_fields=["first_name"])
+            if d.get("role"):
+                roles.set_user_role(u, d["role"])
+            return JsonResponse({"ok": True})
+        u = User.objects.filter(pk=d.get("user_id")).first()
+        if not u:
+            return JsonResponse({"ok": False, "error": "ไม่พบผู้ใช้"}, status=404)
+        if u.is_superuser:
+            return JsonResponse({"ok": False, "error": "แก้ superuser ไม่ได้ (เป็นผู้บริหารเสมอ)"}, status=400)
+        if action == "set_role":
+            roles.set_user_role(u, d.get("role") or "")
+        elif action == "toggle_active":
+            u.is_active = not u.is_active
+            u.save(update_fields=["is_active"])
+        elif action == "reset_password":
+            if not d.get("password"):
+                return JsonResponse({"ok": False, "error": "ต้องระบุรหัสใหม่"}, status=400)
+            u.set_password(d["password"])
+            u.save(update_fields=["password"])
+        return JsonResponse({"ok": True})
+
+    users = [{
+        "id": u.pk, "username": u.username, "name": u.get_full_name(),
+        "role": roles.get_role(u), "roleLabel": roles.role_label(u),
+        "active": u.is_active, "isSuper": u.is_superuser,
+    } for u in User.objects.order_by("-is_active", "username")]
+    return JsonResponse({"ok": True, "users": users, "roles": [[k, v] for k, v in roles.ROLES]},
+                        json_dumps_params={"ensure_ascii": False})

@@ -1232,7 +1232,7 @@
             <button onclick="openSheetsPanel()" title="ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bar-chart-3',16)} แหล่งข้อมูล (Sheets)</button>
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:search',16)} ตรวจ Log ข้อมูล</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:save',16)} ส่งคะแนนเข้าชีต</button>
-            <button onclick="window.open('/track/','_blank')" title="ระบบติดตามรถ — จัดการรถ/สเตป/QR + จัดการผู้ใช้และบทบาท (เปิดเต็มจอ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;border-top:.5px solid var(--bd);margin-top:2px;padding-top:9px;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:car-front',16)} จัดการระบบติดตามรถ</button>
+            <button onclick="openTrkUsers()" title="จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;border-top:.5px solid var(--bd);margin-top:2px;padding-top:9px;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:car-front',16)} บทบาทระบบติดตามรถ</button>
           </div>
         </details>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
@@ -1293,6 +1293,7 @@
       root.innerHTML = html;
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
       if(tab==='o') initCharts();
+      if(tab==='t') loadTracking();   // "สถานะรถ" เรนเดอร์ native (fetch /track/api/cars) ธีมเดียวกับ sales
       requestAnimationFrame(positionNavInd);
 
       // คืน focus + cursor ให้ input ที่กำลังพิมพ์ก่อน rebuild — กัน bug "ลบได้ทีละตัวต้องคลิกใหม่"
@@ -1330,15 +1331,6 @@
       __navIndLast = target;
     }
     window.addEventListener('resize', positionNavInd);
-
-    // แท็บ "สถานะรถ" (iframe /track/) — ปรับความสูง iframe เท่าเนื้อหา (ไม่มีสกรอลล์ใน) + เลื่อนหา popup
-    window.addEventListener('message', function(e){
-      const d = e.data || {};
-      const f = document.getElementById('trackFrame');
-      if (!f) return;
-      if (d.oxletTrackHeight) f.style.height = (d.oxletTrackHeight + 4) + 'px';
-      if (d.oxletScrollTop) { try { f.scrollIntoView({behavior:'smooth', block:'start'}); } catch(_){ window.scrollTo(0, f.offsetTop); } }
-    });
 
     // ── Charts (Chart.js) ──
     const __charts = {};
@@ -3525,11 +3517,184 @@
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
 
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
-    function renderTracking(){
-      // iframe ขยายสูงเท่าเนื้อหา (ไม่มีสกรอลล์ใน/ไม่มีกรอบ) → เลื่อนเป็นหน้าเดียวกับ sales
-      // ความสูงปรับอัตโนมัติจาก postMessage ของ /track/ (ดู listener ด้านล่าง)
-      return `<div style="text-align:right;margin-bottom:6px"><a href="/track/" target="_blank" style="color:var(--blue);font-weight:600;font-size:12px">เปิดเต็มจอ ↗</a></div>
-        <iframe id="trackFrame" src="/track/" title="สถานะรถ" scrolling="no" style="width:100%;border:0;display:block;min-height:600px;background:transparent"></iframe>`;
+    // ── "สถานะรถ" เรนเดอร์ native ในหน้า sales (ธีม/สีเดียวกัน · ไม่ใช้ iframe) ──
+    const TRK_FLAG = {red:'#ef4444', amber:'#f59e0b', ok:'#22c55e'};
+    let _trkData = null, _trkF = {branch:'', stage:'', sort:'days'};
+    function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
+
+    async function loadTracking(force){
+      const el = document.getElementById('trk'); if(!el) return;
+      if(force) _trkData = null;
+      if(!_trkData){
+        try { _trkData = await (await fetch('/track/api/cars',{credentials:'same-origin'})).json(); }
+        catch(e){ el.innerHTML = '<div style="padding:24px;color:var(--red)">โหลดข้อมูลรถไม่ได้ — ลองรีเฟรช</div>'; return; }
+      }
+      renderTrk();
+    }
+
+    function renderTrk(){
+      const D = _trkData, el = document.getElementById('trk'); if(!el||!D) return;
+      let cars = D.cars.slice();
+      if(_trkF.branch) cars = cars.filter(c=>c.branch===_trkF.branch);
+      if(_trkF.stage)  cars = cars.filter(c=>c.stage===_trkF.stage);
+      if(_trkF.sort==='days') cars.sort((a,b)=>b.days-a.days);
+      else if(_trkF.sort==='code') cars.sort((a,b)=>(a.code>b.code?1:-1));
+      const btn = (on,txt)=>`<button class="${on}" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${txt}</button>`;
+      let h2 = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div><div style="font-size:18px;font-weight:800;color:var(--t1)">สถานะรถ</div><div class="mut" style="font-size:12px">ทั้งหมด ${D.total} คัน</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${D.canAdd?`<button onclick="openTrkAdd()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">+ เพิ่มรถ</button>`:''}
+          ${D.canViewAdmin?`<a href="/track/cars/qr-print/" target="_blank" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);text-decoration:none">พิมพ์ QR</a>`:''}
+          ${D.canManageUsers?`<button onclick="openTrkUsers()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ผู้ใช้/บทบาท</button>`:''}
+        </div></div>`;
+      // KPI
+      const kpi = (lbl,val,col)=>`<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px"><div class="mut" style="font-size:11px">${lbl}</div><div style="font-size:24px;font-weight:800;${col?'color:'+col:''}">${val}</div></div>`;
+      h2 += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+        ${kpi('รถทั้งหมด',D.total)}${kpi('ใกล้ค้าง (≥2 วัน)',D.flags.amber,TRK_FLAG.amber)}${kpi('ค้างนาน (&gt;3 วัน)',D.flags.red,TRK_FLAG.red)}${kpi('T2L เฉลี่ย (เป้า ≤'+D.t2lTarget+')',D.avgT2l!=null?D.avgT2l:'—')}</div>`;
+      // stage counts (กดกรอง)
+      h2 += `<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px">`;
+      D.phaseRows.forEach(ph=>{
+        h2 += `<div class="mut" style="font-size:11px;margin:6px 0 5px">${ph.name}</div><div style="display:flex;gap:6px;flex-wrap:wrap">`;
+        ph.stages.forEach(s=>{ const on=_trkF.stage===s.key; h2+=`<span onclick="trkSetStage('${s.key}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;background:var(--bg2);border:.5px solid ${on?'var(--blue)':'var(--bd)'};color:var(--t1)">${ic(s.icon,13)} ${h(s.name)} <b>${s.n}</b></span>`; });
+        h2 += `</div>`;
+      });
+      h2 += `</div>`;
+      // filters + table
+      h2 += `<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
+          <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
+          <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="days" ${_trkF.sort==='days'?'selected':''}>ค้างนานสุด</option><option value="code" ${_trkF.sort==='code'?'selected':''}>รหัสรถ</option></select>
+          ${(_trkF.branch||_trkF.stage)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
+          <span class="mut" style="font-size:12px;margin-left:auto">${cars.length} คัน · กดแถวดูรายละเอียด</span>
+        </div>
+        <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:8px">รหัส</th><th style="padding:8px">รถ</th><th style="padding:8px">สาขา</th><th style="padding:8px">สเตป</th><th style="padding:8px">ค้าง</th></tr></thead>
+          <tbody>${cars.map(c=>`<tr onclick="openTrkCar('${c.code}')" style="cursor:pointer;border-top:.5px solid var(--bd)">
+            <td style="padding:8px"><b>${h(c.code)}</b></td>
+            <td style="padding:8px">${h(c.title||'')}${c.plate?`<div class="mut" style="font-size:11px">${h(c.plate)}</div>`:''}</td>
+            <td style="padding:8px;color:var(--t2)">${h(c.branch||'')}</td>
+            <td style="padding:8px"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">${ic(c.stageIcon,13)} ${h(c.stageName)}</span></td>
+            <td style="padding:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${TRK_FLAG[c.flag]||'#888'}"></span> ${c.days} วัน</td>
+          </tr>`).join('')||`<tr><td colspan="5" class="mut" style="padding:24px;text-align:center">ไม่มีรถตามตัวกรอง</td></tr>`}</tbody>
+        </table></div>
+      </div>`;
+      el.innerHTML = h2;
+      if(window.lucide) lucide.createIcons();
+    }
+    function trkSetStage(k){ _trkF.stage = (_trkF.stage===k?'':k); renderTrk(); }
+
+    function _trkOverlay(id, inner){
+      const old=document.getElementById(id); if(old) old.remove();
+      const ov=document.createElement('div'); ov.id=id;
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
+      ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+      ov.innerHTML=`<div style="background:var(--card);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:600px;width:100%">${inner}</div>`;
+      document.body.appendChild(ov); if(window.lucide) lucide.createIcons(); return ov;
+    }
+
+    async function openTrkCar(code){
+      const ov=_trkOverlay('trk-car','<p class="mut">กำลังโหลด…</p>');
+      let d; try{ d=await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json',{credentials:'same-origin'})).json(); }
+      catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      const kv=(k,v)=>(v!==''&&v!=null)?`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:.5px solid var(--bd);font-size:13px"><span class="mut">${h(k)}</span><span style="text-align:right">${h(String(v))}</span></div>`:'';
+      const dump=o=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut">—</span>';
+      const logs=(d.logs||[]).map(l=>`<div style="font-size:12px;padding:5px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}</div>`).join('')||'<span class="mut" style="font-size:12px">ยังไม่มีประวัติ</span>';
+      const stages = (d.direct&&d.direct.length) ? d.direct.map(s=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">${h(s.name)}</button>`).join(' ') : `<a href="${d.scanUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+      const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div><div style="font-size:18px;font-weight:800">${h(d.code)}</div><div class="mut" style="font-size:12px">${h(d.title||'')} ${d.plate?'· '+h(d.plate):''}</div></div>
+          <button onclick="document.getElementById('trk-car').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
+          <span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">${h(d.stageName)}</span>
+          <span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TRK_FLAG[d.flag]||'#888'}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
+          ${d.t2l!=null?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">T2L ${d.t2l} วัน</span>`:''}
+          ${d.price?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px;font-weight:700">฿ ${h(String(d.price))}</span>`:''}
+        </div>
+        ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px">`:''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+          ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}${kv('สี',d.color)}${kv('เลขไมล์',d.km)}${kv('วันรับเข้า',d.dateIn)}${kv('ครบกำหนดภาษี',d.taxDue)}
+        </div>
+        ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="mut" style="cursor:pointer;font-size:12px">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
+        ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
+        <div class="mut" style="font-size:12px;margin:14px 0 6px">เปลี่ยนสเตป</div><div style="display:flex;gap:6px;flex-wrap:wrap">${stages}</div>
+        <div class="mut" style="font-size:12px;margin:14px 0 6px">ประวัติการสแกน</div><div style="max-height:150px;overflow:auto">${logs}</div>
+        <div style="display:flex;justify-content:space-between;margin-top:14px">
+          <a href="${d.qrUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปิด QR</a>
+          ${d.canEdit?`<a href="${d.editUrl}" target="_blank" style="font-size:12px;color:var(--blue)">แก้ไขข้อมูล</a>`:''}
+        </div>`;
+    }
+    async function trkChangeStage(code,stage){
+      try{
+        const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage})});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'เปลี่ยนสเตปไม่สำเร็จ'); return; }
+        document.getElementById('trk-car').remove(); loadTracking(true);
+      }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+
+    function openTrkAdd(){
+      const D=_trkData||{branches:[]};
+      const f=(lbl,inp)=>`<div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">${lbl}</label>${inp}</div>`;
+      const inp=(id,ph)=>`<input id="${id}" placeholder="${ph||''}" style="width:100%;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);box-sizing:border-box">`;
+      _trkOverlay('trk-add',`<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">เพิ่มรถ</div><button onclick="document.getElementById('trk-add').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div style="margin-top:12px">
+          ${f('สาขา',`<select id="ta_branch" style="width:100%;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${D.branches.map(b=>`<option value="${h(b[0])}">${h(b[1])}</option>`).join('')}</select>`)}
+          ${f('ทะเบียน',inp('ta_plate','เช่น 1กก1234'))}
+          ${f('ยี่ห้อ',inp('ta_brand','TOYOTA'))}
+          ${f('รุ่น',inp('ta_model','Altis'))}
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">${f('ปี',inp('ta_year','2020'))}${f('สี',inp('ta_color','ขาว'))}${f('เลขไมล์',inp('ta_km','50000'))}</div>
+          ${f('หมายเหตุ',inp('ta_note',''))}
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="document.getElementById('trk-add').remove()" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ยกเลิก</button><button onclick="addTrkCar()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">บันทึก</button></div>
+        </div>`);
+    }
+    async function addTrkCar(){
+      const v=id=>(document.getElementById(id)||{}).value||'';
+      const body={branch:v('ta_branch'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),note:v('ta_note')};
+      try{
+        const r=await fetch('/track/api/add_car',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มรถไม่สำเร็จ'); return; }
+        document.getElementById('trk-add').remove(); loadTracking(true);
+      }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+
+    async function openTrkUsers(){
+      const ov=_trkOverlay('trk-users','<p class="mut">กำลังโหลด…</p>');
+      await renderTrkUsers(ov);
+    }
+    async function renderTrkUsers(ov){
+      ov=ov||document.getElementById('trk-users'); if(!ov) return;
+      let d; try{ d=await (await fetch('/track/api/users',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const roleOpts=sel=>`<option value="">— ไม่มี —</option>`+d.roles.map(r=>`<option value="${r[0]}" ${sel===r[0]?'selected':''}>${h(r[1])}</option>`).join('');
+      const rows=d.users.map(u=>`<tr style="border-top:.5px solid var(--bd)">
+        <td style="padding:7px"><b>${h(u.username)}</b>${u.name?`<div class="mut" style="font-size:11px">${h(u.name)}</div>`:''}${u.isSuper?'<span class="mut" style="font-size:10px">(superuser)</span>':''}</td>
+        <td style="padding:7px">${u.isSuper?'<span class="mut" style="font-size:12px">ผู้บริหารเสมอ</span>':`<select onchange="trkUserAction('set_role',${u.id},{role:this.value})" style="font-size:12px;padding:5px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${roleOpts(u.role)}</select>`}</td>
+        <td style="padding:7px;text-align:right">${u.isSuper?'':`<button onclick="trkUserAction('toggle_active',${u.id})" style="font-size:11px;padding:5px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:${u.active?'var(--red)':'var(--t2)'};cursor:pointer">${u.active?'ปิด':'เปิด'}</button>`}</td>
+      </tr>`).join('');
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">จัดการผู้ใช้/บทบาท (ระบบรถ)</div><button onclick="document.getElementById('trk-users').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:12px 0">
+          <div class="mut" style="font-size:12px;margin-bottom:8px">เพิ่มผู้ใช้ใหม่ (สำหรับช่าง/ฝ่ายทะเบียน ที่ login ด้วยรหัส)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input id="tu_user" placeholder="ชื่อผู้ใช้" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+            <input id="tu_pass" placeholder="รหัสผ่าน" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+            <input id="tu_name" placeholder="ชื่อ-สกุล" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+            <select id="tu_role" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">${roleOpts('')}</select>
+          </div>
+          <button onclick="trkUserCreate()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:12px">เพิ่มผู้ใช้</button>
+        </div>
+        <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">ผู้ใช้</th><th style="padding:7px">บทบาท</th><th style="padding:7px"></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    async function trkUserAction(action,user_id,extra){
+      try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(Object.assign({action,user_id},extra||{}))});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'ไม่สำเร็จ'); } renderTrkUsers(); }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+    async function trkUserCreate(){
+      const v=id=>(document.getElementById(id)||{}).value||'';
+      try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'create',username:v('tu_user'),password:v('tu_pass'),full_name:v('tu_name'),role:v('tu_role')})});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มไม่สำเร็จ'); return; } renderTrkUsers(); }catch(e){ alert('ผิดพลาด: '+e); }
     }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น
