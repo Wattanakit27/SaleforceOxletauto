@@ -5,8 +5,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+<script>
+  // ฝังในแท็บ "สถานะรถ" ของ sales (iframe) → ซ่อน header ของ tracking กันหัวซ้ำ 2 ชั้น
+  // เปิดเต็มจอ (แท็บใหม่) = ไม่ได้อยู่ใน iframe → header แสดงปกติ
+  try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); }
+  catch (e) { document.documentElement.classList.add('embedded'); }
+</script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
+  html.embedded header.top{display:none!important}
+  html.embedded .wrap{padding-top:10px}
   :root{--bg:#0f1220;--card:#1a1f33;--mut:#8b93a7;--line:#2a3147;--fg:#e8ebf5;
         --ok:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;--accent:#6366f1}
   *{box-sizing:border-box}
