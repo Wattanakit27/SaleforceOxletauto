@@ -59,16 +59,24 @@ def dashboard(request):
     t2ls = [c.t2l for c in all_cars if c.t2l is not None]
     avg_t2l = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
 
-    # ตารางรถ (รวม car_list เดิมมาไว้หน้าเดียว) — ตัวกรอง สาขา/สเตป + เรียง
+    # ตารางรถ (รวม car_list เดิมมาไว้หน้าเดียว) — กรอง/เรียงใน Python จาก all_cars
+    # (ดึง DB ครั้งเดียว ไม่ query ซ้ำ — ลด round-trip ข้ามภูมิภาคไป Supabase Sydney)
     branch = request.GET.get("branch", "")
     stage = request.GET.get("stage", "")
     sort = request.GET.get("sort", "updated")
-    qs = Car.objects.all()
+    cars = all_cars
     if branch:
-        qs = qs.filter(branch=branch)
+        cars = [c for c in cars if c.branch == branch]
     if stage:
-        qs = qs.filter(stage=stage)
-    cars = list(qs.order_by(*SORT_MAP.get(sort, ("-updated_at",))))
+        cars = [c for c in cars if c.stage == stage]
+    if sort == "stuck":
+        cars = sorted(cars, key=lambda c: c.stage_since)
+    elif sort == "newest":
+        cars = sorted(cars, key=lambda c: c.date_in, reverse=True)
+    elif sort == "code":
+        cars = sorted(cars, key=lambda c: c.code)
+    else:  # updated (default)
+        cars = sorted(cars, key=lambda c: c.updated_at, reverse=True)
 
     return render(request, "dashboard.html", {
         "total": len(all_cars), "flags": flags, "phase_rows": phase_rows,
