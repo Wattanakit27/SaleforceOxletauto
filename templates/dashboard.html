@@ -122,7 +122,8 @@
     let d;
     try{ d=await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json')).json(); }
     catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }
-    const kv=(k,v)=> v?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
+    const kv=(k,v)=> (v!==''&&v!=null)?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
+    const dump=(o)=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut sm">—</span>';
     const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||'<span class="mut sm">ยังไม่มีประวัติ</span>';
     let stageBtns;
     if(d.direct && d.direct.length){
@@ -140,6 +141,7 @@
         <span class="pill">${d.stageName}</span>
         <span class="pill"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
+        ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
       ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px">`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
@@ -149,6 +151,8 @@
         ${kv('วันรับเข้า',d.dateIn)}${kv('สถานะเล่ม',d.bookStatus)}
         ${kv('ครบกำหนดภาษี',d.taxDue)}${kv('หมายเหตุ',d.note)}
       </div>
+      ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
+      ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
       <div class="sm mut" style="margin:14px 0 6px">เปลี่ยนสเตป</div>
       <div class="row" style="gap:6px">${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">ประวัติการสแกน</div>

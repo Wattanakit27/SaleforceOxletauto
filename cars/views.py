@@ -116,6 +116,10 @@ def car_json(request, code):
         "scanUrl": f"/track/scan/{car.code}/",
         "editUrl": f"/track/cars/{car.code}/edit/",
         "logs": logs, "direct": direct, "canEdit": roles.can_edit_car(request.user),
+        # ข้อมูลนำเข้า (ราคา/เจ้าของ/รายละเอียดเครื่องยนต์ ฯลฯ) — เก็บครบใน extra
+        "price": (car.extra or {}).get("price"),
+        "owner": (car.extra or {}).get("owner") or {},
+        "detail": (car.extra or {}).get("detail") or {},
     }, json_dumps_params={"ensure_ascii": False})
 
 

@@ -37,6 +37,9 @@ class Car(models.Model):
     photo = models.ImageField("รูปรถ", upload_to="cars/%Y/%m/", null=True, blank=True)
     note = models.TextField("หมายเหตุ", blank=True)
 
+    # ข้อมูลดิบจากการนำเข้า (detail/owner/price/รูป ฯลฯ) — เก็บครบเป๊ะ ไม่ตกหล่น
+    extra = models.JSONField("ข้อมูลเพิ่มเติม (นำเข้า)", default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -195,11 +198,19 @@ def branch_pairs(active_only=True):
     return pairs or list(C.BRANCH_CHOICES)
 
 
+_branch_name_cache = {}
+
+
 def branch_name(code):
-    """ชื่อสาขาจาก code — constant ก่อน (ไม่ยิง query) แล้วค่อย DB"""
+    """ชื่อสาขาจาก code — constant ก่อน (ไม่ยิง query) · DB-driven cache ต่อ process
+    (กัน N+1 ตอนแสดงรถหลายร้อยคันในหน้าเดียว — branch code นอก constant เช่น BK/ON)"""
     if not code:
         return "—"
     if code in C.BRANCH_PREFIX:
         return C.BRANCH_PREFIX[code]
+    if code in _branch_name_cache:
+        return _branch_name_cache[code]
     b = Branch.objects.filter(code=code).first()
-    return b.name if b else code
+    name = b.name if b else code
+    _branch_name_cache[code] = name
+    return name
