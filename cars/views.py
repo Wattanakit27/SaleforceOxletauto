@@ -106,15 +106,24 @@ def _media_urls(lst, photo_name=None):
     return out
 
 
+def _fetch_logs(car, limit):
+    """คืน (list ของ log objects, has_media) — fallback ถ้าคอลัมน์ media ยังไม่ถูก migrate (ช่วง deploy)"""
+    try:
+        return list(car.logs.all()[:limit]), True
+    except Exception:
+        return list(car.logs.all()[:limit].defer("media")), False
+
+
 @login_required
 def car_json(request, code):
     """รายละเอียดรถ (สำหรับ popup ในหน้าเดียว) — ฟิลด์ + ประวัติสแกน + สเตปที่เปลี่ยนได้."""
     car = get_object_or_404(Car, code=code)
+    _log_objs, _hm = _fetch_logs(car, 50)
     logs = [{
         "stage": l.stage_name, "worker": l.worker_name,
         "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
-        "media": _media_urls(l.media, l.photo.name if l.photo else None),
-    } for l in car.logs.all()[:50]]
+        "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
+    } for l in _log_objs]
     # สเตปที่ "เปลี่ยนตรงผ่าน UI" ได้ (Exec/Purchasing) · บทบาททำงานเปลี่ยนผ่านสแกนเท่านั้น
     if roles.is_worker(request.user) or not roles.can_view_admin(request.user):
         direct = []
@@ -260,12 +269,13 @@ def car_stage(request, code):
 def scan_page(request, code):
     car = get_object_or_404(Car, code=code)
     stages = _stage_options(roles.allowed_stages(request.user))
+    _log_objs, _hm = _fetch_logs(car, 20)
     logs = [{
         "stageKey": l.stage, "stageName": l.stage_name, "stageIcon": l.stage_icon,
         "at": timezone.localtime(l.created_at).strftime("%d/%m %H:%M"),
         "worker": l.worker_name, "note": l.note,
-        "media": _media_urls(l.media, l.photo.name if l.photo else None),
-    } for l in car.logs.all()[:20]]
+        "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
+    } for l in _log_objs]
     return render(request, "scan.html", {
         "car": car, "stages": stages, "logs": logs, "actor": _actor(request.user),
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
