@@ -3740,6 +3740,9 @@
             <button onclick="trkUserCreate()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:12px">เพิ่มบัญชี</button>
           </div>
           <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">ผู้ใช้</th><th style="padding:7px">บทบาท</th><th style="padding:7px"></th></tr></thead><tbody>${rows}</tbody></table></div>
+        </details>
+        <details style="margin-top:10px"><summary class="mut" style="cursor:pointer;font-size:12px">ℹ️ แต่ละบทบาททำอะไรได้</summary>
+          <div style="margin-top:8px">${(d.roleHelp||[]).map(r=>`<div style="padding:8px 0;border-bottom:.5px solid var(--bd)"><b style="font-size:13px">${h(r.label)}</b>${r.scanOnly?' <span class="mut" style="font-size:11px">(เปลี่ยนสเตปผ่านสแกน QR เท่านั้น)</span>':''}<div class="mut" style="font-size:12px;margin:2px 0">${h(r.cap)}</div>${r.stages.length?`<div class="mut" style="font-size:11px">สเตปที่เปลี่ยนได้: ${r.stages.map(h).join(' · ')}</div>`:''}</div>`).join('')}</div>
         </details>`;
     }
     async function trkUserAction(action,user_id,extra){

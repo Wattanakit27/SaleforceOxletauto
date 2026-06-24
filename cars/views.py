@@ -544,8 +544,26 @@ def api_users(request):
         "role": roles.get_role(u), "roleLabel": roles.role_label(u),
         "active": u.is_active, "isSuper": u.is_superuser,
     } for u in User.objects.exclude(username__startswith="line_").order_by("-is_active", "username")]
+    # คำอธิบายบทบาท (สร้างจาก roles.py ให้ตรงเสมอ) — แต่ละบทบาทเปลี่ยนสเตปไหนได้ + ทำอะไรได้
+    role_stages = {k: [] for k, _ in roles.ROLES}
+    for st, rset in roles.STAGE_ROLES.items():
+        for rk in rset:
+            if rk in role_stages:
+                role_stages[rk].append(C.STAGE_NAME.get(st, st))
+    _caps = {
+        roles.EXEC: "ทุกอย่าง — เปลี่ยนทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
+        roles.PURCHASING: "เพิ่ม/แก้รถ + เปลี่ยนสเตปตรงผ่านจอ (ไม่ต้องสแกน)",
+        roles.ADMIN: "แก้ข้อมูลรถ + ลบรถ + จัดการบทบาท (ไม่เปลี่ยนสเตปงานช่าง)",
+        roles.SALES: "สแกน QR เปลี่ยนสเตป (งานตรวจ/ขาย)",
+        roles.TECH: "สแกน QR เปลี่ยนสเตป (งานช่าง)",
+        roles.VENDOR: "สแกน QR เปลี่ยนสเตป (งานอู่นอก)",
+        roles.REGIST: "สแกน QR เปลี่ยนสเตป (ทะเบียน)",
+    }
+    role_help = [{"label": lbl, "cap": _caps.get(k, ""),
+                  "stages": role_stages.get(k, []),
+                  "scanOnly": k in roles.SCAN_ONLY_ROLES} for k, lbl in roles.ROLES]
     return JsonResponse({"ok": True, "lineUsers": line_users, "users": users,
-                         "roles": [[k, v] for k, v in roles.ROLES]},
+                         "roles": [[k, v] for k, v in roles.ROLES], "roleHelp": role_help},
                         json_dumps_params={"ensure_ascii": False})
 
 
