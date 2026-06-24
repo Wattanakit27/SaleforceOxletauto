@@ -11,6 +11,7 @@ import_cars — นำเข้าเคสรถจริงจากไฟล�
 - detail/owner/price/image_files เก็บครบใน Car.extra (เป๊ะ ไม่ตกหล่น)
 """
 import json
+import os
 import re
 import zipfile
 from datetime import datetime
@@ -90,22 +91,34 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=0, help="จำกัดจำนวน (ทดสอบ)")
 
     def handle(self, *args, **opts):
-        zip_path = opts["zip_path"]
-        try:
-            z = zipfile.ZipFile(zip_path)
-        except Exception as e:
-            raise CommandError(f"เปิด zip ไม่ได้: {e}")
+        src = opts["zip_path"]
+        # รับได้ทั้ง zip และโฟลเดอร์ (cars.json + images/)
+        if os.path.isdir(src):
+            cars_raw = open(os.path.join(src, "cars.json"), encoding="utf-8").read()
+            img_index = {}
+            imgroot = os.path.join(src, "images")
+            if os.path.isdir(imgroot):
+                for root, _dirs, files in os.walk(imgroot):
+                    for fn in files:
+                        if fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                            img_index[fn] = os.path.join(root, fn)
+            read_img = lambda p: open(p, "rb").read()
+        else:
+            try:
+                z = zipfile.ZipFile(src)
+            except Exception as e:
+                raise CommandError(f"เปิดไฟล์ไม่ได้ (ต้องเป็น zip หรือโฟลเดอร์): {e}")
+            cars_raw = z.read("cars.json").decode("utf-8")
+            img_index = {}
+            for n in z.namelist():
+                if n.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    img_index[n.rsplit("/", 1)[-1]] = n
+            read_img = z.read
 
-        cars = json.loads(z.read("cars.json").decode("utf-8")).get("cars", [])
+        cars = json.loads(cars_raw).get("cars", [])
         if opts["limit"]:
             cars = cars[: opts["limit"]]
-        self.stdout.write(f"พบ {len(cars)} เคสใน cars.json")
-
-        # map ชื่อไฟล์รูป (hash) → path เต็มใน zip (สำหรับ --images)
-        img_index = {}
-        for n in z.namelist():
-            if n.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                img_index[n.rsplit("/", 1)[-1]] = n
+        self.stdout.write(f"พบ {len(cars)} เคส")
 
         # สร้างสาขา
         for code, name in BRANCH_MAP.values():
@@ -126,7 +139,9 @@ class Command(BaseCommand):
                 date_in = _parse_date(d.get("วันที่ซื้อรถเข้า"))
                 date_in_dt = (timezone.make_aware(datetime(date_in.year, date_in.month, date_in.day))
                               if date_in else now)
-                defaults = dict(
+                # อัปเดตทุกครั้ง (ข้อมูล+extra) แต่ "สเตป/วันที่" ตั้งเฉพาะตอนสร้างใหม่
+                # → re-import ไม่รีเซ็ตสเตปที่แอดมินอาจแก้ไปแล้ว (เติมแค่ข้อมูล+รูป)
+                always = dict(
                     branch=br_code,
                     plate=_plate(car),
                     brand=(car.get("brand") or "").strip()[:40],
@@ -134,9 +149,6 @@ class Command(BaseCommand):
                     year=_int(d.get("รถปี ค.ศ.")),
                     color=(d.get("สี") or "").strip()[:30],
                     km=_int(d.get("เลขไมล์ปัจจุบัน")),
-                    stage=stage,
-                    stage_since=now,
-                    date_in=date_in_dt,
                     status="active",
                     tax_due_date=_parse_date(d.get("วันที่ต่อภาษีรถยนต์")),
                     note=(car.get("note") or "")[:5000],
@@ -152,13 +164,16 @@ class Command(BaseCommand):
                         "image_count": car.get("image_count") or 0,
                     },
                 )
-                obj, is_new = Car.objects.update_or_create(code=code, defaults=defaults)
+                obj, is_new = Car.objects.update_or_create(
+                    code=code, defaults=always,
+                    create_defaults={**always, "stage": stage, "stage_since": now, "date_in": date_in_dt},
+                )
                 created += int(is_new)
                 updated += int(not is_new)
                 by_stage[stage] = by_stage.get(stage, 0) + 1
 
                 if opts["images"]:
-                    self._upload_images(z, img_index, obj, car)
+                    self._upload_images(read_img, img_index, obj, car)
             except Exception as e:
                 errors += 1
                 self.stderr.write(f"  ! {code}: {e}")
@@ -167,17 +182,14 @@ class Command(BaseCommand):
             f"เสร็จ — สร้างใหม่ {created} · อัปเดต {updated} · ข้าม {skipped} · error {errors}"))
         self.stdout.write("ตามสเตป: " + ", ".join(f"{k}={v}" for k, v in by_stage.items()))
 
-    def _upload_images(self, z, img_index, car_obj, car):
-        """อัปรูปคันนี้ขึ้น storage (รูปแรก = car.photo) — ใช้เมื่อ --images และ storage พร้อม"""
+    def _upload_images(self, read_img, img_index, car_obj, car):
+        """อัปรูปปก (รูปแรก) ขึ้น storage — ข้ามคันที่มีรูปแล้ว (เติมเฉพาะที่ขาด)"""
+        if car_obj.photo:
+            return
         from django.core.files.base import ContentFile
-        files = car.get("image_files") or []
-        first = True
-        for fn in files:
-            path = img_index.get(fn)
+        for fn in (car.get("image_files") or []):
+            path = img_index.get(fn) or img_index.get(fn.rsplit("/", 1)[-1])
             if not path:
                 continue
-            data = z.read(path)
-            if first:
-                car_obj.photo.save(fn, ContentFile(data), save=True)
-                first = False
-        # (รูปที่เหลือ: ปัจจุบันเก็บแค่รายการใน extra.image_files — ขยายเป็นแกลเลอรีภายหลังได้)
+            car_obj.photo.save(fn.rsplit("/", 1)[-1], ContentFile(read_img(path)), save=True)
+            return  # รูปแรกพอ (รูปที่เหลืออยู่ใน extra.image_files แล้ว)
