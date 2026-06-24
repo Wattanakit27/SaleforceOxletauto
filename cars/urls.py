@@ -24,6 +24,7 @@ urlpatterns = [
     path("api/delete_car", views.api_delete_car, name="api_delete_car"),
     path("api/restore_car", views.api_restore_car, name="api_restore_car"),
     path("api/trash", views.api_trash, name="api_trash"),
+    path("api/sign_upload", views.api_sign_upload, name="api_sign_upload"),
 
     # QR
     path("qr/<str:code>.png", views.qr_png, name="qr_png"),

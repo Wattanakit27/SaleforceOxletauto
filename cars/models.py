@@ -154,6 +154,8 @@ class ScanLog(models.Model):
     worker_name = models.CharField("ผู้สแกน", max_length=80, blank=True)
     worker_id = models.CharField("LINE userId", max_length=64, blank=True)
     photo = models.ImageField("รูป", upload_to="scans/%Y/%m/", null=True, blank=True)
+    # ไฟล์แนบหลายไฟล์ (รูป/วิดีโอ) — อัปตรงเข้า Supabase Storage แล้วเก็บ path: [{"path":..,"video":bool}]
+    media = models.JSONField("ไฟล์แนบ (รูป/วิดีโอ)", default=list, blank=True)
     note = models.TextField("หมายเหตุ", blank=True)
     created_at = models.DateTimeField("เวลา", auto_now_add=True)
 

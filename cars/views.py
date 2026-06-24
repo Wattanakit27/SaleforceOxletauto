@@ -5,6 +5,7 @@ import io
 import json
 
 import qrcode
+import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -90,6 +91,21 @@ def dashboard(request):
     })
 
 
+def _media_urls(lst, photo_name=None):
+    """สร้าง public URL ของไฟล์แนบ (รูป/วิดีโอ) จาก path ที่เก็บไว้ใน Supabase"""
+    base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
+    bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+    out = []
+    if photo_name:  # back-compat: รูปเดี่ยวแบบเดิม
+        out.append({"url": f"{base}/storage/v1/object/public/{bucket}/{photo_name}", "video": False})
+    for m in (lst or []):
+        p = m.get("path") if isinstance(m, dict) else m
+        if p:
+            out.append({"url": f"{base}/storage/v1/object/public/{bucket}/{p}",
+                        "video": bool(isinstance(m, dict) and m.get("video"))})
+    return out
+
+
 @login_required
 def car_json(request, code):
     """รายละเอียดรถ (สำหรับ popup ในหน้าเดียว) — ฟิลด์ + ประวัติสแกน + สเตปที่เปลี่ยนได้."""
@@ -97,6 +113,7 @@ def car_json(request, code):
     logs = [{
         "stage": l.stage_name, "worker": l.worker_name,
         "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
+        "media": _media_urls(l.media, l.photo.name if l.photo else None),
     } for l in car.logs.all()[:50]]
     # สเตปที่ "เปลี่ยนตรงผ่าน UI" ได้ (Exec/Purchasing) · บทบาททำงานเปลี่ยนผ่านสแกนเท่านั้น
     if roles.is_worker(request.user) or not roles.can_view_admin(request.user):
@@ -243,12 +260,46 @@ def car_stage(request, code):
 def scan_page(request, code):
     car = get_object_or_404(Car, code=code)
     stages = _stage_options(roles.allowed_stages(request.user))
+    logs = [{
+        "stageKey": l.stage, "stageName": l.stage_name, "stageIcon": l.stage_icon,
+        "at": timezone.localtime(l.created_at).strftime("%d/%m %H:%M"),
+        "worker": l.worker_name, "note": l.note,
+        "media": _media_urls(l.media, l.photo.name if l.photo else None),
+    } for l in car.logs.all()[:20]]
     return render(request, "scan.html", {
-        "car": car,
-        "stages": stages,
-        "logs": car.logs.all()[:20],
-        "actor": _actor(request.user),
+        "car": car, "stages": stages, "logs": logs, "actor": _actor(request.user),
+        "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
+        "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
     })
+
+
+@login_required
+@require_POST
+def api_sign_upload(request):
+    """ขอ signed upload URL จาก Supabase (เซิร์ฟเวอร์เซ็นด้วย service_role) → เบราว์เซอร์อัปไฟล์ตรง
+    (ข้ามลิมิต body 4.5MB ของ Vercel · รองรับวิดีโอ/รูปใหญ่)."""
+    key = (getattr(settings, "SUPABASE_SECRET_KEY", "") or "").strip()
+    base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
+    bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+    if not (key and base):
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งค่า storage บนเซิร์ฟเวอร์"}, status=400)
+    import re as _re
+    import uuid as _uuid
+    d = json.loads(request.body or "{}")
+    fn = (d.get("filename") or "file")
+    safe = _re.sub(r"[^A-Za-z0-9._-]", "_", fn)[-50:]
+    path = f"scans/{timezone.now():%Y/%m}/{_uuid.uuid4().hex[:8]}-{safe}"
+    try:
+        r = requests.post(f"{base}/storage/v1/object/upload/sign/{bucket}/{path}",
+                          headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=15)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)[:120]}, status=502)
+    if r.status_code not in (200, 201):
+        return JsonResponse({"ok": False, "error": f"sign fail {r.status_code}: {r.text[:120]}"}, status=400)
+    signed = (r.json() or {}).get("url", "")
+    upload_url = base + ("/storage/v1" + signed if signed.startswith("/object") else signed)
+    return JsonResponse({"ok": True, "uploadUrl": upload_url, "path": path,
+                         "isVideo": bool((d.get("contentType") or "").startswith("video"))})
 
 
 @login_required
@@ -261,8 +312,18 @@ def scan_submit(request, code):
         raise PermissionDenied("บทบาทของคุณไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้")
     note = (request.POST.get("note") or "").strip()
     actor = _actor(request.user)
-    photo = request.FILES.get("photo")
-    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note, photo=photo)
+    # ไฟล์แนบถูกอัปตรงเข้า Supabase แล้ว — รับมาเป็น path list (JSON)
+    try:
+        media = json.loads(request.POST.get("media") or "[]")
+    except (ValueError, TypeError):
+        media = []
+    log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
+    if media:
+        try:  # กันช่วง deploy ที่คอลัมน์ media ยังไม่ migrate — เปลี่ยนสเตปต้องไม่ 500
+            log.media = media
+            log.save(update_fields=["media"])
+        except Exception:
+            pass
     if should_notify:
         notify_stage_change(car, worker_name=actor)
     messages.success(request, f"บันทึกงาน {car.code} แล้ว — สเตปปัจจุบัน: {car.stage_name}")

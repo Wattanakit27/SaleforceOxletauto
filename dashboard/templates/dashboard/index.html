@@ -3633,7 +3633,12 @@
       catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       const kv=(k,v)=>(v!==''&&v!=null)?`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:.5px solid var(--bd);font-size:13px"><span class="mut">${h(k)}</span><span style="text-align:right">${h(String(v))}</span></div>`:'';
       const dump=o=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut">—</span>';
-      const logs=(d.logs||[]).map(l=>`<div style="font-size:12px;padding:5px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}</div>`).join('')||'<span class="mut" style="font-size:12px">ยังไม่มีประวัติ</span>';
+      const logs=(d.logs||[]).map(l=>{
+        const med=(l.media||[]).map(m=>m.video
+          ? `<a href="${m.url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:7px;background:var(--bg2);border:.5px solid var(--bd);font-size:11px;text-decoration:none;color:var(--t1)">▶ วิดีโอ</a>`
+          : `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy" style="width:54px;height:54px;object-fit:cover;border-radius:6px;display:block"></a>`).join('');
+        return `<div style="font-size:12px;padding:6px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}${med?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">${med}</div>`:''}</div>`;
+      }).join('')||'<span class="mut" style="font-size:12px">ยังไม่มีประวัติ</span>';
       const stages = (d.direct&&d.direct.length) ? d.direct.map(s=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">${h(s.name)}</button>`).join(' ') : `<a href="${d.scanUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
       const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
       ov.firstChild.innerHTML=`
