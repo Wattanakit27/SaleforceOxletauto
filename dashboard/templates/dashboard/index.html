@@ -3542,9 +3542,21 @@
       let cars = D.cars.slice();
       if(_trkF.branch) cars = cars.filter(c=>c.branch===_trkF.branch);
       if(_trkF.stage)  cars = cars.filter(c=>c.stage===_trkF.stage);
-      if(_trkF.sort==='photo') cars.sort((a,b)=>((b.photo?1:0)-(a.photo?1:0)) || (a.code<b.code?-1:1));
-      else if(_trkF.sort==='days') cars.sort((a,b)=>b.days-a.days);
-      else if(_trkF.sort==='code') cars.sort((a,b)=>(a.code>b.code?1:-1));
+      const _S={
+        photo:(a,b)=>((b.photo?1:0)-(a.photo?1:0))||(a.code<b.code?-1:1),
+        updated:(a,b)=>(b.updatedTs||0)-(a.updatedTs||0),
+        days:(a,b)=>b.days-a.days,
+        price_asc:(a,b)=>(a.priceNum||0)-(b.priceNum||0),
+        price_desc:(a,b)=>(b.priceNum||0)-(a.priceNum||0),
+        year_desc:(a,b)=>(b.year||0)-(a.year||0),
+        year_asc:(a,b)=>(a.year||0)-(b.year||0),
+        km_asc:(a,b)=>(a.km||0)-(b.km||0),
+        km_desc:(a,b)=>(b.km||0)-(a.km||0),
+        datein_desc:(a,b)=>(b.dateInTs||0)-(a.dateInTs||0),
+        datein_asc:(a,b)=>(a.dateInTs||0)-(b.dateInTs||0),
+        code:(a,b)=>(a.code<b.code?-1:1),
+      };
+      cars.sort(_S[_trkF.sort]||_S.photo);
       const btn = (on,txt)=>`<button class="${on}" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${txt}</button>`;
       let h2 = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:800;color:var(--t1)">สถานะรถ</div><div class="mut" style="font-size:12px">ทั้งหมด ${D.total} คัน · มีรูป ${D.cars.filter(c=>c.photo).length}/${D.total}</div></div>
@@ -3571,7 +3583,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
           <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
           <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
-          <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="photo" ${_trkF.sort==='photo'?'selected':''}>มีรูปก่อน</option><option value="days" ${_trkF.sort==='days'?'selected':''}>ค้างนานสุด</option><option value="code" ${_trkF.sort==='code'?'selected':''}>รหัสรถ</option></select>
+          <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${[['photo','มีรูปก่อน'],['updated','วันที่แก้ไขล่าสุด'],['days','ค้างนานสุด'],['price_asc','ราคาขาย : ต่ำไปสูง'],['price_desc','ราคาขาย : สูงไปต่ำ'],['year_desc','ปี : ใหม่ไปเก่า'],['year_asc','ปี : เก่าไปใหม่'],['km_asc','เลขไมล์ : ต่ำไปสูง'],['km_desc','เลขไมล์ : สูงไปต่ำ'],['datein_desc','วันที่ซื้อรถเข้า : ใหม่ไปเก่า'],['datein_asc','วันที่ซื้อรถเข้า : เก่าไปใหม่'],['code','รหัสรถ']].map(o=>`<option value="${o[0]}" ${_trkF.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
           ${(_trkF.branch||_trkF.stage)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
           <span class="mut" style="font-size:12px;margin-left:auto">${cars.length} คัน · กดแถวดูรายละเอียด</span>
         </div>

@@ -420,6 +420,11 @@ def cars_api(request):
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
             "province": (ex.get("owner") or {}).get("จังหวัด", ""),
+            # สำหรับเรียง: ราคา/ปี/ไมล์/วันรับเข้า/วันแก้ไขล่าสุด
+            "priceNum": ex.get("price_num") or 0,
+            "year": c.year or 0, "km": c.km or 0,
+            "dateInTs": c.date_in.timestamp() if c.date_in else 0,
+            "updatedTs": c.updated_at.timestamp() if c.updated_at else 0,
         })
     return JsonResponse({
         "total": len(all_cars), "flags": flags, "phaseRows": phase_rows,
