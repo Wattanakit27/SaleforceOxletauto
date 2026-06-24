@@ -3519,6 +3519,7 @@
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
     // ── "สถานะรถ" เรนเดอร์ native ในหน้า sales (ธีม/สีเดียวกัน · ไม่ใช้ iframe) ──
     const TRK_FLAG = {red:'#ef4444', amber:'#f59e0b', ok:'#22c55e'};
+    const _trkBanner = (st)=>({sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'}[st]||'#2563eb');
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'days'};
     function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
 
@@ -3568,16 +3569,27 @@
           ${(_trkF.branch||_trkF.stage)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
           <span class="mut" style="font-size:12px;margin-left:auto">${cars.length} คัน · กดแถวดูรายละเอียด</span>
         </div>
-        <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:8px">รหัส</th><th style="padding:8px">รถ</th><th style="padding:8px">สาขา</th><th style="padding:8px">สเตป</th><th style="padding:8px">ค้าง</th></tr></thead>
-          <tbody>${cars.map(c=>`<tr onclick="openTrkCar('${c.code}')" style="cursor:pointer;border-top:.5px solid var(--bd)">
-            <td style="padding:8px"><b>${h(c.code)}</b></td>
-            <td style="padding:8px">${h(c.title||'')}${c.plate?`<div class="mut" style="font-size:11px">${h(c.plate)}</div>`:''}</td>
-            <td style="padding:8px;color:var(--t2)">${h(c.branch||'')}</td>
-            <td style="padding:8px"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">${ic(c.stageIcon,13)} ${h(c.stageName)}</span></td>
-            <td style="padding:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${TRK_FLAG[c.flag]||'#888'}"></span> ${c.days} วัน</td>
-          </tr>`).join('')||`<tr><td colspan="5" class="mut" style="padding:24px;text-align:center">ไม่มีรถตามตัวกรอง</td></tr>`}</tbody>
-        </table></div>
+        <div style="overflow-x:auto">${cars.map((c,i)=>{
+          const ban=_trkBanner(c.stage);
+          const tax=(c.taxNote&&c.taxNote.indexOf('หมด')>=0)?`<span style="background:${c.taxNote.indexOf('ใกล้')>=0?'#f59e0b':'#ef4444'};color:#fff;font-size:10px;padding:2px 7px;border-radius:5px">${c.taxNote.indexOf('ใกล้')>=0?'ภาษีใกล้หมด':'ภาษีหมดอายุ'}</span>`:'';
+          const plate=c.plate?`<span style="background:var(--bg2);border:.5px solid var(--bd);font-size:11px;padding:2px 8px;border-radius:6px">เลขทะเบียน: ${h(c.plate)}${c.province?' ('+h(c.province)+')':''}</span>`:'';
+          const ph=c.photo?`<img src="${c.photo}" loading="lazy" style="width:100%;height:96px;object-fit:cover;display:block">`:`<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--t3);font-size:11px">ไม่มีรูป</div>`;
+          return `<div onclick="openTrkCar('${c.code}')" style="display:flex;gap:12px;padding:14px 4px;border-top:.5px solid var(--bd);cursor:pointer;align-items:flex-start;min-width:680px">
+            <div style="width:22px;color:var(--t3);font-size:12px;flex-shrink:0;padding-top:2px">${i+1}</div>
+            <div style="width:140px;flex-shrink:0;border-radius:8px;overflow:hidden;border:.5px solid var(--bd)"><div style="background:${ban};color:#fff;font-size:11px;font-weight:700;text-align:center;padding:3px">${h(c.stageName)}</div>${ph}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;color:var(--blue);font-size:14px">${h(c.name||c.title)}</div>
+              <div class="mut" style="font-size:11px;margin:2px 0">${h(c.brand||'')}${c.model?' › '+h(c.model):''} · ${h(c.branch||'')}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0">${tax}${plate}</div>
+              ${c.note?`<div class="mut" style="font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${h(c.note)}</div>`:''}
+            </div>
+            <div style="width:104px;text-align:right;flex-shrink:0"><div class="mut" style="font-size:10px">ราคาขาย</div><div style="font-weight:800;font-size:16px;color:var(--t1)">${c.price?h(String(c.price)):'—'}</div></div>
+            <div onclick="event.stopPropagation()" style="width:118px;flex-shrink:0;display:flex;flex-direction:column;gap:6px">
+              <button onclick="openTrkCar('${c.code}')" style="font-size:11px;padding:6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">รายละเอียด</button>
+              <a href="/track/qr/${c.code}.png" target="_blank" style="font-size:11px;padding:6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);text-align:center;text-decoration:none">QR</a>
+            </div>
+          </div>`;
+        }).join('')||`<div class="mut" style="padding:24px;text-align:center">ไม่มีรถตามตัวกรอง</div>`}</div>
       </div>`;
       el.innerHTML = h2;
       if(window.lucide) lucide.createIcons();

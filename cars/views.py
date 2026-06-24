@@ -5,6 +5,7 @@ import io
 import json
 
 import qrcode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -402,12 +403,23 @@ def cars_api(request):
     ]
     t2ls = [c.t2l for c in all_cars if c.t2l is not None]
     avg = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
-    cars = [{
-        "code": c.code, "title": c.title, "plate": c.plate, "branch": c.branch_name,
-        "brand": c.brand, "model": c.model, "stage": c.stage, "stageName": c.stage_name,
-        "stageIcon": c.stage_icon, "flag": c.flag, "days": c.days_in_stage,
-        "price": (c.extra or {}).get("price"),
-    } for c in all_cars]
+    # build public photo URL ตรงจาก Supabase (ไม่ต้องพึ่ง storage backend config บน prod)
+    _base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
+    _bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+    cars = []
+    for c in all_cars:
+        ex = c.extra or {}
+        det = ex.get("detail") or {}
+        photo = f"{_base}/storage/v1/object/public/{_bucket}/{c.photo.name}" if (c.photo and _base) else ""
+        cars.append({
+            "code": c.code, "title": c.title, "name": ex.get("name") or c.title,
+            "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
+            "stage": c.stage, "stageName": c.stage_name, "stageIcon": c.stage_icon,
+            "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
+            "note": c.note, "photo": photo,
+            "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
+            "province": (ex.get("owner") or {}).get("จังหวัด", ""),
+        })
     return JsonResponse({
         "total": len(all_cars), "flags": flags, "phaseRows": phase_rows,
         "avgT2l": avg, "t2lTarget": C.T2L_TARGET_DAYS,
