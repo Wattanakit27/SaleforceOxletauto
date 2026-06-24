@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260606f">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260624a">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -3549,11 +3549,11 @@
           ${D.canManageUsers?`<button onclick="openTrkUsers()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ผู้ใช้/บทบาท</button>`:''}
         </div></div>`;
       // KPI
-      const kpi = (lbl,val,col)=>`<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px"><div class="mut" style="font-size:11px">${lbl}</div><div style="font-size:24px;font-weight:800;${col?'color:'+col:''}">${val}</div></div>`;
+      const kpi = (lbl,val,col)=>`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px"><div class="mut" style="font-size:11px">${lbl}</div><div style="font-size:24px;font-weight:800;${col?'color:'+col:''}">${val}</div></div>`;
       h2 += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
         ${kpi('รถทั้งหมด',D.total)}${kpi('ใกล้ค้าง (≥2 วัน)',D.flags.amber,TRK_FLAG.amber)}${kpi('ค้างนาน (&gt;3 วัน)',D.flags.red,TRK_FLAG.red)}${kpi('T2L เฉลี่ย (เป้า ≤'+D.t2lTarget+')',D.avgT2l!=null?D.avgT2l:'—')}</div>`;
       // stage counts (กดกรอง)
-      h2 += `<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px">`;
+      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px">`;
       D.phaseRows.forEach(ph=>{
         h2 += `<div class="mut" style="font-size:11px;margin:6px 0 5px">${ph.name}</div><div style="display:flex;gap:6px;flex-wrap:wrap">`;
         ph.stages.forEach(s=>{ const on=_trkF.stage===s.key; h2+=`<span onclick="trkSetStage('${s.key}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;background:var(--bg2);border:.5px solid ${on?'var(--blue)':'var(--bd)'};color:var(--t1)">${ic(s.icon,13)} ${h(s.name)} <b>${s.n}</b></span>`; });
@@ -3561,7 +3561,7 @@
       });
       h2 += `</div>`;
       // filters + table
-      h2 += `<div style="background:var(--card);border:.5px solid var(--bd);border-radius:14px;padding:14px">
+      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
           <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
           <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
@@ -3601,7 +3601,7 @@
       const ov=document.createElement('div'); ov.id=id;
       ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
       ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
-      ov.innerHTML=`<div style="background:var(--card);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:600px;width:100%">${inner}</div>`;
+      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:600px;width:100%">${inner}</div>`;
       document.body.appendChild(ov); if(window.lucide) lucide.createIcons(); return ov;
     }
 
