@@ -40,6 +40,9 @@ class Car(models.Model):
     # ข้อมูลดิบจากการนำเข้า (detail/owner/price/รูป ฯลฯ) — เก็บครบเป๊ะ ไม่ตกหล่น
     extra = models.JSONField("ข้อมูลเพิ่มเติม (นำเข้า)", default=dict, blank=True)
 
+    # soft delete — ลบ = ย้ายถังขยะ (เก็บข้อมูลไว้) · ถังขยะโชว์ 30 วัน แล้วซ่อน (ไม่ลบจริง)
+    deleted_at = models.DateTimeField("ลบเมื่อ (ถังขยะ)", null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

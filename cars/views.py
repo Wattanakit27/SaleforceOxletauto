@@ -46,7 +46,7 @@ def _stage_options(keys):
 @login_required
 def dashboard(request):
     """หน้าเดียวจบ: ตัวเลขสรุปต่อสเตป + ตารางรถทั้งหมด (มีตัวกรอง) · กดรถ = popup (car_json)."""
-    all_cars = list(Car.objects.all())
+    all_cars = list(Car.objects.filter(deleted_at__isnull=True))
     flags = {"red": 0, "amber": 0, "ok": 0}
     counts = {k: 0 for k in C.STAGE_KEYS}
     for c in all_cars:
@@ -212,10 +212,10 @@ def car_edit(request, code):
 def car_delete(request, code):
     car = get_object_or_404(Car, code=code)
     if request.method == "POST":
-        deleted = car.code
-        car.delete()
-        messages.success(request, f"ลบรถ {deleted} แล้ว")
-        return redirect("car_list")
+        car.deleted_at = timezone.now()   # soft delete → ถังขยะ (เก็บข้อมูลไว้)
+        car.save(update_fields=["deleted_at"])
+        messages.success(request, f"ย้ายรถ {car.code} เข้าถังขยะแล้ว")
+        return redirect("track_dashboard")
     return render(request, "car_delete.html", {"car": car})
 
 
@@ -389,7 +389,7 @@ def _to_int(s):
 @login_required
 def cars_api(request):
     """ข้อมูล dashboard ติดตามรถ (counts + รายการรถ) เป็น JSON → sales เรนเดอร์เองด้วยธีมเดียวกัน."""
-    all_cars = list(Car.objects.all())
+    all_cars = list(Car.objects.filter(deleted_at__isnull=True))
     flags = {"red": 0, "amber": 0, "ok": 0}
     counts = {k: 0 for k in C.STAGE_KEYS}
     for c in all_cars:
@@ -427,6 +427,7 @@ def cars_api(request):
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
         "canViewAdmin": roles.can_view_admin(request.user),
+        "canDelete": roles.can_edit_car(request.user),
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -512,3 +513,49 @@ def api_users(request):
     } for u in User.objects.order_by("-is_active", "username")]
     return JsonResponse({"ok": True, "users": users, "roles": [[k, v] for k, v in roles.ROLES]},
                         json_dumps_params={"ensure_ascii": False})
+
+
+TRASH_DAYS = 30  # ถังขยะเก็บโชว์กี่วัน (พ้นแล้วซ่อน แต่ไม่ลบจริง — ข้อมูลยังอยู่)
+
+
+@login_required
+@require_POST
+def api_delete_car(request):
+    """ลบรถ = ย้ายเข้าถังขยะ (soft delete) — เก็บข้อมูลไว้ กู้คืนได้ใน 30 วัน."""
+    if not roles.can_edit_car(request.user):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์ลบรถ"}, status=403)
+    car = get_object_or_404(Car, code=json.loads(request.body or "{}").get("code"))
+    car.deleted_at = timezone.now()
+    car.save(update_fields=["deleted_at"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def api_restore_car(request):
+    """กู้รถจากถังขยะกลับมาใช้งาน."""
+    if not roles.can_edit_car(request.user):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์กู้คืน"}, status=403)
+    car = get_object_or_404(Car, code=json.loads(request.body or "{}").get("code"))
+    car.deleted_at = None
+    car.save(update_fields=["deleted_at"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def api_trash(request):
+    """ถังขยะ — รถที่ลบภายใน 30 วัน (พ้น 30 วันซ่อน แต่ข้อมูลยังอยู่ใน DB)."""
+    if not roles.can_view_admin(request.user):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์"}, status=403)
+    cutoff = timezone.now() - timezone.timedelta(days=TRASH_DAYS)
+    qs = Car.objects.filter(deleted_at__isnull=False, deleted_at__gte=cutoff).order_by("-deleted_at")
+    cars = []
+    for c in qs:
+        days_in = (timezone.now() - c.deleted_at).days
+        cars.append({
+            "code": c.code, "title": c.title, "plate": c.plate, "branch": c.branch_name,
+            "stageName": c.stage_name, "deletedAt": timezone.localtime(c.deleted_at).strftime("%d/%m/%y %H:%M"),
+            "daysLeft": max(0, TRASH_DAYS - days_in),
+        })
+    return JsonResponse({"ok": True, "cars": cars, "canRestore": roles.can_edit_car(request.user),
+                         "trashDays": TRASH_DAYS}, json_dumps_params={"ensure_ascii": False})

@@ -21,6 +21,9 @@ urlpatterns = [
     path("api/set_stage", views.api_set_stage, name="api_set_stage"),
     path("api/add_car", views.api_add_car, name="api_add_car"),
     path("api/users", views.api_users, name="api_users"),
+    path("api/delete_car", views.api_delete_car, name="api_delete_car"),
+    path("api/restore_car", views.api_restore_car, name="api_restore_car"),
+    path("api/trash", views.api_trash, name="api_trash"),
 
     # QR
     path("qr/<str:code>.png", views.qr_png, name="qr_png"),
