@@ -458,6 +458,15 @@ def _to_int(s):
         return None
 
 
+def _parse_dateonly(s):
+    """'YYYY-MM-DD' (จาก <input type=date>) -> date | None"""
+    from datetime import datetime as _dt
+    try:
+        return _dt.strptime((s or "").strip(), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
 @login_required
 def cars_api(request):
     """ข้อมูล dashboard ติดตามรถ (counts + รายการรถ) เป็น JSON → sales เรนเดอร์เองด้วยธีมเดียวกัน."""
@@ -501,6 +510,7 @@ def cars_api(request):
         "total": len(all_cars), "flags": flags, "phaseRows": phase_rows,
         "avgT2l": avg, "t2lTarget": C.T2L_TARGET_DAYS,
         "branches": branch_pairs(), "stages": [[k, n] for k, n, _ in C.STAGES], "cars": cars,
+        "statusChoices": list(C.STATUS_CHOICES), "bookChoices": list(C.BOOK_STATUS_CHOICES),
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
         "canViewAdmin": roles.can_view_admin(request.user),
@@ -528,17 +538,42 @@ def api_set_stage(request):
 @login_required
 @require_POST
 def api_add_car(request):
-    """เพิ่มรถจากหน้า sales (POST JSON) — gen code อัตโนมัติ."""
+    """เพิ่มรถจากหน้า sales (POST JSON) — gen code อัตโนมัติ.
+    รับฟิลด์ครบตาม DB: ทะเบียน/ยี่ห้อ/รุ่น/ปี/สี/ไมล์ + สเตปเริ่มต้น/สถานะ/สถานะเล่ม/
+    วันรับเข้า/ครบกำหนดภาษี/หมายเหตุ + รูป 1 รูป (photo_path = path ที่อัปเข้า Supabase ผ่าน sign_upload)."""
     if not roles.can_add_car(request.user):
         return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เพิ่มรถ"}, status=403)
     d = json.loads(request.body or "{}")
+
+    # ฟิลด์ตัวเลือก — ค่านอกลิสต์ = ใช้ default (กันค่ามั่ว)
+    status = d.get("status") if d.get("status") in dict(C.STATUS_CHOICES) else "active"
+    book = d.get("book_status") if d.get("book_status") in dict(C.BOOK_STATUS_CHOICES) else ""
+    stage = d.get("stage") if d.get("stage") in C.STAGE_KEYS else C.STAGE_KEYS[0]
+
     car = Car(
         branch=(d.get("branch") or C.DEFAULT_BRANCH),
         plate=(d.get("plate") or "")[:20], brand=(d.get("brand") or "")[:40],
         model=(d.get("model") or "")[:60], color=(d.get("color") or "")[:30],
         year=_to_int(d.get("year")), km=_to_int(d.get("km")),
+        status=status, book_status=book, stage=stage,
+        tax_due_date=_parse_dateonly(d.get("tax_due_date")),
         note=(d.get("note") or "")[:5000],
     )
+    # วันรับเข้า (ระบุเองได้ · ว่าง = วันนี้ตาม default ของโมเดล)
+    di = _parse_dateonly(d.get("date_in"))
+    if di:
+        from datetime import datetime as _dt, time as _time
+        car.date_in = timezone.make_aware(_dt.combine(di, _time(12, 0)))
+    # สเตปเริ่มต้น: ตั้งนาฬิกาค้างสเตป + จัดการ frontline/sold ให้เหมือน change_stage
+    car.stage_since = timezone.now()
+    if stage == C.FRONTLINE_STAGE:
+        car.frontline_at = timezone.now()
+    if stage == "sold":
+        car.status = "sold"
+    # รูปรถ — เก็บ path ที่อัปเข้า Supabase แล้ว (แสดงผลผ่าน car.photo.url / cars_api)
+    photo_path = (d.get("photo_path") or "").strip()
+    if photo_path:
+        car.photo.name = photo_path
     car.save()
     return JsonResponse({"ok": True, "code": car.code})
 

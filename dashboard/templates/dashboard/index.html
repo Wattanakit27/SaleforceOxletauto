@@ -3701,28 +3701,54 @@
     }
 
     function openTrkAdd(){
-      const D=_trkData||{branches:[]};
-      const f=(lbl,inp)=>`<div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">${lbl}</label>${inp}</div>`;
-      const inp=(id,ph)=>`<input id="${id}" placeholder="${ph||''}" style="width:100%;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);box-sizing:border-box">`;
+      const D=_trkData||{branches:[],stages:[],statusChoices:[],bookChoices:[]};
+      const _st="width:100%;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);box-sizing:border-box";
+      const f=(lbl,inner)=>`<div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">${lbl}</label>${inner}</div>`;
+      const inp=(id,ph,type)=>`<input id="${id}" ${type?`type="${type}"`:''} placeholder="${ph||''}" style="${_st}">`;
+      const sel=(id,opts)=>`<select id="${id}" style="${_st}">${(opts||[]).map(o=>`<option value="${h(o[0])}">${h(o[1])}</option>`).join('')}</select>`;
       _trkOverlay('trk-add',`<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">เพิ่มรถ</div><button onclick="document.getElementById('trk-add').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
         <div style="margin-top:12px">
-          ${f('สาขา',`<select id="ta_branch" style="width:100%;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${D.branches.map(b=>`<option value="${h(b[0])}">${h(b[1])}</option>`).join('')}</select>`)}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('สาขา',sel('ta_branch',D.branches))}${f('สเตปเริ่มต้น',sel('ta_stage',D.stages))}</div>
           ${f('ทะเบียน',inp('ta_plate','เช่น 1กก1234'))}
-          ${f('ยี่ห้อ',inp('ta_brand','TOYOTA'))}
-          ${f('รุ่น',inp('ta_model','Altis'))}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('ยี่ห้อ',inp('ta_brand','TOYOTA'))}${f('รุ่น',inp('ta_model','Altis'))}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">${f('ปี',inp('ta_year','2020'))}${f('สี',inp('ta_color','ขาว'))}${f('เลขไมล์',inp('ta_km','50000'))}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('วันรับเข้า',inp('ta_datein','','date'))}${f('ครบกำหนดต่อภาษี',inp('ta_tax','','date'))}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('สถานะ',sel('ta_status',D.statusChoices))}${f('สถานะเล่ม (ทะเบียน)',sel('ta_book',D.bookChoices))}</div>
+          ${f('รูปรถ (1 รูป)',`<input id="ta_photo" type="file" accept="image/*" onchange="trkAddPreview()" style="${_st}"><div id="ta_photo_prev" style="margin-top:8px"></div>`)}
           ${f('หมายเหตุ',inp('ta_note',''))}
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="document.getElementById('trk-add').remove()" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ยกเลิก</button><button onclick="addTrkCar()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">บันทึก</button></div>
+          <div id="ta_msg" class="mut" style="font-size:12px;min-height:16px"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="document.getElementById('trk-add').remove()" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ยกเลิก</button><button id="ta_save" onclick="addTrkCar()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">บันทึก</button></div>
         </div>`);
+    }
+    function trkAddPreview(){
+      const fi=document.getElementById('ta_photo'), pv=document.getElementById('ta_photo_prev'); if(!fi||!pv) return;
+      const file=fi.files&&fi.files[0];
+      if(!file){ pv.innerHTML=''; return; }
+      pv.innerHTML=`<img src="${URL.createObjectURL(file)}" style="width:100%;max-height:180px;object-fit:contain;border-radius:9px;background:#000">`;
     }
     async function addTrkCar(){
       const v=id=>(document.getElementById(id)||{}).value||'';
-      const body={branch:v('ta_branch'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),note:v('ta_note')};
+      const btn=document.getElementById('ta_save'), msg=document.getElementById('ta_msg');
+      const setMsg=t=>{ if(msg) msg.textContent=t||''; };
+      if(btn){ btn.disabled=true; btn.style.opacity=.6; }
       try{
+        // อัปรูปก่อน (ถ้าเลือก) — ขอ signed URL แล้ว PUT ตรงเข้า Supabase เหมือนหน้าสแกน
+        let photo_path='';
+        const fi=document.getElementById('ta_photo'), file=fi&&fi.files&&fi.files[0];
+        if(file){
+          setMsg('กำลังอัปโหลดรูป…');
+          const s=await (await fetch('/track/api/sign_upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({filename:file.name,contentType:file.type})})).json();
+          if(!s.ok) throw new Error(s.error||'ขอที่อัปรูปไม่สำเร็จ');
+          const up=await fetch(s.uploadUrl,{method:'PUT',headers:{'content-type':file.type||'application/octet-stream','x-upsert':'true'},body:file});
+          if(!up.ok) throw new Error('อัปโหลดรูปไม่สำเร็จ ('+up.status+')');
+          photo_path=s.path;
+        }
+        setMsg('กำลังบันทึก…');
+        const body={branch:v('ta_branch'),stage:v('ta_stage'),status:v('ta_status'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),date_in:v('ta_datein'),tax_due_date:v('ta_tax'),book_status:v('ta_book'),note:v('ta_note'),photo_path};
         const r=await fetch('/track/api/add_car',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
-        const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มรถไม่สำเร็จ'); return; }
+        const j=await r.json(); if(!j.ok) throw new Error(j.error||'เพิ่มรถไม่สำเร็จ');
         document.getElementById('trk-add').remove(); loadTracking(true);
-      }catch(e){ alert('ผิดพลาด: '+e); }
+      }catch(e){ setMsg(''); if(btn){ btn.disabled=false; btn.style.opacity=1; } alert('ผิดพลาด: '+(e.message||e)); }
     }
 
     async function openTrkUsers(){
