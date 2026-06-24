@@ -3520,6 +3520,8 @@
     // ── "สถานะรถ" เรนเดอร์ native ในหน้า sales (ธีม/สีเดียวกัน · ไม่ใช้ iframe) ──
     const TRK_FLAG = {red:'#ef4444', amber:'#f59e0b', ok:'#22c55e'};
     const _trkBanner = (st)=>({sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'}[st]||'#2563eb');
+    // DEBUG: รูปโหลดไม่สำเร็จ → โชว์กล่องแดง + log URL (แยกจาก "ไม่มีรูป" = ไม่มี path เลย)
+    function trkImgErr(el){ console.warn('[TRK] โหลดรูปไม่ได้:', el.src); el.outerHTML='<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:#3a1a1a;color:#f88;font-size:10px;text-align:center;padding:4px">โหลดรูปไม่ได้<br>(ดู console)</div>'; }
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo'};
     function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
 
@@ -3530,6 +3532,8 @@
         try { _trkData = await (await fetch('/track/api/cars',{credentials:'same-origin'})).json(); }
         catch(e){ el.innerHTML = '<div style="padding:24px;color:var(--red)">โหลดข้อมูลรถไม่ได้ — ลองรีเฟรช</div>'; return; }
       }
+      // DEBUG: ดูว่า API ส่งรูปมากี่คัน + ตัวอย่าง URL (เปิด console)
+      try { const wp=_trkData.cars.filter(c=>c.photo); console.log('[TRK] total',_trkData.total,'· มีรูป',wp.length,'· ตัวอย่าง URL:', wp.slice(0,3).map(c=>c.photo)); } catch(_){}
       renderTrk();
     }
 
@@ -3543,7 +3547,7 @@
       else if(_trkF.sort==='code') cars.sort((a,b)=>(a.code>b.code?1:-1));
       const btn = (on,txt)=>`<button class="${on}" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${txt}</button>`;
       let h2 = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-        <div><div style="font-size:18px;font-weight:800;color:var(--t1)">สถานะรถ</div><div class="mut" style="font-size:12px">ทั้งหมด ${D.total} คัน</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:var(--t1)">สถานะรถ</div><div class="mut" style="font-size:12px">ทั้งหมด ${D.total} คัน · มีรูป ${D.cars.filter(c=>c.photo).length}/${D.total}</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${D.canAdd?`<button onclick="openTrkAdd()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">+ เพิ่มรถ</button>`:''}
           ${D.canViewAdmin?`<a href="/track/cars/qr-print/" target="_blank" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);text-decoration:none">พิมพ์ QR</a>`:''}
@@ -3574,7 +3578,7 @@
           const ban=_trkBanner(c.stage);
           const tax=(c.taxNote&&c.taxNote.indexOf('หมด')>=0)?`<span style="background:${c.taxNote.indexOf('ใกล้')>=0?'#f59e0b':'#ef4444'};color:#fff;font-size:10px;padding:2px 7px;border-radius:5px">${c.taxNote.indexOf('ใกล้')>=0?'ภาษีใกล้หมด':'ภาษีหมดอายุ'}</span>`:'';
           const plate=c.plate?`<span style="background:var(--bg2);border:.5px solid var(--bd);font-size:11px;padding:2px 8px;border-radius:6px">เลขทะเบียน: ${h(c.plate)}${c.province?' ('+h(c.province)+')':''}</span>`:'';
-          const ph=c.photo?`<img src="${c.photo}" loading="lazy" style="width:100%;height:96px;object-fit:cover;display:block">`:`<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--t3);font-size:11px">ไม่มีรูป</div>`;
+          const ph=c.photo?`<img src="${c.photo}" loading="lazy" onerror="trkImgErr(this)" style="width:100%;height:96px;object-fit:cover;display:block">`:`<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--t3);font-size:11px">ไม่มีรูป</div>`;
           return `<div onclick="openTrkCar('${c.code}')" style="display:flex;gap:12px;padding:14px 4px;border-top:.5px solid var(--bd);cursor:pointer;align-items:flex-start;min-width:680px">
             <div style="width:22px;color:var(--t3);font-size:12px;flex-shrink:0;padding-top:2px">${i+1}</div>
             <div style="width:140px;flex-shrink:0;border-radius:8px;overflow:hidden;border:.5px solid var(--bd)"><div style="background:${ban};color:#fff;font-size:11px;font-weight:700;text-align:center;padding:3px">${h(c.stageName)}</div>${ph}</div>
