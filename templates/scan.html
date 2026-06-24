@@ -34,6 +34,7 @@
       </div>
       <input type="hidden" name="media" id="scanMedia">
       <button class="btn pri" type="submit"><i data-lucide="check"></i> <span data-i18n="save">บันทึกเปลี่ยนสเตป</span></button>
+      <div id="upBar" style="display:none;height:9px;border-radius:6px;background:var(--bg2);overflow:hidden;border:.5px solid var(--bd)"><div id="upBarFill" style="height:100%;width:0;background:var(--blue);transition:width .15s ease"></div></div>
       <div id="uploadProg" class="mut sm"></div>
       <div class="mut sm"><span data-i18n="by">ผู้ทำ</span>: {{ actor }}</div>
     </form>
@@ -117,28 +118,50 @@
       fileInput.value='';   // เคลียร์ input → กดเพิ่มทีละรูปได้ ไม่ทับของเดิม
       render();
     });
+    var bar = document.getElementById('upBar');
+    var barFill = document.getElementById('upBarFill');
+    function setPct(p){ p=Math.max(0,Math.min(100,p)); if(barFill) barFill.style.width=p.toFixed(1)+'%'; return Math.round(p); }
+    // PUT ผ่าน XHR เพื่อจับ progress จริง (fetch จับ upload progress ไม่ได้)
+    function putWithProgress(url, file, onLoaded){
+      return new Promise(function(resolve,reject){
+        var xhr=new XMLHttpRequest();
+        xhr.open('PUT', url);
+        xhr.setRequestHeader('content-type', file.type||'application/octet-stream');
+        xhr.setRequestHeader('x-upsert','true');
+        if(xhr.upload) xhr.upload.onprogress=function(ev){ if(ev.lengthComputable) onLoaded(ev.loaded); };
+        xhr.onload=function(){ (xhr.status>=200&&xhr.status<300)?resolve():reject(new Error('upload '+xhr.status)); };
+        xhr.onerror=function(){ reject(new Error('network')); };
+        xhr.send(file);
+      });
+    }
     form.addEventListener('submit', async function(e){
       if(form.dataset.ready==='1') return;
       if(!picked.length) return;   // ไม่มีไฟล์ → submit ปกติ
       e.preventDefault();
       var btn = form.querySelector('button[type=submit]'); if(btn) btn.disabled=true;
-      var out=[];
+      var total = picked.reduce(function(a,f){ return a+(f.size||0); }, 0) || 1;
+      var done = 0, out=[];
+      if(bar) bar.style.display='block';
       for(var i=0;i<picked.length;i++){
         var f=picked[i];
-        if(prog) prog.textContent = 'กำลังอัปโหลด '+(i+1)+'/'+picked.length+'...';
         try{
+          if(prog) prog.textContent='กำลังเตรียมไฟล์ '+(i+1)+'/'+picked.length+'...';
           var s = await (await fetch('/track/api/sign_upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({filename:f.name,contentType:f.type})})).json();
           if(!s.ok) throw new Error(s.error||'sign');
-          var up = await fetch(s.uploadUrl,{method:'PUT',headers:{'content-type':f.type||'application/octet-stream','x-upsert':'true'},body:f});
-          if(!up.ok) throw new Error('upload '+up.status);
+          await putWithProgress(s.uploadUrl, f, function(loaded){
+            var pct=setPct((done+loaded)/total*100);
+            if(prog) prog.textContent='กำลังอัปโหลด '+(i+1)+'/'+picked.length+' · '+pct+'%';
+          });
+          done += (f.size||0); setPct(done/total*100);
           out.push({path:s.path, video:(f.type||'').indexOf('video')===0});
         }catch(err){
           if(prog) prog.textContent='อัปโหลดไม่สำเร็จ: '+(err.message||err);
           if(btn) btn.disabled=false; return;
         }
       }
-      mediaInput.value = JSON.stringify(out);
+      setPct(100);
       if(prog) prog.textContent='อัปโหลดเสร็จ '+out.length+' ไฟล์ · กำลังบันทึก...';
+      mediaInput.value = JSON.stringify(out);
       form.dataset.ready='1';
       form.submit();
     });
