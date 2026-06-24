@@ -3522,7 +3522,7 @@
     const _trkBanner = (st)=>({sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'}[st]||'#2563eb');
     // DEBUG: รูปโหลดไม่สำเร็จ → โชว์กล่องแดง + log URL (แยกจาก "ไม่มีรูป" = ไม่มี path เลย)
     function trkImgErr(el){ console.warn('[TRK] โหลดรูปไม่ได้:', el.src); el.outerHTML='<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:#3a1a1a;color:#f88;font-size:10px;text-align:center;padding:4px">โหลดรูปไม่ได้<br>(ดู console)</div>'; }
-    let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo'};
+    let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo', q:''};
     function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
 
     async function loadTracking(force){
@@ -3542,6 +3542,7 @@
       let cars = D.cars.slice();
       if(_trkF.branch) cars = cars.filter(c=>c.branch===_trkF.branch);
       if(_trkF.stage)  cars = cars.filter(c=>c.stage===_trkF.stage);
+      if(_trkF.q){ const q=_trkF.q.trim().toLowerCase(); if(q) cars = cars.filter(c=>((c.code||'')+' '+(c.name||'')+' '+(c.title||'')+' '+(c.brand||'')+' '+(c.model||'')+' '+(c.plate||'')).toLowerCase().includes(q)); }
       const _S={
         photo:(a,b)=>((b.photo?1:0)-(a.photo?1:0))||(a.code<b.code?-1:1),
         updated:(a,b)=>(b.updatedTs||0)-(a.updatedTs||0),
@@ -3581,10 +3582,11 @@
       // filters + table
       h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <input id="trkSearch" value="${h(_trkF.q||'')}" oninput="_trkF.q=this.value;renderTrk()" placeholder="🔍 ค้นหา ทะเบียน/ชื่อ/รุ่น/รหัส" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);min-width:220px;flex:1;max-width:320px">
           <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
           <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
           <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${[['photo','มีรูปก่อน'],['updated','วันที่แก้ไขล่าสุด'],['days','ค้างนานสุด'],['price_asc','ราคาขาย : ต่ำไปสูง'],['price_desc','ราคาขาย : สูงไปต่ำ'],['year_desc','ปี : ใหม่ไปเก่า'],['year_asc','ปี : เก่าไปใหม่'],['km_asc','เลขไมล์ : ต่ำไปสูง'],['km_desc','เลขไมล์ : สูงไปต่ำ'],['datein_desc','วันที่ซื้อรถเข้า : ใหม่ไปเก่า'],['datein_asc','วันที่ซื้อรถเข้า : เก่าไปใหม่'],['code','รหัสรถ']].map(o=>`<option value="${o[0]}" ${_trkF.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
-          ${(_trkF.branch||_trkF.stage)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
+          ${(_trkF.branch||_trkF.stage||_trkF.q)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort,q:''};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
           <span class="mut" style="font-size:12px;margin-left:auto">${cars.length} คัน · กดแถวดูรายละเอียด</span>
         </div>
         <div style="overflow-x:auto">${cars.map((c,i)=>{
@@ -3611,6 +3613,8 @@
       </div>`;
       el.innerHTML = h2;
       if(window.lucide) lucide.createIcons();
+      // คงโฟกัส+เคอร์เซอร์ช่องค้นหา หลัง re-render (พิมพ์ต่อเนื่องได้)
+      if(_trkF.q){ const _si=document.getElementById('trkSearch'); if(_si){ _si.focus(); try{_si.setSelectionRange(_si.value.length,_si.value.length);}catch(_){} } }
     }
     function trkSetStage(k){ _trkF.stage = (_trkF.stage===k?'':k); renderTrk(); }
 
