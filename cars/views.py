@@ -557,10 +557,10 @@ def api_users(request):
         roles.SALES: "สแกน QR เปลี่ยนสเตป (งานตรวจ/ขาย)",
         roles.TECH: "สแกน QR เปลี่ยนสเตป (งานช่าง)",
         roles.VENDOR: "สแกน QR เปลี่ยนสเตป (งานอู่นอก)",
-        roles.REGIST: "สแกน QR เปลี่ยนสเตป (ทะเบียน)",
+        roles.REGIST: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — งานทะเบียน + ทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
     }
     role_help = [{"label": lbl, "cap": _caps.get(k, ""),
-                  "stages": role_stages.get(k, []),
+                  "stages": [] if k in roles.FULL_ROLES else role_stages.get(k, []),
                   "scanOnly": k in roles.SCAN_ONLY_ROLES} for k, lbl in roles.ROLES]
     return JsonResponse({"ok": True, "lineUsers": line_users, "users": users,
                          "roles": [[k, v] for k, v in roles.ROLES], "roleHelp": role_help},

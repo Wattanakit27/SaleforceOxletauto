@@ -58,7 +58,10 @@ STAGE_ROLES = {
 }
 
 # บทบาทที่ต้อง "สแกนก่อน" ถึงจะเปลี่ยนสเตปได้ (เปลี่ยนตรงผ่าน UI ไม่ได้)
-SCAN_ONLY_ROLES = {SALES, TECH, VENDOR, REGIST}
+SCAN_ONLY_ROLES = {SALES, TECH, VENDOR}
+
+# สิทธิ์เต็ม (ทำได้ทุกอย่าง = ผู้บริหาร) — ฝ่ายทะเบียนยกระดับมาเท่าผู้บริหาร (มิ.ย.69)
+FULL_ROLES = {EXEC, REGIST}
 
 
 def set_user_role(user, role_key):
@@ -87,26 +90,26 @@ def role_label(user):
     return ROLE_LABEL.get(get_role(user), "ไม่มีบทบาท")
 
 
-# ===== ความสามารถ =====
-def is_exec(user):        return get_role(user) == EXEC
-def can_manage_users(user): return get_role(user) in {EXEC, ADMIN}
-def can_add_car(user):    return get_role(user) in {EXEC, PURCHASING}
-def can_edit_car(user):   return get_role(user) in {EXEC, PURCHASING, ADMIN}
-def can_delete_car(user): return get_role(user) == EXEC
-def can_view_admin(user): return get_role(user) in {EXEC, PURCHASING, ADMIN}
+# ===== ความสามารถ ===== (FULL_ROLES = ผู้บริหาร+ฝ่ายทะเบียน ทำได้ทุกอย่าง)
+def is_exec(user):        return get_role(user) in FULL_ROLES
+def can_manage_users(user): return get_role(user) in (FULL_ROLES | {ADMIN})
+def can_add_car(user):    return get_role(user) in (FULL_ROLES | {PURCHASING})
+def can_edit_car(user):   return get_role(user) in (FULL_ROLES | {PURCHASING, ADMIN})
+def can_delete_car(user): return get_role(user) in FULL_ROLES
+def can_view_admin(user): return get_role(user) in (FULL_ROLES | {PURCHASING, ADMIN})
 def is_worker(user):      return get_role(user) in SCAN_ONLY_ROLES
 
 
 def allowed_stages(user):
     """รายชื่อคีย์สเตปที่ user เปลี่ยนได้"""
     role = get_role(user)
-    if role == EXEC:
+    if role in FULL_ROLES:
         return list(STAGE_ROLES.keys())
     return [s for s, rs in STAGE_ROLES.items() if role in rs]
 
 
 def can_set_stage(user, stage):
-    return is_exec(user) or (get_role(user) in STAGE_ROLES.get(stage, set()))
+    return get_role(user) in FULL_ROLES or (get_role(user) in STAGE_ROLES.get(stage, set()))
 
 
 def can_set_stage_direct(user, stage):
