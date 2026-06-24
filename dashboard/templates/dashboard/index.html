@@ -3631,7 +3631,7 @@
           ${d.t2l!=null?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">T2L ${d.t2l} วัน</span>`:''}
           ${d.price?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px;font-weight:700">฿ ${h(String(d.price))}</span>`:''}
         </div>
-        ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px">`:''}
+        ${d.photo?`<img src="${d.photo}" style="width:100%;height:auto;border-radius:10px;margin-bottom:10px;background:#000">`:''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
           ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}${kv('สี',d.color)}${kv('เลขไมล์',d.km)}${kv('วันรับเข้า',d.dateIn)}${kv('ครบกำหนดภาษี',d.taxDue)}
         </div>
