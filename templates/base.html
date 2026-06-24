@@ -51,6 +51,17 @@
   i[data-lucide]{width:16px;height:16px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  /* มือถือ — หัวเพจ/การ์ดกระชับขึ้น (หน้าสแกน ฯลฯ) */
+  @media (max-width:560px){
+    .top{padding:9px 12px;gap:8px}
+    .top .brand img{height:26px}
+    .top .me{gap:8px;font-size:12px}
+    .top .me .pill{font-size:11px;padding:3px 8px}
+    .top .btn.sm{padding:6px 10px}
+    .wrap{padding:14px 12px}
+    .card{padding:14px}
+    h1{font-size:19px}
+  }
 </style>
 </head>
 <body>

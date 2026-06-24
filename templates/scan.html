@@ -3,11 +3,11 @@
 {% block content %}
 <div style="max-width:480px;margin:0 auto">
   <!-- เลือกภาษา (เฉพาะหน้าสแกน — สำหรับแรงงานเพื่อนบ้าน) -->
-  <div class="row" style="gap:6px;justify-content:center;margin-bottom:10px">
-    <button type="button" class="langbtn btn sm" data-lang="th" onclick="setScanLang('th')">ไทย</button>
-    <button type="button" class="langbtn btn sm" data-lang="en" onclick="setScanLang('en')">EN</button>
-    <button type="button" class="langbtn btn sm" data-lang="my" onclick="setScanLang('my')">မြန်မာ</button>
-    <button type="button" class="langbtn btn sm" data-lang="km" onclick="setScanLang('km')">ខ្មែរ</button>
+  <div style="display:flex;gap:4px;justify-content:center;margin-bottom:12px;background:var(--bg2);padding:4px;border-radius:16px;border:.5px solid var(--bd)">
+    <button type="button" class="langbtn" data-lang="th" onclick="setScanLang('th')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇹🇭</span>ไทย</button>
+    <button type="button" class="langbtn" data-lang="en" onclick="setScanLang('en')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇬🇧</span>EN</button>
+    <button type="button" class="langbtn" data-lang="my" onclick="setScanLang('my')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇲🇲</span>မြန်မာ</button>
+    <button type="button" class="langbtn" data-lang="km" onclick="setScanLang('km')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇰🇭</span>ខ្មែរ</button>
   </div>
 
   <div class="card">
@@ -71,7 +71,7 @@
       var k=el.getAttribute('data-key');
       el.textContent = (lang==='th' || !sm || !sm[k]) ? (el.getAttribute('data-th')||el.textContent) : sm[k];
     });
-    document.querySelectorAll('.langbtn').forEach(function(b){ b.style.opacity = (b.getAttribute('data-lang')===lang)?'1':'.55'; });
+    document.querySelectorAll('.langbtn').forEach(function(b){ var on=(b.getAttribute('data-lang')===lang); b.style.background=on?'var(--blue)':'transparent'; b.style.color=on?'#fff':'var(--t1)'; });
     document.documentElement.lang = lang;
   }
   (function(){ var l='th'; try{ l=localStorage.getItem('trk_scan_lang')||'th'; }catch(e){} setScanLang(l); })();
