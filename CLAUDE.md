@@ -503,6 +503,12 @@ CRON_SECRET=xxx...
 
 ## Conventions
 
+- **⭐ คำอธิบาย/help inline → ใช้ `.info-tip` (ปุ่ม `?` + tooltip) เสมอ** — ไม่ใช้ `<details>`/กล่องแยก สำหรับ tip สั้น ๆ:
+  ```html
+  <span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="บรรทัด1\nบรรทัด2">?</span>
+  ```
+  - CSS `.info-tip` + smart-tooltip JS (กัน parent `overflow:hidden` ตัดหัว) อยู่ใน [index.html](dashboard/templates/dashboard/index.html) แล้ว · `data-tip` รองรับหลายบรรทัดด้วย `\n` · ตัวอย่าง: KPI tips, รหัสในชื่อรถ (popup สถานะรถ), RJ leads
+  - tip ยาว/เป็นตาราง (เช่นรายการ 7 บทบาท) ค่อยใช้กล่อง/section แทน
 - **⭐ กฎเหล็ก: ทุกตาราง/การ์ด/กราฟ/modal/พาเนล ในหน้ารวม (`index.html`) ต้อง "กรองตามตัวกรองวันที่ด้านบนเสมอ"** — เพิ่มอะไรใหม่ก็ต้องผูกกับช่วงวันที่ (`dfFrom`/`dfTo`)
   - ใช้ `ir(ds)` / `inRange(ds)` เช็คว่า date string อยู่ในช่วงไหม · หรือ `buildRangeMs()` (มี summary+sellers+teams ของช่วง) · หรือ `rangeDays()` (list วัน/เดือนในช่วง)
   - **ห้ามใช้ `dfMonth`** — เป็น vestige (=0 ตลอด) โค้ดเก่าที่ยังเช็ค `dfMonth > 0` = bug โชว์รายปีเสมอ (ดู `_sval`/charts/modal ที่แก้ไปแล้ว)
