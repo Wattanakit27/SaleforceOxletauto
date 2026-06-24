@@ -2,10 +2,18 @@
 {% block title %}สแกน {{ car.code }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div style="max-width:480px;margin:0 auto">
+  <!-- เลือกภาษา (เฉพาะหน้าสแกน — สำหรับแรงงานเพื่อนบ้าน) -->
+  <div class="row" style="gap:6px;justify-content:center;margin-bottom:10px">
+    <button type="button" class="langbtn btn sm" data-lang="th" onclick="setScanLang('th')">ไทย</button>
+    <button type="button" class="langbtn btn sm" data-lang="en" onclick="setScanLang('en')">EN</button>
+    <button type="button" class="langbtn btn sm" data-lang="my" onclick="setScanLang('my')">မြန်မာ</button>
+    <button type="button" class="langbtn btn sm" data-lang="km" onclick="setScanLang('km')">ខ្មែរ</button>
+  </div>
+
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <h1 style="font-size:20px">{{ car.code }}</h1>
-      <span class="pill"><i data-lucide="{{ car.stage_icon }}"></i> {{ car.stage_name }}</span>
+      <span class="pill"><i data-lucide="{{ car.stage_icon }}"></i> <span data-key="{{ car.stage }}" data-th="{{ car.stage_name }}">{{ car.stage_name }}</span></span>
     </div>
     <div class="mut sm">{{ car.title }} · {{ car.plate }} · {{ car.branch_name }}</div>
 
@@ -13,29 +21,59 @@
     <form method="post" action="{% url 'scan_submit' car.code %}" enctype="multipart/form-data" class="grid" style="gap:12px;margin-top:14px">
       {% csrf_token %}
       <div>
-        <label class="sm mut">เปลี่ยนเป็นสเตป</label>
+        <label class="sm mut" data-i18n="changeStage">เปลี่ยนเป็นสเตป</label>
         <select name="stage" required>
-          {% for k,n,i in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}
+          {% for k,n,i in stages %}<option value="{{ k }}" data-key="{{ k }}" data-th="{{ n }}">{{ n }}</option>{% endfor %}
         </select>
       </div>
-      <div><label class="sm mut">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="2"></textarea></div>
-      <div><label class="sm mut">แนบรูป (ถ้ามี)</label><input type="file" name="photo" accept="image/*" capture="environment"></div>
-      <button class="btn pri" type="submit"><i data-lucide="check"></i> บันทึกเปลี่ยนสเตป</button>
-      <div class="mut sm">ผู้ทำ: {{ actor }}</div>
+      <div><label class="sm mut" data-i18n="note">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="2"></textarea></div>
+      <div><label class="sm mut" data-i18n="photo">แนบรูป (ถ้ามี)</label><input type="file" name="photo" accept="image/*" capture="environment"></div>
+      <button class="btn pri" type="submit"><i data-lucide="check"></i> <span data-i18n="save">บันทึกเปลี่ยนสเตป</span></button>
+      <div class="mut sm"><span data-i18n="by">ผู้ทำ</span>: {{ actor }}</div>
     </form>
     {% else %}
-    <div class="msg" style="margin-top:14px">บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้</div>
+    <div class="msg" style="margin-top:14px" data-i18n="noStage">บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้</div>
     {% endif %}
   </div>
 
   <div class="card" style="margin-top:14px">
-    <h2>ประวัติล่าสุด</h2>
+    <h2 data-i18n="history">ประวัติล่าสุด</h2>
     {% for l in logs %}
     <div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0">
-      <span class="pill"><i data-lucide="{{ l.stage_icon }}"></i> {{ l.stage_name }}</span>
+      <span class="pill"><i data-lucide="{{ l.stage_icon }}"></i> <span data-key="{{ l.stage }}" data-th="{{ l.stage_name }}">{{ l.stage_name }}</span></span>
       <span class="mut sm">{{ l.created_at|date:"d/m H:i" }} · {{ l.worker_name }}</span>
     </div>
-    {% empty %}<p class="mut sm">ยังไม่มีประวัติ</p>{% endfor %}
+    {% empty %}<p class="mut sm" data-i18n="noHistory">ยังไม่มีประวัติ</p>{% endfor %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // i18n เฉพาะหน้าสแกน — ไทย/อังกฤษ/พม่า/เขมร (คำพม่า-เขมรเป็นฉบับแปลเบื้องต้น ให้ native ตรวจได้)
+  var SCAN_I18N = {
+    th: {changeStage:'เปลี่ยนเป็นสเตป', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป (ถ้ามี)', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ'},
+    en: {changeStage:'Change to stage', note:'Note (optional)', photo:'Attach photo (optional)', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet'},
+    my: {changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံတွဲရန် (ရှိလျှင်)', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ'},
+    km: {changeStage:'ប្ដូរទៅដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូបថត (បើមាន)', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ'}
+  };
+  var STAGE_I18N = {
+    en: {intake:'Intake', appraise:'Assess repair', repair:'Repair check', wait_paint:'Wait for paint', paint:'Painting', parts:'Order / wait parts', upholstery:'Upholstery', film:'Window film', detail:'Detailing', qc:'QC inspection', rework:'Rework', registration:'Registration', show:'Ready / showroom', reserve:'Reserved', finance:'Finance', closing:'Closing sale', sold:'Sold'},
+    my: {intake:'ကားလက်ခံ', appraise:'ပြုပြင်ရေးအကဲဖြတ်', repair:'ပြုပြင်စစ်ဆေး', wait_paint:'ဆေးသုတ်ရန်စောင့်', paint:'ဆေးသုတ်', parts:'အပိုပစ္စည်းမှာ/စောင့်', upholstery:'ထိုင်ခုံအလုပ်', film:'ဖလင်ကပ်', detail:'သန့်ရှင်းရေး', qc:'QC စစ်ဆေး', rework:'ပြန်ပြင်ရန်', registration:'မှတ်ပုံတင်', show:'ရောင်းရန်အသင့်', reserve:'ကြိုတင်မှာထား', finance:'ငွေကြေးစီစဉ်', closing:'အရောင်းပိတ်ရန်', sold:'ရောင်းပြီး'},
+    km: {intake:'ទទួលរថយន្ត', appraise:'វាយតម្លៃជួសជុល', repair:'ពិនិត្យជួសជុល', wait_paint:'រង់ចាំលាបថ្នាំ', paint:'លាបថ្នាំ', parts:'កុម្ម៉ង់/រង់ចាំគ្រឿងបន្លាស់', upholstery:'ការងារកៅអី', film:'បិទហ្វីល', detail:'សម្អាត', qc:'រង់ចាំ QC', rework:'រង់ចាំកែ', registration:'ចុះបញ្ជី', show:'រួចរាល់លក់', reserve:'បានកក់', finance:'រៀបចំហិរញ្ញវត្ថុ', closing:'រង់ចាំបិទការលក់', sold:'លក់រួច'}
+  };
+  function setScanLang(lang){
+    try{ localStorage.setItem('trk_scan_lang', lang); }catch(e){}
+    var t = SCAN_I18N[lang] || SCAN_I18N.th;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(t[k]!=null) el.textContent=t[k]; });
+    var sm = STAGE_I18N[lang];
+    document.querySelectorAll('[data-key]').forEach(function(el){
+      var k=el.getAttribute('data-key');
+      el.textContent = (lang==='th' || !sm || !sm[k]) ? (el.getAttribute('data-th')||el.textContent) : sm[k];
+    });
+    document.querySelectorAll('.langbtn').forEach(function(b){ b.style.opacity = (b.getAttribute('data-lang')===lang)?'1':'.55'; });
+    document.documentElement.lang = lang;
+  }
+  (function(){ var l='th'; try{ l=localStorage.getItem('trk_scan_lang')||'th'; }catch(e){} setScanLang(l); })();
+</script>
 {% endblock %}
