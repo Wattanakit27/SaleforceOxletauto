@@ -3637,6 +3637,14 @@
         </div>
         ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="mut" style="cursor:pointer;font-size:12px">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
         ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
+        <details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">ℹ️ รหัสในชื่อรถ ( เช่น (A) (T) (1.1) (07/68) )</summary>
+          <div class="mut" style="font-size:12px;margin-top:6px;line-height:1.8">
+            <div><b>(A)/(B)/(C)/(D)</b> = โซนจอดรถในลาน (รถจอดอยู่โซนไหน)</div>
+            <div><b>(T)/(V)/(S)</b> = สถานะเอกสาร/งาน (T=โอนแล้ว/มีทะเบียน · V=ตรวจแล้ว · S=รอยืนยัน — รอทีมยืนยันความหมาย)</div>
+            <div><b>(1.1)/(2.1)/(2.2)</b> = เกรด/รอบการตรวจสภาพ</div>
+            <div><b>(07/68)/(3/69)</b> = เดือน/ปี (พ.ศ.) ที่รับรถเข้า</div>
+          </div>
+        </details>
         <div class="mut" style="font-size:12px;margin:14px 0 6px">เปลี่ยนสเตป</div><div style="display:flex;gap:6px;flex-wrap:wrap">${stages}</div>
         <div class="mut" style="font-size:12px;margin:14px 0 6px">ประวัติการสแกน</div><div style="max-height:150px;overflow:auto">${logs}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
