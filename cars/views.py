@@ -119,6 +119,7 @@ def car_json(request, code):
         "scanUrl": f"/track/scan/{car.code}/",
         "editUrl": f"/track/cars/{car.code}/edit/",
         "logs": logs, "direct": direct, "canEdit": roles.can_edit_car(request.user),
+        "canDelete": roles.can_manage_users(request.user),  # ลบ = แอดมินเท่านั้น (Exec/Admin)
         # ข้อมูลนำเข้า (ราคา/เจ้าของ/รายละเอียดเครื่องยนต์ ฯลฯ) — เก็บครบใน extra
         "price": (car.extra or {}).get("price"),
         "owner": (car.extra or {}).get("owner") or {},
@@ -427,7 +428,7 @@ def cars_api(request):
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
         "canViewAdmin": roles.can_view_admin(request.user),
-        "canDelete": roles.can_edit_car(request.user),
+        "canDelete": roles.can_manage_users(request.user),
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -489,6 +490,17 @@ def api_users(request):
             if d.get("role"):
                 roles.set_user_role(u, d["role"])
             return JsonResponse({"ok": True})
+        if action == "set_role_line":
+            # ตั้งบทบาทให้พนักงานจาก LINE id (ที่เก็บไว้แล้วในชีต) — สร้าง/ผูก Django user line_<id>
+            lid = (d.get("line_id") or "").strip()
+            if not lid:
+                return JsonResponse({"ok": False, "error": "ไม่มี LINE id"}, status=400)
+            lu, _ = User.objects.get_or_create(username=f"line_{lid}")
+            if d.get("name") and not lu.first_name:
+                lu.first_name = d["name"][:150]
+                lu.save(update_fields=["first_name"])
+            roles.set_user_role(lu, d.get("role") or "")
+            return JsonResponse({"ok": True})
         u = User.objects.filter(pk=d.get("user_id")).first()
         if not u:
             return JsonResponse({"ok": False, "error": "ไม่พบผู้ใช้"}, status=404)
@@ -506,12 +518,34 @@ def api_users(request):
             u.save(update_fields=["password"])
         return JsonResponse({"ok": True})
 
+    # พนักงานจาก LINE (ใช้ LINE id ที่เก็บไว้แล้วในชีต employees → ตั้งบทบาท tracking ได้เลย)
+    line_users = []
+    try:
+        from dashboard.services.google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
+        seen = set()
+        for r in fetch_sheet("employees"):
+            uid = (cell(r, EM.user_id) or "").strip()
+            if not uid or uid in seen:
+                continue
+            seen.add(uid)
+            du = User.objects.filter(username=f"line_{uid}").first()
+            line_users.append({
+                "lineId": uid,
+                "name": (cell(r, EM.display_name) or cell(r, EM.nickname) or "").strip(),
+                "nick": (cell(r, EM.nickname) or "").strip(),
+                "role": roles.get_role(du) if du else None,
+                "roleLabel": roles.role_label(du) if du else "ไม่มีบทบาท",
+            })
+    except Exception:
+        line_users = []
+    # บัญชีรหัสผ่าน (ช่าง/ฝ่ายทะเบียน/break-glass) — ไม่ใช่ line_*
     users = [{
         "id": u.pk, "username": u.username, "name": u.get_full_name(),
         "role": roles.get_role(u), "roleLabel": roles.role_label(u),
         "active": u.is_active, "isSuper": u.is_superuser,
-    } for u in User.objects.order_by("-is_active", "username")]
-    return JsonResponse({"ok": True, "users": users, "roles": [[k, v] for k, v in roles.ROLES]},
+    } for u in User.objects.exclude(username__startswith="line_").order_by("-is_active", "username")]
+    return JsonResponse({"ok": True, "lineUsers": line_users, "users": users,
+                         "roles": [[k, v] for k, v in roles.ROLES]},
                         json_dumps_params={"ensure_ascii": False})
 
 
@@ -521,9 +555,9 @@ TRASH_DAYS = 30  # ถังขยะเก็บโชว์กี่วัน 
 @login_required
 @require_POST
 def api_delete_car(request):
-    """ลบรถ = ย้ายเข้าถังขยะ (soft delete) — เก็บข้อมูลไว้ กู้คืนได้ใน 30 วัน."""
-    if not roles.can_edit_car(request.user):
-        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์ลบรถ"}, status=403)
+    """ลบรถ = ย้ายเข้าถังขยะ (soft delete) — เก็บข้อมูลไว้ กู้คืนได้ใน 30 วัน · แอดมินเท่านั้น."""
+    if not roles.can_manage_users(request.user):
+        return JsonResponse({"ok": False, "error": "ลบรถได้เฉพาะแอดมิน"}, status=403)
     car = get_object_or_404(Car, code=json.loads(request.body or "{}").get("code"))
     car.deleted_at = timezone.now()
     car.save(update_fields=["deleted_at"])
@@ -533,9 +567,9 @@ def api_delete_car(request):
 @login_required
 @require_POST
 def api_restore_car(request):
-    """กู้รถจากถังขยะกลับมาใช้งาน."""
-    if not roles.can_edit_car(request.user):
-        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์กู้คืน"}, status=403)
+    """กู้รถจากถังขยะกลับมาใช้งาน · แอดมินเท่านั้น."""
+    if not roles.can_manage_users(request.user):
+        return JsonResponse({"ok": False, "error": "กู้คืนได้เฉพาะแอดมิน"}, status=403)
     car = get_object_or_404(Car, code=json.loads(request.body or "{}").get("code"))
     car.deleted_at = None
     car.save(update_fields=["deleted_at"])
@@ -557,5 +591,5 @@ def api_trash(request):
             "stageName": c.stage_name, "deletedAt": timezone.localtime(c.deleted_at).strftime("%d/%m/%y %H:%M"),
             "daysLeft": max(0, TRASH_DAYS - days_in),
         })
-    return JsonResponse({"ok": True, "cars": cars, "canRestore": roles.can_edit_car(request.user),
+    return JsonResponse({"ok": True, "cars": cars, "canRestore": roles.can_manage_users(request.user),
                          "trashDays": TRASH_DAYS}, json_dumps_params={"ensure_ascii": False})

@@ -3607,7 +3607,7 @@
       const ov=document.createElement('div'); ov.id=id;
       ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
       ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
-      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:600px;width:100%">${inner}</div>`;
+      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:720px;width:100%">${inner}</div>`;
       document.body.appendChild(ov); if(window.lucide) lucide.createIcons(); return ov;
     }
 
@@ -3641,11 +3641,9 @@
         <div class="mut" style="font-size:12px;margin:14px 0 6px">ประวัติการสแกน</div><div style="max-height:150px;overflow:auto">${logs}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
           <a href="${d.qrUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปิด QR</a>
-          <div style="display:flex;gap:14px;align-items:center">
-            ${d.canEdit?`<a href="${d.editUrl}" target="_blank" style="font-size:12px;color:var(--blue)">แก้ไขข้อมูล</a>`:''}
-            ${d.canEdit?`<a onclick="trkDelete('${d.code}')" style="font-size:12px;color:var(--red);cursor:pointer">🗑 ลบ (ถังขยะ)</a>`:''}
-          </div>
-        </div>`;
+          ${d.canEdit?`<a href="${d.editUrl}" target="_blank" style="font-size:12px;color:var(--blue)">แก้ไขข้อมูล</a>`:''}
+        </div>
+        ${d.canDelete?`<div style="border-top:.5px solid var(--bd);margin-top:12px;padding-top:12px;text-align:center"><button onclick="trkDelete('${d.code}')" style="font-size:12px;padding:8px 16px;border-radius:9px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer">🗑 ลบรถ (ย้ายถังขยะ · แอดมินเท่านั้น)</button></div>`:''}`;
     }
     async function trkChangeStage(code,stage){
       try{
@@ -3715,24 +3713,34 @@
       let d; try{ d=await (await fetch('/track/api/users',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const roleOpts=sel=>`<option value="">— ไม่มี —</option>`+d.roles.map(r=>`<option value="${r[0]}" ${sel===r[0]?'selected':''}>${h(r[1])}</option>`).join('');
-      const rows=d.users.map(u=>`<tr style="border-top:.5px solid var(--bd)">
+      // พนักงานจาก LINE (ตั้งบทบาทด้วย LINE id ที่เก็บไว้แล้ว)
+      const lineRows=(d.lineUsers||[]).map(u=>`<tr style="border-top:.5px solid var(--bd)">
+        <td style="padding:7px"><b>${h(u.name||u.nick||u.lineId)}</b>${(u.nick&&u.nick!==u.name)?`<div class="mut" style="font-size:11px">${h(u.nick)}</div>`:''}<div class="mut" style="font-size:10px">${h(u.lineId)}</div></td>
+        <td style="padding:7px"><select onchange="trkUserAction('set_role_line',null,{line_id:'${u.lineId}',role:this.value})" style="font-size:12px;padding:5px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${roleOpts(u.role)}</select></td>
+      </tr>`).join('')||`<tr><td colspan="2" class="mut" style="padding:14px;text-align:center">ไม่พบพนักงาน LINE (เช็คชีต employees)</td></tr>`;
+      // บัญชีรหัสผ่าน (ช่าง/ฝ่ายทะเบียน/break-glass)
+      const rows=(d.users||[]).map(u=>`<tr style="border-top:.5px solid var(--bd)">
         <td style="padding:7px"><b>${h(u.username)}</b>${u.name?`<div class="mut" style="font-size:11px">${h(u.name)}</div>`:''}${u.isSuper?'<span class="mut" style="font-size:10px">(superuser)</span>':''}</td>
         <td style="padding:7px">${u.isSuper?'<span class="mut" style="font-size:12px">ผู้บริหารเสมอ</span>':`<select onchange="trkUserAction('set_role',${u.id},{role:this.value})" style="font-size:12px;padding:5px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${roleOpts(u.role)}</select>`}</td>
         <td style="padding:7px;text-align:right">${u.isSuper?'':`<button onclick="trkUserAction('toggle_active',${u.id})" style="font-size:11px;padding:5px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:${u.active?'var(--red)':'var(--t2)'};cursor:pointer">${u.active?'ปิด':'เปิด'}</button>`}</td>
-      </tr>`).join('');
+      </tr>`).join('')||`<tr><td colspan="3" class="mut" style="padding:14px;text-align:center">ยังไม่มีบัญชีรหัสผ่าน</td></tr>`;
       ov.firstChild.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">จัดการผู้ใช้/บทบาท (ระบบรถ)</div><button onclick="document.getElementById('trk-users').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
-        <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:12px 0">
-          <div class="mut" style="font-size:12px;margin-bottom:8px">เพิ่มผู้ใช้ใหม่ (สำหรับช่าง/ฝ่ายทะเบียน ที่ login ด้วยรหัส)</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input id="tu_user" placeholder="ชื่อผู้ใช้" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
-            <input id="tu_pass" placeholder="รหัสผ่าน" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
-            <input id="tu_name" placeholder="ชื่อ-สกุล" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
-            <select id="tu_role" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">${roleOpts('')}</select>
+        <div class="mut" style="font-size:12px;margin:6px 0 10px">ตั้งบทบาทให้พนักงานจาก LINE ที่มีในระบบอยู่แล้ว (เลือกบทบาทในแถวนั้น = ใช้ได้ทันทีเมื่อเขา login ด้วย LINE)</div>
+        <div style="overflow:auto;max-height:300px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">พนักงาน (LINE)</th><th style="padding:7px">บทบาท</th></tr></thead><tbody>${lineRows}</tbody></table></div>
+        <details style="margin-top:14px"><summary class="mut" style="cursor:pointer;font-size:12px">บัญชีรหัสผ่าน (ช่าง/ฝ่ายทะเบียน ที่ไม่มี LINE)</summary>
+          <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:10px 0">
+            <div class="mut" style="font-size:12px;margin-bottom:8px">เพิ่มบัญชีใหม่ (login ด้วยรหัสในหน้า login เดียวกัน)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input id="tu_user" placeholder="ชื่อผู้ใช้" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+              <input id="tu_pass" placeholder="รหัสผ่าน" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+              <input id="tu_name" placeholder="ชื่อ-สกุล" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+              <select id="tu_role" style="padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">${roleOpts('')}</select>
+            </div>
+            <button onclick="trkUserCreate()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:12px">เพิ่มบัญชี</button>
           </div>
-          <button onclick="trkUserCreate()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:12px">เพิ่มผู้ใช้</button>
-        </div>
-        <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">ผู้ใช้</th><th style="padding:7px">บทบาท</th><th style="padding:7px"></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+          <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">ผู้ใช้</th><th style="padding:7px">บทบาท</th><th style="padding:7px"></th></tr></thead><tbody>${rows}</tbody></table></div>
+        </details>`;
     }
     async function trkUserAction(action,user_id,extra){
       try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(Object.assign({action,user_id},extra||{}))});
