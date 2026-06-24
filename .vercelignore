@@ -1,0 +1,23 @@
+# ลดขนาด bundle ที่อัปขึ้น Vercel (maxLambdaSize) — ตัดไฟล์ที่ runtime ไม่ได้ import
+# สคริปต์ debug/test แบบ one-off (ไม่ถูก import โดยแอป)
+scripts/
+
+# Google Apps Script (รันบน Google ไม่ใช่ Vercel)
+gas/
+
+# เอกสาร
+README.md
+CLAUDE.md
+
+# Python cache / virtualenv
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# helper local-only (โชว์ค่า env)
+show_env.py
+
+# media/static ที่ gen เอง
+media/
+staticfiles/

@@ -1929,13 +1929,7 @@ def update_lead_note(request):
     if res.get("error"):
         return JsonResponse(res, status=502)
 
-    # mirror Supabase → re-sync เบื้องหลัง ให้ dashboard เห็นค่าใหม่ (ไม่ block)
-    if getattr(settings, "USE_SUPABASE", False):
-        try:
-            from .services.supabase_client import _trigger_bg_sync
-            _trigger_bg_sync()
-        except Exception:
-            pass
+    # dashboard เห็นค่าใหม่รอบ precompute ถัดไป (cron อ่าน Google ตรง — เลิก raw mirror แล้ว)
     return JsonResponse(res, json_dumps_params={"ensure_ascii": False})
 
 
@@ -2214,11 +2208,7 @@ def _render_seller_page(request, seller_name):
         note = _re.sub(r"^\d{4,5}\s*", "", note_raw)
         # คำนวณ Lead Score ต่อเคส
         try:
-            ls = compute_lead_score(
-                r, score_ctx["cfg"],
-                score_ctx["cancelled"], score_ctx["done"],
-                score_ctx["top_cars"],
-            )
+            ls = compute_lead_score(r, score_ctx["cfg"])
         except Exception:
             ls = {"score": 0, "tier": "❄cold", "breakdown": []}
         my_leads.append({

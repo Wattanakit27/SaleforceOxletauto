@@ -4,37 +4,10 @@
 - sheet_cache: mirror ข้อมูลจาก Google Sheets (dashboard อ่านจากนี่แทน)
 - loan_applications / finance_checks: เก็บฟอร์มจากหน้าเซลล์
 """
-import threading
 from datetime import datetime, timezone
 
 import requests
 from django.conf import settings
-
-# ── Lazy background sync ──
-# เวลา dashboard อ่าน Supabase แล้วเจอข้อมูลเก่า > TTL → ยิง sync เบื้องหลัง (ไม่ block)
-# ทำให้ local สดเองโดยไม่ต้องมี external cron (บน Vercel ใช้ n8n คู่กัน)
-_STALE_TTL = 120  # วินาที
-_bg_lock = threading.Lock()
-_bg_syncing = False
-
-
-def _trigger_bg_sync():
-    global _bg_syncing
-    with _bg_lock:
-        if _bg_syncing:
-            return
-        _bg_syncing = True
-
-    def _run():
-        global _bg_syncing
-        try:
-            sync_all_sheets_to_supabase()
-        except Exception:
-            pass
-        finally:
-            _bg_syncing = False
-
-    threading.Thread(target=_run, daemon=True).start()
 
 
 def is_configured() -> bool:
@@ -103,126 +76,11 @@ def update_rows(table: str, match: str, patch: dict) -> list:
         return []
 
 
-def _trim_row(row: list) -> list:
-    """ตัด cell ว่างท้ายแถวทิ้ง — ลดขนาด jsonb (เขียนเร็วขึ้น, กัน statement timeout).
-    ปลอดภัย: aggregator อ่านด้วย cell(r, idx) ซึ่งคืน '' ถ้า idx เกินความยาวแถวอยู่แล้ว."""
-    i = len(row)
-    while i > 0 and (row[i - 1] is None or str(row[i - 1]).strip() == ""):
-        i -= 1
-    return row[:i] if i < len(row) else row
-
-
-def upsert_sheet(sheet_key: str, rows: list) -> None:
-    """upsert ข้อมูล 1 sheet ลง sheet_cache (sheet_key เป็น primary key)."""
-    url, key = _base()
-    rows = [_trim_row(r) for r in rows]   # ลดขนาดก้อน → เขียนเร็วขึ้น (leads 15k แถวเคย timeout)
-    payload = {
-        "sheet_key": sheet_key,
-        "rows": rows,
-        "synced_at": datetime.now(timezone.utc).isoformat(),
-    }
-    r = requests.post(
-        f"{url}/rest/v1/sheet_cache?on_conflict=sheet_key",
-        headers=_headers(key, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
-        json=payload, timeout=60,
-    )
-    if r.status_code not in (200, 201, 204):
-        raise Exception(f"Supabase upsert sheet_cache({sheet_key}) {r.status_code}: {r.text[:300]}")
-
-
-def get_sheet(sheet_key: str) -> list | None:
-    """อ่าน rows ของ 1 sheet จาก sheet_cache. คืน None ถ้าไม่มี."""
-    url, key = _base()
-    r = requests.get(
-        f"{url}/rest/v1/sheet_cache?sheet_key=eq.{sheet_key}&select=rows",
-        headers=_headers(key), timeout=30,
-    )
-    if r.status_code != 200:
-        raise Exception(f"Supabase get sheet_cache({sheet_key}) {r.status_code}: {r.text[:300]}")
-    data = r.json()
-    if not data:
-        return None
-    return data[0].get("rows", [])
-
-
 def sync_all_sheets_to_supabase() -> dict:
     """(Phase 2 มิ.ย.69) เลิก mirror leads ดิบเข้า sheet_cache — Supabase เก็บแค่ผลสรุป (dashboard_cache) → no-op.
-    รีเฟรช dashboard ใช้ precompute_dashboard() อ่าน Google ตรงแทน (กัน CPU เต็มจากการยัด 15k แถว)."""
+    รีเฟรช dashboard ใช้ precompute_dashboard() อ่าน Google ตรงแทน (กัน CPU เต็มจากการยัด 15k แถว).
+    ยังถูกเรียกจาก cron_tick — คงไว้เป็น no-op (upsert_sheet/get_sheet/fetch_all_from_supabase ถูกลบออกแล้ว)."""
     return {"skipped": "raw mirror disabled (Phase 2 — เก็บแค่ dashboard_cache)"}
-    from .google_sheets import (
-        fetch_sheet, fetch_leads_by_month_tabs, fetch_sales_by_month_tabs,
-        fetch_bookings_by_month_tabs, fetch_live_by_month_tabs,
-    )
-    results: dict = {}
-
-    # leads + sales ใช้ month tabs (ตรงกับที่ dashboard ใช้)
-    try:
-        rows = fetch_leads_by_month_tabs()
-        upsert_sheet("leads", rows)
-        results["leads"] = len(rows)
-    except Exception as e:
-        results["leads"] = f"error: {e}"
-
-    try:
-        rows = fetch_sales_by_month_tabs()
-        upsert_sheet("sales_reports", rows)
-        results["sales_reports"] = len(rows)
-    except Exception as e:
-        results["sales_reports"] = f"error: {e}"
-
-    try:
-        rows = fetch_bookings_by_month_tabs()
-        upsert_sheet("bookings", rows)
-        results["bookings"] = len(rows)
-    except Exception as e:
-        results["bookings"] = f"error: {e}"
-
-    try:
-        rows = fetch_live_by_month_tabs()
-        upsert_sheet("live_sessions", rows)
-        results["live_sessions"] = len(rows)
-    except Exception as e:
-        results["live_sessions"] = f"error: {e}"
-
-    for k in ("live_followups", "employees"):
-        try:
-            rows = fetch_sheet(k)
-            upsert_sheet(k, rows)
-            results[k] = len(rows)
-        except Exception as e:
-            results[k] = f"error: {e}"
-
-    return results
-
-
-def fetch_all_from_supabase() -> dict:
-    """อ่าน 6 sheets จาก sheet_cache ใน query เดียว (เร็วกว่าอ่านทีละ sheet)."""
-    url, key = _base()
-    keys = ["leads", "sales_reports", "bookings", "live_sessions", "live_followups", "employees"]
-    r = requests.get(
-        f"{url}/rest/v1/sheet_cache?select=sheet_key,rows,synced_at", headers=_headers(key), timeout=60,
-    )
-    if r.status_code != 200:
-        raise Exception(f"Supabase get_all sheet_cache {r.status_code}: {r.text[:300]}")
-    data = r.json()
-    cache = {row["sheet_key"]: row.get("rows", []) for row in data}
-    out = {}
-    for k in keys:
-        if k not in cache:
-            raise Exception(f"sheet_cache ยังไม่มี '{k}' (ต้อง sync ก่อน)")
-        out[k] = cache[k]
-
-    # ข้อมูลเก่าเกิน TTL → ยิง sync เบื้องหลัง (คืนข้อมูลปัจจุบันทันที ไม่รอ)
-    try:
-        stamps = [row["synced_at"] for row in data if row.get("synced_at")]
-        if stamps:
-            oldest = min(stamps).replace("Z", "+00:00")
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(oldest)).total_seconds()
-            if age > _STALE_TTL:
-                _trigger_bg_sync()
-    except Exception:
-        pass
-    return out
 
 
 def save_dashboard_cache(data: dict) -> None:

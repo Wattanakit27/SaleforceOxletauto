@@ -1934,41 +1934,7 @@ def load_lead_score_config() -> dict[str, int]:
     return cfg if cfg else dict(_LEAD_SCORE_DEFAULTS)
 
 
-def _build_lead_history_maps(sales_reports: list) -> tuple[set, set]:
-    """สร้าง set ของ lead_code ที่เคยยกเลิก / เคยปล่อยสำเร็จ.
-    ใช้สำหรับ Lead Score history component.
-    """
-    cancelled = set()
-    done = set()
-    for r in sales_reports:
-        code = cell(r, S.lead_code).strip()
-        if not code:
-            continue
-        status = cell(r, S.status).lower()
-        if any(k in status for k in ("ยกเลิก", "คืน", "รีเจ็ก")):
-            cancelled.add(code)
-        elif "ปล่อย" in status:
-            done.add(code)
-    return cancelled, done
-
-
-def _build_top_cars_set(raw_leads: list, top_n: int = 20) -> set:
-    """หา top N รุ่นรถยอดนิยม (จาก car_formula column M)."""
-    counts: dict[str, int] = {}
-    for r in raw_leads:
-        car = cell(r, L.car_formula).strip()
-        if not car or car == "ไม่ระบุ":
-            continue
-        counts[car] = counts.get(car, 0) + 1
-    return set([c for c, _ in sorted(counts.items(), key=lambda x: -x[1])[:top_n]])
-
-
-def compute_lead_score(lead_row: list,
-                       cfg: dict[str, int],
-                       cancelled_codes: set,
-                       done_codes: set,
-                       top_cars: set,
-                       price_lookup: dict[str, float] | None = None) -> dict:
+def compute_lead_score(lead_row: list, cfg: dict[str, int]) -> dict:
     """คำนวณ Lead Score ของ lead 1 ราย.
 
     Returns:
@@ -2064,14 +2030,7 @@ def prepare_lead_score_context(raw_leads: list, sales_reports: list) -> dict:
         return _lsc_cache["val"]
 
     cfg = load_lead_score_config()
-    cancelled, done = _build_lead_history_maps(sales_reports)
-    top_cars = _build_top_cars_set(raw_leads, top_n=20)
-    val = {
-        "cfg": cfg,
-        "cancelled": cancelled,
-        "done": done,
-        "top_cars": top_cars,
-    }
+    val = {"cfg": cfg}
     _lsc_cache.update(key=key, ts=now, val=val)
     return val
 
@@ -2090,8 +2049,6 @@ def attach_lead_scores(follow_cases: list[dict],
         follow_cases เดิม + field ใหม่
     """
     cfg = load_lead_score_config()
-    cancelled, done = _build_lead_history_maps(sales_reports)
-    top_cars = _build_top_cars_set(my_year_leads, top_n=20)
 
     # Index leads by code สำหรับ lookup เร็ว
     leads_by_code: dict[str, list] = {}
@@ -2108,7 +2065,7 @@ def attach_lead_scores(follow_cases: list[dict],
             case["leadTier"] = "❄cold"
             case["scoreBreakdown"] = []
             continue
-        result = compute_lead_score(row, cfg, cancelled, done, top_cars)
+        result = compute_lead_score(row, cfg)
         case["leadScore"] = result["score"]
         case["leadTier"] = result["tier"]
         case["scoreBreakdown"] = result["breakdown"]
@@ -2235,7 +2192,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         if not _inwin(cell(r, L.received_date)):
             continue
         try:
-            ls = compute_lead_score(r, ctx["cfg"], ctx["cancelled"], ctx["done"], ctx["top_cars"])
+            ls = compute_lead_score(r, ctx["cfg"])
         except Exception:
             ls = {"score": 0, "tier": "❄cold"}
         leads_by_seller[name].append({

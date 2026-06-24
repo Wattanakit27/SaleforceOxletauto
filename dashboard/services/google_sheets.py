@@ -1,5 +1,4 @@
 """Google Sheets API — ported from lib/google-sheets.ts"""
-import asyncio
 import concurrent.futures
 import time
 from typing import Any
