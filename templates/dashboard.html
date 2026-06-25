@@ -8,7 +8,7 @@
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .kpi .n{font-size:26px;font-weight:800}
   .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:#252b42;border:.5px solid var(--line)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:var(--bg3);border:.5px solid var(--line)}
   .chip.on{border-color:var(--accent);color:var(--fg)}
   .kv{padding:8px 2px;border-bottom:.5px solid var(--line)}
   .kv span:first-child{display:block;font-size:11px;color:var(--mut)}
@@ -145,7 +145,7 @@
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
-      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:#000">`:''}
+      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:var(--bg2)">`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
         ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}
         ${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}

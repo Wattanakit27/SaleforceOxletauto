@@ -15,16 +15,16 @@
   }
   #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:16px;border:1px solid var(--line)}
   #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
-  #scanRoot .sc-photo{width:100%;height:auto;max-height:380px;object-fit:contain;background:#0c0f1a;border-radius:13px;margin-bottom:13px;display:block}
-  #scanRoot .sc-stage{background:rgba(123,97,255,.18);color:#cbbcff;font-weight:600}
+  #scanRoot .sc-photo{width:100%;height:auto;max-height:380px;object-fit:contain;background:var(--bg2);border-radius:13px;margin-bottom:13px;display:block}
+  #scanRoot .sc-stage{background:rgba(123,97,255,.18);color:var(--accent);font-weight:600}
   #scanRoot .sc-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:2px 0 13px}
-  #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:999px;background:#252b42;color:var(--mut)}
-  #scanRoot .sc-flow #selPill{padding:6px 12px;border-radius:999px;background:#252b42;color:var(--mut);font-weight:700}
-  #scanRoot .sc-flow #selPill.sel{background:rgba(123,97,255,.18);color:#cbbcff}
+  #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--mut)}
+  #scanRoot .sc-flow #selPill{padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--mut);font-weight:700}
+  #scanRoot .sc-flow #selPill.sel{background:rgba(123,97,255,.18);color:var(--accent)}
   #scanRoot .sc-chips{display:flex;gap:7px;flex-wrap:wrap}
-  #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:#141a2c;color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
+  #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
   #scanRoot .sc-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-  #scanRoot .sc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--mut);background:#141a2c;text-align:center}
+  #scanRoot .sc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--mut);background:var(--bg2);text-align:center}
   #scanRoot .sc-drop i{width:26px;height:26px}
   #scanRoot .sc-confirm{width:100%;justify-content:center;padding:14px;font-size:15px;font-weight:800;border-radius:12px}
   #scanRoot .sc-tl{display:flex;gap:11px}
@@ -118,7 +118,7 @@
         {% if l.note %}<div class="mut sm" style="margin-top:4px">{{ l.note }}</div>{% endif %}
         {% if l.media %}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-          {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:#141a2c;border:1px solid var(--line);font-size:12px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:60px;height:60px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
+          {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--line);font-size:12px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:60px;height:60px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
         </div>
         {% endif %}
       </div>
