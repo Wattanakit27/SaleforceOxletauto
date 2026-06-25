@@ -21,7 +21,7 @@ from . import constants as C
 from . import roles
 from .forms import CarForm
 from .line import notify_stage_change
-from .models import Car, ScanLog, branch_pairs
+from .models import Car, ScanLog, LoginEvent, branch_pairs
 
 SORT_MAP = {
     "updated": ("-updated_at",),
@@ -92,6 +92,36 @@ def dashboard(request):
         # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
+    })
+
+
+@roles.role_required(roles.can_manage_users)
+def login_log(request):
+    """หน้าดู log การเข้าสู่ระบบ (Executive/Admin) — ใครเข้า/พยายามเข้า เมื่อไหร่ สำเร็จไหม.
+    ดึงจาก cars.LoginEvent (เขียนจากทุกจุด login ฝั่ง sales/tracking · best-effort)."""
+    show = request.GET.get("show", "")          # ''=ทั้งหมด · 'ok'=สำเร็จ · 'fail'=ล้มเหลว
+    qs = LoginEvent.objects.all()
+    if show == "fail":
+        qs = qs.filter(success=False)
+    elif show == "ok":
+        qs = qs.filter(success=True)
+    events = list(qs[:300])
+    now = timezone.localtime(timezone.now())
+    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = LoginEvent.objects.filter(created_at__gte=start_today)
+    rows = [{
+        "at": timezone.localtime(e.created_at).strftime("%d/%m/%y %H:%M:%S"),
+        "identity": e.identity, "name": e.name,
+        "method": e.get_method_display() if e.method else "—",
+        "success": e.success, "role": e.role, "ip": e.ip, "reason": e.reason,
+        "ua": e.user_agent,
+    } for e in events]
+    return render(request, "login_log.html", {
+        "rows": rows, "show": show,
+        "today_ok": today.filter(success=True).count(),
+        "today_fail": today.filter(success=False).count(),
+        "uniq_today": today.filter(success=True).values("identity").distinct().count(),
+        "total": LoginEvent.objects.count(),
     })
 
 

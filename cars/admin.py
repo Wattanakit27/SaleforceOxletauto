@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Branch, Car, ScanLog
+from .models import Branch, Car, LoginEvent, ScanLog
 
 
 class ScanLogInline(admin.TabularInline):
@@ -36,3 +36,11 @@ class ScanLogAdmin(admin.ModelAdmin):
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "active")
+
+
+@admin.register(LoginEvent)
+class LoginEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "identity", "name", "method", "success", "role", "ip")
+    list_filter = ("success", "method")
+    search_fields = ("identity", "name", "ip")
+    readonly_fields = ("created_at",)

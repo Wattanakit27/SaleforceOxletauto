@@ -219,3 +219,28 @@ def branch_name(code):
     name = b.name if b else code
     _branch_name_cache[code] = name
     return name
+
+
+class LoginEvent(models.Model):
+    """บันทึกการเข้าสู่ระบบ (audit) — ใครเข้า/พยายามเข้า เมื่อไหร่ ด้วยวิธีไหน สำเร็จไหม
+    เก็บทั้ง sales (LINE/แอดมินรหัสผ่าน) และ tracking (worker). เขียนแบบ best-effort —
+    DB ล่ม/ยังไม่ migrate = ข้ามเงียบ ไม่ทำให้ login พัง (ดู dashboard/services/audit.py)."""
+    METHODS = [("line", "LINE"), ("admin", "แอดมินรหัสผ่าน"), ("worker", "บัญชีรหัสผ่าน")]
+    created_at = models.DateTimeField("เวลา", auto_now_add=True, db_index=True)
+    identity = models.CharField("บัญชี (user/LINE id)", max_length=200, blank=True)
+    name = models.CharField("ชื่อ", max_length=200, blank=True)
+    method = models.CharField("วิธี", max_length=20, choices=METHODS, blank=True)
+    success = models.BooleanField("สำเร็จ", default=True)
+    role = models.CharField("บทบาท", max_length=40, blank=True)
+    ip = models.CharField("IP", max_length=64, blank=True)
+    user_agent = models.CharField("อุปกรณ์", max_length=300, blank=True)
+    reason = models.CharField("หมายเหตุ/สาเหตุ", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "การเข้าสู่ระบบ"
+        verbose_name_plural = "การเข้าสู่ระบบ"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["-created_at"]), models.Index(fields=["success"])]
+
+    def __str__(self):
+        return f"{'OK' if self.success else 'FAIL'} {self.identity} ({self.method})"

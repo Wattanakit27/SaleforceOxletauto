@@ -15,6 +15,7 @@ urlpatterns = [
 
     # จัดการผู้ใช้/บทบาท (Executive/Admin)
     path("users/", views.manage_users, name="manage_users"),
+    path("logins/", views.login_log, name="login_log"),
 
     # JSON API — ให้หน้า sales เรนเดอร์ "สถานะรถ" เองด้วยธีมเดียวกัน (ไม่ใช้ iframe)
     path("api/cars", views.cars_api, name="cars_api"),

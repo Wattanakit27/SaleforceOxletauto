@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Log การเข้าสู่ระบบ · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between;margin-bottom:14px">
+  <div><h1 style="margin:0"><i data-lucide="log-in"></i> การเข้าสู่ระบบ</h1><span class="mut sm">ใครเข้า/พยายามเข้า เมื่อไหร่ · {{ total }} รายการล่าสุด</span></div>
+  <a class="btn" href="{% url 'track_dashboard' %}"><i data-lucide="arrow-left"></i> กลับ</a>
+</div>
+
+<div class="cols" style="margin-bottom:12px">
+  <div class="kpi"><div class="mut sm">เข้าสำเร็จวันนี้</div><div class="n tag-ok">{{ today_ok }}</div></div>
+  <div class="kpi"><div class="mut sm">พยายามเข้าล้มเหลววันนี้</div><div class="n tag-red">{{ today_fail }}</div></div>
+  <div class="kpi"><div class="mut sm">บัญชีไม่ซ้ำ (เข้าสำเร็จวันนี้)</div><div class="n">{{ uniq_today }}</div></div>
+</div>
+
+<div class="card" style="padding:14px">
+  <div class="row" style="gap:6px;margin-bottom:10px">
+    <a class="chip{% if not show %} on{% endif %}" href="?">ทั้งหมด</a>
+    <a class="chip{% if show == 'ok' %} on{% endif %}" href="?show=ok"><span class="dot ok"></span> สำเร็จ</a>
+    <a class="chip{% if show == 'fail' %} on{% endif %}" href="?show=fail"><span class="dot red"></span> ล้มเหลว</a>
+    <span class="mut sm" style="margin-left:auto">เวลาไทย (Asia/Bangkok)</span>
+  </div>
+  <div style="overflow:auto">
+  <table>
+    <thead><tr><th>เวลา</th><th>บัญชี</th><th>วิธี</th><th>ผล</th><th>บทบาท</th><th>IP</th><th>หมายเหตุ</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="sm" style="white-space:nowrap">{{ r.at }}</td>
+        <td><b>{{ r.name|default:r.identity }}</b>{% if r.name and r.identity %}<div class="mut sm" style="word-break:break-all">{{ r.identity }}</div>{% endif %}</td>
+        <td class="sm">{{ r.method }}</td>
+        <td>{% if r.success %}<span class="pill tag-ok"><span class="dot ok"></span> สำเร็จ</span>{% else %}<span class="pill tag-red"><span class="dot red"></span> ล้มเหลว</span>{% endif %}</td>
+        <td class="sm mut">{{ r.role|default:"—" }}</td>
+        <td class="sm mut" style="white-space:nowrap">{{ r.ip|default:"—" }}</td>
+        <td class="sm mut" style="max-width:240px"><span title="{{ r.ua }}">{{ r.reason|default:"—" }}</span></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="mut" style="text-align:center;padding:24px">ยังไม่มีบันทึกการเข้าสู่ระบบ</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

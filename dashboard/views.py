@@ -18,6 +18,7 @@ from .services.constants import (
 )
 from .services.helpers import pct, nc, urg, nocar, empty, dots_html, urg_badge_html
 from .services.seller_tokens import seller_from_token
+from .services.audit import log_login
 
 
 @require_GET
@@ -190,6 +191,7 @@ def login_view(request):
             "position": "admin",
         }
         request.session.set_expiry(60 * 60 * 24 * 30)
+        log_login(request, identity=admin_user, name="Admin (รหัสผ่านระบบ)", method="admin", success=True, role="admin")
         if is_ajax:
             return JsonResponse({"ok": True, "next": next_url})
         return HttpResponseRedirect(next_url)
@@ -205,6 +207,8 @@ def login_view(request):
         if duser is not None:
             from django.contrib.auth import login as auth_login
             auth_login(request, duser)
+            log_login(request, identity=duser.username, name=(duser.get_full_name() or duser.username),
+                      method="worker", success=True, role=("superuser" if duser.is_superuser else ""))
             dest = next_url if (next_url or "").startswith("/track/") else "/track/"
             if is_ajax:
                 return JsonResponse({"ok": True, "next": dest})
@@ -217,6 +221,8 @@ def login_view(request):
 
     line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
     error = "ข้อมูลไม่ถูกต้อง" if (username or password or line_token) else "กรุณากรอกข้อมูล"
+    if username or password:   # มีการพยายามเข้าจริง (ไม่นับฟอร์มเปล่า) → log failed
+        log_login(request, identity=(username or "(ไม่ระบุ)"), method="worker", success=False, reason="รหัสผ่านไม่ถูกต้อง")
     if is_ajax:
         return JsonResponse({"ok": False, "error": error}, status=401)
     return render(request, "dashboard/login.html", {
@@ -360,6 +366,10 @@ def line_login_callback(request):
 
     # ตั้ง session sales (best-effort) — ถ้าเป็นพนักงาน/แอดมิน จะได้ oxlet_user + รู้ position
     sales_target, sales_err = _login_with_line_user_id(request, line_user_id, next_url)
+    _ou = request.session.get("oxlet_user") or {}
+    log_login(request, identity=line_user_id, name=(_ou.get("display_name") or line_display or ""),
+              method="line", success=not sales_err, role=_ou.get("position", ""),
+              reason=("" if not sales_err else (sales_err or "")[:200]))
     is_admin_user = ((request.session.get("oxlet_user") or {}).get("position") == "admin")
 
     # tracking (cars/) ใช้ Django auth — ถ้า next ชี้ /track/ → bridge LINE → Django user + login

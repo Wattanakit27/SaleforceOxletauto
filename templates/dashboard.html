@@ -23,7 +23,8 @@
     <a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>
     {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
     {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
-    {% if can_manage_users %}<a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>{% endif %}
+    {% if can_manage_users %}<a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>
+    <a class="btn" href="{% url 'login_log' %}"><i data-lucide="log-in"></i> Log เข้าระบบ</a>{% endif %}
   </div>
 </div>
 
