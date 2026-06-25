@@ -4,6 +4,15 @@
 <style>
   /* หน้าสแกน — รีสไตล์ตามม็อก (โทนมืดของ tracking) · accent ม่วง */
   #scanRoot{--accent:#7b61ff;max-width:480px;margin:0 auto}
+  #scanRoot .sc-grid{display:grid;gap:14px;align-items:start}
+  #scanRoot .sc-col-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+  /* จอกว้าง (คอม) — ใช้พื้นที่ 2 คอลัมน์ ซ้าย:รถ+เปลี่ยนสเตป ขวา:ประวัติ */
+  @media (min-width:900px){
+    #scanRoot{max-width:1000px}
+    #scanRoot .lang-row{max-width:440px;margin-left:auto;margin-right:auto}
+    #scanRoot .sc-grid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+    #scanRoot .sc-side{position:sticky;top:80px;max-height:calc(100vh - 100px);overflow:auto}
+  }
   #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:16px;border:1px solid var(--line)}
   #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
   #scanRoot .sc-photo{width:100%;height:auto;max-height:380px;object-fit:contain;background:#0c0f1a;border-radius:13px;margin-bottom:13px;display:block}
@@ -42,6 +51,8 @@
     <button type="button" class="langbtn" data-lang="km" onclick="setScanLang('km')"><span style="font-size:22px;line-height:1">🇰🇭</span>ខ្មែរ</button>
   </div>
 
+  <div class="sc-grid">
+  <div class="sc-col-main">
   <!-- การ์ดรถ (hero) -->
   <div class="card">
     {% if car.photo and supabaseUrl %}<img class="sc-photo" src="{{ supabaseUrl }}/storage/v1/object/public/{{ storageBucket }}/{{ car.photo.name }}" alt="">{% endif %}
@@ -58,7 +69,7 @@
   </div>
 
   <!-- เปลี่ยนสเตป -->
-  <div class="card" style="margin-top:14px">
+  <div class="card">
     <h2 style="display:flex;align-items:center;gap:7px"><i data-lucide="repeat"></i> <span data-i18n="changeStage">เปลี่ยนสเตปรถ</span></h2>
     {% if stages %}
     <form method="post" action="{% url 'scan_submit' car.code %}" enctype="multipart/form-data" class="grid" style="gap:13px">
@@ -91,9 +102,10 @@
     <div class="msg" style="margin-top:14px" data-i18n="noStage">บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้</div>
     {% endif %}
   </div>
+  </div><!-- /sc-col-main -->
 
   <!-- ประวัติ -->
-  <div class="card" style="margin-top:14px">
+  <div class="card sc-side">
     <h2 style="display:flex;align-items:center;gap:7px"><i data-lucide="history"></i> <span data-i18n="history">ประวัติล่าสุด</span></h2>
     {% for l in logs %}
     <div class="sc-tl" style="padding:9px 0">
@@ -113,6 +125,7 @@
     </div>
     {% empty %}<p class="mut sm" data-i18n="noHistory">ยังไม่มีประวัติ</p>{% endfor %}
   </div>
+  </div><!-- /sc-grid -->
 </div>
 {% endblock %}
 
