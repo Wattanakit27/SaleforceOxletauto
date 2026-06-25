@@ -446,23 +446,19 @@
                       'ยังไม่ออกเร็วๆนี้','ติดแบล็คลิส','เครดิตไม่ผ่าน','ลูกค้าไม่สนใจแล้ว','คืนเคส',
                       'ได้รถแล้ว','เงินสดเงินไม่พอ','ลูกค้าไม่ตอบ'];
   const zVal = (l) => (l.customerStatus || '').trim();
+  // "ไม่ต้องตาม" = ดูคอลัม Z (สถานะลูกค้า) ร่วมกับ AB (Status แอดมิน) + เซลล์ แบบ OR — อันใดอันหนึ่งเข้า = ตัด
+  // (sync กับ backend _skip/_booked · เดิมดู Z ก่อน ถ้า Z มีค่าจะไม่สน AB → เคส Z=ติดตาม·AB=จอง หลุดมาโดนตามผิด)
   const isSkipped = (l) => {
     const z = zVal(l);
-    if (z) return Z_DEAD.some(k => z.includes(k));   // มี Z → Z ตัดสินว่า junk
-    const a = (l.adminStatus||'').toLowerCase();
-    const s = (l.salesStatus||'').toLowerCase();
-    return SKIP_KEYWORDS.some(k => {
-      const kw = k.toLowerCase();
-      return (a && a.includes(kw)) || (s && s.includes(kw));
-    });
+    if (Z_DEAD.some(k => z.includes(k))) return true;   // คำ "เคสเสีย" ของ Z (controlled vocab)
+    // ยกเลิก/คืนเคส/จ่ายใหม่/จบ/ส่งมอบ... ที่ไหนก็ตาม (Z หรือ AB หรือเซลล์)
+    const st = (z + ' ' + (l.adminStatus||'') + ' ' + (l.salesStatus||'')).toLowerCase();
+    return SKIP_KEYWORDS.some(k => st.includes(k.toLowerCase()));
   };
-  // "จอง / ปล่อย / ส่งมอบ / ได้รถแล้ว" = เคสที่จัดการแล้ว (ไม่ต้องเตือนให้โทรตามอีก)
+  // "จอง / ปล่อย / ส่งมอบ / ได้รถแล้ว" ที่คอลัมไหนก็ตาม (Z + AB + เซลล์) = จัดการแล้ว ไม่ต้องเตือนโทร
   const isBooked = (l) => {
-    const z = zVal(l);
-    if (z) return z.includes('จอง') || z.includes('ส่งมอบ') || z.includes('ปล่อย') || z.includes('ได้รถแล้ว');
-    const a = (l.adminStatus||'').toLowerCase();
-    const s = (l.salesStatus||'').toLowerCase();
-    return a.includes('จอง') || s.includes('จอง') || a.includes('ปล่อย') || s.includes('ปล่อย');
+    const blob = zVal(l) + ' ' + (l.adminStatus||'') + ' ' + (l.salesStatus||'');
+    return blob.includes('จอง') || blob.includes('ส่งมอบ') || blob.includes('ปล่อย') || blob.includes('ได้รถแล้ว');
   };
   // "เคสในมือ" = เคสที่ยังต้องดูแล (ติดตาม + จอง + ปล่อย) ไม่นับเคสปิด (คืน/ยกเลิก/จ่ายใหม่)
   const isInHand = (l) => {

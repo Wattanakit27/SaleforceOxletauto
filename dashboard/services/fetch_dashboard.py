@@ -2131,20 +2131,21 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
                 return v
         return 2
 
+    # ── "ไม่ต้องตาม" = ดูคอลัม Z (สถานะลูกค้า) ร่วมกับ AB (Status แอดมิน) + เซลล์ — อันใดอันหนึ่งเข้าเงื่อนไข = ตัด ──
+    # (เดิม _booked ดูแค่ Z ถ้า Z มีค่า → เคส Z=ติดตาม แต่ AB=จอง/ปล่อย หลุดมาโดนตามผิด)
+    # ตัวอย่าง: Z ว่าง·AB=ยกเลิก → ตัด · Z=คืนเคส·AB=ติดตาม → ตัด (คำเสียใน Z ชนะ) · Z=ติดตาม·AB=จอง → ตัด (booked จาก AB)
     def _skip(l):
         z = l["customerStatus"] or ""
-        if any(k in z for k in _FU_DEAD):
+        if any(k in z for k in _FU_DEAD):            # คำ "เคสเสีย" ของ Z (controlled vocab)
             return True
-        st = ((l["adminStatus"] or "") + " " + (l["salesStatus"] or "")).lower()
+        # ยกเลิก/คืนเคส/จ่ายใหม่/จบ/ส่งมอบ... ที่ไหนก็ตาม (Z หรือ AB หรือเซลล์)
+        st = (z + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")).lower()
         return any(k.lower() in st for k in _FU_SKIP)
 
     def _booked(l):
-        z = l["customerStatus"] or ""
-        if z:
-            return "จอง" in z or "ส่งมอบ" in z or "ได้รถแล้ว" in z or "ปล่อย" in z
-        # Z ว่าง (เดือนยังไม่กรอก Z) → fallback admin/sales (เคส ANLD-9921: Z ว่าง แต่ admin/sales=จอง ก็ booked) — ตรงกับ seller.html isBooked
-        a = (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")
-        return "จอง" in a or "ส่งมอบ" in a or "ได้รถแล้ว" in a or "ปล่อย" in a
+        # จอง/ปล่อย/ส่งมอบ/ได้รถแล้ว ที่คอลัมไหนก็ตาม (Z + AB + เซลล์) = ไม่ตามเป็นลีดใหม่
+        blob = (l["customerStatus"] or "") + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")
+        return any(k in blob for k in ("จอง", "ส่งมอบ", "ได้รถแล้ว", "ปล่อย"))
 
     def _urg(l):
         score = l["leadScore"] or 0
