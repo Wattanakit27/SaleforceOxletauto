@@ -1,62 +1,105 @@
 {% extends "base.html" %}
 {% block title %}สแกน {{ car.code }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div style="max-width:480px;margin:0 auto">
+<style>
+  /* หน้าสแกน — รีสไตล์ตามม็อก (โทนมืดของ tracking) · accent ม่วง */
+  #scanRoot{--accent:#7b61ff;max-width:480px;margin:0 auto}
+  #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:16px;border:1px solid var(--line)}
+  #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
+  #scanRoot .sc-photo{width:100%;height:175px;object-fit:cover;border-radius:13px;margin-bottom:13px;display:block}
+  #scanRoot .sc-stage{background:rgba(123,97,255,.18);color:#cbbcff;font-weight:600}
+  #scanRoot .sc-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:2px 0 13px}
+  #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:999px;background:#252b42;color:var(--mut)}
+  #scanRoot .sc-flow #selPill{padding:6px 12px;border-radius:999px;background:#252b42;color:var(--mut);font-weight:700}
+  #scanRoot .sc-flow #selPill.sel{background:rgba(123,97,255,.18);color:#cbbcff}
+  #scanRoot .sc-chips{display:flex;gap:7px;flex-wrap:wrap}
+  #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:#141a2c;color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
+  #scanRoot .sc-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  #scanRoot .sc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--mut);background:#141a2c;text-align:center}
+  #scanRoot .sc-drop i{width:26px;height:26px}
+  #scanRoot .sc-confirm{width:100%;justify-content:center;padding:14px;font-size:15px;font-weight:800;border-radius:12px}
+  #scanRoot .sc-tl{display:flex;gap:11px}
+  #scanRoot .sc-tl .col{flex-shrink:0;display:flex;flex-direction:column;align-items:center}
+  #scanRoot .sc-tl .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);margin-top:4px}
+  #scanRoot .sc-tl .line{flex:1;width:2px;background:var(--line);margin-top:3px}
+</style>
+<div id="scanRoot">
   <!-- เลือกภาษา (เฉพาะหน้าสแกน — สำหรับแรงงานเพื่อนบ้าน) -->
-  <div style="display:flex;gap:4px;justify-content:center;margin-bottom:12px;background:var(--bg2);padding:4px;border-radius:16px;border:.5px solid var(--bd)">
-    <button type="button" class="langbtn" data-lang="th" onclick="setScanLang('th')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇹🇭</span>ไทย</button>
-    <button type="button" class="langbtn" data-lang="en" onclick="setScanLang('en')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇬🇧</span>EN</button>
-    <button type="button" class="langbtn" data-lang="my" onclick="setScanLang('my')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇲🇲</span>မြန်မာ</button>
-    <button type="button" class="langbtn" data-lang="km" onclick="setScanLang('km')" style="flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:22px;line-height:1">🇰🇭</span>ខ្មែរ</button>
+  <div class="lang-row">
+    <button type="button" class="langbtn" data-lang="th" onclick="setScanLang('th')"><span style="font-size:22px;line-height:1">🇹🇭</span>ไทย</button>
+    <button type="button" class="langbtn" data-lang="en" onclick="setScanLang('en')"><span style="font-size:22px;line-height:1">🇬🇧</span>EN</button>
+    <button type="button" class="langbtn" data-lang="my" onclick="setScanLang('my')"><span style="font-size:22px;line-height:1">🇲🇲</span>မြန်မာ</button>
+    <button type="button" class="langbtn" data-lang="km" onclick="setScanLang('km')"><span style="font-size:22px;line-height:1">🇰🇭</span>ខ្មែរ</button>
   </div>
 
+  <!-- การ์ดรถ (hero) -->
   <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <h1 style="font-size:20px">{{ car.code }}</h1>
-      <span class="pill"><i data-lucide="{{ car.stage_icon }}"></i> <span data-key="{{ car.stage }}" data-th="{{ car.stage_name }}">{{ car.stage_name }}</span></span>
-    </div>
-    <div class="mut sm">{{ car.title }} · {{ car.plate }} · {{ car.branch_name }}</div>
-
-    {% if stages %}
-    <form method="post" action="{% url 'scan_submit' car.code %}" enctype="multipart/form-data" class="grid" style="gap:12px;margin-top:14px">
-      {% csrf_token %}
+    {% if car.photo and supabaseUrl %}<img class="sc-photo" src="{{ supabaseUrl }}/storage/v1/object/public/{{ storageBucket }}/{{ car.photo.name }}" alt="">{% endif %}
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
-        <label class="sm mut" data-i18n="changeStage">เปลี่ยนเป็นสเตป</label>
-        <select name="stage" required>
-          {% for k,n,i in stages %}<option value="{{ k }}" data-key="{{ k }}" data-th="{{ n }}">{{ n }}</option>{% endfor %}
-        </select>
+        <div class="mut sm" data-i18n="carCode">รหัสรถ</div>
+        <div style="font-size:22px;font-weight:800;line-height:1.1">{{ car.code }}</div>
       </div>
-      <div><label class="sm mut" data-i18n="note">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="2"></textarea></div>
+      <span class="pill sc-stage"><i data-lucide="{{ car.stage_icon }}"></i> <span data-key="{{ car.stage }}" data-th="{{ car.stage_name }}">{{ car.stage_name }}</span></span>
+    </div>
+    {% if car.plate %}<div style="font-size:18px;font-weight:700;margin-top:9px">{{ car.plate }}</div>{% endif %}
+    <div class="mut sm" style="margin-top:2px">{{ car.title }}</div>
+    <div class="mut sm row" style="gap:5px;margin-top:8px"><i data-lucide="map-pin"></i> {{ car.branch_name }}</div>
+  </div>
+
+  <!-- เปลี่ยนสเตป -->
+  <div class="card" style="margin-top:14px">
+    <h2 style="display:flex;align-items:center;gap:7px"><i data-lucide="repeat"></i> <span data-i18n="changeStage">เปลี่ยนสเตปรถ</span></h2>
+    {% if stages %}
+    <form method="post" action="{% url 'scan_submit' car.code %}" enctype="multipart/form-data" class="grid" style="gap:13px">
+      {% csrf_token %}
+      <div class="sc-flow">
+        <span class="cur" data-key="{{ car.stage }}" data-th="{{ car.stage_name }}">{{ car.stage_name }}</span>
+        <i data-lucide="arrow-right" style="color:var(--mut)"></i>
+        <span id="selPill">—</span>
+      </div>
+      <div class="sc-chips">
+        {% for k,n,i in stages %}<button type="button" class="sc-chip" data-stage="{{ k }}" onclick="scPickStage('{{ k }}', this)"><i data-lucide="{{ i }}"></i> <span data-key="{{ k }}" data-th="{{ n }}">{{ n }}</span></button>{% endfor %}
+      </div>
+      <input type="hidden" name="stage" id="stageInput">
+      <div><label class="sm mut" data-i18n="note">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="2" placeholder="…"></textarea></div>
       <div>
         <label class="sm mut" data-i18n="photo">แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)</label>
-        <input type="file" id="scanFiles" accept="image/*,video/*" multiple>
+        <label class="sc-drop">
+          <input type="file" id="scanFiles" accept="image/*,video/*" multiple style="display:none">
+          <i data-lucide="camera"></i><span class="sm" data-i18n="photoHint">แตะเพื่อถ่าย/เลือกไฟล์</span>
+        </label>
         <div id="filePrev" class="mut sm" style="margin-top:6px"></div>
       </div>
       <input type="hidden" name="media" id="scanMedia">
-      <button class="btn pri" type="submit"><i data-lucide="check"></i> <span data-i18n="save">บันทึกเปลี่ยนสเตป</span></button>
-      <div id="upBar" style="display:none;height:9px;border-radius:6px;background:var(--bg2);overflow:hidden;border:.5px solid var(--bd)"><div id="upBarFill" style="height:100%;width:0;background:var(--blue);transition:width .15s ease"></div></div>
+      <button class="btn pri sc-confirm" type="submit"><i data-lucide="check"></i> <span data-i18n="save">บันทึกเปลี่ยนสเตป</span></button>
+      <div id="upBar" style="display:none;height:9px;border-radius:6px;background:var(--card);overflow:hidden;border:1px solid var(--line)"><div id="upBarFill" style="height:100%;width:0;background:var(--accent);transition:width .15s ease"></div></div>
       <div id="uploadProg" class="mut sm"></div>
-      <div class="mut sm"><span data-i18n="by">ผู้ทำ</span>: {{ actor }}</div>
+      <div class="mut sm" style="text-align:center"><span data-i18n="by">ผู้ทำ</span>: {{ actor }}</div>
     </form>
     {% else %}
     <div class="msg" style="margin-top:14px" data-i18n="noStage">บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้</div>
     {% endif %}
   </div>
 
+  <!-- ประวัติ -->
   <div class="card" style="margin-top:14px">
-    <h2 data-i18n="history">ประวัติล่าสุด</h2>
+    <h2 style="display:flex;align-items:center;gap:7px"><i data-lucide="history"></i> <span data-i18n="history">ประวัติล่าสุด</span></h2>
     {% for l in logs %}
-    <div style="border-bottom:1px solid var(--line);padding:9px 0">
-      <div class="row" style="justify-content:space-between">
-        <span class="pill"><i data-lucide="{{ l.stageIcon }}"></i> <span data-key="{{ l.stageKey }}" data-th="{{ l.stageName }}">{{ l.stageName }}</span></span>
-        <span class="mut sm">{{ l.at }} · {{ l.worker }}</span>
+    <div class="sc-tl" style="padding:9px 0">
+      <div class="col"><span class="dot"></span>{% if not forloop.last %}<span class="line"></span>{% endif %}</div>
+      <div style="flex:1;min-width:0">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill"><i data-lucide="{{ l.stageIcon }}"></i> <span data-key="{{ l.stageKey }}" data-th="{{ l.stageName }}">{{ l.stageName }}</span></span>
+          <span class="mut sm">{{ l.at }} · {{ l.worker }}</span>
+        </div>
+        {% if l.note %}<div class="mut sm" style="margin-top:4px">{{ l.note }}</div>{% endif %}
+        {% if l.media %}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:#141a2c;border:1px solid var(--line);font-size:12px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:60px;height:60px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
+        </div>
+        {% endif %}
       </div>
-      {% if l.note %}<div class="mut sm" style="margin-top:4px">{{ l.note }}</div>{% endif %}
-      {% if l.media %}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:var(--bg2);border:.5px solid var(--line);font-size:12px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:64px;height:64px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
-      </div>
-      {% endif %}
     </div>
     {% empty %}<p class="mut sm" data-i18n="noHistory">ยังไม่มีประวัติ</p>{% endfor %}
   </div>
@@ -67,27 +110,37 @@
 <script>
   // i18n เฉพาะหน้าสแกน — ไทย/อังกฤษ/พม่า/เขมร (คำพม่า-เขมรเป็นฉบับแปลเบื้องต้น ให้ native ตรวจได้)
   var SCAN_I18N = {
-    th: {changeStage:'เปลี่ยนเป็นสเตป', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ'},
-    en: {changeStage:'Change to stage', note:'Note (optional)', photo:'Attach photos/videos (multiple)', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet'},
-    my: {changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံ/ဗီဒီယို တွဲရန် (များစွာ)', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှិပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ'},
-    km: {changeStage:'ប្ដូរទៅដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូប/វីដេអូ (ច្រើន)', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ'}
+    th: {carCode:'รหัสรถ', changeStage:'เปลี่ยนสเตปรถ', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)', photoHint:'แตะเพื่อถ่าย/เลือกไฟล์', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ', pickFirst:'เลือกสเตปใหม่ก่อน'},
+    en: {carCode:'Car code', changeStage:'Change stage', note:'Note (optional)', photo:'Attach photos/videos (multiple)', photoHint:'Tap to take / pick files', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet', pickFirst:'Select a new stage first'},
+    my: {carCode:'ကားကုဒ်', changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံ/ဗီဒီယို တွဲရန် (များစွာ)', photoHint:'ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ', pickFirst:'အဆင့်အသစ်အရင်ရွေးပါ'},
+    km: {carCode:'លេខកូដរថយន្ត', changeStage:'ប្ដូរដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូប/វីដេអូ (ច្រើន)', photoHint:'ចុចដើម្បីថត/ជ្រើសឯកសារ', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ', pickFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន'}
   };
   var STAGE_I18N = {
     en: {intake:'Intake', appraise:'Assess repair', repair:'Repair check', wait_paint:'Wait for paint', paint:'Painting', parts:'Order / wait parts', upholstery:'Upholstery', film:'Window film', detail:'Detailing', qc:'QC inspection', rework:'Rework', registration:'Registration', show:'Ready / showroom', reserve:'Reserved', finance:'Finance', closing:'Closing sale', sold:'Sold'},
     my: {intake:'ကားလက်ခံ', appraise:'ပြုပြင်ရေးအကဲဖြတ်', repair:'ပြုပြင်စစ်ဆေး', wait_paint:'ဆေးသုတ်ရန်စောင့်', paint:'ဆေးသုတ်', parts:'အပိုပစ္စည်းမှာ/စောင့်', upholstery:'ထိုင်ခုံအလုပ်', film:'ဖလင်ကပ်', detail:'သန့်ရှင်းရေး', qc:'QC စစ်ဆေး', rework:'ပြန်ပြင်ရန်', registration:'မှတ်ပုံတင်', show:'ရောင်းရန်အသင့်', reserve:'ကြိုတင်မှာထား', finance:'ငွေကြေးစီစဉ်', closing:'အရောင်းပိတ်ရန်', sold:'ရောင်းပြီး'},
     km: {intake:'ទទួលរថយន្ត', appraise:'វាយតម្លៃជួសជុល', repair:'ពិនិត្យជួសជុល', wait_paint:'រង់ចាំលាបថ្នាំ', paint:'លាបថ្នាំ', parts:'កុម្ម៉ង់/រង់ចាំគ្រឿងបន្លាស់', upholstery:'ការងារកៅអី', film:'បិទហ្វីល', detail:'សម្អាត', qc:'រង់ចាំ QC', rework:'រង់ចាំកែ', registration:'ចុះបញ្ជី', show:'រួចរាល់លក់', reserve:'បានកក់', finance:'រៀបចំហិរញ្ញវត្ថុ', closing:'រង់ចាំបិទការលក់', sold:'លក់រួច'}
   };
+  window._scanLang = 'th';
+  function scanStageText(k, th){ var sm=STAGE_I18N[window._scanLang]; return (window._scanLang==='th'||!sm||!sm[k]) ? th : sm[k]; }
   function setScanLang(lang){
+    window._scanLang = lang;
     try{ localStorage.setItem('trk_scan_lang', lang); }catch(e){}
     var t = SCAN_I18N[lang] || SCAN_I18N.th;
     document.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(t[k]!=null) el.textContent=t[k]; });
-    var sm = STAGE_I18N[lang];
     document.querySelectorAll('[data-key]').forEach(function(el){
       var k=el.getAttribute('data-key');
-      el.textContent = (lang==='th' || !sm || !sm[k]) ? (el.getAttribute('data-th')||el.textContent) : sm[k];
+      el.textContent = scanStageText(k, el.getAttribute('data-th')||el.textContent);
     });
-    document.querySelectorAll('.langbtn').forEach(function(b){ var on=(b.getAttribute('data-lang')===lang); b.style.background=on?'var(--blue)':'transparent'; b.style.color=on?'#fff':'var(--t1)'; });
+    document.querySelectorAll('.langbtn').forEach(function(b){ var on=(b.getAttribute('data-lang')===lang); b.style.background=on?'var(--accent)':'transparent'; b.style.color=on?'#fff':'var(--mut)'; });
     document.documentElement.lang = lang;
+  }
+  // เลือกสเตปแบบ chip → set hidden input + อัปเดต current→selected
+  function scPickStage(k, btn){
+    var inp=document.getElementById('stageInput'); if(inp) inp.value=k;
+    document.querySelectorAll('.sc-chip').forEach(function(c){ c.classList.toggle('on', c===btn); });
+    var span=btn.querySelector('[data-th]'); var th=span?span.getAttribute('data-th'):k;
+    var sp=document.getElementById('selPill');
+    if(sp){ sp.setAttribute('data-key',k); sp.setAttribute('data-th',th); sp.textContent=scanStageText(k,th); sp.classList.add('sel'); }
   }
   (function(){ var l='th'; try{ l=localStorage.getItem('trk_scan_lang')||'th'; }catch(e){} setScanLang(l); })();
 
@@ -106,7 +159,7 @@
       prev.innerHTML = picked.map(function(f,i){
         var isVid=(f.type||'').indexOf('video')===0;
         var thumb = isVid
-          ? '<div style="width:56px;height:56px;border-radius:8px;background:var(--bg2);border:.5px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:22px">🎥</div>'
+          ? '<div style="width:56px;height:56px;border-radius:8px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px">🎥</div>'
           : '<img src="'+URL.createObjectURL(f)+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;display:block">';
         return '<div style="position:relative;display:inline-block;margin:6px 8px 0 0;vertical-align:top">'+thumb+
                '<button type="button" data-rm="'+i+'" aria-label="ลบ" style="position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:14px;line-height:1;cursor:pointer">×</button></div>';
@@ -136,6 +189,12 @@
     }
     form.addEventListener('submit', async function(e){
       if(form.dataset.ready==='1') return;
+      // ต้องเลือกสเตปใหม่ก่อน (chip → hidden input)
+      if(!(document.getElementById('stageInput')||{}).value){
+        e.preventDefault();
+        alert((SCAN_I18N[window._scanLang]||SCAN_I18N.th).pickFirst);
+        return;
+      }
       if(!picked.length) return;   // ไม่มีไฟล์ → submit ปกติ
       e.preventDefault();
       var btn = form.querySelector('button[type=submit]'); if(btn) btn.disabled=true;
