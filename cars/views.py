@@ -121,7 +121,7 @@ def car_json(request, code):
     car = get_object_or_404(Car, code=code)
     _log_objs, _hm = _fetch_logs(car, 50)
     logs = [{
-        "stage": l.stage_name, "worker": l.worker_name,
+        "stage": l.stage_name, "stageKey": l.stage, "worker": l.worker_name,
         "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
         "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
     } for l in _log_objs]
@@ -142,6 +142,7 @@ def car_json(request, code):
         "dateIn": timezone.localtime(car.date_in).strftime("%d/%m/%Y") if car.date_in else "",
         "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
         "qrUrl": f"/track/qr/{car.code}.png",
+        "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
         "scanUrl": f"/track/scan/{car.code}/",
         "editUrl": f"/track/cars/{car.code}/edit/",
@@ -284,11 +285,14 @@ def scan_page(request, code):
     })
 
 
+@csrf_exempt
 @login_required
 @require_POST
 def api_sign_upload(request):
     """ขอ signed upload URL จาก Supabase (เซิร์ฟเวอร์เซ็นด้วย service_role) → เบราว์เซอร์อัปไฟล์ตรง
-    (ข้ามลิมิต body 4.5MB ของ Vercel · รองรับวิดีโอ/รูปใหญ่)."""
+    (ข้ามลิมิต body 4.5MB ของ Vercel · รองรับวิดีโอ/รูปใหญ่).
+    csrf_exempt: หน้าเซลล์ (seller.html · โหมดสถานะรถ) เรียกอัปรูปก่อน/หลังตอนเปลี่ยนสเตป
+    ซึ่งไม่มี CSRF token — เหมือน endpoint ฝั่งเซลล์ตัวอื่น (login_required กันคนนอกอยู่แล้ว)."""
     key = (getattr(settings, "SUPABASE_SECRET_KEY", "") or "").strip()
     base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
     bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
@@ -514,6 +518,7 @@ def cars_api(request):
         "statusChoices": list(C.STATUS_CHOICES), "bookChoices": list(C.BOOK_STATUS_CHOICES),
         # สเตปที่ user คนนี้ "เปลี่ยนได้" (Sales = qc/show/reserve/finance/closing/sold) → seller.html โชว์ปุ่มตามนี้
         "myStages": [[k, C.STAGE_NAME[k]] for k in roles.allowed_stages(request.user)],
+        "me": _actor(request.user),
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
         "canViewAdmin": roles.can_view_admin(request.user),
@@ -542,17 +547,29 @@ def api_set_stage(request):
 @login_required
 @require_POST
 def api_seller_set_stage(request):
-    """เซลล์เปลี่ยนสเตปรถจากหน้าเซลล์ (seller.html · โหมด "สถานะรถ") — POST JSON {code, stage}.
+    """เซลล์เปลี่ยนสเตปรถจากหน้าเซลล์ (seller.html · โหมด "สถานะรถ") — POST JSON {code, stage, note?, media?}.
     ★ ผ่อนกฎ scan-only ให้เซลล์ (ตามที่ตกลง): ใช้ can_set_stage (Sales เปลี่ยนสเตปที่ตัวเองมีสิทธิ์
     ได้ตรงๆ ไม่ต้องสแกน QR) ต่างจาก api_set_stage ที่ใช้ can_set_stage_direct (กัน scan-only).
+    note = หมายเหตุ · media = list ของ path รูป/วิดีโอ (อัปตรงเข้า Supabase ผ่าน api_sign_upload แล้ว
+    ส่ง path กลับมา — แนบเข้า ScanLog เหมือนหน้าสแกน) → เก็บรูป "ก่อน/หลัง" ตอนเปลี่ยนสเตป.
     csrf_exempt + login_required (เหมือน endpoint ฝั่งเซลล์ตัวอื่น · seller.html ไม่มี CSRF token)."""
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
     stage = data.get("stage", "")
     if not roles.can_set_stage(request.user, stage):
         return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้"}, status=403)
+    note = (data.get("note") or "").strip()
+    media = data.get("media")
+    if not isinstance(media, list):
+        media = []
     actor = _actor(request.user)
-    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor)
+    log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
+    if media:
+        try:  # กันช่วง deploy ที่คอลัมน์ media ยังไม่ migrate — เปลี่ยนสเตปต้องไม่ 500
+            log.media = media
+            log.save(update_fields=["media"])
+        except Exception:
+            pass
     if should_notify:
         notify_stage_change(car, worker_name=actor)
     return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,

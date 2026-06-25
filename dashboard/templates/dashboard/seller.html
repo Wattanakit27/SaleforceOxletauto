@@ -2255,18 +2255,72 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   // เซลล์ login ไลน์ → bridge เป็น Django user role "Sales" อัตโนมัติ → เปลี่ยนได้เฉพาะสเตปใน myStages
   // (qc/show/reserve/finance/closing/sold) · ไม่ต้องสแกน QR (ผ่อนกฎ scan-only ให้เซลล์ในหน้านี้)
   // ════════════════════════════════════════════════════════════════
-  let _scData = null, _scF = { stage: '', q: '' };
+  // ── i18n (TH/EN/MM/KH) สำหรับคนงานหลายสัญชาติ — พม่า/เขมรเป็นฉบับร่าง ควรให้เจ้าของภาษาตรวจ ──
+  const SC_LANGS = [['TH','ไทย'],['EN','Eng'],['MM','မြန်မာ'],['KH','ខ្មែរ']];
+  const SC_T = {
+    TH:{carStatus:'สถานะรถ',back:'กลับ',carCode:'รหัสรถ',branch:'สาขา',changeStage:'เปลี่ยนสเตปรถ',currentStage:'สเตปปัจจุบัน',pickStage:'เลือกสเตปใหม่',changeTo:'เปลี่ยนเป็น',note:'หมายเหตุ (ถ้ามี)',notePh:'พิมพ์รายละเอียดเพิ่มเติม…',addPhoto:'เพิ่มรูป / วิดีโอ',photoHint:'ถ่ายตอนเปลี่ยนสเตป · ได้หลายไฟล์',confirm:'ยืนยันเปลี่ยนสเตป',by:'ผู้ทำ',history:'ประวัติล่าสุด',noHistory:'ยังไม่มีประวัติ',noPerm:'บัญชีนี้ยังไม่มีสิทธิ์เปลี่ยนสเตป — แจ้งแอดมินตั้งบทบาทในระบบรถ',selectFirst:'เลือกสเตปใหม่ก่อน',saving:'กำลังบันทึก…',uploading:'กำลังอัปโหลด…',saved:'บันทึกแล้ว',searchPh:'ค้นหา ทะเบียน / รุ่น / รหัส',allStages:'ทุกสเตป',cars:'คัน',noCars:'ไม่มีรถตามตัวกรอง',loading:'กำลังโหลดข้อมูลรถ…',loadErr:'โหลดข้อมูลรถไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อม',days:'วัน',tapCar:'แตะรถเพื่อเปลี่ยนสเตป',failed:'เปลี่ยนสเตปไม่สำเร็จ',upFail:'อัปไฟล์ไม่สำเร็จ'},
+    EN:{carStatus:'Car Status',back:'Back',carCode:'Car Code',branch:'Branch',changeStage:'Change Stage',currentStage:'Current stage',pickStage:'Select new stage',changeTo:'Change to',note:'Note (optional)',notePh:'Add details…',addPhoto:'Add photo / video',photoHint:'Take at stage change · multiple files',confirm:'Confirm stage change',by:'By',history:'Recent history',noHistory:'No history yet',noPerm:"This account can't change stages — ask admin to set your role",selectFirst:'Select a new stage first',saving:'Saving…',uploading:'Uploading…',saved:'Saved',searchPh:'Search plate / model / code',allStages:'All stages',cars:'cars',noCars:'No cars match the filter',loading:'Loading car data…',loadErr:'Could not load car data',days:'days',tapCar:'Tap a car to change stage',failed:'Failed to change stage',upFail:'Upload failed'},
+    MM:{carStatus:'ကားအခြေအနေ',back:'နောက်သို့',carCode:'ကားကုဒ်',branch:'ဌာနခွဲ',changeStage:'အဆင့်ပြောင်းရန်',currentStage:'လက်ရှိအဆင့်',pickStage:'အဆင့်အသစ်ရွေးပါ',changeTo:'သို့ပြောင်းရန်',note:'မှတ်ချက် (ရှိလျှင်)',notePh:'အသေးစိတ်ထည့်ပါ…',addPhoto:'ဓာတ်ပုံ / ဗီဒီယိုထည့်ပါ',photoHint:'အဆင့်ပြောင်းချိန်ရိုက်ပါ · ဖိုင်များစွာ',confirm:'အဆင့်ပြောင်းရန်အတည်ပြုပါ',by:'ပြုလုပ်သူ',history:'မှတ်တမ်း',noHistory:'မှတ်တမ်းမရှိသေးပါ',noPerm:'ဤအကောင့်တွင် အဆင့်ပြောင်းခွင့်မရှိပါ',selectFirst:'အဆင့်အသစ်အရင်ရွေးပါ',saving:'သိမ်းနေသည်…',uploading:'တင်နေသည်…',saved:'သိမ်းပြီးပါပြီ',searchPh:'နံပါတ် / မော်ဒယ် / ကုဒ် ရှာရန်',allStages:'အဆင့်အားလုံး',cars:'စီး',noCars:'ကားမတွေ့ပါ',loading:'ကားအချက်အလက်ဖွင့်နေသည်…',loadErr:'ကားအချက်အလက်မဖွင့်နိုင်ပါ',days:'ရက်',tapCar:'အဆင့်ပြောင်းရန် ကားကိုနှိပ်ပါ',failed:'အဆင့်ပြောင်းမအောင်မြင်ပါ',upFail:'ဖိုင်တင်မအောင်မြင်ပါ'},
+    KH:{carStatus:'ស្ថានភាពរថយន្ត',back:'ត្រឡប់',carCode:'លេខកូដរថយន្ត',branch:'សាខា',changeStage:'ប្តូរដំណាក់កាល',currentStage:'ដំណាក់កាលបច្ចុប្បន្ន',pickStage:'ជ្រើសដំណាក់កាលថ្មី',changeTo:'ប្តូរទៅ',note:'កំណត់សម្គាល់ (បើមាន)',notePh:'បន្ថែមព័ត៌មាន…',addPhoto:'បន្ថែមរូប / វីដេអូ',photoHint:'ថតពេលប្តូរដំណាក់កាល · បានច្រើនឯកសារ',confirm:'បញ្ជាក់ការប្តូរ',by:'ដោយ',history:'ប្រវត្តិថ្មីៗ',noHistory:'មិនទាន់មានប្រវត្តិ',noPerm:'គណនីនេះគ្មានសិទ្ធិប្តូរដំណាក់កាល',selectFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន',saving:'កំពុងរក្សាទុក…',uploading:'កំពុងផ្ទុកឡើង…',saved:'បានរក្សាទុក',searchPh:'ស្វែងរក ស្លាក / ម៉ូដែល / លេខកូដ',allStages:'គ្រប់ដំណាក់កាល',cars:'គ្រឿង',noCars:'រកមិនឃើញរថយន្ត',loading:'កំពុងផ្ទុកទិន្នន័យរថយន្ត…',loadErr:'មិនអាចផ្ទុកទិន្នន័យរថយន្ត',days:'ថ្ងៃ',tapCar:'ចុចរថយន្តដើម្បីប្តូរ',failed:'ប្តូរដំណាក់កាលមិនបានសម្រេច',upFail:'ផ្ទុកឯកសារមិនបានសម្រេច'},
+  };
+  // ชื่อสเตป EN/MM/KH (TH ใช้ค่าจากเซิร์ฟเวอร์ใน myStages/stages)
+  const SC_STAGE_I18N = {
+    intake:{EN:'Intake',MM:'ကားဝင်ရောက်',KH:'ទទួលចូល'}, appraise:{EN:'Appraisal',MM:'ပြုပြင်ခန့်မှန်း',KH:'វាយតម្លៃ'},
+    repair:{EN:'Repair',MM:'ပြုပြင်ရန်',KH:'ជួសជុល'}, wait_paint:{EN:'Awaiting Paint',MM:'ဆေးသုတ်ရန်စောင့်',KH:'រង់ចាំលាបថ្នាំ'},
+    paint:{EN:'Painting',MM:'ဆေးသုတ်',KH:'លាបថ្នាំ'}, parts:{EN:'Awaiting Parts',MM:'အပိုပစ္စည်းစောင့်',KH:'រង់ចាំគ្រឿងបន្លាស់'},
+    upholstery:{EN:'Upholstery',MM:'ထိုင်ခုံအလုပ်',KH:'កៅអី'}, film:{EN:'Window Film',MM:'ဖလင်ကပ်',KH:'បិទហ្វីល'},
+    detail:{EN:'Detailing',MM:'သန့်ရှင်းရေး',KH:'សម្អាត'}, qc:{EN:'QC Inspection',MM:'အရည်အသွေးစစ်',KH:'ត្រួតពិនិត្យ QC'},
+    rework:{EN:'Rework',MM:'ပြန်ပြင်',KH:'ធ្វើឡើងវិញ'}, registration:{EN:'Registration',MM:'မှတ်ပုံတင်',KH:'ចុះបញ្ជី'},
+    show:{EN:'Ready / Showroom',MM:'ရောင်းရန်အသင့်',KH:'ត្រៀមលក់'}, reserve:{EN:'Reserved',MM:'ကြိုတင်မှာ',KH:'កក់ទុក'},
+    finance:{EN:'Financing',MM:'ငွေချေး',KH:'ហិរញ្ញវត្ថុ'}, closing:{EN:'Closing',MM:'အရောင်းပိတ်',KH:'បិទការលក់'},
+    sold:{EN:'Sold',MM:'ရောင်းပြီး',KH:'លក់រួច'},
+  };
+  let _scLang = (function(){ try { return localStorage.getItem('scLang') || 'TH'; } catch(e){ return 'TH'; } })();
+  if (!SC_T[_scLang]) _scLang = 'TH';
+  const scT = (k) => (SC_T[_scLang] && SC_T[_scLang][k]) || SC_T.TH[k] || k;
+  function scStageName(key, th) {
+    if (_scLang === 'TH') return th || (SC_STAGE_I18N[key] && SC_STAGE_I18N[key].EN) || key;
+    return (SC_STAGE_I18N[key] && SC_STAGE_I18N[key][_scLang]) || th || key;
+  }
+  function setScLang(l) {
+    if (!SC_T[l]) return;
+    _scLang = l; try { localStorage.setItem('scLang', l); } catch(e){}
+    renderCarsMode();
+  }
+
+  // ── state ──
+  let _scData = null;                       // payload จาก /track/api/cars (cars[], myStages, stages)
+  let _scF = { stage: '', q: '' };          // ตัวกรองรายการ
+  let _scView = 'list';                     // 'list' | 'detail'
+  let _scCar = null;                        // car_json ของรถที่เปิดอยู่ (detail)
+  let _scSel = '';                          // สเตปใหม่ที่เลือก (detail)
+  let _scMedia = [];                        // [{id,name,path,url,up,video}] รูป/วิดีโอที่อัปแล้ว
   const _scFlag = { red: 'var(--red)', amber: 'var(--amber)', ok: 'var(--green)' };
 
   function renderCarsMode() {
-    document.getElementById('root').innerHTML = `
-      ${modeBar()}
+    document.getElementById('root').innerHTML = `${modeBar()}<div id="scWrap"></div>`;
+    if (_scView === 'detail') renderCarDetail();
+    else renderCarsList();
+  }
+
+  // ════════ รายการรถ (list) ════════
+  function renderCarsList() {
+    const wrap = document.getElementById('scWrap'); if (!wrap) return;
+    wrap.innerHTML = `
       <div class="seller-hd"><div>
-        <h1>🚗 สถานะรถ</h1>
-        <div class="sub">เปลี่ยนสเตปรถได้เฉพาะที่มีสิทธิ์ (รอตรวจ / พร้อมขาย / จอง / จัดไฟแนนซ์ / รอปิดการขาย / ขายแล้ว)</div>
-      </div></div>
-      <div id="scBox"><div style="padding:24px;text-align:center;color:var(--t3)">กำลังโหลดข้อมูลรถ…</div></div>`;
+        <h1>${ic('lucide:car-front',20)} ${h(scT('carStatus'))}</h1>
+        <div class="sub">${h(scT('tapCar'))}</div>
+      </div>${scLangSwitcher()}</div>
+      <div id="scBox"><div style="padding:24px;text-align:center;color:var(--t3)">${h(scT('loading'))}</div></div>`;
     loadSellerCars();
+  }
+
+  function scLangSwitcher() {
+    return `<div style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:62vw;padding:2px">${
+      SC_LANGS.map(([code,label]) => {
+        const on = _scLang === code;
+        return `<button onclick="setScLang('${code}')" style="flex:0 0 auto;font-size:12px;padding:6px 11px;border-radius:999px;cursor:pointer;white-space:nowrap;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t2)'};font-weight:${on?'700':'500'}">${h(label)}</button>`;
+      }).join('')}</div>`;
   }
 
   async function loadSellerCars(force) {
@@ -2274,7 +2328,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     if (force) _scData = null;
     if (!_scData) {
       try { _scData = await (await fetch('/track/api/cars', { credentials: 'same-origin' })).json(); }
-      catch (e) { box.innerHTML = '<div style="padding:24px;color:var(--red)">โหลดข้อมูลรถไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อมใช้งาน</div>'; return; }
+      catch (e) { box.innerHTML = `<div style="padding:24px;color:var(--red)">${h(scT('loadErr'))}</div>`; return; }
     }
     renderSellerCars();
   }
@@ -2286,39 +2340,201 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     let cars = (D2.cars || []).slice();
     if (_scF.stage) cars = cars.filter(c => c.stage === _scF.stage);
     if (_scF.q) { const q = _scF.q.trim().toLowerCase(); if (q) cars = cars.filter(c => ((c.code||'')+' '+(c.title||'')+' '+(c.brand||'')+' '+(c.model||'')+' '+(c.plate||'')).toLowerCase().includes(q)); }
-    const stageOpts = (D2.stages || []).map(s => `<option value="${s[0]}" ${_scF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('');
+    const stageOpts = (D2.stages || []).map(s => `<option value="${s[0]}" ${_scF.stage===s[0]?'selected':''}>${h(scStageName(s[0],s[1]))}</option>`).join('');
     let html = `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-        <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="🔍 ค้นหา ทะเบียน/รุ่น/รหัส" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
-        <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${stageOpts}</select>
-        <span style="font-size:12px;color:var(--t3);margin-left:auto">${cars.length} คัน</span>
+        <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="${h(scT('searchPh'))}" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
+        <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">${h(scT('allStages'))}</option>${stageOpts}</select>
+        <span style="font-size:12px;color:var(--t3);margin-left:auto">${cars.length} ${h(scT('cars'))}</span>
       </div>`;
-    if (!myStages.length) html += `<div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-radius:9px;color:var(--amber);font-size:12px;margin-bottom:10px">บัญชีนี้ยังไม่มีสิทธิ์เปลี่ยนสเตปรถ — แจ้งแอดมินตั้งบทบาท "เซลล์" ในระบบรถ (/track/users/)</div>`;
+    if (!myStages.length) html += `<div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-radius:9px;color:var(--amber);font-size:12px;margin-bottom:10px">${h(scT('noPerm'))} (/track/users/)</div>`;
     html += cars.map(c => {
-      const ph = c.photo ? `<img src="${c.photo}" loading="lazy" style="width:72px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:54px;border-radius:8px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:10px">ไม่มีรูป</div>`;
-      const btns = myStages.filter(s => s[0] !== c.stage).map(s => `<button onclick="scSetStage('${c.code}','${s[0]}')" style="font-size:11px;padding:5px 9px;border-radius:7px;border:.5px solid var(--blue);background:var(--blue-bg,#eaf2fe);color:var(--blue);cursor:pointer;white-space:nowrap">${h(s[1])}</button>`).join('');
-      return `<div style="display:flex;gap:10px;padding:12px 4px;border-top:.5px solid var(--bd);align-items:flex-start">
+      const ph = c.photo ? `<img src="${c.photo}" loading="lazy" style="width:72px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:54px;border-radius:8px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3)">${ic('lucide:car-front',20)}</div>`;
+      return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="display:flex;gap:10px;padding:12px 4px;border-top:.5px solid var(--bd);align-items:center;cursor:pointer">
         ${ph}
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;color:var(--t1);font-size:13px">${h(c.code)} · ${h(c.title||'')}</div>
           <div style="font-size:11px;color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.plate):''}</div>
-          <div style="margin:5px 0"><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(c.stageName)} · ${c.days} วัน</span></div>
-          ${btns?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px"><span style="font-size:10px;color:var(--t3);align-self:center">เปลี่ยนเป็น:</span>${btns}</div>`:''}
+          <div style="margin-top:5px"><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(scStageName(c.stage,c.stageName))} · ${c.days} ${h(scT('days'))}</span></div>
         </div>
+        <span style="color:var(--t3);flex-shrink:0">${ic('lucide:arrow-up-right',18)}</span>
       </div>`;
-    }).join('') || `<div style="padding:24px;text-align:center;color:var(--t3)">ไม่มีรถตามตัวกรอง</div>`;
+    }).join('') || `<div style="padding:24px;text-align:center;color:var(--t3)">${h(scT('noCars'))}</div>`;
     html += `</div>`;
     box.innerHTML = html;
   }
 
-  async function scSetStage(code, stage) {
-    if (!confirm('ยืนยันเปลี่ยนสเตปของรถ ' + code + '?')) return;
+  // ════════ รายละเอียดรถ + เปลี่ยนสเตป (detail · ดีไซน์มือถือ) ════════
+  async function openSellerCar(code) {
+    _scView = 'detail'; _scSel = ''; _scMedia = []; _scCar = null;
+    window.scrollTo(0,0); renderCarsMode();                  // โชว์ loading
+    try { if (!_scData) _scData = await (await fetch('/track/api/cars', { credentials:'same-origin' })).json(); } catch(e){}
+    try { _scCar = await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json', { credentials:'same-origin' })).json(); }
+    catch(e) { _scCar = { error: scT('loadErr') }; }
+    if (_scView === 'detail') renderCarsMode();
+  }
+  function scBackToList() { _scView = 'list'; _scCar = null; window.scrollTo(0,0); renderCarsMode(); }
+
+  function renderCarDetail() {
+    const wrap = document.getElementById('scWrap'); if (!wrap) return;
+    const car = _scCar;
+    const hdr = `<div class="seller-hd" style="margin-bottom:10px">
+        <button onclick="scBackToList()" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;padding:7px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-family:inherit"><span style="font-size:16px;line-height:1">‹</span> ${h(scT('back'))}</button>
+        ${scLangSwitcher()}</div>`;
+    if (!car) { wrap.innerHTML = hdr + `<div style="padding:30px;text-align:center;color:var(--t3)">${h(scT('loading'))}</div>`; return; }
+    if (car.error) { wrap.innerHTML = hdr + `<div style="padding:24px;color:var(--red)">${h(car.error)}</div>`; return; }
+    const myStages = (_scData && _scData.myStages) || [];
+    const flagCol = _scFlag[car.flag] || 'var(--t3)';
+    const hero = `
+      <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px">
+        ${car.photo ? `<img src="${car.photo}" style="width:100%;max-height:190px;object-fit:cover;display:block">` : ''}
+        <div style="padding:14px 15px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div style="min-width:0">
+              <div style="font-size:11px;color:var(--t3);letter-spacing:.3px">${h(scT('carCode'))}</div>
+              <div style="font-size:20px;font-weight:800;color:var(--t1)">${h(car.code||'')}</div>
+            </div>
+            <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--blue-bg,#eaf2fe);color:var(--blue)"><span style="width:7px;height:7px;border-radius:50%;background:${flagCol}"></span>${h(scStageName(car.stage,car.stageName))}</span>
+          </div>
+          ${car.plate?`<div style="font-size:17px;font-weight:700;color:var(--t1);margin-top:8px">${h(car.plate)}</div>`:''}
+          <div style="font-size:13px;color:var(--t2);margin-top:2px">${h(car.title||[car.brand,car.model,car.year].filter(Boolean).join(' '))}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--t3)">
+            <span>${ic('lucide:map-pin',13)} ${h(scT('branch'))}: ${h(car.branch||'-')}</span>
+            <span>${ic('lucide:calendar',13)} ${h(scT('currentStage'))}: ${car.daysInStage} ${h(scT('days'))}</span>
+          </div>
+        </div>
+      </div>`;
+
+    let body;
+    if (!myStages.length) {
+      body = `<div style="padding:14px;background:var(--amber-bg,#fff7e6);border-radius:12px;color:var(--amber);font-size:12.5px">${h(scT('noPerm'))}</div>`;
+    } else {
+      body = `
+        <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow);margin-bottom:12px">
+          <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:4px">${ic('lucide:repeat',16)} ${h(scT('changeStage'))}</div>
+          <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">${h(scT('pickStage'))}</div>
+          <div id="scChanger"></div>
+          <div style="margin-top:14px">
+            <label style="font-size:12.5px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${h(scT('note'))}</label>
+            <textarea id="scNote" rows="2" placeholder="${h(scT('notePh'))}" style="width:100%;padding:10px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;font-family:inherit;line-height:1.5;resize:vertical"></textarea>
+          </div>
+          <div style="margin-top:14px">
+            <label style="font-size:12.5px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${ic('lucide:camera',15)} ${h(scT('addPhoto'))}</label>
+            <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:18px;border:1.5px dashed var(--bd2);border-radius:12px;cursor:pointer;color:var(--t3);background:var(--bg2)">
+              <input type="file" accept="image/*,video/*" multiple onchange="scAddPhotos(this)" style="display:none">
+              ${ic('lucide:camera',24)}<span style="font-size:12px;text-align:center">${h(scT('photoHint'))}</span>
+            </label>
+            <div id="scPhotoStrip" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
+          </div>
+          <button id="scConfirmBtn" onclick="scConfirmStage()" style="width:100%;margin-top:16px;padding:13px;border-radius:12px;border:none;background:var(--blue);color:#fff;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;opacity:.55" disabled>${ic('lucide:circle-check',18)} ${h(scT('confirm'))}</button>
+          <div style="text-align:center;font-size:11px;color:var(--t3);margin-top:7px">${h(scT('by'))}: ${h((_scData&&_scData.me) || car.lastWorker || '')}</div>
+        </div>`;
+    }
+    wrap.innerHTML = hdr + hero + body + scHistoryHtml(car);
+    if (myStages.length) { renderScChanger(); renderScPhotos(); }
+  }
+
+  function renderScChanger() {
+    const box = document.getElementById('scChanger'); if (!box || !_scCar) return;
+    const myStages = (_scData && _scData.myStages) || [];
+    const curName = scStageName(_scCar.stage, _scCar.stageName);
+    const selName = _scSel ? scStageName(_scSel) : '—';
+    const chips = myStages.filter(s => s[0] !== _scCar.stage).map(s => {
+      const on = _scSel === s[0];
+      return `<button onclick="scPickStage('${s[0]}')" style="font-size:12.5px;padding:8px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}</button>`;
+    }).join('');
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px;font-size:13px">
+        <span style="padding:6px 12px;border-radius:999px;background:var(--bg2);color:var(--t2);font-weight:600">${h(curName)}</span>
+        <span style="color:var(--t3)">→</span>
+        <span style="padding:6px 12px;border-radius:999px;background:${_scSel?'var(--blue-bg,#eaf2fe)':'var(--bg2)'};color:${_scSel?'var(--blue)':'var(--t3)'};font-weight:700">${h(selName)}</span>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">${chips}</div>`;
+    const btn = document.getElementById('scConfirmBtn');
+    if (btn) { btn.disabled = !_scSel; btn.style.opacity = _scSel ? '1' : '.55'; }
+  }
+  function scPickStage(stage) { _scSel = (_scSel === stage) ? '' : stage; renderScChanger(); }
+
+  // ── อัปรูป/วิดีโอ (sign_upload → PUT ตรงเข้า Supabase Storage) ──
+  async function scAddPhotos(input) {
+    const files = Array.from(input.files || []); input.value = '';
+    for (const f of files) {
+      const id = 'u' + Math.random().toString(36).slice(2, 9);
+      const isVid = (f.type || '').startsWith('video');
+      let url = ''; try { url = URL.createObjectURL(f); } catch(e){}
+      _scMedia.push({ id, name: f.name, path: '', url, up: true, video: isVid });
+      renderScPhotos();
+      try {
+        const sr = await fetch('/track/api/sign_upload', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body: JSON.stringify({ filename: f.name, contentType: f.type }) });
+        const sj = await sr.json();
+        if (!sj.ok) throw new Error(sj.error || 'sign');
+        const pr = await fetch(sj.uploadUrl, { method:'PUT', headers:{ 'content-type': f.type || 'application/octet-stream', 'x-upsert':'true' }, body: f });
+        if (!pr.ok) throw new Error('PUT ' + pr.status);
+        const it = _scMedia.find(m => m.id === id); if (it) { it.path = sj.path; it.up = false; }
+      } catch (e) {
+        _scMedia = _scMedia.filter(m => m.id !== id);
+        alert(scT('upFail') + ': ' + e);
+      }
+      renderScPhotos();
+    }
+  }
+  function scRemovePhoto(id) { _scMedia = _scMedia.filter(m => m.id !== id); renderScPhotos(); }
+  function renderScPhotos() {
+    const box = document.getElementById('scPhotoStrip'); if (!box) return;
+    box.innerHTML = _scMedia.map(m => `
+      <div style="position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:.5px solid var(--bd2);background:var(--bg2)">
+        ${m.url && !m.video ? `<img src="${m.url}" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--t3)">${ic(m.video?'lucide:clapperboard':'lucide:camera',22)}</div>`}
+        ${m.up ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;text-align:center">${h(scT('uploading'))}</div>` : ''}
+        <button onclick="scRemovePhoto('${m.id}')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">${ic('lucide:circle-x',15)}</button>
+      </div>`).join('');
+  }
+
+  async function scConfirmStage() {
+    const car = _scCar; if (!car) return;
+    if (!_scSel) { alert(scT('selectFirst')); return; }
+    if (_scMedia.some(m => m.up)) { alert(scT('uploading')); return; }
+    const note = (document.getElementById('scNote')?.value || '').trim();
+    const media = _scMedia.filter(m => m.path).map(m => m.path);
+    const btn = document.getElementById('scConfirmBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = scT('saving'); }
     try {
-      const r = await fetch('/track/api/seller_set_stage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', body: JSON.stringify({ code, stage }) });
+      const r = await fetch('/track/api/seller_set_stage', { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest' }, credentials:'same-origin', body: JSON.stringify({ code: car.code, stage: _scSel, note, media }) });
       const j = await r.json();
-      if (!j.ok) { alert(j.error || 'เปลี่ยนสเตปไม่สำเร็จ'); return; }
-      loadSellerCars(true);
-    } catch (e) { alert('ผิดพลาด: ' + e); }
+      if (!j.ok) { alert(j.error || scT('failed')); if (btn) { btn.disabled = false; btn.style.opacity = '1'; } renderScChanger(); return; }
+      _scData = null;                       // ให้รายการ + myStages โหลดใหม่รอบหน้า
+      await openSellerCar(car.code);          // โหลด detail ใหม่ (สเตป + ประวัติอัปเดต)
+    } catch (e) { alert('ผิดพลาด: ' + e); if (btn) { btn.disabled = false; btn.style.opacity = '1'; } renderScChanger(); }
+  }
+
+  function scHistoryHtml(car) {
+    const logs = (car && car.logs) || [];
+    let inner;
+    if (!logs.length) { inner = `<div style="padding:14px 2px;color:var(--t3);font-size:12.5px">${h(scT('noHistory'))}</div>`; }
+    else {
+      inner = logs.map((l, i) => {
+        const media = (l.media || []).slice(0, 4).map(u => {
+          const url = (u && typeof u === 'object') ? u.url : u;        // _media_urls คืน {url,video}
+          if (u && u.video) return `<a href="${url}" target="_blank" style="width:40px;height:40px;border-radius:6px;border:.5px solid var(--bd2);background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--t2)">${ic('lucide:clapperboard',18)}</a>`;
+          return `<a href="${url}" target="_blank"><img src="${url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:.5px solid var(--bd2)"></a>`;
+        }).join('');
+        return `<div style="display:flex;gap:10px;padding:9px 0;${i?'border-top:.5px solid var(--bd)':''}">
+          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center">
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--blue);margin-top:4px"></span>
+            ${i<logs.length-1?'<span style="flex:1;width:1.5px;background:var(--bd);margin-top:3px"></span>':''}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${h(scStageName(l.stageKey, l.stage))}</div>
+            ${l.note?`<div style="font-size:11.5px;color:var(--t2);margin-top:1px">${h(l.note)}</div>`:''}
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">${h(l.at||'')}${l.worker?' · '+h(l.worker):''}</div>
+            ${media?`<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${media}</div>`:''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+    return `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow)">
+        <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:6px">${ic('lucide:clipboard-list',16)} ${h(scT('history'))}</div>
+        ${inner}
+      </div>`;
   }
 
   function collectLoan() {
