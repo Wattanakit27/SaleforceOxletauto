@@ -4,6 +4,7 @@
 <style>
   .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
   .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:600px;width:100%;max-height:94vh;overflow:auto}
+  #carBody{max-width:920px}   /* popup รายละเอียดรถ — กว้างกว่าฟอร์มเพิ่มรถ */
   .modal h2{margin:0 0 12px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .kpi .n{font-size:26px;font-weight:800}
@@ -147,7 +148,7 @@
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
-      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:var(--bg2)">`:''}
+      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:340px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:var(--bg2)">`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
         ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}
         ${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}
