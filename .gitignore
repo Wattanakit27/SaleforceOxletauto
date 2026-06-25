@@ -5,7 +5,8 @@
 .env.*.local
 *.pem
 *.key
-show_env.py  # helper สำหรับดู env values — local only
+# helper สำหรับดู env values — local only (inline comment ใช้ไม่ได้ ต้องแยกบรรทัด)
+show_env.py
 
 # Python
 __pycache__/
