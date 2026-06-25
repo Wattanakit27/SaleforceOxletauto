@@ -295,10 +295,11 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
     if display_name and (user.first_name or "") != display_name[:150]:
         user.first_name = display_name[:150]
         user.save(update_fields=["first_name"])
-    # sales-admin ครั้งแรก → Executive (ไม่ทับ role ที่ตั้งทีหลังใน /track/users/)
-    if make_exec and created and not user.is_superuser:
+    # sales-admin ครั้งแรก → Executive · เซลล์ทั่วไป → Sales (เปลี่ยนสเตปขายของรถได้ในหน้าเซลล์)
+    # ตั้งเฉพาะตอนเพิ่งสร้าง user (ไม่ทับ role ที่แอดมินตั้งทีหลังใน /track/users/)
+    if created and not user.is_superuser:
         from cars import roles as _troles
-        _troles.set_user_role(user, _troles.EXEC)
+        _troles.set_user_role(user, _troles.EXEC if make_exec else _troles.SALES)
     auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     return user
 
@@ -2122,7 +2123,9 @@ def seller_dashboard(request, token):
         load_tele_user_ids()   # fetch_sheet มี cache → ไม่ช้า
         _uid = (user.get("user_id") or "").strip()
         _is_tele_hub = seller_name == "ADMIN" and _uid in TELE_USER_IDS
-        if own and not _is_tele_hub and normalize_seller(seller_name) != own:
+        # fail-closed: ไม่ใช่ tele hub แล้ว (ไม่มีชื่อตัวเอง หรือ ชื่อไม่ตรงกับเจ้าของลิงก์) → เด้ง /me/
+        # (own ว่าง = session ไม่มีชื่อเล่น/seller_name → ห้ามปล่อยให้เปิดลิงก์คนอื่นได้)
+        if not _is_tele_hub and (not own or normalize_seller(seller_name) != own):
             return HttpResponseRedirect("/me/")
     return _render_seller_page(request, seller_name)
 

@@ -14,6 +14,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import constants as C
@@ -511,6 +512,8 @@ def cars_api(request):
         "avgT2l": avg, "t2lTarget": C.T2L_TARGET_DAYS,
         "branches": branch_pairs(), "stages": [[k, n] for k, n, _ in C.STAGES], "cars": cars,
         "statusChoices": list(C.STATUS_CHOICES), "bookChoices": list(C.BOOK_STATUS_CHOICES),
+        # สเตปที่ user คนนี้ "เปลี่ยนได้" (Sales = qc/show/reserve/finance/closing/sold) → seller.html โชว์ปุ่มตามนี้
+        "myStages": [[k, C.STAGE_NAME[k]] for k in roles.allowed_stages(request.user)],
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
         "canViewAdmin": roles.can_view_admin(request.user),
@@ -527,6 +530,27 @@ def api_set_stage(request):
     stage = data.get("stage", "")
     if not roles.can_set_stage_direct(request.user, stage):
         return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (บทบาททำงานต้องสแกน QR)"}, status=403)
+    actor = _actor(request.user)
+    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor)
+    if should_notify:
+        notify_stage_change(car, worker_name=actor)
+    return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,
+                         "flag": car.flag, "days": car.days_in_stage})
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def api_seller_set_stage(request):
+    """เซลล์เปลี่ยนสเตปรถจากหน้าเซลล์ (seller.html · โหมด "สถานะรถ") — POST JSON {code, stage}.
+    ★ ผ่อนกฎ scan-only ให้เซลล์ (ตามที่ตกลง): ใช้ can_set_stage (Sales เปลี่ยนสเตปที่ตัวเองมีสิทธิ์
+    ได้ตรงๆ ไม่ต้องสแกน QR) ต่างจาก api_set_stage ที่ใช้ can_set_stage_direct (กัน scan-only).
+    csrf_exempt + login_required (เหมือน endpoint ฝั่งเซลล์ตัวอื่น · seller.html ไม่มี CSRF token)."""
+    data = json.loads(request.body or "{}")
+    car = get_object_or_404(Car, code=data.get("code"))
+    stage = data.get("stage", "")
+    if not roles.can_set_stage(request.user, stage):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้"}, status=403)
     actor = _actor(request.user)
     _, should_notify = car.change_stage(new_stage=stage, worker_name=actor)
     if should_notify:

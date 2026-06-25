@@ -780,6 +780,7 @@
 
   // ── render ──
   function render() {
+    if (pageMode === 'cars') { renderCarsMode(); return; }                            // 🚗 สถานะรถ
     if (pageMode === 'finance' || pageMode === 'loan') { renderLoanMode(); return; }  // รวมเป็นฟอร์มเดียว
     const s = D.seller;
     const teamId = s.team || '?';
@@ -1845,6 +1846,7 @@
         <span style="font-size:12px;color:var(--t3);font-weight:700">โหมด</span>
         <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">
           <option value="dashboard" ${pageMode==='dashboard'?'selected':''}>📊 แดชบอร์ดของฉัน</option>
+          <option value="cars" ${pageMode==='cars'?'selected':''}>🚗 สถานะรถ</option>
           <option value="loan" ${(pageMode==='loan'||pageMode==='finance')?'selected':''}>📄 ยื่นสินเชื่อ / เช็คไฟแนนซ์</option>
         </select>
         ${sellerBellHtml()}
@@ -2246,6 +2248,77 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       </div>
     `;
     document.getElementById('root').innerHTML = html;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 🚗 โหมด "สถานะรถ" — เซลล์เปลี่ยนสเตปรถ (ระบบ tracking ผ่าน /track/api/*)
+  // เซลล์ login ไลน์ → bridge เป็น Django user role "Sales" อัตโนมัติ → เปลี่ยนได้เฉพาะสเตปใน myStages
+  // (qc/show/reserve/finance/closing/sold) · ไม่ต้องสแกน QR (ผ่อนกฎ scan-only ให้เซลล์ในหน้านี้)
+  // ════════════════════════════════════════════════════════════════
+  let _scData = null, _scF = { stage: '', q: '' };
+  const _scFlag = { red: 'var(--red)', amber: 'var(--amber)', ok: 'var(--green)' };
+
+  function renderCarsMode() {
+    document.getElementById('root').innerHTML = `
+      ${modeBar()}
+      <div class="seller-hd"><div>
+        <h1>🚗 สถานะรถ</h1>
+        <div class="sub">เปลี่ยนสเตปรถได้เฉพาะที่มีสิทธิ์ (รอตรวจ / พร้อมขาย / จอง / จัดไฟแนนซ์ / รอปิดการขาย / ขายแล้ว)</div>
+      </div></div>
+      <div id="scBox"><div style="padding:24px;text-align:center;color:var(--t3)">กำลังโหลดข้อมูลรถ…</div></div>`;
+    loadSellerCars();
+  }
+
+  async function loadSellerCars(force) {
+    const box = document.getElementById('scBox'); if (!box) return;
+    if (force) _scData = null;
+    if (!_scData) {
+      try { _scData = await (await fetch('/track/api/cars', { credentials: 'same-origin' })).json(); }
+      catch (e) { box.innerHTML = '<div style="padding:24px;color:var(--red)">โหลดข้อมูลรถไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อมใช้งาน</div>'; return; }
+    }
+    renderSellerCars();
+  }
+
+  function renderSellerCars() {
+    const D2 = _scData, box = document.getElementById('scBox'); if (!box || !D2) return;
+    if (D2.error) { box.innerHTML = `<div style="padding:24px;color:var(--red)">${h(D2.error)}</div>`; return; }
+    const myStages = D2.myStages || [];
+    let cars = (D2.cars || []).slice();
+    if (_scF.stage) cars = cars.filter(c => c.stage === _scF.stage);
+    if (_scF.q) { const q = _scF.q.trim().toLowerCase(); if (q) cars = cars.filter(c => ((c.code||'')+' '+(c.title||'')+' '+(c.brand||'')+' '+(c.model||'')+' '+(c.plate||'')).toLowerCase().includes(q)); }
+    const stageOpts = (D2.stages || []).map(s => `<option value="${s[0]}" ${_scF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('');
+    let html = `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+        <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="🔍 ค้นหา ทะเบียน/รุ่น/รหัส" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
+        <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${stageOpts}</select>
+        <span style="font-size:12px;color:var(--t3);margin-left:auto">${cars.length} คัน</span>
+      </div>`;
+    if (!myStages.length) html += `<div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-radius:9px;color:var(--amber);font-size:12px;margin-bottom:10px">บัญชีนี้ยังไม่มีสิทธิ์เปลี่ยนสเตปรถ — แจ้งแอดมินตั้งบทบาท "เซลล์" ในระบบรถ (/track/users/)</div>`;
+    html += cars.map(c => {
+      const ph = c.photo ? `<img src="${c.photo}" loading="lazy" style="width:72px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:54px;border-radius:8px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:10px">ไม่มีรูป</div>`;
+      const btns = myStages.filter(s => s[0] !== c.stage).map(s => `<button onclick="scSetStage('${c.code}','${s[0]}')" style="font-size:11px;padding:5px 9px;border-radius:7px;border:.5px solid var(--blue);background:var(--blue-bg,#eaf2fe);color:var(--blue);cursor:pointer;white-space:nowrap">${h(s[1])}</button>`).join('');
+      return `<div style="display:flex;gap:10px;padding:12px 4px;border-top:.5px solid var(--bd);align-items:flex-start">
+        ${ph}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:var(--t1);font-size:13px">${h(c.code)} · ${h(c.title||'')}</div>
+          <div style="font-size:11px;color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.plate):''}</div>
+          <div style="margin:5px 0"><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(c.stageName)} · ${c.days} วัน</span></div>
+          ${btns?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px"><span style="font-size:10px;color:var(--t3);align-self:center">เปลี่ยนเป็น:</span>${btns}</div>`:''}
+        </div>
+      </div>`;
+    }).join('') || `<div style="padding:24px;text-align:center;color:var(--t3)">ไม่มีรถตามตัวกรอง</div>`;
+    html += `</div>`;
+    box.innerHTML = html;
+  }
+
+  async function scSetStage(code, stage) {
+    if (!confirm('ยืนยันเปลี่ยนสเตปของรถ ' + code + '?')) return;
+    try {
+      const r = await fetch('/track/api/seller_set_stage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', body: JSON.stringify({ code, stage }) });
+      const j = await r.json();
+      if (!j.ok) { alert(j.error || 'เปลี่ยนสเตปไม่สำเร็จ'); return; }
+      loadSellerCars(true);
+    } catch (e) { alert('ผิดพลาด: ' + e); }
   }
 
   function collectLoan() {
