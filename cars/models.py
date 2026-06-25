@@ -244,3 +244,22 @@ class LoginEvent(models.Model):
 
     def __str__(self):
         return f"{'OK' if self.success else 'FAIL'} {self.identity} ({self.method})"
+
+
+class Presence(models.Model):
+    """ผู้ใช้ที่กำลังออนไลน์ (heartbeat) — นับ "คนเข้าเว็บตอนนี้" = แถวที่ last_seen ภายใน ~2.5 นาที.
+    1 แถวต่อ identity (user_id ของ session · update_or_create อัปเดตในที่เดิม ไม่บวมตาราง).
+    เขียนจาก dashboard.presence_ping (heartbeat ทุก ~45 วิ จาก index.html/seller.html) · best-effort."""
+    identity = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200, blank=True)
+    role = models.CharField(max_length=40, blank=True)
+    page = models.CharField(max_length=20, blank=True)        # dashboard / seller
+    last_seen = models.DateTimeField(db_index=True)
+
+    class Meta:
+        verbose_name = "ออนไลน์"
+        verbose_name_plural = "ออนไลน์"
+        ordering = ["-last_seen"]
+
+    def __str__(self):
+        return f"{self.identity} @ {self.last_seen:%H:%M}"

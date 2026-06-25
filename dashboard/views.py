@@ -403,6 +403,31 @@ def logout_view(request):
     return resp
 
 
+@require_GET
+def presence_ping(request):
+    """heartbeat — บันทึกว่า user คนนี้ยังออนไลน์ + คืนจำนวน "คนเข้าเว็บตอนนี้".
+    เรียกทุก ~45 วิ จาก index.html (แอดมิน) + seller.html (เซลล์) → นับรวมทุกคนที่ active.
+    best-effort: DB ล่ม/ยังไม่ migrate = คืน online=0 ไม่พังหน้า. GET (เลี่ยง CSRF · idempotent)."""
+    ou = request.session.get("oxlet_user") or {}
+    ident = ou.get("user_id") or ("anon:" + (request.session.session_key or request.META.get("REMOTE_ADDR", "") or "?"))
+    online = 0
+    try:
+        from datetime import timedelta
+        from django.utils import timezone as _tz
+        from cars.models import Presence
+        now = _tz.now()
+        Presence.objects.update_or_create(identity=ident[:200], defaults={
+            "name": (ou.get("nickname") or ou.get("display_name") or "")[:200],
+            "role": (ou.get("position") or ("seller" if ou else ""))[:40],
+            "page": (request.GET.get("p") or "")[:20],
+            "last_seen": now,
+        })
+        online = Presence.objects.filter(last_seen__gte=now - timedelta(seconds=150)).count()
+    except Exception:
+        pass
+    return JsonResponse({"online": online})
+
+
 @require_http_methods(["GET", "POST"])
 def admin_seller_config(request):
     """Admin endpoint — ตั้งเป้า/ทีม

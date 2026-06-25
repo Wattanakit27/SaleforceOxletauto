@@ -260,6 +260,15 @@
       window.addEventListener('scroll', hide, true);
       window.addEventListener('resize', hide);
     })();
+    // 🟢 heartbeat — บอกเซิร์ฟเวอร์ว่ายังออนไลน์ + อัปเดตชิป "คนเข้าเว็บตอนนี้"
+    (function(){
+      function ping(){
+        fetch('/api/presence?p=dashboard',{credentials:'same-origin'})
+          .then(r=>r.json()).then(j=>{ var el=document.getElementById('online-count'); if(el && j && typeof j.online==='number') el.textContent=j.online; })
+          .catch(function(){});
+      }
+      ping(); setInterval(ping, 45000);
+    })();
     const passMonth = (ds, m) => {
       if(m===0) return true;
       if(!ds) return true;
@@ -1235,6 +1244,8 @@
             <button onclick="openTrkUsers()" title="จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;border-top:.5px solid var(--bd);margin-top:2px;padding-top:9px;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:car-front',16)} บทบาทระบบติดตามรถ</button>
           </div>
         </details>`;
+        // 🟢 คนเข้าเว็บตอนนี้ (online now) — heartbeat อัปเดต #online-count ทุก ~45 วิ
+        html += `<span id="online-now" title="คนกำลังใช้งานเว็บตอนนี้ (อัปเดตอัตโนมัติ ~45 วิ)" style="font-size:12px;padding:5px 11px;border-radius:14px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px">${ic('lucide:radio',14)} <span id="online-count">–</span> ออนไลน์</span>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
         const _al = computeAdminAlerts();
         const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length;

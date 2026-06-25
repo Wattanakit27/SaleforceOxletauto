@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Branch, Car, LoginEvent, ScanLog
+from .models import Branch, Car, LoginEvent, Presence, ScanLog
 
 
 class ScanLogInline(admin.TabularInline):
@@ -44,3 +44,9 @@ class LoginEventAdmin(admin.ModelAdmin):
     list_filter = ("success", "method")
     search_fields = ("identity", "name", "ip")
     readonly_fields = ("created_at",)
+
+
+@admin.register(Presence)
+class PresenceAdmin(admin.ModelAdmin):
+    list_display = ("identity", "name", "role", "page", "last_seen")
+    search_fields = ("identity", "name")
