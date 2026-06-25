@@ -761,27 +761,34 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
         # ดึง parse_date จาก fetch_dashboard (avoid circular import — late import)
         from .fetch_dashboard import parse_date
 
-        # ── overlay สถานะ Z (customer_status) จากแท็บล่าสุดที่กรอก ──
-        # เคสเก่า (วันที่เดือนก่อน) ถูกเอามาทำต่อในแท็บปัจจุบัน (layout ใหม่มีคอลัม Z) แต่ date-filter เก็บ copy เดือนเก่า
-        # (layout เก่าไม่มีคอลัม Z) → สถานะ Z ที่อัปเดต (คืนเคส/จอง/ฯลฯ) หาย → ตามผิด/นับผิด.
-        # รวบ Z จาก "เดือนล่าสุด" ที่กรอก ต่อ lead_code มา overlay ทับ (การนับเดือนยังอิงวันที่เหมือนเดิม — overlay แค่สถานะ)
-        latest_z: dict[str, str] = {}
-        latest_z_m: dict[str, int] = {}
+        # ── overlay สถานะล่าสุดจากทุกแท็บ: Z (customer_status) + AB (admin_status) + เซลล์ (sales_status) ──
+        # เคสเก่า (วันที่เดือนก่อน) ถูกเอามาทำต่อในแท็บปัจจุบัน (admin อัปเดต Z/AB) แต่ date-filter เก็บ copy เดือนเก่า
+        # (สถานะในสำเนาเดือนเก่ายังเป็นค่าเดิม) → สถานะที่อัปเดต (จ่ายใหม่/คืนเคส/จอง) หาย → ตามผิด/นับผิด.
+        # รวบ "ค่าล่าสุด (เดือนสูงสุดที่กรอก)" ต่อ lead_code มา overlay ทับ (การนับเดือนยังอิงวันที่เดิม — overlay แค่สถานะ).
+        # เคส TLD-10187: received 28/5 → row ใช้สำเนา พ.ค. (admin=ติดตาม) แต่ admin ใส่ "จ่ายใหม่" ในแท็บ มิ.ย. → overlay มาให้
+        _OVERLAY_FIELDS = (LEADS_COL.customer_status, LEADS_COL.admin_status, LEADS_COL.sales_status)
+        latest: dict[int, dict[str, str]] = {f: {} for f in _OVERLAY_FIELDS}
+        latest_m: dict[int, dict[str, int]] = {f: {} for f in _OVERLAY_FIELDS}
         for m_int, tab in monthly_tabs:
             _, vals = tab_rows.get(tab, (m_int, []))
             if not vals:
                 continue
             cmz = _resolve_lead_colmap(vals[0])
-            zsrc = cmz.get(LEADS_COL.customer_status)
             csrc = cmz.get(LEADS_COL.lead_code)
-            if zsrc is None or csrc is None:
+            if csrc is None:
+                continue
+            srcs = {f: cmz[f] for f in _OVERLAY_FIELDS if cmz.get(f) is not None}
+            if not srcs:
                 continue
             for raw in vals[1:]:
                 code = (raw[csrc] if csrc < len(raw) else "").strip()
-                z = (raw[zsrc] if zsrc < len(raw) else "").strip()
-                if code and z and m_int >= latest_z_m.get(code, 0):
-                    latest_z[code] = z
-                    latest_z_m[code] = m_int
+                if not code:
+                    continue
+                for f, fsrc in srcs.items():
+                    val = (raw[fsrc] if fsrc < len(raw) else "").strip()
+                    if val and m_int >= latest_m[f].get(code, 0):
+                        latest[f][code] = val
+                        latest_m[f][code] = m_int
 
         all_rows: list[list[str]] = []
         for m_int, tab in monthly_tabs:
@@ -795,8 +802,9 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
                 d = parse_date(cell(row, LEADS_COL.received_date))
                 if d and d.month == m_int:
                     _code = cell(row, LEADS_COL.lead_code).strip()
-                    if _code in latest_z:
-                        row[LEADS_COL.customer_status] = latest_z[_code]   # สถานะ Z ล่าสุดจากทุกแท็บ
+                    for f in _OVERLAY_FIELDS:    # สถานะล่าสุดจากทุกแท็บ (Z/AB/เซลล์)
+                        if _code in latest[f]:
+                            row[f] = latest[f][_code]
                     all_rows.append(row)
         _cache_set(cache_key, all_rows)
         return all_rows
