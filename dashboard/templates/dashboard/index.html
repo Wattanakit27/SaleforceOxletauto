@@ -3761,7 +3761,7 @@
     }
     async function renderTrkUsers(ov){
       ov=ov||document.getElementById('trk-users'); if(!ov) return;
-      const _ovTop=ov.scrollTop, _inEl=ov.querySelector('#trk-users-scroll'), _inTop=_inEl?_inEl.scrollTop:0;  // จำตำแหน่งสกอลล์ กันเด้งบนตอน re-render
+      const _cardTop=ov.firstChild?ov.firstChild.scrollTop:0, _inEl=ov.querySelector('#trk-users-scroll'), _inTop=_inEl?_inEl.scrollTop:0;  // จำสกอลล์ (การ์ด ov.firstChild เป็นตัวสกอลล์จริง) กันเด้งบน
       let d; try{ d=await (await fetch('/track/api/users',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const roleOpts=sel=>`<option value="">— ไม่มี —</option>`+d.roles.map(r=>`<option value="${r[0]}" ${sel===r[0]?'selected':''}>${h(r[1])}</option>`).join('');
@@ -3797,7 +3797,7 @@
           </div>
           <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:7px">ผู้ใช้</th><th style="padding:7px">บทบาท</th><th style="padding:7px"></th></tr></thead><tbody>${rows}</tbody></table></div>
         </details>`;
-      ov.scrollTop=_ovTop; const _ni=ov.querySelector('#trk-users-scroll'); if(_ni)_ni.scrollTop=_inTop;  // คืนตำแหน่งสกอลล์ กันเด้งบน
+      if(ov.firstChild)ov.firstChild.scrollTop=_cardTop; const _ni=ov.querySelector('#trk-users-scroll'); if(_ni)_ni.scrollTop=_inTop;  // คืนสกอลล์ (การ์ด+ตารางใน) กันเด้งบน
     }
     async function trkUserAction(action,user_id,extra){
       try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(Object.assign({action,user_id},extra||{}))});
