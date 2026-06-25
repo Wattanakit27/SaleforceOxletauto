@@ -6,7 +6,7 @@
   #scanRoot{--accent:#7b61ff;max-width:480px;margin:0 auto}
   #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:16px;border:1px solid var(--line)}
   #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
-  #scanRoot .sc-photo{width:100%;height:175px;object-fit:cover;border-radius:13px;margin-bottom:13px;display:block}
+  #scanRoot .sc-photo{width:100%;height:auto;max-height:380px;object-fit:contain;background:#0c0f1a;border-radius:13px;margin-bottom:13px;display:block}
   #scanRoot .sc-stage{background:rgba(123,97,255,.18);color:#cbbcff;font-weight:600}
   #scanRoot .sc-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:2px 0 13px}
   #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:999px;background:#252b42;color:var(--mut)}
@@ -22,6 +22,16 @@
   #scanRoot .sc-tl .col{flex-shrink:0;display:flex;flex-direction:column;align-items:center}
   #scanRoot .sc-tl .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);margin-top:4px}
   #scanRoot .sc-tl .line{flex:1;width:2px;background:var(--line);margin-top:3px}
+  #scanRoot .sc-stage{white-space:normal;text-align:right}
+  /* กันเพี้ยนบนจอแคบ/มือถือ */
+  @media (max-width:560px){
+    #scanRoot{max-width:100%}
+    #scanRoot .sc-photo{max-height:300px}
+    #scanRoot h2{font-size:15px}
+    #scanRoot .lang-row{gap:3px;padding:3px}
+    #scanRoot .lang-row .langbtn{font-size:11px;padding:7px 1px}
+    #scanRoot .sc-chip{font-size:12.5px;padding:8px 11px}
+  }
 </style>
 <div id="scanRoot">
   <!-- เลือกภาษา (เฉพาะหน้าสแกน — สำหรับแรงงานเพื่อนบ้าน) -->
