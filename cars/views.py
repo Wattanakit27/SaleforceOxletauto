@@ -89,6 +89,9 @@ def dashboard(request):
         "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
+        # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
+        "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
+        "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
     })
 
 

@@ -69,10 +69,11 @@
 
   <div style="overflow:auto">
   <table>
-    <thead><tr><th>รหัส</th><th>รถ</th><th>สาขา</th><th>สเตป</th><th>ค้าง</th><th></th></tr></thead>
+    <thead><tr><th style="width:60px">รูป</th><th>รหัส</th><th>รถ</th><th>สาขา</th><th>สเตป</th><th>ค้าง</th><th></th></tr></thead>
     <tbody>
     {% for c in cars %}
       <tr class="clickrow" onclick="openCar('{{ c.code }}')">
+        <td>{% if c.photo and supabaseUrl %}<img src="{{ supabaseUrl }}/storage/v1/object/public/{{ storageBucket }}/{{ c.photo.name }}" loading="lazy" style="width:54px;height:40px;object-fit:cover;border-radius:6px;display:block">{% else %}<div style="width:54px;height:40px;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--mut)"><i data-lucide="car-front" style="width:18px;height:18px"></i></div>{% endif %}</td>
         <td><b>{{ c.code }}</b></td>
         <td>{{ c.title }}{% if c.plate %}<div class="sm mut">{{ c.plate }}</div>{% endif %}</td>
         <td class="sm mut">{{ c.branch_name }}</td>
@@ -81,7 +82,7 @@
         <td class="mut">›</td>
       </tr>
     {% empty %}
-      <tr><td colspan="6" class="mut" style="text-align:center;padding:24px">ยังไม่มีรถ{% if can_add %} — กด "เพิ่มรถ" เพื่อเริ่ม{% endif %}</td></tr>
+      <tr><td colspan="7" class="mut" style="text-align:center;padding:24px">ยังไม่มีรถ{% if can_add %} — กด "เพิ่มรถ" เพื่อเริ่ม{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
