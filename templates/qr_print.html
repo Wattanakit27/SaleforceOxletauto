@@ -16,25 +16,42 @@
   <button class="btn"><i data-lucide="filter"></i> กรอง</button>
 </form>
 
+<input type="search" id="qsearch" oninput="qrFilter()" placeholder="ค้นหา รหัส / รุ่น / ทะเบียน" autocomplete="off" style="margin-bottom:12px">
+
 <form method="get" action="{% url 'qr_print_sheet' %}" target="_blank">
   <div class="row" style="justify-content:space-between;margin-bottom:10px">
-    <label class="row sm"><input type="checkbox" id="all" style="width:auto"> เลือกทั้งหมด ({{ cars|length }})</label>
+    <label class="row sm"><input type="checkbox" id="all" style="width:auto"> เลือกทั้งหมด (<span id="visct">{{ cars|length }}</span>)</label>
     <button class="btn pri"><i data-lucide="printer"></i> สร้างแผ่นพิมพ์</button>
   </div>
   <div class="card cols">
     {% for c in cars %}
-    <label class="row sm" style="border:1px solid var(--line);border-radius:9px;padding:9px">
+    <label class="row sm qr-item" data-s="{{ c.code }} {{ c.title }} {{ c.plate }}" style="border:1px solid var(--line);border-radius:9px;padding:9px">
       <input type="checkbox" name="code" value="{{ c.code }}" class="ck" style="width:auto">
-      <span><b>{{ c.code }}</b><br><span class="mut">{{ c.title }}</span></span>
+      <span><b>{{ c.code }}</b><br><span class="mut">{{ c.title }}</span>{% if c.plate %}<br><span class="mut" style="font-size:11px"><i data-lucide="car-front" style="width:12px;height:12px;vertical-align:-2px"></i> {{ c.plate }}</span>{% endif %}</span>
     </label>
     {% empty %}<div class="mut">ไม่มีรถตามเงื่อนไข</div>{% endfor %}
   </div>
+  <div id="qr-empty" class="mut" style="display:none;padding:12px">ไม่พบรถที่ค้นหา — ลองคำอื่น</div>
 </form>
 {% endblock %}
 {% block scripts %}
 <script>
-  document.getElementById('all')?.addEventListener('change',e=>{
-    document.querySelectorAll('.ck').forEach(c=>c.checked=e.target.checked);
+  // ค้นหา รหัส/รุ่น/ทะเบียน แบบทันที (client-side · ไม่ต้องโหลดใหม่)
+  function qrFilter(){
+    var q=((document.getElementById('qsearch')||{}).value||'').trim().toLowerCase(), n=0;
+    document.querySelectorAll('.qr-item').forEach(function(el){
+      var hit = !q || (el.getAttribute('data-s')||'').toLowerCase().indexOf(q)!==-1;
+      el.style.display = hit ? '' : 'none'; if(hit) n++;
+    });
+    var c=document.getElementById('visct'); if(c) c.textContent=n;
+    var em=document.getElementById('qr-empty'); if(em) em.style.display=n?'none':'block';
+  }
+  // "เลือกทั้งหมด" = เลือกเฉพาะคันที่กรองเห็นอยู่
+  document.getElementById('all')?.addEventListener('change',function(e){
+    document.querySelectorAll('.qr-item').forEach(function(lbl){
+      if(lbl.style.display==='none') return;
+      var ck=lbl.querySelector('.ck'); if(ck) ck.checked=e.target.checked;
+    });
   });
 </script>
 {% endblock %}
