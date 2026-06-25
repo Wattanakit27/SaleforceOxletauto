@@ -19,6 +19,7 @@
 <div class="row" style="justify-content:space-between;margin-bottom:14px">
   <div><h1 style="margin:0">สถานะรถ</h1><span class="mut sm">ทั้งหมด {{ total }} คัน</span></div>
   <div class="row" style="gap:8px">
+    <a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>
     {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
     {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
     {% if can_manage_users %}<a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>{% endif %}
