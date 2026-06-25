@@ -2,16 +2,17 @@
 {% block title %}สถานะรถ · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <style>
-  .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:24px;overflow:auto}
-  .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:600px;width:100%}
+  .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:600px;width:100%;max-height:94vh;overflow:auto}
   .modal h2{margin:0 0 12px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .kpi .n{font-size:26px;font-weight:800}
   .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
   .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:#252b42;border:.5px solid var(--line)}
   .chip.on{border-color:var(--accent);color:var(--fg)}
-  .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:.5px solid var(--line);font-size:13px}
-  .kv span:first-child{color:var(--mut)}
+  .kv{padding:8px 2px;border-bottom:.5px solid var(--line)}
+  .kv span:first-child{display:block;font-size:11px;color:var(--mut)}
+  .kv span:last-child{display:block;font-size:14px;font-weight:600;word-break:break-word}
 </style>
 
 <!-- แถบหัว + ปุ่มจัดการ (รวมไว้หน้าเดียว) -->
@@ -144,15 +145,15 @@
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
-      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px">`:''}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:#000">`:''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
         ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}
         ${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}
         ${kv('สี',d.color)}${kv('เลขไมล์',d.km)}
         ${kv('วันรับเข้า',d.dateIn)}${kv('สถานะเล่ม',d.bookStatus)}
         ${kv('ครบกำหนดภาษี',d.taxDue)}${kv('หมายเหตุ',d.note)}
       </div>
-      ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
+      ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
       ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
       <div class="sm mut" style="margin:14px 0 6px">เปลี่ยนสเตป</div>
       <div class="row" style="gap:6px">${stageBtns}</div>

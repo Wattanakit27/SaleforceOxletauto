@@ -3621,9 +3621,9 @@
     function _trkOverlay(id, inner){
       const old=document.getElementById(id); if(old) old.remove();
       const ov=document.createElement('div'); ov.id=id;
-      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto';
       ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
-      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:20px;max-width:720px;width:100%;max-height:92vh;overflow:auto">${inner}</div>`;
+      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:18px;max-width:720px;width:100%;max-height:94vh;overflow:auto">${inner}</div>`;
       document.body.appendChild(ov); if(window.lucide) lucide.createIcons(); return ov;
     }
 
@@ -3631,40 +3631,44 @@
       const ov=_trkOverlay('trk-car','<p class="mut">กำลังโหลด…</p>');
       let d; try{ d=await (await fetch('/track/cars/'+encodeURIComponent(code)+'/json',{credentials:'same-origin'})).json(); }
       catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
-      const kv=(k,v)=>(v!==''&&v!=null)?`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:.5px solid var(--bd);font-size:13px"><span class="mut">${h(k)}</span><span style="text-align:right">${h(String(v))}</span></div>`:'';
+      // ฟิลด์แบบ stacked (label บน / ค่าล่าง) — อ่านง่ายบนมือถือ ไม่บีบซ้าย-ขวา
+      const kv=(k,v)=>(v!==''&&v!=null)?`<div style="padding:8px 2px;border-bottom:.5px solid var(--bd)"><div class="mut" style="font-size:11px;line-height:1.3">${h(k)}</div><div style="font-size:14px;font-weight:600;margin-top:2px;word-break:break-word">${h(String(v))}</div></div>`:'';
       const dump=o=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut">—</span>';
+      // grid ยุบเป็น 1 คอลัมน์อัตโนมัติบนจอแคบ (auto-fit) · จอกว้างค่อยขึ้นหลายคอลัมน์
+      const grid='display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px';
       const logs=(d.logs||[]).map(l=>{
         const med=(l.media||[]).map(m=>m.video
           ? `<a href="${m.url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:7px;background:var(--bg2);border:.5px solid var(--bd);font-size:11px;text-decoration:none;color:var(--t1)">▶ วิดีโอ</a>`
           : `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy" style="width:54px;height:54px;object-fit:cover;border-radius:6px;display:block"></a>`).join('');
-        return `<div style="font-size:12px;padding:6px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}${med?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">${med}</div>`:''}</div>`;
+        return `<div style="font-size:12px;padding:7px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}${med?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">${med}</div>`:''}</div>`;
       }).join('')||'<span class="mut" style="font-size:12px">ยังไม่มีประวัติ</span>';
-      const stages = (d.direct&&d.direct.length) ? d.direct.map(s=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">${h(s.name)}</button>`).join(' ') : `<a href="${d.scanUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+      // ปุ่มเปลี่ยนสเตปใหญ่ขึ้น (กดง่ายบนมือถือ) · ยืดเต็มแถวเมื่อจอแคบ
+      const stages = (d.direct&&d.direct.length) ? d.direct.map(s=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:13px;padding:10px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;flex:1;min-width:120px">${h(s.name)}</button>`).join('') : `<a href="${d.scanUrl}" target="_blank" style="font-size:13px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
       const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
       ov.firstChild.innerHTML=`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div><div style="font-size:18px;font-weight:800">${h(d.code)}</div><div class="mut" style="font-size:12px">${h(d.title||'')} <span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="รหัสในชื่อรถ:\n(A)/(B)/(C)/(D) = โซนจอดรถในลาน\n(T)/(V)/(S) = สถานะเอกสาร/งาน (รอทีมยืนยัน)\n(1.1)/(2.1) = เกรด/รอบตรวจสภาพ\n(07/68) = เดือน/ปี (พ.ศ.) ที่รับรถเข้า">?</span> ${d.plate?'· '+h(d.plate):''}</div></div>
-          <button onclick="document.getElementById('trk-car').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="min-width:0"><div style="font-size:18px;font-weight:800">${h(d.code)}</div><div class="mut" style="font-size:12px;word-break:break-word">${h(d.title||'')} <span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="รหัสในชื่อรถ:\n(A)/(B)/(C)/(D) = โซนจอดรถในลาน\n(T)/(V)/(S) = สถานะเอกสาร/งาน (รอทีมยืนยัน)\n(1.1)/(2.1) = เกรด/รอบตรวจสภาพ\n(07/68) = เดือน/ปี (พ.ศ.) ที่รับรถเข้า">?</span> ${d.plate?'· '+h(d.plate):''}</div></div>
+          <button onclick="document.getElementById('trk-car').remove()" style="background:transparent;border:none;font-size:24px;line-height:1;color:var(--t3);cursor:pointer;padding:2px 6px;flex-shrink:0">✕</button>
         </div>
+        ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:260px;object-fit:contain;border-radius:10px;margin:10px 0;background:#000">`:''}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
-          <span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">${h(d.stageName)}</span>
-          <span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TRK_FLAG[d.flag]||'#888'}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
-          ${d.t2l!=null?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px">T2L ${d.t2l} วัน</span>`:''}
-          ${d.price?`<span style="padding:3px 9px;border-radius:999px;background:var(--bg2);font-size:12px;font-weight:700">฿ ${h(String(d.price))}</span>`:''}
+          <span style="padding:4px 10px;border-radius:999px;background:var(--bg2);font-size:12px">${h(d.stageName)}</span>
+          <span style="padding:4px 10px;border-radius:999px;background:var(--bg2);font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TRK_FLAG[d.flag]||'#888'}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
+          ${d.t2l!=null?`<span style="padding:4px 10px;border-radius:999px;background:var(--bg2);font-size:12px">T2L ${d.t2l} วัน</span>`:''}
+          ${d.price?`<span style="padding:4px 10px;border-radius:999px;background:var(--bg2);font-size:12px;font-weight:700">฿ ${h(String(d.price))}</span>`:''}
         </div>
-        ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:#000">`:''}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        <div style="${grid}">
           ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}${kv('สี',d.color)}${kv('เลขไมล์',d.km)}${kv('วันรับเข้า',d.dateIn)}${kv('ครบกำหนดภาษี',d.taxDue)}
         </div>
-        ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="mut" style="cursor:pointer;font-size:12px">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
+        ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="mut" style="cursor:pointer;font-size:12px">รายละเอียดรถ (ทั้งหมด)</summary><div style="${grid};margin-top:6px">${dump(d.detail)}</div></details>`:''}
         ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
-        <div class="mut" style="font-size:12px;margin:14px 0 6px">เปลี่ยนสเตป</div><div style="display:flex;gap:6px;flex-wrap:wrap">${stages}</div>
-        <div class="mut" style="font-size:12px;margin:14px 0 6px">ประวัติการสแกน</div><div style="max-height:150px;overflow:auto">${logs}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-          <a href="${d.qrUrl}" target="_blank" style="font-size:12px;color:var(--blue)">เปิด QR</a>
-          ${d.canEdit?`<a href="${d.editUrl}" target="_blank" style="font-size:12px;color:var(--blue)">แก้ไขข้อมูล</a>`:''}
+        <div class="mut" style="font-size:12px;margin:16px 0 6px">เปลี่ยนสเตป</div><div style="display:flex;gap:8px;flex-wrap:wrap">${stages}</div>
+        <div class="mut" style="font-size:12px;margin:16px 0 6px">ประวัติการสแกน</div><div style="max-height:170px;overflow:auto">${logs}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <a href="${d.qrUrl}" target="_blank" style="font-size:13px;color:var(--blue)">เปิด QR</a>
+          ${d.canEdit?`<a href="${d.editUrl}" target="_blank" style="font-size:13px;color:var(--blue)">แก้ไขข้อมูล</a>`:''}
         </div>
-        ${d.canDelete?`<div style="border-top:.5px solid var(--bd);margin-top:12px;padding-top:12px;text-align:center"><button onclick="trkDelete('${d.code}')" style="font-size:12px;padding:8px 16px;border-radius:9px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer">🗑 ลบรถ (ย้ายถังขยะ · แอดมินเท่านั้น)</button></div>`:''}`;
+        ${d.canDelete?`<div style="border-top:.5px solid var(--bd);margin-top:12px;padding-top:12px;text-align:center"><button onclick="trkDelete('${d.code}')" style="font-size:13px;padding:10px 18px;border-radius:9px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer">🗑 ลบรถ (ย้ายถังขยะ · แอดมินเท่านั้น)</button></div>`:''}`;
     }
     async function trkChangeStage(code,stage){
       try{
