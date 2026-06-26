@@ -36,8 +36,8 @@
       {% for r in rows %}
         <tr style="{% if not r.u.is_active %}opacity:.5{% endif %}">
           <td>
-            <b>{{ r.u.username }}</b>
-            {% if r.u.get_full_name %}<div class="sm mut">{{ r.u.get_full_name }}</div>{% endif %}
+            <b>{{ r.label }}</b>
+            {% if r.is_line and r.label != r.u.username %}<div class="sm mut" style="font-size:10px;word-break:break-all">{{ r.u.username }}</div>{% endif %}
             {% if r.u.is_superuser %}<span class="pill" style="background:var(--bg3);color:var(--accent)">superuser</span>{% endif %}
           </td>
           <td><span class="pill">{{ r.role_label }}</span></td>

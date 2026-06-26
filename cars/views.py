@@ -503,8 +503,26 @@ def manage_users(request):
 
         return redirect("manage_users")
 
+    # map LINE user_id → (ชื่อเล่น, displayname) จากชีต employees → โชว์ชื่อแทน line_<id> ดิบ
+    emp_map = {}
+    try:
+        from dashboard.services.google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
+        for e in fetch_sheet("employees"):
+            uid = (cell(e, EM.user_id) or "").strip()
+            if uid:
+                emp_map[uid] = ((cell(e, EM.nickname) or "").strip(), (cell(e, EM.display_name) or "").strip())
+    except Exception:
+        emp_map = {}
+
+    def _label(u):
+        if u.username.startswith("line_"):
+            nick, disp = emp_map.get(u.username[5:], ("", ""))
+            return nick or disp or (u.get_full_name() or "").strip() or u.username
+        return (u.get_full_name() or "").strip() or u.username
+
     rows = [
-        {"u": u, "role": roles.get_role(u), "role_label": roles.role_label(u)}
+        {"u": u, "role": roles.get_role(u), "role_label": roles.role_label(u),
+         "label": _label(u), "is_line": u.username.startswith("line_")}
         for u in User.objects.order_by("-is_active", "username")
     ]
     return render(request, "manage_users.html", {"rows": rows, "roles": roles.ROLES})
