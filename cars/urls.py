@@ -19,6 +19,7 @@ urlpatterns = [
 
     # JSON API — ให้หน้า sales เรนเดอร์ "สถานะรถ" เองด้วยธีมเดียวกัน (ไม่ใช้ iframe)
     path("api/cars", views.cars_api, name="cars_api"),
+    path("api/logins", views.login_log_api, name="login_log_api"),
     path("api/set_stage", views.api_set_stage, name="api_set_stage"),
     path("api/seller_set_stage", views.api_seller_set_stage, name="api_seller_set_stage"),
     path("api/add_car", views.api_add_car, name="api_add_car"),

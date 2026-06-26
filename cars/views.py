@@ -125,6 +125,33 @@ def login_log(request):
     })
 
 
+@roles.role_required(roles.can_manage_users)
+def login_log_api(request):
+    """JSON ของ log การเข้าสู่ระบบ — ให้หน้าแดชบอร์ด sales (index.html) เรนเดอร์เป็น modal เอง.
+    (เข้าจาก /track/ → middleware bridge session sales → Django user · เหมือน api_users)."""
+    show = request.GET.get("show", "")
+    qs = LoginEvent.objects.all()
+    if show == "fail":
+        qs = qs.filter(success=False)
+    elif show == "ok":
+        qs = qs.filter(success=True)
+    now = timezone.localtime(timezone.now())
+    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = LoginEvent.objects.filter(created_at__gte=start_today)
+    rows = [{
+        "at": timezone.localtime(e.created_at).strftime("%d/%m %H:%M:%S"),
+        "identity": e.identity, "name": e.name,
+        "method": e.get_method_display() if e.method else "—",
+        "success": e.success, "ip": e.ip, "reason": e.reason,
+    } for e in list(qs[:200])]
+    return JsonResponse({
+        "ok": True, "rows": rows, "total": LoginEvent.objects.count(),
+        "todayOk": today.filter(success=True).count(),
+        "todayFail": today.filter(success=False).count(),
+        "uniqToday": today.filter(success=True).values("identity").distinct().count(),
+    }, json_dumps_params={"ensure_ascii": False})
+
+
 def _media_urls(lst, photo_name=None):
     """สร้าง public URL ของไฟล์แนบ (รูป/วิดีโอ) จาก path ที่เก็บไว้ใน Supabase"""
     base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")

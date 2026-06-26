@@ -1242,6 +1242,7 @@
             <button onclick="openDiagnosticsPanel()" title="ดู Log การกรองข้อมูล" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:search',16)} ตรวจ Log ข้อมูล</button>
             <button onclick="exportLeadScore()" title="เขียน Diligence Score ของเดือนนี้ลง Sheet 'leadscore'" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:save',16)} ส่งคะแนนเข้าชีต</button>
             <button onclick="openTrkUsers()" title="จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;border-top:.5px solid var(--bd);margin-top:2px;padding-top:9px;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:car-front',16)} บทบาทระบบติดตามรถ</button>
+            <button onclick="openLoginLog()" title="ดู log การเข้าสู่ระบบ — ใครเข้า/พยายามเข้า เมื่อไหร่" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} Log เข้าระบบ</button>
           </div>
         </details>`;
         // 🟢 คนเข้าเว็บตอนนี้ (online now) — heartbeat อัปเดต #online-count ทุก ~45 วิ
@@ -3821,6 +3822,31 @@
       const v=id=>(document.getElementById(id)||{}).value||'';
       try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'create',username:v('tu_user'),password:v('tu_pass'),full_name:v('tu_name'),role:v('tu_role')})});
         const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มไม่สำเร็จ'); return; } renderTrkUsers(); }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+    // 📋 Log การเข้าสู่ระบบ — modal ในหน้าแดชบอร์ด sales (ดึง /track/api/logins)
+    async function openLoginLog(){ const ov=_trkOverlay('login-log','<p class="mut">กำลังโหลด…</p>'); await renderLoginLog(ov,''); }
+    async function renderLoginLog(ov, show){
+      ov=ov||document.getElementById('login-log'); if(!ov) return;
+      show=show||'';
+      let d; try{ d=await (await fetch('/track/api/logins'+(show?'?show='+encodeURIComponent(show):''),{credentials:'same-origin'})).json(); }
+      catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลด log ไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อม</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+h(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const fchip=(k,label)=>`<button onclick="renderLoginLog(null,'${k}')" style="font-size:11px;padding:5px 11px;border-radius:13px;cursor:pointer;border:.5px solid ${show===k?'var(--blue)':'var(--bd2)'};background:${show===k?'var(--blue)':'var(--bg2)'};color:${show===k?'#fff':'var(--t2)'};font-weight:${show===k?'700':'500'}">${label}</button>`;
+      const card=(label,val,col)=>`<div style="flex:1;min-width:90px;background:var(--bg2);border-radius:10px;padding:9px 11px"><div style="font-size:10px;color:var(--t3)">${label}</div><div style="font-size:20px;font-weight:800;color:${col}">${val}</div></div>`;
+      const rows=(d.rows||[]).map(r=>`<tr style="border-top:.5px solid var(--bd)">
+        <td style="padding:6px 7px;white-space:nowrap;font-size:11px">${h(r.at)}</td>
+        <td style="padding:6px 7px"><b style="font-size:12px">${h(r.name||r.identity)}</b>${(r.name&&r.identity)?`<div class="mut" style="font-size:10px;word-break:break-all">${h(r.identity)}</div>`:''}</td>
+        <td style="padding:6px 7px;font-size:11px">${h(r.method)}</td>
+        <td style="padding:6px 7px">${r.success?`<span style="color:var(--green);font-weight:700;font-size:11px">● สำเร็จ</span>`:`<span style="color:var(--red);font-weight:700;font-size:11px">● ล้มเหลว</span>`}</td>
+        <td style="padding:6px 7px;font-size:11px;color:var(--t3);white-space:nowrap">${h(r.ip||'—')}</td>
+        <td style="padding:6px 7px;font-size:11px;color:var(--t3)">${h(r.reason||'—')}</td>
+      </tr>`).join('') || `<tr><td colspan="6" class="mut" style="padding:18px;text-align:center">ยังไม่มีบันทึกการเข้าสู่ระบบ</td></tr>`;
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:user-round',18)} การเข้าสู่ระบบ</div><button onclick="document.getElementById('login-log').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:4px 0 10px">ใครเข้า/พยายามเข้า เมื่อไหร่ · ${d.total} รายการล่าสุด · เวลาไทย</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">${card('เข้าสำเร็จวันนี้',d.todayOk,'var(--green)')}${card('พยายามล้มเหลววันนี้',d.todayFail,'var(--red)')}${card('บัญชีไม่ซ้ำวันนี้',d.uniqToday,'var(--blue)')}</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center"><span style="font-size:11px;color:var(--t3)">กรอง:</span>${fchip('','ทั้งหมด')}${fchip('ok','สำเร็จ')}${fchip('fail','ล้มเหลว')}</div>
+        <div style="overflow:auto;max-height:52vh"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--t3);font-size:10px;text-align:left"><th style="padding:6px 7px">เวลา</th><th style="padding:6px 7px">บัญชี</th><th style="padding:6px 7px">วิธี</th><th style="padding:6px 7px">ผล</th><th style="padding:6px 7px">IP</th><th style="padding:6px 7px">หมายเหตุ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น
