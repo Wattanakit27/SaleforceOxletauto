@@ -1246,7 +1246,7 @@
           </div>
         </details>`;
         // 🟢 คนเข้าเว็บตอนนี้ (online now) — heartbeat อัปเดต #online-count ทุก ~45 วิ
-        html += `<span id="online-now" title="คนกำลังใช้งานเว็บตอนนี้ (อัปเดตอัตโนมัติ ~45 วิ)" style="font-size:12px;padding:5px 11px;border-radius:14px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px">${ic('lucide:radio',14)} <span id="online-count">–</span> ออนไลน์</span>`;
+        html += `<button id="online-now" onclick="openOnlinePanel()" title="คนกำลังใช้งานเว็บตอนนี้ — กดดูรายชื่อ (อัปเดต ~45 วิ)" style="font-size:12px;padding:5px 11px;border-radius:14px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer">${ic('lucide:radio',14)} <span id="online-count">–</span> ออนไลน์</button>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
         const _al = computeAdminAlerts();
         const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length;
@@ -3847,6 +3847,23 @@
         <div style="display:flex;gap:8px;margin-bottom:10px">${card('เข้าสำเร็จวันนี้',d.todayOk,'var(--green)')}${card('พยายามล้มเหลววันนี้',d.todayFail,'var(--red)')}${card('บัญชีไม่ซ้ำวันนี้',d.uniqToday,'var(--blue)')}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center"><span style="font-size:11px;color:var(--t3)">กรอง:</span>${fchip('','ทั้งหมด')}${fchip('ok','สำเร็จ')}${fchip('fail','ล้มเหลว')}</div>
         <div style="overflow:auto;max-height:52vh"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--t3);font-size:10px;text-align:left"><th style="padding:6px 7px">เวลา</th><th style="padding:6px 7px">บัญชี</th><th style="padding:6px 7px">วิธี</th><th style="padding:6px 7px">ผล</th><th style="padding:6px 7px">IP</th><th style="padding:6px 7px">หมายเหตุ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    // 🟢 รายชื่อคนออนไลน์ตอนนี้ (กดชิป "ออนไลน์") — เฉพาะแอดมิน
+    async function openOnlinePanel(){
+      const ov=_trkOverlay('online-panel','<p class="mut">กำลังโหลด…</p>');
+      let d; try{ d=await (await fetch('/api/presence/list',{credentials:'same-origin'})).json(); }
+      catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">ดูได้เฉพาะแอดมิน</p>'; return; }
+      const pageLbl={dashboard:'หน้าหลัก',seller:'หน้าเซลล์'};
+      const ago=s=> s<60?`${s} วิ`:`${Math.floor(s/60)} นาที`;
+      const rows=(d.users||[]).map(u=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 2px;border-bottom:.5px solid var(--bd)">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></span><b style="font-size:13px">${h(sname(u.name||'-'))}</b>${u.role==='admin'?`<span style="font-size:10px;color:var(--amber);font-weight:700">แอดมิน</span>`:''}</div>
+          <div style="font-size:11px;color:var(--t3);text-align:right;flex-shrink:0">${h(pageLbl[u.page]||u.page||'')}<div style="font-size:10px">${ago(u.ago)}ที่แล้ว</div></div>
+        </div>`).join('') || '<div class="mut" style="padding:16px;text-align:center">ไม่มีใครออนไลน์</div>';
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:radio',18)} ออนไลน์ตอนนี้ (${(d.users||[]).length})</div><button onclick="document.getElementById('online-panel').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:11px;margin:4px 0 8px">คนที่ใช้งานเว็บภายใน ~2.5 นาที (เซลล์ + แอดมิน)</div>
+        ${rows}`;
     }
     function switchToSeller(name) { tab='s'; curS=name; showCase=null; curF='all'; lfPage=1; dfMonth=0; updateUrl(); render(); }
     // setDf(preset) — ตอนนี้ map เป็นช่วงวันที่: 0=ทั้งปี · -1=วันนี้ · 1-12=ทั้งเดือนนั้น

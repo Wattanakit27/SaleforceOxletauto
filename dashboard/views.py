@@ -428,6 +428,28 @@ def presence_ping(request):
     return JsonResponse({"online": online})
 
 
+@require_GET
+def presence_list(request):
+    """รายชื่อคนที่ออนไลน์ตอนนี้ (เฉพาะแอดมิน · กดชิป "ออนไลน์" ในหน้าหลัก) — best-effort."""
+    ou = request.session.get("oxlet_user") or {}
+    if ou.get("position") != "admin":
+        return JsonResponse({"ok": False, "users": []}, status=403)
+    users = []
+    try:
+        from datetime import timedelta
+        from django.utils import timezone as _tz
+        from cars.models import Presence
+        now = _tz.now()
+        for pr in Presence.objects.filter(last_seen__gte=now - timedelta(seconds=150)).order_by("-last_seen"):
+            users.append({
+                "name": pr.name or pr.identity, "role": pr.role, "page": pr.page,
+                "ago": int((now - pr.last_seen).total_seconds()),
+            })
+    except Exception:
+        pass
+    return JsonResponse({"ok": True, "users": users})
+
+
 @require_http_methods(["GET", "POST"])
 def admin_seller_config(request):
     """Admin endpoint — ตั้งเป้า/ทีม
