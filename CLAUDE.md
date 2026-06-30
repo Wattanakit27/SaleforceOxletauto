@@ -376,8 +376,18 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 - ต้องมี Supabase ตั้งค่าแล้ว (`canEdit` = `is_configured()`); ไฟล์ใหม่ **service account ต้องมีสิทธิ์อ่านด้วย**
 - SQL สร้างตาราง: `create table if not exists sheet_config (key text primary key, spreadsheet_id text, sheet_name text, updated_at timestamptz default now());`
 
+### 🗄️ ที่เก็บผล (store) — VPS ใช้ PostgreSQL ในเครื่องแทน Supabase (มิ.ย.69 หลังย้าย Hostinger)
+ตอนขึ้น VPS เปลี่ยน "ที่เก็บผลสรุป" จาก Supabase (REST) → **PostgreSQL ในเครื่อง** (ตัวเดียวกับ cars/) ผ่าน **facade [cache_store.py](dashboard/services/cache_store.py)**:
+- `cache_store.*` เลือก backend อัตโนมัติ: **Supabase ถ้า `USE_SUPABASE=True`+ตั้งครบ · ไม่งั้น local Postgres** ([local_store.py](dashboard/services/local_store.py) · Django ORM) — โหมดหลักบน VPS
+- โมเดล [dashboard/models.py](dashboard/models.py): **`KVStore`** (`dash_kv` · key→json: dashboard cache key='main', `cron_tick`/`cron_followup` heartbeat, `sheet_config` override blob) + **`FormSubmission`** (`dash_form` · ฟอร์ม finance/loan)
+- ทุก call site เรียกผ่าน `cache_store` (ไม่เรียก `supabase_client` ตรง): `fetch_dashboard_data`/`precompute_dashboard`, `cron_tick` (warm+kv), `system_health`, `admin_sheet_config`, `cron_sync`, `_save_form`, `load_sheet_config_overrides`
+- **ดีกว่า Supabase**: local ไม่วิ่งเน็ต (~50ms) · ไม่เจอ NANO timeout ที่เคยทำเว็บล่ม · ฟีเจอร์ครบเท่าเดิม (heartbeat/ย้ายแหล่งข้อมูล/ประวัติฟอร์ม)
+- `supabase_client.py` ยังอยู่ (facade เรียกเมื่อ `USE_SUPABASE=True`) — เปิด Supabase กลับได้โดยไม่แก้ call site
+- ต้อง `migrate` (สร้าง `dash_kv`/`dash_form`) — รันในขั้น deploy อยู่แล้ว · ไม่มี DB = best-effort คืน None/{} (ไม่พัง)
+
 ### ⚡ Pre-compute dashboard (แก้ "ยิ่งข้อมูลเยอะยิ่งช้า")
 แทนที่จะอ่าน 15k lead + aggregate สดทุกโหลด → **คำนวณล่วงหน้าเก็บผลไว้ คนเข้าเว็บอ่านผลสำเร็จรูป** (เร็วคงที่ ไม่ขึ้นกับจำนวนข้อมูล):
+- **(VPS) store = Postgres ในเครื่อง ผ่าน `cache_store`** (เดิม Supabase) · `cron_tick` อุ่น cache ทุกนาที (threshold 120 วิ) → ทุก gunicorn worker อ่าน store ที่อุ่นแล้ว = **dashboard อุ่นตลอด** ไม่มีใครเจอ recompute สด ~8.5 วิ (ยกเว้น cold start)
 - `precompute_dashboard()` ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) — คำนวณ `_compute_dashboard_data()` 1 ครั้ง → เก็บลง Supabase table **`dashboard_cache`** (1 แถว key='main', `data` jsonb)
 - `fetch_dashboard_data()` อ่านเร็ว→ช้า: **in-memory (30s)** → **ผล pre-compute Supabase** (fresh<5นาที ใช้เลย · **stale ก็ใช้** ดีกว่าคำนวณใหม่) → ของเก่าใน memory → คำนวณสด (cold เท่านั้น)
   - **⚠️ stale-while-revalidate กันลูกโซ่ล่ม (มิ.ย.69)**: เดิมถ้าอ่าน cache ไม่ทัน (Supabase timeout) จะ **คำนวณสด 121 วิ ทันที** (อ่าน 15k + เขียนกลับ) → ยิ่งไปรุม DB ที่อ่อน (NANO) → ทุก request ตายลูกโซ่. ตอนนี้ **user request ห้าม trigger recompute ถ้ามีของเก่าเสิร์ฟ** — recompute เป็นงานของ cron/ปุ่มรีเฟรชเท่านั้น (ดู "บทเรียน NANO ล่ม" ในโค้ด)

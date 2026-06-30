@@ -51,18 +51,14 @@ def _is_admin(user) -> bool:
     return bool(user) and (user.get("position") or "").strip().lower() == "admin"
 
 
-def _save_to_supabase(table, row):
-    """เก็บ row ลง Supabase (best-effort). คืน id ถ้าสำเร็จ, None ถ้าล่ม/ยังไม่ตั้งค่า."""
+def _save_form(kind, row):
+    """เก็บฟอร์มที่เซลล์ส่ง (best-effort) — Supabase ถ้าเปิด ไม่งั้น Postgres ในเครื่อง (cache_store).
+    kind = 'finance' | 'loan'. คืน id ถ้าสำเร็จ, None ถ้าล่ม/ไม่มีที่เก็บ."""
     try:
-        from .services.supabase_client import is_configured, insert_row
-        if not is_configured():
-            return None
-        saved = insert_row(table, row)
-        if saved and isinstance(saved, list):
-            return saved[0].get("id")
+        from .services.cache_store import insert_form
+        return insert_form(kind, row)
     except Exception:
-        pass
-    return None
+        return None
 
 
 @ensure_csrf_cookie
@@ -776,7 +772,7 @@ def admin_schedule_config(request):
     cron_tick = None
     last_followup = None
     try:
-        from .services.supabase_client import get_kv
+        from .services.cache_store import get_kv
         from datetime import datetime as _dt, timezone as _tz
         _ct = get_kv("cron_tick")
         if _ct and _ct.get("updated_at"):
@@ -788,13 +784,13 @@ def admin_schedule_config(request):
     except Exception:
         pass
     try:
-        from .services.supabase_client import is_configured as _sbcfg
-        _sb_ok = _sbcfg()
+        from .services.cache_store import available as _store_ok
+        _sb_ok = _store_ok()
     except Exception:
         _sb_ok = False
     return JsonResponse({
         "ok": True,
-        "supabaseOk": _sb_ok,   # False = โหมดอ่าน Google ตรง → heartbeat ไม่ติดตาม (cron ยังทำงาน)
+        "supabaseOk": _sb_ok,   # มีที่เก็บผล (Postgres ในเครื่อง/Supabase) → heartbeat ติดตามได้
         "schedules": schedules,
         "count": len(schedules),
         "enabled_count": sum(1 for s in schedules if s.get("enabled")),
@@ -836,7 +832,7 @@ def cron_tick(request):
     now = bangkok_now()
     # heartbeat — บันทึกว่า cron ทำงานล่าสุดเมื่อไหร่ (โชว์ในหน้าสถานะระบบ → รู้ว่า n8n ยิงถึงไหม)
     try:
-        from .services.supabase_client import set_kv as _set_kv
+        from .services.cache_store import set_kv as _set_kv
         _set_kv("cron_tick", {"ok": True})
     except Exception:
         pass
@@ -885,34 +881,28 @@ def cron_tick(request):
                     if _code == 200:
                         followup_sent += 1
             try:
-                from .services.supabase_client import set_kv as _set_kv
+                from .services.cache_store import set_kv as _set_kv
                 _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})
             except Exception:
                 pass
     except Exception:
         pass
 
-    # ── รีเฟรช dashboard (sync mirror + precompute) ทุก ~3-4 นาที — ดูเหตุผล threshold ด้านล่าง ──
+    # ── อุ่น dashboard cache: cron คำนวณผลใหม่เก็บลง store (Postgres ในเครื่อง/Supabase) ──
+    # ทุก worker อ่าน store ที่อุ่นแล้ว → dashboard อุ่นตลอด ไม่มีใครเจอ recompute สด ~8.5 วิ
+    # threshold 120 = อุ่นใหม่เมื่อผลเก่า > 2 นาที (cron ยิง 1 นาที · precompute ~8-15s < 60s ไม่ซ้อน)
     refreshed = False
-    if getattr(settings, "USE_SUPABASE", False):
-        try:
-            from .services.supabase_client import (
-                is_configured, get_dashboard_cache_age, sync_all_sheets_to_supabase,
-            )
-            if is_configured():
-                age = get_dashboard_cache_age()
-                # (Phase 2 มิ.ย.69) sync เป็น no-op แล้ว (ไม่มี raw mirror) → recompute = precompute (อ่าน Google + เขียนผล 3MB)
-                # 30 = recompute ~ทุก 1 นาที (cron ยิง 1 นาที · recompute ~15-23s < 60s → ไม่ซ้อน)
-                # โหลดหลัก = Vercel function time + Google API (~3 เท่าของ 180) · Supabase เขียนผลก้อนเดียว เบา (ไม่ใช่ CPU เต็มแบบ raw)
-                # ถ้า Vercel quota ตึง → ขยับขึ้น (90 = ~2 นาที · 180 = ~3 นาที)
-                if age is None or age > 30:
-                    sync_all_sheets_to_supabase()
-                    from .services.fetch_dashboard import precompute_dashboard, _dash_cache
-                    _dash_cache["data"] = None
-                    precompute_dashboard()
-                    refreshed = True
-        except Exception:
-            pass   # best-effort
+    try:
+        from .services.cache_store import available, get_dashboard_cache_age
+        if available():
+            age = get_dashboard_cache_age()
+            if age is None or age > 120:
+                from .services.fetch_dashboard import precompute_dashboard, _dash_cache
+                _dash_cache["data"] = None   # บังคับคำนวณสดจาก Google (ไม่ใช้ของเก่าใน memory)
+                precompute_dashboard()       # → เขียนผลลง store + อุ่น in-memory ของ worker นี้
+                refreshed = True
+    except Exception:
+        pass   # best-effort
 
     return JsonResponse({
         "ok": True,
@@ -940,20 +930,22 @@ def cron_sync(request):
     if submitted != secret_setting:
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
-    from .services.supabase_client import is_configured, sync_all_sheets_to_supabase
-    if not is_configured():
-        return JsonResponse({"error": "ยังไม่ได้ตั้ง SUPABASE_URL / SUPABASE_SECRET_KEY"}, status=500)
-    try:
-        result = sync_all_sheets_to_supabase()
-    except Exception as e:
-        return JsonResponse({"error": f"sync ล้มเหลว: {e}"}, status=500)
+    from .services.cache_store import available
+    if not available():
+        return JsonResponse({"error": "ไม่มีที่เก็บผล (Postgres ในเครื่อง/Supabase)"}, status=500)
+    result = {}
+    try:  # ถ้ายังเปิด Supabase mirror อยู่ → sync (เป็น no-op ในโหมดปกติ)
+        from .services.supabase_client import is_configured, sync_all_sheets_to_supabase
+        if is_configured():
+            result["synced"] = sync_all_sheets_to_supabase()
+    except Exception:
+        pass
 
-    # หลัง sync mirror เสร็จ → คำนวณ dashboard ใหม่ + เก็บผล (pre-compute)
-    # ทำให้คนเข้าเว็บอ่านผลสำเร็จรูป ไม่ต้องคำนวณ 15k lead สดเอง
+    # คำนวณ dashboard ใหม่ + เก็บผล (pre-compute) → เก็บลง store (Postgres ในเครื่อง/Supabase)
     precomputed = False
     try:
         from .services.fetch_dashboard import _dash_cache, precompute_dashboard
-        _dash_cache["data"] = None   # บังคับคำนวณจาก mirror ที่เพิ่ง sync
+        _dash_cache["data"] = None   # บังคับคำนวณสดจาก Google
         precompute_dashboard()
         precomputed = True
     except Exception as e:
@@ -1600,9 +1592,9 @@ def admin_sheets_status(request):
         load_sheet_config_overrides,
     )
 
-    from .services.supabase_client import is_configured as _sb_configured
+    from .services.cache_store import available as _sb_configured
 
-    # ดึง override ล่าสุดจาก Supabase ก่อน (ถ้า admin เคยย้ายไฟล์ชีต)
+    # ดึง override ล่าสุดจาก store ก่อน (ถ้า admin เคยย้ายไฟล์ชีต)
     load_sheet_config_overrides(force=True)
 
     # 6 แหล่งข้อมูลหลัก (ตรงกับ node ใน n8n)
@@ -1687,7 +1679,7 @@ def admin_system_health(request):
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
 
     from .services.fetch_dashboard import fetch_dashboard_data, bangkok_now
-    from .services.supabase_client import is_configured, get_dashboard_cache_age
+    from .services.cache_store import available as _store_ok, get_dashboard_cache_age
 
     now = bangkok_now()
     try:
@@ -1701,7 +1693,7 @@ def admin_system_health(request):
 
     sb_ok = False
     try:
-        sb_ok = is_configured()
+        sb_ok = _store_ok()
     except Exception:
         pass
     age = None
@@ -1725,14 +1717,13 @@ def admin_system_health(request):
     today_leads = int(today.get("totalLeads", 0))
 
     # ── เช็กข้อมูลผิดอัตโนมัติ ──
-    # โหมด stopgap (Supabase ปิด มิ.ย.69): เว็บอ่าน Google ตรง+cache เอง ไม่พึ่ง Supabase/cron sync
-    # → ไม่ต้องเตือน sync/cron/Supabase (เป็นโหมดที่ตั้งใจ ไม่ใช่ error)
+    # VPS: store = Postgres ในเครื่อง · cron อุ่น cache ทุกนาที → เตือนถ้า cache ค้าง (cron หยุด)
     issues = []
     if sb_ok:
         if age is None:
-            issues.append({"level": "warn", "msg": "ยังไม่เคย sync (อ่านสด) — รอ cron รอบแรก หรือกดรีเฟรช"})
+            issues.append({"level": "warn", "msg": "ยังไม่เคยอุ่น cache (อ่านสด) — รอ cron รอบแรก หรือกดรีเฟรช"})
         elif age > 600:
-            issues.append({"level": "err", "msg": f"ข้อมูลค้าง — sync ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~3-4 นาที) · cron อาจหยุด"})
+            issues.append({"level": "err", "msg": f"ข้อมูลค้าง — อุ่น cache ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~2 นาที) · cron อาจหยุด"})
     if not line_ok:
         issues.append({"level": "warn", "msg": "LINE token ไม่ได้ตั้ง — แจ้งเตือนเข้าไลน์จะไม่ทำงาน"})
     if total_leads == 0:
@@ -1744,7 +1735,7 @@ def admin_system_health(request):
     cron_tick_age = None
     last_followup = None
     try:
-        from .services.supabase_client import get_kv
+        from .services.cache_store import get_kv
         from datetime import datetime as _dt, timezone as _tz
         _ct = get_kv("cron_tick")
         if _ct and _ct.get("updated_at"):
@@ -1754,9 +1745,9 @@ def admin_system_health(request):
             last_followup = {"at": _fu.get("updated_at"), **(_fu.get("data") or {})}
     except Exception:
         pass
-    # heartbeat ติดตามได้เฉพาะตอนเปิด Supabase (kv เก็บใน Supabase) — โหมด stopgap ไม่ track (ไม่เตือน)
+    # heartbeat เก็บใน store (Postgres ในเครื่อง) → เตือนถ้า cron ไม่ยิงเกิน 10 นาที
     if sb_ok and (cron_tick_age is None or cron_tick_age > 600):
-        issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค URL ใน n8n ให้เป็นโดเมน saleforce-oxletauto"})
+        issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค crontab บน VPS (ยิง /api/cron/tick ทุกนาที)"})
 
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
@@ -1896,9 +1887,9 @@ def admin_sheet_config(request):
     if not user or user.get("position") != "admin":
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
 
-    from .services.supabase_client import is_configured as sb_ok, save_sheet_config
+    from .services.cache_store import available as sb_ok, save_sheet_config
     if not sb_ok():
-        return JsonResponse({"error": "ต้องตั้ง Supabase ก่อน (SUPABASE_URL/SUPABASE_SECRET_KEY) ถึงจะบันทึก override ได้"}, status=400)
+        return JsonResponse({"error": "ต้องมีฐานข้อมูล (Postgres) หรือ Supabase ก่อน ถึงจะบันทึก override แหล่งข้อมูลได้"}, status=400)
 
     try:
         body = json.loads(request.body or b"{}")
@@ -2023,8 +2014,8 @@ def finance_check_submit(request):
     if not target:
         return JsonResponse({"error": "ยังไม่ได้ตั้ง FINANCE_TEST_LINE_ID ใน .env — ปฏิเสธการส่ง (กันส่งผิดคน)"}, status=500)
 
-    # เก็บลง Supabase (best-effort — ไม่ block การส่ง LINE)
-    record_id = _save_to_supabase("finance_checks", {
+    # เก็บประวัติฟอร์ม (best-effort — ไม่ block การส่ง LINE)
+    record_id = _save_form("finance", {
         "seller": data.get("seller") or seller_name,
         "lead_code": data.get("leadCode", ""),
         "customer": data.get("customer", ""),
@@ -2124,8 +2115,8 @@ def loan_submit(request):
     if not target:
         return JsonResponse({"error": "ยังไม่ได้ตั้ง FINANCE_TEST_LINE_ID ใน .env — ปฏิเสธการส่ง (กันส่งผิดคน)"}, status=500)
 
-    # เก็บลง Supabase (best-effort)
-    record_id = _save_to_supabase("loan_applications", {
+    # เก็บประวัติฟอร์ม (best-effort)
+    record_id = _save_form("loan", {
         "seller": data.get("sales") or seller_name,
         "customer": data.get("customer", ""),
         "phone": data.get("phone", ""),

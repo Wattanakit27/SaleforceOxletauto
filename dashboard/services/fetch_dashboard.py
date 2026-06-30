@@ -340,8 +340,8 @@ def precompute_dashboard() -> dict:
     import time
     data = _compute_dashboard_data()
     try:
-        from .supabase_client import save_dashboard_cache, is_configured
-        if is_configured():
+        from .cache_store import save_dashboard_cache, available
+        if available():
             save_dashboard_cache(data)
     except Exception:
         pass
@@ -352,47 +352,47 @@ def precompute_dashboard() -> dict:
 
 def fetch_dashboard_data() -> dict:
     """อ่านผล dashboard — เร็วสุด→ช้าสุด:
-    1) in-memory cache (warm lambda) — มี Supabase 30 วิ · ไม่มี Supabase 180 วิ
-    2) (ถ้าเปิด Supabase) precompute Supabase: fresh/stale ก็ใช้ — กันลูกโซ่ recompute ที่ไปรุม DB
-    3) ไม่มี Supabase (หรือ cold + Supabase ล่ม) → คำนวณสดจาก Google (~8.5 วิ) แล้ว cache ในหน่วยความจำ
+    1) in-memory cache (warm process) — มี store 30 วิ · ไม่มี store 180 วิ
+    2) ที่เก็บผล (Supabase หรือ Postgres ในเครื่อง): precompute fresh/stale ก็ใช้ — กันลูกโซ่ recompute
+    3) ไม่มี store (หรือ cold + store ล่ม) → คำนวณสดจาก Google (~8.5 วิ) แล้ว cache ในหน่วยความจำ
 
-    ⚠️ โหมดปัจจุบัน (มิ.ย.69): ตัด Supabase ออก (USE_SUPABASE=False) → อ่าน Google ตรง คำนวณ ~8.5 วิ/cold,
-    เสิร์ฟ in-memory 180 วิ (หมดอายุ → คำนวณใหม่). เปิด Supabase กลับได้ด้วย USE_SUPABASE=True.
+    ⚠️ โหมด VPS (มิ.ย.69): store = PostgreSQL ในเครื่อง (cache_store → local_store). cron อุ่น cache ทุกนาที
+    → ทุก worker อ่าน store ที่อุ่นแล้ว (เร็ว ~50ms ไม่ recompute สด). dashboard อุ่นตลอดเหมือนยุค Supabase
+    แต่ local เร็วกว่า (ไม่วิ่งเน็ต ไม่เจอ NANO timeout). เปิด Supabase กลับได้ด้วย USE_SUPABASE=True (facade เลือกให้)
 
-    ⚠️ บทเรียน NANO ล่ม (มิ.ย.69): ตอนเปิด Supabase อยู่ — ห้ามให้ user request trigger recompute ถ้ามีของเก่า
-    ให้เสิร์ฟ (กันลูกโซ่ล่ม) recompute เป็นงานของ cron. โหมดไม่มี Supabase ไม่มี DB ให้รุม จึงคำนวณตอน cache หมดอายุได้.
+    ⚠️ บทเรียน NANO ล่ม: ห้ามให้ user request trigger recompute ถ้ามีของเก่าให้เสิร์ฟ (กันลูกโซ่ล่ม) —
+    recompute เป็นงานของ cron เท่านั้น. user-load อ่าน store (cron อุ่นไว้) · cold start เท่านั้นที่คำนวณสด
     """
     import time
     from datetime import datetime as _dt, timezone as _tz
-    from .supabase_client import is_configured
+    from .cache_store import available, get_dashboard_cache
     c = _dash_cache
     now = time.time()
-    sb = is_configured()
-    ttl = _DASH_TTL if sb else _LOCAL_TTL
+    store = available()   # Supabase หรือ Postgres ในเครื่อง (VPS) — cron อุ่นไว้ให้
+    ttl = _DASH_TTL if store else _LOCAL_TTL
     # 1) in-memory cache สด → ใช้เลย
     if c["data"] is not None and (now - c["ts"]) < ttl:
         return c["data"]
 
-    # 2) มี Supabase → อ่าน precompute (fresh/stale ก็ใช้ · ไม่ปล่อยให้ user-load ไป recompute รุม DB)
-    if sb:
+    # 2) มีที่เก็บผล → อ่าน precompute (fresh/stale ก็ใช้ · ไม่ปล่อยให้ user-load ไป recompute รุม DB)
+    if store:
         try:
-            from .supabase_client import get_dashboard_cache
             cached = get_dashboard_cache()
             if cached and cached.get("data"):
-                ts = cached.get("updated_at", "").replace("Z", "+00:00")
+                ts = (cached.get("updated_at") or "").replace("Z", "+00:00")
                 age = (_dt.now(_tz.utc) - _dt.fromisoformat(ts)).total_seconds() if ts else 1e9
                 c["data"] = cached["data"]
-                # fresh → cache เต็ม 30 วิ · stale → cache สั้น (เช็ค Supabase ใหม่เร็วขึ้น เผื่อ cron อัปแล้ว)
+                # fresh → cache เต็ม 30 วิ · stale → cache สั้น (เช็ค store ใหม่เร็วขึ้น เผื่อ cron อัปแล้ว)
                 c["ts"] = now if age < _PRECOMPUTE_TTL else (now - _DASH_TTL + 5)
                 return cached["data"]
         except Exception:
             pass
-        # Supabase อ่านไม่ได้ (timeout/ล่ม) → ใช้ของเก่าใน memory ถ้ามี (กันลูกโซ่ recompute ที่ไปรุม DB ซ้ำ)
+        # อ่าน store ไม่ได้ (timeout/ล่ม) → ใช้ของเก่าใน memory ถ้ามี (กันลูกโซ่ recompute ที่ไปรุม DB ซ้ำ)
         if c["data"] is not None:
-            c["ts"] = now - _DASH_TTL + 5   # เสิร์ฟของเก่าต่อ แต่ลองเช็ค Supabase ใหม่อีกใน ~5 วิ
+            c["ts"] = now - _DASH_TTL + 5   # เสิร์ฟของเก่าต่อ แต่ลองเช็ค store ใหม่อีกใน ~5 วิ
             return c["data"]
 
-    # 3) ไม่มี Supabase (หรือ cold + Supabase ล่ม) → คำนวณสดจาก Google แล้ว cache ในหน่วยความจำ
+    # 3) ไม่มี store (หรือ cold + store ล่ม) → คำนวณสดจาก Google แล้ว cache ในหน่วยความจำ
     return precompute_dashboard()
 
 

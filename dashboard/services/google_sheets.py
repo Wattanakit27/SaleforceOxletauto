@@ -520,7 +520,7 @@ def load_sheet_config_overrides(force: bool = False) -> None:
         return
     _sheet_config_loaded = True
     try:
-        from .supabase_client import get_sheet_config
+        from .cache_store import get_sheet_config
         for k, v in (get_sheet_config() or {}).items():
             if k in SHEET_CONFIG:
                 if v.get("spreadsheet_id"):
