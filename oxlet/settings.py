@@ -74,7 +74,9 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 วัน
 # (Vercel ส่ง X-Forwarded-Proto=https → Django รู้ว่า secure ผ่าน SECURE_PROXY_SSL_HEADER ด้านบน)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
-SECURE_SSL_REDIRECT = not DEBUG
+# SSL redirect: default = not DEBUG (prod บังคับ https). บน VPS ตอน bootstrap ก่อนติด SSL
+# ตั้ง SECURE_SSL_REDIRECT=False ใน .env ชั่วคราว กัน redirect loop (เปิดกลับเป็น True หลังติด cert)
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", str(not DEBUG)).lower() in ("true", "1", "yes")
 
 # Admin credentials — override ใน .env ได้: OXLET_ADMIN_USER, OXLET_ADMIN_PASSWORD
 # Default: admin / 1234 (ควรเปลี่ยนใน production)

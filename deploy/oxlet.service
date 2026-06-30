@@ -1,0 +1,20 @@
+[Unit]
+Description=Oxlet Sales Dashboard (gunicorn)
+After=network.target postgresql.service
+
+[Service]
+User=oxlet
+Group=oxlet
+WorkingDirectory=/opt/oxlet
+# gunicorn อ่าน .env เองผ่าน python-dotenv (load_dotenv ใน settings.py) — ไม่ต้อง EnvironmentFile
+ExecStart=/opt/oxlet/.venv/bin/gunicorn oxlet.wsgi:application \
+    --bind 127.0.0.1:8000 \
+    --workers 3 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
