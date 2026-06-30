@@ -3749,19 +3749,18 @@
       const setMsg=t=>{ if(msg) msg.textContent=t||''; };
       if(btn){ btn.disabled=true; btn.style.opacity=.6; }
       try{
-        // อัปรูปก่อน (ถ้าเลือก) — ขอ signed URL แล้ว PUT ตรงเข้า Supabase เหมือนหน้าสแกน
-        let photo_path='';
+        // อัปรูปก่อน (ถ้าเลือก) — POST เข้าเซิร์ฟเวอร์ → Google Drive (ย้ายเข้าโฟลเดอร์รถหลังสร้างเสร็จ)
+        let photo_id='';
         const fi=document.getElementById('ta_photo'), file=fi&&fi.files&&fi.files[0];
         if(file){
           setMsg('กำลังอัปโหลดรูป…');
-          const s=await (await fetch('/track/api/sign_upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({filename:file.name,contentType:file.type})})).json();
-          if(!s.ok) throw new Error(s.error||'ขอที่อัปรูปไม่สำเร็จ');
-          const up=await fetch(s.uploadUrl,{method:'PUT',headers:{'content-type':file.type||'application/octet-stream','x-upsert':'true'},body:file});
-          if(!up.ok) throw new Error('อัปโหลดรูปไม่สำเร็จ ('+up.status+')');
-          photo_path=s.path;
+          const fd=new FormData(); fd.append('file', file);
+          const s=await (await fetch('/track/api/upload',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:fd})).json();
+          if(!s.ok) throw new Error(s.error||'อัปโหลดรูปไม่สำเร็จ');
+          photo_id=s.id;
         }
         setMsg('กำลังบันทึก…');
-        const body={branch:v('ta_branch'),stage:v('ta_stage'),status:v('ta_status'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),date_in:v('ta_datein'),tax_due_date:v('ta_tax'),book_status:v('ta_book'),note:v('ta_note'),photo_path};
+        const body={branch:v('ta_branch'),stage:v('ta_stage'),status:v('ta_status'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),date_in:v('ta_datein'),tax_due_date:v('ta_tax'),book_status:v('ta_book'),note:v('ta_note'),photo_id};
         const r=await fetch('/track/api/add_car',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
         const j=await r.json(); if(!j.ok) throw new Error(j.error||'เพิ่มรถไม่สำเร็จ');
         document.getElementById('trk-add').remove(); loadTracking(true);

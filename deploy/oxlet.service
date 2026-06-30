@@ -10,7 +10,7 @@ WorkingDirectory=/opt/oxlet
 ExecStart=/opt/oxlet/.venv/bin/gunicorn oxlet.wsgi:application \
     --bind 127.0.0.1:8000 \
     --workers 3 \
-    --timeout 120 \
+    --timeout 300 \
     --access-logfile - \
     --error-logfile -
 Restart=always

@@ -237,9 +237,22 @@ LOGOUT_REDIRECT_URL = "/login/"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# รูป/ไฟล์ของ cars/ → Supabase Storage (Vercel serverless เก็บไฟล์ถาวรไม่ได้)
-# เปิดใช้เมื่อ: ตั้ง SUPABASE_STORAGE_BUCKET (env) + มี SUPABASE_URL + SUPABASE_SECRET_KEY
-# ไม่ตั้ง → fallback FileSystemStorage (local dev เท่านั้น · บน prod รูปจะไม่ persist)
+# ──────────────────────────────────────────────────────────────────────
+# รูป/วิดีโอของ cars/ (tracking) — เก็บที่ไหน (เลือกตามลำดับ Drive > Supabase > local)
+# ──────────────────────────────────────────────────────────────────────
+# 1) Google Drive (ปัจจุบัน) — อัปลง Drive ของ oxletauto@gmail.com ผ่าน OAuth (drive.file scope)
+#    ขอ refresh token ครั้งเดียว: `python manage.py gdrive_auth` (ดู cars/gdrive.py)
+#    GDRIVE_ROOT_FOLDER_ID = โฟลเดอร์แม่ที่เก็บโฟลเดอร์รถทุกคัน (ออปชั่น · ว่าง = root ของไดรฟ์)
+GDRIVE_CLIENT_ID = os.getenv("GDRIVE_CLIENT_ID", "")
+GDRIVE_CLIENT_SECRET = os.getenv("GDRIVE_CLIENT_SECRET", "")
+GDRIVE_REFRESH_TOKEN = os.getenv("GDRIVE_REFRESH_TOKEN", "")
+GDRIVE_ROOT_FOLDER_ID = os.getenv("GDRIVE_ROOT_FOLDER_ID", "")
+# ลิมิตขนาดไฟล์ที่อัปผ่าน api_upload (MB) — กัน RAM/แบนด์วิดท์ (วิดีโอใหญ่)
+GDRIVE_MAX_UPLOAD_MB = int(os.getenv("GDRIVE_MAX_UPLOAD_MB", "200"))
+
+# 2) Supabase Storage (legacy — ยุค Vercel) · 3) FileSystemStorage (local/VPS disk)
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "")
-if SUPABASE_URL and SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET:
+if GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET and GDRIVE_REFRESH_TOKEN:
+    STORAGES["default"]["BACKEND"] = "cars.storage.GoogleDriveStorage"
+elif SUPABASE_URL and SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET:
     STORAGES["default"]["BACKEND"] = "cars.storage.SupabaseStorage"

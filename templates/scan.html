@@ -55,7 +55,7 @@
   <div class="sc-col-main">
   <!-- การ์ดรถ (hero) -->
   <div class="card">
-    {% if car.photo and supabaseUrl %}<img class="sc-photo" src="{{ supabaseUrl }}/storage/v1/object/public/{{ storageBucket }}/{{ car.photo.name }}" alt="">{% endif %}
+    {% if car.photo %}<img class="sc-photo" src="{{ car.photo.url }}" alt="">{% endif %}
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
         <div class="mut sm" data-i18n="carCode">รหัสรถ</div>
@@ -175,6 +175,7 @@
     var prog = document.getElementById('uploadProg');
     var prev = document.getElementById('filePrev');
     var csrf = (form.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
+    var CAR_CODE = '{{ car.code }}';   // ใช้จัดไฟล์เข้าโฟลเดอร์ Drive ของรถคันนี้
     var picked = [];   // สะสมไฟล์ที่เลือก — กดเลือกใหม่ไม่ทับของเดิม
     function render(){
       if(!prev) return;
@@ -197,17 +198,20 @@
     var bar = document.getElementById('upBar');
     var barFill = document.getElementById('upBarFill');
     function setPct(p){ p=Math.max(0,Math.min(100,p)); if(barFill) barFill.style.width=p.toFixed(1)+'%'; return Math.round(p); }
-    // PUT ผ่าน XHR เพื่อจับ progress จริง (fetch จับ upload progress ไม่ได้)
-    function putWithProgress(url, file, onLoaded){
+    // POST ไฟล์เข้าเซิร์ฟเวอร์ (อัปต่อเข้า Google Drive) — XHR เพื่อจับ progress จริง
+    function uploadToDrive(file, code, onLoaded){
       return new Promise(function(resolve,reject){
+        var fd=new FormData(); fd.append('file', file); if(code) fd.append('code', code);
         var xhr=new XMLHttpRequest();
-        xhr.open('PUT', url);
-        xhr.setRequestHeader('content-type', file.type||'application/octet-stream');
-        xhr.setRequestHeader('x-upsert','true');
+        xhr.open('POST', '/track/api/upload');
+        xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');
         if(xhr.upload) xhr.upload.onprogress=function(ev){ if(ev.lengthComputable) onLoaded(ev.loaded); };
-        xhr.onload=function(){ (xhr.status>=200&&xhr.status<300)?resolve():reject(new Error('upload '+xhr.status)); };
+        xhr.onload=function(){
+          var j; try{ j=JSON.parse(xhr.responseText); }catch(e){ return reject(new Error('upload '+xhr.status)); }
+          (xhr.status>=200&&xhr.status<300&&j.ok) ? resolve(j) : reject(new Error(j.error||('upload '+xhr.status)));
+        };
         xhr.onerror=function(){ reject(new Error('network')); };
-        xhr.send(file);
+        xhr.send(fd);
       });
     }
     form.addEventListener('submit', async function(e){
@@ -227,15 +231,13 @@
       for(var i=0;i<picked.length;i++){
         var f=picked[i];
         try{
-          if(prog) prog.textContent='กำลังเตรียมไฟล์ '+(i+1)+'/'+picked.length+'...';
-          var s = await (await fetch('/track/api/sign_upload',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({filename:f.name,contentType:f.type})})).json();
-          if(!s.ok) throw new Error(s.error||'sign');
-          await putWithProgress(s.uploadUrl, f, function(loaded){
+          if(prog) prog.textContent='กำลังอัปโหลด '+(i+1)+'/'+picked.length+'...';
+          var res = await uploadToDrive(f, CAR_CODE, function(loaded){
             var pct=setPct((done+loaded)/total*100);
             if(prog) prog.textContent='กำลังอัปโหลด '+(i+1)+'/'+picked.length+' · '+pct+'%';
           });
           done += (f.size||0); setPct(done/total*100);
-          out.push({path:s.path, video:(f.type||'').indexOf('video')===0});
+          out.push({id:res.id, video:(f.type||'').indexOf('video')===0});
         }catch(err){
           if(prog) prog.textContent='อัปโหลดไม่สำเร็จ: '+(err.message||err);
           if(btn) btn.disabled=false; return;

@@ -2457,22 +2457,22 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   }
   function scPickStage(stage) { _scSel = (_scSel === stage) ? '' : stage; renderScChanger(); }
 
-  // ── อัปรูป/วิดีโอ (sign_upload → PUT ตรงเข้า Supabase Storage) ──
+  // ── อัปรูป/วิดีโอ (POST เข้าเซิร์ฟเวอร์ → Google Drive · เข้าโฟลเดอร์ของรถคันนั้น) ──
   async function scAddPhotos(input) {
     const files = Array.from(input.files || []); input.value = '';
+    const code = (_scCar && _scCar.code) || '';
     for (const f of files) {
       const id = 'u' + Math.random().toString(36).slice(2, 9);
       const isVid = (f.type || '').startsWith('video');
       let url = ''; try { url = URL.createObjectURL(f); } catch(e){}
-      _scMedia.push({ id, name: f.name, path: '', url, up: true, video: isVid });
+      _scMedia.push({ id, name: f.name, fileId: '', url, up: true, video: isVid });
       renderScPhotos();
       try {
-        const sr = await fetch('/track/api/sign_upload', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body: JSON.stringify({ filename: f.name, contentType: f.type }) });
-        const sj = await sr.json();
-        if (!sj.ok) throw new Error(sj.error || 'sign');
-        const pr = await fetch(sj.uploadUrl, { method:'PUT', headers:{ 'content-type': f.type || 'application/octet-stream', 'x-upsert':'true' }, body: f });
-        if (!pr.ok) throw new Error('PUT ' + pr.status);
-        const it = _scMedia.find(m => m.id === id); if (it) { it.path = sj.path; it.up = false; }
+        const fd = new FormData(); fd.append('file', f); if (code) fd.append('code', code);
+        const r = await fetch('/track/api/upload', { method:'POST', headers:{ 'X-Requested-With':'XMLHttpRequest' }, credentials:'same-origin', body: fd });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'upload');
+        const it = _scMedia.find(m => m.id === id); if (it) { it.fileId = j.id; it.up = false; }
       } catch (e) {
         _scMedia = _scMedia.filter(m => m.id !== id);
         alert(scT('upFail') + ': ' + e);
@@ -2496,7 +2496,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     if (!_scSel) { alert(scT('selectFirst')); return; }
     if (_scMedia.some(m => m.up)) { alert(scT('uploading')); return; }
     const note = (document.getElementById('scNote')?.value || '').trim();
-    const media = _scMedia.filter(m => m.path).map(m => m.path);
+    const media = _scMedia.filter(m => m.fileId).map(m => ({ id: m.fileId, video: m.video }));
     const btn = document.getElementById('scConfirmBtn');
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = scT('saving'); }
     try {

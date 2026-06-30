@@ -5,7 +5,7 @@ Python venv → gunicorn → nginx (reverse proxy + SSL) → systemd (กัน 
 Postgres ในเครื่อง (ระบบติดตามรถ cars/) → crontab ในเครื่อง (แทน n8n)
 
 > สมมติ: VPS IP = `76.13.214.140`, login root, OS Ubuntu 22.04/24.04
-> โดเมน = ใช้โดเมนฟรีของ Hostinger (แทน `__DOMAIN__` ด้วยโดเมนจริงทุกที่)
+> โดเมน = `srv1793506.hstgr.cloud` (hostname ของ VPS — Hostinger ชี้ DNS มาที่เครื่องให้อัตโนมัติแล้ว)
 > ตำแหน่งแอปบนเครื่อง = `/opt/oxlet`
 
 ---
@@ -22,15 +22,15 @@ VPS จะ `git clone` จาก GitHub ดังนั้นต้องมี�
 
 ---
 
-## 1) ชี้โดเมนมาที่ VPS (ทำใน Hostinger hPanel)
+## 1) โดเมน — ใช้ hostname ของ VPS (ไม่ต้องตั้ง DNS เอง)
 
-1. อ้างสิทธิ์โดเมนฟรี (ปุ่มในหน้าที่เห็น) ให้ได้ชื่อโดเมนมาก่อน
-2. ไปที่ DNS / Zone Editor ของโดเมนนั้น → เพิ่ม/แก้ A record:
-   - `@`  →  `76.13.214.140`
-   - `www` → `76.13.214.140`
-3. รอ DNS propagate (ปกติ 5–30 นาที) เช็คด้วย: `ping __DOMAIN__` ต้องได้ IP นี้
+ใช้ `srv1793506.hstgr.cloud` ที่ Hostinger ชี้มาที่ VPS ให้อัตโนมัติแล้ว — ไม่ต้องอ้างสิทธิ์โดเมนฟรี/ตั้ง A record
+เช็คว่าชี้ถูกเครื่อง:
+```bash
+ping srv1793506.hstgr.cloud      # ต้องได้ 76.13.214.140
+```
 
-> SSL (LINE Login) ทำต่อได้เมื่อโดเมนชี้มาที่ VPS แล้วเท่านั้น
+> อยากใช้โดเมนสวย ๆ ของตัวเองภายหลัง: ชี้ A record มาที่ IP นี้ แล้วแก้ค่าโดเมนใน .env + nginx + รัน certbot ใหม่
 
 ---
 
@@ -149,24 +149,22 @@ curl -s -H "X-Forwarded-Proto: https" http://127.0.0.1:8000/login/ | head -c 200
 ## 10) nginx
 
 ```bash
-# วางไฟล์แล้วแทน __DOMAIN__ ด้วยโดเมนจริง (แก้ oxlet.example.com เป็นของคุณ)
+# nginx-oxlet.conf ตั้ง server_name = srv1793506.hstgr.cloud ไว้แล้ว — วางได้เลย
 cp /opt/oxlet/deploy/nginx-oxlet.conf /etc/nginx/sites-available/oxlet
-sed -i "s/__DOMAIN__/oxlet.example.com/g" /etc/nginx/sites-available/oxlet
-nano /etc/nginx/sites-available/oxlet      # ตรวจว่า server_name เป็นโดเมนจริง
 
 ln -sf /etc/nginx/sites-available/oxlet /etc/nginx/sites-enabled/oxlet
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-ทดสอบ: เปิด `http://__DOMAIN__/login/` ในเบราว์เซอร์ ต้องเห็นหน้า login
+ทดสอบ: เปิด `http://srv1793506.hstgr.cloud/login/` ในเบราว์เซอร์ ต้องเห็นหน้า login
 
 ---
 
 ## 11) ติด SSL (Let's Encrypt) — จำเป็นสำหรับ LINE Login
 
 ```bash
-certbot --nginx -d __DOMAIN__ -d www.__DOMAIN__ --redirect -m oxletauto@gmail.com --agree-tos
+certbot --nginx -d srv1793506.hstgr.cloud --redirect -m oxletauto@gmail.com --agree-tos
 ```
 
 certbot จะเติม block 443 + redirect http→https + ตั้ง auto-renew ให้เอง
@@ -177,7 +175,7 @@ nano /opt/oxlet/.env      # เปลี่ยน SECURE_SSL_REDIRECT=False → 
 systemctl restart oxlet
 ```
 
-ทดสอบ: `https://__DOMAIN__/login/` ต้องเป็นกุญแจเขียว
+ทดสอบ: `https://srv1793506.hstgr.cloud/login/` ต้องเป็นกุญแจเขียว
 
 ---
 
@@ -200,15 +198,42 @@ crontab -e
 
 ที่ LINE Developers Console → LINE Login channel → ตั้ง **Callback URL**:
 ```
-https://__DOMAIN__/auth/line/callback
+https://srv1793506.hstgr.cloud/auth/line/callback
 ```
 (ต้องตรงกับ `LINE_LOGIN_CALLBACK` ใน .env เป๊ะ)
 
 ---
 
+## 13.1) เก็บรูป/วิดีโอลง Google Drive (ระบบติดตามรถ)
+
+รูป/วิดีโอของรถถูกเก็บลง Google Drive ของ `oxletauto@gmail.com` (ใช้พื้นที่ Google One ที่ซื้อไว้)
+ไฟล์ของรถแต่ละคันแยกโฟลเดอร์ ชื่อ `โค้ดรถ ทะเบียน(ทะเบียนเดิม)` เช่น `CS0011 กก1414(4525)`
+
+ตั้งครั้งเดียว:
+1. Google Cloud Console (โปรเจกต์เดียวกับ Sheets) → APIs & Services → เปิด **Google Drive API**
+2. OAuth consent screen → User type **External** → เพิ่ม scope `.../auth/drive.file`
+   → Publishing status ตั้งเป็น **In production** (กัน token หมดอายุใน 7 วันของโหมด Testing)
+3. Credentials → Create OAuth client ID → Application type **Desktop app** → ได้ Client ID + Secret
+4. บนเครื่องตัวเอง (มีเบราว์เซอร์) ในโฟลเดอร์โปรเจกต์:
+   ```bash
+   python manage.py gdrive_auth --client-id <ID> --client-secret <SECRET>
+   ```
+   → เบราว์เซอร์เด้ง → ล็อกอิน `oxletauto@gmail.com` → อนุญาต → คำสั่งพิมพ์ 3 ค่า
+5. เอา `GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET` / `GDRIVE_REFRESH_TOKEN` ใส่ `.env` บน VPS
+6. (แนะนำ) สร้างโฟลเดอร์แม่ บน VPS:
+   ```bash
+   cd /opt/oxlet && .venv/bin/python manage.py gdrive_setup
+   ```
+   → เอา `GDRIVE_ROOT_FOLDER_ID` ที่ได้ใส่ `.env` → `systemctl restart oxlet`
+
+> ตั้งครบแล้ว: อัปรูป/วิดีโอจากหน้าสแกน/หน้าเซลล์/เพิ่มรถ จะเข้าโฟลเดอร์ของรถคันนั้นใน Drive อัตโนมัติ
+> ไม่ตั้ง GDRIVE_* = อัปไฟล์ไม่ได้ (ฟอร์มอื่นยังทำงานปกติ)
+
+---
+
 ## 14) เช็คลิสต์สุดท้าย
 
-- [ ] `https://__DOMAIN__/login/` เปิดได้ มี SSL
+- [ ] `https://srv1793506.hstgr.cloud/login/` เปิดได้ มี SSL
 - [ ] login LINE ได้ → เด้งเข้า /dashboard/ (admin) หรือ /me/ (เซลล์)
 - [ ] ตัวเลข dashboard มาครบ (อ่าน Google Sheets ตรง)
 - [ ] `/track/` เข้าได้ (ระบบติดตามรถ — ต่อ Postgres แล้ว)

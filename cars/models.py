@@ -16,6 +16,8 @@ class Car(models.Model):
     branch = models.CharField("สาขา", max_length=4, default=C.DEFAULT_BRANCH)
 
     plate = models.CharField("ทะเบียน", max_length=20, blank=True)
+    # ทะเบียนเดิม — ระบบจำให้อัตโนมัติเมื่อมีการแก้ทะเบียน (โชว์ในวงเล็บชื่อโฟลเดอร์ Drive)
+    plate_original = models.CharField("ทะเบียนเดิม (ก่อนแก้)", max_length=20, blank=True)
     brand = models.CharField("ยี่ห้อ", max_length=40, blank=True)
     model = models.CharField("รุ่น", max_length=60, blank=True)
     year = models.PositiveIntegerField("ปี", null=True, blank=True)
@@ -35,6 +37,8 @@ class Car(models.Model):
     doc_registration = models.FileField("เล่มทะเบียน", upload_to="docs/%Y/%m/", null=True, blank=True)
 
     photo = models.ImageField("รูปรถ", upload_to="cars/%Y/%m/", null=True, blank=True)
+    # โฟลเดอร์ Google Drive ของรถคันนี้ (รูป/วิดีโอเข้าโฟลเดอร์เดียวกัน) — ตั้งครั้งแรกที่อัปไฟล์
+    drive_folder_id = models.CharField("โฟลเดอร์ Drive", max_length=64, blank=True)
     note = models.TextField("หมายเหตุ", blank=True)
 
     # ข้อมูลดิบจากการนำเข้า (detail/owner/price/รูป ฯลฯ) — เก็บครบเป๊ะ ไม่ตกหล่น
@@ -67,13 +71,30 @@ class Car(models.Model):
         seq = int(last.split("-")[1]) + 1 if last else 1
         return f"{prefix}-{seq:04d}"
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # จำทะเบียนตอนโหลด เพื่อตรวจจับ "การแก้ทะเบียน" ตอน save (ไม่ยิง query เพิ่ม)
+        inst = super().from_db(db, field_names, values)
+        inst._loaded_plate = inst.plate
+        return inst
+
     def save(self, *args, **kwargs):
         if not self.code:
             with transaction.atomic():
                 self.code = self._next_code(self.branch)
                 super().save(*args, **kwargs)
+            self._loaded_plate = self.plate
             return
+        # จับ "ทะเบียนเดิม" อัตโนมัติ: ทะเบียนเปลี่ยน + ยังไม่เคยเก็บเดิม → เก็บอันก่อนหน้าไว้
+        uf = kwargs.get("update_fields")
+        plate_saving = uf is None or "plate" in uf
+        prev = getattr(self, "_loaded_plate", None)
+        if plate_saving and prev and prev != self.plate and not self.plate_original:
+            self.plate_original = prev[:20]
+            if uf is not None:
+                kwargs["update_fields"] = list(uf) + ["plate_original"]
         super().save(*args, **kwargs)
+        self._loaded_plate = self.plate
 
     # ----- เปลี่ยนสเตป -----
     def change_stage(self, new_stage, worker_name="", worker_id="", note="", photo=None):

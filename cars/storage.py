@@ -73,3 +73,44 @@ class SupabaseStorage(Storage):
 
     def size(self, name):
         return 0
+
+
+@deconstructible
+class GoogleDriveStorage(Storage):
+    """เก็บไฟล์ลง Google Drive (ผ่าน cars/gdrive.py) — "name" ที่เก็บใน DB = Drive file id
+    ใช้กับ ImageField/FileField ของ Car (photo, doc_registration). ส่วน media หลายไฟล์
+    (ScanLog.media) อัปผ่าน api_upload โดยตรง ไม่ผ่าน backend นี้.
+    เปิดใช้เมื่อตั้ง GDRIVE_* ครบ (ดู oxlet/settings.py) · file id ไม่มี "/" → แยกจาก path เก่าได้"""
+
+    def _save(self, name, content):
+        from . import gdrive
+        base = name.replace("\\", "/").rsplit("/", 1)[-1]  # ใช้แค่ชื่อไฟล์ (folder จาก upload_to ทิ้ง)
+        size = getattr(content, "size", None)
+        ctype = getattr(getattr(content, "file", None), "content_type", "") \
+            or getattr(content, "content_type", "")
+        return gdrive.upload(content, base, content_type=ctype, size=size,
+                             parent_id=getattr(settings, "GDRIVE_ROOT_FOLDER_ID", ""))
+
+    def exists(self, name):
+        return False  # name = Drive id (unique อยู่แล้ว) ไม่ต้องเช็ก
+
+    def get_available_name(self, name, max_length=None):
+        return name
+
+    def url(self, name):
+        from . import gdrive
+        if not name:
+            return ""
+        if "/" in name:  # legacy Supabase path (back-compat)
+            base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
+            bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+            return f"{base}/storage/v1/object/public/{bucket}/{quote(name)}"
+        return gdrive.photo_url(name)  # Drive file id → thumbnail (ใช้กับรูปรถ)
+
+    def delete(self, name):
+        if name and "/" not in name:
+            from . import gdrive
+            gdrive.delete(name)
+
+    def size(self, name):
+        return 0

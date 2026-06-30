@@ -153,17 +153,32 @@ def login_log_api(request):
 
 
 def _media_urls(lst, photo_name=None):
-    """สร้าง public URL ของไฟล์แนบ (รูป/วิดีโอ) จาก path ที่เก็บไว้ใน Supabase"""
-    base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
-    bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+    """สร้าง URL แสดงผลของไฟล์แนบ (รูป/วิดีโอ) จาก token ที่เก็บไว้
+    token = Drive file id (ไม่มี "/") → Google Drive · path เก่า (มี "/") → Supabase (legacy)"""
+    from . import gdrive
+
+    def _u(token, video):
+        if not token:
+            return None
+        if "/" in token:  # legacy Supabase path (ของเก่ายุค Vercel)
+            base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
+            bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
+            return {"url": f"{base}/storage/v1/object/public/{bucket}/{token}", "video": video}
+        url = gdrive.video_view_url(token) if video else gdrive.photo_url(token)
+        return {"url": url, "video": video}
+
     out = []
-    if photo_name:  # back-compat: รูปเดี่ยวแบบเดิม
-        out.append({"url": f"{base}/storage/v1/object/public/{bucket}/{photo_name}", "video": False})
+    if photo_name:  # back-compat: รูปเดี่ยว (ImageField)
+        u = _u(photo_name, False)
+        if u:
+            out.append(u)
     for m in (lst or []):
-        p = m.get("path") if isinstance(m, dict) else m
-        if p:
-            out.append({"url": f"{base}/storage/v1/object/public/{bucket}/{p}",
-                        "video": bool(isinstance(m, dict) and m.get("video"))})
+        if isinstance(m, dict):
+            u = _u(m.get("id") or m.get("path"), bool(m.get("video")))
+        else:
+            u = _u(m, False)
+        if u:
+            out.append(u)
     return out
 
 
@@ -377,6 +392,67 @@ def api_sign_upload(request):
                          "isVideo": bool((d.get("contentType") or "").startswith("video"))})
 
 
+def _car_folder_name(car):
+    """ชื่อโฟลเดอร์ Drive ของรถ: '<โค้ด> <ทะเบียน>(<ทะเบียนเดิม>)' เช่น 'CS0011 กก1414(4525)'"""
+    name = f"{car.code} {car.plate}".strip()
+    if car.plate_original:
+        name += f"({car.plate_original})"
+    return name
+
+
+def _ensure_car_folder(car):
+    """หา/สร้างโฟลเดอร์ Drive ของรถคันนี้ → คืน folder id (เก็บที่ car.drive_folder_id)
+    มีอยู่แล้ว = rename ให้ตรงชื่อปัจจุบัน (กรณีแก้ทะเบียน) · คืน '' ถ้า Drive ยังไม่ตั้งค่า"""
+    from . import gdrive
+    if not gdrive.is_configured():
+        return ""
+    fid = gdrive.ensure_folder(
+        _car_folder_name(car),
+        parent_id=getattr(settings, "GDRIVE_ROOT_FOLDER_ID", ""),
+        existing_id=car.drive_folder_id or "",
+    )
+    if fid and fid != car.drive_folder_id:
+        car.drive_folder_id = fid
+        car.save(update_fields=["drive_folder_id"])
+    return fid
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def api_upload(request):
+    """อัปรูป/วิดีโอเข้า Google Drive (ฝั่งเซิร์ฟเวอร์) → คืน {ok, id, video, url}
+    multipart: file=<ไฟล์> + code=<โค้ดรถ> (ออปชั่น — มี = เข้าโฟลเดอร์ของรถคันนั้น).
+    บน VPS ไม่มีลิมิต body 4.5MB แบบ Vercel แล้ว → อัปผ่านเซิร์ฟเวอร์ตรงได้ (จำกัดด้วย GDRIVE_MAX_UPLOAD_MB).
+    csrf_exempt + login_required (เหมือน endpoint ฝั่งเซลล์ตัวอื่น · seller.html ไม่มี CSRF token)."""
+    from . import gdrive
+    if not gdrive.is_configured():
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งค่า Google Drive บนเซิร์ฟเวอร์"}, status=400)
+    f = request.FILES.get("file")
+    if not f:
+        return JsonResponse({"ok": False, "error": "ไม่มีไฟล์"}, status=400)
+    max_mb = getattr(settings, "GDRIVE_MAX_UPLOAD_MB", 200)
+    if f.size and f.size > max_mb * 1024 * 1024:
+        return JsonResponse({"ok": False, "error": f"ไฟล์ใหญ่เกิน {max_mb}MB"}, status=400)
+
+    parent = ""
+    code = (request.POST.get("code") or "").strip()
+    if code:
+        car = Car.objects.filter(code=code).first()
+        if car:
+            try:
+                parent = _ensure_car_folder(car)
+            except Exception:
+                parent = ""  # สร้างโฟลเดอร์ไม่ได้ → อัปลง root แทน (ไม่ให้พังทั้งงาน)
+    is_video = (f.content_type or "").startswith("video")
+    try:
+        fid = gdrive.upload(f, f.name, content_type=f.content_type, size=f.size, parent_id=parent)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)[:160]}, status=502)
+    url = gdrive.video_view_url(fid) if is_video else gdrive.photo_url(fid)
+    return JsonResponse({"ok": True, "id": fid, "video": is_video, "url": url})
+
+
 @login_required
 def scan_submit(request, code):
     car = get_object_or_404(Car, code=code)
@@ -567,14 +643,13 @@ def cars_api(request):
     ]
     t2ls = [c.t2l for c in all_cars if c.t2l is not None]
     avg = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
-    # build public photo URL ตรงจาก Supabase (ไม่ต้องพึ่ง storage backend config บน prod)
-    _base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
-    _bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
     cars = []
     for c in all_cars:
         ex = c.extra or {}
         det = ex.get("detail") or {}
-        photo = f"{_base}/storage/v1/object/public/{_bucket}/{c.photo.name}" if (c.photo and _base) else ""
+        # ผ่าน _media_urls → รองรับทั้ง Drive id และ Supabase path (legacy) ตามชนิดที่เก็บ
+        _pu = _media_urls(None, c.photo.name) if c.photo else []
+        photo = _pu[0]["url"] if _pu else ""
         cars.append({
             "code": c.code, "title": c.title, "name": ex.get("name") or c.title,
             "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
@@ -689,11 +764,20 @@ def api_add_car(request):
         car.frontline_at = timezone.now()
     if stage == "sold":
         car.status = "sold"
-    # รูปรถ — เก็บ path ที่อัปเข้า Supabase แล้ว (แสดงผลผ่าน car.photo.url / cars_api)
-    photo_path = (d.get("photo_path") or "").strip()
-    if photo_path:
-        car.photo.name = photo_path
     car.save()
+    # รูปรถ — Drive file id (จาก api_upload) · ย้ายเข้าโฟลเดอร์ของรถที่เพิ่งสร้าง
+    photo_id = (d.get("photo_id") or d.get("photo_path") or "").strip()
+    if photo_id:
+        if "/" not in photo_id:  # Drive id → ย้ายเข้าโฟลเดอร์รถ (best-effort)
+            try:
+                from . import gdrive
+                folder = _ensure_car_folder(car)
+                if folder:
+                    gdrive.move_to_folder(photo_id, folder)
+            except Exception:
+                pass
+        car.photo.name = photo_id
+        car.save(update_fields=["photo"])
     return JsonResponse({"ok": True, "code": car.code})
 
 

@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/restore_car", views.api_restore_car, name="api_restore_car"),
     path("api/trash", views.api_trash, name="api_trash"),
     path("api/sign_upload", views.api_sign_upload, name="api_sign_upload"),
+    path("api/upload", views.api_upload, name="api_upload"),  # อัปรูป/วิดีโอเข้า Google Drive
 
     # QR
     path("qr/<str:code>.png", views.qr_png, name="qr_png"),
