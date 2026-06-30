@@ -204,7 +204,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # service account email = ไม่ลับ (เป็น identity ไม่ใช่ credential) → inline ได้
 GOOGLE_SERVICE_ACCOUNT_EMAIL = os.getenv(
     "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-    "n8n-sheets@sylvan-road-477705-q4.iam.gserviceaccount.com",
+    "google-account-oxletauto@gen-lang-client-0431582933.iam.gserviceaccount.com",
 )
 # GOOGLE_PRIVATE_KEY = SECRET (RSA private key) — ต้องตั้งบน Vercel เท่านั้น ห้าม inline
 GOOGLE_PRIVATE_KEY = os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n")
