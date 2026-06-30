@@ -121,12 +121,54 @@ nano /opt/oxlet/.env
 cd /opt/oxlet
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py collectstatic --noinput
-.venv/bin/python manage.py createsuperuser   # บัญชีนี้ = Executive (เข้า /track/ จัดการได้)
 
 # ให้ user oxlet เป็นเจ้าของทุกอย่าง (gunicorn รันเป็น oxlet + เขียน media ได้)
 mkdir -p /opt/oxlet/media
 chown -R oxlet:oxlet /opt/oxlet
 ```
+
+> ยังไม่ต้อง `createsuperuser` ตรงนี้ — ขั้น 8.1 จะ loaddata ผู้ใช้เดิม 45 คน (รวมแอดมิน) มาให้
+> ถ้าไม่ย้ายข้อมูลเดิม (เริ่มสด) ค่อยรัน `.venv/bin/python manage.py createsuperuser` (บัญชีนี้ = Executive)
+
+---
+
+## 8.1) ย้ายข้อมูลรถเดิม (118 คัน + 432 log + 45 user + รูป)
+
+ทำหลัง migrate (ขั้น 8) · เลือกวิธี A (ง่ายสุด) หรือ B
+
+### วิธี A (แนะนำ — รันบนเว็บเทอร์มินัล Hostinger ได้เลย) · VPS ดึงจาก Supabase ตรง
+Supabase ยังออนไลน์ → ให้ VPS ดึงข้อมูล + รูปมาเอง **คำสั่งเดียว ไม่ต้องอัปไฟล์จากเครื่อง**:
+```bash
+cd /opt/oxlet
+.venv/bin/python manage.py import_from_supabase \
+  --url https://qtavqquhjstrgrzauvsd.supabase.co \
+  --key <SUPABASE_SERVICE_ROLE_KEY>
+chown -R oxlet:oxlet /opt/oxlet/media
+```
+→ ดึงรถ 118 + ผู้ใช้ 45 (+บทบาท) + ประวัติ 432 เข้า Postgres · โหลดรูป ~48MB ลง `/media/` อัตโนมัติ
+> `SUPABASE_SERVICE_ROLE_KEY` = Supabase dashboard → Settings → API → service_role (หรือค่า `SUPABASE_SECRET_KEY` ใน .env เก่า)
+
+### วิธี B (สำรอง — ถ้า Supabase ถูกลบไปแล้ว) · โหลดจาก backup ในเครื่อง
+มี backup อยู่แล้วที่ `migration_backup/` (gitignored · **ห้ามอัปขึ้น git** มีรหัสผ่าน+ข้อมูลลูกค้า) — ส่งตรงเข้า VPS:
+- **scp** (Git Bash บนเครื่องตัวเอง · D: ใช้ `/d/`):
+  ```bash
+  cd "/d/project django/SaleforceOxletauto"
+  scp -r migration_backup root@76.13.214.140:/opt/oxlet/
+  ```
+- หรือ **WinSCP/FileZilla** → SFTP `root@76.13.214.140` → ลาก `migration_backup` ไปวางใน `/opt/oxlet/`
+
+แล้วบน VPS:
+```bash
+cd /opt/oxlet
+.venv/bin/python manage.py loaddata migration_backup/oxlet_data.json
+cp -r migration_backup/media/* media/ && chown -R oxlet:oxlet media
+```
+
+### ปิดงาน (ทั้ง 2 วิธี)
+- **ตรวจ**: เปิด `/track/` ต้องเห็นรถ 118 คัน + รูปขึ้น · ผู้ใช้/บทบาทเดิมเข้าได้
+- **ลบ backup ทิ้งบน VPS** (ถ้าใช้วิธี B): `rm -rf /opt/oxlet/migration_backup`
+
+> ข้ามขั้นนี้ได้ถ้าจะเริ่มระบบรถใหม่จากศูนย์ (ไม่เอาข้อมูลเก่า)
 
 ---
 

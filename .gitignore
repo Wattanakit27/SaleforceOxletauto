@@ -7,6 +7,8 @@
 *.key
 # helper สำหรับดู env values — local only (inline comment ใช้ไม่ได้ ต้องแยกบรรทัด)
 show_env.py
+# backup ข้อมูลย้ายจาก Supabase → VPS (มีข้อมูลลูกค้า + รหัสผ่าน · local เท่านั้น ห้ามขึ้น git)
+migration_backup/
 
 # Python
 __pycache__/
