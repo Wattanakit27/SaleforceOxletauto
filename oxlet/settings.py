@@ -26,12 +26,12 @@ _hosts_env = os.getenv("ALLOWED_HOSTS", "").strip()
 if _hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else [".vercel.app", "localhost", "127.0.0.1"]
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["srv1793506.hstgr.cloud", ".hstgr.cloud", "localhost", "127.0.0.1"]
 
 # Vercel/proxy ส่ง HTTPS มาเป็น header X-Forwarded-Proto
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
-    "CSRF_TRUSTED_ORIGINS", "https://*.vercel.app"
+    "CSRF_TRUSTED_ORIGINS", "https://srv1793506.hstgr.cloud"
 ).split(",") if o.strip()]
 
 INSTALLED_APPS = [
@@ -94,7 +94,7 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")
 LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
 # Callback URL ต้องตรงกับที่ลงทะเบียนใน LINE Login channel (ใช้ canonical URL)
-LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://saleforce-oxletauto.vercel.app/auth/line/callback")
+LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://srv1793506.hstgr.cloud/auth/line/callback")
 
 # ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — LINE user_id แอดมิน (ไม่ลับ: เป็นปลายทาง ไม่ใช่ credential)
 FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c9848dde9bf4")
@@ -222,7 +222,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # โดเมนที่ QR ชี้ไป (หน้า /track/scan/<code>/) — ต้องตรง prod ก่อนปริ้น QR
-SITE_URL = os.getenv("SITE_URL", "https://saleforce-oxletauto.vercel.app").rstrip("/")
+SITE_URL = os.getenv("SITE_URL", "https://srv1793506.hstgr.cloud").rstrip("/")
 
 # LINE push ของ tracking (แยกจาก sales LINE_CHANNEL_ACCESS_TOKEN) — ไม่ตั้ง = ไม่ push เงียบ ๆ
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN", "")
@@ -234,7 +234,7 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/track/"
 LOGOUT_REDIRECT_URL = "/login/"
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"   # leading slash — nginx เสิร์ฟ location /media/ (รูป/วิดีโอรถเก็บลงดิสก์ VPS)
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ──────────────────────────────────────────────────────────────────────

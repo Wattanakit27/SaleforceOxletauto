@@ -3754,7 +3754,7 @@
         const fi=document.getElementById('ta_photo'), file=fi&&fi.files&&fi.files[0];
         if(file){
           setMsg('กำลังอัปโหลดรูป…');
-          const fd=new FormData(); fd.append('file', file);
+          const fd=new FormData(); fd.append('file', file); fd.append('target','disk'); // รูปหน้าปก → เก็บดิสก์ VPS เสมอ
           const s=await (await fetch('/track/api/upload',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:fd})).json();
           if(!s.ok) throw new Error(s.error||'อัปโหลดรูปไม่สำเร็จ');
           photo_id=s.id;

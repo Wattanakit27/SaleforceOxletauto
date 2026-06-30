@@ -153,17 +153,22 @@ def login_log_api(request):
 
 
 def _media_urls(lst, photo_name=None):
-    """สร้าง URL แสดงผลของไฟล์แนบ (รูป/วิดีโอ) จาก token ที่เก็บไว้
-    token = Drive file id (ไม่มี "/") → Google Drive · path เก่า (มี "/") → Supabase (legacy)"""
+    """สร้าง URL แสดงผลของไฟล์แนบ (รูป/วิดีโอ) จาก token ที่เก็บไว้:
+    - Drive file id (ไม่มี "/") → Google Drive
+    - path มี "/" → ดิสก์ VPS (/media/...) · หรือ Supabase (ถ้ายังตั้ง bucket — legacy)"""
     from . import gdrive
 
     def _u(token, video):
         if not token:
             return None
-        if "/" in token:  # legacy Supabase path (ของเก่ายุค Vercel)
-            base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
-            bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
-            return {"url": f"{base}/storage/v1/object/public/{bucket}/{token}", "video": video}
+        if "/" in token:  # ไฟล์ที่เก็บเป็น path
+            if getattr(settings, "SUPABASE_STORAGE_BUCKET", "") and getattr(settings, "SUPABASE_URL", ""):
+                base = settings.SUPABASE_URL.rstrip("/")
+                bucket = settings.SUPABASE_STORAGE_BUCKET
+                return {"url": f"{base}/storage/v1/object/public/{bucket}/{token}", "video": video}
+            # ดิสก์ VPS — nginx เสิร์ฟ /media/
+            url = getattr(settings, "MEDIA_URL", "/media/").rstrip("/") + "/" + token.lstrip("/")
+            return {"url": url, "video": video}
         url = gdrive.video_view_url(token) if video else gdrive.photo_url(token)
         return {"url": url, "video": video}
 
@@ -417,40 +422,62 @@ def _ensure_car_folder(car):
     return fid
 
 
+def _save_local_media(f, code=""):
+    """เก็บไฟล์ลงดิสก์ VPS (MEDIA_ROOT) จัดโฟลเดอร์ media/cars/<code>/ → คืน relative name (มี "/")"""
+    import re as _re
+    import uuid as _uuid
+    from django.core.files.storage import default_storage
+    safe = _re.sub(r"[^A-Za-z0-9._-]", "_", f.name or "file")[-50:]
+    sub = f"cars/{code}" if code else f"cars/_misc/{timezone.now():%Y/%m}"
+    return default_storage.save(f"{sub}/{_uuid.uuid4().hex[:8]}-{safe}", f)
+
+
 @csrf_exempt
 @login_required
 @require_POST
 def api_upload(request):
-    """อัปรูป/วิดีโอเข้า Google Drive (ฝั่งเซิร์ฟเวอร์) → คืน {ok, id, video, url}
-    multipart: file=<ไฟล์> + code=<โค้ดรถ> (ออปชั่น — มี = เข้าโฟลเดอร์ของรถคันนั้น).
-    บน VPS ไม่มีลิมิต body 4.5MB แบบ Vercel แล้ว → อัปผ่านเซิร์ฟเวอร์ตรงได้ (จำกัดด้วย GDRIVE_MAX_UPLOAD_MB).
+    """อัปรูป/วิดีโอ (ฝั่งเซิร์ฟเวอร์) → คืน {ok, id, video, url}
+    multipart: file=<ไฟล์> + code=<โค้ดรถ> (ออปชั่น) + target=<'disk'|''>.
+    แยกที่เก็บตามประเภท:
+    - **รูปหน้าปกรถ** (เพิ่มรถ · target='disk') → ดิสก์ VPS เสมอ (ไฟล์เล็ก ไม่ต้องพึ่งบริการนอก)
+    - **รูปรายงาน/วิดีโอ** (สแกน/หน้าเซลล์ · ไม่ส่ง target) → Google Drive ถ้าตั้งไว้ (โชว์ลิงก์) · ยังไม่ตั้ง = ดิสก์ VPS (fallback)
+    บน VPS ไม่มีลิมิต body 4.5MB แบบ Vercel (จำกัดด้วย GDRIVE_MAX_UPLOAD_MB · nginx 220M).
     csrf_exempt + login_required (เหมือน endpoint ฝั่งเซลล์ตัวอื่น · seller.html ไม่มี CSRF token)."""
-    from . import gdrive
-    if not gdrive.is_configured():
-        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งค่า Google Drive บนเซิร์ฟเวอร์"}, status=400)
     f = request.FILES.get("file")
     if not f:
         return JsonResponse({"ok": False, "error": "ไม่มีไฟล์"}, status=400)
     max_mb = getattr(settings, "GDRIVE_MAX_UPLOAD_MB", 200)
     if f.size and f.size > max_mb * 1024 * 1024:
         return JsonResponse({"ok": False, "error": f"ไฟล์ใหญ่เกิน {max_mb}MB"}, status=400)
-
-    parent = ""
     code = (request.POST.get("code") or "").strip()
-    if code:
-        car = Car.objects.filter(code=code).first()
-        if car:
-            try:
-                parent = _ensure_car_folder(car)
-            except Exception:
-                parent = ""  # สร้างโฟลเดอร์ไม่ได้ → อัปลง root แทน (ไม่ให้พังทั้งงาน)
+    target = (request.POST.get("target") or "").strip()   # 'disk' = บังคับเก็บดิสก์ (รูปหน้าปก)
     is_video = (f.content_type or "").startswith("video")
+
+    from . import gdrive
+    if target != "disk" and gdrive.is_configured():
+        # ── Google Drive (รูปรายงาน/วิดีโอ · โฟลเดอร์ต่อรถ) ──
+        parent = ""
+        if code:
+            car = Car.objects.filter(code=code).first()
+            if car:
+                try:
+                    parent = _ensure_car_folder(car)
+                except Exception:
+                    parent = ""  # สร้างโฟลเดอร์ไม่ได้ → อัปลง root แทน (ไม่ให้พังทั้งงาน)
+        try:
+            fid = gdrive.upload(f, f.name, content_type=f.content_type, size=f.size, parent_id=parent)
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": str(e)[:160]}, status=502)
+        url = gdrive.video_view_url(fid) if is_video else gdrive.photo_url(fid)
+        return JsonResponse({"ok": True, "id": fid, "video": is_video, "url": url})
+
+    # ── เก็บลงดิสก์ VPS (รูปหน้าปก target=disk · หรือ Drive ยังไม่ตั้ง = fallback) ──
     try:
-        fid = gdrive.upload(f, f.name, content_type=f.content_type, size=f.size, parent_id=parent)
+        name = _save_local_media(f, code)
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)[:160]}, status=502)
-    url = gdrive.video_view_url(fid) if is_video else gdrive.photo_url(fid)
-    return JsonResponse({"ok": True, "id": fid, "video": is_video, "url": url})
+    url = getattr(settings, "MEDIA_URL", "/media/").rstrip("/") + "/" + name.lstrip("/")
+    return JsonResponse({"ok": True, "id": name, "video": is_video, "url": url})
 
 
 @login_required

@@ -610,7 +610,12 @@ CRON_SECRET=xxx...
   - **อัปโหลด**: หน้าสแกน/หน้าเซลล์/เพิ่มรถ POST ไฟล์ (multipart) → **`/track/api/upload`** (`api_upload` · csrf_exempt+login_required · ส่ง `code` เพื่อจัดเข้าโฟลเดอร์รถ) → server อัป resumable streaming เข้า Drive + ตั้ง public link → คืน `{id, video, url}` · เก็บใน `ScanLog.media`=`[{id,video}]` / `Car.photo.name`=Drive id. **บน VPS ไม่มีลิมิต body 4.5MB แบบ Vercel** เลยอัปผ่าน server ตรง (เลิกใช้ `sign_upload`+PUT ตรงเข้า Supabase) · `api_sign_upload` ยังอยู่ (legacy ไม่ถูกเรียก)
   - **แสดงผล**: `_media_urls()` คืน `{url,video}` — Drive id (ไม่มี "/") → รูป `drive.google.com/thumbnail?id=&sz=w1920` (ฝัง `<img>`) · วิดีโอ `drive.google.com/file/d/<id>/view` (เปิดตัวเล่น Drive) · path เก่ามี "/" → Supabase (legacy back-compat)
   - **storage backend** ([cars/storage.py](cars/storage.py) `GoogleDriveStorage`): ใช้กับ `ImageField`/`FileField` (`Car.photo`/`doc_registration`) — name=Drive id · เลือกใน [settings.py](oxlet/settings.py) **Drive > Supabase(legacy) > FileSystemStorage**
-  - ไม่ตั้ง GDRIVE_* = อัปไฟล์ไม่ได้ (`api_upload` คืน 400 · ฟอร์มอื่นทำงานปกติ)
+  - **★ แยกที่เก็บตามประเภท (มิ.ย.69)**: `api_upload` รับ `target`:
+    - **รูปหน้าปกรถ** (index.html `addTrkCar` ส่ง `target=disk`) → **ดิสก์ VPS เสมอ** (ไฟล์เล็ก ไม่ต้องตั้ง Drive)
+    - **รูปรายงาน/วิดีโอ** (scan.html/seller.html · ไม่ส่ง target) → **Google Drive ถ้าตั้งไว้** (โชว์ลิงก์) · ยังไม่ตั้ง = ดิสก์ VPS (fallback)
+    - logic: `if target != "disk" and gdrive.is_configured()` → Drive · ไม่งั้น → `_save_local_media` (ดิสก์)
+  - **เก็บดิสก์**: `_save_local_media` บันทึก `MEDIA_ROOT/cars/<code>/...` ผ่าน `default_storage` → คืน `{id: path, url: /media/...}` · nginx เสิร์ฟ `location /media/` · `_media_urls` token ที่มี "/" → `/media/<path>` (วิดีโอเล่นตรงใน `<video>` ได้ ต่างจาก Drive ที่ต้อง /view). `MEDIA_URL="/media/"` (leading slash จำเป็น)
+  - **Storage backend (ImageField)** เลือกตามลำดับ Drive > Supabase(legacy) > ดิสก์ VPS · Drive เป็นออปชั่นสำหรับรูปรายงาน/วิดีโอ ไม่ใช่ของบังคับ
 - **QR**: gen PNG ต่อ request ด้วย `qrcode`+`Pillow` (ไม่เก็บไฟล์) ชี้ไป `{SITE_URL}/track/scan/<code>/` → ต้องตั้ง **`SITE_URL`** เป็นโดเมน prod **ก่อนปริ้น QR**
 - **deps เพิ่ม** ([requirements.txt](requirements.txt)): `psycopg2-binary`, `qrcode[pil]`, `Pillow` · **[vercel.json](vercel.json) ขยาย `maxLambdaSize` 15→50mb** (ไม่งั้น build ไม่ผ่าน)
 - **settings ที่เพิ่มเข้า sales เดิม**: INSTALLED_APPS (+admin/auth/contenttypes/messages/cars) · MIDDLEWARE (+Authentication/Message/XFrameOptions) · `X_FRAME_OPTIONS="SAMEORIGIN"` (กัน iframe เซลล์ของ sales พัง) · TEMPLATES DIRS (+`templates/`) + context_processors (auth/messages/cars.context.nav) · sales ใช้ signed-cookie session เหมือนเดิม (Django auth ทำงานบน signed_cookies ได้)

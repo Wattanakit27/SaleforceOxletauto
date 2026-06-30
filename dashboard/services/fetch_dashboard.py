@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
+
 from .google_sheets import (
     fetch_all_sheets, cell, cell_num,
     LEADS_COL as L, SALES_COL as S, BOOKINGS_COL as B,
@@ -2077,7 +2079,8 @@ def attach_lead_scores(follow_cases: list[dict],
 # 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ (เฟส 2) — mirror followUrgency จาก seller.html เป็น Python
 # cron_tick ยิงเช้า/บ่าย → ส่ง LINE ข้อความธรรมดา top N ให้เซลล์แต่ละคน · pass เดียว (group ตาม seller)
 # ════════════════════════════════════════════════════════════════
-_FU_BASE = "https://saleforce-oxletauto.vercel.app"
+# ลิงก์ในข้อความ followup → ดึงจาก SITE_URL (.env) เพื่อให้ตรงโดเมนที่ใช้จริง (VPS)
+_FU_BASE = (getattr(settings, "SITE_URL", "") or "https://srv1793506.hstgr.cloud").rstrip("/")
 _FU_CADENCE = {"สนใจมาก": 1, "ลังเล": 2, "ไม่รับสาย": 1, "ลูกค้าไม่ตอบ": 1, "รอเงิน": 3, "รอเช็คเครดิต": 2, "ดาวน์ไม่พอ": 3, "เงินสดเงินไม่พอ": 3}
 # อ้าง CUSTOMER_STATUS_DEAD (นิยาม "เคสเสีย" ของ dashboard) ตัวเดียวกัน — กัน followup ดันเคสที่ dashboard ถือว่าตายแล้ว (เดิมลิสต์แยกกันคำไม่ตรง)
 _FU_DEAD = CUSTOMER_STATUS_DEAD
