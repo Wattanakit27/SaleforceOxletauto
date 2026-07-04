@@ -371,6 +371,10 @@ def line_login_callback(request):
     # tracking (cars/) ใช้ Django auth — ถ้า next ชี้ /track/ → bridge LINE → Django user + login
     # (ใช้ LINE channel + callback เดิมของ sales · ไม่ต้องตั้ง callback ใหม่ใน LINE console)
     if (next_url or "").startswith("/track/"):
+        # ★ กันคนนอก (มิ.ย.69 · ปิดช่องข้อมูลหลุด): ต้องเป็นพนักงานในชีต employees ก่อน (login sales ผ่าน = sales_err ว่าง)
+        # เดิม bridge ทุก LINE id ที่ next=/track/ → ใครมี LINE ก็ถูกสร้างเป็น user role Sales เข้าดู/แก้ข้อมูลรถได้
+        if sales_err:
+            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": sales_err})
         if not line_user_id:
             return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": "ไม่ได้รับ LINE user_id"})
         try:
@@ -540,6 +544,8 @@ def admin_seller_config(request):
         "sheet_url": sheet_url,
         "sheet_name": cfg.get("sheet_name", "ตั้งค่าเซลล์"),
         "sellers": sellers,
+        # รายชื่อพนักงาน (ชื่อเล่น + LINE user_id) — ให้ UI เลือก "ผูก LINE" ให้เซลล์ที่ยังไม่มี id (ไม่ต้องก๊อปไอดีเอง)
+        "employees": [{"name": n, "user_id": u} for n, u in sorted(uid_map.items()) if u],
         "total_target": sum(s["target"] for s in sellers),
         "team_count": len({s["team"] for s in sellers}),
     })

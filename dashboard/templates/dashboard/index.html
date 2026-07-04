@@ -1251,10 +1251,10 @@
         html += `<button id="online-now" onclick="openOnlinePanel()" title="คนกำลังใช้งานเว็บตอนนี้ — กดดูรายชื่อ (อัปเดต ~45 วิ)" style="font-size:12px;padding:5px 11px;border-radius:14px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer">${ic('lucide:radio',14)} <span id="online-count">${_onlineNow!=null?_onlineNow:'–'}</span> ออนไลน์</button>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
         const _al = computeAdminAlerts();
-        const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length;
+        const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length + _al.stuckCars.length;
         const _alBadge = _alTot > 0 ? `<span style="position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:9px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)">${_alTot>99?'99+':_alTot}</span>` : '';
-        const _alColor = _al.blankRel.length > 0 ? 'var(--amber)' : (_alTot > 0 ? 'var(--blue)' : 'var(--t3)');
-        html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:13px;padding:5px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
+        const _alColor = (_al.stuckCars.length > 0 || _al.blankRel.length > 0) ? (_al.stuckCars.length > 0 ? 'var(--red)' : 'var(--amber)') : (_alTot > 0 ? 'var(--blue)' : 'var(--t3)');
+        html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: รถค้างนาน / เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:13px;padding:5px 10px;border-radius:14px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
       if(canViewAll && D.sellers) {
@@ -1287,7 +1287,7 @@
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:car-front',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:qr-code',l:'สถานะรถ'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
@@ -1716,6 +1716,20 @@
       }
 
       html += `<div class="card"><div class="card-title">แยกตามทีม<span class="info-tip" tabindex="0" data-tip="เปรียบเทียบทีม A/B/C\n• Lead = หลีดธรรมดา (ไม่รวม RJ) · +RJ แดง = RJ แยกต่างหาก\n• Conv% = ปล่อย ÷ Lead ปกติ × 100 (ไม่รวม RJ)\n• เป้าจบ: เซลล์ในทีมปิดได้กี่ % ของเป้า\n• 📡 X 🎬 Y/Z: ไลฟ์ X · คลิป Y จากเป้า Z\nกดที่ 'ปิด/เป้า ↗' ดูเซลล์ที่ปล่อยจริง">?</span></div>`;
+      const _teamAct = rangeActiveSellers();   // สมาชิกที่มีกิจกรรมในช่วงที่เลือก — กันโชว์ชื่อเดือนก่อน
+      // ── live/clip ต่อทีม "ตามช่วงวันที่" (mirror แท็บไลฟ์) — เดิมใช้ t.live/t.clip รายปี ขีดคลิปเลยไม่ตรงเดือน ──
+      const _laT = D.liveActivity||{};
+      const _liveByHostT = {};
+      (_laT.sessions||[]).forEach(s=>{ if(s&&ir(s.date||'')) (s.hosts||[]).forEach(hh=>{ if(hh) _liveByHostT[hh]=(_liveByHostT[hh]||0)+1; }); });
+      const _hasClipsT = Array.isArray(_laT.clips);
+      const _clipByHostT = {};
+      if(_hasClipsT) _laT.clips.forEach(c=>{ if(c&&ir(c.date||'')) _clipByHostT[c.name]=(_clipByHostT[c.name]||0)+1; });
+      // เป้าคลิปต่อคน = สัปดาห์ในช่วง (ไม่เกินวันนี้) × 2 (เกณฑ์เดียวกับแท็บไลฟ์)
+      const _cTodayT=new Date(); _cTodayT.setHours(0,0,0,0);
+      const _cFromT = dfFrom?new Date(dfFrom):null;
+      let _cToT = dfTo?new Date(dfTo):_cTodayT; if(_cToT>_cTodayT) _cToT=_cTodayT;
+      const _cDaysT = (_cFromT && _cToT>=_cFromT) ? Math.floor((_cToT-_cFromT)/86400000)+1 : 7;
+      const _clipTgtPP = Math.max(2, Math.ceil(_cDaysT/7)*2);
       Object.entries(D.teams||{}).forEach(([tid,t]) => {
         const mt = ms?.teams?.[tid];
         const tLead=mt?mt.lead:t.lead, tFollow=mt?mt.follow:t.follow;
@@ -1725,7 +1739,11 @@
         const tDealValue = mt ? (mt.dealValue||0) : (t.dealValue||0);
         const tTarget = (t.target||0) * rangeMonthCount();   // ${ic('lucide:calendar',16)} เป้ารายเดือน × จำนวนเดือนในช่วง
         const conv=pct(tDone,tLeadNormal), tPct=pct(tDone,tTarget);   // Conv = ปล่อย ÷ Lead ปกติ (ไม่รวม RJ) — ตรงกับตารางรายเซลล์
-        const cPct = t.clipTarget>0 ? Math.min((t.clip/t.clipTarget)*100,100) : 0;
+        // live/clip ของทีม ตามช่วงวันที่ (fallback: รายปี ถ้า backend ยังไม่ส่ง la.clips)
+        const tLive = (t.members||[]).reduce((a,m)=>a+(_liveByHostT[m]||0),0);
+        const tClip = _hasClipsT ? (t.members||[]).reduce((a,m)=>a+(_clipByHostT[m]||0),0) : (t.clip||0);
+        const tClipTarget = _hasClipsT ? ((t.members||[]).length * _clipTgtPP) : (t.clipTarget||0);
+        const cPct = tClipTarget>0 ? Math.min((tClip/tClipTarget)*100,100) : 0;
         // MoM
         const t_mLead = teamMoM(tid, 'lead');
         const t_mDone = teamMoM(tid, 'done');
@@ -1735,7 +1753,8 @@
         html += `<div class="team-card ${tid}">`;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">`;
         html += `<span style="font-size:13px;font-weight:700;color:${C.TEAM_COLORS[tid]}">${C.TEAM_NAMES[tid]}</span>`;
-        html += `<span style="font-size:11px;color:var(--t2)">${t.members.join(' · ')}</span></div>`;
+        const _mem = (t.members||[]).filter(n=>_teamAct.has(n));   // เฉพาะสมาชิกที่ active ในช่วง (ตามตัวกรองวันที่ด้านบน)
+        html += `<span style="font-size:11px;color:var(--t2)">${_mem.join(' · ')}</span></div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;text-align:center">`;
         html += `<div><div style="font-size:10px;color:var(--t3)">Lead</div><div style="font-size:15px;font-weight:600;color:${C.TEAM_COLORS[tid]}">${tLeadNormal}${tLeadRJ?` <span style="font-size:9px;color:var(--red);font-weight:500">+RJ${tLeadRJ}</span>`:''}</div>${momBadge(t_mLead)}</div>`;
         html += `<div><div style="font-size:10px;color:var(--t3)">ติดตาม</div><div style="font-size:15px;font-weight:600;color:var(--blue)">${tFollow}</div></div>`;
@@ -1750,7 +1769,7 @@
         // Progress bars
         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
         html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">เป้าจบ ${tDone}/${tTarget}</span><span style="color:${C.TEAM_COLORS[tid]}">${tPct}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(tPct,100)}%;background:${C.TEAM_COLORS[tid]}"></div></div></div>`;
-        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">${ic('lucide:radio',16)}${t.live} ${ic('lucide:clapperboard',16)}${t.clip}/${t.clipTarget}</span><span style="color:${t.clip>=t.clipTarget?'var(--green)':'var(--amber)'}">${Math.round(cPct)}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(cPct,100)}%;background:${t.clip>=t.clipTarget?'var(--green-mid)':'var(--purple-mid)'}"></div></div></div>`;
+        html += `<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:var(--t3)">${ic('lucide:radio',16)}${tLive} ${ic('lucide:clapperboard',16)}${tClip}/${tClipTarget}</span><span style="color:${tClip>=tClipTarget?'var(--green)':'var(--amber)'}">${Math.round(cPct)}%</span></div><div class="pbr" style="height:5px"><div class="pbf" style="width:${Math.min(cPct,100)}%;background:${tClip>=tClipTarget?'var(--green-mid)':'var(--purple-mid)'}"></div></div></div>`;
         html += `</div></div>`;
       });
       html += `</div>`;
@@ -2186,13 +2205,18 @@
       // เซลล์ใหม่/orphan ที่มีกิจกรรมในช่วงที่กรอง
       const _act = rangeActiveSellers();
       const newSellers = (D.sellers || []).filter(s => s.inactive === true && _act.has(s.name));
-      return {blankRel, badYr, newSellers};
+      // 🚗 รถค้างนานเกิน (flag แดง = ค้างในสเตปเดิม >3 วัน · ไม่รวมที่ขายแล้ว) จากระบบติดตามรถ
+      //    _trkData โหลดล่วงหน้าตอน init (ensureTrackingForAlerts) → กระดิ่งนับได้แม้ไม่เปิดแท็บสถานะรถ
+      const stuckCars = ((_trkData && _trkData.cars) || [])
+        .filter(c => c && c.flag === 'red' && !c.sold)
+        .sort((x, y) => (y.days || 0) - (x.days || 0));
+      return {blankRel, badYr, newSellers, stuckCars};
     }
 
     function openAlertsPanel() {
       const old = document.getElementById('alerts-overlay'); if (old) old.remove();
       const a = computeAdminAlerts();
-      const tot = a.blankRel.length + a.badYr.length + a.newSellers.length;
+      const tot = a.blankRel.length + a.badYr.length + a.newSellers.length + a.stuckCars.length;
       const overlay = document.createElement('div');
       overlay.id = 'alerts-overlay';
       overlay.style.cssText = 'position:fixed;inset:0;background:transparent;z-index:1010';
@@ -2209,6 +2233,18 @@
 
       let bd = '';
       if (!tot) bd += `<div style="text-align:center;color:var(--green);padding:44px 12px"><div>${ic('lucide:circle-check',32)}</div><div style="margin-top:8px;font-weight:700;font-size:13px">ไม่มีอะไรต้องเติม/แก้ ✓</div></div>`;
+
+      // ── 🚗 รถค้างนานเกิน (จากระบบติดตามรถ) ──
+      if (a.stuckCars.length) {
+        bd += `<div style="margin-bottom:15px">`;
+        bd += `<div style="font-size:12.5px;font-weight:800;color:var(--red)">${ic('lucide:car-front',15)} รถค้างนานเกิน (&gt;3 วันในสเตป) · ${a.stuckCars.length}</div>`;
+        bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">รถที่ค้างในสเตปเดิมนานเกินไป → แตะเพื่อดู/เปลี่ยนสเตป</div>`;
+        a.stuckCars.slice(0, 60).forEach(c => {
+          bd += `<div onclick="${_close};openTrkCar('${h(c.code)}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11.5px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h(c.code)}</b> <span style="color:var(--t2)">${h((c.name||c.title||'').slice(0,18))}</span> <span style="color:var(--t3);font-size:10px">${h(c.stageName||'')}</span></span><span style="color:var(--red);font-weight:700;white-space:nowrap;font-size:10.5px">${c.days} วัน</span></div>`;
+        });
+        if (a.stuckCars.length > 60) bd += `<div style="font-size:10px;color:var(--t3);padding:5px 0">… อีก ${a.stuckCars.length-60} คัน</div>`;
+        bd += `</div>`;
+      }
 
       // ── เน้น: เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) ──
       if (a.blankRel.length) {
@@ -3538,6 +3574,15 @@
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo', q:''};
     function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
 
+    // โหลดข้อมูลรถล่วงหน้า (ไม่ต้องเปิดแท็บสถานะรถ) → กระดิ่งแจ้งเตือนนับ "รถค้างนาน" ได้ทันที
+    let _trkAlertsTried = false;
+    async function ensureTrackingForAlerts(){
+      if(_trkData || _trkAlertsTried) return;
+      _trkAlertsTried = true;
+      try { _trkData = await (await fetch('/track/api/cars',{credentials:'same-origin'})).json(); }
+      catch(_){ return; }
+      try { render(); } catch(_){}   // refresh กระดิ่ง (computeAdminAlerts รวมรถค้างนาน)
+    }
     async function loadTracking(force){
       const el = document.getElementById('trk'); if(!el) return;
       if(force) _trkData = null;
@@ -3556,6 +3601,8 @@
       if(_trkF.branch) cars = cars.filter(c=>c.branch===_trkF.branch);
       if(_trkF.stage)  cars = cars.filter(c=>c.stage===_trkF.stage);
       if(_trkF.q){ const q=_trkF.q.trim().toLowerCase(); if(q) cars = cars.filter(c=>((c.code||'')+' '+(c.name||'')+' '+(c.title||'')+' '+(c.brand||'')+' '+(c.model||'')+' '+(c.plate||'')).toLowerCase().includes(q)); }
+      const view=_trkF.view||'active', _actN=D.cars.filter(c=>!c.sold).length, _soldN=D.cars.filter(c=>c.sold).length;
+      cars = cars.filter(c => view==='sold' ? c.sold : !c.sold);   // หน้าหลักโชว์เฉพาะรถในระบบ · ขายแล้วแยกไปแท็บ
       const _S={
         photo:(a,b)=>((b.photo?1:0)-(a.photo?1:0))||(a.code<b.code?-1:1),
         updated:(a,b)=>(b.updatedTs||0)-(a.updatedTs||0),
@@ -3572,7 +3619,24 @@
       };
       cars.sort(_S[_trkF.sort]||_S.photo);
       const btn = (on,txt)=>`<button class="${on}" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${txt}</button>`;
-      let h2 = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      let h2 = `<style>
+.trkrow{display:flex;gap:12px;padding:14px 4px;border-top:.5px solid var(--bd);cursor:pointer;align-items:flex-start}
+.trk-rnk{width:22px;color:var(--t3);font-size:12px;flex-shrink:0;padding-top:2px}
+.trk-pic{width:140px;flex-shrink:0;border-radius:8px;overflow:hidden;border:.5px solid var(--bd)}
+.trk-info{flex:1;min-width:0}
+.trk-price{width:104px;text-align:right;flex-shrink:0}
+.trk-acts{width:118px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.trk-acts>*{font-size:11px;padding:6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;text-align:center;text-decoration:none}
+@media(max-width:640px){
+.trk-scroll{overflow-x:visible!important}
+.trkrow{flex-wrap:wrap;gap:8px 10px;padding:12px 2px}
+.trk-rnk{display:none}
+.trk-pic{width:104px}
+.trk-info{flex:1 1 55%}
+.trk-price{order:5;width:auto;text-align:left;align-self:center}
+.trk-acts{order:6;width:auto;margin-left:auto;flex-direction:row}
+}
+</style><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:800;color:var(--t1)">สถานะรถ</div><div class="mut" style="font-size:12px">ทั้งหมด ${D.total} คัน · มีรูป ${D.cars.filter(c=>c.photo).length}/${D.total}</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${D.canAdd?`<button onclick="openTrkAdd()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">+ เพิ่มรถ</button>`:''}
@@ -3583,53 +3647,75 @@
       // KPI
       const kpi = (lbl,val,col)=>`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px"><div class="mut" style="font-size:11px">${lbl}</div><div style="font-size:24px;font-weight:800;${col?'color:'+col:''}">${val}</div></div>`;
       h2 += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
-        ${kpi('รถทั้งหมด',D.total)}${kpi('ใกล้ค้าง (≥2 วัน)',D.flags.amber,TRK_FLAG.amber)}${kpi('ค้างนาน (&gt;3 วัน)',D.flags.red,TRK_FLAG.red)}${kpi('T2L เฉลี่ย (เป้า ≤'+D.t2lTarget+')',D.avgT2l!=null?D.avgT2l:'—')}</div>`;
-      // stage counts (กดกรอง)
-      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px">`;
-      D.phaseRows.forEach(ph=>{
-        h2 += `<div class="mut" style="font-size:11px;margin:6px 0 5px">${ph.name}</div><div style="display:flex;gap:6px;flex-wrap:wrap">`;
-        ph.stages.forEach(s=>{ const on=_trkF.stage===s.key; h2+=`<span onclick="trkSetStage('${s.key}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;background:var(--bg2);border:.5px solid ${on?'var(--blue)':'var(--bd)'};color:var(--t1)">${ic(s.icon,13)} ${h(s.name)} <b>${s.n}</b></span>`; });
-        h2 += `</div>`;
-      });
-      h2 += `</div>`;
+        ${kpi('รถในระบบ',_actN)}${kpi('ขายแล้ว',_soldN,'#16a34a')}${kpi('ใกล้ค้าง (≥2 วัน)',D.flags.amber,TRK_FLAG.amber)}${kpi('ค้างนาน (&gt;3 วัน)',D.flags.red,TRK_FLAG.red)}${kpi('T2L เฉลี่ย (เป้า ≤'+D.t2lTarget+')',D.avgT2l!=null?D.avgT2l:'—')}</div>`;
+      // รถแต่ละช่วงงาน (โดนัท) — แทนชิปกองเดิม อ่านง่ายขึ้น
+      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:12px">รถแต่ละช่วงงาน</div>
+        <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center">
+          <div style="flex:0 0 180px;height:170px;position:relative"><canvas id="trkPie"></canvas></div>
+          <div id="trkPieLegend" style="flex:1;min-width:210px;display:flex;flex-direction:column;gap:9px"></div>
+        </div></div>`;
       // filters + table
+      const _vTab=(v,l,n)=>{const on=view===v;return `<button onclick="_trkF.view='${v}';renderTrk()" style="font-size:13px;padding:8px 16px;border-radius:9px;border:1px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};cursor:pointer;font-weight:${on?'700':'500'}">${l} <b>${n}</b></button>`;};
       h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">${_vTab('active','รถในระบบ',_actN)}${_vTab('sold','ขายแล้ว',_soldN)}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-          <input id="trkSearch" value="${h(_trkF.q||'')}" oninput="_trkF.q=this.value;renderTrk()" placeholder="🔍 ค้นหา ทะเบียน/ชื่อ/รุ่น/รหัส" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);min-width:220px;flex:1;max-width:320px">
-          <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
-          <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
-          <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${[['photo','มีรูปก่อน'],['updated','วันที่แก้ไขล่าสุด'],['days','ค้างนานสุด'],['price_asc','ราคาขาย : ต่ำไปสูง'],['price_desc','ราคาขาย : สูงไปต่ำ'],['year_desc','ปี : ใหม่ไปเก่า'],['year_asc','ปี : เก่าไปใหม่'],['km_asc','เลขไมล์ : ต่ำไปสูง'],['km_desc','เลขไมล์ : สูงไปต่ำ'],['datein_desc','วันที่ซื้อรถเข้า : ใหม่ไปเก่า'],['datein_asc','วันที่ซื้อรถเข้า : เก่าไปใหม่'],['code','รหัสรถ']].map(o=>`<option value="${o[0]}" ${_trkF.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
-          ${(_trkF.branch||_trkF.stage||_trkF.q)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort,q:''};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
+          <input id="trkSearch" value="${h(_trkF.q||'')}" oninput="_trkF.q=this.value;renderTrk()" placeholder="🔍 ค้นหา ทะเบียน/ชื่อ/รุ่น/รหัส" style="font-size:13px;padding:9px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1 1 100%;min-width:0">
+          <select onchange="_trkF.branch=this.value;renderTrk()" style="font-size:12px;padding:8px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1 1 30%;min-width:120px;max-width:100%"><option value="">ทุกสาขา</option>${D.branches.map(b=>`<option value="${h(b[1])}" ${_trkF.branch===b[1]?'selected':''}>${h(b[1])}</option>`).join('')}</select>
+          <select onchange="_trkF.stage=this.value;renderTrk()" style="font-size:12px;padding:8px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1 1 30%;min-width:120px;max-width:100%"><option value="">ทุกสเตป</option>${D.stages.map(s=>`<option value="${s[0]}" ${_trkF.stage===s[0]?'selected':''}>${h(s[1])}</option>`).join('')}</select>
+          <select onchange="_trkF.sort=this.value;renderTrk()" style="font-size:12px;padding:8px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1 1 30%;min-width:120px;max-width:100%">${[['photo','มีรูปก่อน'],['updated','วันที่แก้ไขล่าสุด'],['days','ค้างนานสุด'],['price_asc','ราคาขาย : ต่ำไปสูง'],['price_desc','ราคาขาย : สูงไปต่ำ'],['year_desc','ปี : ใหม่ไปเก่า'],['year_asc','ปี : เก่าไปใหม่'],['km_asc','เลขไมล์ : ต่ำไปสูง'],['km_desc','เลขไมล์ : สูงไปต่ำ'],['datein_desc','วันที่ซื้อรถเข้า : ใหม่ไปเก่า'],['datein_asc','วันที่ซื้อรถเข้า : เก่าไปใหม่'],['code','รหัสรถ']].map(o=>`<option value="${o[0]}" ${_trkF.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
+          ${(_trkF.branch||_trkF.stage||_trkF.q)?`<button onclick="_trkF={branch:'',stage:'',sort:_trkF.sort,q:'',view:_trkF.view};renderTrk()" style="font-size:12px;padding:6px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
           <span class="mut" style="font-size:12px;margin-left:auto">${cars.length} คัน · กดแถวดูรายละเอียด</span>
         </div>
-        <div style="overflow-x:auto">${cars.map((c,i)=>{
-          const ban=_trkBanner(c.stage);
+        <div class="trk-scroll" style="overflow-x:auto">${cars.map((c,i)=>{
+          const ban=_trkBanner(c.stage), fc=TRK_FLAG[c.flag]||'#888';
           const tax=(c.taxNote&&c.taxNote.indexOf('หมด')>=0)?`<span style="background:${c.taxNote.indexOf('ใกล้')>=0?'#f59e0b':'#ef4444'};color:#fff;font-size:10px;padding:2px 7px;border-radius:5px">${c.taxNote.indexOf('ใกล้')>=0?'ภาษีใกล้หมด':'ภาษีหมดอายุ'}</span>`:'';
           const plate=c.plate?`<span style="background:var(--bg2);border:.5px solid var(--bd);font-size:11px;padding:2px 8px;border-radius:6px">เลขทะเบียน: ${h(c.plate)}${c.province?' ('+h(c.province)+')':''}</span>`:'';
           const ph=c.photo?`<img src="${c.photo}" loading="lazy" onerror="trkImgErr(this)" style="width:100%;height:96px;object-fit:cover;display:block">`:`<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--t3);font-size:11px">ไม่มีรูป</div>`;
-          return `<div onclick="openTrkCar('${c.code}')" style="display:flex;gap:12px;padding:14px 4px;border-top:.5px solid var(--bd);cursor:pointer;align-items:flex-start;min-width:680px">
-            <div style="width:22px;color:var(--t3);font-size:12px;flex-shrink:0;padding-top:2px">${i+1}</div>
-            <div style="width:140px;flex-shrink:0;border-radius:8px;overflow:hidden;border:.5px solid var(--bd)"><div style="background:${ban};color:#fff;font-size:11px;font-weight:700;text-align:center;padding:3px">${h(c.stageName)}</div>${ph}</div>
-            <div style="flex:1;min-width:0">
+          return `<div onclick="openTrkCar('${c.code}')" class="trkrow">
+            <div class="trk-rnk">${i+1}</div>
+            <div class="trk-pic"><div style="background:${ban};color:#fff;font-size:11px;font-weight:700;text-align:center;padding:3px">${h(c.stageName)}</div>${ph}</div>
+            <div class="trk-info">
               <div style="font-weight:700;color:var(--blue);font-size:14px">${h(c.name||c.title)}</div>
               <div class="mut" style="font-size:11px;margin:2px 0">${h(c.brand||'')}${c.model?' › '+h(c.model):''} · ${h(c.branch||'')}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0">${tax}${plate}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0">${c.sold?`<span style="display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,#16a34a 16%,transparent);border:.5px solid #16a34a;color:#16a34a;font-size:11px;padding:2px 9px;border-radius:6px;font-weight:800">✓ ขายแล้ว</span>`:`<span style="display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,${fc} 15%,transparent);border:.5px solid ${fc};color:${fc};font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700"><span style="width:7px;height:7px;border-radius:50%;background:${fc}"></span>ค้าง ${c.days} วัน</span>`}${tax}${plate}</div>
               ${c.note?`<div class="mut" style="font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${h(c.note)}</div>`:''}
             </div>
-            <div style="width:104px;text-align:right;flex-shrink:0"><div class="mut" style="font-size:10px">ราคาขาย</div><div style="font-weight:800;font-size:16px;color:var(--t1)">${c.price?h(String(c.price)):'—'}</div></div>
-            <div onclick="event.stopPropagation()" style="width:118px;flex-shrink:0;display:flex;flex-direction:column;gap:6px">
-              <button onclick="openTrkCar('${c.code}')" style="font-size:11px;padding:6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">รายละเอียด</button>
-              <a href="/track/qr/${c.code}.png" target="_blank" style="font-size:11px;padding:6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);text-align:center;text-decoration:none">QR</a>
+            <div class="trk-price"><div class="mut" style="font-size:10px">ราคาขาย</div><div style="font-weight:800;font-size:16px;color:var(--t1)">${c.price?h(String(c.price)):'—'}</div></div>
+            <div onclick="event.stopPropagation()" class="trk-acts">
+              <button onclick="openTrkCar('${c.code}')">รายละเอียด</button>
+              <a href="/track/qr/${c.code}.png" target="_blank">QR</a>
             </div>
           </div>`;
         }).join('')||`<div class="mut" style="padding:24px;text-align:center">ไม่มีรถตามตัวกรอง</div>`}</div>
       </div>`;
       el.innerHTML = h2;
       if(window.lucide) lucide.createIcons();
+      buildTrkPie(D);
       // คงโฟกัส+เคอร์เซอร์ช่องค้นหา หลัง re-render (พิมพ์ต่อเนื่องได้)
       if(_trkF.q){ const _si=document.getElementById('trkSearch'); if(_si){ _si.focus(); try{_si.setSelectionRange(_si.value.length,_si.value.length);}catch(_){} } }
     }
     function trkSetStage(k){ _trkF.stage = (_trkF.stage===k?'':k); renderTrk(); }
+
+    // โดนัท "รถแต่ละช่วงงาน" (5 เฟส · สี CVD-safe) — แทนชิปกองเดิม
+    let _trkPieChart=null;
+    const _TRK_PHASE_COLORS=['#0072B2','#E69F00','#CC79A7','#56B4E9','#009E73'];
+    function buildTrkPie(D){
+      const cv=document.getElementById('trkPie'); if(!cv||!window.Chart) return;
+      const gv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      const rows=(D.phaseRows||[]).map((ph,i)=>({name:ph.name, n:(ph.stages||[]).reduce((a,s)=>a+(s.n||0),0), c:_TRK_PHASE_COLORS[i%_TRK_PHASE_COLORS.length]}));
+      const total=rows.reduce((a,r)=>a+r.n,0);
+      if(_trkPieChart){ try{_trkPieChart.destroy();}catch(_){} _trkPieChart=null; }
+      _trkPieChart=new Chart(cv,{
+        type:'doughnut',
+        data:{labels:rows.map(r=>r.name), datasets:[{data:rows.map(r=>r.n), backgroundColor:rows.map(r=>r.c), borderColor:gv('--bg')||'#fff', borderWidth:2, hoverOffset:5}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed+' คัน'}}}},
+        plugins:[{id:'trkCtr',afterDraw(ch){const a=ch.chartArea,x=(a.left+a.right)/2,y=(a.top+a.bottom)/2,ctx=ch.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=gv('--t1')||'#000';ctx.font='800 22px "Segoe UI",sans-serif';ctx.fillText(total,x,y-6);ctx.fillStyle=gv('--mut')||'#888';ctx.font='500 10px "Segoe UI",sans-serif';ctx.fillText('รถทั้งหมด',x,y+13);ctx.restore();}}]
+      });
+      const leg=document.getElementById('trkPieLegend');
+      if(leg) leg.innerHTML=rows.map(r=>{const pct=total?Math.round(r.n/total*100):0;return `<div style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--t1)"><span style="width:11px;height:11px;border-radius:50%;background:${r.c};flex-shrink:0"></span><span>${h(r.name)}</span><b style="margin-left:auto;font-variant-numeric:tabular-nums;color:var(--t1)">${r.n} <span class="mut" style="font-weight:400">· ${pct}%</span></b></div>`;}).join('');
+    }
 
     function _trkOverlay(id, inner){
       const old=document.getElementById(id); if(old) old.remove();
@@ -3655,8 +3741,25 @@
           : `<a href="${m.url}" target="_blank"><img src="${m.url}" loading="lazy" style="width:54px;height:54px;object-fit:cover;border-radius:6px;display:block"></a>`).join('');
         return `<div style="font-size:12px;padding:7px 0;border-bottom:.5px solid var(--bd)">${h(l.at)} · <b>${h(l.stage)}</b>${l.worker?' · '+h(l.worker):''}${l.note?' · '+h(l.note):''}${med?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">${med}</div>`:''}</div>`;
       }).join('')||'<span class="mut" style="font-size:12px">ยังไม่มีประวัติ</span>';
-      // ปุ่มเปลี่ยนสเตปใหญ่ขึ้น (กดง่ายบนมือถือ) · ยืดเต็มแถวเมื่อจอแคบ
-      const stages = (d.direct&&d.direct.length) ? d.direct.map(s=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:13px;padding:10px 14px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;flex:1;min-width:120px">${h(s.name)}</button>`).join('') : `<a href="${d.scanUrl}" target="_blank" style="font-size:13px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+      // เปลี่ยนสเตป — พิลล์เล็กจัดกลุ่ม+ลงสีตามเฟส (ชุดสีเดียวกับโดนัท) · ไฮไลต์สเตปปัจจุบัน
+      let stages;
+      if(d.direct && d.direct.length){
+        const allow=new Set(d.direct.map(s=>s.key));
+        const COL=_TRK_PHASE_COLORS;   // รับเข้า/ทำสภาพ/ตรวจ/ทะเบียน/ขาย
+        const _pill=(s,c)=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid ${c};background:color-mix(in srgb,${c} 14%,transparent);color:var(--t1);cursor:pointer">${h(s.name)}</button>`;
+        const phRows=(_trkData&&_trkData.phaseRows)||[];
+        stages=phRows.map((ph,pi)=>{
+          const c=COL[pi%COL.length];
+          const pills=(ph.stages||[]).filter(s=>allow.has(s.key)||s.key===d.stage).map(s=>
+            s.key===d.stage
+              ? `<span style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid ${c};background:${c};color:#fff;font-weight:700">● ${h(s.name)}</span>`
+              : _pill(s,c)).join('');
+          return pills?`<div style="margin-bottom:10px"><div style="font-size:10.5px;margin-bottom:5px;display:flex;align-items:center;gap:5px;color:${c};font-weight:700"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${h(ph.name)}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${pills}</div></div>`:'';
+        }).join('');
+        if(!stages) stages=`<div style="display:flex;gap:6px;flex-wrap:wrap">${d.direct.map(s=>_pill(s,'#4f6ef7')).join('')}</div>`;
+      } else {
+        stages=`<a href="${d.scanUrl}" target="_blank" style="font-size:13px;color:var(--blue)">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+      }
       const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
       ov.firstChild.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -3675,7 +3778,7 @@
         </div>
         ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="mut" style="cursor:pointer;font-size:12px">รายละเอียดรถ (ทั้งหมด)</summary><div style="${grid};margin-top:6px">${dump(d.detail)}</div></details>`:''}
         ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
-        <div class="mut" style="font-size:12px;margin:16px 0 6px">เปลี่ยนสเตป</div><div style="display:flex;gap:8px;flex-wrap:wrap">${stages}</div>
+        <div class="mut" style="font-size:12px;margin:16px 0 6px">เปลี่ยนสเตป <span style="opacity:.65">· ● = ปัจจุบัน · กดเพื่อย้าย</span></div><div>${stages}</div>
         <div class="mut" style="font-size:12px;margin:16px 0 6px">ประวัติการสแกน</div><div style="max-height:170px;overflow:auto">${logs}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
           <a href="${d.qrUrl}" target="_blank" style="font-size:13px;color:var(--blue)">เปิด QR</a>
@@ -4428,12 +4531,33 @@
     }
 
     // editable state — copy ของ data.sellers ที่แก้ได้
-    let __scRows = [];
+    let __scRows = [], __scData = null, __scModal = null;
 
     function renderSellerConfig(modal, data) {
       __scRows = (data.sellers || []).map(s => ({...s}));
+      __scData = data; __scModal = modal;
       drawSellerConfigBody(modal, data);
       drawSellerConfigFooter(modal);
+    }
+
+    // เปลี่ยนทีมจาก dropdown — เลือก "ทีมใหม่" = prompt ชื่อ แล้ว re-render ให้ทีมใหม่โผล่ในตัวเลือก
+    function __scTeamChange(i, sel) {
+      if (sel.value === '__new__') {
+        const nt = (prompt('ชื่อทีมใหม่:') || '').trim().toUpperCase();
+        if (nt) __scRows[i].team = nt;
+        if (__scModal && __scData) drawSellerConfigBody(__scModal, __scData);
+      } else {
+        __scRows[i].team = sel.value;
+      }
+    }
+
+    // ผูก LINE user_id ให้เซลล์จากรายชื่อพนักงาน (แทนการก๊อปไอดีเอง) — เติมชื่อให้ตรง employees เพื่อให้ match ตอนบันทึก
+    function __scPickEmp(i, uid) {
+      if (!uid) return;
+      const emp = ((__scData && __scData.employees) || []).find(e => e.user_id === uid);
+      __scRows[i].user_id = uid;
+      if (emp && emp.name) __scRows[i].name = emp.name;
+      if (__scModal && __scData) drawSellerConfigBody(__scModal, __scData);
     }
 
     function drawSellerConfigBody(modal, data) {
@@ -4447,6 +4571,9 @@
 
       // datalist for team suggestions
       const teamOpts = ['A','B','C','D','E'].concat(Array.from(teamSet)).filter((v,i,a)=>a.indexOf(v)===i);
+      // พนักงานสำหรับ dropdown "ผูก LINE" (เซลล์ที่ยังไม่มี user_id) — ตัดคนที่ผูกไปแล้ว
+      const _usedUids = new Set(__scRows.map(r=>r.user_id).filter(Boolean));
+      const _empOpts = (data.employees||[]).filter(e=>e.user_id && !_usedUids.has(e.user_id)).map(e=>`<option value="${h(e.user_id)}">${h(e.name)}</option>`).join('');
 
       let html = banner;
       html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
@@ -4471,11 +4598,11 @@
             const url = uid ? `${location.origin}/s/${uid}/` : '';
             const urlCell = uid
               ? `<div style="display:flex;align-items:center;gap:4px"><code style="flex:1;font-size:10px;background:var(--bg2);padding:4px 6px;border-radius:5px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(url)}">/s/${h(uid.slice(0,10))}...</code><button onclick="navigator.clipboard.writeText('${h(url)}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='copy',1200)})" style="font-size:9px;padding:3px 7px;border-radius:5px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer;white-space:nowrap">copy</button></div>`
-              : `<span style="font-size:10px;color:var(--amber);font-style:italic">ยังไม่มี LINE user_id</span>`;
+              : `<select onchange="__scPickEmp(${i},this.value)" style="width:100%;padding:5px 7px;border:.5px solid var(--amber);border-radius:6px;background:var(--bg);color:var(--amber);font-size:10.5px;cursor:pointer" title="เลือกพนักงานเพื่อผูก LINE ให้เซลล์ (ไม่ต้องก๊อปไอดีเอง)"><option value="">🔗 ผูก LINE จากพนักงาน…</option>${_empOpts}</select>`;
             return `
             <tr>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input value="${h(s.name)}" oninput="__scRows[${i}].name=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box"></td>
-              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input list="sc-teams" value="${h(s.team)}" oninput="__scRows[${i}].team=this.value" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:center;font-weight:700;text-transform:uppercase"></td>
+              <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><select onchange="__scTeamChange(${i},this)" style="width:100%;padding:6px 8px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;font-weight:700;cursor:pointer"><option value="" ${!s.team?'selected':''}>— เลือก —</option>${teamOpts.map(t=>`<option value="${h(t)}" ${s.team===t?'selected':''}>${h(t)}</option>`).join('')}${(s.team&&teamOpts.indexOf(s.team)<0)?`<option value="${h(s.team)}" selected>${h(s.team)}</option>`:''}<option value="__new__">➕ ทีมใหม่…</option></select></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)"><input type="number" min="0" value="${s.target}" oninput="__scRows[${i}].target=parseInt(this.value)||0;__scUpdateTotal()" style="width:100%;padding:6px 9px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;outline:none;box-sizing:border-box;text-align:right"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd);text-align:center"><input type="checkbox" ${s.is_admin?'checked':''} onchange="__scRows[${i}].is_admin=this.checked" title="ติ๊ก = เซลล์คนนี้ได้สิทธิ์แอดมินด้วย" style="width:16px;height:16px;cursor:pointer;accent-color:var(--amber)"></td>
               <td style="padding:5px 6px;border-bottom:.5px solid var(--bd)">${urlCell}</td>
@@ -5431,6 +5558,8 @@
     document.getElementById('loading').style.display='none';
     root.style.display='block';
     render();
+    // แอดมิน: โหลดข้อมูลรถล่วงหน้า → กระดิ่งโชว์ "รถค้างนาน" โดยไม่ต้องเปิดแท็บสถานะรถ
+    if (typeof canViewAll !== 'undefined' && canViewAll) ensureTrackingForAlerts();
   </script>
   {% endif %}
 </body>

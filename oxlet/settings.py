@@ -109,9 +109,11 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qtavqquhjstrgrzauvsd.supabase.co").rstrip("/")
 # SECRET key (ข้าม RLS) — env-only เท่านั้น (อย่า hardcode/commit) · ต้องตั้งบน Vercel
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
-# (Phase 2 มิ.ย.69) default True — Supabase เก็บแค่ "ผลสรุป" (dashboard_cache) ไม่ mirror leads ดิบ
+# (VPS มิ.ย.69) default False — ย้ายมาใช้ Postgres ในเครื่อง (cache_store) แล้ว ไม่พึ่ง Supabase
+# ★ default False กันกับดัก: ถ้ามี SUPABASE_SECRET_KEY ค้างจาก .env เก่า + USE_SUPABASE ไม่ตั้ง จะไม่เผลอ
+#   วิ่งไปโปรเจกต์ Supabase ที่ลบแล้ว (timeout ทุก request) · เปิดกลับได้โดยตั้ง env USE_SUPABASE=True
 # active เมื่อ is_configured() = True (มี URL + SECRET_KEY) · ถ้า SECRET_KEY ว่าง → fallback อ่าน Google ตรง (ไม่พัง)
-USE_SUPABASE = os.getenv("USE_SUPABASE", "True").lower() in ("true", "1", "yes")
+USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes")
 
 # Cron endpoint secret — ใช้ป้องกัน /api/cron/send_line ไม่ให้ใครยิงก็ได้
 # external cron service (n8n, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย

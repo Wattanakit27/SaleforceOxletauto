@@ -69,7 +69,13 @@ def dashboard(request):
     branch = request.GET.get("branch", "")
     stage = request.GET.get("stage", "")
     sort = request.GET.get("sort", "updated")
-    cars = all_cars
+    # ★ แยก "ขายแล้ว" ออกจากตารางหลัก (เหมือนแท็บสถานะรถในแดชบอร์ดขาย) — default โชว์รถในระบบ
+    def _is_sold(c):
+        return c.status == "sold" or c.stage == "sold"
+    active_n = sum(1 for c in all_cars if not _is_sold(c))
+    sold_n = len(all_cars) - active_n
+    view = "sold" if request.GET.get("view", "active") == "sold" else "active"
+    cars = [c for c in all_cars if (_is_sold(c) if view == "sold" else not _is_sold(c))]
     if branch:
         cars = [c for c in cars if c.branch == branch]
     if stage:
@@ -88,6 +94,7 @@ def dashboard(request):
         "avg_t2l": avg_t2l, "t2l_target": C.T2L_TARGET_DAYS,
         "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
+        "cur_view": view, "active_n": active_n, "sold_n": sold_n,
         "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
         # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
@@ -681,6 +688,7 @@ def cars_api(request):
             "code": c.code, "title": c.title, "name": ex.get("name") or c.title,
             "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
             "stage": c.stage, "stageName": c.stage_name, "stageIcon": c.stage_icon,
+            "status": c.status, "sold": (c.status == "sold" or c.stage == "sold"),
             "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),

@@ -101,10 +101,14 @@ class GoogleDriveStorage(Storage):
         from . import gdrive
         if not name:
             return ""
-        if "/" in name:  # legacy Supabase path (back-compat)
-            base = (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/")
-            bucket = getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos"
-            return f"{base}/storage/v1/object/public/{bucket}/{quote(name)}"
+        if "/" in name:  # path — ดิสก์ VPS (/media/) หรือ Supabase legacy (ถ้ายังตั้ง bucket)
+            # ★ ต้องเช็ค Supabase ก่อน (เหมือน _media_urls) — ไม่งั้นรูป target=disk (cars/CBxxxx/..)
+            #   จะชี้ไป Supabase URL ที่ลบโปรเจกต์ไปแล้ว = รูปหน้าปกพัง
+            if getattr(settings, "SUPABASE_STORAGE_BUCKET", "") and getattr(settings, "SUPABASE_URL", ""):
+                base = settings.SUPABASE_URL.rstrip("/")
+                bucket = settings.SUPABASE_STORAGE_BUCKET
+                return f"{base}/storage/v1/object/public/{bucket}/{quote(name)}"
+            return getattr(settings, "MEDIA_URL", "/media/").rstrip("/") + "/" + name.lstrip("/")
         return gdrive.photo_url(name)  # Drive file id → thumbnail (ใช้กับรูปรถ)
 
     def delete(self, name):

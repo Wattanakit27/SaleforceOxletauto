@@ -4,21 +4,46 @@
 <style>
   .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
   .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:600px;width:100%;max-height:94vh;overflow:auto}
-  #carBody{max-width:920px}   /* popup รายละเอียดรถ — กว้างกว่าฟอร์มเพิ่มรถ */
+  #carBody{max-width:920px}
   .modal h2{margin:0 0 12px}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
-  .kpi .n{font-size:26px;font-weight:800}
   .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
   .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:var(--bg3);border:.5px solid var(--line)}
   .chip.on{border-color:var(--accent);color:var(--fg)}
   .kv{padding:8px 2px;border-bottom:.5px solid var(--line)}
   .kv span:first-child{display:block;font-size:11px;color:var(--mut)}
   .kv span:last-child{display:block;font-size:14px;font-weight:600;word-break:break-word}
+  /* KPI */
+  .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+  .k{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:flex;gap:12px;align-items:center}
+  .k .ic{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .k .ic i{width:20px;height:20px}
+  .k .lbl{font-size:12px;color:var(--mut);margin-bottom:2px}
+  .k .n{font-size:24px;font-weight:800;line-height:1.1}
+  .k .sub{font-size:11px;color:var(--mut)}
+  /* charts */
+  .chartgrid{display:grid;grid-template-columns:1.55fr 1fr;gap:12px;margin-bottom:14px}
+  @media(max-width:760px){.chartgrid{grid-template-columns:1fr}}
+  .chead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .chead h2{margin:0;font-size:15px}
+  .plegend{display:flex;flex-wrap:wrap;gap:6px}
+  .plegend .pill{font-size:11px;padding:3px 9px}
+  .hleg{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+  .hleg .row2{display:flex;align-items:center;gap:9px;font-size:13px}
+  .hleg .row2 b{margin-left:auto;font-variant-numeric:tabular-nums}
+  /* สเตป pill สีตามเฟส (เติมด้วย JS) — border ไม่ดันขนาด */
+  .pill[data-stage]{box-sizing:border-box;font-weight:600}
+  /* มือถือ: ซ่อนคอลัมน์ สาขา + ลูกศร ให้ตารางพอดีจอ ไม่ต้องเลื่อนขวา */
+  @media(max-width:640px){
+    #carTable th:nth-child(4),#carTable td:nth-child(4){display:none}
+    #carTable th:nth-child(7),#carTable td:nth-child(7){display:none}
+    #carTable th,#carTable td{padding:8px 5px;font-size:12px}
+    #carTable .pill{font-size:11px;padding:3px 7px}
+  }
 </style>
 
-<!-- แถบหัว + ปุ่มจัดการ (รวมไว้หน้าเดียว) -->
+<!-- หัว + ปุ่มจัดการ -->
 <div class="row" style="justify-content:space-between;margin-bottom:14px">
-  <div><h1 style="margin:0">สถานะรถ</h1><span class="mut sm">ทั้งหมด {{ total }} คัน</span></div>
+  <div><h1 style="margin:0">สถานะรถ</h1><span class="mut sm">ภาพรวมไปป์ไลน์ · ทั้งหมด {{ total }} คัน</span></div>
   <div class="row" style="gap:8px">
     <a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>
     {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
@@ -29,28 +54,48 @@
 </div>
 
 <!-- KPI -->
-<div class="cols" style="margin-bottom:12px">
-  <div class="kpi"><div class="mut sm">รถทั้งหมด</div><div class="n">{{ total }}</div></div>
-  <div class="kpi"><div class="mut sm">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div></div>
-  <div class="kpi"><div class="mut sm">ค้างนาน (&gt;3 วัน)</div><div class="n tag-red">{{ flags.red }}</div></div>
-  <div class="kpi"><div class="mut sm">T2L เฉลี่ย (เป้า ≤{{ t2l_target }})</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}{% else %}—{% endif %}</div></div>
+<div class="kgrid">
+  <div class="k">
+    <div class="ic" style="background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)"><i data-lucide="car-front"></i></div>
+    <div><div class="lbl">รถทั้งหมด</div><div class="n">{{ total }}</div><div class="sub" id="kSale">กำลังดำเนินการ</div></div>
+  </div>
+  <div class="k">
+    <div class="ic" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)"><i data-lucide="alert-triangle"></i></div>
+    <div><div class="lbl">ค้างนาน (&gt;3 วัน ในสเตป)</div><div class="n tag-red">{{ flags.red }}</div><div class="sub">ต้องเร่งจัดการ</div></div>
+  </div>
+  <div class="k">
+    <div class="ic" style="background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)"><i data-lucide="clock"></i></div>
+    <div><div class="lbl">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div><div class="sub">เฝ้าระวัง</div></div>
+  </div>
+  <div class="k">
+    <div class="ic" style="background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)"><i data-lucide="gauge"></i></div>
+    <div><div class="lbl">T2L เฉลี่ย</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}<span style="font-size:13px;font-weight:500;color:var(--mut)"> วัน</span>{% else %}—{% endif %}</div><div class="sub">เป้า ≤ {{ t2l_target }} วัน</div></div>
+  </div>
 </div>
 
-<!-- จำนวนตามสเตป (กดเพื่อกรอง) -->
-<div class="card" style="margin-bottom:12px">
-  {% for ph in phase_rows %}
-    <div class="sm mut" style="margin:8px 0 6px">{{ ph.name }}</div>
-    <div class="row" style="gap:6px">
-      {% for s in ph.stages %}
-        <a href="?stage={{ s.key }}" class="chip{% if cur_stage == s.key %} on{% endif %}"><i data-lucide="{{ s.icon }}"></i> {{ s.name }} <b>{{ s.n }}</b></a>
-      {% endfor %}
-    </div>
-  {% endfor %}
+<!-- กราฟ -->
+<div class="chartgrid">
+  <div class="card">
+    <div class="chead"><h2>ไปป์ไลน์ — รถแต่ละสเตป</h2><span class="mut sm">กดแถบเพื่อกรองตาราง</span></div>
+    <div class="plegend" id="pipeLegend" style="margin-bottom:10px"></div>
+    <div id="pipeWrap" style="position:relative;min-height:200px"><canvas id="pipeChart"></canvas></div>
+    <div id="pipeEmpty" class="mut sm" style="display:none;text-align:center;padding:30px">ยังไม่มีรถในระบบ</div>
+  </div>
+  <div class="card">
+    <div class="chead"><h2>สุขภาพงาน</h2></div>
+    <div style="position:relative;height:190px"><canvas id="healthChart"></canvas></div>
+    <div class="hleg" id="healthLegend"></div>
+  </div>
 </div>
 
 <!-- ตัวกรอง + ตารางรถ -->
 <div class="card" style="padding:14px">
+  <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <a class="btn sm{% if cur_view != 'sold' %} pri{% endif %}" href="?view=active{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}">รถในระบบ {{ active_n }}</a>
+    <a class="btn sm{% if cur_view == 'sold' %} pri{% endif %}" href="?view=sold{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}">ขายแล้ว {{ sold_n }}</a>
+  </div>
   <form method="get" class="row" style="gap:8px;margin-bottom:10px">
+    <input type="hidden" name="view" value="{{ cur_view }}">
     <select name="branch" onchange="this.form.submit()" style="width:auto">
       <option value="">ทุกสาขา</option>
       {% for code, name in branch_choices %}<option value="{{ code }}" {% if cur_branch == code %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -65,12 +110,12 @@
       <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>เข้าใหม่สุด</option>
       <option value="code" {% if cur_sort == 'code' %}selected{% endif %}>รหัสรถ</option>
     </select>
-    {% if cur_branch or cur_stage %}<a class="btn sm" href="?">ล้างตัวกรอง</a>{% endif %}
+    {% if cur_branch or cur_stage %}<a class="btn sm" href="?view={{ cur_view }}">ล้างตัวกรอง</a>{% endif %}
     <span class="mut sm" style="margin-left:auto">{{ cars|length }} คัน · กดแถวดูรายละเอียด</span>
   </form>
 
   <div style="overflow:auto">
-  <table>
+  <table id="carTable">
     <thead><tr><th style="width:60px">รูป</th><th>รหัส</th><th>รถ</th><th>สาขา</th><th>สเตป</th><th>ค้าง</th><th></th></tr></thead>
     <tbody>
     {% for c in cars %}
@@ -79,7 +124,7 @@
         <td><b>{{ c.code }}</b></td>
         <td>{{ c.title }}{% if c.plate %}<div class="sm mut">{{ c.plate }}</div>{% endif %}</td>
         <td class="sm mut">{{ c.branch_name }}</td>
-        <td><span class="pill"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
+        <td><span class="pill" data-stage="{{ c.stage }}"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
         <td><span class="dot {{ c.flag }}"></span> {{ c.days_in_stage }} วัน</td>
         <td class="mut">›</td>
       </tr>
@@ -108,15 +153,23 @@
 </div>
 {% endif %}
 
-<!-- Modal: รายละเอียดรถ (popup) -->
+<!-- Modal: รายละเอียดรถ -->
 <div id="carModal" class="ov" onclick="if(event.target===this)closeCar()">
   <div class="modal" id="carBody"></div>
 </div>
+
+{{ phase_rows|json_script:"phaseData" }}
+{{ flags|json_script:"flagData" }}
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   const CSRF='{{ csrf_token }}';
+  // สีสเตปตามเฟส — ให้ pill/ปุ่มเปลี่ยนสเตปมีสี อ่านง่าย (ตรงกับแท็บสถานะรถในแดชบอร์ดขาย)
+  const STAGE_COLOR={sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'};
+  function tintPill(el,stage){ const c=STAGE_COLOR[stage]||'#64748b'; el.style.background=`color-mix(in srgb,${c} 14%,transparent)`; el.style.color=c; el.style.border=`.5px solid color-mix(in srgb,${c} 45%,transparent)`; }
+  function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }
   function _scrollParent(){ try{ if(window.self!==window.top) parent.postMessage({oxletScrollTop:true},'*'); }catch(e){} }
   function openAdd(){document.getElementById('addModal').style.display='flex'; _scrollParent();}
   function closeAdd(){document.getElementById('addModal').style.display='none';}
@@ -133,7 +186,7 @@
     const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||'<span class="mut sm">ยังไม่มีประวัติ</span>';
     let stageBtns;
     if(d.direct && d.direct.length){
-      stageBtns=d.direct.map(s=>`<button class="btn sm" onclick="setStage('${d.code}','${s.key}')">${s.name}</button>`).join(' ');
+      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="setStage('${d.code}','${s.key}')">${s.name}</button>`;}).join(' ');
     }else{
       stageBtns=`<a class="btn sm" href="${d.scanUrl}">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
     }
@@ -144,7 +197,7 @@
         <button class="btn sm" onclick="closeCar()">✕</button>
       </div>
       <div class="row" style="gap:6px;margin:8px 0 12px">
-        <span class="pill">${d.stageName}</span>
+        <span class="pill" data-stage="${d.stage}">${d.stageName}</span>
         <span class="pill"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
@@ -168,6 +221,7 @@
         ${d.canEdit?`<a href="${d.editUrl}" class="btn sm">แก้ไขข้อมูล</a>`:''}
       </div>`;
     if(window.lucide)lucide.createIcons();
+    colorizeStagePills(b);
   }
 
   function setStage(code,stage){
@@ -176,7 +230,94 @@
     f.innerHTML='<input type="hidden" name="csrfmiddlewaretoken" value="'+CSRF+'"><input type="hidden" name="stage" value="'+stage+'">';
     document.body.appendChild(f); f.submit();
   }
-
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();} });
+
+  // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
+  const PHASES = JSON.parse(document.getElementById('phaseData').textContent);
+  const FLAGS  = JSON.parse(document.getElementById('flagData').textContent);
+  const PHASE_COLORS = ['#0072B2','#E69F00','#CC79A7','#56B4E9','#009E73']; // รับเข้า/ทำสภาพ/ตรวจ/ทะเบียน/ขาย (CVD-safe)
+  const gv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  let pipeChart=null, healthChart=null;
+
+  // phase legend
+  document.getElementById('pipeLegend').innerHTML = PHASES.map((ph,i)=>
+    `<span class="pill"><span class="dot" style="background:${PHASE_COLORS[i]}"></span>${ph.name}</span>`).join('');
+
+  // ค่าที่ปลายบาร์
+  const barValue = {
+    id:'barValue',
+    afterDatasetsDraw(ch){
+      const ds=ch.data.datasets[0], mut=gv('--mut'); const {ctx}=ch;
+      ctx.save(); ctx.font='700 12px "Segoe UI",sans-serif'; ctx.fillStyle=mut; ctx.textBaseline='middle';
+      ch.getDatasetMeta(0).data.forEach((el,i)=>{ const v=ds.data[i]; if(v>0) ctx.fillText(v, el.x+7, el.y); });
+      ctx.restore();
+    }
+  };
+  // เลขกลางโดนัท
+  const donutCenter = {
+    id:'donutCenter',
+    afterDraw(ch){
+      if(ch.config.type!=='doughnut') return;
+      const a=ch.chartArea, ctx=ch.ctx, tot=ch.data.datasets[0].data.reduce((x,y)=>x+y,0);
+      const cx=(a.left+a.right)/2, cy=(a.top+a.bottom)/2;
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=gv('--fg'); ctx.font='800 26px "Segoe UI",sans-serif'; ctx.fillText(tot, cx, cy-7);
+      ctx.fillStyle=gv('--mut'); ctx.font='500 11px "Segoe UI",sans-serif'; ctx.fillText('รถทั้งหมด', cx, cy+15);
+      ctx.restore();
+    }
+  };
+
+  function buildCharts(){
+    const grid=gv('--line'), tick=gv('--mut'), surf=gv('--card');
+    if(pipeChart) pipeChart.destroy();
+    if(healthChart) healthChart.destroy();
+
+    // ── ไปป์ไลน์: บาร์แนวนอน สเตปที่มีรถ (สีตามเฟส) ──
+    const bars=[];
+    PHASES.forEach((ph,pi)=> ph.stages.forEach(s=>{ if(s.n>0) bars.push({label:s.name, v:s.n, c:PHASE_COLORS[pi], key:s.key}); }));
+    const pipeWrap=document.getElementById('pipeWrap'), pipeEmpty=document.getElementById('pipeEmpty');
+    if(!bars.length){ pipeWrap.style.display='none'; pipeEmpty.style.display='block'; }
+    else{
+      pipeWrap.style.display='block'; pipeEmpty.style.display='none';
+      pipeWrap.style.height = Math.max(200, bars.length*34)+'px';
+      pipeChart=new Chart(document.getElementById('pipeChart'),{
+        type:'bar',
+        data:{ labels:bars.map(b=>b.label), datasets:[{ data:bars.map(b=>b.v),
+          backgroundColor:bars.map(b=>b.c), borderRadius:4, borderSkipped:false, barThickness:16, maxBarThickness:20 }]},
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          layout:{padding:{right:24}},
+          onClick:(e,els)=>{ if(els.length){ const p=new URLSearchParams(location.search); p.set('stage',bars[els[0].index].key); location.search=p.toString(); } },
+          onHover:(e,els)=>{ if(e.native&&e.native.target) e.native.target.style.cursor=els.length?'pointer':'default'; },
+          plugins:{ legend:{display:false},
+            tooltip:{callbacks:{label:(c)=>` ${c.parsed.x} คัน · กดเพื่อกรอง`}} },
+          scales:{
+            x:{ beginAtZero:true, grid:{color:grid,drawBorder:false}, ticks:{color:tick,precision:0,font:{size:11}} },
+            y:{ grid:{display:false,drawBorder:false}, ticks:{color:gv('--fg'),font:{size:12}} }
+          }
+        }, plugins:[barValue]
+      });
+    }
+
+    // ── สุขภาพงาน: โดนัท status ──
+    healthChart=new Chart(document.getElementById('healthChart'),{
+      type:'doughnut',
+      data:{ labels:['ปกติ','ใกล้ค้าง','ค้างนาน'],
+        datasets:[{ data:[FLAGS.ok||0, FLAGS.amber||0, FLAGS.red||0],
+          backgroundColor:[gv('--ok'),gv('--amber'),gv('--red')], borderColor:surf, borderWidth:2, hoverOffset:4 }]},
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'68%',
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(c)=>` ${c.label}: ${c.parsed} คัน`}} } },
+      plugins:[donutCenter]
+    });
+    const tot=(FLAGS.ok||0)+(FLAGS.amber||0)+(FLAGS.red||0);
+    const pct=n=> tot? Math.round(n/tot*100):0;
+    document.getElementById('healthLegend').innerHTML=[
+      ['ปกติ','ok',FLAGS.ok||0],['ใกล้ค้าง','amber',FLAGS.amber||0],['ค้างนาน','red',FLAGS.red||0]
+    ].map(([lb,cl,n])=>`<div class="row2"><span class="dot ${cl}"></span><span>${lb}</span><b>${n} · ${pct(n)}%</b></div>`).join('');
+  }
+
+  buildCharts();
+  colorizeStagePills();   // ลงสีสเตป pill ในตาราง
+  // re-render เมื่อสลับธีม (สีข้อความ/เส้น/พื้นเปลี่ยน)
+  new MutationObserver(()=>buildCharts()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 </script>
 {% endblock %}
