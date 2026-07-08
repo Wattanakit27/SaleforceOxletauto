@@ -64,7 +64,10 @@ pip install -r requirements.txt
 python manage.py runserver
 ```
 
-ไม่ต้องรัน `migrate` — ไม่มี local DB. Session ใช้ signed-cookie backend
+- **⚠️ รัน dev บนเครื่องต้องตั้ง env: `DB_HOST=` (ว่าง=SQLite ไม่ต้องมี Postgres) + `DEBUG=True`** — ไม่งั้นมันอ่าน `.env` (DEBUG=False + DB_HOST=127.0.0.1 Postgres) → พังถ้าไม่มี Postgres/ต้อง https. **ไฟล์ [run_dev.bat](run_dev.bat) ตั้งให้แล้ว** — ดับเบิลคลิก/พิมพ์ `run_dev.bat` พอ (รันที่ 127.0.0.1:8000)
+- Login dev: admin/รหัส (จาก `.env` `OXLET_ADMIN_PASSWORD`) ที่ `/login/?bg=1`
+- **แก้ template (index.html/seller.html) ต้องรีสตาร์ท server เสมอ** (โปรเจกต์ cache template แม้ DEBUG) + บอกผู้ใช้ Ctrl+F5
+- ไม่ต้องรัน `migrate` สำหรับ sales — ไม่มี local DB. Session ใช้ signed-cookie backend (แต่ cars/ tracking ต้อง migrate + DB)
 
 ## URL Routes
 
@@ -93,6 +96,8 @@ python manage.py runserver
 | `/api/admin/seller_config` | `admin_seller_config` | admin: GET=อ่าน config, POST=บันทึก (เขียน sheet "ตั้งค่าเซลล์") — รวมคอลัมน์ `is_admin` (เซลล์แอดมิน) |
 | `/api/admin/admin_config` | `admin_admin_config` | admin: GET=รายชื่อแอดมิน(ไอดี)+employees, POST=บันทึก (เขียน sheet "ตั้งค่าแอดมิน") — เทเลเซลล์/ออฟฟิศที่ไม่ใช่เซลล์ |
 | `/api/admin/schedule_config` | `admin_schedule_config` | admin: GET=อ่านตาราง, POST=บันทึก (เขียน sheet "ตั้งเวลาส่ง") |
+| `/api/admin/onhand_config` | `admin_onhand_config` | admin: GET=อ่าน ONHAND (รถในมือรายสัปดาห์), POST=บันทึก (เขียน sheet "ONHAND รายสัปดาห์") — body `{ym,week,rows}` · ตัดรอบวันพฤหัส |
+| `/api/admin/seller_flags` | `admin_seller_flags` | admin: GET=อ่านสีโฟกัสเซลล์, POST=บันทึก (เขียน sheet "โฟกัสเซลล์") — `{seller:'y'\|'r'}` ระบายทั้งแถวในตารางสรุป |
 | `/api/admin/diagnostics` | `admin_diagnostics` | admin: ตรวจ log การกรองข้อมูล (เคสที่หาย, วันที่พัง, สถานะว่าง, "รอปล่อย" cases) |
 | `/api/admin/sheets_status` | `admin_sheets_status` | admin: เช็คสด 6 แหล่งข้อมูล + tab รายเดือน + sheet ตั้งค่า (panel "📊 แหล่งข้อมูล" แบบ n8n) |
 | `/api/admin/sheet_config` | `admin_sheet_config` | admin POST: ย้าย spreadsheet/tab ของแต่ละแหล่ง (เก็บ Supabase `sheet_config`) — ใช้ตอนขึ้นปีใหม่/ย้ายไฟล์ |
@@ -170,6 +175,8 @@ python manage.py runserver
 ### Source of truth สำหรับนับเคสตามสถานะ
 - **"จอง"** → นับจาก **leads sheet** (admin_status หรือ sales_status มีคำว่า "จอง" + ไม่ skipped). ดู `has_booking_status()` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py)
 - **"รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก"** → นับจาก **sales_reports sheet** (`booking_cases[].status`) — เพราะ admin update ใน "รายงานฝ่ายขาย"
+- **★ dedup เคสค้างข้ามเดือน (ก.ค.69) — `_dedup_booking_cases()`**: เคสจองที่ไม่จบใน 1 เดือน แอดมิน **ก๊อปไปแท็บเดือนถัดไปเรื่อยๆ** (วันจองยังเป็นเดือนเดิม) → เคสเดียวโผล่หลายแท็บ. เดิม `booking_cases` อ่านทุกแท็บมารวมโดยไม่ dedup → **ตัวนับสถานะซ้ำ 2-2.6 เท่า** (วัดจริง: รอผล 97→38 · รอปล่อย 36→14 · รอเซ็น 80→40 · จอง(สถานะ) 44→22 · รีเจ็ก 292→271 · **ปล่อย 278→274 แทบไม่กระทบ** เพราะแท็บเก่าเคสยังไม่ปล่อย). **แก้: `_dedup_booking_cases()` ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) เก็บสำเนา "แท็บเดือนล่าสุด" ต่อเคส** (= สถานะปัจจุบันจริง · สำเนาแท็บเก่า = สถานะที่ตายแล้ว) — คีย์: `leadCode` (ถ้ามีเลข) ไม่งั้น `ชื่อ+รถ+วันจอง`. เรียกหลัง build `booking_cases` (หน้ารวม) + `my_booking_cases` (หน้าเซลล์). วันจองยังเดิม → จอง นับเดือนถูก · ปล่อย นับตามแท็บ (ดูข้อถัดไป) · inline edit เขียนกลับแท็บ active (ล่าสุด)
+- **★ ปล่อย/pipeline รายเดือน = นับ "ตามแท็บ" ไม่ใช่ "วันปล่อย" (ก.ค.69) — `_tab_month(b)`**: เดิม `get_done_month`/`_parse_done_day` นับปล่อยตาม **วันปล่อย** (`extract_release_date`) → แท็บเดือนเก่าคอลัมน์วันปล่อยย้าย/ฟอร์แมตต่าง/ว่าง **parse ไม่ได้** → เดือนต้นปีนับปล่อย**ขาดครึ่ง** (วัดจริง: ม.ค. ได้ 18 แทน 44 · ก.พ. 16 แทน 43). **แก้: ยึด "เดือนของแท็บ" ที่เคสอยู่เป็นหลัก** (`_tab_month` map ชื่อแท็บ→เดือน · fallback วันปล่อย/วันจอง ถ้าไม่มีแท็บ) → ตรงสูตรสรุปในชีตเป๊ะ (ม.ค.-พ.ค. 44/43/50/43/52). **นับจาก `booking_cases_raw` (ก่อน dedup)** — เคสข้ามเดือนนับในทุกแท็บที่มันอยู่ (แบบสูตรชีต · ต่างจาก dedup ที่เก็บแท็บเดียว) · แก้ทั้ง `monthly_summary` (m_done/m_bookings), `daily_by_month`/`daily_by_seller` dones, และ `fetch_seller_stats` (my_monthly/my_daily). **`_daily_names` รวมทุกเซลล์ที่มีเคส** (ADMIN/เซลล์ลาออก/ใบตอง) → ตารางรายเซลล์ครบ ไม่ขาด · `booking_cases` (dedup) ยังส่งให้ frontend กัน date-range นับซ้ำ. **★ รอผล/รอปล่อย ใน report table = `monthlySummary[m].pipeBySeller`** (per-seller wr/wp นับตามแท็บจาก m_bookings · รวมทุกเซลล์) — เดิม frontend `_pipeBy` นับเองจาก `D.bookingCases` กรองด้วย leadDate → ได้น้อยกว่าแท็บ (ก.ค. โชว์ 5/3 แทน 13/6). ตอนนี้ `_row` ใช้ `_mpipe(name)` ดึงจาก pipeBySeller ของเดือน `_cm` (เดือนที่ดู) → ตรงสูตรชีต (พ.ค. รอผล 25/รอปล่อย 6)
 - **bookings sheet (separate spreadsheet) ไม่ใช้แล้ว** — เดิม `year_jongs` มาจาก bookings sheet, ตอนนี้ derive จาก leads. `fetch_all_sheets()` ยัง fetch อยู่ แต่ `raw_bookings` ไม่ถูกใช้ใน aggregator
 - frontend (seller.html "🎯 เคสในมือ") — `bookingCount` filter จาก `D.leads` ด้วย logic เดียวกัน
 
@@ -311,6 +318,16 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 
 > _(เอาตาราง "รายงานรายเซลล์ (ละเอียด)" ออกแล้ว มิ.ย.69 — ข้อมูลซ้ำกับตาราง "สรุปรายเซลล์" ด้านบน · ถ้าจะกู้คืน ดู git history บล็อก `_aRows`/`_msSum`/`_tabMonth` ใน [index.html](dashboard/templates/dashboard/index.html))_
 
+**★ ตารางสรุปเต็มรายเซลล์ (mega table · ก.ค.69)** — `_row(s)`/`_RC` cols ใน [index.html](dashboard/templates/dashboard/index.html) (`if(canViewAll)`) · ทุกคอลัมน์ตามตัวกรองวันที่ · คอลัมน์: เป้า(×`rangeMonthCount`)/จองเดือน/จอง/รอผล/รอปล่อย/ปล่อย/จองรายวัน(จอง÷วันที่ผ่านไป)/วันไฟแนนซ์(ผล→ปล่อย ตัดเคสวันผิด)/Lead/RJ/ไลฟ์/คลิป/ONHAND · จัดกลุ่มตามทีม + subtotal + total (คอลัมน์คะแนน=เฉลี่ย · ยอด=ผลรวม)
+- **🎨 โฟกัสเซลล์ (sellerFlags)**: dropdown สี ⚪/🟡/🔴 ต่อเซลล์ → ระบายทั้งแถว (`_FLAGS=D.sellerFlags`, `_flagBg`, `_setSellerFlag` optimistic) · เก็บชีต **"โฟกัสเซลล์"** (`SHEET_CONFIG["seller_flags"]` · cols เซลล์|สี) ผ่าน `/api/admin/seller_flags`
+- **📋 ONHAND (รถในมือรายสัปดาห์ · กรอกมือ)**: คอลัมน์ ONHAND ในตาราง · แอดมินกรอกยอดรถในมือต่อเซลล์ราย **สัปดาห์ (ตัดรอบทุกวันพฤหัส · week-of-month)** ผ่านฟอร์ม (`openOnhandForm`/`saveOnhand`) → เก็บชีต **"ONHAND รายสัปดาห์"** (`SHEET_CONFIG["onhand_config"]`) ผ่าน `/api/admin/onhand_config` (`_onhand_now`/`_onhand_key(ym,wk)` ใน [views.py](dashboard/views.py)) · ดู/แก้สัปดาห์ย้อนหลัง + เดลต้าเทียบสัปดาห์ก่อนได้
+
+**★ ตาราง "รายงาน จอง / อนุมัติ / ปล่อย" (ก.ค.69)** — เลย์เอาต์ตามชีต DL37:DX53 · ข้อมูลแดชบอร์ดสด ตามตัวกรองวันที่ · [index.html](dashboard/templates/dashboard/index.html) `_rpt`/`_RC`/`_rc`
+- คอลัมน์: จองทั้งหมด/รอผล/รอปล่อย/ปล่อย/%การจอง/Lead/RJ/เฉลี่ยLead/วัน/ไลฟ์/คลิป/Lead ไลฟ์
+- **เรียง: (ปล่อย+รอปล่อย) มากสุด → รองด้วยจอง** (`_rpt` sort)
+- **สีแถวอัตโนมัติ `_rc(ปล่อย+รอปล่อย)`: เขียว ≥5 · เหลือง 3-4 · แดง ≤2** (ไม่มีขาว · `_flagBg` เพิ่มเคส `'g'`=เขียว)
+- **จอง/ปล่อย** = tab-based (จาก `_sval`) · **รอผล/รอปล่อย** = `monthlySummary[_cm].pipeBySeller` (`_mpipe(name)` · นับตามแท็บ ตรงสูตรชีต · ดู section "Source of truth")
+
 1. **🚗 Lead รถรุ่นยอดนิยม** — top cars by lead count
    - **ไม่นับ RJ ทุกประเภท** (มิ.ย.69) — `lead_cars_by_month`/`lead_car_seller_month` skip `cell(r,L.type) in RJ_TYPES` (ทั้งตารางรวม + modal รายเซลล์) → ~10,680 เคส (จาก ~15k)
    - ใช้ **คอลัมน์ M เท่านั้น** (car_formula) — clean normalized names
@@ -361,6 +378,8 @@ section "ตามด่วน — โทรก่อน" (เดิม "โท�
 | `schedule_config` | (เดียวกับ employees) | **"ตั้งเวลาส่ง"** | ตารางเวลาส่ง LINE Flex อัตโนมัติ |
 | `admin_config` | (เดียวกับ employees) | **"ตั้งค่าแอดมิน"** | รายชื่อ LINE user_id ที่เป็นแอดมิน (สิทธิ์แอดมิน) — `ADMIN_USER_IDS` |
 | `tele_config` | (เดียวกับ employees) | **"ตั้งค่าเทเลเซลล์"** | รายชื่อ LINE user_id ของเทเลเซลล์ (ทีมโทร · เคสรวมเป็น seller "ADMIN" · ไม่ใช่สิทธิ์แอดมิน) — `TELE_USER_IDS` |
+| `onhand_config` | (เดียวกับ employees) | **"ONHAND รายสัปดาห์"** | รถในมือต่อเซลล์รายสัปดาห์ (แอดมินกรอกมือ · `/api/admin/onhand_config`) |
+| `seller_flags` | (เดียวกับ employees) | **"โฟกัสเซลล์"** | สีโฟกัสต่อเซลล์ (เซลล์\|สี ⚪/🟡/🔴) ในตารางสรุป (`/api/admin/seller_flags`) |
 
 **OAuth scope**: `https://www.googleapis.com/auth/spreadsheets` (read+write — เปลี่ยนมาจาก readonly เพราะ admin ต้องเขียน config)
 
@@ -441,7 +460,7 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
   - ตัวอย่าง พ.ค. 2026: tab "พฤษภาคม 69" raw=3,101 → filter date=พ.ค. → **2,585 เคส** (ตัด 516 เคสที่ admin เอาเคสเม.ย./มี.ค./ก.พ. มาใส่ tab พ.ค. ออก)
   - **ทำไมไม่ใช้ dedup**: `fetch_leads_dedup` ทำให้ lead เดือนนี้หาย ~30 เคส (2,552 vs 2,582) เพราะ code ซ้ำ + monthly tab override ทำ code "ย้ายเดือน". `fetch_sheet("leads")` ก็ inflated +83 จาก dup ภายใน 'รวม sheet' + orphan codes
   - Failsafe: ถ้า monthly tabs fetch ไม่ได้/ว่าง → fall back ไป `fetch_sheet("leads")`
-- `fetch_sales_by_month_tabs()` — **default สำหรับ sales_reports** — อ่านยอดขายจากแท็บรายเดือน **`<เดือน>69` (ไม่เว้นวรรค)** ตรงๆ แทน "รวม sheet" (ที่ใช้สูตร REDUCE). แต่ละแท็บจัดกลุ่มตามเซลล์ด้วย marker **"ชื่อเซลล์ X"** ใน column B → ดึงบล็อกของแต่ละเซลล์ (ใต้ marker ถึง marker ถัดไป), เอาแถวที่ลำดับ(B)เป็นเลข+สถานะ(N)ไม่ว่าง, prepend ชื่อเซลล์เป็น col 0 (ตรง `SALES_COL` flattened เดิม). **match ชื่อกับ `ALL_SELLERS` (dynamic) + `{"ADMIN"}`** (อ่านบล็อก "ชื่อเซลล์ ADMIN" ด้วย) → เซลล์ใหม่เพิ่มเองอัตโนมัติ + ตัด marker ขยะ (A/ว่าง). **★ ย้ายเคส ADMIN ที่อยู่ใต้เซลล์อื่น**: ถ้าแถวมี `"ADMIN"` ในคอลัมน์ AB (idx 24–29) → set seller='ADMIN' (ตัดจากเซลล์เจ้าของบล็อก) — เคสที่แอดมิน/เทเลเซลล์ดูแลแต่บันทึกใต้เซลล์. **⚠️ ยกเว้นสถานะ "ปล่อย" (มิ.ย.69)**: เคสติดป้าย ADMIN แต่ status="ปล่อย" (ไม่รวม "รอปล่อย") → **ไม่ย้าย** เครดิตปล่อยอยู่กับเซลล์เจ้าของบล็อกที่ปิดดีลเอง (เทเลเซลล์หาลีด/จองให้ แต่ "ปล่อย"=เซลล์ปิด → **เทเลเซลล์ done/dealValue = 0 เสมอ**). ใช้ใน `fetch_all_sheets()` + `sync_all_sheets_to_supabase()`. Failsafe → `fetch_sheet("sales_reports")` ("รวม sheet")
+- `fetch_sales_by_month_tabs()` — **default สำหรับ sales_reports** — อ่านยอดขายจากแท็บรายเดือน **`<เดือน>69` (ไม่เว้นวรรค)** ตรงๆ แทน "รวม sheet" (ที่ใช้สูตร REDUCE). แต่ละแท็บจัดกลุ่มตามเซลล์ด้วย marker **"ชื่อเซลล์ X"** ใน column B → ดึงบล็อกของแต่ละเซลล์ (ใต้ marker ถึง marker ถัดไป), เอาแถวที่ลำดับ(B)เป็นเลข+สถานะ(N)ไม่ว่าง, prepend ชื่อเซลล์เป็น col 0 (ตรง `SALES_COL` flattened เดิม). **match ชื่อกับ `ALL_SELLERS` (dynamic) + `{"ADMIN"}`** (อ่านบล็อก "ชื่อเซลล์ ADMIN" ด้วย) → เซลล์ใหม่เพิ่มเองอัตโนมัติ. **★ (ก.ค.69) อ่านบล็อกชื่ออื่นที่มีเคสจริงด้วย — เซลล์ลาออก/เทเลเซลล์ (เช่น "ใบตอง")**: เดิมตัดบล็อกที่ชื่อไม่อยู่ใน ALL_SELLERS ทิ้ง → เคสของเซลล์ที่ออกไปแล้ว/เทเลเซลล์ที่มีบล็อกชื่อตัวเอง **หายทั้งบล็อก** (เช่น ใบตอง พ.ค.: ปล่อย 1/รีเจ็ก 8/จอง 13 → ทำ dashboard นับปล่อย พ.ค. 51 แทนที่จะเป็น 52 ตามสูตรชีต). ตอนนี้ **บล็อกไหนมีเคสจริง (seq เลข + สถานะ) = อ่าน เก็บชื่อเดิม** (โผล่เป็น orphan seller ไม่มี target/team แต่ยอดนับ · ผู้ใช้: "เซลล์ออกไปแล้วเคสยังนับ แค่เดือนต่อมาไม่มีชื่อ/สิทธิ์") · **ตัดเฉพาะ marker ขยะ**: ชื่อ "A"/ว่าง/สั้นกว่า 2 ตัว หรือบล็อกไม่มีเคส. **★ ย้ายเคส ADMIN ที่อยู่ใต้เซลล์อื่น**: ถ้าแถวมี `"ADMIN"` ในคอลัมน์ AB (idx 24–29) → set seller='ADMIN' (ตัดจากเซลล์เจ้าของบล็อก) — เคสที่แอดมิน/เทเลเซลล์ดูแลแต่บันทึกใต้เซลล์. **★ มาร์ค ADMIN = "เทเลเซลล์ทำเอง" ได้เครดิตปล่อยด้วย (ก.ค.69 — เอากฎยกเว้น "ปล่อย" ออกแล้ว)**: มาร์ค "ADMIN" หมายถึง **เทเลเซลล์ทำเอง (หาลีด+ปิดเอง)** → ย้ายเป็น seller='ADMIN' **ทุกสถานะ รวม "ปล่อย"** (เทเลเซลล์มี done/dealValue ได้). กติกาแยก 2 กรณีด้วย **"มาร์คต่างคำ"**: (1) เทเลเซลล์ทำเอง = มาร์ค "ADMIN" → ปล่อยเป็นของเทเลเซลล์ · (2) เทเลเซลล์แค่หาลีดให้แล้ว **เซลล์เป็นคนปิด** = **ไม่ต้องมาร์ค ADMIN (ลบมาร์คทิ้ง)** → ปล่อยเป็นของเซลล์เจ้าของบล็อกตามปกติ. _(เดิม มิ.ย.69 บังคับเทปล่อยให้เซลล์เสมอ ทำให้เทเลเซลล์ done=0 — ยกเลิกแล้วเพราะบางเคสเทเลเซลล์ปิดเอง)_ ใช้ใน `fetch_all_sheets()` + `sync_all_sheets_to_supabase()`. Failsafe → `fetch_sheet("sales_reports")` ("รวม sheet")
 - `fetch_bookings_by_month_tabs()` — **default สำหรับ bookings (จอง)** — อ่านจากแท็บ **"จอง/จบ \<เดือน\> 69"** (ไฟล์ bookings) แทน "รวม sheet" (เก่า ไม่อัปเดต). แท็บวาง **จอง(ซ้าย A-K) + จบ(ขวา) แยกกัน** — อ่านแค่ A-K ฝั่งจอง ซึ่งตรง `BOOKINGS_COL` เป๊ะ → `year_jongs` กรอง date เอง. **ชื่อแท็บมี "/" → ใช้ `values:batchGet`** (range เป็น query param กัน URL path พัง 404). ใช้ใน `fetch_all_sheets()` + sync. Failsafe → `fetch_sheet("bookings")`
 - `fetch_live_by_month_tabs()` — **default สำหรับ live_sessions (ไลฟ์สด)** — อ่านจากแท็บ **"สรุปไลฟ์สด \<เดือนไทย\>"** (มี.ค./เม.ย./พ.ค./มิ.ย....) ในไฟล์ live แทน "รวม sheet" (สูตร REDUCE เดือนล่าสุด lag — เคย มิ.ย. มี 1 session ทั้งที่จริง 30). list tab → filter prefix `สรุปไลฟ์สด` → รวมทุกเดือน (ตัด header). โครงสร้างตรง `LIVE_COL` เป๊ะ (date/host_1-5/inbox/lead). ใช้ใน `fetch_all_sheets()` + sync. Failsafe → `fetch_sheet("live_sessions")`
 - `fetch_leads_dedup()` — **ใช้แค่ใน `admin_diagnostics`** (debug page เพื่อดู dedup behavior). รวม "รวม sheet" + monthly tabs แล้ว dedup by `Code` — แถวที่ปรากฏหลังสุดชนะ. ไม่ใช้ใน user-facing dashboard อีกแล้ว.

@@ -439,6 +439,49 @@ def _mask_phone(p) -> str:
     return d[:3] + "-xxx-" + d[-2:]
 
 
+def _dedup_booking_cases(cases: list[dict]) -> list[dict]:
+    """เคสจองที่ค้าง (ไม่จบใน 1 เดือน) ถูกก๊อปไปแท็บเดือนถัดไปเรื่อยๆ โดยวันจองยังเป็นเดือนเดิม
+    → เคสเดียวโผล่หลายแท็บ ทำให้ตัวนับสถานะ (จอง/รอเซ็น/รอผล/รอปล่อย/รีเจ็ก) ซ้ำ 2-2.6 เท่า
+    (ปล่อย แทบไม่กระทบ เพราะแท็บเก่าเคสยังไม่ปล่อย)
+
+    dedup: เก็บสำเนาจาก 'แท็บเดือนล่าสุด' ของแต่ละเคส = สถานะปัจจุบันจริง + วันปล่อยถูก
+    (สำเนาเก่าในแท็บก่อนหน้า = สถานะที่ตายแล้ว ไม่ใช่ปัจจุบัน) · วันจองยังเป็นเดือนเดิม (ก๊อปมาพร้อมกัน)
+    → จอง ยังนับเดือนถูก · ปล่อย นับตามวันปล่อย · inline edit เขียนกลับแท็บ active (ล่าสุด)
+
+    คีย์ระบุเคสเดียวกัน: leadCode (ถ้ามีเลข) · เคสไม่มีรหัส "-" ใช้ ชื่อลูกค้า+รถ+วันจอง แทน
+    """
+    def _tab_order(tab: str) -> int:
+        t = (tab or "").strip()
+        for i, m in enumerate(MONTHS_FULL_TH):
+            if t.startswith(m):
+                return i + 1
+        return 0
+
+    def _key(b: dict):
+        c = (b.get("leadCode") or "").strip().lstrip(":").strip().upper()
+        if any(ch.isdigit() for ch in c):
+            return ("code", c)
+        return ("cust", str(b.get("customer", "")).strip()[:14],
+                str(b.get("car", "")).strip()[:14], str(b.get("date", "")).strip())
+
+    # หาสำเนา 'แท็บล่าสุด' ต่อ key (ถ้าเสมอ เอาแถวหลังสุดในลิสต์)
+    best: dict = {}
+    for b in cases:
+        k = _key(b)
+        prev = best.get(k)
+        if prev is None or _tab_order(b.get("sheetTab", "")) >= _tab_order(prev.get("sheetTab", "")):
+            best[k] = b
+    # คงลำดับตามที่เจอ key ครั้งแรก (ไม่สลับ output)
+    seen, out = set(), []
+    for b in cases:
+        k = _key(b)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(best[k])
+    return out
+
+
 def _compute_dashboard_data() -> dict:
     # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
     # ถ้า sheet หายหรือ error → ใช้ default hardcode
@@ -584,6 +627,12 @@ def _compute_dashboard_data() -> dict:
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
         })
+
+    # เคสค้างข้ามเดือนถูกก๊อปหลายแท็บ → dedup เก็บสำเนาแท็บล่าสุด (สถานะปัจจุบัน)
+    # booking_cases (dedup) = ใช้กับ summary รวม + ส่งให้ frontend (กัน date-range นับซ้ำ)
+    # booking_cases_raw (ไม่ dedup) = ใช้นับ "รายเดือนตามแท็บ" ให้ตรงสูตรชีต (เคสข้ามเดือนนับในทุกแท็บที่มันอยู่)
+    booking_cases_raw = booking_cases
+    booking_cases = _dedup_booking_cases(booking_cases)
 
     # Live sessions from this year
     year_live = [r for r in live_sessions if is_this_year(cell(r, LV.date))]
@@ -960,7 +1009,20 @@ def _compute_dashboard_data() -> dict:
     }
 
     # Monthly Summary
+    def _tab_month(b):
+        t = str(b.get("sheetTab", "") or "").strip()
+        for i, mn in enumerate(MONTHS_FULL_TH):
+            if t.startswith(mn):
+                return i + 1
+        return 0
+
     def get_done_month(b):
+        # ★ (ก.ค.69) นับ "ตามแท็บ" ที่เคสอยู่ = เดือนที่ทีมบันทึกในชีต (ตรงสูตรสรุป)
+        #   เดิมใช้ "วันปล่อย" → แท็บเดือนเก่าคอลัมน์วันปล่อยย้าย/ฟอร์แมตต่าง/ว่าง → parse ไม่ได้
+        #   → เดือนต้นปีนับปล่อยขาดเยอะ (ม.ค. ได้ 18 แทน 44) · ตอนนี้ยึดแท็บเป็นหลัก
+        tm = _tab_month(b)
+        if tm:
+            return tm
         rd = b.get("releaseDate", "")
         if rd and rd != "-" and rd != "":
             m = get_month(rd)
@@ -977,8 +1039,9 @@ def _compute_dashboard_data() -> dict:
         m_follow = len([r for r in m_leads if should_follow(r)])
         m_vacant = len([r for r in m_leads if is_lead_vacant(r)])
 
-        m_bookings = [b for b in booking_cases if get_month(b["date"]) == m]
-        m_done = [b for b in booking_cases if b["status"] == "ปล่อย" and get_done_month(b) == m]
+        # ★ นับ "ตามแท็บ" จาก raw (ก่อน dedup) → เคสข้ามเดือนนับในทุกแท็บที่มันอยู่ (ตรงสูตรชีต)
+        m_bookings = [b for b in booking_cases_raw if _tab_month(b) == m]
+        m_done = [b for b in booking_cases_raw if b["status"] == "ปล่อย" and _tab_month(b) == m]
 
         m_pipeline = {
             "จอง": len(m_jongs),
@@ -1155,6 +1218,19 @@ def _compute_dashboard_data() -> dict:
                     ts[k] += s2.get(k, 0)
             m_teams[tid] = ts
 
+        # per-seller pipeline (รอผล/รอปล่อย) นับ "ตามแท็บ" จาก m_bookings — รวมทุกเซลล์ (ADMIN/ลาออก/ใบตอง)
+        #   → report table (frontend) ดึงอันนี้ไปโชว์แทนการนับเองด้วย leadDate → ตรงสูตรชีต (เหมือน จอง/ปล่อย)
+        m_pipe_by_seller: dict[str, dict] = {}
+        for b in m_bookings:
+            nm = b["seller"]
+            if not nm:
+                continue
+            e = m_pipe_by_seller.setdefault(nm, {"wr": 0, "wp": 0})
+            if b["status"] == "รอผล":
+                e["wr"] += 1
+            elif b["status"] == "รอปล่อย":
+                e["wp"] += 1
+
         monthly_summary[m] = {
             "totalLeads": len(m_leads),
             "leadNormal": m_ln,
@@ -1167,6 +1243,7 @@ def _compute_dashboard_data() -> dict:
             "pipelineValue": m_pipeline_value,
             "avgDealValue": (m_deal_value / len(m_done)) if m_done else 0,
             "pipeline": m_pipeline,
+            "pipeBySeller": m_pipe_by_seller,
             "sellers": m_sellers,
             "teams": m_teams,
         }
@@ -1212,12 +1289,15 @@ def _compute_dashboard_data() -> dict:
         return parse_month_day(date_str)   # รองรับ "d/m" ไม่มีปี → daily ตรงกับ monthlySummary
 
     def _parse_done_day(b):
+        # ★ (ก.ค.69) เดือน = เดือนของแท็บ (ตรงสูตรชีต · เหมือน get_done_month) · วัน = วันปล่อยถ้า parse ได้ ไม่งั้นวันจอง ไม่งั้น 1
+        tm = _tab_month(b)
         rd = b.get("releaseDate", "")
-        if rd and rd != "-" and rd != "":
-            md = _parse_day(rd)
-            if md:
-                return md
-        return _parse_day(b["date"])
+        _d = _parse_day(rd) if (rd and rd != "-" and rd != "") else None
+        if not _d:
+            _d = _parse_day(b.get("date", ""))
+        if tm:
+            return (tm, _d[1] if _d else 1)
+        return _d   # ไม่มีแท็บ → วิธีเดิม (วันปล่อย/วันจอง)
 
     daily_by_month = {
         m: {
@@ -1245,7 +1325,7 @@ def _compute_dashboard_data() -> dict:
         mm, dd = md
         daily_by_month[mm]["bookings"][dd] += 1
 
-    for b in booking_cases:
+    for b in booking_cases_raw:   # raw (นับตามแท็บ ให้ตรงสูตรชีต · เคสข้ามเดือนนับทุกแท็บ)
         if b["status"] != "ปล่อย":
             continue
         md = _parse_done_day(b)
@@ -1256,8 +1336,10 @@ def _compute_dashboard_data() -> dict:
         daily_by_month[mm]["dealValue"][dd] += b["price"] or 0
 
     # Daily-by-month แยกตามเซลล์ — ใช้ตอน admin impersonate เซลล์คนใดคนหนึ่ง
-    # รวม orphan/inactive sellers ด้วย → ตารางรายเซลล์กรองตามช่วงวันที่ได้ (ไม่งั้นโชว์ 0)
-    _daily_names = set(ALL_SELLERS) | {s["name"] for s in sellers if s.get("inactive")}
+    # รวม orphan/inactive sellers + ทุกเซลล์ที่มีเคสในชีต (ADMIN/เซลล์ลาออก/ใบตอง) → ตารางรายเซลล์ครบ ไม่ขาด
+    _daily_names = (set(ALL_SELLERS)
+                    | {s["name"] for s in sellers if s.get("inactive")}
+                    | {b["seller"] for b in booking_cases_raw if b.get("seller")})
     daily_by_seller = {
         name: {
             m: {
@@ -1292,7 +1374,7 @@ def _compute_dashboard_data() -> dict:
             continue
         daily_by_seller[j["seller"]][mm]["bookings"][dd] += 1
 
-    for b in booking_cases:
+    for b in booking_cases_raw:   # raw (นับตามแท็บ ให้ตรงสูตรชีต)
         if b["status"] != "ปล่อย":
             continue
         md = _parse_done_day(b)
@@ -1701,6 +1783,11 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "note": cell(r, S.note),
         })
 
+    # เคสค้างข้ามเดือนถูกก๊อปหลายแท็บ → dedup เก็บสำเนาแท็บล่าสุด (สถานะปัจจุบัน) · ส่งให้ frontend
+    # my_booking_cases_raw (ไม่ dedup) = นับ done รายเดือน "ตามแท็บ" ให้ตรงสูตรชีต (เหมือนหน้ารวม)
+    my_booking_cases_raw = my_booking_cases
+    my_booking_cases = _dedup_booking_cases(my_booking_cases)
+
     # ── 3) Year jongs ของเซลล์ (จาก bookings sheet — source of truth สำหรับเซลล์ทั่วไป) ──
     my_year_jongs = []
     for r in raw_bookings:
@@ -1773,7 +1860,18 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
     }
 
     # ── 6) Monthly summary (เฉพาะเซลล์, 12 เดือน) ──
+    def _tab_month(b: dict) -> int:
+        t = str(b.get("sheetTab", "") or "").strip()
+        for i, mn in enumerate(MONTHS_FULL_TH):
+            if t.startswith(mn):
+                return i + 1
+        return 0
+
     def get_done_month(b: dict) -> int:
+        # ★ (ก.ค.69) นับ "ตามแท็บ" ที่เคสอยู่ (ตรงสูตรชีต · เหมือนหน้ารวม) — เดิมใช้วันปล่อย parse ไม่ได้แท็บเก่า
+        tm = _tab_month(b)
+        if tm:
+            return tm
         rd = b.get("releaseDate")
         if rd:
             d = parse_date(rd)
@@ -1785,7 +1883,7 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
     for m in range(1, 13):
         m_leads = [r for r in my_year_leads if get_month(cell(r, L.received_date)) == m]
         m_jongs = [j for j in my_year_jongs if get_month(j["date"]) == m]
-        m_done = [b for b in my_booking_cases if b["status"] == "ปล่อย" and get_done_month(b) == m]
+        m_done = [b for b in my_booking_cases_raw if b["status"] == "ปล่อย" and _tab_month(b) == m]
         n_done = len(m_done)
         dv = sum(b["price"] for b in m_done)
         my_monthly[m] = {
@@ -1820,14 +1918,17 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             continue
         mm, dd = md
         my_daily[mm]["bookings"][dd] += 1
-    for b in my_booking_cases:
+    for b in my_booking_cases_raw:   # raw (นับ done ตามแท็บ ให้ตรงสูตรชีต · วัน = วันปล่อยถ้าได้ ไม่งั้น 1)
         if b["status"] != "ปล่อย":
             continue
-        rd = b.get("releaseDate") or b.get("date")
-        md = _parse_day(rd)
-        if not md:
+        tm = _tab_month(b)
+        _d = _parse_day(b.get("releaseDate") or b.get("date"))
+        if tm:
+            mm, dd = tm, (_d[1] if _d else 1)
+        elif _d:
+            mm, dd = _d
+        else:
             continue
-        mm, dd = md
         my_daily[mm]["dones"][dd] += 1
         my_daily[mm]["dealValue"][dd] += b["price"] or 0
 

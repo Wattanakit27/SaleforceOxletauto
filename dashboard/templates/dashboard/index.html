@@ -164,6 +164,7 @@
     const _ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     let dfTo = _ymd(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));  // default = สิ้นเดือนปัจจุบัน (กรองทั้งเดือน)
     let dfFrom = _ymd(new Date(new Date().getFullYear(), new Date().getMonth(), 1));  // default = ต้นเดือนปัจจุบัน
+    let _ohWeek = (function(){ const d=new Date(), f=new Date(d.getFullYear(),d.getMonth(),1); const ft=1+((4-f.getDay()+7)%7); return d.getDate()<ft?1:Math.floor((d.getDate()-ft)/7)+1; })();   // สัปดาห์ที่โชว์ ONHAND (ตัดรอบวันพฤหัส)
     let curF = 'all';
     let curSo = 'urgent';
     let curMode = 'month';
@@ -341,8 +342,24 @@
           : { lead:mL, leadNormal:mLN, leadRJ:mRJ, booking:mBk, done:mDn, dealValue:mDv,
               follow:0, notCalled:0, vacant:0, bans, leadDist, target:s.target||0, team:s.team };
       });
+      // ── ติดตาม (follow) + ยังไม่โทร (notCalled) ──
+      // ★ เดือนเต็ม → ดึงจาก monthlySummary (backend นับด้วย get_month · robust · แหล่งเดียวกับ trend/MoM)
+      //   กัน KPI "ติดตามอยู่" = 0 ทั้งที่ trend มีเคส (เกิดเมื่อ followCases/inRange นับพลาด เช่น cache/precompute เพี้ยน)
+      // ★ ช่วงบางส่วน (ไม่ใช่เดือนเต็ม) → นับ followCases ทีละเคสผ่าน inRange (ต้องการความละเอียดระดับวัน)
       let totalFollow = 0;
-      (D.followCases || []).forEach(c => { if(!inRange(c.dateIn)) return; totalFollow++; if(sellers[c.seller]){ sellers[c.seller].follow++; if((c.updateCount||0)===0) sellers[c.seller].notCalled++; } });
+      const _wmF = (typeof selectedWholeMonth === 'function') ? selectedWholeMonth() : 0;
+      const _mmF = _wmF ? ((D.monthlySummary || {})[_wmF] || (D.monthlySummary || {})[String(_wmF)] || null) : null;
+      if (_mmF) {
+        totalFollow = Number(_mmF.totalFollow || 0);
+        const _mfSellers = _mmF.sellers || {};
+        Object.keys(sellers).forEach(n => {
+          const md = _mfSellers[n] || {};
+          sellers[n].follow = Number(md.follow || 0);
+          sellers[n].notCalled = Number(md.notCalled || 0);
+        });
+      } else {
+        (D.followCases || []).forEach(c => { if(!inRange(c.dateIn)) return; totalFollow++; if(sellers[c.seller]){ sellers[c.seller].follow++; if((c.updateCount||0)===0) sellers[c.seller].notCalled++; } });
+      }
       // รวมเป็นทีม (range) — ให้การ์ด "แยกตามทีม" เปลี่ยนตามช่วงวันที่ด้วย
       const teams = {};
       Object.values(sellers).forEach(sd => {
@@ -2041,6 +2058,156 @@
       });
       html += `</div>`;
 
+      // ══════════ ตารางสรุปเต็มรายเซลล์ (คล้ายชีต "ข้อมูล<เดือน>") — admin · ทุกคอลัมน์ตามตัวกรองวันที่ ══════════
+      if (canViewAll) try {
+        // — คำนวณต่อเซลล์ตามช่วงวันที่ —
+        const _finBy = {};   // วันจัดไฟแนนซ์ (ผล→ปล่อย) · รอผล/รอปล่อย ย้ายไปใช้ pipeBySeller (นับตามแท็บ ตรงสูตรชีต)
+        (D.bookingCases || []).forEach(b => {
+          const nm = b.seller; if (!nm) return;
+          // วันไฟแนนซ์ = ระยะเวลา ผล→ปล่อย ของ "เคสที่ปล่อยในช่วง" → กรองด้วยวันปล่อย (ไม่ใช่วันรับเคส · ลีดเข้ามานานแล้ว)
+          if (b.status === 'ปล่อย' && ir(b.releaseDate || b.date || '')) {
+            const rd = _parseDmy(b.releaseDate || ''), pd = _parseDmy(b.resultDate || '');
+            if (rd && pd) { const _dd = Math.round((rd - pd)/86400000); if (_dd >= 0 && _dd <= 90) { const f = _finBy[nm] = _finBy[nm] || {sum:0, n:0}; f.sum += _dd; f.n++; } }   // ตัดเคสวันผิด (ติดลบ/เกิน 90 วัน = ปีพิมพ์ผิด) ไม่ให้ลากค่าเฉลี่ย
+          }
+        });
+        const _liveBy = {}, _clipBy = {};   // ไลฟ์/คลิป ต่อเซลล์
+        ((D.liveActivity && D.liveActivity.sessions) || []).forEach(s => { if (s && ir(s.date||'')) (s.hosts||[]).forEach(hh => { if (hh) _liveBy[hh] = (_liveBy[hh]||0)+1; }); });
+        if (D.liveActivity && Array.isArray(D.liveActivity.clips)) D.liveActivity.clips.forEach(c => { if (c && ir(c.date||'')) _clipBy[c.name] = (_clipBy[c.name]||0)+1; });
+        const _wkBook = {};   // จองสัปดาห์ที่ผ่านมา (7 วันย้อนหลังจากวันนี้)
+        { const _t = new Date(); _t.setHours(0,0,0,0); const _f = new Date(_t); _f.setDate(_f.getDate()-6); const dbs = D.dailyBySeller || {};
+          Object.keys(dbs).forEach(nm => { let tot = 0; const md = dbs[nm] || {};
+            Object.keys(md).forEach(m => { const arr = (md[m]||{}).bookings || []; for (let dd=0; dd<arr.length; dd++){ const v = arr[dd]||0; if(!v) continue; const dt = new Date(_t.getFullYear(), Number(m)-1, dd); if (dt>=_f && dt<=_t) tot += v; } });
+            _wkBook[nm] = tot; }); }
+        const _rDays = (rangeDays().length) || 1;
+        // เดือนที่กรอง (จาก dfTo) — "จองเดือน" ต้องตามเดือนที่ดู ไม่ใช่เดือนปัจจุบันเสมอ (ไม่งั้นดู มิ.ย. แต่โชว์ ก.ค.)
+        const _cm = (function(){ const t=new Date((dfTo||'')+'T00:00:00'); return isNaN(t.getTime())?((D.meta&&D.meta.month)||(new Date().getMonth()+1)):(t.getMonth()+1); })();
+        const _monBook = (nm) => { const sm = ((D.monthlySummary && D.monthlySummary[_cm] && D.monthlySummary[_cm].sellers) || {})[nm]; return sm ? Number(sm.booking||0) : 0; };
+        // รอผล/รอปล่อย ต่อเซลล์ — จาก backend pipeBySeller (นับตามแท็บของเดือนที่ดู · ตรงสูตรชีต · รวม ADMIN/ลาออก/ใบตอง)
+        const _mpipe = (nm) => { const pb = ((D.monthlySummary && D.monthlySummary[_cm] && D.monthlySummary[_cm].pipeBySeller) || {})[nm]; return pb ? {wr:Number(pb.wr||0), wp:Number(pb.wp||0)} : {wr:0, wp:0}; };
+
+        // ── ONHAND ตามเดือนที่กรอง (ดึงเดือนอื่นถ้ายังไม่แคช · เดือนที่ไม่มีข้อมูล = "-") ──
+        window._ohCache = window._ohCache || {};
+        const _ohCurYm = (D.onhandMeta && D.onhandMeta.ym) || null;
+        if(_ohCurYm && window._ohCache[_ohCurYm]===undefined) window._ohCache[_ohCurYm] = D.onhand || {};
+        const _p2 = n => String(n).padStart(2,'0');
+        const _ohViewYm = (function(){ const t=new Date((dfTo||'')+'T00:00:00'); return isNaN(t.getTime())?_ohCurYm:(t.getFullYear()+'-'+_p2(t.getMonth()+1)); })();
+        window._ohViewYm = _ohViewYm;
+        let _ohMon;
+        if(_ohViewYm===_ohCurYm){ _ohMon = D.onhand || {}; }
+        else { if(window._ohCache[_ohViewYm]===undefined) _ohFetchMonth(_ohViewYm); _ohMon = window._ohCache[_ohViewYm] || {}; }
+        const _row = (s) => { const lead=_sval(s,'leadNormal'), rj=_sval(s,'leadRJ'), bk=_sval(s,'booking'), dn=_sval(s,'done');
+          const p = _mpipe(s.name), f = _finBy[s.name] || {sum:0, n:0};
+          return { team:s.team, name:s.name, target:Math.round((s.target||0)*rangeMonthCount()), monBook:_monBook(s.name), bk, wr:p.wr, wp:p.wp, dn,
+            finSum:f.sum, finN:f.n, lead, rj, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, leadLive:_sval(s,'leadLive'), wk:_wkBook[s.name]||0, oh:((_ohMon[String(_ohWeek)])||{})[s.name]||null }; };
+        const rows = ss.filter(s => s.team!=='INACTIVE' && s.inactive!==true).map(_row);   // ตัดเซลล์ลาออก/ไม่อยู่ในชีตตั้งค่า (INACTIVE) ออก
+        window._ohSellers = rows.map(r=>r.name);   // เซลล์ที่ active ในตาราง → ใช้ในฟอร์ม ONHAND (ตัดเซลล์เก่า)
+        const teamsOrder = [...new Set(rows.map(r=>r.team))].sort((a,b)=> a==='ADMIN'?1 : b==='ADMIN'?-1 : (a<b?-1:1));
+
+        // — นิยามคอลัมน์ (v=ค่าต่อแถว · f=ฟิลด์สำหรับผลรวม · sub=วิธีรวม) —
+        const _pctB = rs => { const l=rs.reduce((a,r)=>a+r.lead,0), b=rs.reduce((a,r)=>a+r.bk,0); return (l?Math.round(b/l*100):0)+'%'; };
+        const _pctD = rs => { const l=rs.reduce((a,r)=>a+r.lead,0), d=rs.reduce((a,r)=>a+r.dn,0); return (l?Math.round(d/l*100):0)+'%'; };
+        const _finA = rs => { const s=rs.reduce((a,r)=>a+r.finSum,0), n=rs.reduce((a,r)=>a+r.finN,0); return n?Math.round(s/n):'-'; };
+        const _lpdA = rs => { const l=rs.reduce((a,r)=>a+r.lead,0); return Math.round(l/_rDays*100)/100; };
+        const _sumF = (rs,f) => rs.reduce((a,r)=>a+(r[f]||0),0);
+        // "จองรายวัน" = จอง ÷ วันที่ผ่านไปในเดือนที่ดู (เดือนปัจจุบัน→วันนี้ · เดือนก่อน→สิ้นเดือน)
+        const _bkDiv = (function(){ const p=(_ohViewYm||'').split('-'); const yy=+p[0], mm=+p[1]; if(!yy||!mm) return _rDays; const last=new Date(yy,mm,0).getDate(); const nw=new Date(); return (yy===nw.getFullYear()&&mm===nw.getMonth()+1)?Math.min(nw.getDate(),last):last; })();
+        const _perDay = n => _bkDiv ? Math.round(n/_bkDiv*100)/100 : 0;
+        // ค่า ONHAND ของสัปดาห์ใดๆ (จาก D.onhand[week][seller]) + ส่วนต่างจากสัปดาห์ก่อน
+        const _ohGet = (wk,nm,k) => { const v = ((_ohMon[String(wk)])||{})[nm]; return (v && v[k]!=null) ? Number(v[k]) : null; };
+        const _ohDlt = (cur,prev) => { if(prev==null) return ''; const d=cur-prev; const c=d>0?'var(--green)':d<0?'var(--red)':'var(--t3)'; return ` <span style="font-size:9px;color:${c}">${d>0?'+'+d:d<0?d:'='}</span>`; };
+        const _ohv = (r,k) => { const cur=_ohGet(_ohWeek,r.name,k); if(cur==null) return '<span style="color:var(--t3)">-</span>'; return cur + (_ohWeek>1?_ohDlt(cur,_ohGet(_ohWeek-1,r.name,k)):''); };
+        const _ohsum = (rs,k) => { if(!rs.some(r=>_ohGet(_ohWeek,r.name,k)!=null)) return '<span style="color:var(--t3)">-</span>'; const cur=rs.reduce((a,r)=>a+(_ohGet(_ohWeek,r.name,k)||0),0); if(_ohWeek>1){ const prev=rs.reduce((a,r)=>a+(_ohGet(_ohWeek-1,r.name,k)||0),0); return cur+_ohDlt(cur,prev); } return cur; };
+        const COLS = [
+          {l:'เป้าจบ',      v:r=>r.target,                        agg:rs=>_sumF(rs,'target')},
+          {l:'จองเดือน',    v:r=>r.monBook,                       agg:rs=>_sumF(rs,'monBook')},
+          {l:'จองรายวัน',   v:r=>_perDay(r.bk),                   agg:rs=>_perDay(_sumF(rs,'bk'))},
+          {l:'วันไฟแนนซ์',  v:r=>r.finN?Math.round(r.finSum/r.finN):'-', agg:_finA},
+          {l:'รอผล',        v:r=>r.wr,                            agg:rs=>_sumF(rs,'wr')},
+          {l:'รอปล่อย',     v:r=>r.wp,                            agg:rs=>_sumF(rs,'wp')},
+          {l:'ปล่อย',       v:r=>r.dn,                            agg:rs=>_sumF(rs,'dn')},
+          {l:'% จอง',       v:r=>(r.lead?Math.round(r.bk/r.lead*100):0)+'%', agg:_pctB},
+          {l:'% ปล่อย',     v:r=>(r.lead?Math.round(r.dn/r.lead*100):0)+'%', agg:_pctD},
+          {l:'Lead',        v:r=>r.lead,                          agg:rs=>_sumF(rs,'lead')},
+          {l:'RJ',          v:r=>r.rj,                            agg:rs=>_sumF(rs,'rj')},
+          {l:'Lead/วัน',    v:r=>Math.round(r.lead/_rDays*100)/100, agg:_lpdA},
+          {l:'ไลฟ์',        v:r=>r.live,                          agg:rs=>_sumF(rs,'live')},
+          {l:'คลิป',        v:r=>r.clip,                          agg:rs=>_sumF(rs,'clip')},
+          {l:'Lead ไลฟ์',   v:r=>r.leadLive,                      agg:rs=>_sumF(rs,'leadLive')},
+          {l:'จองสัปดาห์ก่อน', v:r=>r.wk,                         agg:rs=>_sumF(rs,'wk')},
+          {l:'ONHAND',      v:r=>_ohv(r,'onhand'),         agg:rs=>_ohsum(rs,'onhand')},
+          {l:'ONHAND หน้า', v:r=>_ohv(r,'onhandNext'),     agg:rs=>_ohsum(rs,'onhandNext')},
+          {l:'เป้าจองหน้า', v:r=>_ohv(r,'bookTargetNext'), agg:rs=>_ohsum(rs,'bookTargetNext')},
+          {l:'เคสติดตาม',   v:r=>_ohv(r,'follow'),         agg:rs=>_ohsum(rs,'follow')},
+          {l:'หมายเหตุ',    v:r=>(r.oh&&r.oh.note)?h(String(r.oh.note).slice(0,24)):'<span style="color:var(--t3)">-</span>', agg:()=>'-'},
+        ];
+        const _tcol = t => C.TEAM_COLORS[t] || '#888';
+
+        let T = `<div class="card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:table-2',16)} สรุปเต็มรายเซลล์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ทุกคอลัมน์ตามช่วงวันที่ที่เลือก (ยกเว้น 'จองเดือน' = ทั้งเดือนปัจจุบัน)\nเลื่อนแนวนอนดูคอลัมน์เพิ่ม · คอลัมน์เซลล์ตรึงซ้าย\nวันไฟแนนซ์ = เฉลี่ยวัน ผล→ปล่อย ของเคสที่ปล่อย\nONHAND/เป้าจองหน้า/เคสติดตาม = ยังไม่ต่อชีต (เฟส 2)">?</span></div>`;
+        T += `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px"><div class="card-sub" style="margin:0">รายเซลล์ จัดกลุ่มตามทีม + แถวรวมทีม/รวมทั้งหมด — เลื่อนแนวนอนได้${_ohWeek>1?' · <b style="color:var(--green)">เลขเล็กข้าง ONHAND = ต่างจากสัปดาห์ '+(_ohWeek-1)+'</b>':''}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><select onchange="_ohWeek=Number(this.value);render()" title="เลือกสัปดาห์ของ ONHAND" style="font-size:12px;padding:6px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${[1,2,3,4,5].map(n=>`<option value="${n}" ${_ohWeek===n?'selected':''}>ONHAND สัปดาห์ ${n}</option>`).join('')}</select><button onclick="openOnhandForm()" style="font-size:12px;padding:6px 12px;border-radius:9px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;cursor:pointer;white-space:nowrap">✏️ กรอก ONHAND</button></div></div>`;
+        T += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
+        T += `<thead><tr style="background:var(--bg2)"><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:118px">เซลล์</th>`;
+        COLS.forEach(c => { T += `<th style="padding:7px 8px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2);font-weight:600">${h(c.l)}</th>`; });
+        T += `</tr></thead><tbody>`;
+        // สีโฟกัสแถว (แอดมินตั้งเอง · ขาว=ปกติ / เหลือง / แดง)
+        const _FLAGS = D.sellerFlags || {};
+        const _flagBg = f => f==='r' ? 'color-mix(in srgb,#ef4444 15%,var(--bg))' : f==='y' ? 'color-mix(in srgb,#f59e0b 20%,var(--bg))' : f==='g' ? 'color-mix(in srgb,#22c55e 16%,var(--bg))' : '';
+        const _flagSel = (nm,f) => `<select onchange="_setSellerFlag('${h(nm)}',this.value)" onclick="event.stopPropagation()" title="สีโฟกัส (ขาว/เหลือง/แดง)" style="font-size:11px;border:none;background:transparent;cursor:pointer;padding:0;margin-right:3px"><option value="" ${!f?'selected':''}>⚪</option><option value="y" ${f==='y'?'selected':''}>🟡</option><option value="r" ${f==='r'?'selected':''}>🔴</option></select>`;
+        teamsOrder.forEach(tid => {
+          rows.filter(r=>r.team===tid).forEach(r => {
+            const _f=_FLAGS[r.name]||'', _tint=_flagBg(_f), _cbg=_tint?`background:${_tint};`:'';
+            T += `<tr><td style="position:sticky;left:0;z-index:1;background:${_tint||'var(--bg)'};padding:5px 9px;border-bottom:.5px solid var(--bd);border-left:3px solid ${_tcol(tid)};font-weight:600;white-space:nowrap">${_flagSel(r.name,_f)}${h(sname(r.name))} <span style="font-size:8px;color:#fff;background:${_tcol(tid)};padding:0 4px;border-radius:3px">${h(tid==='ADMIN'?'AD':tid)}</span></td>`;
+            COLS.forEach(c => { T += `<td style="${_cbg}padding:5px 8px;text-align:right;border-bottom:.5px solid var(--bd)">${c.v(r)}</td>`; });
+            T += `</tr>`;
+          });
+        });
+        teamsOrder.forEach(tid => {
+          if (tid === 'ADMIN') return;
+          const grp = rows.filter(r=>r.team===tid); if (!grp.length) return;
+          const cc = _tcol(tid);
+          T += `<tr style="font-weight:700"><td style="position:sticky;left:0;z-index:1;background:color-mix(in srgb,${cc} 14%,var(--bg));padding:5px 9px;border-top:1px solid ${cc};color:${cc}">รวม ${h(C.TEAM_NAMES[tid]||('ทีม '+tid))}</td>`;
+          COLS.forEach(c => { T += `<td style="padding:5px 8px;text-align:right;border-top:1px solid ${cc};background:color-mix(in srgb,${cc} 9%,transparent)">${c.agg(grp)}</td>`; });
+          T += `</tr>`;
+        });
+        T += `<tr style="font-weight:800"><td style="position:sticky;left:0;z-index:1;background:var(--blue);color:#fff;padding:6px 9px">รวมทั้งหมด</td>`;
+        COLS.forEach(c => { T += `<td style="padding:6px 8px;text-align:right;background:var(--blue);color:#fff">${c.agg(rows)}</td>`; });
+        T += `</tr></tbody></table></div></div>`;
+        html += T;
+
+        // ══ รายงาน จอง / อนุมัติ / ปล่อย (เลย์เอาต์ตามชีต DL37:DX53 · ข้อมูลแดชบอร์ดสด · ตามตัวกรองวันที่) ══
+        const _rc = m => m>=5?'g':(m>=3?'y':'r');   // สีอัตโนมัติจาก (ปล่อย+รอปล่อย): ≥5 = เขียว(ดี) · 3-4 = เหลือง · ≤2 = แดง(ต้องดูแล) · ไม่มีขาว
+        const _rpt = [...rows].sort((a,b)=> (((b.dn||0)+(b.wp||0))-((a.dn||0)+(a.wp||0))) || ((b.bk||0)-(a.bk||0)) || (b.dn-a.dn));  // เรียง (ปล่อย+รอปล่อย) มากสุด → รองด้วยจอง
+        const _sL = (rs,f)=>rs.reduce((a,r)=>a+(r[f]||0),0);
+        const _RC = [
+          {l:'จองทั้งหมด', v:r=>r.bk,     t:rs=>_sL(rs,'bk')},
+          {l:'รอผล',       v:r=>r.wr,     t:rs=>_sL(rs,'wr')},
+          {l:'รอปล่อย',    v:r=>r.wp,     t:rs=>_sL(rs,'wp')},
+          {l:'ปล่อย',      v:r=>r.dn,     t:rs=>_sL(rs,'dn')},
+          {l:'% การจอง',   v:r=>(r.lead?Math.round(r.bk/r.lead*100):0)+'%', t:rs=>{const l=_sL(rs,'lead'),b=_sL(rs,'bk');return (l?Math.round(b/l*100):0)+'%';}},
+          {l:'Lead',       v:r=>r.lead,   t:rs=>_sL(rs,'lead')},
+          {l:'RJ',         v:r=>r.rj,     t:rs=>_sL(rs,'rj')},
+          {l:'เฉลี่ย Lead/วัน', v:r=>Math.round(r.lead/_rDays*100)/100, t:rs=>Math.round(_sL(rs,'lead')/_rDays*100)/100},
+          {l:'ไลฟ์',       v:r=>r.live,   t:rs=>_sL(rs,'live')},
+          {l:'คลิป',       v:r=>r.clip,   t:rs=>_sL(rs,'clip')},
+          {l:'Lead ไลฟ์',  v:r=>r.leadLive, t:rs=>_sL(rs,'leadLive')},
+        ];
+        let RT = `<div class="card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} รายงาน จอง / อนุมัติ / ปล่อย · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ไปป์ไลน์รายเซลล์ (เรียงตามจองมากสุด) ตามช่วงวันที่ที่เลือก\nจอง/รอผล/รอปล่อย/ปล่อย = จากข้อมูลแดชบอร์ด (สด) · เลย์เอาต์ตามชีตรายงาน\nรอผล/รอปล่อย = สถานะเคส (กรองวันรับเคส) · ปล่อย = ตามวันปล่อย">?</span></div>`;
+        RT += `<div class="card-sub">เรียงตาม (ปล่อย+รอปล่อย) มากสุด → รองด้วยจอง · สีแถว: <b style="color:#16a34a">เขียว</b> = ≥5 (ดี) · <b style="color:#d97706">เหลือง</b> = 3-4 · <b style="color:#dc2626">แดง</b> = ≤2 (ต้องดูแล)</div>`;
+        RT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
+        RT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">#</th><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:100px">เซลล์</th>`;
+        _RC.forEach(c=>{ RT += `<th style="padding:7px 8px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2);font-weight:600">${h(c.l)}</th>`; });
+        RT += `</tr></thead><tbody>`;
+        _rpt.forEach((r,i)=>{
+          const _f2=_rc((r.dn||0)+(r.wp||0)), _t2=_flagBg(_f2), _cb2=_t2?`background:${_t2};`:'';
+          RT += `<tr><td style="${_cb2}padding:5px 8px;text-align:center;border-bottom:.5px solid var(--bd);color:var(--t3)">${i+1}</td><td style="position:sticky;left:0;z-index:1;background:${_t2||'var(--bg)'};padding:5px 9px;border-bottom:.5px solid var(--bd);border-left:3px solid ${_tcol(r.team)};font-weight:600;white-space:nowrap">${h(sname(r.name))} <span style="font-size:8px;color:#fff;background:${_tcol(r.team)};padding:0 4px;border-radius:3px">${h(r.team==='ADMIN'?'AD':r.team)}</span></td>`;
+          _RC.forEach(c=>{ RT += `<td style="${_cb2}padding:5px 8px;text-align:right;border-bottom:.5px solid var(--bd)">${c.v(r)}</td>`; });
+          RT += `</tr>`;
+        });
+        RT += `<tr style="font-weight:800"><td style="background:var(--blue);color:#fff;padding:6px 8px;text-align:center">รวม</td><td style="position:sticky;left:0;z-index:1;background:var(--blue);color:#fff;padding:6px 9px">รวมทั้งหมด</td>`;
+        _RC.forEach(c=>{ RT += `<td style="padding:6px 8px;text-align:right;background:var(--blue);color:#fff">${c.t(_rpt)}</td>`; });
+        RT += `</tr></tbody></table></div></div>`;
+        html += RT;
+      } catch (e) { console.error('mega seller table error', e); }
+
       // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──
       {
         const _adm = (D.sellers || []).find(s => s.name === 'ADMIN');
@@ -3563,6 +3730,86 @@
     }
 
     // ── Actions ──
+    // ดึง ONHAND ทุกสัปดาห์ของเดือนที่ระบุ (เดือนอื่นที่ไม่ใช่ปัจจุบัน) → แคช → รีเฟรชตาราง
+    async function _ohFetchMonth(ym){
+      window._ohCache = window._ohCache || {};
+      if(!ym || window._ohCache[ym]!==undefined) return;
+      window._ohCache[ym] = null;   // กันยิงซ้ำระหว่างโหลด
+      try{ const d=await (await fetch('/api/admin/onhand_config?ym='+encodeURIComponent(ym),{credentials:'same-origin'})).json(); window._ohCache[ym] = (d&&d.ok)?(d.weeks||{}):{}; }
+      catch(_){ window._ohCache[ym] = {}; }
+      try{ render(); }catch(_){}
+    }
+    // ── ฟอร์มกรอก/ดู ONHAND รายสัปดาห์ (แอดมิน · เลือกดู/แก้สัปดาห์ก่อนได้) → เขียนชีต "ONHAND รายสัปดาห์" ──
+    async function openOnhandForm(week){
+      let ov=document.getElementById('onhand-ov');
+      if(!ov){
+        ov=document.createElement('div'); ov.id='onhand-ov';
+        ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+        ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+        ov.innerHTML='<div style="background:var(--bg);border-radius:14px;padding:18px;max-width:740px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3)"></div>';
+        document.body.appendChild(ov);
+      }
+      const box=ov.firstChild; box.innerHTML='<p class="mut">กำลังโหลด…</p>';
+      let d; try{ const _q='ym='+encodeURIComponent(window._ohViewYm||'')+(week?('&week='+encodeURIComponent(week)):''); d=await (await fetch('/api/admin/onhand_config?'+_q,{credentials:'same-origin'})).json(); }
+      catch(e){ box.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ box.innerHTML='<p style="color:var(--red)">'+h(d.error||'ผิดพลาด')+'</p>'; return; }
+      const V=d.values||{}, isCur=(Number(d.week)===Number(d.currentWeek) && d.ym===d.currentYm);
+      window._ohYm=d.ym;
+      // รายชื่อ = เซลล์ active ในตาราง (ตัดเซลล์เก่า) + เซลล์ที่มีข้อมูลในสัปดาห์นั้น
+      const names=[], seen=new Set();
+      ((window._ohSellers&&window._ohSellers.length)?window._ohSellers:(d.sellers||[])).forEach(n=>{ if(n&&!seen.has(n)){seen.add(n);names.push(n);} });
+      Object.keys(V).forEach(n=>{ if(n&&!seen.has(n)){seen.add(n);names.push(n);} });
+      const wopts=[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(d.week)===n?'selected':''}>สัปดาห์ ${n}${(n===Number(d.currentWeek)&&d.ym===d.currentYm)?' · สัปดาห์นี้':''}</option>`).join('');
+      const _inp=(nm,k,val)=>`<input type="number" inputmode="numeric" data-nm="${h(nm)}" data-k="${k}" value="${val!=null?val:''}" style="width:58px;padding:5px 6px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg2);color:var(--t1);font-size:12px;text-align:center">`;
+      const _note=(nm,val)=>`<input type="text" data-nm="${h(nm)}" data-k="note" value="${val!=null?h(String(val)):''}" style="width:130px;padding:5px 6px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg2);color:var(--t1);font-size:12px">`;
+      let b=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:16px;font-weight:800">✏️ กรอก / ดู ONHAND</div><button onclick="document.getElementById('onhand-ov').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--t2)">✕</button></div>`;
+      b+=`<div style="font-size:12px;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="mut">เดือน ${h(d.ym)} · สัปดาห์</span><select id="oh-week" onchange="openOnhandForm(this.value)" style="padding:5px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:12px">${wopts}</select>${isCur?'':'<span style="font-size:10px;color:var(--amber)">· กำลังดู/แก้สัปดาห์ก่อน</span>'}<span class="mut" style="font-size:10px">· กรอกแล้วกดบันทึก → ชีต "ONHAND รายสัปดาห์"</span></div>`;
+      b+=`<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:100%"><thead><tr style="color:var(--t3);font-size:10px;background:var(--bg2)"><th style="text-align:left;padding:6px 8px;position:sticky;left:0;background:var(--bg2)">เซลล์</th><th style="padding:6px">ONHAND</th><th style="padding:6px">ONHAND หน้า</th><th style="padding:6px">เป้าจองหน้า</th><th style="padding:6px">เคสติดตาม</th><th style="padding:6px">หมายเหตุ</th></tr></thead><tbody>`;
+      names.forEach(nm=>{ const v=V[nm]||{};
+        b+=`<tr><td style="padding:4px 8px;font-weight:600;white-space:nowrap;position:sticky;left:0;background:var(--bg);border-bottom:.5px solid var(--bd)">${h(nm==='ADMIN'?'เทเลเซลล์':nm)}</td><td style="padding:4px;text-align:center;border-bottom:.5px solid var(--bd)">${_inp(nm,'onhand',v.onhand)}</td><td style="padding:4px;text-align:center;border-bottom:.5px solid var(--bd)">${_inp(nm,'onhandNext',v.onhandNext)}</td><td style="padding:4px;text-align:center;border-bottom:.5px solid var(--bd)">${_inp(nm,'bookTargetNext',v.bookTargetNext)}</td><td style="padding:4px;text-align:center;border-bottom:.5px solid var(--bd)">${_inp(nm,'follow',v.follow)}</td><td style="padding:4px;text-align:center;border-bottom:.5px solid var(--bd)">${_note(nm,v.note)}</td></tr>`; });
+      b+=`</tbody></table></div>`;
+      b+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button onclick="document.getElementById('onhand-ov').remove()" style="padding:7px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button><button id="oh-save" onclick="saveOnhand()" style="padding:7px 18px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">บันทึก</button></div>`;
+      box.innerHTML=b;
+    }
+    async function saveOnhand(){
+      const wsel=document.getElementById('oh-week'); const week=wsel?Number(wsel.value):0;
+      const ym=window._ohYm||'';
+      const btn=document.getElementById('oh-save'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
+      const map={};
+      document.querySelectorAll('#onhand-ov input[data-nm]').forEach(el=>{
+        const nm=el.getAttribute('data-nm'), k=el.getAttribute('data-k'), val=el.value.trim();
+        const o=map[nm]=map[nm]||{seller:nm};
+        o[k] = (k==='note') ? val : (val===''?'':Number(val));
+      });
+      const rows=Object.values(map);
+      try{
+        const r=await fetch('/api/admin/onhand_config',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({ym,week,rows})});
+        const j=await r.json();
+        if(!j.ok){ alert(j.error||'บันทึกไม่สำเร็จ'); if(btn){btn.disabled=false;btn.textContent='บันทึก';} return; }
+        const _ym=j.ym, _wk=String(j.week);   // อัปเดตแคชเดือนนั้น → ตารางรีเฟรช (โชว์สัปดาห์ที่เพิ่งกรอก)
+        window._ohCache=window._ohCache||{};
+        if(window._ohCache[_ym]==null) window._ohCache[_ym]={};
+        window._ohCache[_ym][_wk]=j.values||{};
+        if(j.ym===j.currentYm) D.onhand=window._ohCache[_ym];
+        if(j.week){ _ohWeek=Number(j.week); }
+        const ov=document.getElementById('onhand-ov'); if(ov) ov.remove();
+        render();
+      }catch(e){ alert('ผิดพลาด: '+e); if(btn){btn.disabled=false;btn.textContent='บันทึก';} }
+    }
+    // ตั้งสีโฟกัสแถวเซลล์ (ขาว/เหลือง/แดง) → เขียนชีต "โฟกัสเซลล์"
+    async function _setSellerFlag(name, flag){
+      // ★ optimistic: เปลี่ยนสีทันที แล้วค่อยเซฟเบื้องหลัง (ไม่รอ Google Sheets เขียนเสร็จ ~1-2 วิ)
+      D.sellerFlags = D.sellerFlags || {};
+      const _prev = D.sellerFlags[name];
+      if(flag==='y'||flag==='r') D.sellerFlags[name]=flag; else delete D.sellerFlags[name];
+      render();
+      try{
+        const r=await fetch('/api/admin/seller_flags',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({seller:name,flag:flag})});
+        const j=await r.json();
+        if(!j.ok){ if(_prev){D.sellerFlags[name]=_prev;}else{delete D.sellerFlags[name];} render(); alert(j.error||'บันทึกไม่สำเร็จ'); return; }
+        D.sellerFlags=j.flags||{};   // sync เงียบๆ กับ server (ไม่ต้อง render ซ้ำ)
+      }catch(e){ if(_prev){D.sellerFlags[name]=_prev;}else{delete D.sellerFlags[name];} render(); alert('บันทึกไม่สำเร็จ (เน็ต?) — คืนค่าเดิม'); }
+    }
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
 
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)

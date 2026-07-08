@@ -95,6 +95,14 @@ def dashboard_page(request):
         "MONTHS_FULL": MONTHS_FULL,
     }
 
+    # ONHAND รายสัปดาห์ (พิมพ์เอง) — ฝังทุกสัปดาห์ของเดือนปัจจุบัน + เดือน/สัปดาห์ปัจจุบัน + สีโฟกัสแถวเซลล์
+    try:
+        _oy, _ow = _onhand_now()
+        data = {**data, "onhand": _onhand_read_month(_oy), "onhandMeta": {"ym": _oy, "week": _ow},
+                "sellerFlags": _seller_flags_read()}
+    except Exception:
+        pass
+
     return render(request, "dashboard/index.html", {
         "data_json": json.dumps(data, ensure_ascii=False, default=str),
         "constants_json": json.dumps(constants, ensure_ascii=False),
@@ -712,6 +720,219 @@ def admin_tele_config(request):
         "sheet_url": f"https://docs.google.com/spreadsheets/d/{cfg.get('spreadsheet_id','')}/edit",
         "sheet_name": cfg.get("sheet_name", "ตั้งค่าเทเลเซลล์"),
     })
+
+
+# ─────────── ONHAND รายสัปดาห์ (แอดมินพิมพ์เอง · เก็บชีต) ───────────
+ONHAND_HEADER = ["สัปดาห์", "เซลล์", "ONHAND", "ONHAND สัปดาห์หน้า", "เป้าจองสัปดาห์หน้า", "เคสที่ติดตาม", "หมายเหตุ"]
+
+
+def _onhand_now():
+    """คืน (ym 'YYYY-MM', weeknum) ของสัปดาห์ปัจจุบัน (เวลาไทย) — ★ สัปดาห์ตัดรอบทุกวันพฤหัส
+    สัปดาห์ 1 = ตั้งแต่พฤหัสแรกของเดือนเป็นต้นไป · วันก่อนพฤหัสแรก = ยังนับสัปดาห์ 1"""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=7)))
+    first = now.replace(day=1)
+    first_thu_day = 1 + (3 - first.weekday()) % 7   # วันที่ของพฤหัสแรก (Mon=0..Thu=3..Sun=6)
+    wk = 1 if now.day < first_thu_day else (now.day - first_thu_day) // 7 + 1
+    return now.strftime("%Y-%m"), wk
+
+
+def _onhand_key(ym, wk):
+    """คีย์เก็บในชีต = 'YYYY-MM-Wn' (เดือน + สัปดาห์ที่ 1-5)"""
+    return f"{ym}-W{int(wk)}"
+
+
+def _onhand_read(week):
+    """อ่านค่า ONHAND ของสัปดาห์ที่ระบุจากชีต → {seller: {onhand, onhandNext, bookTargetNext, follow}}"""
+    try:
+        rows = fetch_sheet("onhand_config")
+    except Exception:
+        return {}
+
+    def _gi(r, i):
+        try:
+            return int(float(str(r[i]).strip() or 0)) if len(r) > i else 0
+        except Exception:
+            return 0
+
+    out = {}
+    for r in rows:
+        w = (str(r[0]).strip() if len(r) > 0 else "")
+        nm = (str(r[1]).strip() if len(r) > 1 else "")
+        if w != week or not nm:
+            continue
+        out[nm] = {"onhand": _gi(r, 2), "onhandNext": _gi(r, 3),
+                   "bookTargetNext": _gi(r, 4), "follow": _gi(r, 5),
+                   "note": (str(r[6]).strip() if len(r) > 6 else "")}
+    return out
+
+
+def _onhand_read_month(ym):
+    """คืน {weeknum(str): {seller: {...}}} ของทุกสัปดาห์ในเดือน ym — สำหรับฝังในหน้า dashboard"""
+    try:
+        rows = fetch_sheet("onhand_config")
+    except Exception:
+        return {}
+
+    def _gi(r, i):
+        try:
+            return int(float(str(r[i]).strip() or 0)) if len(r) > i else 0
+        except Exception:
+            return 0
+
+    out, prefix = {}, ym + "-W"
+    for r in rows:
+        w = (str(r[0]).strip() if len(r) > 0 else "")
+        if not w.startswith(prefix):
+            continue
+        wk = w[len(prefix):]
+        nm = (str(r[1]).strip() if len(r) > 1 else "")
+        if not nm:
+            continue
+        out.setdefault(wk, {})[nm] = {
+            "onhand": _gi(r, 2), "onhandNext": _gi(r, 3), "bookTargetNext": _gi(r, 4),
+            "follow": _gi(r, 5), "note": (str(r[6]).strip() if len(r) > 6 else "")}
+    return out
+
+
+@require_http_methods(["GET", "POST"])
+def admin_onhand_config(request):
+    """Admin — กรอก/แก้ ONHAND รายสัปดาห์ (ต่อเซลล์) → เขียนชีต "ONHAND รายสัปดาห์"
+    GET  → {week, sellers, values:{name:{...}}}
+    POST → {week?, rows:[{seller,onhand,onhandNext,bookTargetNext,follow}]} · เก็บประวัติสัปดาห์อื่นไว้
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.google_sheets import write_sheet
+    cur_ym, cur_wk = _onhand_now()
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+        ym = (str(body.get("ym") or cur_ym).strip()) or cur_ym
+        try:
+            wk = int(body.get("week") or cur_wk)
+        except Exception:
+            wk = cur_wk
+        key = _onhand_key(ym, wk)
+        rows_in = body.get("rows") or []
+        try:
+            existing = fetch_sheet("onhand_config")
+        except Exception:
+            existing = []
+        # เก็บแถวของสัปดาห์อื่น (ประวัติ) · ตัดหัวตาราง + สัปดาห์นี้ออก แล้วเขียนใหม่
+        kept = []
+        for r in existing:
+            w = (str(r[0]).strip() if len(r) > 0 else "")
+            if not w or w == "สัปดาห์" or w == key:
+                continue
+            kept.append([(str(r[i]) if len(r) > i else "") for i in range(7)])
+
+        def _num(v):
+            s = str(v).strip()
+            if s in ("", "-"):
+                return ""
+            try:
+                return str(int(float(s)))
+            except Exception:
+                return ""
+
+        new_rows = []
+        for it in rows_in:
+            nm = str(it.get("seller", "") or "").strip()
+            if not nm:
+                continue
+            new_rows.append([key, nm, _num(it.get("onhand")), _num(it.get("onhandNext")),
+                             _num(it.get("bookTargetNext")), _num(it.get("follow")),
+                             str(it.get("note", "") or "").strip()])
+        values = [ONHAND_HEADER] + kept + new_rows
+        try:
+            write_sheet("onhand_config", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+        return JsonResponse({"ok": True, "ym": ym, "week": wk, "currentYm": cur_ym, "currentWeek": cur_wk,
+                             "saved": len(new_rows), "values": _onhand_read(key)})
+
+    # GET
+    from .services.constants import ALL_SELLERS, refresh_from_sheet
+    try:
+        refresh_from_sheet()
+    except Exception:
+        pass
+    sellers = sorted(n for n in (ALL_SELLERS or []) if n)
+    if "ADMIN" not in sellers:
+        sellers.append("ADMIN")
+    ym = (request.GET.get("ym") or "").strip() or cur_ym
+    try:
+        wk = int(request.GET.get("week") or cur_wk)
+    except Exception:
+        wk = cur_wk
+    return JsonResponse({"ok": True, "ym": ym, "week": wk, "currentYm": cur_ym, "currentWeek": cur_wk,
+                         "sellers": sellers, "values": _onhand_read(_onhand_key(ym, wk)),
+                         "weeks": _onhand_read_month(ym)})
+
+
+# ─────────── สีโฟกัสแถวเซลล์ (แอดมินตั้งเอง · ขาว/เหลือง/แดง) ───────────
+def _seller_flags_read():
+    """คืน {seller: 'y'|'r'} — สีโฟกัสที่ตั้งไว้ (ไม่มี = ขาว/ปกติ ไม่เก็บ)"""
+    try:
+        rows = fetch_sheet("seller_flags")
+    except Exception:
+        return {}
+    out = {}
+    for r in rows:
+        nm = (str(r[0]).strip() if len(r) > 0 else "")
+        fl = (str(r[1]).strip().lower() if len(r) > 1 else "")
+        if nm and nm != "เซลล์" and fl in ("y", "r"):
+            out[nm] = fl
+    return out
+
+
+@require_http_methods(["GET", "POST"])
+def admin_seller_flags(request):
+    """Admin — ตั้งสีโฟกัสแถวเซลล์ (ขาว/เหลือง/แดง) → เขียนชีต "โฟกัสเซลล์"
+    GET → {flags:{seller:'y'|'r'}}
+    POST → {seller, flag} (แก้ทีละคน) หรือ {flags:{...}} (ทั้งชุด)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.google_sheets import write_sheet
+    cur = _seller_flags_read()
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+        if isinstance(body.get("flags"), dict):
+            new = {}
+            for k, v in body["flags"].items():
+                k = str(k).strip()
+                v = str(v).strip().lower()
+                if k and v in ("y", "r"):
+                    new[k] = v
+        else:
+            nm = str(body.get("seller", "") or "").strip()
+            if not nm:
+                return JsonResponse({"error": "ไม่มีชื่อเซลล์"}, status=400)
+            fl = str(body.get("flag", "") or "").strip().lower()
+            new = dict(cur)
+            if fl in ("y", "r"):
+                new[nm] = fl
+            else:
+                new.pop(nm, None)
+        values = [["เซลล์", "สี"]] + [[k, v] for k, v in new.items()]
+        try:
+            write_sheet("seller_flags", values)
+        except Exception as e:
+            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+        return JsonResponse({"ok": True, "flags": _seller_flags_read()})
+
+    return JsonResponse({"ok": True, "flags": cur})
 
 
 @require_http_methods(["GET", "POST"])

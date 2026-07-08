@@ -81,6 +81,14 @@ SHEET_CONFIG = {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "ตั้งค่าเทเลเซลล์",
     },
+    "onhand_config": {   # ONHAND รายสัปดาห์ (แอดมินพิมพ์เอง) — ต่อเซลล์: onhand/onhand หน้า/เป้าจองหน้า/เคสติดตาม
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "ONHAND รายสัปดาห์",
+    },
+    "seller_flags": {   # สีโฟกัสแถวเซลล์ (แอดมินตั้งเอง) — เซลล์ | สี (y=เหลือง, r=แดง)
+        "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+        "sheet_name": "โฟกัสเซลล์",
+    },
     "leadscore": {
         "spreadsheet_id": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
         "sheet_name": "leadscore",
@@ -877,9 +885,21 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     markers.append((i, b.strip()[len("ชื่อเซลล์"):].strip()))
             for k, (mi, raw_name) in enumerate(markers):
                 name = normalize_seller(raw_name)
-                if name not in known:
-                    continue   # ตัด marker ขยะ / เซลล์ไม่อยู่ในรายชื่อจริง
                 end = markers[k + 1][0] if k + 1 < len(markers) else len(vals)
+                # อ่านบล็อก: (1) ชื่ออยู่ในรายชื่อจริง (ALL_SELLERS/ADMIN) หรือ
+                #   (2) ชื่อเซลล์จริงที่ไม่อยู่ใน config — เซลล์ลาออก/เทเลเซลล์ (เช่น "ใบตอง") ยังนับเคส
+                #   (ผู้ใช้: เซลล์ออกไปแล้วเคสยังนับ · แค่เดือนต่อมาไม่มีชื่อ/สิทธิ์เข้าระบบ)
+                # ตัดเฉพาะ marker ขยะ: "A"/ว่าง/สั้นเกิน หรือบล็อกไม่มีเคสจริง (seq เลข + สถานะ)
+                if name not in known:
+                    rn = raw_name.strip()
+                    if len(rn) < 2 or rn.upper() == "A":
+                        continue
+                    if not any(
+                        str(vals[j][1] if len(vals[j]) > 1 else "").strip().isdigit()
+                        and str(vals[j][13] if len(vals[j]) > 13 else "").strip()
+                        for j in range(mi + 1, end)
+                    ):
+                        continue   # บล็อกว่าง (ไม่มีเคส)
                 for j in range(mi + 1, end):
                     row = vals[j]
                     seq = str(row[1] if len(row) > 1 else "").strip()
@@ -887,12 +907,12 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     if not seq.isdigit() or not status:
                         continue   # ข้าม sub-header / แถวว่าง (ตรง filter N<>"" ในสูตร)
                     # col 0=ชื่อเซลล์, col 1-27=ตรง tab · col 28=tab name, col 29=แถวในชีต (1-based) — ใช้ inline edit เขียนกลับ
-                    # เคสที่มาร์ค "ADMIN" ในคอลัมน์ AB (idx 27) = เคสของแอดมิน แม้อยู่ใต้บล็อกเซลล์อื่น → ย้ายเป็น ADMIN (ตัดจากเซลล์)
+                    # เคสที่มาร์ค "ADMIN" ในคอลัมน์ AB (idx 24-29) = "เทเลเซลล์ทำเอง" (หาลีด+ปิดเอง) แม้อยู่ใต้บล็อกเซลล์อื่น
+                    #   → ย้ายเป็น ADMIN ทุกสถานะ รวม "ปล่อย" ด้วย (เทเลเซลล์ได้เครดิตปล่อยเมื่อปิดเอง)
+                    # ★ (มิ.ย.69→ก.ค.69) เอากฎยกเว้น "ปล่อย" ออกแล้ว: เดิมบังคับเทปล่อยให้เซลล์เจ้าของบล็อกเสมอ
+                    #   ตอนนี้ผู้ใช้เลือก "มาร์คต่างคำ" — เคสที่เทเลเซลล์แค่หาลีดให้แล้ว "เซลล์เป็นคนปิด"
+                    #   = ไม่ต้องมาร์ค ADMIN (ลบมาร์คทิ้ง) → ปล่อยเป็นของเซลล์เจ้าของบล็อกตามปกติ
                     admin_flag = any(str(row[c] if c < len(row) else "").strip().upper() == "ADMIN" for c in range(24, 30))
-                    # ★ ยกเว้นสถานะ "ปล่อย" (ปิดดีลแล้ว) — เครดิตปล่อยอยู่กับเซลล์เจ้าของบล็อกที่ปิดเอง ไม่ย้ายไป ADMIN
-                    #   (เทเลเซลล์หาลีด/จองให้ แต่ "ปล่อย" = เซลล์ปิด → เทเลเซลล์ไม่มีปล่อย · ไม่รวม "รอปล่อย")
-                    if admin_flag and status.replace(" (ซื้อสด)", "").strip().startswith("ปล่อย"):
-                        admin_flag = False
                     seller_out = "ADMIN" if admin_flag else name
                     all_rows.append([seller_out] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
         _cache_set(cache_key, all_rows)
