@@ -16,6 +16,7 @@
 import http.server
 import json
 import socket
+import sys
 import threading
 import urllib.parse
 import urllib.request
@@ -55,6 +56,11 @@ class Command(BaseCommand):
         parser.add_argument("--port", type=int, default=8765)
 
     def handle(self, *args, **opts):
+        try:  # กัน UnicodeEncodeError ตอนพิมพ์ ✓/ไทย บน console cp874 (Windows ไทย)
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
         cid, secret, port = opts["client_id"], opts["client_secret"], opts["port"]
         if not (cid and secret):
             raise CommandError("ต้องมี --client-id และ --client-secret (หรือ GDRIVE_CLIENT_ID/SECRET ใน .env)")

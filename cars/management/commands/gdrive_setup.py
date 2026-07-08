@@ -6,6 +6,8 @@
 → เช็คว่า token ใช้ได้ + สร้างโฟลเดอร์ "Oxlet Car Media" → พิมพ์ GDRIVE_ROOT_FOLDER_ID ให้เอาไปใส่ .env
 (ถ้าไม่ตั้ง GDRIVE_ROOT_FOLDER_ID ไฟล์จะไปอยู่ root ของไดรฟ์ — ใช้งานได้แต่รก)
 """
+import sys
+
 from django.core.management.base import BaseCommand, CommandError
 
 from cars import gdrive
@@ -18,6 +20,11 @@ class Command(BaseCommand):
         parser.add_argument("--name", default="Oxlet Car Media", help="ชื่อโฟลเดอร์หลัก")
 
     def handle(self, *args, **opts):
+        try:  # กัน UnicodeEncodeError ตอนพิมพ์ ✓/ไทย บน console cp874 (Windows ไทย)
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
         if not gdrive.is_configured():
             raise CommandError("ยังไม่ได้ตั้ง GDRIVE_CLIENT_ID / GDRIVE_CLIENT_SECRET / GDRIVE_REFRESH_TOKEN ใน .env")
         try:
