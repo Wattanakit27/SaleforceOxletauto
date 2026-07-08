@@ -184,3 +184,31 @@ def video_view_url(file_id):
 
 def video_preview_url(file_id):
     return f"https://drive.google.com/file/d/{file_id}/preview"
+
+
+# ──────────────────────────── เปลี่ยนชื่อไฟล์ ────────────────────────────
+def get_name(file_id):
+    """คืนชื่อไฟล์ปัจจุบันใน Drive (สำหรับดึงนามสกุลเดิม) — '' ถ้าอ่านไม่ได้"""
+    if not file_id:
+        return ""
+    try:
+        r = requests.get(f"{_FILES}/{quote(file_id)}?fields=name",
+                         headers=_auth(), timeout=20)
+        if r.status_code == 200:
+            return (r.json() or {}).get("name", "") or ""
+    except Exception:
+        pass
+    return ""
+
+
+def rename(file_id, name):
+    """เปลี่ยนชื่อไฟล์/โฟลเดอร์ใน Drive — best-effort คืน True/False"""
+    if not (file_id and name):
+        return False
+    try:
+        r = requests.patch(f"{_FILES}/{quote(file_id)}?fields=id",
+                           headers=_auth({"Content-Type": "application/json"}),
+                           json={"name": name}, timeout=20)
+        return r.status_code == 200
+    except Exception:
+        return False

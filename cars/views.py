@@ -3,6 +3,8 @@
 """
 import io
 import json
+import os
+import re
 
 import qrcode
 import requests
@@ -429,6 +431,44 @@ def _ensure_car_folder(car):
     return fid
 
 
+_THAI_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+             "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+
+
+def _safe_filename(s):
+    """ตัดอักขระที่ทำชื่อไฟล์พังตอนโหลดลง Windows/มือถือ (\\ / : * ? \" < > | ขึ้นบรรทัดใหม่)"""
+    s = re.sub(r'[\\/:*?"<>|\r\n\t]', "", s or "")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _label_stage_media(log, car):
+    """ตั้งชื่อไฟล์รูป/วิดีโอใน Drive ตาม 'สถานะ(ผู้เปลี่ยน) วันเวลา ลำดับ.นามสกุล'
+    เช่น 'รับเข้า(หมี) 8ก.ค.69 14-30 1.jpg' — เฉพาะไฟล์บน Drive (id ไม่มี '/') · ไฟล์ดิสก์ข้าม.
+    best-effort: ล้มเหลว = ไม่ทำให้การเปลี่ยนสเตปพัง (ชื่อไฟล์เป็นแค่ป้าย ไม่กระทบลิงก์แสดงผลที่อิง id)."""
+    from . import gdrive
+    if not gdrive.is_configured():
+        return
+    media = log.media if isinstance(log.media, list) else []
+    if not media:
+        return
+    now = timezone.localtime(log.created_at) if log.created_at else timezone.localtime()
+    stage = _safe_filename(car.stage_name) or "อัพเดท"
+    worker = _safe_filename(log.worker_name) or "-"
+    datestr = f"{now.day}{_THAI_MON[now.month - 1]}{(now.year + 543) % 100:02d} {now.hour:02d}-{now.minute:02d}"
+    n = 0
+    for m in media:
+        if not isinstance(m, dict):
+            continue
+        fid = m.get("id") or ""
+        if not fid or "/" in fid:   # "/" = path บนดิสก์ VPS → ข้าม (ฟีเจอร์นี้สำหรับ Drive)
+            continue
+        n += 1
+        ext = os.path.splitext(gdrive.get_name(fid))[1]
+        if not ext:
+            ext = ".mp4" if m.get("video") else ".jpg"
+        gdrive.rename(fid, f"{stage}({worker}) {datestr} {n}{ext}")
+
+
 def _save_local_media(f, code=""):
     """เก็บไฟล์ลงดิสก์ VPS (MEDIA_ROOT) จัดโฟลเดอร์ media/cars/<code>/ → คืน relative name (มี "/")"""
     import re as _re
@@ -507,6 +547,10 @@ def scan_submit(request, code):
         try:  # กันช่วง deploy ที่คอลัมน์ media ยังไม่ migrate — เปลี่ยนสเตปต้องไม่ 500
             log.media = media
             log.save(update_fields=["media"])
+        except Exception:
+            pass
+        try:  # ตั้งชื่อไฟล์ตามสถานะ+ผู้เปลี่ยน+เวลา (best-effort · ไม่พังงานถ้า Drive ล่ม)
+            _label_stage_media(log, car)
         except Exception:
             pass
     if should_notify:
@@ -756,6 +800,10 @@ def api_seller_set_stage(request):
         try:  # กันช่วง deploy ที่คอลัมน์ media ยังไม่ migrate — เปลี่ยนสเตปต้องไม่ 500
             log.media = media
             log.save(update_fields=["media"])
+        except Exception:
+            pass
+        try:  # ตั้งชื่อไฟล์ตามสถานะ+ผู้เปลี่ยน+เวลา (best-effort · ไม่พังงานถ้า Drive ล่ม)
+            _label_stage_media(log, car)
         except Exception:
             pass
     if should_notify:
