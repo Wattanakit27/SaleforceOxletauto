@@ -2106,7 +2106,6 @@
         const _pctB = rs => { const l=rs.reduce((a,r)=>a+r.lead,0), b=rs.reduce((a,r)=>a+r.bk,0); return (l?Math.round(b/l*100):0)+'%'; };
         const _pctD = rs => { const l=rs.reduce((a,r)=>a+r.lead,0), d=rs.reduce((a,r)=>a+r.dn,0); return (l?Math.round(d/l*100):0)+'%'; };
         const _finA = rs => { const s=rs.reduce((a,r)=>a+r.finSum,0), n=rs.reduce((a,r)=>a+r.finN,0); return n?Math.round(s/n):'-'; };
-        const _lpdA = rs => { const l=rs.reduce((a,r)=>a+r.lead,0); return Math.round(l/_rDays*100)/100; };
         const _sumF = (rs,f) => rs.reduce((a,r)=>a+(r[f]||0),0);
         // "จองรายวัน" = จอง ÷ วันที่ผ่านไปในเดือนที่ดู (เดือนปัจจุบัน→วันนี้ · เดือนก่อน→สิ้นเดือน)
         const _bkDiv = (function(){ const p=(_ohViewYm||'').split('-'); const yy=+p[0], mm=+p[1]; if(!yy||!mm) return _rDays; const last=new Date(yy,mm,0).getDate(); const nw=new Date(); return (yy===nw.getFullYear()&&mm===nw.getMonth()+1)?Math.min(nw.getDate(),last):last; })();
@@ -2128,7 +2127,7 @@
           {l:'% ปล่อย',     v:r=>(r.lead?Math.round(r.dn/r.lead*100):0)+'%', agg:_pctD},
           {l:'Lead',        v:r=>r.lead,                          agg:rs=>_sumF(rs,'lead')},
           {l:'RJ',          v:r=>r.rj,                            agg:rs=>_sumF(rs,'rj')},
-          {l:'Lead/วัน',    v:r=>Math.round(r.lead/_rDays*100)/100, agg:_lpdA},
+          {l:'Lead/วัน',    v:r=>_perDay(r.lead), agg:rs=>_perDay(_sumF(rs,'lead'))},
           {l:'ไลฟ์',        v:r=>r.live,                          agg:rs=>_sumF(rs,'live')},
           {l:'คลิป',        v:r=>r.clip,                          agg:rs=>_sumF(rs,'clip')},
           {l:'Lead ไลฟ์',   v:r=>r.leadLive,                      agg:rs=>_sumF(rs,'leadLive')},
@@ -2184,7 +2183,7 @@
           {l:'% การจอง',   v:r=>(r.lead?Math.round(r.bk/r.lead*100):0)+'%', t:rs=>{const l=_sL(rs,'lead'),b=_sL(rs,'bk');return (l?Math.round(b/l*100):0)+'%';}},
           {l:'Lead',       v:r=>r.lead,   t:rs=>_sL(rs,'lead')},
           {l:'RJ',         v:r=>r.rj,     t:rs=>_sL(rs,'rj')},
-          {l:'เฉลี่ย Lead/วัน', v:r=>Math.round(r.lead/_rDays*100)/100, t:rs=>Math.round(_sL(rs,'lead')/_rDays*100)/100},
+          {l:'เฉลี่ย Lead/วัน', v:r=>_perDay(r.lead), t:rs=>_perDay(_sL(rs,'lead'))},
           {l:'ไลฟ์',       v:r=>r.live,   t:rs=>_sL(rs,'live')},
           {l:'คลิป',       v:r=>r.clip,   t:rs=>_sL(rs,'clip')},
           {l:'Lead ไลฟ์',  v:r=>r.leadLive, t:rs=>_sL(rs,'leadLive')},
