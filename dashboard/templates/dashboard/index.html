@@ -2032,9 +2032,9 @@
         const sLeadNormal=_sval(s,'leadNormal');   // lead ปกติ (ไม่รวม RJ)
         const sLeadRJ=_sval(s,'leadRJ');
         const sDealVal = _sval(s, 'dealValue');
-        // Conv% = ปล่อย ÷ lead ปกติ (ไม่เอา RJ มาถ่วง)
-        // ★ ADMIN (เทเลเซลล์) special: ใช้ จอง ÷ lead แทน (งานคือ "จอง" ไม่ใช่ "ปิดเอง" → ปล่อย=0 จะดูแย่เกินจริง)
-        const conv = (s.name === 'ADMIN') ? pct(sBooking, sLeadNormal) : pct(sDone, sLeadNormal);
+        // Conv% = ปล่อย ÷ lead ปกติ (ไม่เอา RJ มาถ่วง) — ทุกเซลล์รวม ADMIN(เทเลเซลล์) คิดเหมือนกัน
+        // (เทเลเซลล์มีเครดิตปล่อยได้แล้วตามกติกาใหม่ ก.ค.69 เลยไม่ต้อง special-case จอง÷lead อีก)
+        const conv = pct(sDone, sLeadNormal);
         const tC=conv>=5?'var(--green)':conv>=2?'var(--amber)':'var(--red)';
         const tBg=conv>=5?'var(--green-bg)':conv>=2?'var(--amber-bg)':'var(--red-bg)';
         // Inactive seller (เซลล์เก่าที่ไม่อยู่ใน config) — แสดงเป็น row read-only มี style ต่าง
@@ -2052,8 +2052,7 @@
         html += `<span style="text-align:right;color:var(--green)">${sBooking}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid)">${sDone}</span>`;
         html += `<span style="text-align:right;color:var(--green-mid);font-weight:600">${fmtBaht(sDealVal)}</span>`;
-        const _convLbl = (s.name === 'ADMIN') ? '% จอง' : '% Conv';   // ADMIN วัด จอง/lead → ป้ายต่าง
-        html += `<div><div style="margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}" title="${s.name==='ADMIN'?'ADMIN: จอง ÷ lead × 100':'ปล่อย ÷ lead ปกติ × 100'}">${conv}${_convLbl}</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
+        html += `<div><div style="margin-bottom:2px"><span class="sbdg" style="background:${tBg};color:${tC}" title="ปล่อย ÷ lead ปกติ × 100">${conv}% Conv</span></div><div class="pbr"><div class="pbf" style="width:${Math.min(conv*10,100)}%;background:var(--green-mid)"></div></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
