@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/set_stage", views.api_set_stage, name="api_set_stage"),
     path("api/seller_set_stage", views.api_seller_set_stage, name="api_seller_set_stage"),
     path("api/add_car", views.api_add_car, name="api_add_car"),
+    path("api/car/<str:code>/photos", views.api_car_photos, name="api_car_photos"),  # จัดการรูปขาย (เลือกปก/เพิ่ม/ลบ)
     path("api/users", views.api_users, name="api_users"),
     path("api/delete_car", views.api_delete_car, name="api_delete_car"),
     path("api/restore_car", views.api_restore_car, name="api_restore_car"),

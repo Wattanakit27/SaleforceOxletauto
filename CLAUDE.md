@@ -644,6 +644,21 @@ CRON_SECRET=xxx...
 - **ขั้นตอนเปิดใช้ (ยังไม่ทำ — รอต่อ DB)**: (1) สร้าง DB — Vercel Postgres (Storage→Create→Postgres, ใส่ env ให้เอง) หรือ Supabase (Postgres + bucket `car-photos` public) → (2) ตั้ง `DATABASE_URL`/`POSTGRES_URL`=direct(5432) ในเครื่อง → `python manage.py migrate` + `createsuperuser` (=Executive) [+ `seed_demo` สาขา/รถตัวอย่าง ถ้าต้องการ] → (3) ตั้ง env บน Vercel (pooled 6543) → redeploy. **ไม่ต้องตั้ง bucket ก็ใช้ได้** (แค่อัปรูปรถยังไม่ได้ จนกว่าจะตั้ง Storage)
 - **ตรวจแล้ว (local, sqlite)**: `manage.py check` ผ่าน · migrate ผ่าน · ทุกหน้า /track/* render 200 + QR PNG ออก · sales เดิมไม่กระทบ (/login/ 200, /dashboard/ redirect ปกติ)
 
+### 🔗 เชื่อมเว็บโชว์รูม (oxlet_web) — sync รถ+รูป ผ่าน webhook (ก.ค.69)
+รถในสต็อก (tracking `cars.Car`) → ประกาศขายบนเว็บโชว์รูม **oxlet_web** (Django project แยก · repo `github.com/Wattanakit27/oxletauto_web` · DB คนละตัว) — เชื่อมด้วย **webhook (HTTP POST) ไม่ใช่แชร์ DB** (decoupled):
+- **ตัวผูก**: `Car.code` ↔ `Vehicle.stock_code` (1 รถจริง = 1 ประกาศ)
+- **ยิงเมื่อไหร่**: `post_save` signal ของ `Car` ([cars/models.py](cars/models.py) `_notify_showroom_on_car_save`) → `notify_showroom()` ([cars/showroom_sync.py](cars/showroom_sync.py)) ยิงเฉพาะสเตป **show/reserve/sold** (daemon thread · best-effort ไม่บล็อกงาน/ไม่พังถ้าโชว์รูมล่ม)
+- **ส่งอะไร** (POST `<SHOWROOM_WEBHOOK_URL>` = โชว์รูม `/api/stock-update/` · JSON · header `X-Stock-Secret`):
+  - สเปกพื้นฐาน (brand/model/year/color/km/plate) → โชว์รูม **สร้างประกาศให้อัตโนมัติ** (โชว์ลูกค้าทันที · ราคา/รายละเอียด staff เติมทีหลัง)
+  - สถานะ: **show→available · reserve→reserved · sold→ซ่อน (status=sold)** · สเตปอื่นไม่ยิง
+  - รูปขาย `photos:[{url,key}]` → โชว์รูม GET โหลดรูปเก็บสำเนาเอง + reconcile (เปลี่ยนปก/เพิ่ม/ลบตาม backend · `key`=ต้นทาง กันสลับผิด/ซ้ำ)
+- **รูปขาย (หลายรูป + ปก)** เก็บใน **`Car.extra['sale_photos']`** (list ของ id/path · **รูปแรก=ปก**) — คนละชุดกับ `Car.photo` (รูปติดตาม 1 รูป) และ `ScanLog.media` (รูปรายงานสถานะ):
+  - เพิ่มตอนสร้างรถ: หน้า "เพิ่มรถ" ([index.html](dashboard/templates/dashboard/index.html) `addTrkCar` · อัปหลายรูป · target=disk) → `api_add_car` เก็บใน extra **ก่อน** save (post_save ยิง webhook ครั้งเดียวพร้อมรูป · กัน race/ยิงซ้ำ)
+  - จัดการทีหลัง: หน้า **car_edit** ([templates/car_form.html](templates/car_form.html) · แกลเลอรี thumbnail + ⭐ ตั้งปก + ลบ + อัปหลายรูป) → `api_car_photos` (`/track/api/car/<code>/photos` · action add/remove/cover) → save → sync
+- **env (ว่าง = ปิดสนิท no-op ทั้ง 2 ฝั่ง · ระบบเดิมไม่กระทบ)**: `SHOWROOM_WEBHOOK_URL` (url โชว์รูม + `/api/stock-update/`) · `STOCK_SYNC_SECRET` (ค่าลับ ต้องตรงกับ oxlet_web) · **`SITE_URL`** (โดเมน backend จริง — โชว์รูมโหลดรูปจาก `SITE_URL/media/...` · nginx ต้องเสิร์ฟ `/media/`)
+- **ทิศทางเดียว** (backend → โชว์รูม) · lead/จอง จากโชว์รูมยังไม่ sync กลับ · ยังไม่มี pull สำรอง (webhook พลาด = เงียบ)
+- **ฝั่งรับ (oxlet_web)**: `Vehicle.stock_code` (0021) + `VehicleImage.src` (0022 · ผูกรูปกับต้นทาง reconcile/dedup กันซ้ำ) · view `api_stock_update` + `_sync_car_photos` · **ต้อง `migrate` ตอน deploy**
+
 ## Known issues / limitations
 
 - **Cold start ช้า** บน Vercel — request แรกหลังนิ่งนาน ~5-10s (pip install + Django boot + auth) · **หน้าสแกน /track/scan/ ก็โดน** — คนงานยืนหน้ารถอาจรอ ~10s (trade-off ของการอยู่บน serverless)

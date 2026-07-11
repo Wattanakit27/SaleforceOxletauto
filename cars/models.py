@@ -6,6 +6,8 @@
 """
 from django.db import models, transaction
 from django.db.models import Max
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone
 
 from . import constants as C
@@ -284,3 +286,17 @@ class Presence(models.Model):
 
     def __str__(self):
         return f"{self.identity} @ {self.last_seen:%H:%M}"
+
+
+# ── แจ้งเว็บโชว์รูม (oxlet_web) sync สถานะรถ realtime ─────────────────────────
+# post_save ครอบทุกทางที่ทำให้รถขยับ (เปลี่ยนสเตป/เพิ่มรถตรงที่สเตปพร้อมขาย/แก้ในแอดมิน)
+# → notify_showroom (ยิงเฉพาะสเตป show/reserve/sold · เช็คภายใน) · best-effort · ข้าม fixture
+@receiver(post_save, sender=Car)
+def _notify_showroom_on_car_save(sender, instance, raw=False, **kwargs):
+    if raw:
+        return
+    try:
+        from .showroom_sync import notify_showroom
+        notify_showroom(instance)
+    except Exception:
+        pass

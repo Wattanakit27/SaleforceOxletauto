@@ -1,24 +1,97 @@
 {% extends "base.html" %}
 {% block title %}{% if mode == 'create' %}เพิ่มรถ{% else %}แก้ไขรถ {{ car.code }}{% endif %} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<h1>{% if mode == 'create' %}<i data-lucide="plus"></i> เพิ่มรถใหม่{% else %}<i data-lucide="pencil"></i> แก้ไขรถ {{ car.code }}{% endif %}</h1>
-{% if mode == 'create' %}<p class="mut sm">ระบบจะสร้างรหัสรถ (เช่น CB-0001) ให้อัตโนมัติตามสาขา</p>{% endif %}
+<div style="max-width:900px;margin:0 auto">
+  <h1 style="display:flex;align-items:center;gap:8px">
+    {% if mode == 'create' %}<i data-lucide="plus"></i> เพิ่มรถใหม่{% else %}<i data-lucide="pencil"></i> แก้ไขรถ {{ car.code }}{% endif %}
+  </h1>
+  {% if mode == 'create' %}<p class="mut sm">ระบบจะสร้างรหัสรถ (เช่น CB-0001) ให้อัตโนมัติตามสาขา</p>{% endif %}
 
-<form method="post" enctype="multipart/form-data" class="card grid" style="gap:14px;max-width:680px">
-  {% csrf_token %}
-  {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors }}</div>{% endif %}
-  <div class="cols">
-    {% for field in form %}
-    <div>
-      <label class="sm mut">{{ field.label }}</label>
-      {{ field }}
-      {% if field.errors %}<div class="sm tag-red">{{ field.errors|striptags }}</div>{% endif %}
+  {# ---------- ข้อมูลรถ ---------- #}
+  <form method="post" enctype="multipart/form-data" class="card" style="margin-top:10px">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors }}</div>{% endif %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:14px">
+      {% for field in form %}
+        {% if field.name != 'photo' %}
+        <div{% if field.name == 'note' %} style="grid-column:1/-1"{% endif %}>
+          <label class="sm mut" style="display:block;margin-bottom:5px">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="sm tag-red" style="margin-top:4px">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
     </div>
-    {% endfor %}
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn pri" type="submit"><i data-lucide="save"></i> บันทึกข้อมูล</button>
+      <a class="btn" href="{% if car %}{% url 'car_detail' car.code %}{% else %}{% url 'car_list' %}{% endif %}">ยกเลิก</a>
+    </div>
+  </form>
+
+  {% if mode == 'edit' %}
+  {# ---------- แกลเลอรีรูปขาย (sync ขึ้นเว็บโชว์รูม) ---------- #}
+  <div class="card" style="margin-top:14px">
+    <h2 style="display:flex;align-items:center;gap:8px;margin:0 0 4px"><i data-lucide="images"></i> รูปขาย (ขึ้นเว็บโชว์รูม)</h2>
+    <p class="mut sm" style="margin:0 0 14px">อัปได้หลายรูป · กด <b>⭐ ตั้งปก</b> เลือกรูปที่ลูกค้าเห็นเป็นอันแรก · รูปจะ sync ขึ้นเว็บโชว์รูมอัตโนมัติเมื่อรถ "พร้อมขาย"</p>
+    {{ sale_photos|json_script:"salephotos-data" }}
+    <div id="pg-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+    <label id="pg-uplabel" class="btn" style="margin-top:14px;cursor:pointer">
+      <i data-lucide="upload"></i> <span id="pg-uptext">เพิ่มรูป (เลือกหลายรูปพร้อมกันได้)</span>
+      <input id="pg-upload" type="file" accept="image/*" multiple style="display:none">
+    </label>
   </div>
-  <div class="row">
-    <button class="btn pri" type="submit"><i data-lucide="save"></i> บันทึก</button>
-    <a class="btn" href="{% if car %}{% url 'car_detail' car.code %}{% else %}{% url 'car_list' %}{% endif %}">ยกเลิก</a>
-  </div>
-</form>
+
+  <script>
+  (function(){
+    const CODE = "{{ car.code }}";
+    let photos = JSON.parse((document.getElementById('salephotos-data')||{}).textContent || '[]');
+    const grid = document.getElementById('pg-grid');
+    const upInput = document.getElementById('pg-upload');
+    const upText = document.getElementById('pg-uptext');
+
+    function render(){
+      if(!photos.length){
+        grid.innerHTML = '<div class="mut sm" style="grid-column:1/-1;padding:26px;text-align:center;border:1.5px dashed var(--line);border-radius:12px">ยังไม่มีรูปขาย — กดปุ่มด้านล่างเพื่อเพิ่ม</div>';
+        return;
+      }
+      grid.innerHTML = photos.map(p=>`
+        <div style="border:2px solid ${p.cover?'var(--accent)':'var(--line)'};border-radius:12px;overflow:hidden;background:var(--bg2)">
+          <div style="position:relative;height:112px;background:var(--bg3)">
+            <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.style.opacity=.25">
+            ${p.cover?'<span style="position:absolute;top:6px;left:6px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px">⭐ ปก</span>':''}
+          </div>
+          <div style="display:flex;gap:1px;border-top:1px solid var(--line)">
+            ${p.cover
+              ? '<div class="sm mut" style="flex:1;text-align:center;padding:8px">รูปหลัก</div>'
+              : `<button type="button" onclick="pgCover('${p.id}')" style="flex:1;border:none;background:var(--bg2);color:var(--fg);padding:8px;cursor:pointer;font-size:13px">⭐ ตั้งปก</button>`}
+            <button type="button" onclick="pgRemove('${p.id}')" title="ลบรูป" style="flex:0 0 auto;border:none;border-left:1px solid var(--line);background:var(--bg2);color:var(--red);padding:8px 12px;cursor:pointer">🗑️</button>
+          </div>
+        </div>`).join('');
+    }
+    async function act(body){
+      const r = await fetch(`/track/api/car/${CODE}/photos`,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body)});
+      const j = await r.json(); if(!j.ok) throw new Error(j.error||'ผิดพลาด');
+      photos = j.photos; render();
+    }
+    window.pgCover = id => act({action:'cover', id}).catch(e=>alert('ผิดพลาด: '+e.message));
+    window.pgRemove = id => { if(confirm('ลบรูปนี้ออกจากรูปขาย?')) act({action:'remove', id}).catch(e=>alert('ผิดพลาด: '+e.message)); };
+    upInput.onchange = async () => {
+      const files = Array.from(upInput.files||[]); if(!files.length) return;
+      upInput.disabled = true;
+      try{
+        for(let k=0;k<files.length;k++){
+          upText.textContent = `กำลังอัปโหลด ${k+1}/${files.length}…`;
+          const fd = new FormData(); fd.append('file', files[k]); fd.append('code', CODE); fd.append('target','disk');
+          const s = await (await fetch('/track/api/upload',{method:'POST',credentials:'same-origin',body:fd})).json();
+          if(!s.ok) throw new Error(s.error||'อัปโหลดไม่สำเร็จ');
+          await act({action:'add', id:s.id});
+        }
+      }catch(e){ alert('ผิดพลาด: '+e.message); }
+      upText.textContent = 'เพิ่มรูป (เลือกหลายรูปพร้อมกันได้)'; upInput.disabled = false; upInput.value = '';
+    };
+    render();
+  })();
+  </script>
+  {% endif %}
+</div>
 {% endblock %}

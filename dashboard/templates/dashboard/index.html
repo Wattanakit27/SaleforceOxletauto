@@ -4079,7 +4079,7 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">${f('ปี',inp('ta_year','2020'))}${f('สี',inp('ta_color','ขาว'))}${f('เลขไมล์',inp('ta_km','50000'))}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('วันรับเข้า',inp('ta_datein','','date'))}${f('ครบกำหนดต่อภาษี',inp('ta_tax','','date'))}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('สถานะ',sel('ta_status',D.statusChoices))}${f('สถานะเล่ม (ทะเบียน)',sel('ta_book',D.bookChoices))}</div>
-          ${f('รูปรถ (1 รูป)',`<input id="ta_photo" type="file" accept="image/*" onchange="trkAddPreview()" style="${_st}"><div id="ta_photo_prev" style="margin-top:8px"></div>`)}
+          ${f('รูปรถ (เลือกได้หลายรูป · รูปแรก=ปก)',`<input id="ta_photo" type="file" accept="image/*" multiple onchange="trkAddPreview()" style="${_st}"><div id="ta_photo_prev" style="margin-top:8px"></div>`)}
           ${f('หมายเหตุ',inp('ta_note',''))}
           <div id="ta_msg" class="mut" style="font-size:12px;min-height:16px"></div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="document.getElementById('trk-add').remove()" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ยกเลิก</button><button id="ta_save" onclick="addTrkCar()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">บันทึก</button></div>
@@ -4097,18 +4097,18 @@
       const setMsg=t=>{ if(msg) msg.textContent=t||''; };
       if(btn){ btn.disabled=true; btn.style.opacity=.6; }
       try{
-        // อัปรูปก่อน (ถ้าเลือก) — POST เข้าเซิร์ฟเวอร์ → Google Drive (ย้ายเข้าโฟลเดอร์รถหลังสร้างเสร็จ)
-        let photo_id='';
-        const fi=document.getElementById('ta_photo'), file=fi&&fi.files&&fi.files[0];
-        if(file){
-          setMsg('กำลังอัปโหลดรูป…');
-          const fd=new FormData(); fd.append('file', file); fd.append('target','disk'); // รูปหน้าปก → เก็บดิสก์ VPS เสมอ
+        // อัปรูปก่อน (เลือกได้หลายรูป) — POST เข้าเซิร์ฟเวอร์ → เก็บดิสก์ VPS · รูปแรก=ปก · sync ไปโชว์รูม
+        const photos=[];
+        const fi=document.getElementById('ta_photo'), files=(fi&&fi.files)?Array.from(fi.files):[];
+        for(let k=0;k<files.length;k++){
+          setMsg(`กำลังอัปโหลดรูป ${k+1}/${files.length}…`);
+          const fd=new FormData(); fd.append('file', files[k]); fd.append('target','disk');
           const s=await (await fetch('/track/api/upload',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:fd})).json();
           if(!s.ok) throw new Error(s.error||'อัปโหลดรูปไม่สำเร็จ');
-          photo_id=s.id;
+          photos.push(s.id);
         }
         setMsg('กำลังบันทึก…');
-        const body={branch:v('ta_branch'),stage:v('ta_stage'),status:v('ta_status'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),date_in:v('ta_datein'),tax_due_date:v('ta_tax'),book_status:v('ta_book'),note:v('ta_note'),photo_id};
+        const body={branch:v('ta_branch'),stage:v('ta_stage'),status:v('ta_status'),plate:v('ta_plate'),brand:v('ta_brand'),model:v('ta_model'),year:v('ta_year'),color:v('ta_color'),km:v('ta_km'),date_in:v('ta_datein'),tax_due_date:v('ta_tax'),book_status:v('ta_book'),note:v('ta_note'),photo_id:photos[0]||'',photos};
         const r=await fetch('/track/api/add_car',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
         const j=await r.json(); if(!j.ok) throw new Error(j.error||'เพิ่มรถไม่สำเร็จ');
         document.getElementById('trk-add').remove(); loadTracking(true);

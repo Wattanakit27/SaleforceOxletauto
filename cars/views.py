@@ -323,7 +323,67 @@ def car_edit(request, code):
             return redirect("track_dashboard")
     else:
         form = CarForm(instance=car)
-    return render(request, "car_form.html", {"form": form, "mode": "edit", "car": car})
+    return render(request, "car_form.html", {"form": form, "mode": "edit", "car": car,
+                                             "sale_photos": _sale_photos_ctx(car)})
+
+
+def _resolve_sale_photo_url(pid):
+    """id/path ของรูปขาย → URL แสดงผล (Drive id→thumbnail · disk path→/media/)"""
+    pid = str(pid or "").strip()
+    if not pid:
+        return ""
+    if "/" in pid:
+        return settings.MEDIA_URL.rstrip("/") + "/" + pid.lstrip("/")
+    try:
+        from . import gdrive
+        return gdrive.photo_url(pid)
+    except Exception:
+        return ""
+
+
+def _sale_photos_ctx(car):
+    """list ของ {id, url, cover} จาก car.extra['sale_photos'] (รูปแรก=ปก)
+    ยังไม่มีแกลเลอรี แต่มีรูปเดิม (Car.photo) → เอามาโชว์เป็นรูปแรก (กันแกลเลอรีว่าง)"""
+    ids = (car.extra or {}).get("sale_photos") if isinstance(car.extra, dict) else None
+    ids = list(ids) if isinstance(ids, list) else []
+    if not ids and car.photo and car.photo.name:
+        ids = [car.photo.name]
+    return [{"id": p, "url": _resolve_sale_photo_url(p), "cover": (i == 0)}
+            for i, p in enumerate(ids) if p]
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def api_car_photos(request, code):
+    """จัดการรูปขายของรถ (extra['sale_photos']) — action: add / remove / cover · คืน list ใหม่ + sync โชว์รูม"""
+    if not roles.can_edit_car(request.user):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์"}, status=403)
+    car = get_object_or_404(Car, code=code)
+    d = json.loads(request.body or "{}")
+    action = d.get("action")
+    pid = str(d.get("id") or "").strip()
+    extra = car.extra if isinstance(car.extra, dict) else {}
+    photos = [str(p) for p in (extra.get("sale_photos") or []) if p]
+    if not photos and car.photo and car.photo.name:   # seed จากรูปเดิม → action ต่อยอดได้
+        photos = [car.photo.name]
+    if action == "add" and pid:
+        if pid not in photos:
+            photos.append(pid)
+    elif action == "remove" and pid:
+        photos = [p for p in photos if p != pid]
+    elif action == "cover" and pid and pid in photos:
+        photos = [pid] + [p for p in photos if p != pid]
+    else:
+        return JsonResponse({"ok": False, "error": "action ไม่ถูกต้อง"}, status=400)
+    extra["sale_photos"] = photos
+    car.extra = extra
+    if photos:
+        car.photo.name = photos[0]
+        car.save(update_fields=["extra", "photo"])
+    else:
+        car.save(update_fields=["extra"])
+    return JsonResponse({"ok": True, "photos": _sale_photos_ctx(car)})
 
 
 @roles.role_required(roles.can_delete_car)
@@ -847,20 +907,32 @@ def api_add_car(request):
         car.frontline_at = timezone.now()
     if stage == "sold":
         car.status = "sold"
-    car.save()
-    # รูปรถ — Drive file id (จาก api_upload) · ย้ายเข้าโฟลเดอร์ของรถที่เพิ่งสร้าง
-    photo_id = (d.get("photo_id") or d.get("photo_path") or "").strip()
-    if photo_id:
-        if "/" not in photo_id:  # Drive id → ย้ายเข้าโฟลเดอร์รถ (best-effort)
-            try:
-                from . import gdrive
-                folder = _ensure_car_folder(car)
-                if folder:
-                    gdrive.move_to_folder(photo_id, folder)
-            except Exception:
-                pass
-        car.photo.name = photo_id
-        car.save(update_fields=["photo"])
+
+    # รูปขาย — รับหลายรูป (id/path จาก api_upload) · รูปแรก = ปก · เก็บ list ใน extra['sale_photos']
+    # ตั้งก่อน save → post_save ยิง webhook ครั้งเดียวพร้อมรูป → sync ไปโชว์รูม (ไม่ยิงซ้ำ/ไม่ race)
+    photos = [str(p).strip() for p in (d.get("photos") or []) if p]
+    single = (d.get("photo_id") or d.get("photo_path") or "").strip()
+    if single and single not in photos:
+        photos.insert(0, single)
+    if photos:
+        car.photo.name = photos[0]
+        extra = car.extra if isinstance(car.extra, dict) else {}
+        extra["sale_photos"] = photos
+        car.extra = extra
+
+    car.save()   # gen code + post_save → notify_showroom (พร้อม photos)
+
+    # ย้ายรูป Drive เข้าโฟลเดอร์รถ (best-effort · หลังมี code แล้ว · disk ข้าม)
+    drive_ids = [p for p in photos if p and "/" not in p]
+    if drive_ids:
+        try:
+            from . import gdrive
+            folder = _ensure_car_folder(car)
+            if folder:
+                for pid in drive_ids:
+                    gdrive.move_to_folder(pid, folder)
+        except Exception:
+            pass
     return JsonResponse({"ok": True, "code": car.code})
 
 

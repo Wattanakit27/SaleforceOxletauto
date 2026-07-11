@@ -119,6 +119,11 @@ USE_SUPABASE = os.getenv("USE_SUPABASE", "False").lower() in ("true", "1", "yes"
 # external cron service (n8n, Vercel cron) ต้องส่ง ?secret=xxx มาด้วย
 CRON_SECRET = os.getenv("CRON_SECRET", "")
 
+# เว็บโชว์รูม (oxlet_web) — webhook แจ้ง sync สถานะรถ realtime ตอนเปลี่ยนสเตป (show/reserve/sold)
+# ตั้ง 2 ค่าให้ครบ + STOCK_SYNC_SECRET ต้องตรงกับฝั่ง oxlet_web · ว่าง = ปิด (ไม่ยิง)
+SHOWROOM_WEBHOOK_URL = os.getenv("SHOWROOM_WEBHOOK_URL", "")
+STOCK_SYNC_SECRET = os.getenv("STOCK_SYNC_SECRET", "")
+
 ROOT_URLCONF = "oxlet.urls"
 
 TEMPLATES = [
