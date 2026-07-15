@@ -119,6 +119,8 @@
     const D = {{ data_json|safe }};
     const C = {{ constants_json|safe }};
     const SESSION_USER = {{ session_user_json|safe }};
+    // เทรนด์ (FollowupLog รายวัน + SellerWeekly รายสัปดาห์) — inline จาก context · กรองตามช่วงวันที่ในหน้า
+    const TRENDS = {{ trends_json|default:'{"daily":[],"weekly":[]}'|safe }};
     const LOGO_URL = "{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}";
 
     // ── Close admin-nav-menu dropdown เมื่อคลิกข้างนอก หรือกดเมนูใน ──
@@ -2298,6 +2300,39 @@
 
       html += `</div>`;
 
+      // 📞 โดนทวงเรื่องอะไรบ่อย รายเซลล์ (ล่างสุด) — แยก "โดนทวง" ตามเรื่องค้าง: โทร/สถานะ/ดีล · นับ "ครั้ง" (รอบส่งที่เรื่องนั้นยังค้าง)
+      {
+        const _foc = !canViewAll ? employee.nickname : impersonate;   // impersonate/เซลล์เดี่ยว → เฉพาะคนนั้น
+        const _fRows = (TRENDS.daily || []).filter(r => r.date >= dfFrom && r.date <= dfTo && (!_foc || r.seller === _foc));
+        let _rounds = 0;   // จำนวนรอบส่งทั้งหมดในช่วง (ตัวหาร %)
+        Object.entries(TRENDS.rounds || {}).forEach(([d, c]) => { if (d >= dfFrom && d <= dfTo) _rounds += (+c || 0); });
+        if (_fRows.length) {
+          const _byS = {};
+          _fRows.forEach(r => {
+            const m = _byS[r.seller] || (_byS[r.seller] = { call: 0, status: 0, deal: 0 });
+            m.call += r.nag_call || 0; m.status += r.nag_status || 0; m.deal += r.nag_deal || 0;
+          });
+          const _fd = Object.entries(_byS).map(([s, m]) => ({ s, ...m }))
+                            .sort((a, b) => (b.call + b.status + b.deal) - (a.call + a.status + a.deal));
+          const _gc = 'grid-template-columns:1.6fr 1fr 1.05fr 1fr';
+          const _rtxt = _rounds ? ` · จาก ${_rounds} รอบส่ง` : '';
+          const _cell = (n) => {   // เลข + % ของรอบ · สีตามความเรื้อรัง
+            if (!_rounds) return `<span style="text-align:right">${n || 0}</span>`;
+            const pc = Math.round(n / _rounds * 100);
+            const c = pc >= 70 ? 'var(--red)' : pc >= 40 ? 'var(--amber)' : (n ? 'var(--green)' : 'var(--t3)');
+            return `<span style="text-align:right;font-weight:700;color:${c}">${n || 0}<span style="font-size:9px;font-weight:400;color:var(--t3)"> ${pc}%</span></span>`;
+          };
+          html += `<div class="card"><div class="card-title">${ic('lucide:bell-ring',16)} โดนทวงเรื่องอะไรบ่อย รายเซลล์ <span style="font-size:11px;color:var(--t3);font-weight:400">· ในช่วงที่กรอง${_rtxt}</span><span class="info-tip" tabindex="0" data-tip="แยก 'โดนทวง' ตามเรื่องที่ค้าง — นับจำนวน 'ครั้ง' (รอบส่ง) ที่เรื่องนั้นยังค้าง\n• โทร = ยังไม่โทร · สถานะ = ยังไม่ใส่สถานะ Z · ดีล = ดีลค้าง\n• % = กี่ % ของรอบส่งทั้งหมด (เกือบ 100% = ค้างเรื่องนั้นเรื้อรัง)\n• เห็นว่าเซลล์คนไหนพลาดเรื่องไหน (บางคนไม่โทร บางคนไม่ใส่สถานะ)">?</span></div>`;
+          html += `<div class="shdr" style="${_gc}"><span>เซลล์</span><span style="text-align:right">โทร</span><span style="text-align:right">สถานะ</span><span style="text-align:right">ดีล</span></div>`;
+          _fd.forEach(x => {
+            html += `<div class="srow" style="${_gc};cursor:default"><span style="font-weight:600">${h(sname(x.s))}</span>${_cell(x.call)}${_cell(x.status)}${_cell(x.deal)}</div>`;
+          });
+          const _T = _fd.reduce((t, x) => ({ call: t.call + x.call, status: t.status + x.status, deal: t.deal + x.deal }), { call: 0, status: 0, deal: 0 });
+          html += `<div class="srow" style="${_gc};cursor:default;font-weight:700;border-top:1.5px solid var(--bd)"><span>รวม</span><span style="text-align:right">${_T.call}</span><span style="text-align:right">${_T.status}</span><span style="text-align:right">${_T.deal}</span></div>`;
+          html += `</div>`;
+        }
+      }
+
       // (section "เคสจอง/ปล่อย · ข้อมูลต้องเติม · เคสติดตาม · Hot Cases" ย้ายไปแท็บ LEAD แล้ว — มิ.ย.69)
       return html;
     }
@@ -3889,17 +3924,33 @@
           ${D.canViewAdmin?`<button onclick="openTrkTrash()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">🗑 ถังขยะ</button>`:''}
           ${D.canManageUsers?`<button onclick="openTrkUsers()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ผู้ใช้/บทบาท</button>`:''}
         </div></div>`;
-      // KPI
-      const kpi = (lbl,val,col)=>`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:12px 14px"><div class="mut" style="font-size:11px">${lbl}</div><div style="font-size:24px;font-weight:800;${col?'color:'+col:''}">${val}</div></div>`;
-      h2 += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
-        ${kpi('รถในระบบ',_actN)}${kpi('ขายแล้ว',_soldN,'#16a34a')}${kpi('ใกล้ค้าง (≥2 วัน)',D.flags.amber,TRK_FLAG.amber)}${kpi('ค้างนาน (&gt;3 วัน)',D.flags.red,TRK_FLAG.red)}${kpi('T2L เฉลี่ย (เป้า ≤'+D.t2lTarget+')',D.avgT2l!=null?D.avgT2l:'—')}</div>`;
-      // รถแต่ละช่วงงาน (โดนัท) — แทนชิปกองเดิม อ่านง่ายขึ้น
-      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:12px">รถแต่ละช่วงงาน</div>
-        <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center">
-          <div style="flex:0 0 180px;height:170px;position:relative"><canvas id="trkPie"></canvas></div>
-          <div id="trkPieLegend" style="flex:1;min-width:210px;display:flex;flex-direction:column;gap:9px"></div>
+      // ── การ์ดใหญ่สีสด (สาขา / รถทั้งหมด / ขายแล้ว) — สไตล์ตามรีเฟอเรนซ์ ──
+      const _bigCard = (icon,num,lbl,g)=>`<div style="flex:1;min-width:190px;background:${g};border-radius:16px;padding:18px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:0 5px 16px rgba(0,0,0,.13)">
+        <div style="opacity:.92;display:flex;align-items:center">${icon}</div>
+        <div style="text-align:right"><div style="font-size:33px;font-weight:800;line-height:1">${num}</div><div style="font-size:13px;opacity:.93;margin-top:4px">${lbl}</div></div></div>`;
+      h2 += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        ${_bigCard(ic('lucide:building-2',34),D.branches.length,'สาขาทั้งหมด','linear-gradient(135deg,#f9b234,#f7931e)')}
+        ${_bigCard(ic('lucide:car-front',34),D.total,'จำนวนรถทั้งหมด','linear-gradient(135deg,#4b7bec,#3867d6)')}
+        ${_bigCard(ic('lucide:badge-check',34),_soldN,'ขายแล้ว','linear-gradient(135deg,#2bcc70,#20a95c)')}
+      </div>`;
+      // แถบเตือนบางๆ (รถในระบบ/ค้างนาน/ใกล้ค้าง/T2L) — เก็บ backlog ไว้ ไม่กินที่
+      h2 += `<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--t2);background:var(--bg);border:.5px solid var(--bd);border-radius:11px;padding:9px 15px;margin-bottom:14px">
+        <span>รถในระบบ <b style="color:var(--t1)">${_actN}</b></span>
+        <span style="color:${TRK_FLAG.red}">● ค้างนาน &gt;3 วัน <b>${D.flags.red}</b></span>
+        <span style="color:${TRK_FLAG.amber}">● ใกล้ค้าง ≥2 วัน <b>${D.flags.amber}</b></span>
+        <span>T2L เฉลี่ย <b style="color:var(--t1)">${D.avgT2l!=null?D.avgT2l:'—'}</b> (เป้า ≤${D.t2lTarget})</span>
+      </div>`;
+      // ── 2 วงกลม: สถานะการขาย (c.status) + ขั้นตอนงาน (phaseRows) ──
+      const _pieCard = (title,cid,lid)=>`<div style="flex:1;min-width:300px;background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px">${title}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+          <div style="flex:0 0 156px;height:156px;position:relative"><canvas id="${cid}"></canvas></div>
+          <div id="${lid}" style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:7px"></div>
         </div></div>`;
+      h2 += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        ${_pieCard('ขั้นตอนงาน','trkPiePhase','trkLegPhase')}
+        ${_pieCard('แยกตามสาขา','trkPieBranch','trkLegBranch')}
+      </div>`;
       // filters + table
       const _vTab=(v,l,n)=>{const on=view===v;return `<button onclick="_trkF.view='${v}';renderTrk()" style="font-size:13px;padding:8px 16px;border-radius:9px;border:1px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};cursor:pointer;font-weight:${on?'700':'500'}">${l} <b>${n}</b></button>`;};
       h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
@@ -3936,30 +3987,38 @@
       </div>`;
       el.innerHTML = h2;
       if(window.lucide) lucide.createIcons();
-      buildTrkPie(D);
+      buildTrkPies(D);
       // คงโฟกัส+เคอร์เซอร์ช่องค้นหา หลัง re-render (พิมพ์ต่อเนื่องได้)
       if(_trkF.q){ const _si=document.getElementById('trkSearch'); if(_si){ _si.focus(); try{_si.setSelectionRange(_si.value.length,_si.value.length);}catch(_){} } }
     }
     function trkSetStage(k){ _trkF.stage = (_trkF.stage===k?'':k); renderTrk(); }
 
-    // โดนัท "รถแต่ละช่วงงาน" (5 เฟส · สี CVD-safe) — แทนชิปกองเดิม
-    let _trkPieChart=null;
+    // ── 2 วงกลม (สถานะการขาย + ขั้นตอนงาน) · สี CVD-safe ──
     const _TRK_PHASE_COLORS=['#0072B2','#E69F00','#CC79A7','#56B4E9','#009E73'];
-    function buildTrkPie(D){
-      const cv=document.getElementById('trkPie'); if(!cv||!window.Chart) return;
+    let _trkPies=[];
+    function _trkPie(cid,lid,rows){
+      const cv=document.getElementById(cid); if(!cv||!window.Chart) return;
       const gv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const rows=(D.phaseRows||[]).map((ph,i)=>({name:ph.name, n:(ph.stages||[]).reduce((a,s)=>a+(s.n||0),0), c:_TRK_PHASE_COLORS[i%_TRK_PHASE_COLORS.length]}));
       const total=rows.reduce((a,r)=>a+r.n,0);
-      if(_trkPieChart){ try{_trkPieChart.destroy();}catch(_){} _trkPieChart=null; }
-      _trkPieChart=new Chart(cv,{
+      const ch=new Chart(cv,{
         type:'doughnut',
         data:{labels:rows.map(r=>r.name), datasets:[{data:rows.map(r=>r.n), backgroundColor:rows.map(r=>r.c), borderColor:gv('--bg')||'#fff', borderWidth:2, hoverOffset:5}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+        options:{responsive:true,maintainAspectRatio:false,cutout:'56%',
           plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed+' คัน'}}}},
-        plugins:[{id:'trkCtr',afterDraw(ch){const a=ch.chartArea,x=(a.left+a.right)/2,y=(a.top+a.bottom)/2,ctx=ch.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=gv('--t1')||'#000';ctx.font='800 22px "Segoe UI",sans-serif';ctx.fillText(total,x,y-6);ctx.fillStyle=gv('--mut')||'#888';ctx.font='500 10px "Segoe UI",sans-serif';ctx.fillText('รถทั้งหมด',x,y+13);ctx.restore();}}]
+        plugins:[{id:cid+'ctr',afterDraw(c){const a=c.chartArea,x=(a.left+a.right)/2,y=(a.top+a.bottom)/2,ct=c.ctx;ct.save();ct.textAlign='center';ct.textBaseline='middle';ct.fillStyle=gv('--t1')||'#000';ct.font='800 21px "Segoe UI",sans-serif';ct.fillText(total,x,y-5);ct.fillStyle=gv('--mut')||'#888';ct.font='500 10px "Segoe UI",sans-serif';ct.fillText('คัน',x,y+12);ct.restore();}}]
       });
-      const leg=document.getElementById('trkPieLegend');
-      if(leg) leg.innerHTML=rows.map(r=>{const pct=total?Math.round(r.n/total*100):0;return `<div style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--t1)"><span style="width:11px;height:11px;border-radius:50%;background:${r.c};flex-shrink:0"></span><span>${h(r.name)}</span><b style="margin-left:auto;font-variant-numeric:tabular-nums;color:var(--t1)">${r.n} <span class="mut" style="font-weight:400">· ${pct}%</span></b></div>`;}).join('');
+      _trkPies.push(ch);
+      const leg=document.getElementById(lid);
+      if(leg) leg.innerHTML=rows.map(r=>{const pct=total?Math.round(r.n/total*100):0;return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--t1)"><span style="width:10px;height:10px;border-radius:50%;background:${r.c};flex-shrink:0"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(r.name)}</span><b style="font-variant-numeric:tabular-nums">${r.n} <span class="mut" style="font-weight:400">${pct}%</span></b></div>`;}).join('')||'<span class="mut" style="font-size:12px">ไม่มีข้อมูล</span>';
+    }
+    function buildTrkPies(D){
+      _trkPies.forEach(c=>{try{c.destroy();}catch(_){}}); _trkPies=[];
+      // ขั้นตอนงาน (5 เฟส)
+      _trkPie('trkPiePhase','trkLegPhase', (D.phaseRows||[]).map((ph,i)=>({name:ph.name,n:(ph.stages||[]).reduce((a,s)=>a+(s.n||0),0),c:_TRK_PHASE_COLORS[i%_TRK_PHASE_COLORS.length]})));
+      // แยกตามสาขา (นับรถต่อสาขา)
+      const bc={}; (D.cars||[]).forEach(c=>{ const b=(c.branch||'').trim()||'ไม่ระบุ'; bc[b]=(bc[b]||0)+1; });
+      const _bpal=['#3867d6','#f7931e','#20a95c','#d946ef','#06b6d4','#8b5cf6'];
+      _trkPie('trkPieBranch','trkLegBranch', Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([name,n],i)=>({name,n,c:_bpal[i%_bpal.length]})));
     }
 
     function _trkOverlay(id, inner){

@@ -5,6 +5,7 @@ urlpatterns = [
     path("", views.index),
     path("dashboard/", views.dashboard_page, name="dashboard"),
     path("admin/", views.admin_page, name="admin"),
+    path("api/admin/trends", views.admin_trends, name="admin_trends"),
     path("api/dashboard", views.api_dashboard, name="api_dashboard"),
     path("api/presence", views.presence_ping, name="presence_ping"),
     path("api/presence/list", views.presence_list, name="presence_list"),

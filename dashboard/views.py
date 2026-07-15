@@ -51,6 +51,40 @@ def _is_admin(user) -> bool:
     return bool(user) and (user.get("position") or "").strip().lower() == "admin"
 
 
+def _trends_payload():
+    """{daily, weekly} จาก FollowupLog (รายวัน) + SellerWeekly (รายสัปดาห์) — best-effort
+    (DB ล่ม/ยังไม่ migrate = คืนว่าง ไม่พัง). ฝังเข้า dashboard (inline) + ใช้ใน admin_trends API"""
+    try:
+        from .models import FollowupLog, SellerWeekly
+        daily = list(FollowupLog.objects.order_by("date", "seller").values(
+            "date", "seller", "team", "follow_total", "not_called", "no_status", "stuck_deals",
+            "nags", "nag_call", "nag_status", "nag_deal"))
+        weekly = list(SellerWeekly.objects.order_by("week_start", "seller").values(
+            "week_start", "seller", "team", "lead", "rj", "booking", "done", "deal_value", "live", "clip"))
+        for d in daily:
+            d["date"] = d["date"].isoformat()
+        for w in weekly:
+            w["week_start"] = w["week_start"].isoformat()
+        try:
+            from .services import cache_store
+            _r = cache_store.get_kv("followup_rounds") or {}   # get_kv ห่อด้วย {data, updated_at}
+            rounds = _r.get("data") or {}   # {date_iso: จำนวนรอบส่งวันนั้น} — ตัวหาร
+        except Exception:
+            rounds = {}
+        return {"daily": daily, "weekly": weekly, "rounds": rounds}
+    except Exception:
+        return {"daily": [], "weekly": [], "rounds": {}}
+
+
+def admin_trends(request):
+    """JSON เทรนด์ (FollowupLog รายวัน + SellerWeekly รายสัปดาห์) — admin เท่านั้น · endpoint สำรอง
+    (หน้า dashboard ฝัง trends inline ผ่าน context แล้ว — ตัวนี้ไว้ debug/ใช้ภายนอก)"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    return JsonResponse(_trends_payload(), json_dumps_params={"ensure_ascii": False})
+
+
 def _save_form(kind, row):
     """เก็บฟอร์มที่เซลล์ส่ง (best-effort) — Supabase ถ้าเปิด ไม่งั้น Postgres ในเครื่อง (cache_store).
     kind = 'finance' | 'loan'. คืน id ถ้าสำเร็จ, None ถ้าล่ม/ไม่มีที่เก็บ."""
@@ -107,6 +141,7 @@ def dashboard_page(request):
         "data_json": json.dumps(data, ensure_ascii=False, default=str),
         "constants_json": json.dumps(constants, ensure_ascii=False),
         "session_user_json": json.dumps(user),
+        "trends_json": json.dumps(_trends_payload(), ensure_ascii=False),
         "error": None,
     })
 
@@ -1088,7 +1123,7 @@ def cron_tick(request):
                     _adm_recips = sorted(set(ADMIN_USER_IDS) | set(SUPER_ADMIN_IDS))
                 except Exception:
                     _adm_recips = []
-            for _m in build_followup_messages():
+            for _m in build_followup_messages(log_daily=True):
                 if _m.get("admin"):
                     # สรุปรวมทีม → เทเลเซลล์ (recipients) + แอดมิน (ถ้าติ๊ก include_executive) · test = test_target · dedup รักษาลำดับ
                     _admin_targets = [_test_tgt] if _test_tgt else list(dict.fromkeys((_m.get("recipients") or []) + _adm_recips))
@@ -1107,6 +1142,11 @@ def cron_tick(request):
                     _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], channel_token)
                     if _code == 200:
                         followup_sent += 1
+            try:   # snapshot ผลงานรายสัปดาห์ลง SellerWeekly (upsert สัปดาห์ปัจจุบัน) — best-effort
+                from .services.fetch_dashboard import snapshot_seller_week
+                snapshot_seller_week()
+            except Exception:
+                pass
             try:
                 from .services.cache_store import set_kv as _set_kv
                 _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})

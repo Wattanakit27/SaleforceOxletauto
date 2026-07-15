@@ -2190,16 +2190,16 @@ _FU_NOANS_CAP = 5
 _FU_TH_MON = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
 
 
-def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict]:
+def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: bool = False) -> list[dict]:
     """ข้อความ "ตามด่วน" รายเซลล์ (ข้อความธรรมดา) — สมองเดียวกับ seller.html (followUrgency + cadence + ดีลค้าง)
-    คืน [{"seller", "user_id", "text"}] เฉพาะเซลล์ที่มีเคส + มี user_id · กรองเฉพาะเคสใหม่ (เดือนนี้ + 1 สัปดาห์ท้ายเดือนก่อน)
+    คืน [{"seller", "user_id", "text"}] เฉพาะเซลล์ที่มีเคส + มี user_id · กรองเฉพาะลีดย้อนหลัง 14 วัน (rolling)
     """
     from collections import defaultdict
     from datetime import timedelta
     from .google_sheets import fetch_all_sheets, cell, cell_num, LEADS_COL as L, SALES_COL as S
     from .constants import (normalize_seller, ALL_SELLERS, refresh_from_sheet,
                             ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids,
-                            TELE_USER_IDS, load_tele_user_ids)
+                            TELE_USER_IDS, load_tele_user_ids, TEAM_ID)
     from .line_notify import get_nickname_to_user_id
 
     refresh_from_sheet()
@@ -2211,7 +2211,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
     ctx = prepare_lead_score_context(raw_leads, sales_reports)
     nick2uid = get_nickname_to_user_id()
     today = bangkok_now().date()
-    win_start = today.replace(day=1) - timedelta(days=7)
+    win_start = today - timedelta(days=14)   # ทวงเฉพาะลีดย้อนหลัง 14 วัน (rolling · ไม่บวมตามเดือน)
     date_str = f"{today.day} {_FU_TH_MON[today.month]} {(today.year + 543) % 100:02d}"  # เช่น "13 มิ.ย. 69"
 
     def _ds(s):
@@ -2410,10 +2410,36 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
         tot_nc = sum(x[3] for x in summary)
         tot_st = sum(x[4] for x in summary)
         tot_ns = sum(x[5] for x in summary)
+        if log_daily:   # เก็บ snapshot รายวัน + นับ "โดนทวง" (nags +1 ต่อรอบส่ง) ลง FollowupLog — best-effort
+            try:
+                from ..models import FollowupLog
+                from django.db.models import F
+                for _nm, _nf, _ns, _nc, _nd, _nx in summary:
+                    _team = str(TEAM_ID.get(_nm, "") or "")[:20]
+                    _dc = 1 if _nc else 0   # โดนทวงเรื่องโทร (ยังไม่โทร > 0)
+                    _dx = 1 if _nx else 0   # โดนทวงเรื่องสถานะ (ไม่มีสถานะ > 0)
+                    _dd = 1 if _ns else 0   # โดนทวงเรื่องดีล (ดีลค้าง > 0)
+                    obj, created = FollowupLog.objects.get_or_create(
+                        date=today, seller=_nm,
+                        defaults={"follow_total": _nf, "stuck_deals": _ns, "not_called": _nc,
+                                  "no_status": _nx, "nags": 1, "nag_call": _dc, "nag_status": _dx,
+                                  "nag_deal": _dd, "team": _team},
+                    )
+                    if not created:   # ส่งซ้ำในวันเดียวกัน = โดนทวงเพิ่มอีกครั้ง (state = ค่าล่าสุด · นับแยกเรื่อง)
+                        FollowupLog.objects.filter(pk=obj.pk).update(
+                            follow_total=_nf, stuck_deals=_ns, not_called=_nc, no_status=_nx,
+                            nags=F("nags") + 1, nag_call=F("nag_call") + _dc,
+                            nag_status=F("nag_status") + _dx, nag_deal=F("nag_deal") + _dd, team=_team)
+                # นับ "จำนวนรอบส่งทั้งหมด" ต่อวัน (ตัวหารของสัดส่วนโดนทวง) — เก็บใน kv
+                from . import cache_store
+                _rk = cache_store.get_kv("followup_rounds") or {}
+                _rk[str(today)] = int(_rk.get(str(today), 0)) + 1
+                cache_store.set_kv("followup_rounds", _rk)
+            except Exception:
+                pass
         olines = [f"สรุปตามด่วนวันนี้ (ทีม) - {date_str}", "",
                   f"ต้องตามรวม {tot_f} เคส - ดีลค้าง {tot_s} ดีล",
                   f"- ยังไม่โทร {tot_nc} เคส",
-                  f"- ค้างเกิน 7 วัน {tot_st} เคส",
                   f"- ยังไม่ใส่สถานะ {tot_ns} เคส", ""]
         for nm, nf, ns, nc, nd, nx in summary:
             parts = []
@@ -2435,3 +2461,72 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5) -> list[dict
                     "recipients": sorted(r for r in admin_recipients if r),
                     "text": "\n".join(olines)})
     return out
+
+
+def snapshot_seller_week(week_start=None) -> int:
+    """คำนวณผลงานรายเซลล์ของ "สัปดาห์" (จันทร์→อาทิตย์ · ไม่นับวันอนาคต) จาก dailyBySeller
+    → upsert SellerWeekly (1 แถว/สัปดาห์/เซลล์). best-effort · คืนจำนวนแถวที่เขียน.
+    week_start = จันทร์ของสัปดาห์ (default = สัปดาห์ปัจจุบัน)"""
+    from datetime import timedelta
+    from ..models import SellerWeekly
+    try:
+        data = fetch_dashboard_data()
+    except Exception:
+        return 0
+    today = bangkok_now().date()
+    ws = week_start or (today - timedelta(days=today.weekday()))   # จันทร์
+    we = min(ws + timedelta(days=6), today)
+    days = [ws + timedelta(days=i) for i in range((we - ws).days + 1)]
+
+    dbs = data.get("dailyBySeller") or {}
+    team_of = {s["name"]: s.get("team", "") for s in (data.get("sellers") or []) if s.get("name")}
+    from . import constants
+    try:
+        constants.refresh_from_sheet()   # ให้ ALL_SELLERS เป็นชุดล่าสุด (กัน fetch คืน cache แล้ว roster ตกไป hardcode)
+    except Exception:
+        pass
+    roster = set(constants.ALL_SELLERS) | {"ADMIN"}   # เฉพาะเซลล์ปัจจุบัน — ตัด orphan/เซลล์เก่า/สะกดผิดใน dailyBySeller
+
+    def _in_week(ds):
+        d = parse_date(str(ds or "").split(" ")[0].strip())
+        return bool(d) and ws <= d <= we
+    live_by, clip_by = {}, {}
+    la = data.get("liveActivity") or {}
+    for s in (la.get("sessions") or []):
+        if _in_week(s.get("date")):
+            for h in (s.get("hosts") or []):
+                if h:
+                    live_by[h] = live_by.get(h, 0) + 1
+    for c in (la.get("clips") or []):
+        if _in_week(c.get("date")) and c.get("name"):
+            clip_by[c["name"]] = clip_by.get(c["name"], 0) + 1
+
+    def _cell(md, mm, key, dd):
+        arr = md.get(mm) or md.get(str(mm)) or {}   # month key อาจเป็น int หรือ str (JSON)
+        a = arr.get(key) or []
+        return a[dd] if 0 <= dd < len(a) else 0
+
+    n = 0
+    for name in set(dbs) | set(live_by) | set(clip_by):
+        if name not in roster:   # ข้ามชื่อที่ไม่ใช่เซลล์ปัจจุบัน (guest/เซลล์ลาออก/สะกดผิด)
+            continue
+        md = dbs.get(name) or {}
+        lead = sum(_cell(md, d.month, "leads", d.day) for d in days)
+        rj = sum(_cell(md, d.month, "leadRJ", d.day) for d in days)
+        booking = sum(_cell(md, d.month, "bookings", d.day) for d in days)
+        done = sum(_cell(md, d.month, "dones", d.day) for d in days)
+        dv = sum(_cell(md, d.month, "dealValue", d.day) for d in days)
+        live, clip = live_by.get(name, 0), clip_by.get(name, 0)
+        if not any([lead, rj, booking, done, dv, live, clip]):
+            continue
+        try:
+            SellerWeekly.objects.update_or_create(
+                week_start=ws, seller=name,
+                defaults={"team": str(team_of.get(name, "") or "")[:20], "lead": lead, "rj": rj,
+                          "booking": booking, "done": done, "deal_value": int(dv or 0),
+                          "live": live, "clip": clip},
+            )
+            n += 1
+        except Exception:
+            pass
+    return n
