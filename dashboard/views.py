@@ -2132,6 +2132,67 @@ def admin_line_group_name(request):
         return JsonResponse({"ok": False, "error": str(e)[:150]}, status=500)
 
 
+@csrf_exempt
+def line_webhook(request):
+    """LINE Messaging API webhook — จับ group id + ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message)
+    → เก็บ KVStore 'line_groups' {gid: {name, lastSeen}} · ให้ admin เลือกกลุ่มจาก dropdown (LINE ไม่มี API ลิสต์กลุ่ม)
+    ⚠️ ต้อง register URL นี้ใน LINE Developers Console (Messaging API → Webhook URL = SITE_URL/api/line/webhook · เปิด Use webhook)"""
+    from django.conf import settings as _st
+    from django.http import HttpResponse
+    if request.method != "POST":
+        return HttpResponse("ok")   # LINE verify / ping
+    body = request.body or b""
+    secret = getattr(_st, "LINE_CHANNEL_SECRET", "")
+    if secret:   # ตรวจ signature ถ้ามี channel secret (ปลอดภัยขึ้น · ไม่มี = ข้าม)
+        import hmac, hashlib, base64
+        mac = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
+        if not hmac.compare_digest(mac, request.headers.get("X-Line-Signature", "")):
+            return HttpResponse(status=403)
+    try:
+        data = json.loads(body or b"{}")
+    except Exception:
+        data = {}
+    from .services import cache_store
+    from .services.fetch_dashboard import bangkok_now
+    import requests as _rq
+    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
+    groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+    changed = False
+    for ev in (data.get("events") or []):
+        src = ev.get("source") or {}
+        gid = src.get("groupId")
+        if src.get("type") == "group" and gid:
+            name = groups.get(gid, {}).get("name", "")
+            if not name and token:   # ดึงชื่อกลุ่มครั้งแรก
+                try:
+                    r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
+                                headers={"Authorization": f"Bearer {token}"}, timeout=8)
+                    if r.status_code == 200:
+                        name = r.json().get("groupName", "")
+                except Exception:
+                    pass
+            groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat()}
+            changed = True
+    if changed:
+        try:
+            cache_store.set_kv("line_groups", groups)
+        except Exception:
+            pass
+    return HttpResponse("ok")
+
+
+def admin_line_groups(request):
+    """Admin — รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook) → dropdown เลือกกลุ่มในพาเนลรายงาน"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+    groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+    rows = [{"id": gid, "name": g.get("name", "")} for gid, g in groups.items()]
+    rows.sort(key=lambda x: (x["name"] or x["id"]))
+    return JsonResponse({"ok": True, "groups": rows}, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_list_drive_sheets(request):
     """Admin — รายชื่อไฟล์ Google Sheets ที่ระบบเข้าถึงได้ (ทำ dropdown เลือกไฟล์แบบ n8n)."""
     user = _session_user(request)
