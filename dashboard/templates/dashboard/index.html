@@ -2208,29 +2208,21 @@
         RT += `</tr></tbody></table></div></div>`;
         html += RT;
 
-        // ── เวอร์ชันย่อสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
-        // 6 คอลัมน์สำคัญ ตัวใหญ่ อ่านง่ายบนมือถือ · สีคงที่ (light เสมอ) ไม่อิงธีมเว็บ · reuse ข้อมูล _rpt เดียวกัน
-        const _SC = [
-          {l:'จอง',    v:r=>r.bk,   t:rs=>_sL(rs,'bk')},
-          {l:'รอผล',   v:r=>r.wr,   t:rs=>_sL(rs,'wr')},
-          {l:'รอปล่อย', v:r=>r.wp,   t:rs=>_sL(rs,'wp')},
-          {l:'ปล่อย',  v:r=>r.dn,   t:rs=>_sL(rs,'dn')},
-          {l:'Lead',   v:r=>r.lead, t:rs=>_sL(rs,'lead')},
-          {l:'Conv%',  v:r=>(r.lead?Math.round(r.dn/r.lead*100):0)+'%', t:rs=>{const l=_sL(rs,'lead'),d=_sL(rs,'dn');return (l?Math.round(d/l*100):0)+'%';}},
-        ];
-        let SHOT = `<div style="font-size:23px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
-          <div style="font-size:14px;color:#8b90a6;margin:5px 0 16px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>
-          <table style="width:100%;border-collapse:separate;border-spacing:0 6px;font-size:18px">
-          <thead><tr style="color:#8b90a6;font-size:13px"><th style="text-align:left;padding:2px 12px">เซลล์</th>${_SC.map(c=>`<th style="text-align:right;padding:2px 12px">${h(c.l)}</th>`).join('')}</tr></thead><tbody>`;
+        // ── เวอร์ชันสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
+        // ครบทุกคอลัมน์ (เหมือนตารางเต็ม _RC) แต่สไตล์อ่านง่าย: แถวโค้ง ตัวใหญ่ขึ้น สีคงที่ (light เสมอ) ไม่อิงธีมเว็บ · reuse _rpt/_RC เดียวกัน
+        let SHOT = `<div style="font-size:24px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
+          <div style="font-size:15px;color:#8b90a6;margin:6px 0 16px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>
+          <table style="width:100%;border-collapse:separate;border-spacing:0 6px;font-size:15px">
+          <thead><tr style="color:#8b90a6;font-size:12.5px"><th style="text-align:center;padding:2px 8px">#</th><th style="text-align:left;padding:2px 10px">เซลล์</th>${_RC.map(c=>`<th style="text-align:right;padding:2px 10px;white-space:nowrap">${h(c.l)}</th>`).join('')}</tr></thead><tbody>`;
         _rpt.forEach((r,i)=>{
           const _f=_rc((r.dn||0)+(r.wp||0)), _bg=_f==='g'?'#e6f7ea':_f==='y'?'#fdf5e2':'#fdeceb';
-          SHOT += `<tr><td style="background:${_bg};padding:13px 14px;border-radius:10px 0 0 10px;font-weight:700;color:#1f2333;border-left:5px solid ${_tcol(r.team)}"><span style="color:#a7abbe;font-size:14px;margin-right:7px">${i+1}</span>${h(sname(r.name))} <span style="font-size:11px;color:#fff;background:${_tcol(r.team)};padding:1px 7px;border-radius:5px;vertical-align:2px">${h(r.team==='ADMIN'?'AD':r.team)}</span></td>`;
-          _SC.forEach((c,ci)=>{ SHOT += `<td style="background:${_bg};padding:13px 14px;text-align:right;color:#2b2f42;font-variant-numeric:tabular-nums${ci===_SC.length-1?';border-radius:0 10px 10px 0':''}">${c.v(r)}</td>`; });
+          SHOT += `<tr><td style="background:${_bg};padding:12px 8px;text-align:center;color:#a7abbe;font-size:13px;border-radius:10px 0 0 10px">${i+1}</td><td style="background:${_bg};padding:12px 11px;font-weight:700;color:#1f2333;border-left:5px solid ${_tcol(r.team)};white-space:nowrap">${h(sname(r.name))} <span style="font-size:11px;color:#fff;background:${_tcol(r.team)};padding:1px 6px;border-radius:5px;vertical-align:2px">${h(r.team==='ADMIN'?'AD':r.team)}</span></td>`;
+          _RC.forEach((c,ci)=>{ SHOT += `<td style="background:${_bg};padding:12px 11px;text-align:right;color:#2b2f42;font-variant-numeric:tabular-nums${ci===_RC.length-1?';border-radius:0 10px 10px 0':''}">${c.v(r)}</td>`; });
           SHOT += `</tr>`;
         });
-        SHOT += `<tr style="font-weight:800;color:#fff"><td style="background:#6d28d9;padding:14px;border-radius:10px 0 0 10px">รวมทั้งหมด</td>${_SC.map((c,ci)=>`<td style="background:#6d28d9;padding:14px;text-align:right${ci===_SC.length-1?';border-radius:0 10px 10px 0':''}">${c.t(_rpt)}</td>`).join('')}</tr>`;
+        SHOT += `<tr style="font-weight:800;color:#fff"><td style="background:#6d28d9;padding:13px 8px;text-align:center;border-radius:10px 0 0 10px">รวม</td><td style="background:#6d28d9;padding:13px 11px">รวมทั้งหมด</td>${_RC.map((c,ci)=>`<td style="background:#6d28d9;padding:13px 11px;text-align:right${ci===_RC.length-1?';border-radius:0 10px 10px 0':''}">${c.t(_rpt)}</td>`).join('')}</tr>`;
         SHOT += `</tbody></table>`;
-        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:900px;background:#fff;padding:24px 26px">${SHOT}</div></div>`;
+        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:26px 28px">${SHOT}</div></div>`;
       } catch (e) { console.error('mega seller table error', e); }
 
       // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──
