@@ -4296,7 +4296,9 @@
           <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="rl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
         </div>
         <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="rl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
-        <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE group id (กลุ่มจริง)</label><input id="rl_group" value="${h(c.group_id||'')}" placeholder="Cxxxxxxxx..." style="${_inp}"></div>
+        <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE group id (กลุ่มจริง)</label>
+          <div style="display:flex;gap:6px"><input id="rl_group" value="${h(c.group_id||'')}" placeholder="Cxxxxxxxx..." style="${_inp}"><button onclick="checkGroupName()" title="ดึงชื่อกลุ่มจาก id (ยืนยันว่าใช่กลุ่มที่ต้องการ)" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:12px">ตรวจชื่อ</button></div>
+          <div id="rl_gname" style="font-size:12px;margin-top:5px"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button onclick="saveReportLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
           <button onclick="testReportLine()" style="padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:13px">${ic('lucide:send',15)} ส่งทดสอบเดี๋ยวนี้</button>
@@ -4316,6 +4318,13 @@
       _rlStatus('กำลังแคป + ส่ง… (~10 วิ)');
       try{ const r=await fetch('/api/admin/report_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({target:_rlV('rl_test').trim()})});
         const j=await r.json(); _rlStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _rlStatus('ผิดพลาด: '+e,'var(--red)'); }
+    }
+    async function checkGroupName(){
+      const id=_rlV('rl_group').trim(), el=document.getElementById('rl_gname');
+      if(!id){ if(el){el.textContent='ใส่ group id ก่อน';el.style.color='var(--red)';} return; }
+      if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
+      try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});
+        const j=await r.json(); if(el){ if(j.ok){el.innerHTML='✓ กลุ่ม: <b>'+h(j.name||'(ไม่มีชื่อ)')+'</b>';el.style.color='var(--green)';}else{el.textContent=j.error||'ไม่พบกลุ่ม';el.style.color='var(--red)';} } }catch(e){ if(el){el.textContent='ผิดพลาด';el.style.color='var(--red)';} }
     }
     // 📋 Log การเข้าสู่ระบบ — modal ในหน้าแดชบอร์ด sales (ดึง /track/api/logins)
     async function openLoginLog(){ const ov=_trkOverlay('login-log','<p class="mut">กำลังโหลด…</p>'); await renderLoginLog(ov,''); }

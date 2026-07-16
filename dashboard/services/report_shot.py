@@ -67,7 +67,7 @@ def capture_report_image() -> str | None:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
-            page = browser.new_page(device_scale_factor=2, viewport={"width": 1680, "height": 1000})
+            page = browser.new_page(device_scale_factor=3, viewport={"width": 1680, "height": 1000})   # 3x = คมชัดขึ้น (แตะดูเต็มในไลน์แล้วคม)
             page.goto(base + "/login/?bg=1", wait_until="domcontentloaded", timeout=30000)
             page.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")  # เปิดฟอร์ม break-glass (อยู่ใน <details> พับไว้)
             page.wait_for_selector("input[name=username]", state="visible", timeout=10000)

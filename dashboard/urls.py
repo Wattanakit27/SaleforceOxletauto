@@ -40,6 +40,7 @@ urlpatterns = [
     path("api/admin/refresh_data", views.admin_refresh_data, name="admin_refresh_data"),
     path("api/admin/report_config", views.admin_report_config, name="admin_report_config"),
     path("api/admin/report_test", views.admin_report_test, name="admin_report_test"),
+    path("api/admin/line_group_name", views.admin_line_group_name, name="admin_line_group_name"),
     path("api/admin/update_release_date", views.update_release_date, name="update_release_date"),
     path("api/admin/export_leadscore", views.admin_export_leadscore, name="admin_export_leadscore"),
     path("api/cron/sync", views.cron_sync, name="cron_sync"),

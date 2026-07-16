@@ -2103,6 +2103,35 @@ def admin_report_test(request):
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 
+def admin_line_group_name(request):
+    """Admin — ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่มนั้น)
+    POST {id} → {ok, name, picture} · ใช้ยืนยันว่า group id ที่ใส่คือกลุ่มไหน (กันสับสน)"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from django.conf import settings as _st
+    import requests as _rq
+    try:
+        gid = (json.loads(request.body or "{}").get("id") or "").strip()
+    except Exception:
+        gid = ""
+    if not gid:
+        return JsonResponse({"ok": False, "error": "ใส่ group id ก่อน"}, status=400)
+    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
+    if not token:
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้ง LINE token"}, status=500)
+    try:
+        r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
+                    headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        if r.status_code == 200:
+            j = r.json()
+            return JsonResponse({"ok": True, "name": j.get("groupName", ""), "picture": j.get("pictureUrl", "")},
+                                json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({"ok": False, "error": f"LINE {r.status_code} — เช็คว่า id ถูก + บอทอยู่ในกลุ่มนี้ไหม"}, status=400)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)[:150]}, status=500)
+
+
 def admin_list_drive_sheets(request):
     """Admin — รายชื่อไฟล์ Google Sheets ที่ระบบเข้าถึงได้ (ทำ dropdown เลือกไฟล์แบบ n8n)."""
     user = _session_user(request)
