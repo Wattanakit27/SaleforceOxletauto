@@ -75,9 +75,18 @@ def capture_report_image() -> str | None:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
-            page.wait_for_selector("#rpt-card", state="visible", timeout=30000)
-            page.wait_for_timeout(2200)   # ให้ตาราง + ฟอนต์ render ครบ
-            page.query_selector("#rpt-card").screenshot(path=out)
+            # ใช้ #rpt-shot (เวอร์ชันย่อสำหรับส่งไลน์ · ซ่อนใน wrapper height:0) — เปิดให้เห็นก่อนแคป · fallback #rpt-card (ตัวเต็ม)
+            sel = "#rpt-shot"
+            try:
+                page.wait_for_selector(sel, state="attached", timeout=15000)
+                page.wait_for_timeout(2200)   # ให้ตาราง + ฟอนต์ render ครบ
+                page.evaluate("var w=document.getElementById('rpt-shot-wrap'); if(w){w.style.height='auto'; w.style.overflow='visible';}")
+                page.wait_for_timeout(300)
+            except Exception:
+                sel = "#rpt-card"
+                page.wait_for_selector(sel, state="visible", timeout=15000)
+                page.wait_for_timeout(2200)
+            page.query_selector(sel).screenshot(path=out)
             browser.close()
         return out if os.path.exists(out) else None
     except Exception:
