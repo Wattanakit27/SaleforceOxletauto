@@ -1036,6 +1036,69 @@ def api_users(request):
                         json_dumps_params={"ensure_ascii": False})
 
 
+@login_required
+def api_branches(request):
+    """จัดการสาขา จากเมนู "สถานะรถ" ของ sales (GET=list, POST action=create/rename/toggle_active/delete) — Exec/Admin.
+    code = prefix รหัสรถ (CB→CB-0011) → แก้ไม่ได้หลังสร้าง (จะทำให้รหัสรถเดิมกำพร้า) · แก้ได้แค่ชื่อ+เปิด/ปิด · ลบได้เมื่อไม่มีรถ"""
+    from .models import Branch, _branch_name_cache
+    if not roles.can_manage_users(request.user):
+        return JsonResponse({"ok": False, "error": "ต้องเป็น Executive/Admin"}, status=403)
+    if request.method == "POST":
+        d = json.loads(request.body or "{}")
+        action = d.get("action", "")
+        if action == "create":
+            code = (d.get("code") or "").strip().upper()
+            name = (d.get("name") or "").strip()
+            if not code or not name:
+                return JsonResponse({"ok": False, "error": "ต้องกรอกรหัส + ชื่อสาขา"}, status=400)
+            if len(code) > 4:
+                return JsonResponse({"ok": False, "error": "รหัสสาขายาวได้ไม่เกิน 4 ตัว"}, status=400)
+            if Branch.objects.filter(code__iexact=code).exists():
+                return JsonResponse({"ok": False, "error": f"มีรหัส '{code}' อยู่แล้ว"}, status=400)
+            Branch.objects.create(code=code, name=name, active=True)
+        elif action == "rename":
+            b = Branch.objects.filter(pk=d.get("id")).first()
+            if not b:
+                return JsonResponse({"ok": False, "error": "ไม่พบสาขา"}, status=404)
+            name = (d.get("name") or "").strip()
+            if not name:
+                return JsonResponse({"ok": False, "error": "ชื่อสาขาห้ามว่าง"}, status=400)
+            b.name = name
+            b.save(update_fields=["name"])
+        elif action == "toggle_active":
+            b = Branch.objects.filter(pk=d.get("id")).first()
+            if not b:
+                return JsonResponse({"ok": False, "error": "ไม่พบสาขา"}, status=404)
+            b.active = not b.active
+            b.save(update_fields=["active"])
+        elif action == "delete":
+            b = Branch.objects.filter(pk=d.get("id")).first()
+            if not b:
+                return JsonResponse({"ok": False, "error": "ไม่พบสาขา"}, status=404)
+            n = Car.objects.filter(branch=b.code, deleted_at__isnull=True).count()
+            if n:
+                return JsonResponse({"ok": False, "error": f"มีรถ {n} คันในสาขานี้ — ปิดใช้งานแทน หรือย้ายรถออกก่อน"}, status=400)
+            b.delete()
+        else:
+            return JsonResponse({"ok": False, "error": "action ไม่ถูกต้อง"}, status=400)
+        try:
+            _branch_name_cache.clear()   # ล้าง cache ชื่อสาขา — rename เห็นผลทันที
+        except Exception:
+            pass
+        return JsonResponse({"ok": True})
+    # GET: ทุกสาขา (รวมปิดใช้งาน) + จำนวนรถต่อสาขา
+    # bootstrap: ตารางยังว่าง → seed จาก constant (สาขาที่โชว์อยู่จาก fallback) เข้า DB ก่อน
+    # กัน "เพิ่มสาขาใหม่ 1 อันแล้วสาขาเดิมหาย" (branch_pairs ใช้ DB rows แทน constant ทันทีที่มีแถวแรก)
+    if not Branch.objects.exists():
+        for _code, _name in C.BRANCH_CHOICES:
+            Branch.objects.get_or_create(code=_code, defaults={"name": _name, "active": True})
+        _branch_name_cache.clear()
+    rows = [{"id": b.pk, "code": b.code, "name": b.name, "active": b.active,
+             "cars": Car.objects.filter(branch=b.code, deleted_at__isnull=True).count()}
+            for b in Branch.objects.all().order_by("code")]
+    return JsonResponse({"ok": True, "branches": rows}, json_dumps_params={"ensure_ascii": False})
+
+
 TRASH_DAYS = 30  # ถังขยะเก็บโชว์กี่วัน (พ้นแล้วซ่อน แต่ไม่ลบจริง — ข้อมูลยังอยู่)
 
 

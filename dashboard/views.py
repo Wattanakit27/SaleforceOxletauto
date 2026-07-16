@@ -1155,6 +1155,13 @@ def cron_tick(request):
     except Exception:
         pass
 
+    # ── 📊 รายงานจอง/อนุมัติ/ปล่อย เข้าไลน์รายวัน (แคปตารางด้วย Playwright → ส่งรูป) — ตั้งเวลา/ปลายทางในเมนูจัดการ ──
+    try:
+        from .services.report_shot import maybe_send_daily_report
+        maybe_send_daily_report(now.strftime("%H:%M"), now.date().isoformat())
+    except Exception:
+        pass
+
     # ── อุ่น dashboard cache: cron คำนวณผลใหม่เก็บลง store (Postgres ในเครื่อง/Supabase) ──
     # ทุก worker อ่าน store ที่อุ่นแล้ว → dashboard อุ่นตลอด ไม่มีใครเจอ recompute สด ~8.5 วิ
     # threshold 120 = อุ่นใหม่เมื่อผลเก่า > 2 นาที (cron ยิง 1 นาที · precompute ~8-15s < 60s ไม่ซ้อน)
@@ -2054,6 +2061,46 @@ def admin_refresh_data(request):
     except Exception as e:
         return JsonResponse({"error": str(e)[:300], "ok": False}, status=502)
     return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
+
+
+def admin_report_config(request):
+    """Admin — ตั้งค่า "รายงานเข้าไลน์รายวัน" (แคปตารางรายงานด้วย Playwright → ส่งรูปเข้า LINE)
+    GET = อ่าน config · POST = บันทึก {enabled,time,mode,test_id,group_id}"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_report_config, save_report_config
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        cfg = get_report_config()
+        for k in ("enabled", "time", "mode", "test_id", "group_id"):
+            if k in body:
+                cfg[k] = body[k]
+        save_report_config(cfg)
+        return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
+
+
+def admin_report_test(request):
+    """Admin — ส่งรายงานทดสอบเข้าไลน์เดี๋ยวนี้ (POST {target?}) · target ว่าง = ใช้ปลายทางใน config
+    ⚠️ ต้องรันบน prod (LINE ต้องดึงรูปจาก URL https สาธารณะ · localhost ส่งไม่ได้)"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_report_config, send_report_to_line
+    try:
+        body = json.loads(request.body or "{}")
+    except Exception:
+        body = {}
+    cfg = get_report_config()
+    target = (body.get("target") or "").strip() or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
+    if not target:
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
+    ok, info = send_report_to_line(target, caption="📊 รายงานจอง/อนุมัติ/ปล่อย (ทดสอบ)")
+    return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 
 def admin_list_drive_sheets(request):

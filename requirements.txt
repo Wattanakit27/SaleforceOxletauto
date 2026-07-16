@@ -8,3 +8,5 @@ gunicorn>=21.2          # WSGI server บน VPS (Hostinger) — ไม่ใช
 psycopg2-binary>=2.9        # Postgres driver (Supabase) สำหรับแอป cars/
 qrcode[pil]>=7.4            # gen QR แปะหน้ารถ
 Pillow>=10.0               # ImageField/FileField ของ cars/ + render QR PNG
+# ── รายงานเข้าไลน์รายวัน (แคปตารางแดชบอร์ดเป็นรูป) ──
+playwright>=1.40           # headless Chromium แคป #rpt-card → ส่งรูปเข้า LINE · ต้อง `playwright install chromium --with-deps` หลัง pip install

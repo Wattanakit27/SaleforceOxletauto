@@ -1256,6 +1256,7 @@
             <button onclick="openHealthPanel()" title="เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap;font-weight:700" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:circle-check',16)} สถานะระบบ</button>
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bell',16)} แจ้งเตือนตามด่วน</button>
+            <button onclick="openReportLine()" title="ส่งรูปตารางรายงาน จอง/อนุมัติ/ปล่อย เข้าไลน์อัตโนมัติทุกวัน" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:image',16)} รายงานเข้าไลน์</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:target',16)} ตั้งเป้า / ทีม</button>
             <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
             <button onclick="openTeleConfigPanel()" title="จัดการเทเลเซลล์ (ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:phone',16)} จัดการเทเลเซลล์</button>
@@ -2190,7 +2191,7 @@
           {l:'คลิป',       v:r=>r.clip,   t:rs=>_sL(rs,'clip')},
           {l:'Lead ไลฟ์',  v:r=>r.leadLive, t:rs=>_sL(rs,'leadLive')},
         ];
-        let RT = `<div class="card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} รายงาน จอง / อนุมัติ / ปล่อย · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ไปป์ไลน์รายเซลล์ (เรียงตามจองมากสุด) ตามช่วงวันที่ที่เลือก\nจอง/รอผล/รอปล่อย/ปล่อย = จากข้อมูลแดชบอร์ด (สด) · เลย์เอาต์ตามชีตรายงาน\nรอผล/รอปล่อย = สถานะเคส (กรองวันรับเคส) · ปล่อย = ตามวันปล่อย">?</span></div>`;
+        let RT = `<div class="card" id="rpt-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} รายงาน จอง / อนุมัติ / ปล่อย · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ไปป์ไลน์รายเซลล์ (เรียงตามจองมากสุด) ตามช่วงวันที่ที่เลือก\nจอง/รอผล/รอปล่อย/ปล่อย = จากข้อมูลแดชบอร์ด (สด) · เลย์เอาต์ตามชีตรายงาน\nรอผล/รอปล่อย = สถานะเคส (กรองวันรับเคส) · ปล่อย = ตามวันปล่อย">?</span></div>`;
         RT += `<div class="card-sub">เรียงตาม (ปล่อย+รอปล่อย) มากสุด → รองด้วยจอง · สีแถว: <b style="color:#16a34a">เขียว</b> = ≥5 (ดี) · <b style="color:#d97706">เหลือง</b> = 3-4 · <b style="color:#dc2626">แดง</b> = ≤2 (ต้องดูแล)</div>`;
         RT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
         RT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">#</th><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:100px">เซลล์</th>`;
@@ -3922,6 +3923,7 @@
           ${D.canAdd?`<button onclick="openTrkAdd()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">+ เพิ่มรถ</button>`:''}
           ${D.canViewAdmin?`<a href="/track/cars/qr-print/" target="_blank" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);text-decoration:none">พิมพ์ QR</a>`:''}
           ${D.canViewAdmin?`<button onclick="openTrkTrash()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">🗑 ถังขยะ</button>`:''}
+          ${D.canManageUsers?`<button onclick="openTrkBranches()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">🏢 สาขา</button>`:''}
           ${D.canManageUsers?`<button onclick="openTrkUsers()" style="font-size:12px;padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ผู้ใช้/บทบาท</button>`:''}
         </div></div>`;
       // ── การ์ดใหญ่สีสด (สาขา / รถทั้งหมด / ขายแล้ว) — สไตล์ตามรีเฟอเรนซ์ ──
@@ -4229,6 +4231,91 @@
       const v=id=>(document.getElementById(id)||{}).value||'';
       try{ const r=await fetch('/track/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'create',username:v('tu_user'),password:v('tu_pass'),full_name:v('tu_name'),role:v('tu_role')})});
         const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มไม่สำเร็จ'); return; } renderTrkUsers(); }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+    // 🏢 จัดการสาขา — modal (Exec/Admin) · เพิ่ม/แก้ชื่อ/เปิด-ปิด/ลบ · code = prefix รหัสรถ (แก้ไม่ได้หลังสร้าง)
+    async function openTrkBranches(){ const ov=_trkOverlay('trk-branches','<p class="mut">กำลังโหลด…</p>'); await renderTrkBranches(ov); }
+    async function renderTrkBranches(ov){
+      ov=ov||document.getElementById('trk-branches'); if(!ov) return;
+      let d; try{ d=await (await fetch('/track/api/branches',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const rows=(d.branches||[]).map(b=>`<tr style="border-top:.5px solid var(--bd)">
+        <td style="padding:8px"><span style="background:var(--bg2);border:.5px solid var(--bd);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">${h(b.code)}</span></td>
+        <td style="padding:8px"><input value="${h(b.name)}" onchange="trkBranchAction('rename',${b.id},{name:this.value})" style="width:100%;padding:6px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px"></td>
+        <td style="padding:8px;text-align:center;color:var(--t3);font-size:12px">${b.cars}</td>
+        <td style="padding:8px;text-align:right;white-space:nowrap">
+          <button onclick="trkBranchAction('toggle_active',${b.id})" title="${b.active?'ปิดใช้งาน':'เปิดใช้งาน'}" style="font-size:11px;padding:5px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:${b.active?'var(--green)':'var(--t3)'};cursor:pointer">${b.active?'● เปิด':'○ ปิด'}</button>
+          <button onclick="trkBranchDelete(${b.id},'${h(b.code)}',${b.cars})" title="ลบสาขา" style="font-size:11px;padding:5px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--red);cursor:pointer">ลบ</button>
+        </td></tr>`).join('')||`<tr><td colspan="4" class="mut" style="padding:14px;text-align:center">ยังไม่มีสาขา</td></tr>`;
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">🏢 จัดการสาขา</div><button onclick="document.getElementById('trk-branches').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 12px">รหัสสาขา = prefix ของรหัสรถ (เช่น CB → CB-0011) · แก้ชื่อได้ตลอด · รหัสแก้ไม่ได้หลังสร้าง · ลบได้เมื่อไม่มีรถในสาขา (ไม่งั้นปิดใช้งานแทน)</div>
+        <div style="overflow:auto;max-height:340px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);font-size:11px;text-align:left"><th style="padding:8px">รหัส</th><th style="padding:8px">ชื่อสาขา</th><th style="padding:8px;text-align:center">รถ</th><th style="padding:8px"></th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div style="margin-top:14px;background:var(--bg2);border-radius:10px;padding:12px 14px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px">+ เพิ่มสาขาใหม่</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="tb_code" maxlength="4" placeholder="รหัส (เช่น BK)" style="width:120px;padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);text-transform:uppercase">
+            <input id="tb_name" placeholder="ชื่อสาขา" style="flex:1;min-width:150px;padding:8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1)">
+            <button onclick="trkBranchCreate()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:12px">เพิ่ม</button>
+          </div>
+        </div>`;
+    }
+    async function trkBranchAction(action,id,extra){
+      try{ const r=await fetch('/track/api/branches',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(Object.assign({action,id},extra||{}))});
+        const j=await r.json();
+        if(!j.ok){ alert(j.error||'ไม่สำเร็จ'); renderTrkBranches(); return; }
+        loadTracking(true);                              // อัปเดตตัวกรอง/วงกลมสาขาในหน้าหลัก
+        if(action!=='rename') renderTrkBranches();       // rename ไม่ re-render modal (กันช่องพิมพ์เด้ง/หลุดโฟกัส)
+      }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+    function trkBranchDelete(id,code,cars){
+      if(cars){ alert('สาขา '+code+' มีรถ '+cars+' คัน — ปิดใช้งานแทน หรือย้ายรถออกก่อน'); return; }
+      if(!confirm('ลบสาขา '+code+' ?')) return;
+      trkBranchAction('delete',id);
+    }
+    async function trkBranchCreate(){
+      const code=((document.getElementById('tb_code')||{}).value||'').trim(), name=((document.getElementById('tb_name')||{}).value||'').trim();
+      if(!code||!name){ alert('กรอกรหัส + ชื่อสาขา'); return; }
+      try{ const r=await fetch('/track/api/branches',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'create',code,name})});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มไม่สำเร็จ'); return; } renderTrkBranches(); loadTracking(true); }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+    // 📊 รายงานเข้าไลน์ (รายวัน) — ตั้งค่าเวลา/เปิด-ปิด/ปลายทาง + ส่งทดสอบ (แคปด้วย Playwright บน server)
+    async function openReportLine(){ const ov=_trkOverlay('report-line','<p class="mut">กำลังโหลด…</p>'); await renderReportLine(ov); }
+    async function renderReportLine(ov){
+      ov=ov||document.getElementById('report-line'); if(!ov) return;
+      let d; try{ d=await (await fetch('/api/admin/report_config',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const c=d.config||{};
+      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
+      const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:image',18)} รายงานเข้าไลน์ (รายวัน)</div><button onclick="document.getElementById('report-line').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตาราง "รายงาน จอง/อนุมัติ/ปล่อย" เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)</div>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="rl_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="rl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
+        </div>
+        <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="rl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
+        <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE group id (กลุ่มจริง)</label><input id="rl_group" value="${h(c.group_id||'')}" placeholder="Cxxxxxxxx..." style="${_inp}"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="saveReportLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
+          <button onclick="testReportLine()" style="padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:13px">${ic('lucide:send',15)} ส่งทดสอบเดี๋ยวนี้</button>
+          <span id="rl_status" style="font-size:12px"></span>
+        </div>
+        <div class="mut" style="font-size:11px;margin-top:14px;line-height:1.7;background:var(--bg2);border-radius:9px;padding:10px 12px">⚠️ ส่งได้จริงเฉพาะบน prod — LINE ต้องดึงรูปจาก URL สาธารณะ (เครื่อง dev เป็น localhost ส่งไม่ได้)<br>บน prod ต้องลง Playwright + Chromium ก่อน (<code>playwright install chromium --with-deps</code>)</div>`;
+    }
+    const _rlV=id=>((document.getElementById(id)||{}).value||'');
+    function _rlStatus(txt,col){ const s=document.getElementById('rl_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
+    async function saveReportLine(){
+      _rlStatus('กำลังบันทึก…');
+      const body={enabled:document.getElementById('rl_enabled').checked, time:_rlV('rl_time'), mode:_rlV('rl_mode'), test_id:_rlV('rl_test').trim(), group_id:_rlV('rl_group').trim()};
+      try{ const r=await fetch('/api/admin/report_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
+        const j=await r.json(); _rlStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _rlStatus('ผิดพลาด','var(--red)'); }
+    }
+    async function testReportLine(){
+      _rlStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      try{ const r=await fetch('/api/admin/report_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({target:_rlV('rl_test').trim()})});
+        const j=await r.json(); _rlStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _rlStatus('ผิดพลาด: '+e,'var(--red)'); }
     }
     // 📋 Log การเข้าสู่ระบบ — modal ในหน้าแดชบอร์ด sales (ดึง /track/api/logins)
     async function openLoginLog(){ const ov=_trkOverlay('login-log','<p class="mut">กำลังโหลด…</p>'); await renderLoginLog(ov,''); }
