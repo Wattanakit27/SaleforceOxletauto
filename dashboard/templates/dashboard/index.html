@@ -2223,6 +2223,29 @@
         SHOT += `<tr style="font-weight:800;color:#fff"><td style="background:#6d28d9;padding:13px 8px;text-align:center;border-radius:10px 0 0 10px">รวม</td><td style="background:#6d28d9;padding:13px 11px">รวมทั้งหมด</td>${_RC.map((c,ci)=>`<td style="background:#6d28d9;padding:13px 11px;text-align:right${ci===_RC.length-1?';border-radius:0 10px 10px 0':''}">${c.t(_rpt)}</td>`).join('')}</tr>`;
         SHOT += `</tbody></table>`;
         html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:26px 28px">${SHOT}</div></div>`;
+
+        // ── กราฟแท่ง "การแข่งขันรายทีม" (#rpt-shot-teams · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 2) — ปล่อยต่อทีม ──
+        const _tAgg = {};
+        _rpt.forEach(r=>{ const t=r.team||'?'; if(!_tAgg[t]) _tAgg[t]={done:0,book:0,lead:0}; _tAgg[t].done+=r.dn||0; _tAgg[t].book+=r.bk||0; _tAgg[t].lead+=r.lead||0; });
+        const _tArr = Object.entries(_tAgg).map(([t,v])=>({t,...v})).sort((a,b)=>b.done-a.done);
+        const _tMax = Math.max(1, ..._tArr.map(x=>x.done));
+        const _tName = t => t==='ADMIN' ? 'เทเลเซลล์' : ('ทีม '+t);
+        const _medal = ['🥇','🥈','🥉'];
+        let TS = `<div style="font-size:24px;font-weight:800;color:#1f2333">การแข่งขันรายทีม · ปล่อย</div>
+          <div style="font-size:15px;color:#8b90a6;margin:6px 0 22px">${h(rangeLabelTH())} · แต่ละทีมปล่อยได้เท่าไหร่ (เรียงมากสุด)</div>`;
+        _tArr.forEach((x,i)=>{
+          const _w=Math.round(x.done/_tMax*100), _col=_tcol(x.t);
+          TS += `<div style="margin-bottom:20px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px">
+              <span style="font-size:19px;font-weight:800;color:#1f2333">${_medal[i]||''} ${h(_tName(x.t))}</span>
+              <span style="font-size:15px;color:#8b90a6">จอง ${x.book} · Lead ${x.lead}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="flex:1;height:36px;background:#f1f2f7;border-radius:9px;overflow:hidden"><div style="width:${_w}%;height:100%;background:${_col};border-radius:9px;min-width:4px"></div></div>
+              <span style="font-size:28px;font-weight:800;color:${_col};min-width:64px;text-align:right">${x.done}</span>
+            </div></div>`;
+        });
+        html += `<div id="rpt-shot-teams-wrap" style="height:0;overflow:hidden"><div id="rpt-shot-teams" style="width:920px;background:#fff;padding:28px 30px">${TS}</div></div>`;
       } catch (e) { console.error('mega seller table error', e); }
 
       // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──

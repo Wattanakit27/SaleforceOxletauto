@@ -2096,10 +2096,14 @@ def admin_report_test(request):
     except Exception:
         body = {}
     cfg = get_report_config()
-    target = (body.get("target") or "").strip() or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
+    explicit = (body.get("target") or "").strip()
+    # ปุ่ม "ส่งทดสอบ" ปกติส่งเข้า test_id (1:1) · ระบุ target=group_id หรือเลือกโหมด group → แท็ก @All
+    target = explicit or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
     if not target:
         return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
-    ok, info = send_report_to_line(target, caption="📊 รายงานจอง/อนุมัติ/ปล่อย (ทดสอบ)")
+    # แท็ก @All เฉพาะเมื่อส่งเข้ากลุ่ม (target = group_id) — 1:1 แท็กไม่ได้
+    mention_all = bool(target and target == cfg.get("group_id"))
+    ok, info = send_report_to_line(target, mention_all=mention_all)
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 
@@ -2132,11 +2136,76 @@ def admin_line_group_name(request):
         return JsonResponse({"ok": False, "error": str(e)[:150]}, status=500)
 
 
+def _extract_group_events(data):
+    """ดึง [(groupId, groupName)] จาก payload หลายรูปแบบ:
+      - LINE raw: {events:[{source:{type:'group',groupId,...}}]}
+      - n8n ง่าย: {groupId, groupName?} หรือ {group_id, name?}
+      - list ของอย่างใดอย่างหนึ่งด้านบน
+    (รับ groupId ก็พอ ไม่บังคับ type — มี groupId = กลุ่มแน่นอน)"""
+    out = []
+
+    def _one(obj):
+        if not isinstance(obj, dict):
+            return
+        src = obj.get("source") if isinstance(obj.get("source"), dict) else {}
+        gid = src.get("groupId") or obj.get("groupId") or obj.get("group_id")
+        if gid:
+            name = (obj.get("groupName") or obj.get("group_name")
+                    or obj.get("name") or src.get("groupName") or "")
+            out.append((gid, name))
+
+    if isinstance(data, dict):
+        evs = data.get("events")
+        if isinstance(evs, list):
+            for ev in evs:
+                _one(ev)
+        else:
+            _one(data)
+    elif isinstance(data, list):
+        for it in data:
+            _one(it)
+    return out
+
+
+def _store_line_groups(pairs):
+    """เก็บ [(gid, name)] ลง KVStore 'line_groups' (ดึงชื่อจาก LINE ถ้าไม่มี) · คืน list ที่เพิ่ม/อัปเดต"""
+    from django.conf import settings as _st
+    from .services import cache_store
+    from .services.fetch_dashboard import bangkok_now
+    import requests as _rq
+    if not pairs:
+        return []
+    groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
+    added = []
+    for gid, name in pairs:
+        if not gid:
+            continue
+        name = name or groups.get(gid, {}).get("name", "")
+        if not name and token:   # ดึงชื่อกลุ่มครั้งแรก (บอทต้องอยู่ในกลุ่ม)
+            try:
+                r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
+                            headers={"Authorization": f"Bearer {token}"}, timeout=8)
+                if r.status_code == 200:
+                    name = r.json().get("groupName", "")
+            except Exception:
+                pass
+        groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat()}
+        added.append({"id": gid, "name": name})
+    if added:
+        try:
+            cache_store.set_kv("line_groups", groups)
+        except Exception:
+            pass
+    return added
+
+
 @csrf_exempt
 def line_webhook(request):
-    """LINE Messaging API webhook — จับ group id + ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message)
+    """LINE Messaging API webhook (ต่อตรงจาก LINE) — จับ group id + ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message)
     → เก็บ KVStore 'line_groups' {gid: {name, lastSeen}} · ให้ admin เลือกกลุ่มจาก dropdown (LINE ไม่มี API ลิสต์กลุ่ม)
-    ⚠️ ต้อง register URL นี้ใน LINE Developers Console (Messaging API → Webhook URL = SITE_URL/api/line/webhook · เปิด Use webhook)"""
+    ⚠️ ต้อง register URL นี้ใน LINE Developers Console (Messaging API → Webhook URL = SITE_URL/api/line/webhook · เปิด Use webhook)
+    ถ้าใช้ n8n เป็นตัวรับ webhook แทน → ให้ n8n POST มาที่ /api/line/group_ingest (line_group_ingest)"""
     from django.conf import settings as _st
     from django.http import HttpResponse
     if request.method != "POST":
@@ -2152,33 +2221,31 @@ def line_webhook(request):
         data = json.loads(body or b"{}")
     except Exception:
         data = {}
-    from .services import cache_store
-    from .services.fetch_dashboard import bangkok_now
-    import requests as _rq
-    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
-    groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
-    changed = False
-    for ev in (data.get("events") or []):
-        src = ev.get("source") or {}
-        gid = src.get("groupId")
-        if src.get("type") == "group" and gid:
-            name = groups.get(gid, {}).get("name", "")
-            if not name and token:   # ดึงชื่อกลุ่มครั้งแรก
-                try:
-                    r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
-                                headers={"Authorization": f"Bearer {token}"}, timeout=8)
-                    if r.status_code == 200:
-                        name = r.json().get("groupName", "")
-                except Exception:
-                    pass
-            groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat()}
-            changed = True
-    if changed:
-        try:
-            cache_store.set_kv("line_groups", groups)
-        except Exception:
-            pass
+    _store_line_groups(_extract_group_events(data))
     return HttpResponse("ok")
+
+
+@csrf_exempt
+def line_group_ingest(request):
+    """รับ group id จาก n8n (n8n เป็นตัวรับ LINE webhook แล้ว forward มา) → เก็บ line_groups เหมือน line_webhook
+    - auth: ?secret=<CRON_SECRET> หรือ header X-Cron-Secret (n8n รู้ secret นี้อยู่แล้ว) — ไม่ใช้ลายเซ็น LINE
+      เพราะ n8n serialize body ใหม่ ทำให้ X-Line-Signature ไม่ตรง
+    - body ยืดหยุ่น: ส่ง LINE raw ({events:[...]}) ทั้งก้อน หรือส่งแค่ {groupId, groupName?} / list ก็ได้
+    - คืน {ok, count, groups:[{id,name}]}"""
+    from django.conf import settings as _st
+    secret_setting = (getattr(_st, "CRON_SECRET", "") or "").strip()
+    if not secret_setting:
+        return JsonResponse({"ok": False, "error": "CRON_SECRET ยังไม่ได้ตั้งใน env"}, status=500)
+    given = (request.GET.get("secret") or request.headers.get("X-Cron-Secret", "")).strip()
+    if given != secret_setting:
+        return JsonResponse({"ok": False, "error": "secret ไม่ถูกต้อง"}, status=403)
+    try:
+        data = json.loads(request.body or b"{}")
+    except Exception:
+        data = {}
+    added = _store_line_groups(_extract_group_events(data))
+    return JsonResponse({"ok": True, "count": len(added), "groups": added},
+                        json_dumps_params={"ensure_ascii": False})
 
 
 def admin_line_groups(request):

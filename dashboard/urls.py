@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/admin/line_group_name", views.admin_line_group_name, name="admin_line_group_name"),
     path("api/admin/line_groups", views.admin_line_groups, name="admin_line_groups"),
     path("api/line/webhook", views.line_webhook, name="line_webhook"),
+    path("api/line/group_ingest", views.line_group_ingest, name="line_group_ingest"),
     path("api/admin/update_release_date", views.update_release_date, name="update_release_date"),
     path("api/admin/export_leadscore", views.admin_export_leadscore, name="admin_export_leadscore"),
     path("api/cron/sync", views.cron_sync, name="cron_sync"),

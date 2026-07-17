@@ -52,18 +52,27 @@ def _cleanup_old(days: int = 7) -> None:
         pass
 
 
-def capture_report_image() -> str | None:
-    """login แดชบอร์ด → แคปการ์ด #rpt-card → เซฟ PNG · คืน path (หรือ None ถ้าพัง/ไม่มี playwright)"""
+# แต่ละรูปที่จะแคป: (element id, wrapper id ที่ซ่อนอยู่ height:0 ต้องเปิดก่อน)
+_SHOT_TARGETS = [
+    ("rpt-shot", "rpt-shot-wrap"),            # ตารางรายงาน จอง/อนุมัติ/ปล่อย (เวอร์ชันอ่านง่าย)
+    ("rpt-shot-teams", "rpt-shot-teams-wrap"),  # กราฟแท่งการแข่งขันรายทีม (ปล่อย)
+]
+
+
+def capture_report_images() -> list[str]:
+    """login แดชบอร์ด → แคป #rpt-shot + #rpt-shot-teams → เซฟ PNG · คืน list ของ path (ว่าง = พัง/ไม่มี playwright)
+    ทำใน browser session เดียว (login ครั้งเดียว แคปหลายรูป)"""
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
-        return None
+        return []
     # ยิงที่ SITE_URL (dev=http://127.0.0.1:8000 · prod=https://โดเมนจริง ผ่าน nginx)
     # → CSRF referer scheme ตรง (อย่าใส่ X-Forwarded-Proto เอง จะทำ CSRF เพี้ยนตอน POST login)
     base = (getattr(settings, "REPORT_SHOT_BASE", "") or getattr(settings, "SITE_URL", "") or "http://127.0.0.1:8000").rstrip("/")
     user = getattr(settings, "OXLET_ADMIN_USER", "admin")
     pw = getattr(settings, "OXLET_ADMIN_PASSWORD", "")
-    out = os.path.join(_report_dir(), f"report_{time.strftime('%Y%m%d_%H%M%S')}.png")
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    outs: list[str] = []
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
@@ -75,22 +84,61 @@ def capture_report_image() -> str | None:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
-            # ใช้ #rpt-shot (เวอร์ชันย่อสำหรับส่งไลน์ · ซ่อนใน wrapper height:0) — เปิดให้เห็นก่อนแคป · fallback #rpt-card (ตัวเต็ม)
-            sel = "#rpt-shot"
+            # #rpt-shot / #rpt-shot-teams ซ่อนใน wrapper height:0 → เปิดให้เห็นก่อนแคป
+            # timeout สูง (35s) กัน cold start: /api/dashboard คำนวณสด ~8-20s ตอน cache เย็น
             try:
-                page.wait_for_selector(sel, state="attached", timeout=15000)
+                page.wait_for_selector("#rpt-shot", state="attached", timeout=35000)
                 page.wait_for_timeout(2200)   # ให้ตาราง + ฟอนต์ render ครบ
-                page.evaluate("var w=document.getElementById('rpt-shot-wrap'); if(w){w.style.height='auto'; w.style.overflow='visible';}")
-                page.wait_for_timeout(300)
             except Exception:
-                sel = "#rpt-card"
-                page.wait_for_selector(sel, state="visible", timeout=15000)
-                page.wait_for_timeout(2200)
-            page.query_selector(sel).screenshot(path=out)
+                pass
+            for el_id, wrap_id in _SHOT_TARGETS:
+                try:
+                    # ต้องเป็น arrow function ถึงจะรับ arg ได้ (Playwright ไม่ให้ arguments[0] ใน expression ธรรมดา)
+                    page.evaluate(
+                        "(id) => { var w=document.getElementById(id); if(w){w.style.height='auto'; w.style.overflow='visible';} }",
+                        wrap_id,
+                    )
+                    page.wait_for_timeout(350)
+                    el = page.query_selector("#" + el_id)
+                    if not el:
+                        continue
+                    pth = os.path.join(_report_dir(), f"report_{ts}_{el_id}.png")
+                    el.screenshot(path=pth)
+                    if os.path.exists(pth):
+                        outs.append(pth)
+                except Exception:
+                    continue
+            # fallback: ถ้าแคป #rpt-shot ไม่ได้เลย → ลอง #rpt-card (ตารางเว็บตัวเต็ม)
+            if not outs:
+                try:
+                    page.wait_for_selector("#rpt-card", state="visible", timeout=15000)
+                    page.wait_for_timeout(2000)
+                    pth = os.path.join(_report_dir(), f"report_{ts}_rpt-card.png")
+                    page.query_selector("#rpt-card").screenshot(path=pth)
+                    if os.path.exists(pth):
+                        outs.append(pth)
+                except Exception:
+                    pass
             browser.close()
-        return out if os.path.exists(out) else None
     except Exception:
-        return None
+        return outs
+    return outs
+
+
+# back-compat: เดิมชื่อ capture_report_image (คืน path เดียว)
+def capture_report_image() -> str | None:
+    imgs = capture_report_images()
+    return imgs[0] if imgs else None
+
+
+def _report_caption() -> str:
+    """ข้อความก่อนรูป: 'ผลงานทีม ตั้งแต่วันที่ 1-<วันนี้>/<เดือน>/<ปี พ.ศ.> ค่ะ' (โซนไทย)"""
+    try:
+        from .fetch_dashboard import bangkok_now
+        now = bangkok_now()
+        return f"ผลงานทีม ตั้งแต่วันที่ 1-{now.day}/{now.month}/{now.year + 543} ค่ะ"
+    except Exception:
+        return "ผลงานทีม (อัปเดตอัตโนมัติ) ค่ะ"
 
 
 def _public_url(path: str) -> str:
@@ -101,28 +149,43 @@ def _public_url(path: str) -> str:
 
 
 # ── send ──
-def send_report_to_line(target_id: str, caption: str = "") -> tuple[bool, str]:
-    """แคป + ส่งรูปรายงานเข้า LINE target · คืน (ok, ข้อความสถานะ/URL)"""
+def _caption_message(caption: str, mention_all: bool) -> dict:
+    """สร้าง message ข้อความนำหน้ารูป · mention_all=True → textV2 แท็ก @All (เฉพาะกลุ่ม)"""
+    if mention_all:
+        # LINE textV2: {all} = placeholder → substitution mention type=all (แท็กทุกคนในกลุ่ม)
+        return {
+            "type": "textV2",
+            "text": caption + " {all}",
+            "substitution": {"all": {"type": "mention", "mentionee": {"type": "all"}}},
+        }
+    return {"type": "text", "text": caption}
+
+
+def send_report_to_line(target_id: str, caption: str = "", mention_all: bool = False) -> tuple[bool, str]:
+    """แคป + ส่ง caption + รูปรายงาน (2 รูป: ตาราง + กราฟทีม) เข้า LINE target · คืน (ok, ข้อความสถานะ/URL)
+    - caption ว่าง = ใช้ _report_caption() (ผลงานทีม ตั้งแต่ 1-<วันนี้>...)
+    - mention_all=True = แท็ก @All (ใช้เฉพาะส่งเข้ากลุ่ม · 1:1 แท็กไม่ได้)"""
     if not target_id:
         return False, "ไม่มีปลายทาง (target_id)"
-    path = capture_report_image()
-    if not path:
+    paths = capture_report_images()
+    if not paths:
         return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium ติดตั้งไหม (playwright install chromium --with-deps)"
-    url = _public_url(path)
-    if not url.lower().startswith("https://"):
-        return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod ที่มี /media/ เสิร์ฟผ่าน https · path={path}"
+    urls = [_public_url(p) for p in paths]
+    bad = [u for u in urls if not u.lower().startswith("https://")]
+    if bad:
+        return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod ที่มี /media/ เสิร์ฟผ่าน https · url={bad[0]}"
     try:
         from .line_notify import push_line_message
         token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
         if not token:
             return False, "ไม่มี LINE_CHANNEL_ACCESS_TOKEN"
-        msgs = []
-        if caption:
-            msgs.append({"type": "text", "text": caption})
-        msgs.append({"type": "image", "originalContentUrl": url, "previewImageUrl": url})
+        cap = caption or _report_caption()
+        msgs = [_caption_message(cap, mention_all)]
+        for u in urls:
+            msgs.append({"type": "image", "originalContentUrl": u, "previewImageUrl": u})
         sc, resp = push_line_message(target_id, msgs, token)
         _cleanup_old()
-        return (sc == 200), (url if sc == 200 else f"LINE {sc}: {(resp or '')[:200]}")
+        return (sc == 200), ("  ".join(urls) if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
     except Exception as e:
         return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
 
@@ -140,10 +203,12 @@ def maybe_send_daily_report(now_hhmm: str, today_iso: str) -> bool:
             return False   # ส่งไปแล้วนาทีนี้ (กันซ้ำถ้า cron ยิงถี่)
     except Exception:
         pass
-    target = cfg["test_id"] if cfg["mode"] == "test" else cfg["group_id"]
+    is_group = cfg["mode"] == "group"
+    target = cfg["group_id"] if is_group else cfg["test_id"]
     if not target:
         return False
-    ok, info = send_report_to_line(target, caption="📊 รายงานจอง/อนุมัติ/ปล่อย (อัปเดตอัตโนมัติ)")
+    # ส่งเข้ากลุ่ม = แท็ก @All · ส่งทดสอบเข้า 1:1 = ข้อความธรรมดา (แท็กไม่ได้)
+    ok, info = send_report_to_line(target, mention_all=is_group)
     try:
         from . import cache_store
         cache_store.set_kv("report_line_last", {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
