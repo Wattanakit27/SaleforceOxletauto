@@ -2224,28 +2224,61 @@
         SHOT += `</tbody></table>`;
         html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:26px 28px">${SHOT}</div></div>`;
 
-        // ── กราฟแท่ง "การแข่งขันรายทีม" (#rpt-shot-teams · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 2) — ปล่อยต่อทีม ──
-        const _tAgg = {};
-        _rpt.forEach(r=>{ const t=r.team||'?'; if(!_tAgg[t]) _tAgg[t]={done:0,book:0,lead:0}; _tAgg[t].done+=r.dn||0; _tAgg[t].book+=r.bk||0; _tAgg[t].lead+=r.lead||0; });
-        const _tArr = Object.entries(_tAgg).map(([t,v])=>({t,...v})).sort((a,b)=>b.done-a.done);
-        const _tMax = Math.max(1, ..._tArr.map(x=>x.done));
-        const _tName = t => t==='ADMIN' ? 'เทเลเซลล์' : ('ทีม '+t);
-        const _medal = ['🥇','🥈','🥉'];
-        let TS = `<div style="font-size:24px;font-weight:800;color:#1f2333">การแข่งขันรายทีม · ปล่อย</div>
-          <div style="font-size:15px;color:#8b90a6;margin:6px 0 22px">${h(rangeLabelTH())} · แต่ละทีมปล่อยได้เท่าไหร่ (เรียงมากสุด)</div>`;
-        _tArr.forEach((x,i)=>{
-          const _w=Math.round(x.done/_tMax*100), _col=_tcol(x.t);
-          TS += `<div style="margin-bottom:20px">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px">
-              <span style="font-size:19px;font-weight:800;color:#1f2333">${_medal[i]||''} ${h(_tName(x.t))}</span>
-              <span style="font-size:15px;color:#8b90a6">จอง ${x.book} · Lead ${x.lead}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:14px">
-              <div style="flex:1;height:36px;background:#f1f2f7;border-radius:9px;overflow:hidden"><div style="width:${_w}%;height:100%;background:${_col};border-radius:9px;min-width:4px"></div></div>
-              <span style="font-size:28px;font-weight:800;color:${_col};min-width:64px;text-align:right">${x.done}</span>
-            </div></div>`;
+        // ── ตารางสรุปรายทีม (#rpt-shot-teams · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 2) — เป้า/จอง/เซ็น/อนุมัติ/ปล่อย/รวมปล่อยทั้งปี ──
+        // สีหัวเดือนเปลี่ยนตามเดือน (_cm) · เซ็น=รอผล(wr) · อนุมัติ=รอปล่อย(wp) — ใช้เลขชุดเดียวกับตารางรายงานบนเว็บ
+        const _MONTH_COLORS = ['#2563eb','#db2777','#16a34a','#ea580c','#7c3aed','#0891b2','#e0218a','#ca8a04','#dc2626','#4f46e5','#059669','#9333ea'];
+        const _mcol = _MONTH_COLORS[(((_cm||1)-1)%12+12)%12];
+        const _MF = C.MONTHS_FULL || [];
+        const _mLabel = 'เดือน' + (_MF[(_cm||1)-1] || '') + ' ' + (new Date().getFullYear() + 543);
+        const _tName2 = tid => tid==='ADMIN' ? 'เทเลเซลล์' : ((C.TEAM_NAMES||{})[tid] || ('ทีม ' + tid));
+        // รวมรายทีมจาก _rpt (A/B/C/ADMIN)
+        const _tt = {};
+        _rpt.forEach(r=>{ const t=r.team||'?'; if(!_tt[t]) _tt[t]={target:0,bk:0,wr:0,wp:0,dn:0}; _tt[t].target+=r.target||0; _tt[t].bk+=r.bk||0; _tt[t].wr+=r.wr||0; _tt[t].wp+=r.wp||0; _tt[t].dn+=r.dn||0; });
+        // รวมปล่อยทั้งปี ต่อทีม (sum ทุกเดือนใน monthlySummary · ADMIN นับจาก sellers['ADMIN'])
+        const _yearDone = tid => { const ms=D.monthlySummary||{}; let tot=0; for(let m=1;m<=12;m++){ const M=ms[m]||ms[String(m)]; if(!M) continue; if(tid==='ADMIN'){ const s=(M.sellers||{})['ADMIN']; if(s) tot+=Number(s.done||0); } else { const tm=(M.teams||{})[tid]; if(tm) tot+=Number(tm.done||0); } } return tot; };
+        const _tRows = Object.entries(_tt).map(([tid,v])=>({tid,...v,yr:_yearDone(tid)}))
+          .sort((a,b)=> (a.tid==='ADMIN'?1:0)-(b.tid==='ADMIN'?1:0) || (b.dn-a.dn) || (b.bk-a.bk));   // ปล่อยมากสุด · ADMIN ล่างสุด
+        const _tSum = k => _tRows.reduce((a,x)=>a+(x[k]||0),0);
+        const _mHead = `padding:11px 8px;color:#fff;font-weight:800;font-size:15px;text-align:center;background:${_mcol}`;
+        const _lHead = `padding:11px 10px;font-weight:800;font-size:14px;color:#3a3f52;background:color-mix(in srgb,${_mcol} 12%,#fff)`;
+        const _lc = `background:color-mix(in srgb,${_mcol} 6%,#fff)`;   // พื้นหลังคอลัมน์ซ้าย/รวมปีอ่อนๆ
+        let TT = `<div style="font-size:23px;font-weight:800;color:#1f2333;margin-bottom:3px">สรุปรายทีม</div>
+          <div style="font-size:14px;color:#8b90a6;margin-bottom:16px">${h(_mLabel)} · เซ็น = รอผล · อนุมัติ = รอปล่อย</div>
+          <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:15px;border:1px solid #e6e7ef;border-radius:12px;overflow:hidden">
+          <thead>
+            <tr>
+              <th rowspan="2" style="${_lHead}">ลำดับ</th>
+              <th rowspan="2" style="${_lHead};text-align:left">สาขา/ทีม</th>
+              <th rowspan="2" style="${_lHead}">เป้า</th>
+              <th colspan="4" style="${_mHead}">${h(_mLabel)}</th>
+              <th rowspan="2" style="${_lHead}">รวมปล่อย<br>ทั้งปี</th>
+            </tr>
+            <tr><th style="${_mHead}">จอง</th><th style="${_mHead}">เซ็น</th><th style="${_mHead}">อนุมัติ</th><th style="${_mHead}">ปล่อย</th></tr>
+          </thead><tbody>`;
+        _tRows.forEach((x,i)=>{
+          const cc=_tcol(x.tid);
+          TT += `<tr style="border-top:1px solid #eef0f4">
+            <td style="padding:13px 8px;text-align:center;color:#a7abbe;font-size:14px;${_lc}">${i+1}</td>
+            <td style="padding:13px 12px;font-weight:800;color:#1f2333;border-left:6px solid ${cc};white-space:nowrap;${_lc}">${h(_tName2(x.tid))}</td>
+            <td style="padding:13px 8px;text-align:center;color:#6b7080;${_lc}">${x.target||0}</td>
+            <td style="padding:13px 8px;text-align:center;color:#2b2f42;font-weight:700">${x.bk||0}</td>
+            <td style="padding:13px 8px;text-align:center;color:#2b2f42">${x.wr||0}</td>
+            <td style="padding:13px 8px;text-align:center;color:#2b2f42">${x.wp||0}</td>
+            <td style="padding:13px 8px;text-align:center;color:#16a34a;font-weight:800">${x.dn||0}</td>
+            <td style="padding:13px 8px;text-align:center;color:#8a1f52;font-weight:800;${_lc}">${x.yr||0}</td>
+          </tr>`;
         });
-        html += `<div id="rpt-shot-teams-wrap" style="height:0;overflow:hidden"><div id="rpt-shot-teams" style="width:920px;background:#fff;padding:28px 30px">${TS}</div></div>`;
+        TT += `<tr style="background:${_mcol};color:#fff;font-weight:800">
+          <td style="padding:14px 8px"></td>
+          <td style="padding:14px 12px">รวมทั้งหมด</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('target')}</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('bk')}</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('wr')}</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('wp')}</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('dn')}</td>
+          <td style="padding:14px 8px;text-align:center">${_tSum('yr')}</td>
+        </tr></tbody></table>`;
+        html += `<div id="rpt-shot-teams-wrap" style="height:0;overflow:hidden"><div id="rpt-shot-teams" style="width:1120px;background:#fff;padding:26px 28px">${TT}</div></div>`;
       } catch (e) { console.error('mega seller table error', e); }
 
       // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──
