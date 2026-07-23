@@ -1,0 +1,154 @@
+{% load static %}<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เบิก-คืนรถส่วนกลาง</title>
+<style>
+  :root{
+    --bg:#f5f6fa; --bg2:#fff; --bd:#e6e7ef; --t1:#1f2333; --t2:#5a6072; --t3:#9195a8;
+    --blue:#3b82f6; --green:#16a34a; --amber:#d97706; --red:#dc2626; --purple:#7c3aed;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14161d; --bg2:#1c1f28; --bd:#2a2e3a; --t1:#e8eaf0; --t2:#a7abbe; --t3:#7c8194;
+           --blue:#60a5fa; --green:#4ade80; --amber:#fbbf24; --red:#f87171; --purple:#a78bfa; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Sarabun',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;padding:14px}
+  h1{font-size:18px;font-weight:800;margin:0 0 3px}
+  .sub{font-size:12px;color:var(--t3);margin-bottom:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:12px 14px}
+  .kpi .n{font-size:24px;font-weight:800;line-height:1.1}
+  .kpi .l{font-size:11.5px;color:var(--t3);margin-top:2px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  button{font-family:inherit;cursor:pointer;border-radius:9px;border:.5px solid var(--bd);background:var(--bg2);color:var(--t1);padding:7px 12px;font-size:13px;font-weight:600}
+  button.pri{background:var(--blue);color:#fff;border:none}
+  button.g{background:var(--green);color:#fff;border:none}
+  button.sm{padding:4px 9px;font-size:11.5px;font-weight:700}
+  input,select{font-family:inherit;padding:7px 10px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--t1);font-size:13px}
+  .card{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+  th{background:var(--bg);color:var(--t2);font-weight:600;text-align:left;padding:9px 11px;font-size:11.5px;border-bottom:1px solid var(--bd)}
+  td{padding:9px 11px;border-bottom:.5px solid var(--bd)}
+  tr:last-child td{border-bottom:none}
+  .chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+  .addform{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px;display:none;gap:8px;flex-wrap:wrap;align-items:center}
+  .addform.show{display:flex}
+  .scroll{overflow-x:auto}
+  .muted{color:var(--t3)}
+  .deny{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:30px;text-align:center;color:var(--t2)}
+</style>
+</head>
+<body>
+{% if not is_admin %}
+  <div class="deny">หน้านี้สำหรับหัวหน้า/ออฟฟิศ (แอดมิน) เท่านั้น — กรุณาเข้าสู่ระบบด้วยบัญชีแอดมิน</div>
+{% else %}
+  <h1>เบิก-คืนรถส่วนกลาง</h1>
+  <div class="sub">ดูสถานะรถทุกคัน · อนุมัติ/ปิดเคส · <span class="muted">(ก้อน 2 — ยังไม่ต่อบอท LINE · เพิ่มเคสมือเพื่อทดสอบได้)</span></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="bar">
+    <button class="pri" onclick="toggleAdd()">+ เพิ่มเคสเบิก (มือ)</button>
+    <button onclick="load()">รีเฟรช</button>
+    <span id="status" class="muted" style="font-size:12px"></span>
+  </div>
+
+  <div class="addform" id="addform">
+    <input id="f_plate" placeholder="ทะเบียน (เช่น 8676)" style="width:150px">
+    <input id="f_borrower" placeholder="ผู้เบิก/ผู้ขับ" style="width:150px">
+    <input id="f_purpose" placeholder="วัตถุประสงค์" style="width:150px">
+    <input id="f_dest" placeholder="ปลายทาง/สาขา" style="width:150px">
+    <button class="g" onclick="addCase()">บันทึกเบิก</button>
+    <button onclick="toggleAdd()">ยกเลิก</button>
+  </div>
+
+  <div class="card scroll">
+    <table>
+      <thead><tr>
+        <th>ทะเบียน</th><th>ผู้เบิก</th><th>สถานะ</th><th>ปลายทาง</th>
+        <th>เบิก</th><th>คืน</th><th>ไมล์</th><th>รูป</th><th>จัดการ</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="muted" style="padding:20px;text-align:center">กำลังโหลด…</td></tr></tbody>
+    </table>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function statusChip(m){
+  const c = m.isGreen ? 'var(--green)' : (m.status==='incomplete'||m.status==='equipment_hold') ? 'var(--red)'
+          : (m.status==='pending_human'||m.status==='system_error') ? 'var(--amber)'
+          : m.status==='cancelled' ? 'var(--t3)' : 'var(--blue)';
+  return `<span class="chip" style="background:color-mix(in srgb,${c} 16%,transparent);color:${c}">${esc(m.statusLabel)}</span>`;
+}
+function actionsFor(m){
+  let out = '';
+  if(!m.isGreen && m.status!=='cancelled')
+    out += `<button class="sm g" onclick="act(${m.id},'approve')">ผ่าน</button> `;
+  if(m.isOpen)
+    out += `<button class="sm" onclick="doReturn(${m.id})">คืนรถ</button> `;
+  if(m.status!=='cancelled' && !m.returned)
+    out += `<button class="sm" onclick="act(${m.id},'cancel')">ยกเลิก</button>`;
+  return out || '<span class="muted">—</span>';
+}
+async function load(){
+  $('status').textContent = 'กำลังโหลด…';
+  let d; try{ d = await (await fetch('/checkout/api/movements',{credentials:'same-origin'})).json(); }
+  catch(e){ $('status').textContent = 'โหลดไม่ได้'; return; }
+  if(!d.ok){ $('rows').innerHTML = `<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--red)">${esc(d.error||'ผิดพลาด')}</td></tr>`; $('status').textContent=''; return; }
+  const c = d.counts;
+  $('kpis').innerHTML = [
+    ['รถออกอยู่', c.open, 'var(--blue)'],
+    ['ไม่ครบ — ทวง', c.incomplete, 'var(--red)'],
+    ['รอคนยืนยัน', c.pending, 'var(--amber)'],
+    ['ระงับ (อุปกรณ์)', c.hold, 'var(--red)'],
+    ['บันทึกฝ่าฝืน', c.violations, 'var(--purple)'],
+  ].map(([l,n,col])=>`<div class="kpi"><div class="n" style="color:${col}">${n}</div><div class="l">${l}</div></div>`).join('');
+  const rows = d.movements;
+  $('rows').innerHTML = rows.length ? rows.map(m=>`<tr>
+    <td style="font-weight:700">${esc(m.plate)}</td>
+    <td>${esc(m.borrower)||'<span class="muted">—</span>'}</td>
+    <td>${statusChip(m)}${m.damage?' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)">เสียหาย</span>':''}</td>
+    <td>${esc(m.destination)||'<span class="muted">—</span>'}</td>
+    <td class="muted">${esc(m.checkedOut)}</td>
+    <td class="muted">${esc(m.returned)||'—'}</td>
+    <td class="muted">${m.odoOut||'—'}${m.odoIn?(' → '+m.odoIn):''}</td>
+    <td class="muted">${m.photos}</td>
+    <td>${actionsFor(m)}</td>
+  </tr>`).join('') : '<tr><td colspan="9" class="muted" style="padding:20px;text-align:center">ยังไม่มีเคส</td></tr>';
+  $('status').textContent = '';
+}
+function toggleAdd(){ $('addform').classList.toggle('show'); }
+async function post(url, body){
+  const r = await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  return r.json();
+}
+async function addCase(){
+  const plate = $('f_plate').value.trim();
+  if(!plate){ alert('ใส่ทะเบียน'); return; }
+  const d = await post('/checkout/api/add',{plate, borrower:$('f_borrower').value, purpose:$('f_purpose').value, destination:$('f_dest').value});
+  if(!d.ok){ alert(d.error||'ผิดพลาด'); return; }
+  ['f_plate','f_borrower','f_purpose','f_dest'].forEach(i=>$(i).value='');
+  toggleAdd(); load();
+}
+async function act(id, action){
+  if(action==='cancel' && !confirm('ยกเลิกเคสนี้?')) return;
+  const d = await post('/checkout/api/action',{id, action});
+  if(!d.ok){ alert(d.error||'ผิดพลาด'); return; }
+  load();
+}
+async function doReturn(id){
+  const odo = prompt('เลขไมล์ตอนคืน (เว้นว่างได้):','');
+  if(odo===null) return;
+  const damage = confirm('พบความเสียหายตอนคืนไหม?  (ตกลง=มี / ยกเลิก=ไม่มี)');
+  const d = await post('/checkout/api/action',{id, action:'return', odo_in:odo.trim(), damage});
+  if(!d.ok){ alert(d.error||'ผิดพลาด'); return; }
+  load();
+}
+load();
+</script>
+{% endif %}
+</body>
+</html>

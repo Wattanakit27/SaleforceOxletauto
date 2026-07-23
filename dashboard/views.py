@@ -1155,10 +1155,12 @@ def cron_tick(request):
     except Exception:
         pass
 
-    # ── 📊 รายงานจอง/อนุมัติ/ปล่อย เข้าไลน์รายวัน (แคปตารางด้วย Playwright → ส่งรูป) — ตั้งเวลา/ปลายทางในเมนูจัดการ ──
+    # ── 📊 รายงานจอง/อนุมัติ/ปล่อย + ยอด LEAD (สรุปย่อ) เข้าไลน์รายวัน (แคปด้วย Playwright → ส่งรูป) — ตั้งเวลาในเมนูจัดการ/หัวการ์ด ──
     try:
-        from .services.report_shot import maybe_send_daily_report
-        maybe_send_daily_report(now.strftime("%H:%M"), now.date().isoformat())
+        from .services.report_shot import maybe_send_daily_report, maybe_send_leadsummary
+        _hhmm, _today = now.strftime("%H:%M"), now.date().isoformat()
+        maybe_send_daily_report(_hhmm, _today)
+        maybe_send_leadsummary(_hhmm, _today)
     except Exception:
         pass
 
@@ -2084,6 +2086,28 @@ def admin_report_config(request):
     return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
 
 
+@csrf_exempt
+def admin_purchase_method_config(request):
+    """Admin — ตั้งค่า "หมวดวิธีได้รถ" (map ค่าคอลัมน์ AT → หมวด หาเอง/online/รถเทิร์น/ขายหน้าร้าน)
+    GET = อ่าน map · POST {map:{ค่าAT: หมวด}} = บันทึก · ค่าที่ไม่อยู่ใน map → frontend ตกหาเองอัตโนมัติ (กันพัง)"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+    _VALID = {"หาเอง", "online", "รถเทิร์น", "ขายหน้าร้าน"}
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        mp = body.get("map") or {}
+        clean = {str(k): v for k, v in mp.items() if v in _VALID and str(k).strip()}
+        cache_store.set_kv("purchase_method_map", clean)
+        return JsonResponse({"ok": True, "map": clean}, json_dumps_params={"ensure_ascii": False})
+    mp = (cache_store.get_kv("purchase_method_map") or {}).get("data") or {}
+    return JsonResponse({"ok": True, "map": mp}, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_report_test(request):
     """Admin — ส่งรายงานทดสอบเข้าไลน์เดี๋ยวนี้ (POST {target?}) · target ว่าง = ใช้ปลายทางใน config
     ⚠️ ต้องรันบน prod (LINE ต้องดึงรูปจาก URL https สาธารณะ · localhost ส่งไม่ได้)"""
@@ -2104,6 +2128,47 @@ def admin_report_test(request):
     # แท็ก @All เฉพาะเมื่อส่งเข้ากลุ่ม (target = group_id) — 1:1 แท็กไม่ได้
     mention_all = bool(target and target == cfg.get("group_id"))
     ok, info = send_report_to_line(target, mention_all=mention_all)
+    return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_leadsummary_config(request):
+    """Admin — ตั้งค่า "ส่งยอด LEAD (สรุปย่อ) เข้าไลน์" · GET=อ่าน · POST=บันทึก {enabled,time,mode,test_id,group_id}"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_lead_config, save_lead_config
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        cfg = get_lead_config()
+        for k in ("enabled", "time", "mode", "test_id", "group_id"):
+            if k in body:
+                cfg[k] = body[k]
+        save_lead_config(cfg)
+        return JsonResponse({"ok": True, "config": get_lead_config()}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, "config": get_lead_config()}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_leadsummary_test(request):
+    """Admin — ส่งยอด LEAD (สรุปย่อ) ทดสอบเข้าไลน์เดี๋ยวนี้ (POST {target?}) · prod เท่านั้น"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_lead_config, send_leadsummary_to_line
+    try:
+        body = json.loads(request.body or "{}")
+    except Exception:
+        body = {}
+    cfg = get_lead_config()
+    target = (body.get("target") or "").strip() or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
+    if not target:
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
+    mention_all = bool(target and target == cfg.get("group_id"))
+    ok, info = send_leadsummary_to_line(target, mention_all=mention_all)
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 

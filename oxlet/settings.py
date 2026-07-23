@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "dashboard",
     "cars",  # ระบบติดตามรถ (tracking) — DB จริง, แยกจาก sales ที่อ่าน Sheets
+    "checkout",  # ระบบเบิก-คืนรถส่วนกลาง — DB จริง (เฟส 1: โครงข้อมูล)
 ]
 
 MIDDLEWARE = [

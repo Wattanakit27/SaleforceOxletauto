@@ -482,6 +482,60 @@ def _dedup_booking_cases(cases: list[dict]) -> list[dict]:
     return out
 
 
+# ── ฝั่งจัดซื้อ (รับซื้อรถ) — spreadsheet แยก · tab "ขายรถจบออนไลน์ <เดือน>69" ──
+# คอลัมน์: A(0)=วันที่ · I(8)=ช่องทาง · K(10)=รับซื้อ/ไม่รับซื้อ · M(12)=จัดซื้อ · O(14)=คุณภาพ(HOT/VERY HOT/COOL/REJECT)
+PURCHASE_SID = "1u6A0uYbbY8GshZID1n379bKd5yHqNMoGT88bjFiSWNE"
+
+
+def _fetch_purchase_data() -> dict:
+    """อ่านชีตรับซื้อรถทุกเดือน (ปี 69) — คืน 2 ลิสต์ในการอ่านครั้งเดียว:
+      leads:  [month, day, channel(I), buy(0/1/2), buyer(M), quality(O)]  — ฝั่ง lead รับซื้อ (คอลัมน์ A-O)
+      bought: [month, day, method(AT), buyer(AU)]                          — รถที่ซื้อได้จริง (คอลัมน์ AS:AV)
+    best-effort — พัง/ไม่มีสิทธิ์ = คืนลิสต์ว่าง (ไม่ทำ dashboard ล่ม)"""
+    import urllib.parse
+    import requests
+    from google.auth.transport.requests import Request as AuthRequest
+    from .constants import MONTHS_FULL
+    from .google_sheets import _get_credentials, SHEETS_API
+    leads: list = []
+    bought: list = []
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        headers = {"Authorization": f"Bearer {creds.token}"}
+        meta = requests.get(f"{SHEETS_API}/{PURCHASE_SID}?fields=sheets.properties.title",
+                            headers=headers, timeout=15).json()
+        titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
+        for m in range(1, 13):
+            tab = f"ขายรถจบออนไลน์ {MONTHS_FULL[m - 1]}69"
+            if tab not in titles:
+                continue
+            rng = urllib.parse.quote(f"{tab}!A3:AV400")   # A-O = lead · AS(44)/AT(45)/AU(46) = รถซื้อจริง
+            r = requests.get(f"{SHEETS_API}/{PURCHASE_SID}/values/{rng}?valueRenderOption=FORMATTED_VALUE",
+                             headers=headers, timeout=25)
+            if r.status_code != 200:
+                continue
+            for row in r.json().get("values", []):
+                def g(i):
+                    return (row[i].strip() if i < len(row) and row[i] else "")
+                # ── ฝั่ง lead รับซื้อ (A-O) ──
+                ch, buyer, q = g(8), g(12), g(14)
+                if ch or buyer:
+                    md = parse_month_day(g(0))
+                    day = md[1] if md else 0
+                    buy_raw = g(10)
+                    buy = 2 if "ไม่รับ" in buy_raw else (1 if "รับซื้อ" in buy_raw else 0)
+                    leads.append([m, day, ch, buy, buyer, q.upper()])
+                # ── รถที่ซื้อได้จริง (AS วันที่ · AT วิธี · AU จัดซื้อ) ── ต้องมีวันที่ parse ได้ + คนซื้อ (กันแถว summary รายสัปดาห์ปน)
+                bdate, method, bbuyer = g(44), g(45), g(46)
+                bmd = parse_month_day(bdate)
+                if bmd and bbuyer:
+                    bought.append([bmd[0], bmd[1], method, bbuyer])
+    except Exception:
+        return {"leads": leads, "bought": bought}
+    return {"leads": leads, "bought": bought}
+
+
 def _compute_dashboard_data() -> dict:
     # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
     # ถ้า sheet หายหรือ error → ใช้ default hardcode
@@ -798,18 +852,26 @@ def _compute_dashboard_data() -> dict:
         deal_value = sum(b["price"] for b in g["dones"])
         pipeline_val = sum(
             b["price"] for b in g["bookings"]
-            if b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
+            if b["status"] in ("จอง", "รอเซ็นต์", "รอปล่อย", "รอผล")
         )
+        # ประเภท lead ของเซลล์เก่า (เดิม {} → ตาราง "จำนวนที่รับ Lead" คอลัมน์ประเภทเป็น 0 ตอนกรองวันเก่า)
+        o_lead_types: dict[str, int] = {}
+        for r in g["leads"]:
+            t = cell(r, L.type)
+            if t:
+                o_lead_types[t] = o_lead_types.get(t, 0) + 1
         sellers.append({
             "name": name, "team": "INACTIVE",  # team = INACTIVE → frontend แสดงเป็น "เซลล์เก่า"
             "lead": len(g["leads"]),
+            "leadNormal": len([r for r in g["leads"] if cell(r, L.type) not in RJ_TYPES]),
+            "leadRJ": len([r for r in g["leads"] if cell(r, L.type) in RJ_TYPES]),
             "follow": len([r for r in g["leads"] if should_follow(r)]),
             "vacant": len([r for r in g["leads"] if is_lead_vacant(r)]),
             "done": n_done,
             "target": 0, "booking": len(g["jongs"]),
             "live": 0, "clip": 0, "clipTarget": 0,
             "liveInbox": 0, "liveLead": 0,
-            "leadTypes": {},
+            "leadTypes": o_lead_types,
             "dealValue": deal_value,
             "pipelineValue": pipeline_val,
             "avgDealValue": (deal_value / n_done) if n_done else 0,
@@ -1188,6 +1250,12 @@ def _compute_dashboard_data() -> dict:
                 b["price"] for b in m_bookings
                 if b["seller"] == "ADMIN" and b["status"] in ("จอง", "รอเซ็นต์", "รอผล", "รอปล่อย")
             )
+            # ประเภท lead ของ ADMIN รายเดือน (เดิม hardcode {} → ตาราง "จำนวนที่รับ Lead" คอลัมน์ประเภทเป็น 0 แต่รับรวมไม่ 0)
+            m_admin_types: dict[str, int] = {}
+            for r in m_admin_leads:
+                t = cell(r, L.type)
+                if t:
+                    m_admin_types[t] = m_admin_types.get(t, 0) + 1
             m_sellers["ADMIN"] = {
                 "lead": len(m_admin_leads),
                 "leadNormal": len([r for r in m_admin_leads if cell(r, L.type) not in RJ_TYPES]),
@@ -1200,7 +1268,7 @@ def _compute_dashboard_data() -> dict:
                 "dealValue": m_admin_dv,
                 "pipelineValue": m_admin_pipeline,
                 "avgDealValue": (m_admin_dv / len(m_admin_done)) if m_admin_done else 0,
-                "leadTypes": {},
+                "leadTypes": m_admin_types,
                 "updateSum": m_admin_astats["updateSum"],
                 "proofCount": m_admin_astats["proofCount"],
                 "returnCount": m_admin_astats["returnCount"],
@@ -1401,6 +1469,25 @@ def _compute_dashboard_data() -> dict:
             if isinstance(_row, dict) and _row.get("phone"):
                 _row["phone"] = _mask_phone(_row["phone"])
 
+    # ── Lead แยกช่องทาง (platform) รายเดือน — ตาราง "รายงาน lead" (ช่องทาง=คอลัมน์ H) ──
+    lead_channel_by_month: dict = {}   # {month: {channel: count}}
+    for r in year_leads:
+        m = get_month(cell(r, L.received_date))
+        if not (1 <= m <= 12):
+            continue
+        chn = cell(r, L.channel).strip()
+        if not chn:
+            continue
+        mc = lead_channel_by_month.setdefault(m, {})
+        mc[chn] = mc.get(chn, 0) + 1
+
+    _purchase_data = _fetch_purchase_data()   # ฝั่งจัดซื้อ (lead รับซื้อ + รถซื้อจริง) — อ่านครั้งเดียว
+    try:
+        from . import cache_store
+        _method_map = (cache_store.get_kv("purchase_method_map") or {}).get("data") or {}
+    except Exception:
+        _method_map = {}
+
     return {
         "meta": {
             "generatedAt": now.isoformat(),
@@ -1427,6 +1514,10 @@ def _compute_dashboard_data() -> dict:
         "dailyBySeller": daily_by_seller,
         "leadCarsByMonth": lead_cars_by_month,
         "leadCarSellerMonth": lead_car_seller_month,
+        "purchaseLeads": _purchase_data["leads"],    # ฝั่งจัดซื้อ lead: [m,d,channel,buy,buyer,quality]
+        "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer]
+        "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
+        "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
     }
 
 

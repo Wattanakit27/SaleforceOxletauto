@@ -8,6 +8,8 @@ urlpatterns = [
     path("dj-admin/", admin.site.urls),
     # ระบบติดตามรถ (tracking) — แยก prefix /track/ กันชน login/logout/หน้าแรกของ sales
     path("track/", include("cars.urls")),
+    # ระบบเบิก-คืนรถส่วนกลาง — แยก prefix /checkout/ (หน้า supervisor ฝังเป็นแท็บใน /dashboard/)
+    path("checkout/", include("checkout.urls")),
     # sales dashboard (เดิม) — อ่าน Google Sheets, ไม่ใช้ DB
     path("", include("dashboard.urls")),
 ]

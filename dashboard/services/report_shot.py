@@ -215,3 +215,119 @@ def maybe_send_daily_report(now_hhmm: str, today_iso: str) -> bool:
     except Exception:
         pass
     return ok
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ยอด LEAD (สรุปย่อ) → LINE  — แคปการ์ด #leadsummary-card ส่งเข้ากลุ่ม (config แยกจากรายงานรายวัน)
+# ══════════════════════════════════════════════════════════════════════════════
+_LEAD_CFG_KEY = "leadsummary_line_config"
+
+
+def get_lead_config() -> dict:
+    try:
+        from . import cache_store
+        raw = (cache_store.get_kv(_LEAD_CFG_KEY) or {}).get("data") or {}
+    except Exception:
+        raw = {}
+    cfg = dict(_DEFAULT_CFG)
+    cfg.update({k: raw[k] for k in _DEFAULT_CFG if k in raw})
+    cfg["enabled"] = bool(cfg["enabled"])
+    return cfg
+
+
+def save_lead_config(cfg: dict) -> None:
+    from . import cache_store
+    clean = dict(_DEFAULT_CFG)
+    clean.update({k: cfg[k] for k in _DEFAULT_CFG if k in cfg})
+    clean["enabled"] = bool(clean["enabled"])
+    cache_store.set_kv(_LEAD_CFG_KEY, clean)
+
+
+def capture_leadsummary() -> str | None:
+    """login แดชบอร์ด → แคปการ์ด #leadsummary-card (มองเห็นบนหน้า ไม่ต้องเปิด wrapper) → คืน path"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return None
+    base = (getattr(settings, "REPORT_SHOT_BASE", "") or getattr(settings, "SITE_URL", "") or "http://127.0.0.1:8000").rstrip("/")
+    user = getattr(settings, "OXLET_ADMIN_USER", "admin")
+    pw = getattr(settings, "OXLET_ADMIN_PASSWORD", "")
+    out = os.path.join(_report_dir(), f"leadsummary_{time.strftime('%Y%m%d_%H%M%S')}.png")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+            page = browser.new_page(device_scale_factor=3, viewport={"width": 1680, "height": 1200})
+            page.goto(base + "/login/?bg=1", wait_until="domcontentloaded", timeout=30000)
+            page.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")
+            page.wait_for_selector("input[name=username]", state="visible", timeout=10000)
+            page.fill("input[name=username]", user)
+            page.fill("input[name=password]", pw)
+            page.click("button[type=submit]")
+            page.wait_for_url("**/dashboard/**", timeout=30000)
+            page.wait_for_selector("#leadsummary-card", state="visible", timeout=35000)   # cold start เผื่อ ~8-20s
+            page.wait_for_timeout(1800)
+            el = page.query_selector("#leadsummary-card")
+            if el:
+                el.screenshot(path=out)
+            browser.close()
+        return out if os.path.exists(out) else None
+    except Exception:
+        return None
+
+
+def _lead_caption() -> str:
+    try:
+        from .fetch_dashboard import bangkok_now
+        now = bangkok_now()
+        return f"ยอด LEAD ประจำวันที่ {now.day}/{now.month}/{now.year + 543} ค่ะ"
+    except Exception:
+        return "ยอด LEAD (อัปเดตอัตโนมัติ) ค่ะ"
+
+
+def send_leadsummary_to_line(target_id: str, caption: str = "", mention_all: bool = False) -> tuple[bool, str]:
+    """แคป #leadsummary-card → ส่ง caption + รูปเข้า LINE · คืน (ok, สถานะ/URL)"""
+    if not target_id:
+        return False, "ไม่มีปลายทาง (target_id)"
+    path = capture_leadsummary()
+    if not path:
+        return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium (playwright install chromium --with-deps)"
+    url = _public_url(path)
+    if not url.lower().startswith("https://"):
+        return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={url}"
+    try:
+        from .line_notify import push_line_message
+        token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
+        if not token:
+            return False, "ไม่มี LINE_CHANNEL_ACCESS_TOKEN"
+        cap = caption or _lead_caption()
+        msgs = [_caption_message(cap, mention_all), {"type": "image", "originalContentUrl": url, "previewImageUrl": url}]
+        sc, resp = push_line_message(target_id, msgs, token)
+        _cleanup_old()
+        return (sc == 200), (url if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
+    except Exception as e:
+        return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
+
+
+def maybe_send_leadsummary(now_hhmm: str, today_iso: str) -> bool:
+    """เรียกจาก cron_tick · ส่ง #leadsummary-card ถ้า enabled + เวลาตรง + ยังไม่ส่งวันนี้"""
+    cfg = get_lead_config()
+    if not cfg["enabled"] or cfg["time"] != now_hhmm:
+        return False
+    try:
+        from . import cache_store
+        last = (cache_store.get_kv("leadsummary_line_last") or {}).get("data") or {}
+        if last.get("date") == today_iso and last.get("time") == now_hhmm:
+            return False
+    except Exception:
+        pass
+    is_group = cfg["mode"] == "group"
+    target = cfg["group_id"] if is_group else cfg["test_id"]
+    if not target:
+        return False
+    ok, info = send_leadsummary_to_line(target, mention_all=is_group)
+    try:
+        from . import cache_store
+        cache_store.set_kv("leadsummary_line_last", {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
+    except Exception:
+        pass
+    return ok

@@ -1257,6 +1257,7 @@
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bell',16)} แจ้งเตือนตามด่วน</button>
             <button onclick="openReportLine()" title="ส่งรูปตารางรายงาน จอง/อนุมัติ/ปล่อย เข้าไลน์อัตโนมัติทุกวัน" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:camera',16)} รายงานเข้าไลน์</button>
+            <button onclick="openMethodMap()" title="จับคู่ค่าวิธีได้รถ (คอลัมน์ AT) → หมวด หาเอง/online/รถเทิร์น/ขายหน้าร้าน · ค่าใหม่ที่ยังไม่ตั้ง = ตกหาเองอัตโนมัติ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:package',16)} ตั้งค่าหมวดวิธีได้รถ</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:target',16)} ตั้งเป้า / ทีม</button>
             <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
             <button onclick="openTeleConfigPanel()" title="จัดการเทเลเซลล์ (ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:phone',16)} จัดการเทเลเซลล์</button>
@@ -1306,15 +1307,16 @@
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
+        'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
       html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
-      // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ" เพราะ iframe มี UI ของตัวเอง)
-      if(tab!=='s' && tab!=='t') html += renderDateFilterBar();
+      // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ" เพราะ iframe มี UI ของตัวเอง)
+      if(tab!=='s' && tab!=='t' && tab!=='ck') html += renderDateFilterBar();
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
@@ -1323,6 +1325,7 @@
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
       else if(tab==='t') html += renderTracking();
+      else if(tab==='ck') html += renderCheckout();
 
       root.innerHTML = html;
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
@@ -2101,9 +2104,14 @@
           const p = _mpipe(s.name), f = _finBy[s.name] || {sum:0, n:0};
           return { team:s.team, name:s.name, target:Math.round((s.target||0)*rangeMonthCount()), monBook:_monBook(s.name), bk, wr:p.wr, wp:p.wp, dn,
             finSum:f.sum, finN:f.n, lead, rj, live:_liveBy[s.name]||0, clip:_clipBy[s.name]||0, leadLive:_sval(s,'leadLive'), wk:_wkBook[s.name]||0, oh:((_ohMon[String(_ohWeek)])||{})[s.name]||null }; };
-        const rows = ss.filter(s => s.team!=='INACTIVE' && s.inactive!==true).map(_row);   // ตัดเซลล์ลาออก/ไม่อยู่ในชีตตั้งค่า (INACTIVE) ออก
+        // เอาเซลล์เก่า (INACTIVE/ลาออก) เข้าด้วย ถ้ามีกิจกรรมในช่วง — rangeActiveSellers กรองให้แล้ว (โผล่เฉพาะตอนกรองวันเก่าที่เขายังทำอยู่)
+        const rows = ss.map(_row);
         window._ohSellers = rows.map(r=>r.name);   // เซลล์ที่ active ในตาราง → ใช้ในฟอร์ม ONHAND (ตัดเซลล์เก่า)
-        const teamsOrder = [...new Set(rows.map(r=>r.team))].sort((a,b)=> a==='ADMIN'?1 : b==='ADMIN'?-1 : (a<b?-1:1));
+        // ADMIN + INACTIVE (เซลล์เก่า) ไปท้ายสุด (INACTIVE ล่างสุด)
+        const _tRank = t => t==='INACTIVE'?2 : t==='ADMIN'?1 : 0;
+        const teamsOrder = [...new Set(rows.map(r=>r.team))].sort((a,b)=> (_tRank(a)-_tRank(b)) || (a<b?-1:1));
+        const _tLbl = tid => tid==='INACTIVE'?'เซลล์เก่า' : tid==='ADMIN'?'เทเลเซลล์' : ((C.TEAM_NAMES||{})[tid]||('ทีม '+tid));
+        const _tBadge = tid => tid==='INACTIVE'?'เก่า' : tid==='ADMIN'?'AD' : tid;
 
         // — นิยามคอลัมน์ (v=ค่าต่อแถว · f=ฟิลด์สำหรับผลรวม · sub=วิธีรวม) —
         const _pctB = rs => { const l=rs.reduce((a,r)=>a+r.lead,0), b=rs.reduce((a,r)=>a+r.bk,0); return (l?Math.round(b/l*100):0)+'%'; };
@@ -2156,7 +2164,7 @@
         teamsOrder.forEach(tid => {
           rows.filter(r=>r.team===tid).forEach(r => {
             const _f=_FLAGS[r.name]||'', _tint=_flagBg(_f), _cbg=_tint?`background:${_tint};`:'';
-            T += `<tr><td style="position:sticky;left:0;z-index:1;background:${_tint||'var(--bg)'};padding:5px 9px;border-bottom:.5px solid var(--bd);border-left:3px solid ${_tcol(tid)};font-weight:600;white-space:nowrap">${_flagSel(r.name,_f)}${h(sname(r.name))} <span style="font-size:8px;color:#fff;background:${_tcol(tid)};padding:0 4px;border-radius:3px">${h(tid==='ADMIN'?'AD':tid)}</span></td>`;
+            T += `<tr><td style="position:sticky;left:0;z-index:1;background:${_tint||'var(--bg)'};padding:5px 9px;border-bottom:.5px solid var(--bd);border-left:3px solid ${_tcol(tid)};font-weight:600;white-space:nowrap">${_flagSel(r.name,_f)}${h(sname(r.name))} <span style="font-size:8px;color:#fff;background:${_tcol(tid)};padding:0 4px;border-radius:3px">${h(_tBadge(tid))}</span></td>`;
             COLS.forEach(c => { T += `<td style="${_cbg}padding:5px 8px;text-align:right;border-bottom:.5px solid var(--bd)">${c.v(r)}</td>`; });
             T += `</tr>`;
           });
@@ -2165,7 +2173,7 @@
           if (tid === 'ADMIN') return;
           const grp = rows.filter(r=>r.team===tid); if (!grp.length) return;
           const cc = _tcol(tid);
-          T += `<tr style="font-weight:700"><td style="position:sticky;left:0;z-index:1;background:color-mix(in srgb,${cc} 14%,var(--bg));padding:5px 9px;border-top:1px solid ${cc};color:${cc}">รวม ${h(C.TEAM_NAMES[tid]||('ทีม '+tid))}</td>`;
+          T += `<tr style="font-weight:700"><td style="position:sticky;left:0;z-index:1;background:color-mix(in srgb,${cc} 14%,var(--bg));padding:5px 9px;border-top:1px solid ${cc};color:${cc}">รวม ${h(_tLbl(tid))}</td>`;
           COLS.forEach(c => { T += `<td style="padding:5px 8px;text-align:right;border-top:1px solid ${cc};background:color-mix(in srgb,${cc} 9%,transparent)">${c.agg(grp)}</td>`; });
           T += `</tr>`;
         });
@@ -2207,6 +2215,198 @@
         _RC.forEach(c=>{ RT += `<td style="padding:6px 8px;text-align:right;background:var(--blue);color:#fff">${c.t(_rpt)}</td>`; });
         RT += `</tr></tbody></table></div></div>`;
         html += RT;
+
+        // ══ 📋 จำนวนที่รับ Lead ต่อวัน (แยกประเภท lead รายเซลล์ · ต่อจากตารางรายงาน · ตามตัวกรองวันที่) ══
+        // รับรวม = lead+rj (ตรงกับคอลัมน์ Lead/RJ ในตารางบน) · LEAD ปกติ = ไม่รวม RJ · เฉลี่ยรับรายวัน = LEAD ปกติ ÷ _bkDiv (วันที่ผ่านไป) · RJ% = rj ÷ รับรวม
+        try {
+          const LT_COLS = [
+            {k:'TLD',l:'TLD'},{k:'BLD',l:'BLD'},{k:'Moderate',l:'Moderate'},{k:'Hot',l:'Hot'},
+            {k:'Very Hot',l:'Very Hot'},{k:'MerHot',l:'MerHot'},{k:'TLD / Hot',l:'TLD / Hot'},
+            {k:'Hot RJ',l:'Hot RJ'},{k:'RJ',l:'RJ'},{k:'Hot RB',l:'HOT RB'},
+          ];
+          const _LTH = {'TLD':'#374151','BLD':'#7f1d1d','Moderate':'#374151','Hot':'#2563eb','Very Hot':'#dc2626','MerHot':'#2563eb','TLD / Hot':'#374151','Hot RJ':'#ea580c','RJ':'#dc2626','Hot RB':'#ea580c'};
+          const _rLTm = [...new Set(rangeDays().map(x => x[0]))];   // เดือนในช่วง
+          const _sllLT = {}; (D.sellers||[]).forEach(s => { if(s && s.leadTypes) _sllLT[s.name] = s.leadTypes; });  // fallback: leadTypes รายปี (เซลล์เก่าไม่มีใน monthlySummary)
+          const _ltOf = (name) => { const acc = {}; let any=false; _rLTm.forEach(m => { const sm = ((D.monthlySummary && D.monthlySummary[m] && D.monthlySummary[m].sellers) || {})[name]; if (sm && sm.leadTypes) for (const [k,v] of Object.entries(sm.leadTypes)) { acc[k] = (acc[k]||0) + (Number(v)||0); any=true; } });
+            if(!any && _sllLT[name]) for (const [k,v] of Object.entries(_sllLT[name])) acc[k] = (acc[k]||0) + (Number(v)||0);   // เซลล์เก่า → ใช้ leadTypes รายปี
+            return acc; };
+          const ltRows = rows.map(r => ({ team:r.team, name:r.name, lt:_ltOf(r.name), recv:(r.lead||0)+(r.rj||0), normal:r.lead||0, rj:r.rj||0 }));
+          const _ltSum = (list) => { const o = {lt:{}, recv:0, normal:0, rj:0}; list.forEach(x => { for (const [k,v] of Object.entries(x.lt)) o.lt[k]=(o.lt[k]||0)+v; o.recv+=x.recv; o.normal+=x.normal; o.rj+=x.rj; }); return o; };
+          const _ltCore = (o, bold) => {
+            const fw = bold ? 'font-weight:800' : '';
+            let c = LT_COLS.map(col => { const v = o.lt[col.k]||0; return `<td style="padding:5px 7px;text-align:center;${fw}${v?'':';color:var(--t3)'}">${v}</td>`; }).join('');
+            c += `<td style="padding:5px 7px;text-align:center;font-weight:800;background:#fde047;color:#7c5e00">${o.recv}</td>`;
+            c += `<td style="padding:5px 7px;text-align:center;${fw}">${o.normal}</td>`;
+            c += `<td style="padding:5px 7px;text-align:center;${fw}">${_perDay(o.normal).toFixed(2)}</td>`;
+            const rjp = o.recv ? Math.round(o.rj/o.recv*10000)/100 : 0;
+            c += `<td style="padding:5px 7px;text-align:center;${fw};color:${rjp>=50?'var(--red)':rjp>=30?'var(--amber)':'var(--t2)'}">${rjp}</td>`;
+            return c;
+          };
+          let LT = `<div class="card" id="leadrecv-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} จำนวนที่รับ Lead ต่อวัน · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="แยกตามประเภท lead ที่รับ รายเซลล์ (ตามช่วงวันที่)\nรับรวม = ทั้งหมด (รวม RJ) · LEAD ปกติ = ไม่รวม RJ\nเฉลี่ยรับรายวัน = LEAD ปกติ ÷ วันที่ผ่านไป\nRJ % = RJ ÷ รับรวม">?</span></div>`;
+          LT += `<div class="card-sub">รับรวม=ทั้งหมด · LEAD ปกติ=ไม่รวม RJ · เฉลี่ยรับรายวัน=LEAD ปกติ ÷ วันที่ผ่านไป · RJ%=RJ ÷ รับรวม (RJ/Hot RJ/HOT RB นับเป็น RJ)</div>`;
+          LT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
+          LT += `<thead><tr><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:90px;color:var(--t2)">เซลล์</th>`;
+          LT_COLS.forEach(col => { LT += `<th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);background:${_LTH[col.k]||'#374151'};color:#fff;font-weight:700">${h(col.l)}</th>`; });
+          LT += `<th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:800">รับรวม</th><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">LEAD ปกติ</th><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">เฉลี่ยรับ<br>รายวัน</th><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">RJ %</th></tr></thead><tbody>`;
+          teamsOrder.forEach(tid => {
+            const grp = ltRows.filter(r => r.team === tid);
+            if (!grp.length) return;
+            const cc = _tcol(tid);
+            grp.forEach(r => { LT += `<tr><td style="position:sticky;left:0;z-index:1;background:var(--bg);padding:5px 9px;border-bottom:.5px solid var(--bd);border-left:3px solid ${cc};font-weight:600">${h(sname(r.name))}</td>${_ltCore(r,false)}</tr>`; });
+            if (grp.length > 1) {
+              LT += `<tr style="font-weight:700"><td style="position:sticky;left:0;z-index:1;background:color-mix(in srgb,${cc} 14%,var(--bg));padding:5px 9px;border-top:1px solid ${cc};color:${cc}">รวม ${h(_tLbl(tid))}</td>${_ltCore(_ltSum(grp),true)}</tr>`;
+            }
+          });
+          LT += `<tr style="font-weight:800"><td style="position:sticky;left:0;z-index:1;background:var(--blue);color:#fff;padding:6px 9px">รวมทั้งหมด</td>${_ltCore(_ltSum(ltRows),true)}</tr>`;
+          LT += `</tbody></table></div></div>`;
+          html += LT;
+        } catch(e) { console.error('lead-received table error', e); }
+
+        // ══ ฝั่งจัดซื้อ (รับซื้อรถ) — 2 ตาราง: ช่องทาง lead + จำนวนที่รับ Lead จัดซื้อ (จากชีต "ขายรถจบออนไลน์ <เดือน>69" · ตามตัวกรองวันที่) ══
+        try {
+          const PL = D.purchaseLeads || [];   // [m, d, channel, buy(0/1/2), buyer, quality]
+          const _rMonthsP = [...new Set(rangeDays().map(x => x[0]))];
+          // เทียบ ISO ตรงกับ dfFrom/dfTo (inRange ใช้ _parseDmy คาด d/m/y — ISO parse ไม่ได้) · ไม่รู้วัน → เอาทั้งเดือนถ้าเดือนอยู่ในช่วง
+          const _plOk = (m,d) => { if(d>0){ const t=`2026-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; return t>=dfFrom && t<=dfTo; } return _rMonthsP.includes(m); };
+          const plRows = PL.filter(r => _plOk(r[0], r[1]));
+          // ตาราง 1: ช่องทาง lead
+          const CH_ORDER = ['Line@','เพจบ้านเก่า','เพจอ่อนนุช','เพจguru','กลุ่มรับซื้อรถ','เทิร์นรถ','หน้าร้านบ้านเก่า','หน้าร้านเทพารักษ์','เบอร์กลางส่วนตัว','TIKTOK'];
+          const CH_COLORS = {'Line@':'#22c55e','เพจบ้านเก่า':'#0ea5e9','เพจอ่อนนุช':'#06b6d4','เพจguru':'#8b5cf6','กลุ่มรับซื้อรถ':'#ef4444','เทิร์นรถ':'#d97706','หน้าร้านบ้านเก่า':'#f97316','หน้าร้านเทพารักษ์':'#a855f7','เบอร์กลางส่วนตัว':'#3b82f6','TIKTOK':'#64748b'};   // สีตามตารางที่ส่งมา
+          const chAgg = {};
+          plRows.forEach(r => { const ch=r[2]||'(ไม่ระบุ)'; const a=chAgg[ch]||(chAgg[ch]={n:0,buy:0,no:0}); a.n++; if(r[3]===1)a.buy++; else if(r[3]===2)a.no++; });
+          const chList = [...CH_ORDER, ...Object.keys(chAgg).filter(c=>!CH_ORDER.includes(c))];   // ครบทุกช่อง (รวม 0) แบบรูป + ช่องใหม่ที่โผล่ในข้อมูล
+          const _chA = c => chAgg[c] || {n:0,buy:0,no:0};
+          const chTot = {n:0,buy:0,no:0}; chList.forEach(c=>{ const a=_chA(c); chTot.n+=a.n; chTot.buy+=a.buy; chTot.no+=a.no; });
+          // ตาราง 2: จัดซื้อ × คุณภาพ
+          const Q_COLS = [['Hot','HOT','#2563eb'],['Very Hot','VERY HOT','#dc2626'],['Cool','COOL','#0891b2'],['REJECT','REJECT','#6b7280']];
+          const byAgg = {};
+          plRows.forEach(r => { const b=r[4]||'(ไม่ระบุ)'; const a=byAgg[b]||(byAgg[b]={}); a[(r[5]||'').toUpperCase()]=(a[(r[5]||'').toUpperCase()]||0)+1; });
+          const _bTot = b => Q_COLS.reduce((s,[,k])=>s+(byAgg[b][k]||0),0);
+          const byList = Object.keys(byAgg).sort((a,b)=>_bTot(b)-_bTot(a));
+          const _pctBuy = (buy,n) => n? (Math.round(buy/n*10000)/100):0;
+
+          let PT = `<div class="card" id="purchase-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:shopping-cart',16)} ฝั่งจัดซื้อ (รับซื้อรถ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="จากชีต 'ขายรถจบออนไลน์ <เดือน>69' (คนละไฟล์กับยอดขาย)\nช่องทาง lead = ที่มาของลูกค้าที่จะขายรถให้เรา\nจัดซื้อ = คนรับเคส · คุณภาพ Hot/Very Hot/Cool/REJECT">?</span></div>`;
+          PT += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:8px">`;
+          // — ตาราง 1 —
+          PT += `<div><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">ช่องทาง lead</div><div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
+          PT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">ช่องทาง</th><th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2)">จำนวน</th><th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2)">รับซื้อ</th><th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2)">ไม่รับซื้อ</th><th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2)">% รับซื้อ</th></tr></thead><tbody>`;
+          chList.forEach(c=>{ const a=_chA(c); const _cc=CH_COLORS[c]||'var(--t2)'; PT += `<tr><td style="padding:5px 9px;border-bottom:.5px solid var(--bd)"><span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:color-mix(in srgb,${_cc} 15%,transparent);color:${_cc}">${h(c)}</span></td><td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700${a.n?'':';color:var(--t3)'}">${a.n}</td><td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd);color:var(--green)">${a.buy||0}</td><td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd);color:${a.no?'var(--red)':'var(--t3)'}">${a.no||0}</td><td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd)">${_pctBuy(a.buy,a.n)}%</td></tr>`; });
+          PT += `<tr style="font-weight:800"><td style="padding:6px 9px;background:var(--blue);color:#fff">รวมทั้งหมด</td><td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${chTot.n}</td><td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${chTot.buy}</td><td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${chTot.no}</td><td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${_pctBuy(chTot.buy,chTot.n)}%</td></tr>`;
+          PT += `</tbody></table></div></div>`;
+          // — ตาราง 2 —
+          PT += `<div><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">จำนวนที่รับ Lead จัดซื้อ</div><div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
+          PT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">จัดซื้อ</th>`;
+          Q_COLS.forEach(([l,,col])=>{ PT += `<th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:${col};font-weight:700">${l}</th>`; });
+          PT += `<th style="padding:7px 9px;text-align:right;border-bottom:1px solid var(--bd);color:var(--t2)">รวม</th></tr></thead><tbody>`;
+          byList.forEach(b=>{ PT += `<tr><td style="padding:5px 9px;border-bottom:.5px solid var(--bd);font-weight:600">${h(b)}</td>`; Q_COLS.forEach(([,k])=>{ const v=byAgg[b][k]||0; PT += `<td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd)${v?'':';color:var(--t3)'}">${v}</td>`; }); PT += `<td style="padding:5px 9px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:800">${_bTot(b)}</td></tr>`; });
+          const _qTot = k => byList.reduce((s,b)=>s+(byAgg[b][k]||0),0);
+          PT += `<tr style="font-weight:800"><td style="padding:6px 9px;background:var(--blue);color:#fff">รวมทั้งหมด</td>`;
+          Q_COLS.forEach(([,k])=>{ PT += `<td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${_qTot(k)}</td>`; });
+          PT += `<td style="padding:6px 9px;text-align:right;background:var(--blue);color:#fff">${byList.reduce((s,b)=>s+_bTot(b),0)}</td></tr>`;
+          PT += `</tbody></table></div></div>`;
+          PT += `</div></div>`;
+          html += PT;
+        } catch(e) { console.error('purchase tables error', e); }
+
+        // ══ รถซื้อเข้า รายคน (ตามวิธี) — จากคอลัมน์ AS:AV รถที่ซื้อได้จริง · เลย์เอาต์ตามตารางเดือน<เดือน> ══
+        try {
+          const BC = D.boughtCars || [];   // [m, d, method, buyer]
+          const CATS = [['หาเอง','#ca8a04'],['online','#16a34a'],['รถเทิร์น','#2563eb'],['ขายหน้าร้าน','#dc2626']];
+          const PPL = ['พี่หมี','พี่ต๊าด','มิว'];
+          // เป้ารายคน×วิธี (ค่าตั้งต้นจากตารางที่ส่งมา · รายเดือน → สเกล × จำนวนเดือนในช่วง · แก้ค่าได้ที่นี่)
+          const B_TARGETS = {'หาเอง':{'พี่หมี':12,'พี่ต๊าด':12,'มิว':4},'online':{'พี่หมี':13,'พี่ต๊าด':13,'มิว':10},'รถเทิร์น':{'พี่หมี':6,'พี่ต๊าด':7,'มิว':3},'ขายหน้าร้าน':{'พี่หมี':15,'พี่ต๊าด':15,'มิว':10}};
+          // หมวดของวิธี: map ที่แอดมินตั้ง (ชนะ) → keyword → หาเอง (ค่าใหม่ที่ยังไม่ตั้ง = ตกหาเองอัตโนมัติ กันพัง)
+          const _mMap = window._pmmOverride || (D.purchaseMethodMap || {});
+          const _catOf = mtd => { const s=(mtd||'').trim(); if(_mMap[s]) return _mMap[s]; if(s.toLowerCase().includes('online')) return 'online'; if(s.includes('เทิร์น')) return 'รถเทิร์น'; if(s.includes('หน้าร้าน')) return 'ขายหน้าร้าน'; return 'หาเอง'; };
+          const _rM2 = [...new Set(rangeDays().map(x => x[0]))];
+          const _bcOk = (m,d) => { if(d>0){ const t=`2026-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; return t>=dfFrom && t<=dfTo; } return _rM2.includes(m); };
+          const bcF = BC.filter(r => _bcOk(r[0], r[1]));
+          const cnt = {}; CATS.forEach(([c])=>cnt[c]={});
+          const people = new Set(PPL);
+          bcF.forEach(r => { const cat=_catOf(r[2]); const p=r[3]||'(ไม่ระบุ)'; people.add(p); (cnt[cat]=cnt[cat]||{}); cnt[cat][p]=(cnt[cat][p]||0)+1; });
+          const pplList = [...PPL.filter(p=>people.has(p)), ...[...people].filter(p=>!PPL.includes(p))];
+          const _mc = rangeMonthCount();
+          const _bTg = (cat,p) => Math.round(((B_TARGETS[cat]||{})[p]||0) * _mc);
+          const _bCn = (cat,p) => ((cnt[cat]||{})[p]||0);
+          let MT = `<div class="card" id="bought-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:package',16)} รถซื้อเข้า รายคน (ตามวิธี) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รถที่ซื้อได้จริง (คอลัมน์ AS:AV) นับตามวันรับซื้อ\nวิธี: online · รถเทิร์น(เทิร์น) · ขายหน้าร้าน(หน้าร้าน) · หาเอง(นายหน้า/รถเช่า/อื่นๆ)\nเป้า = ค่าตั้งต้น แก้ได้ในโค้ด B_TARGETS">?</span></div>`;
+          MT += `<div class="card-sub">ยอดรถเข้า = รถที่ซื้อได้จริง · เป้า = ค่าตั้งต้น (สเกลตามจำนวนเดือนในช่วง) · เลย์เอาต์ตามตารางที่ส่งมา</div>`;
+          MT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
+          MT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">วิธี</th><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">จัดซื้อ</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">เป้า</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">ยอดรถเข้า</th></tr></thead><tbody>`;
+          const gTgt = {}, gCnt = {};
+          CATS.forEach(([cat,col]) => {
+            const bg = `color-mix(in srgb,${col} 12%,var(--bg))`;
+            pplList.forEach((p,i) => {
+              const tg=_bTg(cat,p), c=_bCn(cat,p);
+              gTgt[p]=(gTgt[p]||0)+tg; gCnt[p]=(gCnt[p]||0)+c;
+              MT += `<tr>`;
+              if(i===0) MT += `<td rowspan="${pplList.length}" style="background:${bg};color:${col};font-weight:800;padding:6px 9px;text-align:center;border-bottom:1px solid var(--bd);vertical-align:middle">${h(cat)}</td>`;
+              MT += `<td style="padding:5px 9px;border-bottom:.5px solid var(--bd)">${h(p)}</td><td style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd);color:var(--t2)">${tg}</td><td style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd);font-weight:700${c?'':';color:var(--t3)'}">${c}</td></tr>`;
+            });
+            const stT=pplList.reduce((s,p)=>s+_bTg(cat,p),0), stC=pplList.reduce((s,p)=>s+_bCn(cat,p),0);
+            MT += `<tr style="font-weight:800;background:${bg};color:${col}"><td colspan="2" style="padding:5px 9px;text-align:center;border-top:1px solid ${col}">รวม${h(cat)}</td><td style="padding:5px 9px;text-align:center;border-top:1px solid ${col}">${stT}</td><td style="padding:5px 9px;text-align:center;border-top:1px solid ${col}">${stC}</td></tr>`;
+          });
+          const _gold='#ca8a04';
+          pplList.forEach((p,i) => {
+            MT += `<tr style="font-weight:700">`;
+            if(i===0) MT += `<td rowspan="${pplList.length}" style="background:color-mix(in srgb,${_gold} 18%,var(--bg));color:${_gold};font-weight:800;text-align:center;padding:6px 9px;border-bottom:1px solid var(--bd);vertical-align:middle">รวม</td>`;
+            MT += `<td style="padding:5px 9px;border-bottom:.5px solid var(--bd)">${h(p)}</td><td style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd)">${gTgt[p]||0}</td><td style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd)">${gCnt[p]||0}</td></tr>`;
+          });
+          const totT=Object.values(gTgt).reduce((s,x)=>s+x,0), totC=Object.values(gCnt).reduce((s,x)=>s+x,0);
+          MT += `<tr style="font-weight:800;background:var(--green);color:#fff"><td colspan="2" style="padding:7px 9px;text-align:center">รวมทั้งหมด</td><td style="padding:7px 9px;text-align:center">${totT}</td><td style="padding:7px 9px;text-align:center">${totC}</td></tr>`;
+          MT += `</tbody></table></div></div>`;
+          html += MT;
+        } catch(e) { console.error('bought cars table error', e); }
+
+        // ══ รายงาน lead (แยกช่องทาง/platform) — Lead ฝั่งขายจากคอลัมน์ H · PLAN(เป้า) + ACTUAL(จริง) ══
+        try {
+          const LCM = D.leadChannelByMonth || {};
+          const _rMc = [...new Set(rangeDays().map(x => x[0]))];
+          const chSum = {};
+          _rMc.forEach(m => { const mc = LCM[m] || LCM[String(m)] || {}; for(const [c,v] of Object.entries(mc)) chSum[c]=(chSum[c]||0)+(Number(v)||0); });
+          const chArr = Object.entries(chSum).map(([c,n])=>({c,n})).sort((a,b)=>b.n-a.n);
+          const totAct = chArr.reduce((s,x)=>s+x.n,0);
+          // สีตามประเภท platform (แบรนด์) — ใช้ทั้งตารางละเอียด + สรุปย่อ
+          const PLAT_COLORS = {'FACEBOOK':'#1877f2','TIKTOK':'var(--t1)','LIVE TIKTOK':'#dc2626','LIVE FACEBOOK':'#2563eb','LINE@':'#06c755','12CAR':'#f97316','WEB OXLET':'#7c3aed','TIKTOK ADS':'var(--t1)','IG':'#e1306c','YOUTUBE':'#ff0000','อื่นๆ':'#64748b'};
+          const _platGroup = ch => { const s=(ch||'').toUpperCase();
+            if(s.includes('LIVE') && s.includes('TIKTOK')) return 'LIVE TIKTOK';
+            if(s.includes('LIVE') && (s.includes('FACEBOOK')||s.includes('FB'))) return 'LIVE FACEBOOK';
+            if(s.includes('TIKTOKADS')||s.includes('TIKTOK ADS')) return 'TIKTOK ADS';
+            if(s.includes('TIKTOK')) return 'TIKTOK';
+            if(s.includes('เพจ')||s.includes('FACEBOOK')||s.includes('FB')) return 'FACEBOOK';
+            if(s.includes('LINE')) return 'LINE@';
+            if(s.includes('12CAR')) return '12CAR';
+            if(s.includes('OXLET')||s.includes('WEB')) return 'WEB OXLET';
+            if(s.includes('INSTAGRAM')||s.includes('IG')||s.includes('TABIAN')) return 'IG';
+            if(s.includes('YOUTUBE')) return 'YOUTUBE';
+            return 'อื่นๆ'; };
+          const _platColor = g => PLAT_COLORS[g] || '#64748b';
+          const _platPill = (label, col) => `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:color-mix(in srgb,${col} 15%,transparent);color:${col}">${h(label)}</span>`;
+          let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า (ยังไม่ตั้ง)">?</span></div>`;
+          LR += `<div class="card-sub">แยกตาม platform ที่ lead เข้ามา · เรียงมากสุด · ACTUAL = จำนวนจริงตามช่วง · PLAN = เป้า (ยังไม่ตั้งค่า)</div>`;
+          LR += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
+          LR += `<thead><tr><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">PLAN</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700">ACTUAL</th></tr></thead><tbody>`;
+          chArr.forEach(x=>{ const _c=_platColor(_platGroup(x.c)); LR += `<tr><td style="padding:5px 10px;border-bottom:.5px solid var(--bd)">${_platPill(x.c,_c)}</td><td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd);color:var(--t3);background:color-mix(in srgb,#fde047 10%,transparent)">0</td><td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700">${x.n}</td></tr>`; });
+          LR += `<tr style="font-weight:800"><td style="padding:7px 10px;background:var(--purple);color:#fff">รวม/สรุป Lead</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">0</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">${totAct}</td></tr>`;
+          LR += `</tbody></table></div></div>`;
+          html += LR;
+
+          // ── สรุปย่อ: รวมช่องทางย่อยเป็นกลุ่มใหญ่ (FACEBOOK/TIKTOK/LIVE TIKTOK...) + หลีดรับซื้อรถ · ใช้ _platGroup/สี ที่ประกาศด้านบน ──
+          const grp = {}; chArr.forEach(x=>{ const g=_platGroup(x.c); grp[g]=(grp[g]||0)+x.n; });
+          // กลุ่มหลักโชว์เสมอตามรูป (แม้ 0) + กลุ่มเสริมเฉพาะที่มีข้อมูล
+          const GRP_CORE = ['FACEBOOK','TIKTOK','LIVE TIKTOK','LINE@','12CAR','WEB OXLET','TIKTOK ADS','IG'];
+          const GRP_EXTRA = ['LIVE FACEBOOK','YOUTUBE','อื่นๆ'];
+          const grpList = [...GRP_CORE, ...GRP_EXTRA.filter(g=>grp[g]), ...Object.keys(grp).filter(g=>!GRP_CORE.includes(g)&&!GRP_EXTRA.includes(g))];
+          const salesTot = Object.values(grp).reduce((s,x)=>s+x,0);
+          const buyLeads = (D.purchaseLeads||[]).filter(r=>_rMc.includes(r[0])).length;   // หลีดรับซื้อรถ (ฝั่งจัดซื้อ · นับตามเดือนในช่วง)
+          let LS = `<div class="card" id="leadsummary-card" style="max-width:460px"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:megaphone',16)} ยอด LEAD (สรุปย่อ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รวมช่องทางย่อยเป็นกลุ่มใหญ่ (เพจ→FACEBOOK · Tiktok ต่างๆ→TIKTOK/LIVE TIKTOK ฯลฯ)\nหลีดรับซื้อรถ = ฝั่งจัดซื้อ (แยกจากยอดขาย)\nTOTAL = รวมเฉพาะหลีดขายรถ">?</span></span>${canViewAll?`<button onclick="openLeadLine()" title="ตั้งค่า/ส่งยอด LEAD (สรุปย่อ) เข้าไลน์กลุ่ม + ตั้งเวลาอัตโนมัติ" style="font-size:11px;padding:4px 11px;border-radius:13px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap">${ic('lucide:send',13)} ส่งไลน์ ▾</button>`:''}</div>`;
+          LS += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:12.5px;width:100%;white-space:nowrap">`;
+          LS += `<thead><tr><th style="padding:7px 11px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 11px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">LEAD</th></tr></thead><tbody>`;
+          grpList.forEach(g=>{ LS += `<tr><td style="padding:6px 11px;border-bottom:.5px solid var(--bd)">${_platPill(g,_platColor(g))}</td><td style="padding:6px 11px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700${grp[g]?'':';color:var(--t3)'}">${grp[g]||0}</td></tr>`; });
+          LS += `<tr><td style="padding:6px 11px;border-bottom:.5px solid var(--bd);font-weight:600;color:var(--amber)">หลีดรับซื้อรถ</td><td style="padding:6px 11px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700;color:var(--amber)">${buyLeads}</td></tr>`;
+          LS += `<tr style="font-weight:800"><td style="padding:8px 11px;background:var(--green);color:#fff">รวมหลีดขายรถ TOTAL</td><td style="padding:8px 11px;text-align:right;background:var(--green);color:#fff">${salesTot}</td></tr>`;
+          LS += `</tbody></table></div></div>`;
+          html += LS;
+        } catch(e) { console.error('lead report table error', e); }
 
         // ── เวอร์ชันสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
         // ครบทุกคอลัมน์ (เหมือนตารางเต็ม _RC) แต่สไตล์อ่านง่าย: แถวโค้ง ตัวใหญ่ขึ้น สีคงที่ (light เสมอ) ไม่อิงธีมเว็บ · reuse _rpt/_RC เดียวกัน
@@ -3927,6 +4127,9 @@
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo', q:''};
     function renderTracking(){ return `<div id="trk"><div class="mut" style="padding:24px;text-align:center">กำลังโหลดข้อมูลรถ…</div></div>`; }
 
+    // แท็บ "เบิก-คืนรถ" — ฝังหน้า supervisor (checkout/) ผ่าน iframe (same-origin · ใช้ session sales admin)
+    function renderCheckout(){ return `<iframe src="/checkout/" title="เบิก-คืนรถ" style="width:100%;height:calc(100vh - 170px);min-height:560px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`; }
+
     // โหลดข้อมูลรถล่วงหน้า (ไม่ต้องเปิดแท็บสถานะรถ) → กระดิ่งแจ้งเตือนนับ "รถค้างนาน" ได้ทันที
     let _trkAlertsTried = false;
     async function ensureTrackingForAlerts(){
@@ -4350,6 +4553,36 @@
       try{ const r=await fetch('/track/api/branches',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'create',code,name})});
         const j=await r.json(); if(!j.ok){ alert(j.error||'เพิ่มไม่สำเร็จ'); return; } renderTrkBranches(); loadTracking(true); }catch(e){ alert('ผิดพลาด: '+e); }
     }
+    // 📦 ตั้งค่าหมวดวิธีได้รถ — จับคู่ค่า AT → หมวด (หาเอง/online/รถเทิร์น/ขายหน้าร้าน) · ค่าใหม่ที่ไม่ตั้ง → หาเอง
+    async function openMethodMap(){ const ov=_trkOverlay('method-map','<p class="mut">กำลังโหลด…</p>'); await renderMethodMap(ov); }
+    async function renderMethodMap(ov){
+      ov=ov||document.getElementById('method-map'); if(!ov) return;
+      let cur={}; try{ const d=await (await fetch('/api/admin/purchase_method_config',{credentials:'same-origin'})).json(); cur=d.map||{}; }catch(e){}
+      const cnt={}, raw={}; (D.boughtCars||[]).forEach(r=>{ const rv=(r[2]||'').trim(); const disp=rv||'(ว่าง)'; cnt[disp]=(cnt[disp]||0)+1; raw[disp]=rv; });
+      const vals=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+      const CATS=['หาเอง','online','รถเทิร์น','ขายหน้าร้าน'];
+      const _guess=s=>{ if(s.toLowerCase().includes('online'))return'online'; if(s.includes('เทิร์น'))return'รถเทิร์น'; if(s.includes('หน้าร้าน'))return'ขายหน้าร้าน'; return'หาเอง'; };
+      const _inp='padding:6px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;font-family:inherit';
+      const rows=vals.map(v=>{ const rv=raw[v]; const sel=cur[rv]||_guess(rv); const isNew=!(rv in cur);
+        return `<tr><td style="padding:6px 9px;border-bottom:.5px solid var(--bd)">${h(v)} <span class="mut" style="font-size:11px">(${cnt[v]})</span>${isNew?' <span style="font-size:10px;color:var(--amber)">• ยังไม่ตั้ง→หาเอง</span>':''}</td><td style="padding:6px 9px;border-bottom:.5px solid var(--bd)"><select data-mval="${h(rv)}" style="${_inp}">${CATS.map(c=>`<option value="${c}" ${sel===c?'selected':''}>${c}</option>`).join('')}</select></td></tr>`; }).join('');
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:package',18)} ตั้งค่าหมวดวิธีได้รถ</div><button onclick="document.getElementById('method-map').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 12px">จับคู่ค่าในคอลัมน์ "วิธีได้รถ" → หมวดในตาราง "รถซื้อเข้า" · <b>ค่าใหม่ที่ยังไม่ตั้ง = ตกหาเองอัตโนมัติ</b> (ไม่พัง)</div>
+        <div style="max-height:58vh;overflow:auto;border:.5px solid var(--bd);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;color:var(--t2)">ค่าวิธี (จำนวน)</th><th style="padding:7px 9px;text-align:left;color:var(--t2)">หมวด</th></tr></thead><tbody>${rows||'<tr><td colspan="2" style="padding:16px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูลรถซื้อในช่วงข้อมูล</td></tr>'}</tbody></table></div>
+        <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><button onclick="saveMethodMap()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button><span id="mm_status" style="font-size:12px"></span></div>`;
+    }
+    async function saveMethodMap(){
+      const map={}; document.querySelectorAll('#method-map select[data-mval]').forEach(s=>{ const k=s.getAttribute('data-mval'); if(k) map[k]=s.value; });
+      const st=document.getElementById('mm_status'); if(st) st.textContent='กำลังบันทึก…';
+      try{
+        const d=await (await fetch('/api/admin/purchase_method_config',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({map})})).json();
+        if(!d.ok){ if(st){ st.textContent=d.error||'ผิดพลาด'; st.style.color='var(--red)'; } return; }
+        window._pmmOverride=d.map||map;   // ใช้ทันทีในเซสชันนี้ (ก่อน cron recompute)
+        if(st){ st.textContent='บันทึกแล้ว ✓'; st.style.color='var(--green)'; }
+        setTimeout(()=>{ const el=document.getElementById('method-map'); if(el) el.remove(); render(); }, 550);
+      }catch(e){ if(st){ st.textContent='บันทึกไม่สำเร็จ'; st.style.color='var(--red)'; } }
+    }
+
     // 📊 รายงานเข้าไลน์ (รายวัน) — ตั้งค่าเวลา/เปิด-ปิด/ปลายทาง + ส่งทดสอบ (แคปด้วย Playwright บน server)
     async function openReportLine(){ const ov=_trkOverlay('report-line','<p class="mut">กำลังโหลด…</p>'); await renderReportLine(ov); }
     async function renderReportLine(ov){
@@ -4398,6 +4631,59 @@
     }
     async function checkGroupName(){
       const id=_rlV('rl_group').trim(), el=document.getElementById('rl_gname');
+      if(!id){ if(el){el.textContent='ใส่ group id ก่อน';el.style.color='var(--red)';} return; }
+      if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
+      try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});
+        const j=await r.json(); if(el){ if(j.ok){el.innerHTML='✓ กลุ่ม: <b>'+h(j.name||'(ไม่มีชื่อ)')+'</b>';el.style.color='var(--green)';}else{el.textContent=j.error||'ไม่พบกลุ่ม';el.style.color='var(--red)';} } }catch(e){ if(el){el.textContent='ผิดพลาด';el.style.color='var(--red)';} }
+    }
+    // 📤 ส่งยอด LEAD (สรุปย่อ) เข้าไลน์ — ปุ่มบนหัวการ์ด · แคป #leadsummary-card ส่งกลุ่ม + ตั้งเวลา (คู่ขนานรายงานรายวัน)
+    async function openLeadLine(){ const ov=_trkOverlay('lead-line','<p class="mut">กำลังโหลด…</p>'); await renderLeadLine(ov); }
+    async function renderLeadLine(ov){
+      ov=ov||document.getElementById('lead-line'); if(!ov) return;
+      let d; try{ d=await (await fetch('/api/admin/leadsummary_config',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const c=d.config||{};
+      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
+      const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
+      let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
+      const groupDD = groups.length
+        ? `<select onchange="if(this.value){document.getElementById('ll_group').value=this.value;document.getElementById('ll_gname').innerHTML='';}" style="${_inp};margin-bottom:6px"><option value="">— เลือกกลุ่มที่บอทรู้จัก (${groups.length}) —</option>${groups.map(g=>`<option value="${h(g.id)}" ${c.group_id===g.id?'selected':''}>${h(g.name||'(ไม่มีชื่อ)')} · ${h(String(g.id).slice(0,8))}…</option>`).join('')}</select>`
+        : `<div class="mut" style="font-size:11px;margin-bottom:6px;line-height:1.5">ยังไม่รู้จักกลุ่มไหน — เพิ่มบอทเข้ากลุ่ม + พิมพ์อะไรก็ได้ในกลุ่ม 1 ครั้ง แล้วเปิดใหม่ (ต้องตั้ง webhook ใน LINE Console)</div>`;
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:megaphone',18)} ส่งยอด LEAD (สรุปย่อ) เข้าไลน์</div><button onclick="document.getElementById('lead-line').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปการ์ด "ยอด LEAD (สรุปย่อ)" เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)</div>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="ll_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="ll_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="ll_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
+        </div>
+        <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="ll_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
+        <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">กลุ่มปลายทาง (จริง)</label>
+          ${groupDD}
+          <div style="display:flex;gap:6px"><input id="ll_group" value="${h(c.group_id||'')}" placeholder="หรือวาง group id เอง (Cxxxx...)" style="${_inp}"><button onclick="checkGroupNameLL()" title="ดึงชื่อกลุ่มจาก id" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:12px">ตรวจชื่อ</button></div>
+          <div id="ll_gname" style="font-size:12px;margin-top:5px"></div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="saveLeadLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
+          <button onclick="testLeadLine()" style="padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:13px">${ic('lucide:send',15)} ส่งทดสอบเดี๋ยวนี้</button>
+          <span id="ll_status" style="font-size:12px"></span>
+        </div>
+        <div class="mut" style="font-size:11px;margin-top:14px;line-height:1.7;background:var(--bg2);border-radius:9px;padding:10px 12px">⚠️ ส่งได้จริงเฉพาะบน prod — LINE ต้องดึงรูปจาก URL สาธารณะ (เครื่อง dev localhost ส่งไม่ได้)<br>บน prod ต้องลง Playwright + Chromium ก่อน</div>`;
+    }
+    const _llV=id=>((document.getElementById(id)||{}).value||'');
+    function _llStatus(txt,col){ const s=document.getElementById('ll_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
+    async function saveLeadLine(){
+      _llStatus('กำลังบันทึก…');
+      const body={enabled:document.getElementById('ll_enabled').checked, time:_llV('ll_time'), mode:_llV('ll_mode'), test_id:_llV('ll_test').trim(), group_id:_llV('ll_group').trim()};
+      try{ const r=await fetch('/api/admin/leadsummary_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
+        const j=await r.json(); _llStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _llStatus('ผิดพลาด','var(--red)'); }
+    }
+    async function testLeadLine(){
+      _llStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      try{ const r=await fetch('/api/admin/leadsummary_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({target:_llV('ll_test').trim()})});
+        const j=await r.json(); _llStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _llStatus('ผิดพลาด: '+e,'var(--red)'); }
+    }
+    async function checkGroupNameLL(){
+      const id=_llV('ll_group').trim(), el=document.getElementById('ll_gname');
       if(!id){ if(el){el.textContent='ใส่ group id ก่อน';el.style.color='var(--red)';} return; }
       if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
       try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});
