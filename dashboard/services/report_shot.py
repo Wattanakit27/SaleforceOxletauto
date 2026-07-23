@@ -393,6 +393,11 @@ def _capture_element(card_id: str) -> str | None:
             page.wait_for_url("**/dashboard/**", timeout=30000)
             page.wait_for_selector("#" + card_id, state="attached", timeout=35000)
             page.wait_for_timeout(1800)
+            # ซ่อนปุ่ม "ส่งไลน์" + ไอคอน "?" (ตัวช่วย UI · ไม่ใช่ข้อมูล) ก่อนแคป — รูปสะอาดขึ้น
+            try:
+                page.evaluate("document.querySelectorAll('.linesend-btn,.info-tip,.no-capture').forEach(function(e){e.style.display='none'})")
+            except Exception:
+                pass
             # 1) เวอร์ชันอ่านง่าย #<id>-shot (ซ่อนใน wrapper height:0 · เปิดก่อนแคป) — ถ้ามี
             try:
                 page.evaluate(
@@ -407,7 +412,17 @@ def _capture_element(card_id: str) -> str | None:
                     return out if os.path.exists(out) else None
             except Exception:
                 pass
-            # 2) fallback: แคปการ์ดปกติบนหน้า
+            # 2) fallback: แคปการ์ดจริง — ขยาย overflow ให้เห็นครบทุกคอลัมน์ + หดการ์ดพอดีเนื้อหา (กันที่ว่างขวา/คอลัมน์ถูกตัด)
+            try:
+                page.evaluate(
+                    "(id)=>{var c=document.getElementById(id); if(!c)return;"
+                    "c.querySelectorAll('*').forEach(function(e){var o=getComputedStyle(e).overflowX; if(o==='auto'||o==='scroll'){e.style.overflow='visible';e.style.maxWidth='none';}});"
+                    "c.style.display='inline-block'; c.style.width='fit-content'; c.style.maxWidth='none';}",
+                    card_id,
+                )
+                page.wait_for_timeout(400)
+            except Exception:
+                pass
             el = page.query_selector("#" + card_id)
             if el:
                 el.screenshot(path=out)
