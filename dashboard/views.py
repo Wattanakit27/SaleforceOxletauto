@@ -1155,12 +1155,10 @@ def cron_tick(request):
     except Exception:
         pass
 
-    # ── 📊 รายงานจอง/อนุมัติ/ปล่อย + ยอด LEAD (สรุปย่อ) เข้าไลน์รายวัน (แคปด้วย Playwright → ส่งรูป) — ตั้งเวลาในเมนูจัดการ/หัวการ์ด ──
+    # ── 📊 ส่งการ์ด (ตาราง) เข้าไลน์รายวัน (แคปด้วย Playwright → ส่งรูป) — ตั้งเวลาที่ปุ่ม "ส่งไลน์" บนหัวการ์ดแต่ละใบ ──
     try:
-        from .services.report_shot import maybe_send_daily_report, maybe_send_leadsummary
-        _hhmm, _today = now.strftime("%H:%M"), now.date().isoformat()
-        maybe_send_daily_report(_hhmm, _today)
-        maybe_send_leadsummary(_hhmm, _today)
+        from .services.report_shot import maybe_send_cards
+        maybe_send_cards(now.strftime("%H:%M"), now.date().isoformat())
     except Exception:
         pass
 
@@ -2169,6 +2167,56 @@ def admin_leadsummary_test(request):
         return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
     mention_all = bool(target and target == cfg.get("group_id"))
     ok, info = send_leadsummary_to_line(target, mention_all=mention_all)
+    return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_card_line_config(request):
+    """Admin — ตั้งค่า "ส่งการ์ด (ตาราง) เข้าไลน์" แยกต่อการ์ด · GET ?card=<id> · POST {card, enabled,time,mode,test_id,group_id}"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_card_config, save_card_config, _LINE_CARDS
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        card = (body.get("card") or "").strip()
+        if card not in _LINE_CARDS:
+            return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
+        cfg = get_card_config(card)
+        for k in ("enabled", "time", "mode", "test_id", "group_id"):
+            if k in body:
+                cfg[k] = body[k]
+        save_card_config(card, cfg)
+        return JsonResponse({"ok": True, "config": get_card_config(card)}, json_dumps_params={"ensure_ascii": False})
+    card = (request.GET.get("card") or "").strip()
+    if card not in _LINE_CARDS:
+        return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
+    return JsonResponse({"ok": True, "config": get_card_config(card)}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_card_line_test(request):
+    """Admin — ส่งการ์ดทดสอบเข้าไลน์เดี๋ยวนี้ (POST {card, target?}) · prod เท่านั้น"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services.report_shot import get_card_config, send_card_to_line, _LINE_CARDS
+    try:
+        body = json.loads(request.body or "{}")
+    except Exception:
+        body = {}
+    card = (body.get("card") or "").strip()
+    if card not in _LINE_CARDS:
+        return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
+    cfg = get_card_config(card)
+    target = (body.get("target") or "").strip() or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
+    if not target:
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
+    mention_all = bool(target and target == cfg.get("group_id"))
+    ok, info = send_card_to_line(card, target, mention_all=mention_all)
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 

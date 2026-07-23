@@ -1256,7 +1256,6 @@
             <button onclick="openHealthPanel()" title="เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap;font-weight:700" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:circle-check',16)} สถานะระบบ</button>
             <button onclick="openLineIdPanel()" title="ดูรายชื่อพนักงานและ LINE user_id" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:user-round',16)} LINE ID พนักงาน</button>
             <button onclick="openCronPanel()" title="ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:bell',16)} แจ้งเตือนตามด่วน</button>
-            <button onclick="openReportLine()" title="ส่งรูปตารางรายงาน จอง/อนุมัติ/ปล่อย เข้าไลน์อัตโนมัติทุกวัน" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:camera',16)} รายงานเข้าไลน์</button>
             <button onclick="openMethodMap()" title="จับคู่ค่าวิธีได้รถ (คอลัมน์ AT) → หมวด หาเอง/online/รถเทิร์น/ขายหน้าร้าน · ค่าใหม่ที่ยังไม่ตั้ง = ตกหาเองอัตโนมัติ" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:package',16)} ตั้งค่าหมวดวิธีได้รถ</button>
             <button onclick="openSellerConfigPanel()" title="ตั้งเป้าและจัดทีมเซลล์" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:target',16)} ตั้งเป้า / ทีม</button>
             <button onclick="openAdminIdsPanel()" title="จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)" class="admin-nav-item" style="text-align:left;font-size:12px;padding:7px 11px;border-radius:7px;border:none;background:transparent;color:var(--t1);cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">${ic('lucide:crown',16)} จัดการแอดมิน</button>
@@ -1825,9 +1824,10 @@
 
       const _medals = ['🥇','🥈','🥉'];
       const _f1 = (n) => (Math.round(n*10)/10).toFixed(1);
-      html += `<div class="card">
+      html += `<div class="card" id="scorecard-card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
           <div class="card-title" style="margin:0;display:flex;align-items:center">${ic('lucide:trophy',16)} ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--blue);margin-left:6px">(100 คะแนนเต็ม)</span><span class="info-tip" onclick="showScoreHelp()" tabindex="0" title="ดูวิธีคิดแต่ละช่อง">?</span></div>
+          ${_cardLineBtn('scorecard-card','ตารางคะแนนเซลล์')}
         </div>
         <div class="card-sub">6 ด้าน เทียบกับเป้า (ถึงเป้า=เต็ม) · <button onclick="showScoreHelp()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;padding:0">กดดูวิธีคิดแต่ละช่อง</button> · กดแถวดูรายละเอียด</div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
@@ -1936,10 +1936,10 @@
       _withRaw.forEach(e => { allocMap[e.n] = e.base; });
       const perfEntries = [...allocPool].sort((a,b) => b.total - a.total);
 
-      html += `<div class="card">
+      html += `<div class="card" id="alloc-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:6px">
           <div>
-            <div class="card-title" style="margin:0;display:flex;align-items:center">${ic('lucide:trending-up',16)} จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead แจกจ่ายได้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n  (lead แจกจ่ายได้ = ตัดไลฟ์สด + RJ ออก)\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)\n\nหมายเหตุ: KPI/เคส/RJ ด้านบนนับเต็ม — ตัดไลฟ์+RJ เฉพาะการจัดสรรนี้">?</span></div>
+            <div class="card-title" style="margin:0;display:flex;align-items:center;flex-wrap:wrap;gap:6px">${ic('lucide:trending-up',16)} จัดสรร Lead ตามคะแนน<span class="info-tip" tabindex="0" data-tip="lead/วัน คำนวณอัตโนมัติจากสถิติ:\n  lead แจกจ่ายได้ ÷ จำนวนวันที่ผ่าน = เฉลี่ย/วัน\n  (lead แจกจ่ายได้ = ตัดไลฟ์สด + RJ ออก)\n\nแล้วกระจายให้แต่ละเซลล์ตามคะแนนรวม (100 แต้ม)\n  แต่ละคนได้ = (คะแนนตัวเอง ÷ คะแนนรวมทีม) × lead/วัน\n\n• คนคะแนนสูง = ได้ lead เยอะ\n• ขั้นต่ำ 1 lead/วัน\n• แก้เลขเองได้ (กด ↻ กลับเป็น auto)\n\nหมายเหตุ: KPI/เคส/RJ ด้านบนนับเต็ม — ตัดไลฟ์+RJ เฉพาะการจัดสรรนี้">?</span>${_cardLineBtn('alloc-card','จัดสรร Lead ตามคะแนน')}</div>
             <div class="card-sub" style="margin-top:2px">${isAuto ? `auto: lead แจกจ่ายได้ ${_totalLeadsMonth.toLocaleString()} (ตัดไลฟ์+RJ) ÷ ${_daysElapsed} วัน = <b>${_avgRaw.toFixed(2)}</b> → ${_autoPerDay}/วัน` : `ตั้งเอง ${effPerDay}/วัน · auto = ${_autoPerDay}`} · เฉลี่ยแบ่งเท่ากัน <b>${_dailyEqual.toFixed(1)}</b>/คน</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);padding:6px 10px;border-radius:8px">
@@ -2151,7 +2151,7 @@
         ];
         const _tcol = t => C.TEAM_COLORS[t] || '#888';
 
-        let T = `<div class="card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:table-2',16)} สรุปเต็มรายเซลล์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ทุกคอลัมน์ตามช่วงวันที่ที่เลือก (ยกเว้น 'จองเดือน' = ทั้งเดือนปัจจุบัน)\nเลื่อนแนวนอนดูคอลัมน์เพิ่ม · คอลัมน์เซลล์ตรึงซ้าย\nวันไฟแนนซ์ = เฉลี่ยวัน ผล→ปล่อย ของเคสที่ปล่อย\nONHAND/เป้าจองหน้า/เคสติดตาม = ยังไม่ต่อชีต (เฟส 2)">?</span></div>`;
+        let T = `<div class="card" id="mega-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:table-2',16)} สรุปเต็มรายเซลล์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ทุกคอลัมน์ตามช่วงวันที่ที่เลือก (ยกเว้น 'จองเดือน' = ทั้งเดือนปัจจุบัน)\nเลื่อนแนวนอนดูคอลัมน์เพิ่ม · คอลัมน์เซลล์ตรึงซ้าย\nวันไฟแนนซ์ = เฉลี่ยวัน ผล→ปล่อย ของเคสที่ปล่อย\nONHAND/เป้าจองหน้า/เคสติดตาม = ยังไม่ต่อชีต (เฟส 2)">?</span></span>${_cardLineBtn('mega-card','สรุปเต็มรายเซลล์')}</div>`;
         T += `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px"><div class="card-sub" style="margin:0">รายเซลล์ จัดกลุ่มตามทีม + แถวรวมทีม/รวมทั้งหมด — เลื่อนแนวนอนได้${_ohWeek>1?' · <b style="color:var(--green)">เลขเล็กข้าง ONHAND = ต่างจากสัปดาห์ '+(_ohWeek-1)+'</b>':''}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><select onchange="_ohWeek=Number(this.value);render()" title="เลือกสัปดาห์ของ ONHAND" style="font-size:12px;padding:6px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">${[1,2,3,4,5].map(n=>`<option value="${n}" ${_ohWeek===n?'selected':''}>ONHAND สัปดาห์ ${n}</option>`).join('')}</select><button onclick="openOnhandForm()" style="font-size:12px;padding:6px 12px;border-radius:9px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;cursor:pointer;white-space:nowrap">✏️ กรอก ONHAND</button></div></div>`;
         T += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
         T += `<thead><tr style="background:var(--bg2)"><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:118px">เซลล์</th>`;
@@ -2199,7 +2199,7 @@
           {l:'คลิป',       v:r=>r.clip,   t:rs=>_sL(rs,'clip')},
           {l:'Lead ไลฟ์',  v:r=>r.leadLive, t:rs=>_sL(rs,'leadLive')},
         ];
-        let RT = `<div class="card" id="rpt-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} รายงาน จอง / อนุมัติ / ปล่อย · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ไปป์ไลน์รายเซลล์ (เรียงตามจองมากสุด) ตามช่วงวันที่ที่เลือก\nจอง/รอผล/รอปล่อย/ปล่อย = จากข้อมูลแดชบอร์ด (สด) · เลย์เอาต์ตามชีตรายงาน\nรอผล/รอปล่อย = สถานะเคส (กรองวันรับเคส) · ปล่อย = ตามวันปล่อย">?</span></div>`;
+        let RT = `<div class="card" id="rpt-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:clipboard-list',16)} รายงาน จอง / อนุมัติ / ปล่อย · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ไปป์ไลน์รายเซลล์ (เรียงตามจองมากสุด) ตามช่วงวันที่ที่เลือก\nจอง/รอผล/รอปล่อย/ปล่อย = จากข้อมูลแดชบอร์ด (สด) · เลย์เอาต์ตามชีตรายงาน\nรอผล/รอปล่อย = สถานะเคส (กรองวันรับเคส) · ปล่อย = ตามวันปล่อย">?</span></span>${_cardLineBtn('rpt-card','รายงาน จอง/อนุมัติ/ปล่อย')}</div>`;
         RT += `<div class="card-sub">เรียงตาม (ปล่อย+รอปล่อย) มากสุด → รองด้วยจอง · สีแถว: <b style="color:#16a34a">เขียว</b> = ≥5 (ดี) · <b style="color:#d97706">เหลือง</b> = 3-4 · <b style="color:#dc2626">แดง</b> = ≤2 (ต้องดูแล)</div>`;
         RT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
         RT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">#</th><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:100px">เซลล์</th>`;
@@ -2242,7 +2242,7 @@
             c += `<td style="padding:5px 7px;text-align:center;${fw};color:${rjp>=50?'var(--red)':rjp>=30?'var(--amber)':'var(--t2)'}">${rjp}</td>`;
             return c;
           };
-          let LT = `<div class="card" id="leadrecv-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:clipboard-list',16)} จำนวนที่รับ Lead ต่อวัน · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="แยกตามประเภท lead ที่รับ รายเซลล์ (ตามช่วงวันที่)\nรับรวม = ทั้งหมด (รวม RJ) · LEAD ปกติ = ไม่รวม RJ\nเฉลี่ยรับรายวัน = LEAD ปกติ ÷ วันที่ผ่านไป\nRJ % = RJ ÷ รับรวม">?</span></div>`;
+          let LT = `<div class="card" id="leadrecv-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:clipboard-list',16)} จำนวนที่รับ Lead ต่อวัน · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="แยกตามประเภท lead ที่รับ รายเซลล์ (ตามช่วงวันที่)\nรับรวม = ทั้งหมด (รวม RJ) · LEAD ปกติ = ไม่รวม RJ\nเฉลี่ยรับรายวัน = LEAD ปกติ ÷ วันที่ผ่านไป\nRJ % = RJ ÷ รับรวม">?</span></span>${_cardLineBtn('leadrecv-card','จำนวนที่รับ Lead ต่อวัน')}</div>`;
           LT += `<div class="card-sub">รับรวม=ทั้งหมด · LEAD ปกติ=ไม่รวม RJ · เฉลี่ยรับรายวัน=LEAD ปกติ ÷ วันที่ผ่านไป · RJ%=RJ ÷ รับรวม (RJ/Hot RJ/HOT RB นับเป็น RJ)</div>`;
           LT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:11px;min-width:100%;white-space:nowrap">`;
           LT += `<thead><tr><th style="position:sticky;left:0;z-index:2;background:var(--bg2);padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:90px;color:var(--t2)">เซลล์</th>`;
@@ -2285,7 +2285,7 @@
           const byList = Object.keys(byAgg).sort((a,b)=>_bTot(b)-_bTot(a));
           const _pctBuy = (buy,n) => n? (Math.round(buy/n*10000)/100):0;
 
-          let PT = `<div class="card" id="purchase-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:shopping-cart',16)} ฝั่งจัดซื้อ (รับซื้อรถ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="จากชีต 'ขายรถจบออนไลน์ <เดือน>69' (คนละไฟล์กับยอดขาย)\nช่องทาง lead = ที่มาของลูกค้าที่จะขายรถให้เรา\nจัดซื้อ = คนรับเคส · คุณภาพ Hot/Very Hot/Cool/REJECT">?</span></div>`;
+          let PT = `<div class="card" id="purchase-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:shopping-cart',16)} ฝั่งจัดซื้อ (รับซื้อรถ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="จากชีต 'ขายรถจบออนไลน์ <เดือน>69' (คนละไฟล์กับยอดขาย)\nช่องทาง lead = ที่มาของลูกค้าที่จะขายรถให้เรา\nจัดซื้อ = คนรับเคส · คุณภาพ Hot/Very Hot/Cool/REJECT">?</span></span>${_cardLineBtn('purchase-card','ฝั่งจัดซื้อ (รับซื้อรถ)')}</div>`;
           PT += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:8px">`;
           // — ตาราง 1 —
           PT += `<div><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">ช่องทาง lead</div><div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
@@ -2328,7 +2328,7 @@
           const _mc = rangeMonthCount();
           const _bTg = (cat,p) => Math.round(((B_TARGETS[cat]||{})[p]||0) * _mc);
           const _bCn = (cat,p) => ((cnt[cat]||{})[p]||0);
-          let MT = `<div class="card" id="bought-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:package',16)} รถซื้อเข้า รายคน (ตามวิธี) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รถที่ซื้อได้จริง (คอลัมน์ AS:AV) นับตามวันรับซื้อ\nวิธี: online · รถเทิร์น(เทิร์น) · ขายหน้าร้าน(หน้าร้าน) · หาเอง(นายหน้า/รถเช่า/อื่นๆ)\nเป้า = ค่าตั้งต้น แก้ได้ในโค้ด B_TARGETS">?</span></div>`;
+          let MT = `<div class="card" id="bought-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:package',16)} รถซื้อเข้า รายคน (ตามวิธี) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รถที่ซื้อได้จริง (คอลัมน์ AS:AV) นับตามวันรับซื้อ\nวิธี: online · รถเทิร์น(เทิร์น) · ขายหน้าร้าน(หน้าร้าน) · หาเอง(นายหน้า/รถเช่า/อื่นๆ)\nเป้า = ค่าตั้งต้น แก้ได้ในโค้ด B_TARGETS">?</span></span>${_cardLineBtn('bought-card','รถซื้อเข้า รายคน')}</div>`;
           MT += `<div class="card-sub">ยอดรถเข้า = รถที่ซื้อได้จริง · เป้า = ค่าตั้งต้น (สเกลตามจำนวนเดือนในช่วง) · เลย์เอาต์ตามตารางที่ส่งมา</div>`;
           MT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
           MT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">วิธี</th><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">จัดซื้อ</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">เป้า</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">ยอดรถเข้า</th></tr></thead><tbody>`;
@@ -2381,7 +2381,7 @@
             return 'อื่นๆ'; };
           const _platColor = g => PLAT_COLORS[g] || '#64748b';
           const _platPill = (label, col) => `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:color-mix(in srgb,${col} 15%,transparent);color:${col}">${h(label)}</span>`;
-          let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า (ยังไม่ตั้ง)">?</span></div>`;
+          let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า (ยังไม่ตั้ง)">?</span></span>${_cardLineBtn('leadreport-card','รายงาน lead (แยกช่องทาง)')}</div>`;
           LR += `<div class="card-sub">แยกตาม platform ที่ lead เข้ามา · เรียงมากสุด · ACTUAL = จำนวนจริงตามช่วง · PLAN = เป้า (ยังไม่ตั้งค่า)</div>`;
           LR += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
           LR += `<thead><tr><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">PLAN</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700">ACTUAL</th></tr></thead><tbody>`;
@@ -2398,7 +2398,7 @@
           const grpList = [...GRP_CORE, ...GRP_EXTRA.filter(g=>grp[g]), ...Object.keys(grp).filter(g=>!GRP_CORE.includes(g)&&!GRP_EXTRA.includes(g))];
           const salesTot = Object.values(grp).reduce((s,x)=>s+x,0);
           const buyLeads = (D.purchaseLeads||[]).filter(r=>_rMc.includes(r[0])).length;   // หลีดรับซื้อรถ (ฝั่งจัดซื้อ · นับตามเดือนในช่วง)
-          let LS = `<div class="card" id="leadsummary-card" style="max-width:460px"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:megaphone',16)} ยอด LEAD (สรุปย่อ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รวมช่องทางย่อยเป็นกลุ่มใหญ่ (เพจ→FACEBOOK · Tiktok ต่างๆ→TIKTOK/LIVE TIKTOK ฯลฯ)\nหลีดรับซื้อรถ = ฝั่งจัดซื้อ (แยกจากยอดขาย)\nTOTAL = รวมเฉพาะหลีดขายรถ">?</span></span>${canViewAll?`<button onclick="openLeadLine()" title="ตั้งค่า/ส่งยอด LEAD (สรุปย่อ) เข้าไลน์กลุ่ม + ตั้งเวลาอัตโนมัติ" style="font-size:11px;padding:4px 11px;border-radius:13px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap">${ic('lucide:send',13)} ส่งไลน์ ▾</button>`:''}</div>`;
+          let LS = `<div class="card" id="leadsummary-card" style="max-width:460px"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:megaphone',16)} ยอด LEAD (สรุปย่อ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รวมช่องทางย่อยเป็นกลุ่มใหญ่ (เพจ→FACEBOOK · Tiktok ต่างๆ→TIKTOK/LIVE TIKTOK ฯลฯ)\nหลีดรับซื้อรถ = ฝั่งจัดซื้อ (แยกจากยอดขาย)\nTOTAL = รวมเฉพาะหลีดขายรถ">?</span></span>${_cardLineBtn('leadsummary-card','ยอด LEAD (สรุปย่อ)')}</div>`;
           LS += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:12.5px;width:100%;white-space:nowrap">`;
           LS += `<thead><tr><th style="padding:7px 11px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 11px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">LEAD</th></tr></thead><tbody>`;
           grpList.forEach(g=>{ LS += `<tr><td style="padding:6px 11px;border-bottom:.5px solid var(--bd)">${_platPill(g,_platColor(g))}</td><td style="padding:6px 11px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700${grp[g]?'':';color:var(--t3)'}">${grp[g]||0}</td></tr>`; });
@@ -4684,6 +4684,62 @@
     }
     async function checkGroupNameLL(){
       const id=_llV('ll_group').trim(), el=document.getElementById('ll_gname');
+      if(!id){ if(el){el.textContent='ใส่ group id ก่อน';el.style.color='var(--red)';} return; }
+      if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
+      try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});
+        const j=await r.json(); if(el){ if(j.ok){el.innerHTML='✓ กลุ่ม: <b>'+h(j.name||'(ไม่มีชื่อ)')+'</b>';el.style.color='var(--green)';}else{el.textContent=j.error||'ไม่พบกลุ่ม';el.style.color='var(--red)';} } }catch(e){ if(el){el.textContent='ผิดพลาด';el.style.color='var(--red)';} }
+    }
+
+    // 📤 ส่งการ์ด (ตาราง) เข้าไลน์ — generic ต่อการ์ด (ปุ่มบนหัวการ์ดแต่ละใบ · config แยกต่อ id)
+    let _clCard='', _clName='';
+    function _cardLineBtn(cardId, name){ return canViewAll?`<button onclick="openCardLine('${cardId}','${(name||'').replace(/'/g,'')}')" title="ตั้งค่า/ส่ง '${h(name)}' เข้าไลน์กลุ่ม + ตั้งเวลาอัตโนมัติ" style="font-size:11px;padding:4px 11px;border-radius:13px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0">${ic('lucide:send',13)} ส่งไลน์ ▾</button>`:''; }
+    async function openCardLine(cardId, name){ _clCard=cardId; _clName=name||''; const ov=_trkOverlay('card-line','<p class="mut">กำลังโหลด…</p>'); await renderCardLine(ov); }
+    async function renderCardLine(ov){
+      ov=ov||document.getElementById('card-line'); if(!ov) return;
+      let d; try{ d=await (await fetch('/api/admin/card_line_config?card='+encodeURIComponent(_clCard),{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
+      const c=d.config||{};
+      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
+      const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
+      let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
+      const groupDD = groups.length
+        ? `<select onchange="if(this.value){document.getElementById('cl_group').value=this.value;document.getElementById('cl_gname').innerHTML='';}" style="${_inp};margin-bottom:6px"><option value="">— เลือกกลุ่มที่บอทรู้จัก (${groups.length}) —</option>${groups.map(g=>`<option value="${h(g.id)}" ${c.group_id===g.id?'selected':''}>${h(g.name||'(ไม่มีชื่อ)')} · ${h(String(g.id).slice(0,8))}…</option>`).join('')}</select>`
+        : `<div class="mut" style="font-size:11px;margin-bottom:6px;line-height:1.5">ยังไม่รู้จักกลุ่มไหน — เพิ่มบอทเข้ากลุ่ม + พิมพ์อะไรก็ได้ในกลุ่ม 1 ครั้ง (ต้องตั้ง webhook ใน LINE Console)</div>`;
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:send',18)} ส่ง "${h(_clName)}" เข้าไลน์</div><button onclick="document.getElementById('card-line').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตารางนี้เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)${_clCard==='rpt-card'?' · ส่งเวอร์ชันสวย (ตาราง+กราฟทีม)':''}</div>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="cl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="cl_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="cl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
+        </div>
+        <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="cl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
+        <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">กลุ่มปลายทาง (จริง)</label>
+          ${groupDD}
+          <div style="display:flex;gap:6px"><input id="cl_group" value="${h(c.group_id||'')}" placeholder="หรือวาง group id เอง (Cxxxx...)" style="${_inp}"><button onclick="checkGroupNameCL()" title="ดึงชื่อกลุ่มจาก id" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:12px">ตรวจชื่อ</button></div>
+          <div id="cl_gname" style="font-size:12px;margin-top:5px"></div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="saveCardLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
+          <button onclick="testCardLine()" style="padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:13px">${ic('lucide:send',15)} ส่งทดสอบเดี๋ยวนี้</button>
+          <span id="cl_status" style="font-size:12px"></span>
+        </div>
+        <div class="mut" style="font-size:11px;margin-top:14px;line-height:1.7;background:var(--bg2);border-radius:9px;padding:10px 12px">⚠️ ส่งได้จริงเฉพาะบน prod — LINE ต้องดึงรูปจาก URL สาธารณะ (dev localhost ส่งไม่ได้) · บน prod ต้องลง Playwright + Chromium</div>`;
+    }
+    const _clV=id=>((document.getElementById(id)||{}).value||'');
+    function _clStatus(txt,col){ const s=document.getElementById('cl_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
+    async function saveCardLine(){
+      _clStatus('กำลังบันทึก…');
+      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:_clV('cl_mode'), test_id:_clV('cl_test').trim(), group_id:_clV('cl_group').trim()};
+      try{ const r=await fetch('/api/admin/card_line_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
+        const j=await r.json(); _clStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด','var(--red)'); }
+    }
+    async function testCardLine(){
+      _clStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      try{ const r=await fetch('/api/admin/card_line_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({card:_clCard, target:_clV('cl_test').trim()})});
+        const j=await r.json(); _clStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด: '+e,'var(--red)'); }
+    }
+    async function checkGroupNameCL(){
+      const id=_clV('cl_group').trim(), el=document.getElementById('cl_gname');
       if(!id){ if(el){el.textContent='ใส่ group id ก่อน';el.style.color='var(--red)';} return; }
       if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
       try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});

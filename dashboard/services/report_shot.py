@@ -331,3 +331,140 @@ def maybe_send_leadsummary(now_hhmm: str, today_iso: str) -> bool:
     except Exception:
         pass
     return ok
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ระบบส่งการ์ดเข้าไลน์ (generic ต่อการ์ด) — แต่ละตารางมีปุ่ม+ตั้งค่าของตัวเอง
+# config: KVStore "cardline_<id>" · rpt-card ใช้เวอร์ชันสวย (#rpt-shot + กราฟทีม) · การ์ดอื่นแคป element ตรงๆ
+# ══════════════════════════════════════════════════════════════════════════════
+_LINE_CARDS = {
+    "rpt-card": "รายงาน จอง/อนุมัติ/ปล่อย",
+    "leadrecv-card": "จำนวนที่รับ Lead ต่อวัน",
+    "purchase-card": "ฝั่งจัดซื้อ (รับซื้อรถ)",
+    "bought-card": "รถซื้อเข้า รายคน",
+    "leadreport-card": "รายงาน lead (แยกช่องทาง)",
+    "leadsummary-card": "ยอด LEAD (สรุปย่อ)",
+    "mega-card": "สรุปเต็มรายเซลล์",
+    "alloc-card": "จัดสรร Lead ตามคะแนน",
+    "scorecard-card": "ตารางคะแนนเซลล์",
+}
+
+
+def get_card_config(card_id: str) -> dict:
+    try:
+        from . import cache_store
+        raw = (cache_store.get_kv("cardline_" + card_id) or {}).get("data") or {}
+    except Exception:
+        raw = {}
+    cfg = dict(_DEFAULT_CFG)
+    cfg.update({k: raw[k] for k in _DEFAULT_CFG if k in raw})
+    cfg["enabled"] = bool(cfg["enabled"])
+    return cfg
+
+
+def save_card_config(card_id: str, cfg: dict) -> None:
+    from . import cache_store
+    clean = dict(_DEFAULT_CFG)
+    clean.update({k: cfg[k] for k in _DEFAULT_CFG if k in cfg})
+    clean["enabled"] = bool(clean["enabled"])
+    cache_store.set_kv("cardline_" + card_id, clean)
+
+
+def _capture_element(card_id: str) -> str | None:
+    """login แดชบอร์ด → แคป element #<card_id> (การ์ดที่มองเห็นบนหน้า) → คืน path"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return None
+    base = (getattr(settings, "REPORT_SHOT_BASE", "") or getattr(settings, "SITE_URL", "") or "http://127.0.0.1:8000").rstrip("/")
+    user = getattr(settings, "OXLET_ADMIN_USER", "admin")
+    pw = getattr(settings, "OXLET_ADMIN_PASSWORD", "")
+    out = os.path.join(_report_dir(), f"card_{card_id}_{time.strftime('%Y%m%d_%H%M%S')}.png")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+            page = browser.new_page(device_scale_factor=3, viewport={"width": 1780, "height": 1400})
+            page.goto(base + "/login/?bg=1", wait_until="domcontentloaded", timeout=30000)
+            page.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")
+            page.wait_for_selector("input[name=username]", state="visible", timeout=10000)
+            page.fill("input[name=username]", user)
+            page.fill("input[name=password]", pw)
+            page.click("button[type=submit]")
+            page.wait_for_url("**/dashboard/**", timeout=30000)
+            page.wait_for_selector("#" + card_id, state="visible", timeout=35000)
+            page.wait_for_timeout(1800)
+            el = page.query_selector("#" + card_id)
+            if el:
+                el.screenshot(path=out)
+            browser.close()
+        return out if os.path.exists(out) else None
+    except Exception:
+        return None
+
+
+def capture_card(card_id: str) -> list[str]:
+    """คืน list ของ path รูปของการ์ด · rpt-card = เวอร์ชันสวย (ตาราง+กราฟทีม) · การ์ดอื่น = element ตรงๆ"""
+    if card_id == "rpt-card":
+        return capture_report_images()
+    p = _capture_element(card_id)
+    return [p] if p else []
+
+
+def _card_caption(card_id: str) -> str:
+    name = _LINE_CARDS.get(card_id, "รายงาน")
+    try:
+        from .fetch_dashboard import bangkok_now
+        now = bangkok_now()
+        return f"{name} ประจำวันที่ {now.day}/{now.month}/{now.year + 543} ค่ะ"
+    except Exception:
+        return f"{name} (อัปเดตอัตโนมัติ) ค่ะ"
+
+
+def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_all: bool = False) -> tuple[bool, str]:
+    """แคปการ์ด #<card_id> → ส่ง caption + รูปเข้า LINE · คืน (ok, สถานะ/URL)"""
+    if card_id not in _LINE_CARDS:
+        return False, "การ์ดไม่รองรับการส่งไลน์"
+    if not target_id:
+        return False, "ไม่มีปลายทาง (target_id)"
+    paths = capture_card(card_id)
+    if not paths:
+        return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium (playwright install chromium --with-deps)"
+    urls = [_public_url(p) for p in paths]
+    bad = [u for u in urls if not u.lower().startswith("https://")]
+    if bad:
+        return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={bad[0]}"
+    try:
+        from .line_notify import push_line_message
+        token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
+        if not token:
+            return False, "ไม่มี LINE_CHANNEL_ACCESS_TOKEN"
+        cap = caption or _card_caption(card_id)
+        msgs = [_caption_message(cap, mention_all)]
+        for u in urls:
+            msgs.append({"type": "image", "originalContentUrl": u, "previewImageUrl": u})
+        sc, resp = push_line_message(target_id, msgs, token)
+        _cleanup_old()
+        return (sc == 200), ("  ".join(urls) if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
+    except Exception as e:
+        return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
+
+
+def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
+    """เรียกจาก cron_tick · วนทุกการ์ดที่ตั้งค่าไว้ · ส่งอันที่ enabled + เวลาตรง + ยังไม่ส่งวันนี้"""
+    from . import cache_store
+    for card_id in _LINE_CARDS:
+        try:
+            cfg = get_card_config(card_id)
+            if not cfg["enabled"] or cfg["time"] != now_hhmm:
+                continue
+            last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
+            if last.get("date") == today_iso and last.get("time") == now_hhmm:
+                continue
+            is_group = cfg["mode"] == "group"
+            target = cfg["group_id"] if is_group else cfg["test_id"]
+            if not target:
+                continue
+            ok, info = send_card_to_line(card_id, target, mention_all=is_group)
+            cache_store.set_kv("cardline_last_" + card_id, {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
+        except Exception:
+            continue
