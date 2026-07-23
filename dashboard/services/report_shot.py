@@ -391,8 +391,23 @@ def _capture_element(card_id: str) -> str | None:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
-            page.wait_for_selector("#" + card_id, state="visible", timeout=35000)
+            page.wait_for_selector("#" + card_id, state="attached", timeout=35000)
             page.wait_for_timeout(1800)
+            # 1) เวอร์ชันอ่านง่าย #<id>-shot (ซ่อนใน wrapper height:0 · เปิดก่อนแคป) — ถ้ามี
+            try:
+                page.evaluate(
+                    "(id)=>{var w=document.getElementById(id); if(w){w.style.height='auto';w.style.overflow='visible';}}",
+                    card_id + "-shot-wrap",
+                )
+                page.wait_for_timeout(400)
+                shot = page.query_selector("#" + card_id + "-shot")
+                if shot:
+                    shot.screenshot(path=out)
+                    browser.close()
+                    return out if os.path.exists(out) else None
+            except Exception:
+                pass
+            # 2) fallback: แคปการ์ดปกติบนหน้า
             el = page.query_selector("#" + card_id)
             if el:
                 el.screenshot(path=out)

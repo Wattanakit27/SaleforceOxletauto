@@ -2406,6 +2406,17 @@
           LS += `<tr style="font-weight:800"><td style="padding:8px 11px;background:var(--green);color:#fff">รวมหลีดขายรถ TOTAL</td><td style="padding:8px 11px;text-align:right;background:var(--green);color:#fff">${salesTot}</td></tr>`;
           LS += `</tbody></table></div></div>`;
           html += LS;
+
+          // ── เวอร์ชันอ่านง่ายสำหรับส่งไลน์ (#leadsummary-card-shot · ซ่อน height:0 · ตัวใหญ่ สีคงที่ ไม่อิงธีม) ──
+          let LSS = `<div style="font-size:30px;font-weight:800;color:#1f2333">ยอด LEAD (สรุปย่อ)</div>
+            <div style="font-size:18px;color:#8b90a6;margin:6px 0 22px">${h(rangeLabelTH())}</div>
+            <table style="width:100%;border-collapse:separate;border-spacing:0 9px;font-size:21px">`;
+          grpList.forEach(g=>{ const col=_platColor(g), v=grp[g]||0;
+            LSS += `<tr><td style="background:#f5f6fb;padding:15px 20px;border-radius:13px 0 0 13px"><span style="display:inline-block;padding:5px 18px;border-radius:22px;font-weight:800;font-size:19px;background:color-mix(in srgb,${col} 17%,#fff);color:${col}">${h(g)}</span></td><td style="background:#f5f6fb;padding:15px 24px;text-align:right;font-weight:800;font-size:24px;color:${v?'#1f2333':'#b7bccb'};border-radius:0 13px 13px 0">${v}</td></tr>`; });
+          LSS += `<tr><td style="background:#fff5db;padding:15px 20px;border-radius:13px 0 0 13px;font-weight:800;color:#a9781a;font-size:20px">หลีดรับซื้อรถ</td><td style="background:#fff5db;padding:15px 24px;text-align:right;font-weight:800;font-size:24px;color:#a9781a;border-radius:0 13px 13px 0">${buyLeads}</td></tr>`;
+          LSS += `<tr><td style="background:#16a34a;padding:18px 20px;border-radius:13px 0 0 13px;font-weight:800;color:#fff;font-size:21px">รวมหลีดขายรถ TOTAL</td><td style="background:#16a34a;padding:18px 24px;text-align:right;font-weight:800;font-size:27px;color:#fff;border-radius:0 13px 13px 0">${salesTot}</td></tr>`;
+          LSS += `</table>`;
+          html += `<div id="leadsummary-card-shot-wrap" style="height:0;overflow:hidden"><div id="leadsummary-card-shot" style="width:640px;background:#fff;padding:32px 36px">${LSS}</div></div>`;
         } catch(e) { console.error('lead report table error', e); }
 
         // ── เวอร์ชันสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
