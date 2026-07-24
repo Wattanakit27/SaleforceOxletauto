@@ -1156,11 +1156,12 @@ def cron_tick(request):
         pass
 
     # ── 📊 ส่งการ์ด (ตาราง) เข้าไลน์รายวัน (แคปด้วย Playwright → ส่งรูป) — ตั้งเวลาที่ปุ่ม "ส่งไลน์" บนหัวการ์ดแต่ละใบ ──
+    cards_result = None   # สรุปผลส่งการ์ด → โชว์ใน response ให้ debug จาก cron log ได้เลย
     try:
         from .services.report_shot import maybe_send_cards
-        maybe_send_cards(now.strftime("%H:%M"), now.date().isoformat())
-    except Exception:
-        pass
+        cards_result = maybe_send_cards(now.strftime("%H:%M"), now.date().isoformat())
+    except Exception as e:
+        cards_result = {"error": str(e)[:200]}
 
     # ── อุ่น dashboard cache: cron คำนวณผลใหม่เก็บลง store (Postgres ในเครื่อง/Supabase) ──
     # ทุก worker อ่าน store ที่อุ่นแล้ว → dashboard อุ่นตลอด ไม่มีใครเจอ recompute สด ~8.5 วิ
@@ -1183,7 +1184,8 @@ def cron_tick(request):
         "now": f"{now.hour:02d}:{now.minute:02d}",
         "followup_sent": followup_sent,
         "dashboard_refreshed": refreshed,
-    })
+        "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
+    }, json_dumps_params={"ensure_ascii": False})
 
 
 @require_http_methods(["GET", "POST"])

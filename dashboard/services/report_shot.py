@@ -556,9 +556,10 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
         except Exception:
             return None
 
+    result = {"now": now_hhmm, "enabled": [], "cands": [], "sent": []}   # สรุปให้ cron_tick โชว์ใน response (ไว้ debug)
     now_min = _mins(now_hhmm)
     if now_min is None:
-        return
+        return result
     # เฟส 1: หา candidate (ถึงเวลาแล้วภายในหน้าต่าง + ยังไม่ส่งวันนี้) · DB reads ล้วน connection สด
     cands = []
     for card_id in _LINE_CARDS:
@@ -566,6 +567,7 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             cfg = get_card_config(card_id)
             if not cfg["enabled"]:
                 continue
+            result["enabled"].append({"card": card_id, "time": cfg["time"], "mode": cfg["mode"]})
             tmin = _mins(cfg["time"])
             if tmin is None:
                 continue
@@ -578,9 +580,12 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             is_group = cfg["mode"] == "group"
             target = cfg["group_id"] if is_group else cfg["test_id"]
             if not target:
+                result["cands"].append({"card": card_id, "skip": "no_target"})
                 continue
             cands.append((tmin, card_id, cfg["time"], target, is_group))
-        except Exception:
+            result["cands"].append({"card": card_id})
+        except Exception as e:
+            result["cands"].append({"card": card_id, "err": str(e)[:120]})
             continue
     cands.sort()   # เวลาเก่าสุดก่อน (ที่ค้างนานสุดได้ส่งก่อน)
     # เฟส 2: ส่งไม่เกิน N ใบ/รอบ (ที่เหลือรอรอบถัดไปในหน้าต่าง) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง
@@ -593,9 +598,11 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             ok, info = send_card_to_line(card_id, target, mention_all=is_group)
         except Exception as e:
             ok, info = False, str(e)[:200]
+        result["sent"].append({"card": card_id, "ok": ok, "info": str(info)[:200]})
         try:
             close_old_connections()
             cache_store.set_kv("cardline_last_" + card_id,
-                               {"date": today_iso, "time": ctime, "ok": ok, "info": info[:200]})
+                               {"date": today_iso, "time": ctime, "ok": ok, "info": str(info)[:200]})
         except Exception:
             pass
+    return result
