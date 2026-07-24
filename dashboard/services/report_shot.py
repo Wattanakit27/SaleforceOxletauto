@@ -537,8 +537,8 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
 
 
-_CARD_SEND_MAX_PER_TICK = 2    # แคปใบละ ~20-30วิ → จำกัด/รอบ กันรอบ cron ยาวเกิน timeout เซิร์ฟเวอร์
-_CARD_SEND_WINDOW_MIN = 15     # นาที catch-up: การ์ดที่ยังไม่ส่ง (โดนคิว/รอบพลาด) ส่งได้จนถึง +15 นาที
+_CARD_SEND_MAX_PER_TICK = 1    # ส่งทีละใบ/รอบ (แคปใบละ ~20-30วิ) กันรอบ cron ยาว/ชนกัน
+_CARD_SEND_WINDOW_MIN = 20     # นาที catch-up: ตั้งพร้อมกันหลายใบ ทยอยส่ง 1/รอบ จนครบ (รองรับ ~20 ใบ)
 
 
 def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
