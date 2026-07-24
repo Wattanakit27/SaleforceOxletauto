@@ -154,7 +154,7 @@ def refresh_from_sheet() -> bool:
     ADMIN_SELLERS.update(new_admins)
     return True
 
-RJ_TYPES = ["RJ", "Hot RJ", "Hot RB"]
+RJ_TYPES = ["RJ", "Hot RJ", "Hot RB", "HOT RJ"]   # "HOT RJ" = variant ตัวใหญ่ในชีต (เดิมหลุดนับเป็น lead ปกติ)
 
 # (เลิกใช้แล้ว — มิ.ย.69 ยุบ "ผู้บริหาร" เข้า admin) Overview Flex ส่งให้ ADMIN_USER_IDS + SUPER_ADMIN_IDS แทน (ดู cron_tick)
 # คงตัวแปรไว้กัน import เก่า/finance_check fallback พัง — ไม่ต้องตั้ง env EXECUTIVE_USER_IDS อีกแล้ว
