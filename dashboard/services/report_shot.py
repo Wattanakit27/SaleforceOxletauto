@@ -538,8 +538,13 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
 
 
 def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
-    """เรียกจาก cron_tick · วนทุกการ์ดที่ตั้งค่าไว้ · ส่งอันที่ enabled + เวลาตรง + ยังไม่ส่งวันนี้"""
+    """เรียกจาก cron_tick · ส่งทุกการ์ดที่ enabled + เวลาตรง + ยังไม่ส่งวันนี้
+    ⚠️ อ่าน config ทุกการ์ด "ก่อน" รัน Playwright — เพราะ Playwright แคปใบละ ~30-60วิ ทำ DB connection ค้าง
+       ถ้าอ่าน config กลางลูป (หลังใบแรกแคป) get_card_config จะพัง → คืน default (enabled=False) → การ์ดที่เหลือถูกข้าม (bug 'ส่งมาอันเดียว')"""
     from . import cache_store
+    from django.db import close_old_connections
+    # เฟส 1: หาการ์ดที่ต้องส่ง (DB reads ล้วน · connection ยังสด)
+    todo = []
     for card_id in _LINE_CARDS:
         try:
             cfg = get_card_config(card_id)
@@ -552,7 +557,22 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             target = cfg["group_id"] if is_group else cfg["test_id"]
             if not target:
                 continue
-            ok, info = send_card_to_line(card_id, target, mention_all=is_group)
-            cache_store.set_kv("cardline_last_" + card_id, {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
+            todo.append((card_id, target, is_group))
         except Exception:
             continue
+    # เฟส 2: ส่งทีละใบ (Playwright) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง (กันค้างหลังแคป)
+    for card_id, target, is_group in todo:
+        try:
+            close_old_connections()
+        except Exception:
+            pass
+        try:
+            ok, info = send_card_to_line(card_id, target, mention_all=is_group)
+        except Exception as e:
+            ok, info = False, str(e)[:200]
+        try:
+            close_old_connections()
+            cache_store.set_kv("cardline_last_" + card_id,
+                               {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
+        except Exception:
+            pass
