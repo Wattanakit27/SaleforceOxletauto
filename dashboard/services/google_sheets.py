@@ -364,6 +364,40 @@ def write_sheet(config_key: str, values: list[list]) -> None:
     invalidate_cache(f"sheet:{config_key}")
 
 
+# ── Config store: ย้าย config บางตัวเข้า DB (KVStore) — อ่าน/เขียนเร็ว ไม่ต้องรอ Sheets API ──
+# อ่าน: DB ก่อน · ว่าง → fallback ชีต (แล้ว seed DB ให้ครั้งต่อไปเร็ว · auto-migrate) · เขียน: DB อย่างเดียว (ชีตไม่ใช่ source แล้ว)
+_DB_CONFIG_KEYS = {"sellers_config", "schedule_config"}
+
+
+def read_config_rows(config_key: str) -> list[list]:
+    """อ่าน config rows — DB ก่อน (เร็ว) · DB ว่าง → อ่านชีตแล้ว seed DB · error → ชีต (rows รวม header เหมือน fetch_sheet)"""
+    if config_key not in _DB_CONFIG_KEYS:
+        return fetch_sheet(config_key)
+    try:
+        from . import cache_store
+        rows = ((cache_store.get_kv("cfg_" + config_key) or {}).get("data") or {}).get("rows")
+        if rows:
+            return rows
+    except Exception:
+        pass
+    rows = fetch_sheet(config_key)   # fallback ชีต + seed DB
+    if rows:
+        try:
+            from . import cache_store
+            cache_store.set_kv("cfg_" + config_key, {"rows": rows})
+        except Exception:
+            pass
+    return rows
+
+
+def write_config_rows(config_key: str, values: list[list]) -> None:
+    """เขียน config เข้า DB (เร็ว · DB เป็น source) — ไม่แตะชีต
+    แปลงทุกช่องเป็น string (ให้ตรงฟอร์แมตที่ fetch_sheet คืน · cell()/cell_num() คาด string)"""
+    from . import cache_store
+    rows = [["" if c is None else str(c) for c in row] for row in values]
+    cache_store.set_kv("cfg_" + config_key, {"rows": rows})
+
+
 def _col_letter(i: int) -> str:
     """0 → A, 25 → Z, 26 → AA ..."""
     s = ""
@@ -561,7 +595,8 @@ def delete_live_session(tab: str, sheet_row: int) -> dict:
 # ── Fetch helpers ──
 def cell(row: list[str], index: int) -> str:
     if index < len(row):
-        return (row[index] or "").strip()
+        v = row[index]
+        return (str(v) if v is not None else "").strip()   # กันค่าที่ไม่ใช่ string (เช่น int จาก config DB)
     return ""
 
 

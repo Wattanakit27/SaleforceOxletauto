@@ -1881,11 +1881,9 @@ def compute_diligence_scores(target_month: int | None = None,
 
 def export_leadscore_to_sheet(target_month: int | None = None,
                               target_year: int | None = None) -> dict:
-    """เขียน Diligence Score ลง sheet 'leadscore' (clear + write)
-    คืน dict {ok, rows_written, month, year}
+    """เก็บ Diligence Score ลง DB (KVStore 'leadscore_<ปี>_<เดือน>' — ย้ายจากชีต · เร็ว ไม่แตะ Sheets)
+    คืน dict {ok, rows_written, month, year} · แดชบอร์ด scorecard โชว์คะแนนสดอยู่แล้ว
     """
-    from .google_sheets import write_sheet
-
     now = bangkok_now()
     m = target_month if target_month else now.month
     y = target_year if target_year else now.year
@@ -1911,7 +1909,11 @@ def export_leadscore_to_sheet(target_month: int | None = None,
             month_name, y, generated_at,
         ])
 
-    write_sheet("leadscore", rows)
+    try:
+        from . import cache_store
+        cache_store.set_kv(f"leadscore_{y}_{m:02d}", {"rows": rows, "generated_at": generated_at})
+    except Exception as e:
+        return {"ok": False, "error": f"บันทึกลง DB ล้มเหลว: {e}", "month": m, "year": y}
     return {"ok": True, "rows_written": len(scores), "month": m, "year": y, "month_name": month_name}
 
 

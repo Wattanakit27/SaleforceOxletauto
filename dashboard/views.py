@@ -505,7 +505,7 @@ def admin_seller_config(request):
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
 
     from .services.constants import refresh_from_sheet, TEAMS, TARGETS, ADMIN_SELLERS
-    from .services.google_sheets import SHEET_CONFIG, write_sheet
+    from .services.google_sheets import SHEET_CONFIG, write_config_rows
     from .services.line_notify import get_nickname_to_user_id
 
     if request.method == "POST":
@@ -551,9 +551,9 @@ def admin_seller_config(request):
         ]
 
         try:
-            write_sheet("sellers_config", values)
+            write_config_rows("sellers_config", values)   # เข้า DB (เร็ว) — ไม่แตะชีต
         except Exception as e:
-            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+            return JsonResponse({"error": f"บันทึกล้มเหลว: {e}"}, status=500)
 
         # โหลด config ใหม่ทันทีให้ dashboard เห็นค่าใหม่
         refresh_from_sheet()
@@ -980,7 +980,7 @@ def admin_schedule_config(request):
     if not user or user.get("position") != "admin":
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
 
-    from .services.google_sheets import SHEET_CONFIG, write_sheet
+    from .services.google_sheets import SHEET_CONFIG, write_config_rows
     from .services.line_notify import load_schedules
 
     if request.method == "POST":
@@ -1021,9 +1021,9 @@ def admin_schedule_config(request):
         cleaned.sort(key=lambda r: r[0])
         values = [["เวลา", "วัน", "เซลล์", "test_target", "เปิดใช้", "ป้ายชื่อ", "ผู้บริหาร"]] + cleaned
         try:
-            write_sheet("schedule_config", values)
+            write_config_rows("schedule_config", values)   # เข้า DB (เร็ว) — ไม่แตะชีต
         except Exception as e:
-            return JsonResponse({"error": f"เขียน sheet ล้มเหลว: {e}"}, status=500)
+            return JsonResponse({"error": f"บันทึกล้มเหลว: {e}"}, status=500)
         return JsonResponse({"ok": True, "saved": len(cleaned)})
 
     # GET

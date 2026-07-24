@@ -111,11 +111,11 @@ def refresh_from_sheet() -> bool:
     (ดู seller_tokens.seller_from_token() ที่ fall back ไปอ่าน employees)
     """
     try:
-        from .google_sheets import fetch_sheet, cell, cell_num, SELLER_CONFIG_COL as SC
+        from .google_sheets import read_config_rows, cell, cell_num, SELLER_CONFIG_COL as SC
     except Exception:
         return False
     try:
-        rows = fetch_sheet("sellers_config")
+        rows = read_config_rows("sellers_config")   # DB ก่อน · ว่าง → ชีต (auto-seed)
     except Exception:
         return False
 

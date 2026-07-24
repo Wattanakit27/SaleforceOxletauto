@@ -289,9 +289,9 @@ def load_schedules() -> list[dict]:
     """อ่าน schedule_config sheet → list of dict
     Fields: time(HH:MM), days(str), sellers(list or '*'), test_target, enabled(bool), label
     """
-    from .google_sheets import fetch_sheet, cell, SCHEDULE_COL as SC
+    from .google_sheets import read_config_rows, cell, SCHEDULE_COL as SC
     try:
-        rows = fetch_sheet("schedule_config")
+        rows = read_config_rows("schedule_config")   # DB ก่อน · ว่าง → ชีต (auto-seed)
     except Exception:
         return []
 
