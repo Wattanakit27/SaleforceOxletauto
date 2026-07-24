@@ -575,21 +575,23 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             if not (0 <= late <= _CARD_SEND_WINDOW_MIN):   # ยังไม่ถึงเวลา หรือเลยหน้าต่างไปแล้ว
                 continue
             last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
-            if last.get("date") == today_iso and last.get("time") == cfg["time"] and last.get("ok"):
+            attempted = (last.get("date") == today_iso and last.get("time") == cfg["time"])
+            if attempted and last.get("ok"):
                 continue   # ส่ง "สำเร็จ" รอบเวลานี้แล้ววันนี้ · ส่งไม่สำเร็จ = ลองใหม่ในหน้าต่าง (self-heal)
             is_group = cfg["mode"] == "group"
             target = cfg["group_id"] if is_group else cfg["test_id"]
             if not target:
                 result["cands"].append({"card": card_id, "skip": "no_target"})
                 continue
-            cands.append((tmin, card_id, cfg["time"], target, is_group))
-            result["cands"].append({"card": card_id})
+            # prio 0 = ยังไม่เคยลองรอบเวลานี้วันนี้ (ได้คิวก่อน) · 1 = เคยลองแล้วพลาด (retry ท้ายคิว กันยึดช่อง 1/รอบ)
+            cands.append((1 if attempted else 0, tmin, card_id, cfg["time"], target, is_group))
+            result["cands"].append({"card": card_id, "retry": bool(attempted)})
         except Exception as e:
             result["cands"].append({"card": card_id, "err": str(e)[:120]})
             continue
-    cands.sort()   # เวลาเก่าสุดก่อน (ที่ค้างนานสุดได้ส่งก่อน)
+    cands.sort()   # (ยังไม่ลอง ก่อน) → เวลาเก่าสุด → ชื่อ
     # เฟส 2: ส่งไม่เกิน N ใบ/รอบ (ที่เหลือรอรอบถัดไปในหน้าต่าง) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง
-    for tmin, card_id, ctime, target, is_group in cands[:_CARD_SEND_MAX_PER_TICK]:
+    for _prio, tmin, card_id, ctime, target, is_group in cands[:_CARD_SEND_MAX_PER_TICK]:
         try:
             close_old_connections()
         except Exception:
