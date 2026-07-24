@@ -228,6 +228,8 @@ class LIVE_COL:
     date = 0; time = 1; team = 2; host_1 = 3; host_2 = 4
     host_3 = 5; host_4 = 6; host_5 = 7; topic = 8; inbox = 9
     lead_count = 10
+    # ต่อท้ายตอนอ่าน (ไม่ใช่คอลัมน์จริงในชีต · แท็บกว้าง 44 คอล → ใช้ 50/51 กันชน) — ให้ inline edit รู้ว่าเขียนกลับแถวไหน
+    sheet_tab = 50; sheet_row = 51
 
 class FOLLOWUP_COL:
     name = 0; clip_date = 1
@@ -492,6 +494,68 @@ def update_release_date(tab: str, sheet_row: int, col_idx: int, value: str) -> d
         raise Exception(f"write failed: {r.status_code} {r.text[:140]}")
     invalidate_cache()   # ล้าง cache ทั้งหมด → ดึงค่าใหม่รอบหน้า
     return {"a1": a1, "value": value}
+
+
+# ── CRUD ไลฟ์รายครั้ง (ชีต live_sessions แท็บ "สรุปไลฟ์สด <เดือน>") ──
+def _live_sid_headers():
+    load_sheet_config_overrides()
+    sid = SHEET_CONFIG["live_sessions"]["spreadsheet_id"]
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    return sid, {"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"}
+
+
+def update_live_session(tab: str, sheet_row: int, team: str, hosts: list, topic: str) -> dict:
+    """แก้ไลฟ์ 1 ครั้ง — เขียนช่วง C:I ของแถวนั้น (ทีม | ผู้ไลฟ์1-5 | หัวข้อ) · caller ต้องเช็คสิทธิ์ admin มาแล้ว"""
+    import urllib.parse
+    sid, headers = _live_sid_headers()
+    hs = [(hosts[i] if i < len(hosts) else "") for i in range(5)]
+    a1 = f"'{tab}'!C{int(sheet_row)}:I{int(sheet_row)}"
+    # RAW: เก็บเป็นข้อความตรงตัว (ตรงกับที่ชีตนี้ใช้อยู่) + กันข้อความขึ้นต้น '=' กลายเป็นสูตร
+    r = requests.put(
+        f"{SHEETS_API}/{sid}/values/{urllib.parse.quote(a1)}?valueInputOption=RAW",
+        headers=headers, json={"values": [[team] + hs + [topic]]}, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"write failed: {r.status_code} {r.text[:140]}")
+    invalidate_cache()
+    return {"a1": a1}
+
+
+def append_live_session(tab: str, date: str, time_: str, team: str, hosts: list,
+                        topic: str, inbox, lead) -> dict:
+    """เพิ่มไลฟ์ 1 ครั้ง — ต่อท้ายแท็บเดือนนั้น (A:K)"""
+    import urllib.parse
+    sid, headers = _live_sid_headers()
+    ensure_sheet_tab(sid, tab)
+    hs = [(hosts[i] if i < len(hosts) else "") for i in range(5)]
+    row = [date, time_, team] + hs + [topic, inbox, lead]
+    a1 = f"'{tab}'!A:K"
+    # RAW: วันที่เก็บเป็นข้อความ '23/07/26' เหมือนแถวเดิมในชีต (USER_ENTERED จะกลายเป็น serial 46226)
+    r = requests.post(
+        f"{SHEETS_API}/{sid}/values/{urllib.parse.quote(a1)}:append"
+        f"?valueInputOption=RAW&insertDataOption=INSERT_ROWS",
+        headers=headers, json={"values": [row]}, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"append failed: {r.status_code} {r.text[:140]}")
+    invalidate_cache()
+    return {"tab": tab, "row": row}
+
+
+def delete_live_session(tab: str, sheet_row: int) -> dict:
+    """ลบไลฟ์ 1 ครั้ง — ล้างค่าทั้งแถว (A:K) · ใช้ clear ไม่ใช่ deleteRow เพื่อไม่ให้เลขแถวของรายการอื่นเลื่อน"""
+    import urllib.parse
+    sid, headers = _live_sid_headers()
+    a1 = f"'{tab}'!A{int(sheet_row)}:K{int(sheet_row)}"
+    r = requests.post(
+        f"{SHEETS_API}/{sid}/values/{urllib.parse.quote(a1)}:clear",
+        headers=headers, json={}, timeout=15,
+    )
+    if r.status_code != 200:
+        raise Exception(f"clear failed: {r.status_code} {r.text[:140]}")
+    invalidate_cache()
+    return {"a1": a1}
 
 
 # ── Fetch helpers ──
@@ -1001,7 +1065,14 @@ def fetch_live_by_month_tabs() -> list[list[str]]:
                 headers={"Authorization": f"Bearer {token}"}, timeout=30,
             )
             if r.status_code == 200:
-                all_rows.extend(r.json().get("values", [])[1:])  # ตัด header
+                # แนบ tab + เลขแถวจริง (1-based · +2 เพราะตัด header แถวแรก) → ใช้ตอนแก้/ลบเขียนกลับชีต
+                for i, row in enumerate(r.json().get("values", [])[1:]):
+                    row = list(row)
+                    while len(row) < LIVE_COL.sheet_tab:
+                        row.append("")
+                    row.append(tab)          # index 50
+                    row.append(str(i + 2))   # index 51 — แถวจริงในชีต
+                    all_rows.append(row)
         return all_rows if all_rows else fetch_sheet("live_sessions")
     except Exception:
         return fetch_sheet("live_sessions")

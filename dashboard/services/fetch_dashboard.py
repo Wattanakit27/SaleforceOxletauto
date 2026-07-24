@@ -536,6 +536,144 @@ def _fetch_purchase_data() -> dict:
     return {"leads": leads, "bought": bought}
 
 
+# ── ยอดรถเข้า รายรุ่น (ตารางวางแผนซื้อรถเข้าสต๊อก · ทีมจัดซื้อ) ──
+# อ่านแท็บ "ยอดรถเข้า <เดือน>69" ในไฟล์ bookings ตรงๆ (มันคำนวณครบแล้วด้วยสูตร) — header-based กันเดือนอื่น layout เลื่อน
+BOOK_SID = "13jiQTOvcCvlKLGvjrb348_iRWoiMpumqqeEgOTkTgB0"
+
+
+def _fetch_yod_rot_kao(m: int) -> dict | None:
+    """คืน per-รุ่น: จอง/จบ ย้อนหลังรายเดือน + สต๊อก(กรอกมือ) + ซื้อได้/ปล่อย/Lead → เหลือ/ต้องเติม
+    เหลือ = สต๊อคต้นเดือน + ซื้อได้ − ปล่อย · ต้องเติม = เป้า − เหลือ (คำนวณเองให้ตรงชีต · รวมจอง/จบ รวมครบทุกเดือน)
+    best-effort — พัง/ไม่มีแท็บ = None (ไม่ทำ dashboard ล่ม)"""
+    import urllib.parse
+    import requests
+    from google.auth.transport.requests import Request as AuthRequest
+    from .constants import MONTHS_FULL
+    from .google_sheets import _get_credentials, SHEETS_API
+
+    def _num(s):
+        s = (s or "").strip().replace(",", "")
+        if s in ("", "-"):
+            return 0
+        try:
+            return int(float(s))
+        except Exception:
+            return 0
+
+    try:
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        headers = {"Authorization": f"Bearer {creds.token}"}
+        meta = requests.get(f"{SHEETS_API}/{BOOK_SID}?fields=sheets.properties.title",
+                            headers=headers, timeout=15).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+        want = f"ยอดรถเข้า {MONTHS_FULL[m - 1]}69"
+        tab = want if want in titles else None
+        if not tab:   # fuzzy: ขึ้นต้น "ยอดรถเข้า" + มีชื่อเดือน (กันสะกดผิด เช่น กุมพาพันธู์)
+            for t in titles:
+                if t.startswith("ยอดรถเข้า") and MONTHS_FULL[m - 1][:4] in t:
+                    tab = t
+                    break
+        if not tab:
+            return None
+        rng = urllib.parse.quote(f"{tab}!A1:BZ200")
+        r = requests.get(f"{SHEETS_API}/{BOOK_SID}/values/{rng}?valueRenderOption=FORMATTED_VALUE",
+                         headers=headers, timeout=30)
+        if r.status_code != 200:
+            return None
+        vals = r.json().get("values", [])
+        if len(vals) < 4:
+            return None
+
+        def cell(row, i):
+            return (row[i].strip() if 0 <= i < len(row) and row[i] else "")
+
+        hdr = vals[2]   # R3 = หัวคอลัมน์
+        mlab = vals[1]  # R2 = ป้ายเดือน (คร่อม จอง/จบ)
+        H = [(hdr[i].strip() if i < len(hdr) and hdr[i] else "") for i in range(len(hdr))]
+
+        def find(pred, start=0):
+            for i in range(start, len(H)):
+                if pred(H[i]):
+                    return i
+            return -1
+
+        model_col = find(lambda h: h == "รุ่น")
+        if model_col < 0:
+            model_col = 0
+        c_totJong = find(lambda h: h == "รวมจอง")
+        c_totJob = find(lambda h: h == "รวมจบ")
+        if c_totJong < 0 or c_totJob < 0:
+            return None
+        # month pairs (จอง,จบ) ระหว่าง model_col+1 .. รวมจอง
+        pairs = []
+        i = model_col + 1
+        while i < c_totJong:
+            if H[i] == "จอง" and i + 1 < len(H) and H[i + 1] == "จบ":
+                lab = (mlab[i].strip() if i < len(mlab) and mlab[i] else "")
+                pairs.append((lab, i, i + 1))
+                i += 2
+            else:
+                i += 1
+        base = c_totJob
+        c_target = find(lambda h: "เป้า" in h, base)
+        c_added = find(lambda h: "เอาเข้า" in h, base)
+        c_start = find(lambda h: "สต๊อค" in h or "สต็อค" in h, base)
+        c_need = find(lambda h: "เติม" in h, base)
+        c_buyld = find(lambda h: "รับซื้อ" in h, base)
+        c_lead = find(lambda h: h == "Lead", base)
+        c_bought = find(lambda h: "ซื้อได้" in h, base)
+        c_rele = find(lambda h: "ปล่อย" in h, base)
+        c_jong2 = -1
+        for i in range((c_need + 1) if c_need >= 0 else base, len(H)):
+            if H[i] == "จอง":
+                c_jong2 = i
+                break
+        c_tad = find(lambda h: "ต๊าด" in h, base)
+        c_mee = find(lambda h: "หมี" in h, base)
+        c_mew = find(lambda h: "มิว" in h, base)
+        c_stat = find(lambda h: "สถา" in h, base)
+        c_note = find(lambda h: "หมายเหตุ" in h, base)
+
+        rows = []
+        for r_ in vals[3:]:
+            model = cell(r_, model_col)
+            if not model:
+                continue
+            if model.replace(" ", "") in ("รวม", "รวมทั้งหมด", "ผลรวม", "รวมทั้งสิ้น", "total", "Total"):
+                continue   # ข้ามแถว total ของชีตเอง (กันบวกซ้ำในแถวรวมที่เราคำนวณ)
+            jj = [[_num(cell(r_, jc)), _num(cell(r_, bc))] for (_l, jc, bc) in pairs]
+            target = _num(cell(r_, c_target))
+            start = _num(cell(r_, c_start))
+            added = _num(cell(r_, c_added))
+            bought = _num(cell(r_, c_bought))
+            released = _num(cell(r_, c_rele))
+            remain = start + bought - released
+            # หมายเหตุ: ข้อความจริงบางแท็บอยู่คอลัมน์ถัดจากหัว "หมายเหตุ" (ชีตเหลื่อม) → สแกนหาช่องแรกที่มีข้อความ
+            note = ""
+            if c_note >= 0:
+                for ci in range(c_note, min(len(r_), c_note + 6)):
+                    v = cell(r_, ci)
+                    if v:
+                        note = v
+                        break
+            rows.append({
+                "model": model,
+                "jj": jj,
+                "totJong": sum(j for j, _ in jj),
+                "totJob": sum(b for _, b in jj),
+                "target": target, "added": added, "start": start,
+                "remain": remain, "need": target - remain,
+                "buyLead": _num(cell(r_, c_buyld)), "lead": _num(cell(r_, c_lead)),
+                "bought": bought, "jong": _num(cell(r_, c_jong2)), "released": released,
+                "tad": _num(cell(r_, c_tad)), "mee": _num(cell(r_, c_mee)), "mew": _num(cell(r_, c_mew)),
+                "status": cell(r_, c_stat), "note": note,
+            })
+        return {"month": m, "tab": tab, "months": [p[0] for p in pairs], "rows": rows}
+    except Exception:
+        return None
+
+
 def _compute_dashboard_data() -> dict:
     # โหลด config เซลล์ล่าสุดจาก sheet (mutate TEAMS/TARGETS in-place)
     # ถ้า sheet หายหรือ error → ใช้ default hardcode
@@ -1050,6 +1188,8 @@ def _compute_dashboard_data() -> dict:
             "topic": cell(r, LV.topic),
             "inbox": int(cell_num(r, LV.inbox)),
             "lead": int(cell_num(r, LV.lead_count)),
+            "sheetTab": cell(r, LV.sheet_tab),   # ตำแหน่งในชีต → ให้แอดมินแก้/ลบได้ (ว่าง = แก้ไม่ได้)
+            "sheetRow": cell(r, LV.sheet_row),
         })
 
     by_host = {}
@@ -1482,11 +1622,26 @@ def _compute_dashboard_data() -> dict:
         mc[chn] = mc.get(chn, 0) + 1
 
     _purchase_data = _fetch_purchase_data()   # ฝั่งจัดซื้อ (lead รับซื้อ + รถซื้อจริง) — อ่านครั้งเดียว
+    _yod = _fetch_yod_rot_kao(now.month)       # ยอดรถเข้า รายรุ่น (เดือนปัจจุบัน) — สต๊อก/จอง-จบ/ต้องเติม
+    if _yod and _yod.get("rows"):
+        # สต๊อคต้นเดือน = เหลือปลายเดือนก่อน (carry อัตโนมัติ) — ดึงเดือนก่อนมาแมพตามรุ่น (แก้ทับได้)
+        _prev_yod = _fetch_yod_rot_kao(now.month - 1) if now.month > 1 else None
+        _carry = {r["model"]: r["remain"] for r in (_prev_yod["rows"] if _prev_yod else [])}
+        for _r in _yod["rows"]:
+            cs = _carry.get(_r["model"], _r["start"])   # ไม่มีเดือนก่อน/รุ่นใหม่ → ใช้ค่าชีตเดิม
+            _r["carryStart"] = cs
+            _r["remain"] = cs + _r["bought"] - _r["released"]   # เหลือ = ต้นเดือน(carry) + ซื้อได้ − ปล่อย (จอง ไม่ลบ)
+            _r["need"] = _r["target"] - _r["remain"]
     try:
         from . import cache_store
         _method_map = (cache_store.get_kv("purchase_method_map") or {}).get("data") or {}
     except Exception:
         _method_map = {}
+    try:
+        from . import cache_store as _cs
+        _lr_plan = (_cs.get_kv("leadreport_plan") or {}).get("data") or {}
+    except Exception:
+        _lr_plan = {}
 
     return {
         "meta": {
@@ -1518,6 +1673,8 @@ def _compute_dashboard_data() -> dict:
         "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
+        "leadreportPlan": _lr_plan,                    # เป้า lead ต่อช่องทาง (แอดมินตั้งเอง · {channel:target})
+        "yodRotKao": _yod,                             # ยอดรถเข้า รายรุ่น (จัดซื้อ) — {month,months,rows[]} หรือ None
     }
 
 

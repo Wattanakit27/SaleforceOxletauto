@@ -393,6 +393,14 @@
     }
     // จำนวนเดือนที่ช่วงครอบ — ใช้สเกล "เป้า" (รายเดือน) ให้ตรงกับช่วงที่เลือก
     const rangeMonthCount = () => ([...new Set(rangeDays().map(x => x[0]))].length || 1);
+    // สเกลเป้า/เดือน → ตามช่วงวันที่จริง (เศษส่วน): Σ(วันในช่วงของเดือน ÷ วันในเดือนนั้น) · เดือนเต็ม=1 · 1วัน=1/31 · ทั้งปี=12
+    function _planScale(){
+      const yr = new Date().getFullYear();
+      const dim = m => new Date(yr, m, 0).getDate();
+      const dpm = {}; rangeDays().forEach(x => { dpm[x[0]] = (dpm[x[0]]||0)+1; });
+      let s = 0; for(const m in dpm){ s += dpm[m] / dim(Number(m)); }
+      return s > 0 ? s : 1;
+    }
     // คืนเลขเดือน (1-12) ถ้าช่วงที่เลือกพอดี = เดือนเต็มหนึ่งเดือน (วันที่ 1 ถึงสิ้นเดือน · ปีเดียวกัน) — ไม่งั้น 0
     // ใช้เปิด MoM (เทียบเดือนก่อน) เมื่อกดปุ่ม "เดือนนี้" หรือเลือกช่วง = ทั้งเดือนพอดี
     const selectedWholeMonth = () => {
@@ -1305,23 +1313,25 @@
         'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
         'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
+        'p': 'จัดซื้อ — ยอดรถเข้า รายรุ่น: จอง/จบ ย้อนหลัง + สต๊อก(แก้ได้) + เหลือ/ต้องเติม + ผลงานซื้อ',
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
         'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
       html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
-      // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ" เพราะ iframe มี UI ของตัวเอง)
-      if(tab!=='s' && tab!=='t' && tab!=='ck') html += renderDateFilterBar();
+      // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ"/"จัดซื้อ" — มี UI/รอบเดือนของตัวเอง)
+      if(tab!=='s' && tab!=='t' && tab!=='ck' && tab!=='p') html += renderDateFilterBar();
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
       else if(tab==='c') html += renderLeadTab(sellerNames);
       else if(tab==='a') html += renderActivity(sellers);
       else if(tab==='b') html += renderBookings(sellerNames);
+      else if(tab==='p') html += renderPurchaseTab();
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
       else if(tab==='t') html += renderTracking();
       else if(tab==='ck') html += renderCheckout();
@@ -1330,6 +1340,8 @@
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
       if(tab==='o') initCharts();
       if(tab==='t') loadTracking();   // "สถานะรถ" เรนเดอร์ native (fetch /track/api/cars) ธีมเดียวกับ sales
+      if(tab==='p') loadYodStock();   // "จัดซื้อ" — ดึง override สต๊อกที่แก้ไว้ แล้ว refresh ตาราง
+      if(tab==='a') loadClipWeek();   // "ไลฟ์" — ดึง override ตารางติดตามคอนเทนต์ (คลิป) รายสัปดาห์
       requestAnimationFrame(positionNavInd);
 
       // คืน focus + cursor ให้ input ที่กำลังพิมพ์ก่อน rebuild — กัน bug "ลบได้ทีละตัวต้องคลิกใหม่"
@@ -2365,6 +2377,10 @@
           _rMc.forEach(m => { const mc = LCM[m] || LCM[String(m)] || {}; for(const [c,v] of Object.entries(mc)) chSum[c]=(chSum[c]||0)+(Number(v)||0); });
           const chArr = Object.entries(chSum).map(([c,n])=>({c,n})).sort((a,b)=>b.n-a.n);
           const totAct = chArr.reduce((s,x)=>s+x.n,0);
+          const _lrP = ch => { const o=(window._lrPlan||{})[ch]; return (o!=null)?o:((D.leadreportPlan||{})[ch]||0); };   // เป้า/เดือน ต่อช่องทาง (override → compute → 0)
+          const _lrScale = _planScale();   // สเกลตามช่วงที่กรอง
+          const _lrPscaled = ch => Math.round(_lrP(ch) * _lrScale);   // PLAN ที่โชว์ = เป้า/เดือน × สเกล
+          const totPlan = chArr.reduce((s,x)=>s+_lrPscaled(x.c),0);
           // สีตามประเภท platform (แบรนด์) — ใช้ทั้งตารางละเอียด + สรุปย่อ
           const PLAT_COLORS = {'FACEBOOK':'#1877f2','TIKTOK':'var(--t1)','LIVE TIKTOK':'#dc2626','LIVE FACEBOOK':'#2563eb','LINE@':'#06c755','12CAR':'#f97316','WEB OXLET':'#7c3aed','TIKTOK ADS':'var(--t1)','IG':'#e1306c','YOUTUBE':'#ff0000','อื่นๆ':'#64748b'};
           const _platGroup = ch => { const s=(ch||'').toUpperCase();
@@ -2382,11 +2398,12 @@
           const _platColor = g => PLAT_COLORS[g] || '#64748b';
           const _platPill = (label, col) => `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:color-mix(in srgb,${col} 15%,transparent);color:${col}">${h(label)}</span>`;
           let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า (ยังไม่ตั้ง)">?</span></span>${_cardLineBtn('leadreport-card','รายงาน lead (แยกช่องทาง)')}</div>`;
-          LR += `<div class="card-sub">แยกตาม platform ที่ lead เข้ามา · เรียงมากสุด · ACTUAL = จำนวนจริงตามช่วง · PLAN = เป้า (ยังไม่ตั้งค่า)</div>`;
+          LR += `<div class="card-sub">แยกตาม platform · ACTUAL = จริงตามช่วง · PLAN = เป้า/เดือน ปรับตามช่วงอัตโนมัติ (เดือนเต็ม=เท่าเดิม · กรองวัน=หาร · ทั้งปี=×เดือน) · พิมพ์ในช่องเหลืองเพื่อตั้ง (0=ล้าง)</div>`;
           LR += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
           LR += `<thead><tr><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">PLAN</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700">ACTUAL</th></tr></thead><tbody>`;
-          chArr.forEach(x=>{ const _c=_platColor(_platGroup(x.c)); LR += `<tr><td style="padding:5px 10px;border-bottom:.5px solid var(--bd)">${_platPill(x.c,_c)}</td><td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd);color:var(--t3);background:color-mix(in srgb,#fde047 10%,transparent)">0</td><td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700">${x.n}</td></tr>`; });
-          LR += `<tr style="font-weight:800"><td style="padding:7px 10px;background:var(--purple);color:#fff">รวม/สรุป Lead</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">0</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">${totAct}</td></tr>`;
+          const _showSc = Math.abs(_lrScale-1)>0.02;   // ช่วงไม่ใช่เดือนเต็ม → โชว์ค่าที่สเกลแล้ว
+          chArr.forEach(x=>{ const _c=_platColor(_platGroup(x.c)); const _pm=_lrP(x.c); const _pv=_lrPscaled(x.c); LR += `<tr><td style="padding:5px 10px;border-bottom:.5px solid var(--bd)">${_platPill(x.c,_c)}</td><td style="padding:3px 8px;text-align:right;border-bottom:.5px solid var(--bd);background:color-mix(in srgb,#fde047 10%,transparent)"><input type="number" data-ch="${h(x.c)}" value="${_pm}" onchange="saveLeadPlan(this)" onclick="this.select()" title="เป้าต่อเดือน (พิมพ์เป้า/เดือนตรงนี้)" style="width:60px;padding:3px 6px;border:.5px solid ${_pm?'#eab308':'var(--bd2)'};border-radius:5px;background:${_pm?'color-mix(in srgb,#fde047 22%,var(--bg))':'var(--bg)'};color:var(--t1);font-size:12px;font-weight:700;text-align:right;font-family:inherit">${(_showSc&&_pm)?`<div style="font-size:9px;color:var(--t3);margin-top:1px">ช่วงนี้ ≈ ${_pv}</div>`:''}</td><td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700">${x.n}</td></tr>`; });
+          LR += `<tr style="font-weight:800"><td style="padding:7px 10px;background:var(--purple);color:#fff">รวม/สรุป Lead</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">${totPlan||0}</td><td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff">${totAct}</td></tr>`;
           LR += `</tbody></table></div></div>`;
           html += LR;
 
@@ -3726,19 +3743,176 @@
       html += `<div style="display:flex;gap:6px;align-items:center">`;
       html += `<select onchange="liveTeam=this.value;render()" style="font-size:11px"><option value="all">ทุกทีม</option>`;
       liveTeams.forEach(t=>{html+=`<option value="${h(t)}" ${liveTeam===t?'selected':''}>${h(t)}</option>`;});
-      html += `</select></div></div>`;
+      html += `</select>`;
+      html += `<button onclick="openLiveEdit(-1)" style="font-size:11px;padding:5px 11px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap">➕ เพิ่มไลฟ์</button>`;
+      html += `</div></div>`;
       if(sessions.length===0) html += `<div style="padding:12px;text-align:center;color:var(--t3);font-size:12px">ไม่มีข้อมูลไลฟ์</div>`;
-      sessions.slice(0,30).forEach(s=>{
-        html += `<div style="display:grid;grid-template-columns:72px auto 1fr 1fr 60px;gap:6px;align-items:center;padding:7px 0;border-bottom:.5px solid var(--bd);font-size:11px">`;
+      window._liveSess = sessions;   // ให้ปุ่มแก้/ลบอ้างถึงได้
+      sessions.slice(0,30).forEach((s,i)=>{
+        const canEdit = !!(s.sheetTab && s.sheetRow);
+        html += `<div style="display:grid;grid-template-columns:72px auto 1fr 1fr 60px 52px;gap:6px;align-items:center;padding:7px 0;border-bottom:.5px solid var(--bd);font-size:11px">`;
         html += `<span style="color:var(--t3)">${h(s.date)}${s.time?' '+h(s.time):''}</span>`;
         html += `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--bg3);color:var(--t3)">${h(s.team||'-')}</span>`;
         html += `<span style="font-weight:500">${h(s.hosts.join(', '))}</span>`;
         html += `<span style="color:var(--t2)">${h(s.topic||'—')}</span>`;
-        html += `<span style="text-align:right;color:var(--t2)">${ic('lucide:inbox',16)}${s.inbox} ${ic('lucide:target',16)}${s.lead}</span></div>`;
+        html += `<span style="text-align:right;color:var(--t2)">${ic('lucide:inbox',16)}${s.inbox} ${ic('lucide:target',16)}${s.lead}</span>`;
+        html += canEdit
+          ? `<span style="text-align:right;white-space:nowrap"><button onclick="openLiveEdit(${i})" title="แก้ไข" style="border:none;background:transparent;cursor:pointer;font-size:12px;padding:2px 3px">✏️</button><button onclick="deleteLiveSession(${i})" title="ลบ" style="border:none;background:transparent;cursor:pointer;font-size:12px;padding:2px 3px">🗑</button></span>`
+          : `<span style="text-align:right;color:var(--t3);font-size:9px" title="แถวนี้มาจาก 'รวม sheet' ไม่รู้ตำแหน่งในชีต">—</span>`;
+        html += `</div>`;
       });
       if(sessions.length>30) html += `<div style="text-align:center;padding:8px;font-size:11px;color:var(--t3)">แสดง 30 จาก ${sessions.length} รายการ</div>`;
       html += `</div>`;
+      html += renderClipWeek(sellers);
       return html;
+    }
+
+    // ══ CRUD ไลฟ์รายครั้ง — แก้ทีม/ผู้ไลฟ์/หัวข้อ · เพิ่ม · ลบ (เขียนกลับชีต "สรุปไลฟ์สด <เดือน>") ══
+    function openLiveEdit(idx){
+      const isNew = idx < 0;
+      const s = isNew ? {date:'',time:'',team:'',hosts:[],topic:'',inbox:0,lead:0} : ((window._liveSess||[])[idx]||null);
+      if(!s) return;
+      const names = (D.sellers||[]).map(x=>x.name);
+      const teams = [...new Set((((D.liveActivity||{}).sessions)||[]).map(x=>x.team).filter(Boolean))].sort();
+      const _i='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
+      // input+datalist (ไม่ใช่ select) — ผู้ไลฟ์บางคนไม่ได้อยู่ใน roster เซลล์ (เช่น "อั้ม") ถ้าใช้ select ชื่อเดิมจะถูกลบตอนบันทึก
+      const hostRow = i => `<input id="lv_h${i}" list="lv_names" value="${h(s.hosts[i]||'')}" placeholder="ผู้ไลฟ์ ${i+1}" style="${_i}">`;
+      const ov=_trkOverlay('live-edit','');
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:tv',18)} ${isNew?'เพิ่มไลฟ์':'แก้ไขไลฟ์'}</div><button onclick="document.getElementById('live-edit').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 14px">${isNew?'เพิ่มลงชีต "สรุปไลฟ์สด &lt;เดือน&gt;" ตามวันที่ที่กรอก':'แก้แล้วเขียนกลับชีตทันที (ทีม / ผู้ไลฟ์ / หัวข้อ)'}</div>
+        <input type="hidden" id="lv_idx" value="${idx}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">วันที่ (d/m/yyyy)</label><input id="lv_date" value="${h(s.date||'')}" placeholder="23/7/2026" style="${_i}" ${isNew?'':'disabled'}></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลา</label><input id="lv_time" value="${h(s.time||'')}" placeholder="19:00" style="${_i}" ${isNew?'':'disabled'}></div>
+        </div>
+        <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ทีมไลฟ์</label>
+          <input id="lv_team" list="lv_teams" value="${h(s.team||'')}" placeholder="เช่น A / B / C" style="${_i}">
+          <datalist id="lv_teams">${teams.map(t=>`<option value="${h(t)}">`).join('')}</datalist></div>
+        <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ผู้ไลฟ์ (สูงสุด 5 คน · พิมพ์เองได้ ไม่จำกัดเฉพาะเซลล์)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${[0,1,2,3,4].map(hostRow).join('')}</div>
+          <datalist id="lv_names">${names.map(n=>`<option value="${h(n)}">`).join('')}</datalist></div>
+        <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">หัวข้อ</label><input id="lv_topic" value="${h(s.topic||'')}" style="${_i}"></div>
+        ${isNew?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">Inbox</label><input id="lv_inbox" type="number" value="0" style="${_i}"></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">Lead</label><input id="lv_lead" type="number" value="0" style="${_i}"></div></div>`:''}
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button onclick="saveLiveSession()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
+          ${isNew?'':`<button onclick="deleteLiveSession(${idx})" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-size:13px">🗑 ลบไลฟ์นี้</button>`}
+          <span id="lv_status" style="font-size:12px"></span>
+        </div>`;
+    }
+    async function saveLiveSession(){
+      const idx=Number((document.getElementById('lv_idx')||{}).value||-1);
+      const isNew = idx<0, s = isNew?null:((window._liveSess||[])[idx]||null);
+      const hosts=[0,1,2,3,4].map(i=>((document.getElementById('lv_h'+i)||{}).value||'')).filter(Boolean);
+      const st=document.getElementById('lv_status'); const _st=(t,c)=>{ if(st){st.textContent=t;st.style.color=c||'var(--t3)';} };
+      const body = isNew
+        ? {action:'add', date:(document.getElementById('lv_date').value||'').trim(), time:(document.getElementById('lv_time').value||'').trim(),
+           team:(document.getElementById('lv_team').value||'').trim(), hosts, topic:(document.getElementById('lv_topic').value||'').trim(),
+           inbox:Number((document.getElementById('lv_inbox')||{}).value||0), lead:Number((document.getElementById('lv_lead')||{}).value||0)}
+        : {action:'update', tab:s.sheetTab, row:Number(s.sheetRow), team:(document.getElementById('lv_team').value||'').trim(),
+           hosts, topic:(document.getElementById('lv_topic').value||'').trim()};
+      _st('กำลังบันทึก…');
+      try{ const r=await fetch('/api/admin/live_session',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
+        const j=await r.json();
+        if(!j.ok){ _st(j.error||'ไม่สำเร็จ','var(--red)'); return; }
+        _st('✓ บันทึกแล้ว — กำลังรีเฟรช','var(--green)');
+        if(!isNew){ s.team=body.team; s.hosts=hosts; s.topic=body.topic; }   // optimistic (ชีตอัปเดตแล้ว · mirror ตามรอบ sync)
+        setTimeout(()=>{ const el=document.getElementById('live-edit'); if(el) el.remove(); render(); }, 600);
+      }catch(e){ _st('ผิดพลาด: '+e,'var(--red)'); }
+    }
+    async function deleteLiveSession(idx){
+      const s=(window._liveSess||[])[idx]; if(!s) return;
+      if(!s.sheetTab||!s.sheetRow){ alert('แถวนี้ไม่รู้ตำแหน่งในชีต ลบไม่ได้'); return; }
+      if(!confirm(`ลบไลฟ์นี้?\n${s.date} ${s.time||''} · ทีม ${s.team||'-'} · ${(s.hosts||[]).join(', ')}\n\n(ล้างค่าในชีตแถวนั้น)`)) return;
+      try{ const r=await fetch('/api/admin/live_session',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'delete', tab:s.sheetTab, row:Number(s.sheetRow)})});
+        const j=await r.json();
+        if(!j.ok){ alert(j.error||'ลบไม่สำเร็จ'); return; }
+        const el=document.getElementById('live-edit'); if(el) el.remove();
+        render();
+      }catch(e){ alert('ผิดพลาด: '+e); }
+    }
+
+    // ══ ติดตามคอนเทนต์ (คลิป) รายสัปดาห์ — นับจาก log ลงคลิป (liveActivity.clips) · ตีสัปดาห์เป็นช่วงวันที่ · แก้ทับได้ ══
+    const CW_WEEKS = m => { const y=new Date().getFullYear(); const last=new Date(y,m,0).getDate(); return [[1,7],[8,14],[15,21],[22,last]]; };
+    const CW_TARGET = 2;   // เกณฑ์: สัปดาห์ละ 2 คลิป (ตามหมายเหตุในชีต)
+    function renderClipWeek(sellers){
+      try{
+        window._cwSellers = sellers || [];   // เก็บ roster ไว้ re-render การ์ดตอนแก้/โหลด override
+        const la = D.liveActivity || {};
+        const end = new Date(dfTo+'T00:00:00');
+        const Y = end.getFullYear(), M = end.getMonth()+1;
+        const WK = CW_WEEKS(M);
+        const MTH = ['','มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][M];
+        const MS  = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][M];
+        // นับคลิปต่อเซลล์ต่อสัปดาห์ (เดือนที่ดูอยู่)
+        const cnt = {};
+        (la.clips||[]).forEach(c=>{
+          const d=_parseDmy(c.date||''); if(!d) return;
+          if(d.getFullYear()!==Y || d.getMonth()+1!==M) return;
+          const day=d.getDate(); const wi=WK.findIndex(w=>day>=w[0]&&day<=w[1]); if(wi<0) return;
+          if(!cnt[c.name]) cnt[c.name]=[0,0,0,0];
+          cnt[c.name][wi]++;
+        });
+        const ov = window._cwOv||{};
+        const val = (n,wi) => { const o=(ov[n]||{})['w'+(wi+1)]; return (o!=null)?Number(o):((cnt[n]||[0,0,0,0])[wi]||0); };
+        const rowTot = n => WK.reduce((s,_,wi)=>s+val(n,wi),0);
+        // จัดกลุ่มตามทีม (เรียงตามชื่อทีม) — ใช้ roster ที่ active ในช่วง
+        const byTeam={}; (sellers||[]).forEach(s=>{ const t=s.team||'-'; (byTeam[t]=byTeam[t]||[]).push(s); });
+        const teamIds = Object.keys(byTeam).sort((a,b)=>String((C.TEAM_NAMES||{})[a]||a).localeCompare(String((C.TEAM_NAMES||{})[b]||b),'th'));
+        const _num = v => v>0 ? `<b style="color:var(--green)">${v}</b>` : `<span style="color:var(--t3)">0</span>`;
+        const _in = (n,wi) => `<input type="number" min="0" data-n="${h(n)}" data-w="${wi+1}" value="${val(n,wi)}" onchange="saveClipWeek(this)" onclick="this.select()" style="width:46px;padding:3px 4px;border:.5px solid ${((ov[n]||{})['w'+(wi+1)]!=null)?'var(--blue)':'var(--bd2)'};border-radius:5px;background:${((ov[n]||{})['w'+(wi+1)]!=null)?'var(--blue-bg)':'var(--bg)'};color:var(--t1);font-size:12px;font-weight:700;text-align:center;font-family:inherit">`;
+
+        let T = `<div class="card" id="clipweek-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:6px">${ic('lucide:clapperboard',16)} ติดตามคอนเทนต์ เดือน${h(MTH)} 69
+            <span class="info-tip" tabindex="0" data-tip="นับคลิปที่ลงจริง จาก log 'ติดตามไลฟ์สด' (ชื่อ+วันที่ลงคลิป)\nสัปดาห์ตีเป็นช่วงวันที่: 1-7 · 8-14 · 15-21 · 22-สิ้นเดือน\nแก้ทับตัวเลขได้ (เก็บแยก ไม่แตะชีต) — ช่องน้ำเงิน = แก้แล้ว\nเกณฑ์ ${CW_TARGET} คลิป/สัปดาห์ (ต่ำกว่า = สีส้ม)\nเดือนตามตัวกรองวันที่ (ใช้เดือนของวันสิ้นสุดช่วง)">?</span>
+          </span>${_cardLineBtn('clipweek-card','ติดตามคอนเทนต์ (คลิป) รายสัปดาห์')}</div>
+          <div class="card-sub">นับจากการลงคลิปจริง · แก้ทับได้ · เกณฑ์ ${CW_TARGET} คลิป/สัปดาห์</div>
+          <div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px">
+          <table style="border-collapse:collapse;font-size:12px;white-space:nowrap;min-width:100%">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);min-width:110px">ชื่อ</th>
+            ${WK.map((w,i)=>`<th style="padding:5px 8px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2);font-weight:600">สัปดาห์ที่${i+1}<div style="font-size:9px;color:var(--t3);font-weight:400">${w[0]}-${w[1]} ${h(MS)}</div></th>`).join('')}
+            <th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--bd);color:var(--purple);font-weight:700">รวม</th>
+          </tr></thead><tbody>`;
+
+        let gTot=[0,0,0,0];
+        teamIds.forEach(tid=>{
+          const tname = (C.TEAM_NAMES||{})[tid] || tid;
+          const tcol = (C.TEAM_COLORS||{})[tid] || '#888';
+          T += `<tr><td colspan="${WK.length+2}" style="padding:5px 10px;font-weight:800;background:color-mix(in srgb,${tcol} 16%,transparent);color:${tcol};border-bottom:.5px solid var(--bd)">${h(tname)}</td></tr>`;
+          const tt=[0,0,0,0];
+          byTeam[tid].forEach(s=>{
+            const n=s.name;
+            T += `<tr style="border-bottom:.5px solid var(--bd)"><td style="padding:4px 10px;font-weight:600">${h(sname(n))}</td>`;
+            WK.forEach((_,wi)=>{ const v=val(n,wi); tt[wi]+=v; gTot[wi]+=v;
+              T += `<td style="padding:3px 6px;text-align:center;background:${(v>0&&v<CW_TARGET)?'color-mix(in srgb,#f59e0b 12%,transparent)':'transparent'}">${_in(n,wi)}</td>`; });
+            T += `<td style="padding:4px 10px;text-align:center;font-weight:800;color:var(--purple)">${rowTot(n)}</td></tr>`;
+          });
+          T += `<tr style="background:color-mix(in srgb,${tcol} 7%,transparent);font-weight:700"><td style="padding:5px 10px;color:${tcol}">รวม ${h(tname)}</td>${tt.map(v=>`<td style="padding:5px 6px;text-align:center;color:${tcol}">${_num(v)}</td>`).join('')}<td style="padding:5px 10px;text-align:center;color:${tcol}">${tt.reduce((a,b)=>a+b,0)}</td></tr>`;
+        });
+        T += `<tr style="background:var(--purple);color:#fff;font-weight:800"><td style="padding:7px 10px">รวมทั้งหมด</td>${gTot.map(v=>`<td style="padding:7px 6px;text-align:center">${v}</td>`).join('')}<td style="padding:7px 10px;text-align:center">${gTot.reduce((a,b)=>a+b,0)}</td></tr>`;
+        T += `</tbody></table></div>
+          <div style="font-size:11px;color:var(--red);margin-top:8px">หมายเหตุ : ส่งรายงานในห้อง Tiktoker สัปดาห์ละ ${CW_TARGET} คลิป</div></div>`;
+        return T;
+      }catch(e){ console.error('clipweek error', e); return ''; }
+    }
+
+    async function loadClipWeek(){
+      const M = new Date(dfTo+'T00:00:00').getMonth()+1;
+      try{ const r=await fetch('/api/admin/clipweek?month='+M,{credentials:'same-origin'}); const j=await r.json();
+        if(j&&j.ok){ window._cwOv=j.ov||{}; const el=document.getElementById('clipweek-card'); if(el) el.outerHTML=renderClipWeek(window._cwSellers||[]); } }catch(e){}
+    }
+    async function saveClipWeek(el){
+      const n=el.dataset.n, w=el.dataset.w; let v=parseInt(String(el.value),10); if(isNaN(v)||v<0) v=0;
+      const M = new Date(dfTo+'T00:00:00').getMonth()+1;
+      if(!window._cwOv) window._cwOv={};
+      if(!window._cwOv[n]) window._cwOv[n]={};
+      window._cwOv[n]['w'+w]=v;
+      const el2=document.getElementById('clipweek-card'); if(el2) el2.outerHTML=renderClipWeek(window._cwSellers||[]);
+      try{ const r=await fetch('/api/admin/clipweek',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({month:M,seller:n,week:Number(w),value:v})});
+        const j=await r.json(); if(!j||!j.ok) alert(j&&j.error||'บันทึกไม่สำเร็จ'); }catch(e){ alert('บันทึกไม่สำเร็จ (เน็ต?)'); }
     }
 
     // ── BOOKING TAB ──
@@ -4117,6 +4291,208 @@
       }catch(e){ if(_prev){D.sellerFlags[name]=_prev;}else{delete D.sellerFlags[name];} render(); alert('บันทึกไม่สำเร็จ (เน็ต?) — คืนค่าเดิม'); }
     }
     function switchTab(t) { tab=t; showCase=null; updateUrl(); render(); }
+
+    // ══════════ แท็บ "จัดซื้อ" — ยอดรถเข้า รายรุ่น (จอง/จบ ย้อนหลัง + สต๊อกแก้ได้ + เหลือ/ต้องเติม + ผลงานซื้อ) ══════════
+    let _yodStock = {};   // override สต๊อกที่แก้ในเว็บ {รุ่น:{target,start,added}} — ดึงจาก /api/admin/yod_stock
+    let _yodF = {}, _yodSort = null, _yodUrgent = false, _yodFocus = null;   // ฟิลเตอร์ต่อคอลัมน์ / เรียง / เฉพาะต้องเติมด่วน / คืนโฟกัสช่องกรอง
+    async function loadYodStock(){
+      const Y = D.yodRotKao; if(!Y) return;
+      try{
+        const r = await fetch('/api/admin/yod_stock?month='+Y.month);
+        const j = await r.json();
+        if(j && j.ok){ _yodStock = j.stock||{}; refreshPurchase(); }
+      }catch(e){}
+    }
+    function refreshPurchase(){
+      const el=document.getElementById('purchase-inner'); if(!el) return;
+      el.innerHTML = renderPurchaseInner();
+      if(_yodFocus){   // คืนโฟกัส+ตำแหน่งเคอร์เซอร์ให้ช่องกรองที่กำลังพิมพ์ (ไม่งั้นพิมพ์ต่อไม่ได้)
+        const f = el.querySelector('input[data-fk="'+_yodFocus.k+'"]');
+        if(f){ f.focus(); try{ f.setSelectionRange(_yodFocus.pos,_yodFocus.pos); }catch(e){} }
+      }
+    }
+
+    function renderPurchaseTab(){ return `<div id="purchase-inner">${renderPurchaseInner()}</div>`; }
+
+    function renderPurchaseInner(){
+      const Y = D.yodRotKao;
+      if(!Y || !Y.rows || !Y.rows.length){
+        return `<div class="card"><div class="card-title">${ic('lucide:shopping-cart',16)} จัดซื้อ — ยอดรถเข้า รายรุ่น</div>
+          <div style="padding:22px;text-align:center;color:var(--t3);font-size:13px">ยังไม่มีข้อมูล — อ่านแท็บ "ยอดรถเข้า" ไม่ได้ หรือยังไม่ถึงรอบ sync<br><span style="font-size:11px">(dev: รัน precompute ใหม่ · prod: รอ cron ~1 นาที)</span></div></div>`;
+      }
+      const months = Y.months||[];
+      const mName = (Y.tab||'').replace('ยอดรถเข้า ','').replace(/69$/,'').trim() || ('เดือน '+Y.month);
+      const ov = _yodStock||{};
+      // effective stock (override ทับ default ชีต) + คำนวณ เหลือ/ต้องเติม
+      const rows = Y.rows.map(r=>{
+        const o = ov[r.model]||{};
+        const target = (o.target!=null)?o.target:r.target;
+        const _carry = (r.carryStart!=null)?r.carryStart:r.start;   // สต๊อคต้นเดือน = เหลือเดือนก่อน (carry)
+        const start  = (o.start !=null)?o.start :_carry;
+        const added  = (o.added !=null)?o.added :r.added;
+        const noteVal= (o.note  !=null)?o.note  :(r.note||'');
+        const flag   = String(o.flag||'');   // สีแถวที่คนใส่เอง (''/r/y/g)
+        const remain = start + r.bought - r.released;   // จอง ไม่ลบ
+        return Object.assign({}, r, {target, start, added, noteVal, flag, remain, need: target - remain,
+          _edited:(o.target!=null||o.start!=null||o.added!=null), _noteEdited:(o.note!=null)});
+      });
+      const _n = v => (v===0?'<span style="color:var(--t3)">0</span>':v);
+      const _need = v => { const c = v>0?'#dc2626':(v<0?'#16a34a':'var(--t2)'); return `<b style="color:${c}">${v>0?'+':''}${v}</b>`; };
+      const _remain = v => `<b style="color:var(--purple)">${v}</b>`;
+      const _stIn = (r,f,val) => `<input type="number" data-m="${h(r.model)}" data-f="${f}" value="${val}" onchange="saveYodStock(this)" onclick="this.select()" style="width:46px;padding:3px 4px;border:.5px solid ${r._edited?'var(--blue)':'var(--bd2)'};border-radius:5px;background:${r._edited?'var(--blue-bg)':'var(--bg)'};color:var(--t1);font-size:11px;font-weight:700;text-align:center;font-family:inherit">`;
+
+      const _sticky = 'position:sticky;left:0;z-index:2';
+      const _stickyH = 'position:sticky;left:0;z-index:3;background:var(--bg2)';
+
+      // สีแถว: คนใส่เอง (ชนะเสมอ) · ไม่ใส่ = ไล่สีอัตโนมัติตาม "ต้องเติม"
+      const YFLAGS = {'':'⚪','r':'🔴','y':'🟡','g':'🟢'};
+      const _flagBg = f => f==='r'?'color-mix(in srgb,#ef4444 16%,var(--bg))' : f==='y'?'color-mix(in srgb,#f59e0b 20%,var(--bg))' : f==='g'?'color-mix(in srgb,#22c55e 16%,var(--bg))' : '';
+      const _flagSel = r => `<select data-m="${h(r.model)}" data-f="flag" onchange="saveYodStock(this)" onclick="event.stopPropagation()" title="ใส่สีแถวเอง (⚪ ไม่ระบุ / 🔴 ด่วน / 🟡 เฝ้าดู / 🟢 พอแล้ว)" style="font-size:13px;border:none;background:transparent;cursor:pointer;padding:0">${Object.keys(YFLAGS).map(k=>`<option value="${k}" ${r.flag===k?'selected':''}>${YFLAGS[k]}</option>`).join('')}</select>`;
+
+      // ── นิยามคอลัมน์ (ใช้สร้างหัว/ฟิลเตอร์/แถว/รวม ที่เดียว) ──
+      const CO = [{k:'model', l:'รุ่น', t:'text', v:r=>r.model, solo:1},
+                  {k:'flag', l:'สี', t:'flag', v:r=>r.flag, solo:1}];
+      months.forEach((m,i)=>{
+        CO.push({k:'j'+i, l:'จ', g:m, t:'num', v:r=>(r.jj[i]||[0,0])[0], c:'var(--t2)'});
+        CO.push({k:'b'+i, l:'บ', g:m, t:'num', v:r=>(r.jj[i]||[0,0])[1], c:'var(--t3)'});
+      });
+      CO.push({k:'totJong', l:'จ', g:'รวม', t:'num', v:r=>r.totJong, c:'var(--purple)', b:1});
+      CO.push({k:'totJob',  l:'บ', g:'รวม', t:'num', v:r=>r.totJob,  c:'var(--purple)'});
+      CO.push({k:'target', l:'เป้า',     g:'สต๊อก (แก้ได้)', t:'num', v:r=>r.target, edit:'target', ti:'เป้าแรก'});
+      CO.push({k:'start',  l:'สต๊อคต้น', g:'สต๊อก (แก้ได้)', t:'num', v:r=>r.start,  edit:'start',  ti:'สต๊อคต้นเดือน = เหลือปลายเดือนก่อน (auto · แก้ทับได้)'});
+      CO.push({k:'added',  l:'เอาเข้า',  g:'สต๊อก (แก้ได้)', t:'num', v:r=>r.added,  edit:'added',  ti:'รายเดือนที่เอาเข้า'});
+      CO.push({k:'bought',   l:'ซื้อได้', g:'ผลเดือนนี้', t:'num', v:r=>r.bought, ti:'รถที่ซื้อได้จริงเดือนนี้'});
+      CO.push({k:'released', l:'ปล่อย',  g:'ผลเดือนนี้', t:'num', v:r=>r.released});
+      CO.push({k:'remain', l:'เหลือ',    g:'คำนวณ', t:'num', v:r=>r.remain, fmt:_remain, ti:'สต๊อคต้นเดือน+ซื้อได้−ปล่อย'});
+      CO.push({k:'need',   l:'ต้องเติม', g:'คำนวณ', t:'num', v:r=>r.need,   fmt:_need,   ti:'เป้า−เหลือ (แดง=ต้องซื้อเพิ่ม)'});
+      CO.push({k:'lead',    l:'ขาย',    g:'Lead', t:'num', v:r=>r.lead,    c:'var(--t2)', ti:'Lead ขาย (ตัด RJ)'});
+      CO.push({k:'buyLead', l:'รับซื้อ', g:'Lead', t:'num', v:r=>r.buyLead, c:'var(--t2)', ti:'Lead รับซื้อรถ'});
+      CO.push({k:'note', l:'หมายเหตุ', t:'text', v:r=>r.noteVal, edit:'note', solo:1});
+
+      // ── ฟิลเตอร์ต่อคอลัมน์ (แบบชีต): ข้อความ=ค้นหา · ตัวเลข= 5 / >3 / <=2 / 2-8 ──
+      const _fq = _yodF||{};
+      const _match = (co,r) => { const q=String(_fq[co.k]||'').trim(); if(!q) return true;
+        const val=co.v(r);
+        if(co.t==='flag') return q==='-' ? !String(val||'') : String(val||'')===q;   // '-' = ยังไม่ใส่สี
+        if(co.t==='text') return String(val||'').toLowerCase().includes(q.toLowerCase());
+        const n=Number(val)||0; let m;
+        if((m=q.match(/^(>=|<=|>|<|=)\s*(-?\d+(?:\.\d+)?)$/))){ const x=Number(m[2]);
+          return m[1]==='>='?n>=x : m[1]==='<='?n<=x : m[1]==='>'?n>x : m[1]==='<'?n<x : n===x; }
+        if((m=q.match(/^(-?\d+)\s*-\s*(-?\d+)$/))) return n>=Number(m[1])&&n<=Number(m[2]);
+        const x=Number(q); return isNaN(x)?true:n===x; };
+      let view = rows.filter(r => CO.every(co=>_match(co,r)));
+      if(_yodUrgent) view = view.filter(r=>r.need>0);
+      if(_yodSort){ const co=CO.find(c=>c.k===_yodSort.k);
+        if(co) view = view.slice().sort((a,b)=>{ const x=co.v(a),y=co.v(b);
+          const c = (co.t==='text') ? String(x||'').localeCompare(String(y||''),'th') : ((Number(x)||0)-(Number(y)||0));
+          return _yodSort.dir==='d' ? -c : c; }); }
+      const nFilt = CO.filter(c=>String(_fq[c.k]||'').trim()).length;
+
+      // แถวรวม (ตามที่กรองอยู่)
+      const _sv = k => view.reduce((a,r)=>a+(Number(r[k])||0),0);
+      const jjSum = months.map((_,i)=>[ view.reduce((a,r)=>a+((r.jj[i]&&r.jj[i][0])||0),0), view.reduce((a,r)=>a+((r.jj[i]&&r.jj[i][1])||0),0) ]);
+      // สีแถว = ที่คนใส่เองเท่านั้น (ไม่ใส่ = ขาวปกติ · ไม่มีสีอัตโนมัติ)
+      const _rowBg = r => _flagBg(r.flag);
+
+      // หัวกลุ่ม (แถวบน)
+      let g1='', i2=0;
+      while(i2<CO.length){ const co=CO[i2];
+        if(co.solo){ g1 += `<th rowspan="2" style="${co.k==='model'?_stickyH+';':''}padding:6px 9px;text-align:left;border-bottom:1px solid var(--bd);min-width:${co.k==='model'?'120':'100'}px">${h(co.l)}</th>`; i2++; continue; }
+        let n=0; while(i2+n<CO.length && CO[i2+n].g===co.g) n++;
+        const gc = co.g==='รวม'?'var(--purple)':(co.g==='สต๊อก (แก้ได้)'?'var(--blue)':'var(--t2)');
+        g1 += `<th colspan="${n}" style="padding:4px 6px;text-align:center;border-bottom:.5px solid var(--bd);color:${gc};font-weight:700;font-size:10px${co.g==='สต๊อก (แก้ได้)'?';background:var(--blue-bg)':''}">${h(co.g)}</th>`;
+        i2+=n; }
+
+      const _sortMark = k => _yodSort&&_yodSort.k===k ? (_yodSort.dir==='d'?' ▼':' ▲') : '';
+      const _th = co => `<th onclick="sortYod('${co.k}')" title="${h(co.ti||'')}${co.ti?' · ':''}กดเพื่อเรียง" style="padding:5px 6px;text-align:center;border-bottom:1px solid var(--bd);color:${co.c||(co.edit?'var(--blue)':'var(--t2)')};font-weight:${co.b?'700':'600'};cursor:pointer;user-select:none;min-width:34px">${h(co.l)}${_sortMark(co.k)}</th>`;
+      const _fin = co => {
+        const on = String(_fq[co.k]||'').trim();
+        const cell = s => `<th style="padding:2px 3px;border-bottom:1px solid var(--bd);${co.k==='model'?_stickyH+';':'background:var(--bg2);'}">${s}</th>`;
+        if(co.t==='flag'){   // กรองตามสีที่คนใส่เอง
+          return cell(`<select data-fk="flag" onchange="setYodFilter(this)" title="กรองตามสีที่ใส่เอง" style="width:100%;min-width:44px;box-sizing:border-box;padding:2px 2px;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};border-radius:4px;background:var(--bg);color:var(--t1);font-size:11px;font-family:inherit"><option value="">ทั้งหมด</option>${Object.keys(YFLAGS).filter(k=>k).map(k=>`<option value="${k}" ${_fq.flag===k?'selected':''}>${YFLAGS[k]}</option>`).join('')}<option value="-" ${_fq.flag==='-'?'selected':''}>⚪ ยังไม่ใส่</option></select>`);
+        }
+        return cell(`<input data-fk="${co.k}" value="${h(on)}" oninput="setYodFilter(this)" placeholder="${co.t==='text'?'ค้นหา':'เช่น >3'}" title="ตัวเลข: 5 · >3 · <=2 · 2-8" style="width:${co.k==='model'?'110px':(co.k==='note'?'150px':'100%')};min-width:28px;box-sizing:border-box;padding:2px 4px;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};border-radius:4px;background:var(--bg);color:var(--t1);font-size:10px;font-family:inherit">`);
+      };
+
+      let T = `<div class="card" id="yodrot-card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:6px">${ic('lucide:shopping-cart',16)} ยอดรถเข้า รายรุ่น · ${h(mName)}
+            <span class="info-tip" tabindex="0" data-tip="ตารางวางแผนซื้อรถเข้าสต๊อก (ทีมจัดซื้อ) · 1 แถว = 1 รุ่น\n\nจอง/จบ ย้อนหลัง = ดึงจากชีตจอง/จบ รายเดือน (รวมครบทุกเดือน)\nเป้า/สต๊อคต้นเดือน/เอาเข้า/หมายเหตุ = แก้ได้ในตาราง (เก็บแยก ไม่แตะชีตเดิม)\nสต๊อคต้นเดือน = เหลือปลายเดือนก่อน (carry อัตโนมัติ · แก้ทับได้)\nเหลือ = สต๊อคต้นเดือน + ซื้อได้ − ปล่อย  (จอง ไม่ลบ)\nต้องเติม = เป้า − เหลือ  (แดง=ต้องซื้อเพิ่ม · เขียว=พอ/เกิน)\n\nสีแถว: ใส่เองที่คอลัมน์ 'สี' (🔴 ด่วน · 🟡 เฝ้าดู · 🟢 พอแล้ว)\n  ไม่ใส่ = ขาวปกติ (ไม่มีสีอัตโนมัติ)\nฟิลเตอร์ใต้หัวตาราง: สี=เลือกจากลิสต์ · ข้อความ=ค้นหา · ตัวเลข= 5 / >3 / <=2 / 2-8\nกดหัวคอลัมน์ = เรียง">?</span>
+          </span>
+          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button onclick="_yodUrgent=!_yodUrgent;refreshPurchase()" style="font-size:11px;padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:.5px solid ${_yodUrgent?'#dc2626':'var(--bd2)'};background:${_yodUrgent?'color-mix(in srgb,#ef4444 15%,transparent)':'var(--bg2)'};color:${_yodUrgent?'#dc2626':'var(--t2)'}" title="กรองเฉพาะรุ่นที่ ต้องเติม > 0">เฉพาะที่ต้องเติม</button>
+            ${(nFilt||_yodSort||_yodUrgent)?`<button onclick="clearYodFilter()" style="font-size:11px;padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ล้างตัวกรอง</button>`:''}
+            <span style="font-size:11px;color:var(--t3)">${view.length}${view.length!==rows.length?'/'+rows.length:''} รุ่น · เลขน้ำเงิน = แก้แล้ว</span>${_cardLineBtn('yodrot-card','ยอดรถเข้า รายรุ่น (จัดซื้อ)')}</span>
+        </div>
+        <div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px">
+        <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;min-width:100%">
+          <thead>
+            <tr style="background:var(--bg2)">${g1}</tr>
+            <tr style="background:var(--bg2)">${CO.filter(c=>!c.solo).map(_th).join('')}</tr>
+            <tr>${CO.map(_fin).join('')}</tr>
+          </thead><tbody>`;
+
+      if(!view.length) T += `<tr><td colspan="${CO.length}" style="padding:18px;text-align:center;color:var(--t3)">ไม่มีรุ่นที่ตรงตัวกรอง</td></tr>`;
+      view.forEach(r=>{
+        const bg=_rowBg(r);
+        T += `<tr style="border-bottom:.5px solid var(--bd);background:${bg||'transparent'}">`;
+        CO.forEach(co=>{
+          const val=co.v(r);
+          if(co.k==='model'){ T += `<td style="${_sticky};background:${bg||'var(--bg)'};padding:6px 9px;text-align:left;font-weight:600;border-right:.5px solid var(--bd)">${h(r.model)}</td>`; return; }
+          if(co.k==='flag'){ T += `<td style="padding:2px 4px;text-align:center">${_flagSel(r)}</td>`; return; }
+          if(co.edit==='note'){ T += `<td style="padding:3px 5px;text-align:left"><input type="text" data-m="${h(r.model)}" data-f="note" value="${h(r.noteVal||'')}" onchange="saveYodStock(this)" placeholder="—" title="${h(r.noteVal||'')}" style="width:210px;padding:3px 6px;border:.5px solid ${r._noteEdited?'var(--blue)':'var(--bd2)'};border-radius:5px;background:${r._noteEdited?'var(--blue-bg)':'transparent'};color:var(--t2);font-size:10px;font-family:inherit"></td>`; return; }
+          if(co.edit){ T += `<td style="padding:4px 4px;text-align:center;background:color-mix(in srgb,var(--blue) 5%,transparent)">${_stIn(r,co.edit,val)}</td>`; return; }
+          T += `<td style="padding:5px 6px;text-align:center;${co.c?'color:'+co.c+';':''}${co.b?'font-weight:700;':''}">${co.fmt?co.fmt(val):_n(val)}</td>`;
+        });
+        T += `</tr>`;
+      });
+
+      // แถวรวม (ตามที่กรอง)
+      T += `<tr style="background:var(--bg2);border-top:1.5px solid var(--bd);font-weight:700">
+        <td style="${_stickyH};padding:6px 9px;text-align:left;border-right:.5px solid var(--bd)">รวม${view.length!==rows.length?' (ที่กรอง)':'ทั้งหมด'}</td>
+        ${jjSum.map(p=>`<td style="padding:5px 6px;text-align:center;color:var(--t2)">${p[0]}</td><td style="padding:5px 6px;text-align:center;color:var(--t3)">${p[1]}</td>`).join('')}
+        <td style="padding:5px 6px;text-align:center;color:var(--purple)">${_sv('totJong')}</td><td style="padding:5px 6px;text-align:center;color:var(--purple)">${_sv('totJob')}</td>
+        <td style="padding:5px 6px;text-align:center;color:var(--blue)">${_sv('target')}</td><td style="padding:5px 6px;text-align:center;color:var(--blue)">${_sv('start')}</td><td style="padding:5px 6px;text-align:center;color:var(--blue)">${_sv('added')}</td>
+        <td style="padding:5px 6px;text-align:center">${_sv('bought')}</td><td style="padding:5px 6px;text-align:center">${_sv('released')}</td>
+        <td style="padding:5px 6px;text-align:center;color:var(--purple)">${_sv('remain')}</td><td style="padding:5px 6px;text-align:center">${_need(_sv('need'))}</td>
+        <td style="padding:5px 6px;text-align:center">${_sv('lead')}</td><td style="padding:5px 6px;text-align:center">${_sv('buyLead')}</td>
+        <td></td>
+      </tr>`;
+      T += `</tbody></table></div></div>`;
+      return T;
+    }
+
+    // ── ฟิลเตอร์/เรียง ของตารางยอดรถเข้า ──
+    function setYodFilter(el){ _yodF[el.dataset.fk]=el.value; _yodFocus={k:el.dataset.fk,pos:el.selectionStart}; refreshPurchase(); }
+    function sortYod(k){ _yodSort = (!_yodSort||_yodSort.k!==k) ? {k,dir:'a'} : (_yodSort.dir==='a'?{k,dir:'d'}:null); refreshPurchase(); }
+    function clearYodFilter(){ _yodF={}; _yodSort=null; _yodUrgent=false; _yodFocus=null; refreshPurchase(); }
+
+    async function saveYodStock(el){
+      const model = el.dataset.m, field = el.dataset.f;
+      let v;
+      if(field==='note'||field==='flag'){ v = String(el.value).slice(0,500); }
+      else { v = parseInt(String(el.value).replace(/,/g,''),10); if(isNaN(v)) v=0; }
+      const Y = D.yodRotKao; if(!Y) return;
+      // optimistic — อัปเดต local + refresh ตาราง (เหลือ/ต้องเติมขยับทันที · note ไม่กระทบ ไม่ต้อง re-render)
+      if(!_yodStock[model]) _yodStock[model]={};
+      _yodStock[model][field]=v;
+      if(field!=='note') refreshPurchase();
+      try{
+        const r = await fetch('/api/admin/yod_stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:Y.month,model,field,value:v})});
+        const j = await r.json();
+        if(!j || !j.ok){ alert(j&&j.error||'บันทึกไม่สำเร็จ'); }
+      }catch(e){ alert('บันทึกไม่สำเร็จ (เน็ต?)'); }
+    }
+
+    // ตั้งเป้า (PLAN) lead ต่อช่องทาง — ช่องกรอก = เป้า/เดือน (เก็บตรงๆ) · การ์ดคูณ/หารตามช่วงเองตอนโชว์ (KVStore leadreport_plan)
+    async function saveLeadPlan(el){
+      const ch = el.dataset.ch; let v = parseInt(String(el.value).replace(/,/g,''),10); if(isNaN(v)) v=0;
+      if(!window._lrPlan) window._lrPlan={};
+      window._lrPlan[ch]=v;
+      render();   // อัปเดตช่อง+รวม PLAN ทันที (optimistic)
+      try{ const r=await fetch('/api/admin/leadreport_plan',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({channel:ch,value:v})});
+        const j=await r.json(); if(!j||!j.ok){ alert(j&&j.error||'บันทึกเป้าไม่สำเร็จ'); } }catch(e){ alert('บันทึกเป้าไม่สำเร็จ (เน็ต?)'); }
+    }
 
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
     // ── "สถานะรถ" เรนเดอร์ native ในหน้า sales (ธีม/สีเดียวกัน · ไม่ใช้ iframe) ──
@@ -4590,7 +4966,6 @@
       let d; try{ d=await (await fetch('/api/admin/report_config',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const c=d.config||{};
-      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
       const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
       let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
       const groupDD = groups.length
@@ -4601,7 +4976,7 @@
         <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตาราง "รายงาน จอง/อนุมัติ/ปล่อย" เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)</div>
         <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="rl_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="rl_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
           <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="rl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
         </div>
         <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="rl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
@@ -4643,7 +5018,6 @@
       let d; try{ d=await (await fetch('/api/admin/leadsummary_config',{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const c=d.config||{};
-      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
       const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
       let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
       const groupDD = groups.length
@@ -4654,7 +5028,7 @@
         <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปการ์ด "ยอด LEAD (สรุปย่อ)" เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)</div>
         <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="ll_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="ll_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="ll_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
           <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="ll_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
         </div>
         <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="ll_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
@@ -4699,7 +5073,6 @@
       let d; try{ d=await (await fetch('/api/admin/card_line_config?card='+encodeURIComponent(_clCard),{credentials:'same-origin'})).json(); }catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const c=d.config||{};
-      let timeOpts=''; for(let hh=0;hh<24;hh++)for(const mm of [0,30]){const t=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');timeOpts+=`<option value="${t}" ${c.time===t?'selected':''}>${t}</option>`;}
       const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
       let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
       const groupDD = groups.length
@@ -4710,13 +5083,23 @@
         <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตารางนี้เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)${_clCard==='rpt-card'?' · ส่งเวอร์ชันสวย (ตาราง+กราฟทีม)':''}</div>
         <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="cl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><select id="cl_time" style="${_inp}">${timeOpts}</select></div>
+          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="cl_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
           <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="cl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
         </div>
+        <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ช่วงวันที่ของข้อมูลในรูป</label>
+          <select id="cl_dmode" onchange="__clDateMode()" style="${_inp}">
+            <option value="month" ${(c.date_mode||'month')==='month'?'selected':''}>เดือนปัจจุบัน (1 – สิ้นเดือน)</option>
+            <option value="today" ${c.date_mode==='today'?'selected':''}>วันปัจจุบัน (วันนี้)</option>
+            <option value="range" ${c.date_mode==='range'?'selected':''}>ระหว่างวันที่ – ถึงวันที่ (ระบุเอง)</option>
+          </select>
+          <div id="cl_drange" style="display:${c.date_mode==='range'?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <div><label class="mut" style="font-size:10px;display:block;margin-bottom:3px">จากวันที่</label><input type="date" id="cl_dfrom" value="${h(c.date_from||'')}" style="${_inp}"></div>
+            <div><label class="mut" style="font-size:10px;display:block;margin-bottom:3px">ถึงวันที่</label><input type="date" id="cl_dto" value="${h(c.date_to||'')}" style="${_inp}"></div>
+          </div></div>
         <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="cl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
         <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">กลุ่มปลายทาง (จริง)</label>
           ${groupDD}
-          <div style="display:flex;gap:6px"><input id="cl_group" value="${h(c.group_id||'')}" placeholder="หรือวาง group id เอง (Cxxxx...)" style="${_inp}"><button onclick="checkGroupNameCL()" title="ดึงชื่อกลุ่มจาก id" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:12px">ตรวจชื่อ</button></div>
+          <div style="display:flex;gap:6px"><input id="cl_group" value="${h(c.group_id||'')}" placeholder="หรือวาง group id เอง (Cxxxx...)" style="${_inp}"><button onclick="checkGroupNameCL()" title="ดึงชื่อกลุ่มจาก id" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:12px">ตรวจชื่อ</button><button onclick="removeGroupCL()" title="ลบกลุ่มนี้ออกจากรายการ (บอทออกจากกลุ่มแล้ว)" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-size:12px">🗑 ลบกลุ่ม</button></div>
           <div id="cl_gname" style="font-size:12px;margin-top:5px"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button onclick="saveCardLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;font-size:13px">${ic('lucide:save',15)} บันทึก</button>
@@ -4726,10 +5109,13 @@
         <div class="mut" style="font-size:11px;margin-top:14px;line-height:1.7;background:var(--bg2);border-radius:9px;padding:10px 12px">⚠️ ส่งได้จริงเฉพาะบน prod — LINE ต้องดึงรูปจาก URL สาธารณะ (dev localhost ส่งไม่ได้) · บน prod ต้องลง Playwright + Chromium</div>`;
     }
     const _clV=id=>((document.getElementById(id)||{}).value||'');
+    function __clDateMode(){ const el=document.getElementById('cl_drange'); if(el) el.style.display = (_clV('cl_dmode')==='range')?'grid':'none'; }
     function _clStatus(txt,col){ const s=document.getElementById('cl_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
     async function saveCardLine(){
       _clStatus('กำลังบันทึก…');
-      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:_clV('cl_mode'), test_id:_clV('cl_test').trim(), group_id:_clV('cl_group').trim()};
+      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:_clV('cl_mode'), test_id:_clV('cl_test').trim(), group_id:_clV('cl_group').trim(),
+        date_mode:_clV('cl_dmode')||'month', date_from:_clV('cl_dfrom'), date_to:_clV('cl_dto')};
+      if(body.date_mode==='range' && (!body.date_from||!body.date_to)){ _clStatus('เลือกช่วงวันที่ให้ครบก่อน','var(--red)'); return; }
       try{ const r=await fetch('/api/admin/card_line_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
         const j=await r.json(); _clStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด','var(--red)'); }
     }
@@ -4744,6 +5130,17 @@
       if(el){el.textContent='กำลังตรวจ…';el.style.color='var(--t3)';}
       try{ const r=await fetch('/api/admin/line_group_name',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({id})});
         const j=await r.json(); if(el){ if(j.ok){el.innerHTML='✓ กลุ่ม: <b>'+h(j.name||'(ไม่มีชื่อ)')+'</b>';el.style.color='var(--green)';}else{el.textContent=j.error||'ไม่พบกลุ่ม';el.style.color='var(--red)';} } }catch(e){ if(el){el.textContent='ผิดพลาด';el.style.color='var(--red)';} }
+    }
+    async function removeGroupCL(){
+      const id=_clV('cl_group').trim(), el=document.getElementById('cl_gname');
+      if(!id){ if(el){el.textContent='ใส่/เลือก group id ที่จะลบก่อน';el.style.color='var(--red)';} return; }
+      if(!confirm('ลบกลุ่มนี้ออกจากรายการ?\n('+id+')\n\nใช้เมื่อบอทออกจากกลุ่มแล้วแต่ยังค้างในรายการ · ไม่กระทบกลุ่มจริงใน LINE')) return;
+      if(el){el.textContent='กำลังลบ…';el.style.color='var(--t3)';}
+      try{ const r=await fetch('/api/admin/line_groups',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({action:'remove',id})});
+        const j=await r.json();
+        if(j.ok){ document.getElementById('cl_group').value=''; await renderCardLine(); }   // re-render → dropdown อัปเดต ไม่มีกลุ่มนี้แล้ว
+        else if(el){ el.textContent=j.error||'ลบไม่สำเร็จ'; el.style.color='var(--red)'; }
+      }catch(e){ if(el){el.textContent='ผิดพลาด';el.style.color='var(--red)';} }
     }
     // 📋 Log การเข้าสู่ระบบ — modal ในหน้าแดชบอร์ด sales (ดึง /track/api/logins)
     async function openLoginLog(){ const ov=_trkOverlay('login-log','<p class="mut">กำลังโหลด…</p>'); await renderLoginLog(ov,''); }

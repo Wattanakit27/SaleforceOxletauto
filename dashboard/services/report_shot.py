@@ -10,7 +10,30 @@ import time
 import glob
 from django.conf import settings
 
-_DEFAULT_CFG = {"enabled": False, "time": "17:30", "mode": "test", "test_id": "", "group_id": ""}
+_DEFAULT_CFG = {"enabled": False, "time": "17:30", "mode": "test", "test_id": "", "group_id": "",
+                # ช่วงวันที่ของข้อมูลในรูปที่ส่ง: month=เดือนปัจจุบัน · today=วันปัจจุบัน · range=ระบุเอง
+                "date_mode": "month", "date_from": "", "date_to": ""}
+
+
+def _apply_date_mode(page, cfg) -> None:
+    """ตั้งตัวกรองวันที่ของแดชบอร์ดก่อนแคป ตาม config ของการ์ด (เรียกหลัง login/สลับแท็บ · best-effort)"""
+    mode = (cfg or {}).get("date_mode") or "month"
+    try:
+        page.wait_for_function("typeof setDfRange === 'function' && typeof dfThisMonth === 'function'", timeout=30000)
+        if mode == "today":
+            page.evaluate("setDf(-1)")
+        elif mode == "range":
+            f = str((cfg or {}).get("date_from") or "").strip()
+            t = str((cfg or {}).get("date_to") or "").strip()
+            if f and t:
+                page.evaluate("(a) => setDfRange(a[0], a[1])", [f, t])
+            else:
+                page.evaluate("dfThisMonth()")
+        else:
+            page.evaluate("dfThisMonth()")
+        page.wait_for_timeout(1800)   # รอ render ใหม่ตามช่วงที่ตั้ง
+    except Exception:
+        pass
 
 
 # ── config (KVStore) ──
@@ -59,7 +82,7 @@ _SHOT_TARGETS = [
 ]
 
 
-def capture_report_images() -> list[str]:
+def capture_report_images(cfg: dict | None = None) -> list[str]:
     """login แดชบอร์ด → แคป #rpt-shot + #rpt-shot-teams → เซฟ PNG · คืน list ของ path (ว่าง = พัง/ไม่มี playwright)
     ทำใน browser session เดียว (login ครั้งเดียว แคปหลายรูป)"""
     try:
@@ -84,6 +107,13 @@ def capture_report_images() -> list[str]:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
+            # รอ render เสร็จก่อนตั้งช่วงวันที่ (ไม่งั้นโดน init ทับ)
+            try:
+                page.wait_for_selector(".ntab", state="visible", timeout=45000)
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
+            _apply_date_mode(page, cfg)   # ช่วงวันที่ตามที่ตั้งไว้ (None = เดือนปัจจุบัน)
             # #rpt-shot / #rpt-shot-teams ซ่อนใน wrapper height:0 → เปิดให้เห็นก่อนแคป
             # timeout สูง (35s) กัน cold start: /api/dashboard คำนวณสด ~8-20s ตอน cache เย็น
             try:
@@ -347,6 +377,14 @@ _LINE_CARDS = {
     "mega-card": "สรุปเต็มรายเซลล์",
     "alloc-card": "จัดสรร Lead ตามคะแนน",
     "scorecard-card": "ตารางคะแนนเซลล์",
+    "clipweek-card": "ติดตามคอนเทนต์ (คลิป) รายสัปดาห์",
+    "yodrot-card": "ยอดรถเข้า รายรุ่น (จัดซื้อ)",
+}
+
+# การ์ดที่ไม่ได้อยู่แท็บ "ภาพรวม" → ต้องสลับแท็บก่อนแคป (ปุ่มแท็บชื่อไทยตรงกับ nav)
+_CARD_TAB = {
+    "clipweek-card": "ไลฟ์",
+    "yodrot-card": "จัดซื้อ",
 }
 
 
@@ -370,8 +408,11 @@ def save_card_config(card_id: str, cfg: dict) -> None:
     cache_store.set_kv("cardline_" + card_id, clean)
 
 
-def _capture_element(card_id: str) -> str | None:
-    """login แดชบอร์ด → แคป element #<card_id> (การ์ดที่มองเห็นบนหน้า) → คืน path"""
+def _capture_element(card_id: str, cfg: dict | None = None) -> str | None:
+    """login แดชบอร์ด → แคป element #<card_id> (การ์ดที่มองเห็นบนหน้า) → คืน path
+    cfg = อ่านมาก่อนแล้ว (กัน DB read พังหลัง Playwright รันนาน) · None = อ่านเอง"""
+    if cfg is None:
+        cfg = get_card_config(card_id)
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
@@ -391,6 +432,22 @@ def _capture_element(card_id: str) -> str | None:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
+            # ต้องรอให้โหลดข้อมูล+เรนเดอร์เสร็จก่อน ค่อยตั้งช่วงวันที่ (ไม่งั้นโดน init ตั้งค่าเริ่มต้นทับ)
+            try:
+                page.wait_for_selector(".ntab", state="visible", timeout=45000)
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
+            _apply_date_mode(page, cfg)   # ช่วงวันที่ตามที่ตั้งไว้ต่อการ์ด (อ่านมาก่อน launch browser)
+            _tab = _CARD_TAB.get(card_id)
+            if _tab:   # การ์ดอยู่คนละแท็บ → กดแท็บก่อน (ไม่งั้นหา element ไม่เจอ)
+                try:
+                    page.wait_for_selector(".ntab", state="visible", timeout=45000)
+                    page.wait_for_timeout(600)
+                    page.click(f"button.ntab:has-text('{_tab}')")
+                    page.wait_for_timeout(1200)
+                except Exception:
+                    pass
             page.wait_for_selector("#" + card_id, state="attached", timeout=35000)
             page.wait_for_timeout(1800)
             # ซ่อนปุ่ม "ส่งไลน์" + ไอคอน "?" (ตัวช่วย UI · ไม่ใช่ข้อมูล) ก่อนแคป — รูปสะอาดขึ้น
@@ -434,9 +491,10 @@ def _capture_element(card_id: str) -> str | None:
 
 def capture_card(card_id: str) -> list[str]:
     """คืน list ของ path รูปของการ์ด · rpt-card = เวอร์ชันสวย (ตาราง+กราฟทีม) · การ์ดอื่น = element ตรงๆ"""
+    cfg = get_card_config(card_id)   # อ่าน config ครั้งเดียว "ก่อน" launch browser (กัน DB read พังหลัง Playwright รันนาน → ตกไป default)
     if card_id == "rpt-card":
-        return capture_report_images()
-    p = _capture_element(card_id)
+        return capture_report_images(cfg)
+    p = _capture_element(card_id, cfg)
     return [p] if p else []
 
 

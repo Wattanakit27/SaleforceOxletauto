@@ -2106,6 +2106,181 @@ def admin_purchase_method_config(request):
     return JsonResponse({"ok": True, "map": mp}, json_dumps_params={"ensure_ascii": False})
 
 
+@csrf_exempt
+def admin_yod_stock(request):
+    """Admin — สต๊อกรถเข้า รายรุ่น (แก้ได้ในแดชบอร์ด · เก็บ override ในสโตร์เราเอง ไม่แตะชีตเดิม)
+    GET ?month=7 → {stock:{รุ่น:{target,start,added}}} · POST {month,model,field(target|start|added),value} = บันทึก 1 ช่อง
+    ค่าที่ไม่ override → frontend ใช้ค่า default จากชีต (yodRotKao)"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+    from .services.fetch_dashboard import bangkok_now
+    yr = bangkok_now().year
+
+    def _key(m):
+        return f"yod_stock_{yr}_{int(m):02d}"
+
+    _INT_FIELDS = {"target", "start", "added"}
+    _TXT_FIELDS = {"note", "flag"}   # flag = สีแถวที่แอดมินใส่เอง ('' / r / y / g)
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        m = int(body.get("month") or bangkok_now().month)
+        model = str(body.get("model") or "").strip()
+        field = str(body.get("field") or "").strip()
+        if not model or (field not in _INT_FIELDS and field not in _TXT_FIELDS):
+            return JsonResponse({"ok": False, "error": "ข้อมูลไม่ครบ"}, status=400)
+        if field in _TXT_FIELDS:
+            val = str(body.get("value") or "").strip()[:500]   # หมายเหตุ = ข้อความ (จำกัดความยาว)
+        else:
+            try:
+                val = int(float(str(body.get("value")).replace(",", "")))
+            except Exception:
+                val = 0
+        cur = (cache_store.get_kv(_key(m)) or {}).get("data") or {}
+        cur.setdefault(model, {})[field] = val
+        cache_store.set_kv(_key(m), cur)
+        return JsonResponse({"ok": True, "stock": cur}, json_dumps_params={"ensure_ascii": False})
+    m = int(request.GET.get("month") or bangkok_now().month)
+    st = (cache_store.get_kv(_key(m)) or {}).get("data") or {}
+    return JsonResponse({"ok": True, "month": m, "stock": st}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_live_session(request):
+    """Admin — CRUD ไลฟ์รายครั้ง (เขียนกลับชีต "สรุปไลฟ์สด <เดือน>" ตรงๆ)
+    POST {action:'update', tab, row, team, hosts[], topic}
+         {action:'add', date(d/m/yyyy), time, team, hosts[], topic, inbox, lead}
+         {action:'delete', tab, row}"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "ต้องเป็น POST"}, status=405)
+    try:
+        body = json.loads(request.body or "{}")
+    except Exception:
+        body = {}
+    action = str(body.get("action") or "").strip()
+    from .services.google_sheets import (update_live_session, append_live_session,
+                                         delete_live_session)
+    from .services.fetch_dashboard import parse_date, bangkok_now
+    from .services.constants import MONTHS_FULL
+
+    def _hosts():
+        hs = body.get("hosts") or []
+        if isinstance(hs, str):
+            hs = [x.strip() for x in hs.split(",")]
+        return [str(x).strip() for x in hs if str(x).strip()][:5]
+
+    try:
+        if action == "update":
+            tab = str(body.get("tab") or "").strip()
+            row = int(body.get("row") or 0)
+            if not tab or row < 2:
+                return JsonResponse({"ok": False, "error": "ไม่รู้ตำแหน่งในชีต (แก้ไม่ได้)"}, status=400)
+            info = update_live_session(tab, row, str(body.get("team") or "").strip(),
+                                       _hosts(), str(body.get("topic") or "").strip())
+            return JsonResponse({"ok": True, "info": info}, json_dumps_params={"ensure_ascii": False})
+
+        if action == "add":
+            date_s = str(body.get("date") or "").strip()
+            d = parse_date(date_s)
+            if not d:
+                return JsonResponse({"ok": False, "error": "วันที่ไม่ถูกต้อง (d/m/yyyy)"}, status=400)
+            tab = str(body.get("tab") or "").strip() or f"สรุปไลฟ์สด {MONTHS_FULL[d.month - 1]}"
+            info = append_live_session(tab, date_s, str(body.get("time") or "").strip(),
+                                       str(body.get("team") or "").strip(), _hosts(),
+                                       str(body.get("topic") or "").strip(),
+                                       body.get("inbox") or 0, body.get("lead") or 0)
+            return JsonResponse({"ok": True, "info": info}, json_dumps_params={"ensure_ascii": False})
+
+        if action == "delete":
+            tab = str(body.get("tab") or "").strip()
+            row = int(body.get("row") or 0)
+            if not tab or row < 2:
+                return JsonResponse({"ok": False, "error": "ไม่รู้ตำแหน่งในชีต (ลบไม่ได้)"}, status=400)
+            info = delete_live_session(tab, row)
+            return JsonResponse({"ok": True, "info": info}, json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"เขียนชีตไม่สำเร็จ: {e}"}, status=500)
+    return JsonResponse({"ok": False, "error": "action ไม่ถูกต้อง"}, status=400)
+
+
+@csrf_exempt
+def admin_clipweek(request):
+    """Admin — ตาราง "ติดตามคอนเทนต์ (คลิป) รายสัปดาห์" · ค่าปกตินับจาก log ลงคลิป · นี่คือค่าที่แก้ทับ (override)
+    GET ?month=7 → {ov:{เซลล์:{w1..w4}}} · POST {month,seller,week(1-4),value} = แก้ 1 ช่อง"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+    from .services.fetch_dashboard import bangkok_now
+    yr = bangkok_now().year
+
+    def _key(m):
+        return f"clipweek_{yr}_{int(m):02d}"
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        m = int(body.get("month") or bangkok_now().month)
+        seller = str(body.get("seller") or "").strip()
+        try:
+            wk = int(body.get("week") or 0)
+        except Exception:
+            wk = 0
+        if not seller or wk < 1 or wk > 4:
+            return JsonResponse({"ok": False, "error": "ข้อมูลไม่ครบ"}, status=400)
+        try:
+            val = max(0, int(float(str(body.get("value")).replace(",", ""))))
+        except Exception:
+            val = 0
+        cur = (cache_store.get_kv(_key(m)) or {}).get("data") or {}
+        cur.setdefault(seller, {})[f"w{wk}"] = val
+        cache_store.set_kv(_key(m), cur)
+        return JsonResponse({"ok": True, "ov": cur}, json_dumps_params={"ensure_ascii": False})
+    m = int(request.GET.get("month") or bangkok_now().month)
+    ov = (cache_store.get_kv(_key(m)) or {}).get("data") or {}
+    return JsonResponse({"ok": True, "month": m, "ov": ov}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_leadreport_plan(request):
+    """Admin — เป้า (PLAN) lead ต่อช่องทาง ในตาราง "รายงาน lead (แยกช่องทาง)" (แก้ได้ · เก็บ KVStore)
+    GET → {plan:{ช่องทาง:เป้า}} · POST {channel,value} = ตั้งเป้า 1 ช่องทาง"""
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        ch = str(body.get("channel") or "").strip()
+        if not ch:
+            return JsonResponse({"ok": False, "error": "ไม่มีช่องทาง"}, status=400)
+        try:
+            val = int(float(str(body.get("value")).replace(",", "")))
+        except Exception:
+            val = 0
+        cur = (cache_store.get_kv("leadreport_plan") or {}).get("data") or {}
+        if val:
+            cur[ch] = val
+        else:
+            cur.pop(ch, None)   # 0 = ลบเป้า (ไม่รก)
+        cache_store.set_kv("leadreport_plan", cur)
+        return JsonResponse({"ok": True, "plan": cur}, json_dumps_params={"ensure_ascii": False})
+    plan = (cache_store.get_kv("leadreport_plan") or {}).get("data") or {}
+    return JsonResponse({"ok": True, "plan": plan}, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_report_test(request):
     """Admin — ส่งรายงานทดสอบเข้าไลน์เดี๋ยวนี้ (POST {target?}) · target ว่าง = ใช้ปลายทางใน config
     ⚠️ ต้องรันบน prod (LINE ต้องดึงรูปจาก URL https สาธารณะ · localhost ส่งไม่ได้)"""
@@ -2186,7 +2361,7 @@ def admin_card_line_config(request):
         if card not in _LINE_CARDS:
             return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
         cfg = get_card_config(card)
-        for k in ("enabled", "time", "mode", "test_id", "group_id"):
+        for k in ("enabled", "time", "mode", "test_id", "group_id", "date_mode", "date_from", "date_to"):
             if k in body:
                 cfg[k] = body[k]
         save_card_config(card, cfg)
@@ -2280,6 +2455,53 @@ def _extract_group_events(data):
     return out
 
 
+def _extract_group_leaves(data):
+    """ดึง [groupId] จาก event ที่บอท "ออกจากกลุ่ม" (type=='leave') → เอาไปลบออกจาก line_groups
+    LINE ส่ง leave event ตอนบอทถูกเชิญออก/กลุ่มถูกยุบ · รูปแบบ {events:[{type:'leave',source:{type:'group',groupId}}]}"""
+    out = []
+
+    def _one(obj):
+        if not isinstance(obj, dict):
+            return
+        if (obj.get("type") or "").lower() != "leave":
+            return
+        src = obj.get("source") if isinstance(obj.get("source"), dict) else {}
+        gid = src.get("groupId") or obj.get("groupId") or obj.get("group_id")
+        if gid:
+            out.append(gid)
+
+    if isinstance(data, dict):
+        evs = data.get("events")
+        if isinstance(evs, list):
+            for ev in evs:
+                _one(ev)
+        else:
+            _one(data)
+    elif isinstance(data, list):
+        for it in data:
+            _one(it)
+    return out
+
+
+def _remove_line_groups(gids):
+    """ลบ groupId ออกจาก KVStore 'line_groups' (บอทออกจากกลุ่มแล้ว) · คืนจำนวนที่ลบ"""
+    from .services import cache_store
+    gids = [g for g in (gids or []) if g]
+    if not gids:
+        return 0
+    groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+    n = 0
+    for g in gids:
+        if groups.pop(g, None) is not None:
+            n += 1
+    if n:
+        try:
+            cache_store.set_kv("line_groups", groups)
+        except Exception:
+            pass
+    return n
+
+
 def _store_line_groups(pairs):
     """เก็บ [(gid, name)] ลง KVStore 'line_groups' (ดึงชื่อจาก LINE ถ้าไม่มี) · คืน list ที่เพิ่ม/อัปเดต"""
     from django.conf import settings as _st
@@ -2334,7 +2556,11 @@ def line_webhook(request):
         data = json.loads(body or b"{}")
     except Exception:
         data = {}
-    _store_line_groups(_extract_group_events(data))
+    leaves = set(_extract_group_leaves(data))
+    # อย่า re-add กลุ่มที่เพิ่ง leave (leave event ก็มี groupId → _extract_group_events หยิบมาด้วย)
+    adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
+    _store_line_groups(adds)
+    _remove_line_groups(leaves)
     return HttpResponse("ok")
 
 
@@ -2356,17 +2582,35 @@ def line_group_ingest(request):
         data = json.loads(request.body or b"{}")
     except Exception:
         data = {}
-    added = _store_line_groups(_extract_group_events(data))
-    return JsonResponse({"ok": True, "count": len(added), "groups": added},
+    leaves = set(_extract_group_leaves(data))
+    adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
+    added = _store_line_groups(adds)
+    removed = _remove_line_groups(leaves)
+    return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed},
                         json_dumps_params={"ensure_ascii": False})
 
 
+@csrf_exempt
 def admin_line_groups(request):
-    """Admin — รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook) → dropdown เลือกกลุ่มในพาเนลรายงาน"""
+    """Admin — รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook) → dropdown เลือกกลุ่มในพาเนลรายงาน
+    GET = ลิสต์ · POST {action:'remove', id} = ลบกลุ่มออกจากรายการ (เช่น บอทออกจากกลุ่มแล้วแต่ยังค้าง)"""
     user = _session_user(request)
     if not user or user.get("position") != "admin":
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
     from .services import cache_store
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        if body.get("action") == "remove":
+            gid = str(body.get("id") or "").strip()
+            groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+            existed = groups.pop(gid, None) is not None
+            if existed:
+                cache_store.set_kv("line_groups", groups)
+            return JsonResponse({"ok": True, "removed": existed}, json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({"ok": False, "error": "action ไม่ถูกต้อง"}, status=400)
     groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
     rows = [{"id": gid, "name": g.get("name", "")} for gid, g in groups.items()]
     rows.sort(key=lambda x: (x["name"] or x["id"]))
