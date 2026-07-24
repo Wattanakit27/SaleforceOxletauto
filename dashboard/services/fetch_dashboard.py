@@ -1610,12 +1610,18 @@ def _compute_dashboard_data() -> dict:
                 _row["phone"] = _mask_phone(_row["phone"])
 
     # ── Lead แยกช่องทาง (platform) รายเดือน — ตาราง "รายงาน lead" (ช่องทาง=คอลัมน์ H) ──
-    # {month: {day: {channel: count}}} — ตัด RJ/RB (RJ/Hot RJ/RB/Hot RB) + แยกรายวัน ให้ frontend กรองตามช่วงวันจริง
+    # {month: {day: {channel: count}}} — ตัด RJ/RB + แยกรายวัน + dedup เคสซ้ำ (lead_code ละครั้ง) ให้ frontend กรองตามช่วงวันจริง
     lead_channel_by_month: dict = {}
+    _lc_seen: set = set()   # lead_code ที่นับแล้ว (กันเคสซ้ำ · code ว่าง = นับปกติ)
     for r in year_leads:
         ty = cell(r, L.type).upper().replace(" ", "")
         if "RJ" in ty or "RB" in ty:   # ตัด RJ / RB / Hot RJ / Hot RB
             continue
+        code = cell(r, L.lead_code).strip()
+        if code:
+            if code in _lc_seen:
+                continue   # เคสซ้ำ (code เดิม) — นับครั้งเดียว
+            _lc_seen.add(code)
         chn = cell(r, L.channel).strip()
         if not chn:
             continue
