@@ -537,31 +537,54 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
 
 
+_CARD_SEND_MAX_PER_TICK = 2    # แคปใบละ ~20-30วิ → จำกัด/รอบ กันรอบ cron ยาวเกิน timeout เซิร์ฟเวอร์
+_CARD_SEND_WINDOW_MIN = 15     # นาที catch-up: การ์ดที่ยังไม่ส่ง (โดนคิว/รอบพลาด) ส่งได้จนถึง +15 นาที
+
+
 def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
-    """เรียกจาก cron_tick · ส่งทุกการ์ดที่ enabled + เวลาตรง + ยังไม่ส่งวันนี้
-    ⚠️ อ่าน config ทุกการ์ด "ก่อน" รัน Playwright — เพราะ Playwright แคปใบละ ~30-60วิ ทำ DB connection ค้าง
-       ถ้าอ่าน config กลางลูป (หลังใบแรกแคป) get_card_config จะพัง → คืน default (enabled=False) → การ์ดที่เหลือถูกข้าม (bug 'ส่งมาอันเดียว')"""
+    """เรียกจาก cron_tick · ส่งการ์ดที่ enabled + ถึงเวลา (ภายในหน้าต่าง 15 นาที) + ยังไม่ส่งวันนี้
+    ⚠️ 2 กันชน:
+    (1) อ่าน config ทุกการ์ด "ก่อน" รัน Playwright — กัน DB connection ค้างหลังแคป ทำ get_card_config พัง (bug 'ส่งมาอันเดียว')
+    (2) ส่งไม่เกิน N ใบ/รอบ + catch-up window — ตั้งเวลาเดียวกันหลายใบ จะทยอยส่งข้ามรอบ (ใบละ 20-30วิ) ไม่ชนกัน/ไม่เกิน timeout"""
     from . import cache_store
     from django.db import close_old_connections
-    # เฟส 1: หาการ์ดที่ต้องส่ง (DB reads ล้วน · connection ยังสด)
-    todo = []
+
+    def _mins(hhmm):
+        try:
+            h, m = str(hhmm).split(":", 1)
+            return int(h) * 60 + int(m)
+        except Exception:
+            return None
+
+    now_min = _mins(now_hhmm)
+    if now_min is None:
+        return
+    # เฟส 1: หา candidate (ถึงเวลาแล้วภายในหน้าต่าง + ยังไม่ส่งวันนี้) · DB reads ล้วน connection สด
+    cands = []
     for card_id in _LINE_CARDS:
         try:
             cfg = get_card_config(card_id)
-            if not cfg["enabled"] or cfg["time"] != now_hhmm:
+            if not cfg["enabled"]:
+                continue
+            tmin = _mins(cfg["time"])
+            if tmin is None:
+                continue
+            late = now_min - tmin
+            if not (0 <= late <= _CARD_SEND_WINDOW_MIN):   # ยังไม่ถึงเวลา หรือเลยหน้าต่างไปแล้ว
                 continue
             last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
-            if last.get("date") == today_iso and last.get("time") == now_hhmm:
-                continue
+            if last.get("date") == today_iso and last.get("time") == cfg["time"]:
+                continue   # ส่งรอบเวลานี้ไปแล้ววันนี้
             is_group = cfg["mode"] == "group"
             target = cfg["group_id"] if is_group else cfg["test_id"]
             if not target:
                 continue
-            todo.append((card_id, target, is_group))
+            cands.append((tmin, card_id, cfg["time"], target, is_group))
         except Exception:
             continue
-    # เฟส 2: ส่งทีละใบ (Playwright) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง (กันค้างหลังแคป)
-    for card_id, target, is_group in todo:
+    cands.sort()   # เวลาเก่าสุดก่อน (ที่ค้างนานสุดได้ส่งก่อน)
+    # เฟส 2: ส่งไม่เกิน N ใบ/รอบ (ที่เหลือรอรอบถัดไปในหน้าต่าง) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง
+    for tmin, card_id, ctime, target, is_group in cands[:_CARD_SEND_MAX_PER_TICK]:
         try:
             close_old_connections()
         except Exception:
@@ -573,6 +596,6 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
         try:
             close_old_connections()
             cache_store.set_kv("cardline_last_" + card_id,
-                               {"date": today_iso, "time": now_hhmm, "ok": ok, "info": info[:200]})
+                               {"date": today_iso, "time": ctime, "ok": ok, "info": info[:200]})
         except Exception:
             pass
