@@ -5077,12 +5077,18 @@
       if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+(d.error||'ไม่มีสิทธิ์')+'</p>'; return; }
       const c=d.config||{};
       const _inp='width:100%;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;box-sizing:border-box';
+      // สถานะส่งอัตโนมัติล่าสุด — ให้เห็นว่าส่งพลาดเพราะอะไร
+      let lastHtml='';
+      if(d.last){ const L=d.last; const okc=L.ok?'var(--green)':'var(--red)';
+        lastHtml=`<div style="font-size:11px;margin-bottom:12px;background:var(--bg2);border:.5px solid var(--bd);border-radius:8px;padding:8px 11px;line-height:1.6">ส่งอัตโนมัติล่าสุด: <b style="color:${okc}">${L.ok?'สำเร็จ ✓':'ไม่สำเร็จ ✗'}</b> · เวลา ${h(String(L.time||'-'))} (${h(String(L.date||''))})${L.ok?'':`<br><span style="color:var(--red)">เหตุผล: ${h(String(L.info||'').slice(0,180))}</span>`}</div>`;
+      }
       let groups=[]; try{ const g=await (await fetch('/api/admin/line_groups',{credentials:'same-origin'})).json(); groups=g.groups||[]; }catch(e){}
       const groupDD = groups.length
         ? `<select onchange="if(this.value){document.getElementById('cl_group').value=this.value;document.getElementById('cl_gname').innerHTML='';}" style="${_inp};margin-bottom:6px"><option value="">— เลือกกลุ่มที่บอทรู้จัก (${groups.length}) —</option>${groups.map(g=>`<option value="${h(g.id)}" ${c.group_id===g.id?'selected':''}>${h(g.name||'(ไม่มีชื่อ)')} · ${h(String(g.id).slice(0,8))}…</option>`).join('')}</select>`
         : `<div class="mut" style="font-size:11px;margin-bottom:6px;line-height:1.5">ยังไม่รู้จักกลุ่มไหน — เพิ่มบอทเข้ากลุ่ม + พิมพ์อะไรก็ได้ในกลุ่ม 1 ครั้ง (ต้องตั้ง webhook ใน LINE Console)</div>`;
       ov.firstChild.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:17px;font-weight:800">${ic('lucide:send',18)} ส่ง "${h(_clName)}" เข้าไลน์</div><button onclick="document.getElementById('card-line').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        ${lastHtml}
         <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตารางนี้เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)${_clCard==='rpt-card'?' · ส่งเวอร์ชันสวย (ตาราง+กราฟทีม)':''}</div>
         <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="cl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">

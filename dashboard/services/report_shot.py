@@ -573,8 +573,8 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             if not (0 <= late <= _CARD_SEND_WINDOW_MIN):   # ยังไม่ถึงเวลา หรือเลยหน้าต่างไปแล้ว
                 continue
             last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
-            if last.get("date") == today_iso and last.get("time") == cfg["time"]:
-                continue   # ส่งรอบเวลานี้ไปแล้ววันนี้
+            if last.get("date") == today_iso and last.get("time") == cfg["time"] and last.get("ok"):
+                continue   # ส่ง "สำเร็จ" รอบเวลานี้แล้ววันนี้ · ส่งไม่สำเร็จ = ลองใหม่ในหน้าต่าง (self-heal)
             is_group = cfg["mode"] == "group"
             target = cfg["group_id"] if is_group else cfg["test_id"]
             if not target:

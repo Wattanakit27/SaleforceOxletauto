@@ -2369,7 +2369,16 @@ def admin_card_line_config(request):
     card = (request.GET.get("card") or "").strip()
     if card not in _LINE_CARDS:
         return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
-    return JsonResponse({"ok": True, "config": get_card_config(card)}, json_dumps_params={"ensure_ascii": False})
+    last = None   # สถานะส่งอัตโนมัติล่าสุด (ให้เห็นว่าส่งพลาดเพราะอะไร)
+    try:
+        from .services import cache_store
+        _l = cache_store.get_kv("cardline_last_" + card)
+        if _l and _l.get("data"):
+            last = {"at": _l.get("updated_at"), **(_l.get("data") or {})}
+    except Exception:
+        pass
+    return JsonResponse({"ok": True, "config": get_card_config(card), "last": last},
+                        json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt
