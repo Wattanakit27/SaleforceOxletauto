@@ -1610,16 +1610,23 @@ def _compute_dashboard_data() -> dict:
                 _row["phone"] = _mask_phone(_row["phone"])
 
     # ── Lead แยกช่องทาง (platform) รายเดือน — ตาราง "รายงาน lead" (ช่องทาง=คอลัมน์ H) ──
-    lead_channel_by_month: dict = {}   # {month: {channel: count}}
+    # {month: {day: {channel: count}}} — ตัด RJ/RB (RJ/Hot RJ/RB/Hot RB) + แยกรายวัน ให้ frontend กรองตามช่วงวันจริง
+    lead_channel_by_month: dict = {}
     for r in year_leads:
-        m = get_month(cell(r, L.received_date))
-        if not (1 <= m <= 12):
+        ty = cell(r, L.type).upper().replace(" ", "")
+        if "RJ" in ty or "RB" in ty:   # ตัด RJ / RB / Hot RJ / Hot RB
             continue
         chn = cell(r, L.channel).strip()
         if not chn:
             continue
-        mc = lead_channel_by_month.setdefault(m, {})
-        mc[chn] = mc.get(chn, 0) + 1
+        md = parse_month_day(cell(r, L.received_date))   # (month, day) — นับตามวันที่จริง
+        if not md:
+            continue
+        m, d = md
+        if not (1 <= m <= 12):
+            continue
+        dc = lead_channel_by_month.setdefault(m, {}).setdefault(d, {})
+        dc[chn] = dc.get(chn, 0) + 1
 
     _purchase_data = _fetch_purchase_data()   # ฝั่งจัดซื้อ (lead รับซื้อ + รถซื้อจริง) — อ่านครั้งเดียว
     _yod = _fetch_yod_rot_kao(now.month)       # ยอดรถเข้า รายรุ่น (เดือนปัจจุบัน) — สต๊อก/จอง-จบ/ต้องเติม

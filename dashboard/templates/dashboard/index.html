@@ -2371,10 +2371,13 @@
 
         // ══ รายงาน lead (แยกช่องทาง/platform) — Lead ฝั่งขายจากคอลัมน์ H · PLAN(เป้า) + ACTUAL(จริง) ══
         try {
-          const LCM = D.leadChannelByMonth || {};
-          const _rMc = [...new Set(rangeDays().map(x => x[0]))];
+          const LCM = D.leadChannelByMonth || {};   // {month:{day:{channel:count}}} — ตัด RJ/RB แล้ว
+          const _rd = rangeDays();                   // [[m,d],...] ในช่วงที่กรอง
+          const _rMc = [...new Set(_rd.map(x => x[0]))];
+          const _rSet = new Set(_rd.map(x => x[0]+'-'+x[1]));   // เซ็ต "เดือน-วัน" ในช่วง (นับตามวันจริง)
           const chSum = {};
-          _rMc.forEach(m => { const mc = LCM[m] || LCM[String(m)] || {}; for(const [c,v] of Object.entries(mc)) chSum[c]=(chSum[c]||0)+(Number(v)||0); });
+          _rd.forEach(([m,d]) => { const mm = LCM[m] || LCM[String(m)] || {}; const dc = mm[d] || mm[String(d)] || {};
+            for(const [c,v] of Object.entries(dc)) chSum[c]=(chSum[c]||0)+(Number(v)||0); });
           const chArr = Object.entries(chSum).map(([c,n])=>({c,n})).sort((a,b)=>b.n-a.n);
           const totAct = chArr.reduce((s,x)=>s+x.n,0);
           const _lrP = ch => { const o=(window._lrPlan||{})[ch]; return (o!=null)?o:((D.leadreportPlan||{})[ch]||0); };   // เป้า/เดือน ต่อช่องทาง (override → compute → 0)
@@ -2397,7 +2400,7 @@
             return 'อื่นๆ'; };
           const _platColor = g => PLAT_COLORS[g] || '#64748b';
           const _platPill = (label, col) => `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:color-mix(in srgb,${col} 15%,transparent);color:${col}">${h(label)}</span>`;
-          let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า (ยังไม่ตั้ง)">?</span></span>${_cardLineBtn('leadreport-card','รายงาน lead (แยกช่องทาง)')}</div>`;
+          let LR = `<div class="card" id="leadreport-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:megaphone',16)} รายงาน lead (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="Lead ฝั่งขาย แยกตาม platform (ช่องทางที่มา · คอลัมน์ H ในชีต leads)\nตัด RJ/RB (RJ · Hot RJ · RB · Hot RB) ออกแล้ว · นับตามวันที่จริงในช่วงที่กรอง\nACTUAL = จำนวนจริงตามช่วงวันที่ · PLAN = เป้า">?</span></span>${_cardLineBtn('leadreport-card','รายงาน lead (แยกช่องทาง)')}</div>`;
           LR += `<div class="card-sub">แยกตาม platform · ACTUAL = จริงตามช่วง · PLAN = เป้า/เดือน ปรับตามช่วงอัตโนมัติ (เดือนเต็ม=เท่าเดิม · กรองวัน=หาร · ทั้งปี=×เดือน) · พิมพ์ในช่องเหลืองเพื่อตั้ง (0=ล้าง)</div>`;
           LR += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap">`;
           LR += `<thead><tr><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">PLAN</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700">ACTUAL</th></tr></thead><tbody>`;
@@ -2414,8 +2417,8 @@
           const GRP_EXTRA = ['LIVE FACEBOOK','YOUTUBE','อื่นๆ'];
           const grpList = [...GRP_CORE, ...GRP_EXTRA.filter(g=>grp[g]), ...Object.keys(grp).filter(g=>!GRP_CORE.includes(g)&&!GRP_EXTRA.includes(g))];
           const salesTot = Object.values(grp).reduce((s,x)=>s+x,0);
-          const buyLeads = (D.purchaseLeads||[]).filter(r=>_rMc.includes(r[0])).length;   // หลีดรับซื้อรถ (ฝั่งจัดซื้อ · นับตามเดือนในช่วง)
-          let LS = `<div class="card" id="leadsummary-card" style="max-width:460px"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:megaphone',16)} ยอด LEAD (สรุปย่อ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รวมช่องทางย่อยเป็นกลุ่มใหญ่ (เพจ→FACEBOOK · Tiktok ต่างๆ→TIKTOK/LIVE TIKTOK ฯลฯ)\nหลีดรับซื้อรถ = ฝั่งจัดซื้อ (แยกจากยอดขาย)\nTOTAL = รวมเฉพาะหลีดขายรถ">?</span></span>${_cardLineBtn('leadsummary-card','ยอด LEAD (สรุปย่อ)')}</div>`;
+          const buyLeads = (D.purchaseLeads||[]).filter(r=>_rSet.has(r[0]+'-'+r[1])).length;   // หลีดรับซื้อรถ (ฝั่งจัดซื้อ · นับตามวันจริงในช่วง)
+          let LS = `<div class="card" id="leadsummary-card" style="max-width:460px"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:megaphone',16)} ยอด LEAD (สรุปย่อ) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รวมช่องทางย่อยเป็นกลุ่มใหญ่ (เพจ→FACEBOOK · Tiktok ต่างๆ→TIKTOK/LIVE TIKTOK ฯลฯ)\nตัด RJ/RB ออกแล้ว · นับตามวันที่จริงในช่วงที่กรอง\nหลีดรับซื้อรถ = ฝั่งจัดซื้อ (แยกจากยอดขาย)\nTOTAL = รวมเฉพาะหลีดขายรถ">?</span></span>${_cardLineBtn('leadsummary-card','ยอด LEAD (สรุปย่อ)')}</div>`;
           LS += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:12.5px;width:100%;white-space:nowrap">`;
           LS += `<thead><tr><th style="padding:7px 11px;text-align:left;border-bottom:1px solid var(--bd);background:var(--purple);color:#fff;font-weight:700">PLATFORM</th><th style="padding:7px 11px;text-align:right;border-bottom:1px solid var(--bd);background:#fde047;color:#7c5e00;font-weight:700">LEAD</th></tr></thead><tbody>`;
           grpList.forEach(g=>{ LS += `<tr><td style="padding:6px 11px;border-bottom:.5px solid var(--bd)">${_platPill(g,_platColor(g))}</td><td style="padding:6px 11px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700${grp[g]?'':';color:var(--t3)'}">${grp[g]||0}</td></tr>`; });
