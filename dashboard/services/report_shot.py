@@ -565,7 +565,7 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             cfg = get_card_config(card_id)
             if not cfg["enabled"]:
                 continue
-            _tgt = cfg["group_id"] if cfg["mode"] == "group" else cfg["test_id"]
+            _tgt = cfg.get("group_id") or cfg.get("test_id")   # มี group id → ส่งกลุ่ม · ไม่งั้น test id (ไม่พึ่ง mode แล้ว)
             _last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
             result["enabled"].append({"card": card_id, "time": cfg["time"], "mode": cfg["mode"],
                                       "target_set": bool(_tgt),
@@ -581,10 +581,11 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             attempted = (last.get("date") == today_iso and last.get("time") == cfg["time"])
             if attempted and last.get("ok"):
                 continue   # ส่ง "สำเร็จ" รอบเวลานี้แล้ววันนี้ · ส่งไม่สำเร็จ = ลองใหม่ในหน้าต่าง (self-heal)
-            is_group = cfg["mode"] == "group"
-            target = cfg["group_id"] if is_group else cfg["test_id"]
+            # ปลายทาง: มี group id → ส่งกลุ่ม (แท็ก @All) · ไม่งั้น → test id · ไม่ต้องเลือก mode แล้ว (กันบั๊ก mode=test แต่ test_id ว่าง)
+            target = cfg.get("group_id") or cfg.get("test_id")
+            is_group = bool(target and target == cfg.get("group_id"))
             if not target:
-                result["cands"].append({"card": card_id, "skip": "no_target"})
+                result["cands"].append({"card": card_id, "skip": "ไม่มีปลายทาง (ใส่ group id หรือ test id)"})
                 continue
             # prio 0 = ยังไม่เคยลองรอบเวลานี้วันนี้ (ได้คิวก่อน) · 1 = เคยลองแล้วพลาด (retry ท้ายคิว กันยึดช่อง 1/รอบ)
             cands.append((1 if attempted else 0, tmin, card_id, cfg["time"], target, is_group))

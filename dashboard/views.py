@@ -2398,9 +2398,10 @@ def admin_card_line_test(request):
     if card not in _LINE_CARDS:
         return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
     cfg = get_card_config(card)
-    target = (body.get("target") or "").strip() or cfg.get("test_id") or (cfg.get("group_id") if cfg.get("mode") == "group" else "")
+    # ปุ่มทดสอบ: ระบุ target เอง > test id (แชทส่วนตัว) > group id · ไม่พึ่ง mode
+    target = (body.get("target") or "").strip() or cfg.get("test_id") or cfg.get("group_id")
     if not target:
-        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (LINE id ทดสอบ)"}, status=400)
+        return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (ใส่ test id หรือเลือกกลุ่มก่อน)"}, status=400)
     mention_all = bool(target and target == cfg.get("group_id"))
     ok, info = send_card_to_line(card, target, mention_all=mention_all)
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})

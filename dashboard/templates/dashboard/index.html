@@ -5091,10 +5091,7 @@
         ${lastHtml}
         <div class="mut" style="font-size:12px;margin:6px 0 14px">แคปตารางนี้เป็นรูป → ส่งเข้า LINE อัตโนมัติทุกวันตามเวลาที่ตั้ง (โซนไทย)${_clCard==='rpt-card'?' · ส่งเวอร์ชันสวย (ตาราง+กราฟทีม)':''}</div>
         <label style="display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="cl_enabled" ${c.enabled?'checked':''} style="width:18px;height:18px"> <span style="font-weight:700">เปิดส่งอัตโนมัติทุกวัน</span></label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="cl_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
-          <div><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ปลายทาง</label><select id="cl_mode" style="${_inp}"><option value="test" ${c.mode!=='group'?'selected':''}>ทดสอบ (ไลน์ส่วนตัว)</option><option value="group" ${c.mode==='group'?'selected':''}>กลุ่มจริง</option></select></div>
-        </div>
+        <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="cl_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
         <div style="margin-bottom:12px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">ช่วงวันที่ของข้อมูลในรูป</label>
           <select id="cl_dmode" onchange="__clDateMode()" style="${_inp}">
             <option value="month" ${(c.date_mode||'month')==='month'?'selected':''}>เดือนปัจจุบัน (1 – สิ้นเดือน)</option>
@@ -5105,6 +5102,7 @@
             <div><label class="mut" style="font-size:10px;display:block;margin-bottom:3px">จากวันที่</label><input type="date" id="cl_dfrom" value="${h(c.date_from||'')}" style="${_inp}"></div>
             <div><label class="mut" style="font-size:10px;display:block;margin-bottom:3px">ถึงวันที่</label><input type="date" id="cl_dto" value="${h(c.date_to||'')}" style="${_inp}"></div>
           </div></div>
+        <div class="mut" style="font-size:11px;margin-bottom:8px;background:var(--bg2);border-radius:8px;padding:8px 11px;line-height:1.6">ปลายทาง (ส่งอัตโนมัติ): <b>ใส่กลุ่ม → ส่งเข้ากลุ่ม</b> (แท็ก @All) · <b>ไม่มีกลุ่ม/ใส่แค่ LINE id ทดสอบ → ส่งแชทส่วนตัว</b> · ใส่ทั้งคู่ = อัตโนมัติเข้ากลุ่ม · ปุ่ม "ส่งทดสอบ" ใช้ LINE id ทดสอบก่อน</div>
         <div style="margin-bottom:10px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">LINE id ทดสอบ (ส่งเข้าคนเดียว)</label><input id="cl_test" value="${h(c.test_id||'')}" placeholder="Uxxxxxxxx..." style="${_inp}"></div>
         <div style="margin-bottom:16px"><label class="mut" style="font-size:11px;display:block;margin-bottom:4px">กลุ่มปลายทาง (จริง)</label>
           ${groupDD}
@@ -5122,7 +5120,8 @@
     function _clStatus(txt,col){ const s=document.getElementById('cl_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
     async function saveCardLine(){
       _clStatus('กำลังบันทึก…');
-      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:_clV('cl_mode'), test_id:_clV('cl_test').trim(), group_id:_clV('cl_group').trim(),
+      const _grp=_clV('cl_group').trim();
+      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:(_grp?'group':'test'), test_id:_clV('cl_test').trim(), group_id:_grp,
         date_mode:_clV('cl_dmode')||'month', date_from:_clV('cl_dfrom'), date_to:_clV('cl_dto')};
       if(body.date_mode==='range' && (!body.date_from||!body.date_to)){ _clStatus('เลือกช่วงวันที่ให้ครบก่อน','var(--red)'); return; }
       try{ const r=await fetch('/api/admin/card_line_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
