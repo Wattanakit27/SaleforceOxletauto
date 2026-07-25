@@ -537,15 +537,13 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
 
 
-_CARD_SEND_MAX_PER_TICK = 1    # ส่งทีละใบ/รอบ (แคปใบละ ~20-30วิ) กันรอบ cron ยาว/ชนกัน
-_CARD_SEND_WINDOW_MIN = 20     # นาที catch-up: ตั้งพร้อมกันหลายใบ ทยอยส่ง 1/รอบ จนครบ (รองรับ ~20 ใบ)
+_CARD_SEND_WINDOW_MIN = 20     # นาที catch-up: ถ้ารอบเวลาพลาด ยังส่งได้จนถึง +20 นาที (ยิงทั้งชุดใน background thread)
 
 
 def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
-    """เรียกจาก cron_tick · ส่งการ์ดที่ enabled + ถึงเวลา (ภายในหน้าต่าง 15 นาที) + ยังไม่ส่งวันนี้
-    ⚠️ 2 กันชน:
-    (1) อ่าน config ทุกการ์ด "ก่อน" รัน Playwright — กัน DB connection ค้างหลังแคป ทำ get_card_config พัง (bug 'ส่งมาอันเดียว')
-    (2) ส่งไม่เกิน N ใบ/รอบ + catch-up window — ตั้งเวลาเดียวกันหลายใบ จะทยอยส่งข้ามรอบ (ใบละ 20-30วิ) ไม่ชนกัน/ไม่เกิน timeout"""
+    """เรียกจาก cron_tick · ส่งการ์ดที่ enabled + ถึงเวลา (ภายในหน้าต่าง 20 นาที) + ยังไม่ส่งสำเร็จวันนี้
+    ยิงทั้งชุด "ติดๆ กัน" ใน background thread (เสร็จใบนี้เริ่มใบต่อไปทันที ไม่รอครบนาที) → cron ตอบกลับทันที
+    กันชน: (1) อ่าน config ทุกใบก่อน (2) lock กัน batch ซ้อน (3) ใบพลาด retry รอบถัดไป · คืน summary ให้ cron log"""
     from . import cache_store
     from django.db import close_old_connections
 
@@ -590,21 +588,51 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             result["cands"].append({"card": card_id, "err": str(e)[:120]})
             continue
     cands.sort()   # (ยังไม่ลอง ก่อน) → เวลาเก่าสุด → ชื่อ
-    # เฟส 2: ส่งไม่เกิน N ใบ/รอบ (ที่เหลือรอรอบถัดไปในหน้าต่าง) · รีเซ็ต connection ก่อนแตะ DB ทุกครั้ง
-    for _prio, tmin, card_id, ctime, target, is_group in cands[:_CARD_SEND_MAX_PER_TICK]:
+    if not cands:
+        return result
+
+    # ── ยิงทั้งชุด "ติดๆ กัน" ใน background thread → cron ตอบกลับทันที (ไม่บล็อก/ไม่ timeout) ──
+    # lock กันรอบ cron ถัดไปยิงซ้อน (batch เดียวต่อครั้ง) · lock ค้าง >12 นาที = ถือว่าเจ๊ง ปลดเอง
+    import time as _time
+    _lock = (cache_store.get_kv("cardline_lock") or {}).get("data") or {}
+    if _lock.get("ts") and (_time.time() - float(_lock["ts"])) < 720:
+        result["skip"] = "batch_กำลังส่งอยู่ (รอชุดก่อนเสร็จ)"
+        return result
+    try:
+        cache_store.set_kv("cardline_lock", {"ts": _time.time(), "hhmm": now_hhmm})
+    except Exception:
+        pass
+
+    batch = [(c[2], c[3], c[4], c[5]) for c in cands]   # (card_id, ctime, target, is_group)
+    result["dispatched"] = [b[0] for b in batch]         # โชว์ใน cron log ว่ากำลังยิงใบไหนบ้าง (ผลจริงดูที่พาเนล/cardline_last)
+
+    def _worker():
         try:
-            close_old_connections()
-        except Exception:
-            pass
-        try:
-            ok, info = send_card_to_line(card_id, target, mention_all=is_group)
-        except Exception as e:
-            ok, info = False, str(e)[:200]
-        result["sent"].append({"card": card_id, "ok": ok, "info": str(info)[:200]})
-        try:
-            close_old_connections()
-            cache_store.set_kv("cardline_last_" + card_id,
-                               {"date": today_iso, "time": ctime, "ok": ok, "info": str(info)[:200]})
-        except Exception:
-            pass
+            for card_id, ctime, target, is_group in batch:
+                try:
+                    close_old_connections()
+                except Exception:
+                    pass
+                try:
+                    ok, info = send_card_to_line(card_id, target, mention_all=is_group)   # แคป+ส่ง (ใบต่อไปเริ่มทันทีที่ใบนี้เสร็จ)
+                except Exception as e:
+                    ok, info = False, str(e)[:200]
+                try:
+                    close_old_connections()
+                    cache_store.set_kv("cardline_last_" + card_id,
+                                       {"date": today_iso, "time": ctime, "ok": ok, "info": str(info)[:200]})
+                except Exception:
+                    pass
+        finally:
+            try:
+                cache_store.set_kv("cardline_lock", {})   # ปลดล็อก
+            except Exception:
+                pass
+            try:
+                close_old_connections()
+            except Exception:
+                pass
+
+    import threading
+    threading.Thread(target=_worker, name="cardline-batch", daemon=True).start()
     return result
