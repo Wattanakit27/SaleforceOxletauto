@@ -565,7 +565,12 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             cfg = get_card_config(card_id)
             if not cfg["enabled"]:
                 continue
-            result["enabled"].append({"card": card_id, "time": cfg["time"], "mode": cfg["mode"]})
+            _tgt = cfg["group_id"] if cfg["mode"] == "group" else cfg["test_id"]
+            _last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
+            result["enabled"].append({"card": card_id, "time": cfg["time"], "mode": cfg["mode"],
+                                      "target_set": bool(_tgt),
+                                      "last_ok": _last.get("ok"), "last_at": _last.get("date"),
+                                      "last_info": str(_last.get("info") or "")[:120]})
             tmin = _mins(cfg["time"])
             if tmin is None:
                 continue
@@ -607,20 +612,31 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
     result["dispatched"] = [b[0] for b in batch]         # โชว์ใน cron log ว่ากำลังยิงใบไหนบ้าง (ผลจริงดูที่พาเนล/cardline_last)
 
     def _worker():
+        import time as _t2
+        import gc
         try:
             for card_id, ctime, target, is_group in batch:
-                try:
-                    close_old_connections()
-                except Exception:
-                    pass
-                try:
-                    ok, info = send_card_to_line(card_id, target, mention_all=is_group)   # แคป+ส่ง (ใบต่อไปเริ่มทันทีที่ใบนี้เสร็จ)
-                except Exception as e:
-                    ok, info = False, str(e)[:200]
+                ok, info = False, ""
+                for _attempt in range(2):   # ลอง 2 ครั้ง — กันพลาดชั่วคราว (chromium OOM/แคป timeout) พอลองใหม่มักผ่าน
+                    try:
+                        close_old_connections()
+                    except Exception:
+                        pass
+                    try:
+                        ok, info = send_card_to_line(card_id, target, mention_all=is_group)   # แคป+ส่ง
+                    except Exception as e:
+                        ok, info = False, str(e)[:200]
+                    if ok:
+                        break
+                    _t2.sleep(3)   # พลาด → พัก 3 วิ (ให้ chromium/แรมเคลียร์) แล้วลองใหม่
                 try:
                     close_old_connections()
                     cache_store.set_kv("cardline_last_" + card_id,
                                        {"date": today_iso, "time": ctime, "ok": ok, "info": str(info)[:200]})
+                except Exception:
+                    pass
+                try:
+                    gc.collect(); _t2.sleep(2)   # เว้นจังหวะ + คืนแรม ก่อนแคปใบถัดไป (กันชนกันบน VPS แรมน้อย)
                 except Exception:
                     pass
         finally:
