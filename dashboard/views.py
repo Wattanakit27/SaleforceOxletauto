@@ -104,6 +104,11 @@ def dashboard_page(request):
     user = _session_user(request)
     if not user:
         return HttpResponseRedirect("/login/?next=/dashboard/")
+    # คนงานติดตามรถ (ช่าง/อู่นอก/ล้างรถ/ทะเบียน ฯลฯ) — หน้าเดียว /dashboard/ เห็นบอร์ดติดตามรถเฉพาะสเตปตัวเอง
+    #   เรนเดอร์ cars dashboard (role-scoped) · ไม่โหลด fetch_dashboard_data → ไม่เห็นข้อมูลขาย/ลูกค้า (PDPA)
+    if user.get("position") == "worker":
+        from cars.views import dashboard as _cars_dashboard   # lazy import กัน circular
+        return _cars_dashboard(request)
     if not _can_view_all(user):
         return HttpResponseRedirect("/me/")
 
@@ -204,8 +209,13 @@ def login_view(request):
         or "application/json" in request.headers.get("Accept", "")
 
     if request.method == "GET":
-        if _session_user(request) and _session_user(request).get("position") == "admin":
-            return HttpResponseRedirect(next_url)
+        _su = _session_user(request)
+        if _su:
+            _pos = _su.get("position")
+            if _pos == "admin":
+                return HttpResponseRedirect(next_url)
+            if _pos == "worker":            # คนงาน login อยู่แล้ว → หน้าเดียว /dashboard/
+                return HttpResponseRedirect("/dashboard/")
         line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
         return render(request, "dashboard/login.html", {
             "next": next_url, "error": None, "line_login": line_login,
@@ -246,9 +256,17 @@ def login_view(request):
         if duser is not None:
             from django.contrib.auth import login as auth_login
             auth_login(request, duser)
-            log_login(request, identity=duser.username, name=(duser.get_full_name() or duser.username),
+            # ตั้ง oxlet_user (position=worker) → เข้า /dashboard/ ได้ที่เดียว (dashboard_page เรนเดอร์บอร์ดติดตามรถ
+            # เฉพาะสเตปตัวเองให้ · ไม่โหลด/ไม่เห็นข้อมูลขาย) — รวมเป็นลิงก์เดียว เลิก /track/ แยก
+            _wname = duser.get_full_name() or duser.username
+            request.session["oxlet_user"] = {
+                "user_id": "django_" + duser.username,
+                "nickname": _wname, "display_name": _wname, "position": "worker",
+            }
+            request.session.set_expiry(60 * 60 * 24 * 14)
+            log_login(request, identity=duser.username, name=_wname,
                       method="worker", success=True, role=("superuser" if duser.is_superuser else ""))
-            dest = next_url if (next_url or "").startswith("/track/") else "/track/"
+            dest = next_url if (next_url or "").startswith(("/track/", "/dashboard/")) else "/dashboard/"
             if is_ajax:
                 return JsonResponse({"ok": True, "next": dest})
             return HttpResponseRedirect(dest)

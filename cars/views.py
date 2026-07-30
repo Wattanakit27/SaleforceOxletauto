@@ -116,6 +116,8 @@ def dashboard(request):
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
         "board_cols": board_cols, "has_my": has_my, "is_full": is_full,
+        # ปุ่ม "แดชบอร์ดขาย" โชว์เฉพาะแอดมินขาย (มาจาก /track/ ตรง) — คนงาน (position=worker) ซ่อน (อยู่ /dashboard/ แล้ว)
+        "show_sales_link": (request.session.get("oxlet_user") or {}).get("position") == "admin",
         "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
         # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
