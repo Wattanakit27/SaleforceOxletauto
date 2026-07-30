@@ -1328,7 +1328,7 @@
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
-      else if(tab==='c') html += renderLeadTab(sellerNames);
+      else if(tab==='c') html += renderLeadTab(sellers, dilMap, sellerNames);
       else if(tab==='a') html += renderActivity(sellers);
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='p') html += renderPurchaseTab();
@@ -1994,6 +1994,15 @@
       }
       html += `</div>`;
 
+      // (section "เคสจอง/ปล่อย · ข้อมูลต้องเติม · เคสติดตาม · Hot Cases" ย้ายไปแท็บ LEAD แล้ว — มิ.ย.69)
+      return html;
+    }
+
+    // ── แท็บ "LEAD" — รวมตาราง/เคสรายละเอียด (ย้ายมาจากภาพรวม) ──
+    function renderLeadTab(sellers, dilMap, sellerNames) {
+      if (!canViewAll) return `<div class="card" style="text-align:center;color:var(--t3);padding:24px">เฉพาะแอดมิน/ผู้บริหาร</div>`;
+      let html = '';
+      const ms = buildRangeMs();
       // Seller table — เพิ่มมูลค่าดีล (฿ ปล่อย)
       // _sval: ถ้าเลือกเดือน → ใช้ค่ารายเดือน (0 ถ้าเซลล์ไม่มีในเดือนนั้น)
       //         ถ้าเลือกทั้งปี → ใช้ค่ารายปี
@@ -2626,14 +2635,6 @@
         }
       }
 
-      // (section "เคสจอง/ปล่อย · ข้อมูลต้องเติม · เคสติดตาม · Hot Cases" ย้ายไปแท็บ LEAD แล้ว — มิ.ย.69)
-      return html;
-    }
-
-    // ── แท็บ "LEAD" — รวมตาราง/เคสรายละเอียด (ย้ายมาจากภาพรวม) ──
-    function renderLeadTab(sellerNames) {
-      if (!canViewAll) return `<div class="card" style="text-align:center;color:var(--t3);padding:24px">เฉพาะแอดมิน/ผู้บริหาร</div>`;
-      let html = '';
       html += `<div class="card"><div class="card-title">${ic('lucide:car-front',16)} Lead รถรุ่นยอดนิยม <span style="font-size:11px;font-weight:400;color:var(--t3)">— รถยอดฮิตที่ลูกค้าถาม</span></div>${renderLeadCarsTable()}</div>`;
       html += `<details class="adv-section" open>
         <summary>${ic('lucide:clipboard-list',16)} เคสจอง / ปล่อย (รายเคสจริง) <span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:8px">— ดูรายการเคสทุกสถานะพร้อมราคา อายุเคส</span></summary>
@@ -4500,7 +4501,7 @@
     // แท็บ "สถานะรถ" — ฝังระบบติดตามรถ (cars/) ผ่าน iframe · ใช้ Django auth (bridge ตอน LINE login)
     // ── "สถานะรถ" เรนเดอร์ native ในหน้า sales (ธีม/สีเดียวกัน · ไม่ใช้ iframe) ──
     const TRK_FLAG = {red:'#ef4444', amber:'#f59e0b', ok:'#22c55e'};
-    const _trkBanner = (st)=>({sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'}[st]||'#2563eb');
+    const _trkBanner = (st)=>({sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',intake:'#64748b',repair:'#d97706',parts:'#d97706',upholstery:'#d97706',paint:'#d97706',film:'#d97706',qc_repair:'#7c3aed',qc_paint:'#7c3aed',qc_wash:'#7c3aed',wash:'#0891b2'}[st]||'#2563eb');
     // DEBUG: รูปโหลดไม่สำเร็จ → โชว์กล่องแดง + log URL (แยกจาก "ไม่มีรูป" = ไม่มี path เลย)
     function trkImgErr(el){ console.warn('[TRK] โหลดรูปไม่ได้:', el.src); el.outerHTML='<div style="width:100%;height:96px;display:flex;align-items:center;justify-content:center;background:#3a1a1a;color:#f88;font-size:10px;text-align:center;padding:4px">โหลดรูปไม่ได้<br>(ดู console)</div>'; }
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo', q:''};
@@ -4607,6 +4608,33 @@
         ${_pieCard('ขั้นตอนงาน','trkPiePhase','trkLegPhase')}
         ${_pieCard('แยกตามสาขา','trkPieBranch','trkLegBranch')}
       </div>`;
+      // ── บอร์ดสถานะรถ (คัมบัง) — รถทุกคันอยู่สเตปไหน · ไม่รวมขายแล้ว · กดการ์ดดูรายละเอียด ──
+      const _kbCars = D.cars.filter(c => !c.sold);
+      const _kbBy = {}; _kbCars.forEach(c => { (_kbBy[c.stage] = _kbBy[c.stage] || []).push(c); });
+      Object.values(_kbBy).forEach(a => a.sort((x, y) => (y.days || 0) - (x.days || 0)));   // ค้างนานสุดขึ้นก่อน
+      const _kbCol = ([k, nm]) => {
+        const list = _kbBy[k] || [], ban = _trkBanner(k);
+        const cards = list.map(c => {
+          const fc = TRK_FLAG[c.flag] || '#888';
+          return `<div onclick="openTrkCar('${c.code}')" title="กดดูรายละเอียด" style="cursor:pointer;background:var(--bg);border:.5px solid var(--bd);border-left:3px solid ${fc};border-radius:9px;padding:8px 9px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><b style="font-size:12px;color:var(--t1)">${h(c.code)}</b><span style="width:8px;height:8px;border-radius:50%;background:${fc};flex-shrink:0" title="${c.flag==='red'?'ค้างนาน':c.flag==='amber'?'ใกล้ค้าง':'ปกติ'}"></span></div>
+            <div style="font-size:12px;color:var(--blue);margin:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name || c.title || c.code)}</div>
+            <div class="mut" style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.branch || '—')} · ค้าง ${c.days} วัน</div>
+          </div>`;
+        }).join('') || `<div class="mut" style="font-size:11px;text-align:center;padding:12px 0">—</div>`;
+        return `<div style="width:212px;flex:0 0 auto;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:10px 10px 6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px">
+            <span style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px;color:var(--t1);min-width:0"><span style="width:9px;height:9px;border-radius:3px;background:${ban};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(nm)}</span></span>
+            <span style="background:var(--bg);border:.5px solid var(--bd);border-radius:20px;font-size:11px;font-weight:700;padding:1px 9px;color:var(--t2);flex-shrink:0">${list.length}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">${cards}</div>
+        </div>`;
+      };
+      h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:7px">${ic('lucide:clipboard-list',17)} บอร์ดสถานะรถ</div>
+        <div class="mut" style="font-size:12px;margin:3px 0 12px">กำลังดำเนินการ ${_kbCars.length} คัน (ไม่รวมขายแล้ว) · เลื่อนแนวนอนดูทุกสเตป · กดการ์ดดูรายละเอียด</div>
+        <div style="overflow-x:auto;padding-bottom:6px"><div style="display:flex;gap:10px;min-width:max-content;align-items:flex-start">${D.stages.map(_kbCol).join('')}</div></div>
+      </div>`;
       // filters + table
       const _vTab=(v,l,n)=>{const on=view===v;return `<button onclick="_trkF.view='${v}';renderTrk()" style="font-size:13px;padding:8px 16px;border-radius:9px;border:1px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};cursor:pointer;font-weight:${on?'700':'500'}">${l} <b>${n}</b></button>`;};
       h2 += `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
@@ -4706,7 +4734,7 @@
       if(d.direct && d.direct.length){
         const allow=new Set(d.direct.map(s=>s.key));
         const COL=_TRK_PHASE_COLORS;   // รับเข้า/ทำสภาพ/ตรวจ/ทะเบียน/ขาย
-        const _pill=(s,c)=>`<button onclick="trkChangeStage('${d.code}','${s.key}')" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid ${c};background:color-mix(in srgb,${c} 14%,transparent);color:var(--t1);cursor:pointer">${h(s.name)}</button>`;
+        const _pill=(s,c)=>`<button onclick="trkAskStage('${d.code}','${s.key}','${(s.name||'').replace(/'/g,'')}','${(d.stageName||'').replace(/'/g,'')}')" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid ${c};background:color-mix(in srgb,${c} 14%,transparent);color:var(--t1);cursor:pointer">${h(s.name)}</button>`;
         const phRows=(_trkData&&_trkData.phaseRows)||[];
         stages=phRows.map((ph,pi)=>{
           const c=COL[pi%COL.length];
@@ -4746,12 +4774,35 @@
         </div>
         ${d.canDelete?`<div style="border-top:.5px solid var(--bd);margin-top:12px;padding-top:12px;text-align:center"><button onclick="trkDelete('${d.code}')" style="font-size:13px;padding:10px 18px;border-radius:9px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer">🗑 ลบรถ (ย้ายถังขยะ · แอดมินเท่านั้น)</button></div>`:''}`;
     }
+    // เปิด dialog ยืนยัน + ช่องหมายเหตุ ก่อนเปลี่ยนสเตป (กันเผลอกด + เก็บหมายเหตุต่อการเปลี่ยน)
+    function trkAskStage(code,stage,stageName,curName){
+      const old=document.getElementById('trk-stage-confirm'); if(old) old.remove();
+      const ov=document.createElement('div'); ov.id='trk-stage-confirm';
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+      ov.innerHTML=`<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:18px;max-width:400px;width:100%">
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">ยืนยันเปลี่ยนสเตป</div>
+        <div style="font-size:13px;margin-bottom:12px;color:var(--t2)">${h(curName||'')} <span style="color:var(--t3)">→</span> <b style="color:var(--t1)">${h(stageName||stage)}</b></div>
+        <label class="mut" style="font-size:12px">หมายเหตุ (ถ้ามี)</label>
+        <textarea id="trkStageNote" rows="3" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;padding:9px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+          <button onclick="document.getElementById('trk-stage-confirm').remove()" style="font-size:13px;padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ยกเลิก</button>
+          <button id="trkStageGo" onclick="trkChangeStage('${code}','${stage}')" style="font-size:13px;padding:9px 18px;border-radius:9px;border:none;background:var(--blue);color:#fff;font-weight:700;cursor:pointer">ยืนยันเปลี่ยน</button>
+        </div>
+      </div>`;
+      document.body.appendChild(ov);
+      const ta=document.getElementById('trkStageNote'); if(ta) ta.focus();
+    }
     async function trkChangeStage(code,stage){
+      const ta=document.getElementById('trkStageNote'); const note=ta?ta.value.trim():'';
+      const btn=document.getElementById('trkStageGo'); if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='กำลังบันทึก…'; }
       try{
-        const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage})});
-        const j=await r.json(); if(!j.ok){ alert(j.error||'เปลี่ยนสเตปไม่สำเร็จ'); return; }
-        document.getElementById('trk-car').remove(); loadTracking(true);
-      }catch(e){ alert('ผิดพลาด: '+e); }
+        const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note})});
+        const j=await r.json(); if(!j.ok){ alert(j.error||'เปลี่ยนสเตปไม่สำเร็จ'); if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='ยืนยันเปลี่ยน'; } return; }
+        const cf=document.getElementById('trk-stage-confirm'); if(cf) cf.remove();
+        const cc=document.getElementById('trk-car'); if(cc) cc.remove();
+        loadTracking(true);
+      }catch(e){ alert('ผิดพลาด: '+e); const b=document.getElementById('trkStageGo'); if(b){ b.disabled=false; b.style.opacity='1'; b.textContent='ยืนยันเปลี่ยน'; } }
     }
 
     function trkDelete(code){

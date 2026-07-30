@@ -32,6 +32,10 @@
   .hleg .row2 b{margin-left:auto;font-variant-numeric:tabular-nums}
   /* สเตป pill สีตามเฟส (เติมด้วย JS) — border ไม่ดันขนาด */
   .pill[data-stage]{box-sizing:border-box;font-weight:600}
+  /* บอร์ดคัมบัง — แถบสีซ้ายการ์ดตาม flag */
+  .bcard{border-left:3px solid var(--line)}
+  .bcard.red{border-left-color:var(--red)} .bcard.amber{border-left-color:var(--amber)} .bcard.ok{border-left-color:var(--ok)}
+  .bcol .bcard:hover{background:#252b4233}
   /* มือถือ: ซ่อนคอลัมน์ สาขา + ลูกศร ให้ตารางพอดีจอ ไม่ต้องเลื่อนขวา */
   @media(max-width:640px){
     #carTable th:nth-child(4),#carTable td:nth-child(4){display:none}
@@ -70,6 +74,40 @@
   <div class="k">
     <div class="ic" style="background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)"><i data-lucide="gauge"></i></div>
     <div><div class="lbl">T2L เฉลี่ย</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}<span style="font-size:13px;font-weight:500;color:var(--mut)"> วัน</span>{% else %}—{% endif %}</div><div class="sub">เป้า ≤ {{ t2l_target }} วัน</div></div>
+  </div>
+</div>
+
+<!-- บอร์ดสถานะรถ (คัมบัง) — โฟกัสสเตปของตัวเอง · สลับดูทั้งหมดได้ · กดการ์ด = ดู/เปลี่ยนสเตป -->
+<div class="card" style="padding:14px;margin-bottom:14px">
+  <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div><h2 style="margin:0;font-size:15px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> บอร์ดสถานะรถ</h2><span class="mut sm">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
+    {% if has_my %}<div class="row" style="gap:6px">
+      <button id="bmMine" class="btn sm pri" onclick="setBoardMode('mine')">งานของฉัน</button>
+      <button id="bmAll" class="btn sm" onclick="setBoardMode('all')">ทั้งหมด</button>
+    </div>{% endif %}
+  </div>
+  <div style="overflow-x:auto;padding-bottom:6px">
+    <div style="display:flex;gap:10px;min-width:max-content;align-items:flex-start">
+      {% for col in board_cols %}
+      <div class="bcol" data-mine="{% if col.mine %}1{% else %}0{% endif %}" style="width:212px;flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px{% if col.mine %};outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:-1px{% endif %}">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px">
+          <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:13px;height:13px"></i> {{ col.name }}</span>
+          <span class="mut sm" style="font-weight:700">{{ col.cars|length }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">
+          {% for c in col.cars %}
+          <div class="bcard {{ c.flag }}" onclick="openCar('{{ c.code }}')" style="background:var(--card);border:.5px solid var(--line);border-radius:9px;padding:8px 9px;cursor:pointer">
+            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.code }}</b><span class="dot {{ c.flag }}"></span></div>
+            <div class="sm" style="color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div>
+            <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · ค้าง {{ c.days_in_stage }} วัน</div>
+          </div>
+          {% empty %}
+          <div class="mut sm" style="text-align:center;padding:10px 0">—</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
@@ -158,6 +196,20 @@
   <div class="modal" id="carBody"></div>
 </div>
 
+<!-- Modal: ยืนยันเปลี่ยนสเตป + หมายเหตุ (กันเผลอกด) -->
+<div id="stageModal" class="ov" onclick="if(event.target===this)closeStage()" style="z-index:120">
+  <div class="modal" style="max-width:400px">
+    <h2 style="font-size:16px;margin:0 0 6px">ยืนยันเปลี่ยนสเตป</h2>
+    <div id="stageMsg" class="mut sm" style="margin-bottom:12px"></div>
+    <label class="mut sm">หมายเหตุ (ถ้ามี)</label>
+    <textarea id="stageNote" rows="3" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;box-sizing:border-box;font-family:inherit"></textarea>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn" onclick="closeStage()">ยกเลิก</button>
+      <button class="btn pri" id="stageGo" onclick="doStage()">ยืนยันเปลี่ยน</button>
+    </div>
+  </div>
+</div>
+
 {{ phase_rows|json_script:"phaseData" }}
 {{ flags|json_script:"flagData" }}
 {% endblock %}
@@ -167,7 +219,7 @@
 <script>
   const CSRF='{{ csrf_token }}';
   // สีสเตปตามเฟส — ให้ pill/ปุ่มเปลี่ยนสเตปมีสี อ่านง่าย (ตรงกับแท็บสถานะรถในแดชบอร์ดขาย)
-  const STAGE_COLOR={sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc:'#7c3aed',rework:'#dc2626',registration:'#0ea5e9',intake:'#64748b',appraise:'#64748b',repair:'#d97706',wait_paint:'#d97706',paint:'#d97706',parts:'#d97706',upholstery:'#d97706',film:'#d97706',detail:'#d97706'};
+  const STAGE_COLOR={sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',intake:'#64748b',repair:'#d97706',parts:'#d97706',upholstery:'#d97706',paint:'#d97706',film:'#d97706',qc_repair:'#7c3aed',qc_paint:'#7c3aed',qc_wash:'#7c3aed',wash:'#0891b2'};
   function tintPill(el,stage){ const c=STAGE_COLOR[stage]||'#64748b'; el.style.background=`color-mix(in srgb,${c} 14%,transparent)`; el.style.color=c; el.style.border=`.5px solid color-mix(in srgb,${c} 45%,transparent)`; }
   function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }
   function _scrollParent(){ try{ if(window.self!==window.top) parent.postMessage({oxletScrollTop:true},'*'); }catch(e){} }
@@ -186,7 +238,7 @@
     const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||'<span class="mut sm">ยังไม่มีประวัติ</span>';
     let stageBtns;
     if(d.direct && d.direct.length){
-      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="setStage('${d.code}','${s.key}')">${s.name}</button>`;}).join(' ');
+      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="askStage('${d.code}','${s.key}','${(s.name||'').replace(/'/g,'')}','${(d.stageName||'').replace(/'/g,'')}')">${s.name}</button>`;}).join(' ');
     }else{
       stageBtns=`<a class="btn sm" href="${d.scanUrl}">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
     }
@@ -224,13 +276,37 @@
     colorizeStagePills(b);
   }
 
-  function setStage(code,stage){
-    const f=document.createElement('form');
-    f.method='post'; f.action='/track/cars/'+encodeURIComponent(code)+'/stage/';
-    f.innerHTML='<input type="hidden" name="csrfmiddlewaretoken" value="'+CSRF+'"><input type="hidden" name="stage" value="'+stage+'">';
-    document.body.appendChild(f); f.submit();
+  // เปลี่ยนสเตป — เด้ง dialog ยืนยัน + ช่องหมายเหตุ ก่อน (กันเผลอกด · เก็บหมายเหตุต่อการเปลี่ยน)
+  let _stagePend={code:'',stage:''};
+  function askStage(code,stage,stageName,curName){
+    _stagePend={code,stage};
+    document.getElementById('stageMsg').innerHTML=(curName?esc(curName)+' → ':'')+'<b>'+esc(stageName||stage)+'</b>';
+    document.getElementById('stageNote').value='';
+    document.getElementById('stageModal').style.display='flex'; _scrollParent();
+    const ta=document.getElementById('stageNote'); if(ta) setTimeout(()=>ta.focus(),50);
   }
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();} });
+  function closeStage(){ document.getElementById('stageModal').style.display='none'; }
+  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  async function doStage(){
+    const {code,stage}=_stagePend; if(!code||!stage) return;
+    const note=document.getElementById('stageNote').value.trim();
+    const btn=document.getElementById('stageGo'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
+    try{
+      const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note})});
+      const j=await r.json();
+      if(!j.ok){ alert(j.error||'เปลี่ยนสเตปไม่สำเร็จ'); if(btn){ btn.disabled=false; btn.textContent='ยืนยันเปลี่ยน'; } return; }
+      location.reload();
+    }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent='ยืนยันเปลี่ยน'; } }
+  }
+  // บอร์ด: สลับ "งานของฉัน" (เฉพาะคอลัมน์สเตปตัวเอง) / "ทั้งหมด"
+  function setBoardMode(m){
+    document.querySelectorAll('.bcol').forEach(el=>{ el.style.display=(m==='all'||el.getAttribute('data-mine')==='1')?'':'none'; });
+    const bm=document.getElementById('bmMine'), ba=document.getElementById('bmAll');
+    if(bm) bm.classList.toggle('pri', m==='mine');
+    if(ba) ba.classList.toggle('pri', m==='all');
+  }
+  {% if has_my %}setBoardMode('mine');{% endif %}
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();} });
 
   // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
   const PHASES = JSON.parse(document.getElementById('phaseData').textContent);

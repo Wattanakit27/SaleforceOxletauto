@@ -1,41 +1,40 @@
 """
-ค่าคงที่ระบบติดตามรถ — สเตป 16 ขั้น (5 เฟส), สาขา, สถานะ, เกณฑ์ flag
-อิงสถานะงานจริงจากรายงานซ่อม (เช็คซ่อม/ชงล้าง/อู่สี/รอแก้ไข/รอปิดการขาย ฯลฯ)
+ค่าคงที่ระบบติดตามรถ — สเตป 15 ขั้น (4 เฟส), สาขา, สถานะ, เกณฑ์ flag
+อิงสถานะงานจริง: รับเข้า → ซ่อม(+ตรวจ) → ทำสภาพ/สี(+ตรวจ) → ล้าง(+ตรวจ) → ขาย
 """
 
-# ===== สเตป 16 ขั้น แบ่ง 5 เฟส (key, ชื่อไทย, ไอคอน Lucide) =====
+# ===== สเตป 15 ขั้น แบ่ง 4 เฟส (key, ชื่อไทย, ไอคอน Lucide) =====
+# โฟลว์: รับเข้า → ซ่อม(+ตรวจ) → ทำสภาพ/สี(+ตรวจ) → ล้าง(+ตรวจ) → ขาย
+# 3 จุดตรวจ (qc_repair/qc_paint/qc_wash) = ทางแยก: ผ่าน→ไปต่อ(ข้ามได้) · ไม่ผ่าน→เด้งกลับทำใหม่ที่เดิม
+# กดครั้งเดียวย้ายสเตป (out ของคนก่อน = in ของคนถัดไป) · ไม่มีขั้นทะเบียน (โอน/ภาษี/ป้าย ทำนอกระบบ)
 STAGES = [
     # เฟส 1 — รับเข้า (จัดซื้อ)
     ("intake",       "รับเข้า",                      "log-in"),
-    ("appraise",     "ประเมินซ่อม",                  "clipboard-list"),
-    # เฟส 2 — ทำสภาพ (ช่าง/อู่นอก)
+    # เฟส 2 — ทำสภาพ (ช่าง/อู่นอก) + จุดตรวจ
     ("repair",       "เช็คซ่อม",                     "wrench"),
-    ("wait_paint",   "รอเข้าอู่สี",                  "clock"),
-    ("paint",        "ทำสี/อู่สี",                   "paintbrush"),
+    ("qc_repair",    "ซ่อมเสร็จ รอตรวจ",             "clipboard-check"),
     ("parts",        "สั่งของ/รออะไหล่",             "package"),
     ("upholstery",   "งานเบาะ",                      "armchair"),
+    ("paint",        "ทำสี/อู่สี",                   "paintbrush"),
+    ("qc_paint",     "สีเสร็จ รอตรวจ",               "clipboard-check"),
     ("film",         "ติดฟิล์ม",                     "scan-line"),
-    ("detail",       "ชง/ล้าง (ดีเทล)",              "sparkles"),
-    # เฟส 3 — ตรวจ (เซลล์/ช่าง)
-    ("qc",           "รอตรวจ (QC)",                  "clipboard-check"),
-    ("rework",       "รอแก้ไข (ไม่ผ่าน)",            "triangle-alert"),
-    # เฟส 4 — ทะเบียน (ฝ่ายทะเบียน)
-    ("registration", "ทะเบียน (โอน/ภาษี/พ.ร.บ./ป้าย)", "file-text"),
-    # เฟส 5 — ขาย (เซลล์)
+    # เฟส 3 — ล้าง (ฝ่ายล้างรถ) + จุดตรวจ
+    ("wash",         "ชงล้าง",                       "sparkles"),
+    ("qc_wash",      "ล้างเสร็จ รอตรวจ",             "clipboard-check"),
+    # เฟส 4 — ขาย (เซลล์)
     ("show",         "รถพร้อมขาย/หน้าร้าน",          "store"),
     ("reserve",      "จอง",                          "handshake"),
     ("finance",      "จัดไฟแนนซ์",                   "landmark"),
-    ("closing",      "รอปิดการขาย",                  "file-signature"),
+    ("closing",      "ปิดการขาย",                    "file-signature"),
     ("sold",         "ขายแล้ว",                      "banknote"),
 ]
 
 # เฟส (key, ชื่อไทย, [stage keys]) — ใช้จัดกลุ่มแสดงผล
 PHASES = [
-    ("intake_phase", "รับเข้า",  ["intake", "appraise"]),
-    ("recon_phase",  "ทำสภาพ",   ["repair", "wait_paint", "paint", "parts", "upholstery", "film", "detail"]),
-    ("qc_phase",     "ตรวจ",     ["qc", "rework"]),
-    ("reg_phase",    "ทะเบียน",  ["registration"]),
-    ("sale_phase",   "ขาย",      ["show", "reserve", "finance", "closing", "sold"]),
+    ("intake_phase", "รับเข้า", ["intake"]),
+    ("recon_phase",  "ทำสภาพ",  ["repair", "qc_repair", "parts", "upholstery", "paint", "qc_paint", "film"]),
+    ("wash_phase",   "ล้าง",    ["wash", "qc_wash"]),
+    ("sale_phase",   "ขาย",     ["show", "reserve", "finance", "closing", "sold"]),
 ]
 
 STAGE_KEYS = [s[0] for s in STAGES]
@@ -46,7 +45,7 @@ STAGE_ORDER = {key: i for i, key in enumerate(STAGE_KEYS)}
 
 # สเตปที่ push LINE เมื่อเปลี่ยนเข้า (จุดส่งต่อ/ตัดสินใจ — ไม่สแปมทุกขั้น)
 STAGE_NOTIFY = {
-    "intake", "repair", "paint", "qc", "rework", "registration",
+    "intake", "repair", "qc_repair", "paint", "qc_paint", "wash", "qc_wash",
     "show", "reserve", "finance", "closing", "sold",
 }
 

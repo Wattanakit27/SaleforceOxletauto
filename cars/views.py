@@ -91,12 +91,31 @@ def dashboard(request):
     else:  # updated (default)
         cars = sorted(cars, key=lambda c: c.updated_at, reverse=True)
 
+    # ── บอร์ดสถานะรถ (คัมบัง) — คอลัมน์ตามสเตป · มาร์ค "สเตปของฉัน" ตามบทบาท ──
+    #   ทุกบัญชี (ยกเว้นคนนอก = ไม่ login) เห็นบอร์ด · default โฟกัสสเตปตัวเอง สลับดูทั้งหมดได้
+    #   full roles (ผู้บริหาร/ทะเบียน) = เห็นทุกสเตปปกติ ไม่มาร์ค/ไม่มีปุ่มสลับ (allowed = ทุกสเตปอยู่แล้ว)
+    is_full = roles.is_exec(request.user)
+    my_stages = set() if is_full else set(roles.allowed_stages(request.user))
+    _board_by = {}
+    for c in all_cars:
+        if _is_sold(c):
+            continue
+        _board_by.setdefault(c.stage, []).append(c)
+    board_cols = []
+    for k, n, i in C.STAGES:
+        if k == "sold":
+            continue
+        lst = sorted(_board_by.get(k, []), key=lambda c: c.stage_since)  # ค้างนานสุดขึ้นก่อน
+        board_cols.append({"key": k, "name": n, "icon": i, "mine": k in my_stages, "cars": lst})
+    has_my = bool(my_stages)                        # มีสเตปตัวเอง → default โฟกัสงานตัวเอง + ปุ่มสลับ
+
     return render(request, "dashboard.html", {
         "total": len(all_cars), "flags": flags, "phase_rows": phase_rows,
         "avg_t2l": avg_t2l, "t2l_target": C.T2L_TARGET_DAYS,
         "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
+        "board_cols": board_cols, "has_my": has_my, "is_full": is_full,
         "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
         # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
@@ -214,11 +233,9 @@ def car_json(request, code):
         "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
         "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
     } for l in _log_objs]
-    # สเตปที่ "เปลี่ยนตรงผ่าน UI" ได้ (Exec/Purchasing) · บทบาททำงานเปลี่ยนผ่านสแกนเท่านั้น
-    if roles.is_worker(request.user) or not roles.can_view_admin(request.user):
-        direct = []
-    else:
-        direct = [{"key": k, "name": n} for k, n, _ in _stage_options(roles.allowed_stages(request.user))]
+    # สเตปที่ user เปลี่ยนได้ตามบทบาท — ผ่อนกฎ scan-only: กดเปลี่ยนจากบอร์ด/โมดัลได้เลย
+    # (คนงานที่ไม่มีสเตป/ไม่มีบทบาท = [] → โชว์ลิงก์สแกน QR แทน)
+    direct = [{"key": k, "name": n} for k, n, _ in _stage_options(roles.allowed_stages(request.user))]
     return JsonResponse({
         "code": car.code, "title": car.title, "plate": car.plate,
         "brand": car.brand, "model": car.model, "year": car.year,
@@ -821,14 +838,18 @@ def cars_api(request):
 @login_required
 @require_POST
 def api_set_stage(request):
-    """เปลี่ยนสเตปจากหน้า sales (POST JSON {code, stage}) — Exec/Purchasing เท่านั้น (direct)."""
+    """เปลี่ยนสเตปจากบอร์ด/โมดัล (POST JSON {code, stage, note?}).
+    ★ ผ่อนกฎ scan-only: ใช้ can_set_stage (บทบาทที่ "มีสิทธิ์สเตปนั้น" กดเปลี่ยนได้ตรงๆ จากบอร์ด
+    ไม่ต้องสแกน QR) — คนงาน (ช่าง/อู่นอก/ล้างรถ/เซลล์) กดเปลี่ยนสเตปตัวเองจากบอร์ดได้เลย.
+    สแกน QR หน้ารถ (scan_submit) ยังใช้ได้ตามเดิม."""
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
     stage = data.get("stage", "")
-    if not roles.can_set_stage_direct(request.user, stage):
-        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (บทบาททำงานต้องสแกน QR)"}, status=403)
+    if not roles.can_set_stage(request.user, stage):
+        return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (บทบาทของคุณไม่ครอบสเตปนี้)"}, status=403)
+    note = (data.get("note") or "").strip()
     actor = _actor(request.user)
-    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor)
+    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
     if should_notify:
         notify_stage_change(car, worker_name=actor)
     return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,
@@ -1023,10 +1044,11 @@ def api_users(request):
         roles.EXEC: "ทุกอย่าง — เปลี่ยนทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
         roles.PURCHASING: "เพิ่ม/แก้รถ + เปลี่ยนสเตปตรงผ่านจอ (ไม่ต้องสแกน)",
         roles.ADMIN: "แก้ข้อมูลรถ + ลบรถ + จัดการบทบาท (ไม่เปลี่ยนสเตปงานช่าง)",
-        roles.SALES: "สแกน QR เปลี่ยนสเตป (งานตรวจ/ขาย)",
-        roles.TECH: "สแกน QR เปลี่ยนสเตป (งานช่าง)",
-        roles.VENDOR: "สแกน QR เปลี่ยนสเตป (งานอู่นอก)",
-        roles.REGIST: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — งานทะเบียน + ทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
+        roles.SALES: "สแกน QR เปลี่ยนสเตป (คนตรวจ qc + งานขาย + เด้งกลับตอนตรวจไม่ผ่าน)",
+        roles.TECH: "สแกน QR เปลี่ยนสเตป (งานช่าง/อะไหล่/ฟิล์ม)",
+        roles.VENDOR: "สแกน QR เปลี่ยนสเตป (งานอู่นอก — ทำสี/เบาะ)",
+        roles.REGIST: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — คนประเมิน/ตรวจ ชี้ทางแยกได้ทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
+        roles.CARWASH: "สแกน QR เปลี่ยนสเตป (งานล้าง/ชงล้าง)",
     }
     role_help = [{"label": lbl, "cap": _caps.get(k, ""),
                   "stages": [] if k in roles.FULL_ROLES else role_stages.get(k, []),

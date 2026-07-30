@@ -16,11 +16,11 @@ DEMO = [
     # (branch, brand, model, year, color, plate, stage, days_ago_in)
     ("CB", "Toyota", "Altis", 2019, "ขาว", "1กก1234", "repair", 6),
     ("CB", "Honda", "Civic", 2020, "ดำ", "2ขข5678", "paint", 9),
-    ("CB", "Mazda", "Mazda3", 2018, "แดง", "3คค9012", "detail", 3),
-    ("SP", "Toyota", "Revo", 2021, "เทา", "4งง3456", "registration", 12),
+    ("CB", "Mazda", "Mazda3", 2018, "แดง", "3คค9012", "wash", 3),
+    ("SP", "Toyota", "Revo", 2021, "เทา", "4งง3456", "qc_paint", 12),
     ("SP", "Mitsubishi", "Xpander", 2022, "เงิน", "5จจ7890", "show", 5),
     ("SP", "Nissan", "Almera", 2021, "น้ำเงิน", "6ฉฉ2345", "reserve", 8),
-    ("CB", "Honda", "City", 2020, "ขาว", "7ชช6789", "qc", 2),
+    ("CB", "Honda", "City", 2020, "ขาว", "7ชช6789", "qc_wash", 2),
     ("CB", "Toyota", "Fortuner", 2019, "ดำ", "8ซซ1122", "sold", 20),
 ]
 
