@@ -47,8 +47,9 @@
 
 <!-- หัว + ปุ่มจัดการ -->
 <div class="row" style="justify-content:space-between;margin-bottom:14px">
-  <div><h1 style="margin:0">สถานะรถ</h1><span class="mut sm">ภาพรวมไปป์ไลน์ · ทั้งหมด {{ total }} คัน</span></div>
-  <div class="row" style="gap:8px">
+  <div><h1 style="margin:0" data-i18n="title">สถานะรถ</h1><span class="mut sm"><span data-i18n="subtitle">ภาพรวมไปป์ไลน์</span> · {{ total }}</span></div>
+  <div class="row" style="gap:8px;align-items:center">
+    <div class="row" id="langSw" style="gap:3px;margin-right:2px"><button class="btn sm" data-lang="th" onclick="setTrkLang('th')">ไทย</button><button class="btn sm" data-lang="en" onclick="setTrkLang('en')">EN</button><button class="btn sm" data-lang="mm" onclick="setTrkLang('mm')">မြန်မာ</button><button class="btn sm" data-lang="kh" onclick="setTrkLang('kh')">ខ្មែរ</button></div>
     {% if show_sales_link %}<a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>{% endif %}
     {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
     {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
@@ -61,29 +62,29 @@
 <div class="kgrid">
   <div class="k">
     <div class="ic" style="background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)"><i data-lucide="car-front"></i></div>
-    <div><div class="lbl">รถทั้งหมด</div><div class="n">{{ total }}</div><div class="sub" id="kSale">กำลังดำเนินการ</div></div>
+    <div><div class="lbl" data-i18n="totalCars">รถทั้งหมด</div><div class="n">{{ total }}</div><div class="sub" id="kSale" data-i18n="inProgress">กำลังดำเนินการ</div></div>
   </div>
   <div class="k">
     <div class="ic" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)"><i data-lucide="alert-triangle"></i></div>
-    <div><div class="lbl">ค้างนาน (&gt;3 วัน ในสเตป)</div><div class="n tag-red">{{ flags.red }}</div><div class="sub">ต้องเร่งจัดการ</div></div>
+    <div><div class="lbl" data-i18n="stuckLong">ค้างนาน (&gt;3 วัน ในสเตป)</div><div class="n tag-red">{{ flags.red }}</div><div class="sub" data-i18n="urgent">ต้องเร่งจัดการ</div></div>
   </div>
   <div class="k">
     <div class="ic" style="background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)"><i data-lucide="clock"></i></div>
-    <div><div class="lbl">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div><div class="sub">เฝ้าระวัง</div></div>
+    <div><div class="lbl" data-i18n="nearStuck">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div><div class="sub" data-i18n="watch">เฝ้าระวัง</div></div>
   </div>
   <div class="k">
     <div class="ic" style="background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)"><i data-lucide="gauge"></i></div>
-    <div><div class="lbl">T2L เฉลี่ย</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}<span style="font-size:13px;font-weight:500;color:var(--mut)"> วัน</span>{% else %}—{% endif %}</div><div class="sub">เป้า ≤ {{ t2l_target }} วัน</div></div>
+    <div><div class="lbl" data-i18n="avgT2l">T2L เฉลี่ย</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}<span style="font-size:13px;font-weight:500;color:var(--mut)"> วัน</span>{% else %}—{% endif %}</div><div class="sub"><span data-i18n="target">เป้า ≤</span> {{ t2l_target }} <span data-i18n="daysU">วัน</span></div></div>
   </div>
 </div>
 
 <!-- บอร์ดสถานะรถ (คัมบัง) — โฟกัสสเตปของตัวเอง · สลับดูทั้งหมดได้ · กดการ์ด = ดู/เปลี่ยนสเตป -->
 <div class="card" style="padding:14px;margin-bottom:14px">
   <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-    <div><h2 style="margin:0;font-size:15px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> บอร์ดสถานะรถ</h2><span class="mut sm">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
+    <div><h2 style="margin:0;font-size:15px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> <span data-i18n="board">บอร์ดสถานะรถ</span></h2><span class="mut sm" data-i18n="tapCard">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
     {% if has_my %}<div class="row" style="gap:6px">
-      <button id="bmMine" class="btn sm pri" onclick="setBoardMode('mine')">งานของฉัน</button>
-      <button id="bmAll" class="btn sm" onclick="setBoardMode('all')">ทั้งหมด</button>
+      <button id="bmMine" class="btn sm pri" onclick="setBoardMode('mine')" data-i18n="mine">งานของฉัน</button>
+      <button id="bmAll" class="btn sm" onclick="setBoardMode('all')" data-i18n="all">ทั้งหมด</button>
     </div>{% endif %}
   </div>
   <div style="overflow-x:auto;padding-bottom:6px">
@@ -91,7 +92,7 @@
       {% for col in board_cols %}
       <div class="bcol" data-mine="{% if col.mine %}1{% else %}0{% endif %}" style="width:212px;flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px{% if col.mine %};outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:-1px{% endif %}">
         <div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px">
-          <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:13px;height:13px"></i> {{ col.name }}</span>
+          <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:13px;height:13px"></i> <span class="stg-name">{{ col.name }}</span></span>
           <span class="mut sm" style="font-weight:700">{{ col.cars|length }}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">
@@ -99,7 +100,7 @@
           <div class="bcard {{ c.flag }}" onclick="openCar('{{ c.code }}')" style="background:var(--card);border:.5px solid var(--line);border-radius:9px;padding:8px 9px;cursor:pointer">
             <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.code }}</b><span class="dot {{ c.flag }}"></span></div>
             <div class="sm" style="color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div>
-            <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · ค้าง {{ c.days_in_stage }} วัน</div>
+            <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · <span data-i18n="stuck">ค้าง</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span></div>
           </div>
           {% empty %}
           <div class="mut sm" style="text-align:center;padding:10px 0">—</div>
@@ -114,13 +115,13 @@
 <!-- กราฟ -->
 <div class="chartgrid">
   <div class="card">
-    <div class="chead"><h2>ไปป์ไลน์ — รถแต่ละสเตป</h2><span class="mut sm">กดแถบเพื่อกรองตาราง</span></div>
+    <div class="chead"><h2 data-i18n="pipeline">ไปป์ไลน์ — รถแต่ละสเตป</h2><span class="mut sm" data-i18n="tapBar">กดแถบเพื่อกรองตาราง</span></div>
     <div class="plegend" id="pipeLegend" style="margin-bottom:10px"></div>
     <div id="pipeWrap" style="position:relative;min-height:200px"><canvas id="pipeChart"></canvas></div>
-    <div id="pipeEmpty" class="mut sm" style="display:none;text-align:center;padding:30px">ยังไม่มีรถในระบบ</div>
+    <div id="pipeEmpty" class="mut sm" style="display:none;text-align:center;padding:30px" data-i18n="noCars">ยังไม่มีรถในระบบ</div>
   </div>
   <div class="card">
-    <div class="chead"><h2>สุขภาพงาน</h2></div>
+    <div class="chead"><h2 data-i18n="health">สุขภาพงาน</h2></div>
     <div style="position:relative;height:190px"><canvas id="healthChart"></canvas></div>
     <div class="hleg" id="healthLegend"></div>
   </div>
@@ -129,32 +130,32 @@
 <!-- ตัวกรอง + ตารางรถ -->
 <div class="card" style="padding:14px">
   <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <a class="btn sm{% if cur_view != 'sold' %} pri{% endif %}" href="?view=active{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}">รถในระบบ {{ active_n }}</a>
-    <a class="btn sm{% if cur_view == 'sold' %} pri{% endif %}" href="?view=sold{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}">ขายแล้ว {{ sold_n }}</a>
+    <a class="btn sm{% if cur_view != 'sold' %} pri{% endif %}" href="?view=active{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="inSystem">รถในระบบ</span> {{ active_n }}</a>
+    <a class="btn sm{% if cur_view == 'sold' %} pri{% endif %}" href="?view=sold{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="soldTab">ขายแล้ว</span> {{ sold_n }}</a>
   </div>
   <form method="get" class="row" style="gap:8px;margin-bottom:10px">
     <input type="hidden" name="view" value="{{ cur_view }}">
     <select name="branch" onchange="this.form.submit()" style="width:auto">
-      <option value="">ทุกสาขา</option>
+      <option value="" data-i18n="allBranch">ทุกสาขา</option>
       {% for code, name in branch_choices %}<option value="{{ code }}" {% if cur_branch == code %}selected{% endif %}>{{ name }}</option>{% endfor %}
     </select>
     <select name="stage" onchange="this.form.submit()" style="width:auto">
-      <option value="">ทุกสเตป</option>
+      <option value="" data-i18n="allStage">ทุกสเตป</option>
       {% for k, n, i in stage_choices %}<option value="{{ k }}" {% if cur_stage == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
     </select>
     <select name="sort" onchange="this.form.submit()" style="width:auto">
-      <option value="updated" {% if cur_sort == 'updated' %}selected{% endif %}>อัปเดตล่าสุด</option>
-      <option value="stuck" {% if cur_sort == 'stuck' %}selected{% endif %}>ค้างนานสุด</option>
-      <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>เข้าใหม่สุด</option>
-      <option value="code" {% if cur_sort == 'code' %}selected{% endif %}>รหัสรถ</option>
+      <option value="updated" {% if cur_sort == 'updated' %}selected{% endif %} data-i18n="sortUpdated">อัปเดตล่าสุด</option>
+      <option value="stuck" {% if cur_sort == 'stuck' %}selected{% endif %} data-i18n="sortStuck">ค้างนานสุด</option>
+      <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %} data-i18n="sortNewest">เข้าใหม่สุด</option>
+      <option value="code" {% if cur_sort == 'code' %}selected{% endif %} data-i18n="sortCode">รหัสรถ</option>
     </select>
-    {% if cur_branch or cur_stage %}<a class="btn sm" href="?view={{ cur_view }}">ล้างตัวกรอง</a>{% endif %}
-    <span class="mut sm" style="margin-left:auto">{{ cars|length }} คัน · กดแถวดูรายละเอียด</span>
+    {% if cur_branch or cur_stage %}<a class="btn sm" href="?view={{ cur_view }}" data-i18n="clearFilter">ล้างตัวกรอง</a>{% endif %}
+    <span class="mut sm" style="margin-left:auto">{{ cars|length }} · <span data-i18n="tapRow">กดแถวดูรายละเอียด</span></span>
   </form>
 
   <div style="overflow:auto">
   <table id="carTable">
-    <thead><tr><th style="width:60px">รูป</th><th>รหัส</th><th>รถ</th><th>สาขา</th><th>สเตป</th><th>ค้าง</th><th></th></tr></thead>
+    <thead><tr><th style="width:60px" data-i18n="thPhoto">รูป</th><th data-i18n="thCode">รหัส</th><th data-i18n="thCar">รถ</th><th data-i18n="thBranch">สาขา</th><th data-i18n="thStage">สเตป</th><th data-i18n="thStuck">ค้าง</th><th></th></tr></thead>
     <tbody>
     {% for c in cars %}
       <tr class="clickrow" onclick="openCar('{{ c.code }}')">
@@ -162,8 +163,8 @@
         <td><b>{{ c.code }}</b></td>
         <td>{{ c.title }}{% if c.plate %}<div class="sm mut">{{ c.plate }}</div>{% endif %}</td>
         <td class="sm mut">{{ c.branch_name }}</td>
-        <td><span class="pill" data-stage="{{ c.stage }}"><i data-lucide="{{ c.stage_icon }}"></i> {{ c.stage_name }}</span></td>
-        <td><span class="dot {{ c.flag }}"></span> {{ c.days_in_stage }} วัน</td>
+        <td><span class="pill" data-stage="{{ c.stage }}"><i data-lucide="{{ c.stage_icon }}"></i> <span class="stg-name">{{ c.stage_name }}</span></span></td>
+        <td><span class="dot {{ c.flag }}"></span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span></td>
         <td class="mut">›</td>
       </tr>
     {% empty %}
@@ -199,13 +200,13 @@
 <!-- Modal: ยืนยันเปลี่ยนสเตป + หมายเหตุ (กันเผลอกด) -->
 <div id="stageModal" class="ov" onclick="if(event.target===this)closeStage()" style="z-index:120">
   <div class="modal" style="max-width:400px">
-    <h2 style="font-size:16px;margin:0 0 6px">ยืนยันเปลี่ยนสเตป</h2>
+    <h2 style="font-size:16px;margin:0 0 6px" data-i18n="confirmTitle">ยืนยันเปลี่ยนสเตป</h2>
     <div id="stageMsg" class="mut sm" style="margin-bottom:12px"></div>
-    <label class="mut sm">หมายเหตุ (ถ้ามี)</label>
-    <textarea id="stageNote" rows="3" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;box-sizing:border-box;font-family:inherit"></textarea>
+    <label class="mut sm" data-i18n="note">หมายเหตุ (ถ้ามี)</label>
+    <textarea id="stageNote" rows="3" data-i18n-ph="notePh" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;box-sizing:border-box;font-family:inherit"></textarea>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
-      <button class="btn" onclick="closeStage()">ยกเลิก</button>
-      <button class="btn pri" id="stageGo" onclick="doStage()">ยืนยันเปลี่ยน</button>
+      <button class="btn" onclick="closeStage()" data-i18n="cancel">ยกเลิก</button>
+      <button class="btn pri" id="stageGo" onclick="doStage()" data-i18n="confirm">ยืนยันเปลี่ยน</button>
     </div>
   </div>
 </div>
@@ -219,6 +220,22 @@
 <script>
   const CSRF='{{ csrf_token }}';
   // สีสเตปตามเฟส — ให้ pill/ปุ่มเปลี่ยนสเตปมีสี อ่านง่าย (ตรงกับแท็บสถานะรถในแดชบอร์ดขาย)
+
+  // ─────────── i18n (TH/EN/MM/KH) — บอร์ด/โมดัลคนงานหลายสัญชาติ ───────────
+  const STG={"intake": {"th": "รับเข้า", "en": "Intake", "mm": "ကားဝင်ရောက်", "kh": "ទទួលចូល"}, "repair": {"th": "เช็คซ่อม", "en": "Repair", "mm": "ပြုပြင်ရန်", "kh": "ជួសជុល"}, "qc_repair": {"th": "ซ่อมเสร็จ รอตรวจ", "en": "Repair Done · QC", "mm": "ပြုပြင်ပြီး · QC", "kh": "ជួសជុលរួច · QC"}, "parts": {"th": "สั่งของ/รออะไหล่", "en": "Awaiting Parts", "mm": "အပိုပစ္စည်းစောင့်", "kh": "រង់ចាំគ្រឿងបន្លាស់"}, "upholstery": {"th": "งานเบาะ", "en": "Upholstery", "mm": "ထိုင်ခုံအလုပ်", "kh": "កៅអី"}, "paint": {"th": "ทำสี/อู่สี", "en": "Painting", "mm": "ဆေးသုတ်", "kh": "លាបថ្នាំ"}, "qc_paint": {"th": "สีเสร็จ รอตรวจ", "en": "Paint Done · QC", "mm": "ဆေးသုတ်ပြီး · QC", "kh": "លាបថ្នាំរួច · QC"}, "film": {"th": "ติดฟิล์ม", "en": "Window Film", "mm": "ဖလင်ကပ်", "kh": "បិទហ្វីល"}, "wash": {"th": "ชงล้าง", "en": "Wash / Detail", "mm": "ကားဆေးကြော", "kh": "លាងសម្អាត"}, "qc_wash": {"th": "ล้างเสร็จ รอตรวจ", "en": "Wash Done · QC", "mm": "ဆေးကြောပြီး · QC", "kh": "លាងរួច · QC"}, "show": {"th": "รถพร้อมขาย/หน้าร้าน", "en": "Ready / Showroom", "mm": "ရောင်းရန်အသင့်", "kh": "ត្រៀមលក់"}, "reserve": {"th": "จอง", "en": "Reserved", "mm": "ကြိုတင်မှာ", "kh": "កក់ទុก"}, "finance": {"th": "จัดไฟแนนซ์", "en": "Financing", "mm": "ငွေချေး", "kh": "ហិរញ្ញវត្ថុ"}, "closing": {"th": "ปิดการขาย", "en": "Closing", "mm": "အရောင်းပိတ်", "kh": "បិទការលក់"}, "sold": {"th": "ขายแล้ว", "en": "Sold", "mm": "ရောင်းပြီး", "kh": "លក់រួច"}};
+  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ถ้ามี)", "en": "Note (optional)", "mm": "မှတ်ချက် (ရှိလျှင်)", "kh": "កំណត់ចំណាំ (បើមាន)"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}};
+  const TRK_LANG_KEY='trkLang';
+  let TLANG=(function(){try{return localStorage.getItem(TRK_LANG_KEY)||'th';}catch(e){return 'th';}})();
+  function stgName(k){const x=STG[k];return x?(x[TLANG]||x.en||x.th):k;}
+  function T(k){const x=UT[k];return x?(x[TLANG]||x.en||x.th):k;}
+  function setTrkLang(l){TLANG=l;try{localStorage.setItem(TRK_LANG_KEY,l);}catch(e){}applyLang();}
+  function applyLang(){
+    document.querySelectorAll('[data-i18n]').forEach(function(el){el.textContent=T(el.getAttribute('data-i18n'));});
+    document.querySelectorAll('[data-i18n-ph]').forEach(function(el){el.setAttribute('placeholder',T(el.getAttribute('data-i18n-ph')));});
+    document.querySelectorAll('.pill[data-stage] .stg-name').forEach(function(el){var p=el.closest('[data-stage]');if(p)el.textContent=stgName(p.getAttribute('data-stage'));});
+    document.querySelectorAll('select[name="stage"] option[value]').forEach(function(op){if(op.value&&STG[op.value])op.textContent=stgName(op.value);});
+    document.querySelectorAll('#langSw [data-lang]').forEach(function(b){b.classList.toggle('pri',b.getAttribute('data-lang')===TLANG);});
+  }
   const STAGE_COLOR={sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',intake:'#64748b',repair:'#d97706',parts:'#d97706',upholstery:'#d97706',paint:'#d97706',film:'#d97706',qc_repair:'#7c3aed',qc_paint:'#7c3aed',qc_wash:'#7c3aed',wash:'#0891b2'};
   function tintPill(el,stage){ const c=STAGE_COLOR[stage]||'#64748b'; el.style.background=`color-mix(in srgb,${c} 14%,transparent)`; el.style.color=c; el.style.border=`.5px solid color-mix(in srgb,${c} 45%,transparent)`; }
   function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }
@@ -235,42 +252,42 @@
     catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }
     const kv=(k,v)=> (v!==''&&v!=null)?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
     const dump=(o)=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut sm">—</span>';
-    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||'<span class="mut sm">ยังไม่มีประวัติ</span>';
+    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
     let stageBtns;
     if(d.direct && d.direct.length){
-      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="askStage('${d.code}','${s.key}','${(s.name||'').replace(/'/g,'')}','${(d.stageName||'').replace(/'/g,'')}')">${s.name}</button>`;}).join(' ');
+      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="askStage('${d.code}','${s.key}','${stgName(s.key).replace(/'/g,'')}','${stgName(d.stage).replace(/'/g,'')}')">${stgName(s.key)}</button>`;}).join(' ');
     }else{
-      stageBtns=`<a class="btn sm" href="${d.scanUrl}">เปลี่ยนสเตปผ่านการสแกน QR</a>`;
+      stageBtns=`<a class="btn sm" href="${d.scanUrl}">${T('scanChange')}</a>`;
     }
-    const flagTxt={red:'ค้างนาน',amber:'ใกล้ค้าง',ok:'ปกติ'}[d.flag]||'';
+    const flagTxt={red:T('fRed'),amber:T('fAmber'),ok:T('fOk')}[d.flag]||'';
     b.innerHTML=`
       <div class="row" style="justify-content:space-between;align-items:flex-start">
         <div><h2 style="margin:0">${d.code}</h2><div class="mut sm">${d.title||''} ${d.plate?'· '+d.plate:''}</div></div>
         <button class="btn sm" onclick="closeCar()">✕</button>
       </div>
       <div class="row" style="gap:6px;margin:8px 0 12px">
-        <span class="pill" data-stage="${d.stage}">${d.stageName}</span>
+        <span class="pill" data-stage="${d.stage}">${stgName(d.stage)}</span>
         <span class="pill"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
       ${d.photo?`<img src="${d.photo}" style="width:100%;max-height:340px;object-fit:contain;border-radius:10px;margin-bottom:10px;background:var(--bg2)">`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
-        ${kv('สาขา',d.branch)}${kv('สถานะ',d.status)}
-        ${kv('ยี่ห้อ/รุ่น',((d.brand||'')+' '+(d.model||'')).trim())}${kv('ปี',d.year)}
-        ${kv('สี',d.color)}${kv('เลขไมล์',d.km)}
-        ${kv('วันรับเข้า',d.dateIn)}${kv('สถานะเล่ม',d.bookStatus)}
-        ${kv('ครบกำหนดภาษี',d.taxDue)}${kv('หมายเหตุ',d.note)}
+        ${kv(T('fBranch'),d.branch)}${kv(T('fStatus'),d.status)}
+        ${kv(T('fBrand'),((d.brand||'')+' '+(d.model||'')).trim())}${kv(T('fYear'),d.year)}
+        ${kv(T('fColor'),d.color)}${kv(T('fKm'),d.km)}
+        ${kv(T('fDateIn'),d.dateIn)}${kv(T('fBook'),d.bookStatus)}
+        ${kv(T('fTax'),d.taxDue)}${kv(T('fNote'),d.note)}
       </div>
-      ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">รายละเอียดรถ (ทั้งหมด)</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
-      ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">เจ้าของรถ</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
-      <div class="sm mut" style="margin:14px 0 6px">เปลี่ยนสเตป</div>
+      ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">${T('detailAll')}</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
+      ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">${T('owner')}</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
+      <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
       <div class="row" style="gap:6px">${stageBtns}</div>
-      <div class="sm mut" style="margin:14px 0 6px">ประวัติการสแกน</div>
+      <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
       <div style="max-height:160px;overflow:auto">${logs}</div>
       <div class="row" style="justify-content:space-between;gap:8px;margin-top:14px;align-items:center">
-        <a href="${d.qrUrl}" target="_blank" class="btn sm"><i data-lucide="qr-code"></i> เปิด QR</a>
-        ${d.canEdit?`<a href="${d.editUrl}" class="btn sm">แก้ไขข้อมูล</a>`:''}
+        <a href="${d.qrUrl}" target="_blank" class="btn sm"><i data-lucide="qr-code"></i> ${T('openQR')}</a>
+        ${d.canEdit?`<a href="${d.editUrl}" class="btn sm">${T('edit')}</a>`:''}
       </div>`;
     if(window.lucide)lucide.createIcons();
     colorizeStagePills(b);
@@ -290,13 +307,13 @@
   async function doStage(){
     const {code,stage}=_stagePend; if(!code||!stage) return;
     const note=document.getElementById('stageNote').value.trim();
-    const btn=document.getElementById('stageGo'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
+    const btn=document.getElementById('stageGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
     try{
       const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note})});
       const j=await r.json();
-      if(!j.ok){ alert(j.error||'เปลี่ยนสเตปไม่สำเร็จ'); if(btn){ btn.disabled=false; btn.textContent='ยืนยันเปลี่ยน'; } return; }
+      if(!j.ok){ alert(j.error||T('changeFail')); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } return; }
       location.reload();
-    }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent='ยืนยันเปลี่ยน'; } }
+    }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } }
   }
   // บอร์ด: สลับ "งานของฉัน" (เฉพาะคอลัมน์สเตปตัวเอง) / "ทั้งหมด"
   function setBoardMode(m){
@@ -392,7 +409,8 @@
   }
 
   buildCharts();
-  colorizeStagePills();   // ลงสีสเตป pill ในตาราง
+  colorizeStagePills();
+  applyLang();   // ลงสีสเตป pill ในตาราง
   // re-render เมื่อสลับธีม (สีข้อความ/เส้น/พื้นเปลี่ยน)
   new MutationObserver(()=>buildCharts()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 </script>
