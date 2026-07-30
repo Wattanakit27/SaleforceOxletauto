@@ -210,12 +210,10 @@ def login_view(request):
 
     if request.method == "GET":
         _su = _session_user(request)
-        if _su:
-            _pos = _su.get("position")
-            if _pos == "admin":
-                return HttpResponseRedirect(next_url)
-            if _pos == "worker":            # คนงาน login อยู่แล้ว → หน้าเดียว /dashboard/
-                return HttpResponseRedirect("/dashboard/")
+        # แอดมิน login อยู่แล้ว → ไป dashboard (สะดวก) · แต่ ?bg=1 = โชว์ฟอร์มเสมอ (สลับบัญชี/เข้าใหม่)
+        # worker/seller ที่ login อยู่ → โชว์ฟอร์ม (ให้เข้า LINE/สลับบัญชีได้ · ไม่ redirect วนลูปกลับบอร์ด)
+        if _su and _su.get("position") == "admin" and not request.GET.get("bg"):
+            return HttpResponseRedirect(next_url)
         line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
         return render(request, "dashboard/login.html", {
             "next": next_url, "error": None, "line_login": line_login,
