@@ -2338,17 +2338,11 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   // โหมด "สถานะรถ" = ฝังหน้า /track/ เต็ม (KPI + บอร์ด + กราฟ ครบเหมือนบัญชีหลัก · scope ตามสิทธิ์ที่ bridge ให้)
   //   base.html ตรวจว่าอยู่ใน iframe → ซ่อน header ของ /track/ เอง (ไม่หัวซ้ำ) + ส่งความสูงมาปรับ iframe (ไม่สกรอลซ้อน)
   function renderCarsMode() {
+    // เต็มจอ: full-bleed กว้างเต็มหน้าจอ (ทะลุ .seller-page max-width) + สูงเต็ม viewport + สกรอลในตัว
+    //   → โมดัลใน /track/ (position:fixed) ครอบเต็มพื้นที่ iframe = เต็มจอถูกต้อง · ไม่ใช้ auto-resize (โมดัลจะเพี้ยน)
     document.getElementById('root').innerHTML = `${modeBar()}
-      <iframe id="scTrackFrame" src="/track/" title="${h(scT('carStatus'))}" scrolling="no" style="width:100%;height:700px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg);display:block"></iframe>`;
-    if (!window._scFrameOn) {
-      window._scFrameOn = true;
-      window.addEventListener('message', function (e) {
-        if (e && e.data && e.data.oxletTrackHeight) {
-          const f = document.getElementById('scTrackFrame');
-          if (f) f.style.height = (Number(e.data.oxletTrackHeight) + 24) + 'px';
-        }
-      });
-    }
+      <iframe id="scTrackFrame" src="/track/" title="${h(scT('carStatus'))}" style="display:block;border:0;background:var(--bg);height:calc(100vh - 80px);width:100vw;max-width:100vw;position:relative;left:50%;margin-left:-50vw"></iframe>`;
+    document.documentElement.style.overflowX = 'hidden';   // กันสกรอลแนวนอนจาก full-bleed 100vw
   }
 
   // ════════ รายการรถ (list) ════════
