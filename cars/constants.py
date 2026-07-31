@@ -25,7 +25,7 @@ STAGES = [
     ("show",         "รถพร้อมขาย/หน้าร้าน",          "store"),
     ("reserve",      "จอง",                          "handshake"),
     ("finance",      "จัดไฟแนนซ์",                   "landmark"),
-    ("closing",      "ปิดการขาย",                    "file-signature"),
+    ("closing",      "รอปิดการขาย",                  "file-signature"),
     ("sold",         "ขายแล้ว",                      "banknote"),
 ]
 

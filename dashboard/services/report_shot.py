@@ -114,6 +114,12 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
             except Exception:
                 pass
             _apply_date_mode(page, cfg)   # ช่วงวันที่ตามที่ตั้งไว้ (None = เดือนปัจจุบัน)
+            # #rpt-shot / #rpt-shot-teams ย้ายไปแท็บ "LEAD" แล้ว (ก.ค.69) → ต้องสลับไปแท็บนั้นก่อน ไม่งั้นหา element ไม่เจอ
+            try:
+                page.click("button.ntab:has-text('LEAD')")
+                page.wait_for_timeout(1200)
+            except Exception:
+                pass
             # #rpt-shot / #rpt-shot-teams ซ่อนใน wrapper height:0 → เปิดให้เห็นก่อนแคป
             # timeout สูง (35s) กัน cold start: /api/dashboard คำนวณสด ~8-20s ตอน cache เย็น
             try:
@@ -385,6 +391,10 @@ _LINE_CARDS = {
 _CARD_TAB = {
     "clipweek-card": "ไลฟ์",
     "yodrot-card": "จัดซื้อ",
+    # ★ ย้ายไปแท็บ "LEAD" แล้ว (ก.ค.69 · จากภาพรวม) → ต้องสลับแท็บก่อนแคป ไม่งั้นหา element ไม่เจอ
+    "mega-card": "LEAD", "rpt-card": "LEAD", "leadrecv-card": "LEAD",
+    "purchase-card": "LEAD", "bought-card": "LEAD",
+    "leadreport-card": "LEAD", "leadsummary-card": "LEAD",
 }
 
 

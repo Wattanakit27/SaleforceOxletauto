@@ -2300,11 +2300,55 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   let _scSel = '';                          // สเตปใหม่ที่เลือก (detail)
   let _scMedia = [];                        // [{id,name,path,url,up,video}] รูป/วิดีโอที่อัปแล้ว
   const _scFlag = { red: 'var(--red)', amber: 'var(--amber)', ok: 'var(--green)' };
+  let _scBoardMode = 'mine';   // บอร์ดสถานะรถ: 'mine' (โฟกัสสเตปตัวเอง) | 'all'
+  const SC_BOARD_T = {
+    board:{TH:'บอร์ดสถานะรถ',EN:'Car Status Board',MM:'ကားအခြေအနေဘုတ်',KH:'ក្តារស្ថានភាព'},
+    myWork:{TH:'งานของฉัน',EN:'My work',MM:'ကျွန်ုပ်၏အလုပ်',KH:'ការងាររបស់ខ្ញុំ'},
+    all:{TH:'ทั้งหมด',EN:'All',MM:'အားလုံး',KH:'ទាំងអស់'},
+  };
+  const scB = (k) => (SC_BOARD_T[k] && SC_BOARD_T[k][_scLang]) || (SC_BOARD_T[k] && SC_BOARD_T[k].TH) || k;
+  // บอร์ดคัมบัง (เหมือนบัญชีหลัก) — คอลัมน์ตามสเตป · default โฟกัสสเตปตัวเอง สลับดูทั้งหมดได้ · การ์ดกด → รายละเอียดเดิม
+  function scBoard(D2){
+    const _my = new Set((D2.myStages||[]).map(s=>s[0]));
+    const by = {}; (D2.cars||[]).filter(c=>!c.sold).forEach(c=>{ (by[c.stage]=by[c.stage]||[]).push(c); });
+    Object.values(by).forEach(a=>a.sort((x,y)=>(y.days||0)-(x.days||0)));
+    const focus = _scBoardMode==='mine' && _my.size;
+    const cols = (D2.stages||[]).filter(s=> s[0]!=='sold' && (!focus || _my.has(s[0])));
+    const colHtml = cols.map(([k,n])=>{
+      const list = by[k]||[], mine=_my.has(k);
+      const cards = list.map(c=>{ const fc=_scFlag[c.flag]||'var(--t3)';
+        return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="cursor:pointer;background:var(--bg);border:.5px solid var(--bd);border-left:3px solid ${fc};border-radius:9px;padding:7px 8px">
+          <div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:11.5px;color:var(--t1)">${h(c.code)}</b><span style="width:7px;height:7px;border-radius:50%;background:${fc};margin-top:3px;flex-shrink:0"></span></div>
+          <div style="font-size:11px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.title||c.code)}</div>
+          <div style="font-size:10px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.branch||'')} · ${c.days} ${h(scT('days'))}</div>
+        </div>`; }).join('') || `<div style="font-size:11px;color:var(--t3);text-align:center;padding:8px 0">—</div>`;
+      return `<div style="width:178px;flex:0 0 auto;background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:9px${mine?';outline:2px solid color-mix(in srgb,var(--blue) 50%,transparent);outline-offset:-1px':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(scStageName(k,n))}</span><span style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">${list.length}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">${cards}</div>
+      </div>`;
+    }).join('');
+    const _tb=(m,l)=>`<button onclick="_scBoardMode='${m}';renderSellerCars()" style="font-size:11.5px;padding:5px 11px;border-radius:999px;cursor:pointer;border:.5px solid ${_scBoardMode===m?'var(--blue)':'var(--bd2)'};background:${_scBoardMode===m?'var(--blue)':'var(--bg2)'};color:${_scBoardMode===m?'#fff':'var(--t2)'};font-weight:${_scBoardMode===m?'700':'500'}">${h(l)}</button>`;
+    const toggle = _my.size ? `<div style="display:flex;gap:5px">${_tb('mine',scB('myWork'))}${_tb('all',scB('all'))}</div>` : '';
+    return `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:13px;color:var(--t1)">${ic('lucide:car-front',16)} ${h(scB('board'))}</b>${toggle}</div>
+      <div style="overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch"><div style="display:flex;gap:8px;min-width:max-content;align-items:flex-start">${colHtml}</div></div>
+    </div>`;
+  }
 
+  // โหมด "สถานะรถ" = ฝังหน้า /track/ เต็ม (KPI + บอร์ด + กราฟ ครบเหมือนบัญชีหลัก · scope ตามสิทธิ์ที่ bridge ให้)
+  //   base.html ตรวจว่าอยู่ใน iframe → ซ่อน header ของ /track/ เอง (ไม่หัวซ้ำ) + ส่งความสูงมาปรับ iframe (ไม่สกรอลซ้อน)
   function renderCarsMode() {
-    document.getElementById('root').innerHTML = `${modeBar()}<div id="scWrap"></div>`;
-    if (_scView === 'detail') renderCarDetail();
-    else renderCarsList();
+    document.getElementById('root').innerHTML = `${modeBar()}
+      <iframe id="scTrackFrame" src="/track/" title="${h(scT('carStatus'))}" scrolling="no" style="width:100%;height:700px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg);display:block"></iframe>`;
+    if (!window._scFrameOn) {
+      window._scFrameOn = true;
+      window.addEventListener('message', function (e) {
+        if (e && e.data && e.data.oxletTrackHeight) {
+          const f = document.getElementById('scTrackFrame');
+          if (f) f.style.height = (Number(e.data.oxletTrackHeight) + 24) + 'px';
+        }
+      });
+    }
   }
 
   // ════════ รายการรถ (list) ════════
@@ -2345,7 +2389,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     if (_scF.stage) cars = cars.filter(c => c.stage === _scF.stage);
     if (_scF.q) { const q = _scF.q.trim().toLowerCase(); if (q) cars = cars.filter(c => ((c.code||'')+' '+(c.title||'')+' '+(c.brand||'')+' '+(c.model||'')+' '+(c.plate||'')).toLowerCase().includes(q)); }
     const stageOpts = (D2.stages || []).map(s => `<option value="${s[0]}" ${_scF.stage===s[0]?'selected':''}>${h(scStageName(s[0],s[1]))}</option>`).join('');
-    let html = `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
+    let html = scBoard(D2) + `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
         <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="${h(scT('searchPh'))}" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
         <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">${h(scT('allStages'))}</option>${stageOpts}</select>
