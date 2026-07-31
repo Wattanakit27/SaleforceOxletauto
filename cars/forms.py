@@ -9,7 +9,7 @@ class CarForm(forms.ModelForm):
         model = Car
         fields = [
             "branch", "plate", "brand", "model", "year", "color", "km",
-            "status", "book_status", "tax_due_date", "doc_registration",
+            "status", "priority", "book_status", "tax_due_date", "doc_registration",
             "photo", "note",
         ]
         widgets = {

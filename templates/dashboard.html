@@ -97,8 +97,8 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">
           {% for c in col.cars %}
-          <div class="bcard {{ c.flag }}" onclick="openCar('{{ c.code }}')" style="background:var(--card);border:.5px solid var(--line);border-radius:9px;padding:8px 9px;cursor:pointer">
-            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.code }}</b><span class="dot {{ c.flag }}"></span></div>
+          <div class="bcard" onclick="openCar('{{ c.code }}')" title="{{ c.priority_name }}" style="background:var(--card);border:.5px solid var(--line);border-left:3px solid {{ c.priority_color }};border-radius:9px;padding:8px 9px;cursor:pointer">
+            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.code }}</b><span class="dot" style="background:{{ c.priority_color }}" title="{{ c.priority_name }}"></span></div>
             <div class="sm" style="color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div>
             <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · <span data-i18n="stuck">ค้าง</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span></div>
           </div>
@@ -204,9 +204,38 @@
     <div id="stageMsg" class="mut sm" style="margin-bottom:12px"></div>
     <label class="mut sm" data-i18n="note">หมายเหตุ (ถ้ามี)</label>
     <textarea id="stageNote" rows="3" data-i18n-ph="notePh" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;box-sizing:border-box;font-family:inherit"></textarea>
+    <!-- แนบรูป/วิดีโอ (โชว์เมื่อสเตปบังคับ เช่น ตรวจรถรอปล่อย/ปล่อยรถ · แนบเพิ่มได้ทุกสเตป) -->
+    <div id="stageMediaWrap" style="display:none;margin-top:10px">
+      <label class="mut sm" id="stageMediaLbl" data-i18n="addMedia">แนบรูป/วิดีโอ</label>
+      <input type="file" id="stageFile" accept="image/*,video/*" multiple capture="environment" style="display:none" onchange="onStageFiles(this.files)">
+      <div class="row" style="gap:8px;margin-top:4px;align-items:center">
+        <button type="button" class="btn sm" onclick="document.getElementById('stageFile').click()"><i data-lucide="camera"></i> <span data-i18n="addMedia">แนบรูป/วิดีโอ</span></button>
+        <span id="stageUpMsg" class="mut sm"></span>
+      </div>
+      <div id="stageThumbs" class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+    </div>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
       <button class="btn" onclick="closeStage()" data-i18n="cancel">ยกเลิก</button>
       <button class="btn pri" id="stageGo" onclick="doStage()" data-i18n="confirm">ยืนยันเปลี่ยน</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ถ่ายคอนเทนต์ (แทรกได้ทุกสเตป · ไม่เปลี่ยนสเตป) -->
+<div id="shootModal" class="ov" onclick="if(event.target===this)closeShoot()" style="z-index:120">
+  <div class="modal" style="max-width:400px">
+    <h2 style="font-size:16px;margin:0 0 6px"><i data-lucide="camera"></i> <span data-i18n="shoot">ถ่ายคอนเทนต์</span></h2>
+    <div id="shootMsg" class="mut sm" style="margin-bottom:10px"></div>
+    <input type="file" id="shootFile" accept="image/*,video/*" multiple capture="environment" style="display:none" onchange="onShootFiles(this.files)">
+    <div class="row" style="gap:8px;align-items:center">
+      <button type="button" class="btn sm" onclick="document.getElementById('shootFile').click()"><i data-lucide="camera"></i> <span data-i18n="addMedia">แนบรูป/วิดีโอ</span></button>
+      <span id="shootUpMsg" class="mut sm"></span>
+    </div>
+    <div id="shootThumbs" class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+    <textarea id="shootNote" rows="2" placeholder="โน้ต (ถ้ามี)" style="width:100%;margin-top:8px;box-sizing:border-box;font-family:inherit"></textarea>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+      <button class="btn" onclick="closeShoot()" data-i18n="cancel">ยกเลิก</button>
+      <button class="btn pri" id="shootGo" onclick="doShoot()" data-i18n="confirm">บันทึก</button>
     </div>
   </div>
 </div>
@@ -222,8 +251,8 @@
   // สีสเตปตามเฟส — ให้ pill/ปุ่มเปลี่ยนสเตปมีสี อ่านง่าย (ตรงกับแท็บสถานะรถในแดชบอร์ดขาย)
 
   // ─────────── i18n (TH/EN/MM/KH) — บอร์ด/โมดัลคนงานหลายสัญชาติ ───────────
-  const STG={"intake": {"th": "รับเข้า", "en": "Intake", "mm": "ကားဝင်ရောက်", "kh": "ទទួលចូល"}, "repair": {"th": "เช็คซ่อม", "en": "Repair", "mm": "ပြုပြင်ရန်", "kh": "ជួសជុល"}, "qc_repair": {"th": "ซ่อมเสร็จ รอตรวจ", "en": "Repair Done · QC", "mm": "ပြုပြင်ပြီး · QC", "kh": "ជួសជុលរួច · QC"}, "parts": {"th": "สั่งของ/รออะไหล่", "en": "Awaiting Parts", "mm": "အပိုပစ္စည်းစောင့်", "kh": "រង់ចាំគ្រឿងបន្លាស់"}, "upholstery": {"th": "งานเบาะ", "en": "Upholstery", "mm": "ထိုင်ခုံအလုပ်", "kh": "កៅអី"}, "paint": {"th": "ทำสี/อู่สี", "en": "Painting", "mm": "ဆေးသုတ်", "kh": "លាបថ្នាំ"}, "qc_paint": {"th": "สีเสร็จ รอตรวจ", "en": "Paint Done · QC", "mm": "ဆေးသုတ်ပြီး · QC", "kh": "លាបថ្នាំរួច · QC"}, "film": {"th": "ติดฟิล์ม", "en": "Window Film", "mm": "ဖလင်ကပ်", "kh": "បិទហ្វីល"}, "wash": {"th": "ชงล้าง", "en": "Wash / Detail", "mm": "ကားဆေးကြော", "kh": "លាងសម្អាត"}, "qc_wash": {"th": "ล้างเสร็จ รอตรวจ", "en": "Wash Done · QC", "mm": "ဆေးကြောပြီး · QC", "kh": "លាងរួច · QC"}, "show": {"th": "รถพร้อมขาย/หน้าร้าน", "en": "Ready / Showroom", "mm": "ရောင်းရန်အသင့်", "kh": "ត្រៀមលក់"}, "reserve": {"th": "จอง", "en": "Reserved", "mm": "ကြိုတင်မှာ", "kh": "កក់ទុก"}, "finance": {"th": "จัดไฟแนนซ์", "en": "Financing", "mm": "ငွေချေး", "kh": "ហិរញ្ញវត្ថុ"}, "closing": {"th": "รอปิดการขาย", "en": "Closing", "mm": "အရောင်းပိတ်", "kh": "បិទការលក់"}, "sold": {"th": "ขายแล้ว", "en": "Sold", "mm": "ရောင်းပြီး", "kh": "លក់រួច"}};
-  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ถ้ามี)", "en": "Note (optional)", "mm": "မှတ်ချက် (ရှိလျှင်)", "kh": "កំណត់ចំណាំ (បើមាន)"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}};
+  const STG={"intake":{"th":"รับเข้า","en":"Intake","mm":"ကားဝင်ရောက်","kh":"ទទួលចូល"},"photo_wait":{"th":"รถรอถ่ายรูป","en":"Awaiting Photos","mm":"ဓာတ်ပုံစောင့်","kh":"រង់ចាំថតរូប"},"repair":{"th":"เช็คซ่อม","en":"Repair","mm":"ပြုပြင်ရန်","kh":"ជួសជុល"},"parts":{"th":"สั่งของ/รออะไหล่","en":"Awaiting Parts","mm":"အပိုပစ္စည်းစောင့်","kh":"រង់ចាំគ្រឿងបន្លាស់"},"upholstery":{"th":"งานเบาะ","en":"Upholstery","mm":"ထိုင်ခုံအလုပ်","kh":"កៅអី"},"paint_in":{"th":"อู่สีใน","en":"Paint (in-house)","mm":"အတွင်းဆေးသုတ်","kh":"លាបថ្នាំក្នុង"},"paint_out":{"th":"อู่สีนอก","en":"Paint (outside)","mm":"အပြင်ဆေးသုတ်","kh":"លាបថ្នាំក្រៅ"},"film":{"th":"ติดฟิล์ม","en":"Window Film","mm":"ဖလင်ကပ်","kh":"បិទហ្វីល"},"wash":{"th":"ชงล้าง","en":"Wash / Detail","mm":"ကားဆေးကြော","kh":"លាងសម្អាត"},"qc_show":{"th":"รอตรวจรถขึ้นโชว์","en":"QC before Showroom","mm":"ပြသရန် QC","kh":"ត្រួតពិនិត្យមុនតាំង"},"show":{"th":"รถพร้อมขาย/หน้าร้าน","en":"Ready / Showroom","mm":"ရောင်းရန်အသင့်","kh":"ត្រៀមលក់"},"reserve":{"th":"จอง","en":"Reserved","mm":"ကြိုတင်မှာ","kh":"កក់ទុក"},"finance":{"th":"จัดไฟแนนซ์","en":"Financing","mm":"ငွေချေး","kh":"ហិរញ្ញវត្ថុ"},"closing":{"th":"รอปิดการขาย","en":"Closing","mm":"အရောင်းပိတ်","kh":"បិទការលក់"},"qc_release":{"th":"ตรวจรถรอปล่อย","en":"QC before Release","mm":"ထုတ်ပေးရန် QC","kh":"ត្រួតពិនិត្យមុនប្រគល់"},"release":{"th":"ปล่อยรถ","en":"Release / Delivered","mm":"ကားထုတ်ပေး","kh":"ប្រគល់រថយន្ត"}};
+  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ถ้ามี)", "en": "Note (optional)", "mm": "မှတ်ချက် (ရှိလျှင်)", "kh": "កំណត់ចំណាំ (បើមាន)"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}, "prio": {"th": "ความด่วน", "en": "Priority", "mm": "အရေးပေါ်", "kh": "អាទិភាព"}, "shoot": {"th": "ถ่ายคอนเทนต์", "en": "Shoot content", "mm": "ကွန်တင့်ရိုက်", "kh": "ថតខ្លឹមសារ"}, "shootDone": {"th": "บันทึกคอนเทนต์แล้ว", "en": "Content saved"}, "mediaReq": {"th": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน", "en": "This stage needs a photo/video first", "mm": "ဓာတ်ပုံ/ဗီဒီယို လိုအပ်သည်", "kh": "ត្រូវការរូប/វីដេអូ"}, "addMedia": {"th": "แนบรูป/วิดีโอ", "en": "Add photo/video", "mm": "ဓာတ်ပုံ/ဗီဒီယို ထည့်", "kh": "ភ្ជាប់រូប/វីដេអូ"}, "uploading": {"th": "กำลังอัปโหลด…", "en": "Uploading…"}, "saved": {"th": "บันทึกแล้ว", "en": "Saved"}};
   const TRK_LANG_KEY='trkLang';
   let TLANG=(function(){try{return localStorage.getItem(TRK_LANG_KEY)||'th';}catch(e){return 'th';}})();
   function stgName(k){const x=STG[k];return x?(x[TLANG]||x.en||x.th):k;}
@@ -236,7 +265,12 @@
     document.querySelectorAll('select[name="stage"] option[value]').forEach(function(op){if(op.value&&STG[op.value])op.textContent=stgName(op.value);});
     document.querySelectorAll('#langSw [data-lang]').forEach(function(b){b.classList.toggle('pri',b.getAttribute('data-lang')===TLANG);});
   }
-  const STAGE_COLOR={sold:'#16a34a',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',intake:'#64748b',repair:'#d97706',parts:'#d97706',upholstery:'#d97706',paint:'#d97706',film:'#d97706',qc_repair:'#7c3aed',qc_paint:'#7c3aed',qc_wash:'#7c3aed',wash:'#0891b2'};
+  const STAGE_COLOR={intake:'#64748b',photo_wait:'#0891b2',repair:'#d97706',parts:'#d97706',upholstery:'#d97706',paint_in:'#d97706',paint_out:'#d97706',film:'#d97706',wash:'#0891b2',qc_show:'#7c3aed',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',closing:'#2563eb',qc_release:'#7c3aed',release:'#16a34a'};
+  // ความด่วน (สีการ์ด) — ตรงกับ constants.PRIORITY_COLOR/NAME · FORCE_MEDIA = สเตปที่บังคับแนบรูป/วิดีโอ
+  const PRIORITY_COLOR={urgent_high:'#dc2626',urgent:'#ea580c',normal:'#eab308',low:'#d1d5db',photo_wait:'#2563eb'};
+  const PRIORITY_NAME={urgent_high:'ด่วนมาก',urgent:'ด่วน',normal:'ปกติ',low:'ไม่เร่ง',photo_wait:'รอถ่ายรูปยังไม่เสร็จ'};
+  const PRIORITY_KEYS=['urgent_high','urgent','normal','low','photo_wait'];
+  const FORCE_MEDIA=new Set(['qc_release','release']);
   function tintPill(el,stage){ const c=STAGE_COLOR[stage]||'#64748b'; el.style.background=`color-mix(in srgb,${c} 14%,transparent)`; el.style.color=c; el.style.border=`.5px solid color-mix(in srgb,${c} 45%,transparent)`; }
   function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }
   function _scrollParent(){ try{ if(window.self!==window.top) parent.postMessage({oxletScrollTop:true},'*'); }catch(e){} }
@@ -281,6 +315,15 @@
       </div>
       ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">${T('detailAll')}</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
       ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">${T('owner')}</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
+      <div class="sm mut" style="margin:14px 0 6px">${T('prio')}</div>
+      <div class="row" style="gap:8px;align-items:center">
+        <select id="prioSel" onchange="setPriority('${d.code}',this.value)" style="width:auto">
+          ${PRIORITY_KEYS.map(k=>`<option value="${k}" ${d.priority===k?'selected':''}>${PRIORITY_NAME[k]}</option>`).join('')}
+        </select>
+        <span id="prioDot" class="dot" style="background:${d.priorityColor||PRIORITY_COLOR[d.priority]||'#eab308'}"></span>
+        <span id="prioMsg" class="mut sm"></span>
+        <button class="btn sm" style="margin-left:auto" onclick="openShoot('${d.code}')"><i data-lucide="camera"></i> ${T('shoot')}</button>
+      </div>
       <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
       <div class="row" style="gap:6px">${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
@@ -293,26 +336,95 @@
     colorizeStagePills(b);
   }
 
+  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+  // อัปโหลดไฟล์รูป/วิดีโอ → /track/api/upload (Drive ถ้าตั้งไว้ · ไม่งั้นดิสก์) → คืน {id,video}
+  async function trkUpload(file,code){
+    const fd=new FormData(); fd.append('file',file); if(code) fd.append('code',code);
+    const r=await fetch('/track/api/upload',{method:'POST',headers:{'X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:fd});
+    const j=await r.json(); if(!j.ok) throw new Error(j.error||'upload fail');
+    return {id:j.id, video:!!j.video, url:j.url};
+  }
+  function renderThumbs(el,arr){
+    if(!el) return;
+    el.innerHTML=arr.map((m,i)=>m.video
+      ? `<span class="pill sm">🎬<button onclick="rmMedia('${el.id}',${i})" style="border:0;background:none;cursor:pointer;color:var(--red)">✕</button></span>`
+      : `<span style="position:relative;display:inline-block"><img src="${m.url}" style="width:46px;height:46px;object-fit:cover;border-radius:6px"><button onclick="rmMedia('${el.id}',${i})" style="position:absolute;top:-6px;right:-6px;border:0;border-radius:50%;background:var(--red);color:#fff;width:18px;height:18px;cursor:pointer;font-size:11px">✕</button></span>`
+    ).join('');
+  }
+  function rmMedia(elId,i){ const a=(elId==='stageThumbs')?_stageMedia:_shootMedia; a.splice(i,1); renderThumbs(document.getElementById(elId),a); }
+  async function _uploadInto(files,arr,thumbsId,msgId,code){
+    const msg=document.getElementById(msgId); if(msg) msg.textContent=T('uploading');
+    for(const f of files){ try{ arr.push(await trkUpload(f,code)); }catch(e){ if(msg){msg.textContent=String(e.message||e); return;} } }
+    if(msg) msg.textContent=T('saved'); renderThumbs(document.getElementById(thumbsId),arr);
+  }
+
   // เปลี่ยนสเตป — เด้ง dialog ยืนยัน + ช่องหมายเหตุ ก่อน (กันเผลอกด · เก็บหมายเหตุต่อการเปลี่ยน)
-  let _stagePend={code:'',stage:''};
+  // สเตปใน FORCE_MEDIA (ตรวจรถรอปล่อย/ปล่อยรถ) = บังคับแนบรูป/วิดีโอก่อนยืนยัน
+  let _stagePend={code:'',stage:''}, _stageMedia=[], _stageForce=false;
   function askStage(code,stage,stageName,curName){
-    _stagePend={code,stage};
+    _stagePend={code,stage}; _stageMedia=[]; _stageForce=FORCE_MEDIA.has(stage);
     document.getElementById('stageMsg').innerHTML=(curName?esc(curName)+' → ':'')+'<b>'+esc(stageName||stage)+'</b>';
     document.getElementById('stageNote').value='';
+    const wrap=document.getElementById('stageMediaWrap'), lbl=document.getElementById('stageMediaLbl');
+    wrap.style.display=_stageForce?'block':'none';   // บังคับแนบเฉพาะสเตปตรวจ/ปล่อย
+    if(lbl) lbl.textContent=T('mediaReq');
+    document.getElementById('stageThumbs').innerHTML=''; document.getElementById('stageUpMsg').textContent='';
+    const f=document.getElementById('stageFile'); if(f) f.value='';
     document.getElementById('stageModal').style.display='flex'; _scrollParent();
+    if(window.lucide)lucide.createIcons();
     const ta=document.getElementById('stageNote'); if(ta) setTimeout(()=>ta.focus(),50);
   }
+  function onStageFiles(files){ if(files&&files.length) _uploadInto(files,_stageMedia,'stageThumbs','stageUpMsg',_stagePend.code); }
   function closeStage(){ document.getElementById('stageModal').style.display='none'; }
-  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
   async function doStage(){
     const {code,stage}=_stagePend; if(!code||!stage) return;
+    if(_stageForce && !_stageMedia.length){ alert(T('mediaReq')); return; }
     const note=document.getElementById('stageNote').value.trim();
     const btn=document.getElementById('stageGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
     try{
-      const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note})});
+      const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note,media:_stageMedia})});
       const j=await r.json();
       if(!j.ok){ alert(j.error||T('changeFail')); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } return; }
       location.reload();
+    }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } }
+  }
+
+  // ตั้งความด่วน (สีการ์ด) — อัปเดตจุด/ตัวเลือกทันที · บันทึกเบื้องหลัง
+  async function setPriority(code,val){
+    const dot=document.getElementById('prioDot'), msg=document.getElementById('prioMsg');
+    if(dot) dot.style.background=PRIORITY_COLOR[val]||'#eab308';
+    if(msg) msg.textContent=T('uploading');
+    try{
+      const r=await fetch('/track/api/set_priority',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,priority:val})});
+      const j=await r.json();
+      if(msg) msg.textContent=j.ok?T('saved'):(j.error||T('changeFail'));
+    }catch(e){ if(msg) msg.textContent=T('changeFail'); }
+  }
+
+  // ถ่ายคอนเทนต์ — แทรกได้ทุกสเตป (ไม่เปลี่ยนสเตป) · แนบรูป/วิดีโอ + โน้ต → บันทึกลงไทม์ไลน์
+  let _shootCode='', _shootMedia=[];
+  function openShoot(code){
+    _shootCode=code; _shootMedia=[];
+    document.getElementById('shootMsg').textContent=code;
+    document.getElementById('shootNote').value='';
+    document.getElementById('shootThumbs').innerHTML=''; document.getElementById('shootUpMsg').textContent='';
+    const f=document.getElementById('shootFile'); if(f) f.value='';
+    document.getElementById('shootModal').style.display='flex'; _scrollParent();
+    if(window.lucide)lucide.createIcons();
+  }
+  function onShootFiles(files){ if(files&&files.length) _uploadInto(files,_shootMedia,'shootThumbs','shootUpMsg',_shootCode); }
+  function closeShoot(){ document.getElementById('shootModal').style.display='none'; }
+  async function doShoot(){
+    if(!_shootCode) return;
+    if(!_shootMedia.length){ alert(T('mediaReq')); return; }
+    const note=document.getElementById('shootNote').value.trim();
+    const btn=document.getElementById('shootGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
+    try{
+      const r=await fetch('/track/api/content_shoot',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code:_shootCode,note,media:_shootMedia})});
+      const j=await r.json();
+      if(!j.ok){ alert(j.error||T('changeFail')); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } return; }
+      closeShoot(); alert(T('shootDone'));
     }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } }
   }
   // บอร์ด: สลับ "งานของฉัน" (เฉพาะคอลัมน์สเตปตัวเอง) / "ทั้งหมด"
@@ -323,7 +435,7 @@
     if(ba) ba.classList.toggle('pri', m==='all');
   }
   {% if has_my %}setBoardMode('mine');{% endif %}
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();} });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeShoot();} });
 
   // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
   const PHASES = JSON.parse(document.getElementById('phaseData').textContent);

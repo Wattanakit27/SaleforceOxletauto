@@ -86,7 +86,7 @@ class Command(BaseCommand):
             else:
                 car.frontline_at = None
             # สถานะ
-            if car.stage == "sold":
+            if car.stage == "release":       # ปล่อยรถ = จบ
                 car.status = "sold"
             elif random.random() < 0.05:
                 car.status = "hold"

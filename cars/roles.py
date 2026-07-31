@@ -1,16 +1,19 @@
 """
-ระบบสิทธิ์ 8 บทบาท (1 user = 1 บทบาท ผ่าน Django Group)
+ระบบสิทธิ์ 11 บทบาท (1 user = 1 บทบาท ผ่าน Django Group)
   Executive    ผู้บริหาร   - ทำได้ทุกอย่าง (superuser = Executive เสมอ)
-  Purchasing   จัดซื้อ     - เพิ่ม/แก้รถ, เลื่อนสเตปช่วงรับเข้า (ไม่ต้องสแกน)
+  Purchasing   จัดซื้อ     - เพิ่ม/แก้รถ, รับเข้า (ไม่ต้องสแกน)
   Admin        แอดมิน      - แก้ข้อมูลรถ + จัดการ user (เพิ่มรถ/เปลี่ยนสเตปไม่ได้)
-  Sales        เซลล์       - คนตรวจ (qc_*) + งานขาย ผ่านการสแกน · เด้งกลับ (ตรวจไม่ผ่าน→ทำใหม่) ได้
-  Technician   ช่าง        - งานซ่อม/อะไหล่/ฟิล์ม ผ่านการสแกน
-  Vendor       อู่นอก      - ทำสี/เบาะ ผ่านการสแกน
-  Registration ฝ่ายทะเบียน - คนประเมิน/ตรวจ (ชี้ทางแยกได้ทุกสเตป เพราะเป็น FULL_ROLES)
+  Sales        เซลล์       - งานขาย (show/reserve/finance/closing/release) ผ่านการสแกน
+  Technician   ช่าง        - ซ่อม/อะไหล่/ฟิล์ม ผ่านการสแกน
+  Vendor       อู่นอก      - อู่สีนอก/เบาะ ผ่านการสแกน
+  Registration ฝ่ายทะเบียน - FULL_ROLES (ทำได้ทุกสเตป + จัดการรถ/ผู้ใช้)
   CarWash      ฝ่ายล้างรถ  - ชงล้างรถ ผ่านการสแกน
+  Production   โปรดักชัน   - รถรอถ่ายรูป + ส่งต่อไป ซ่อม/สี/ล้าง + ถ่ายคอนเทนต์ (แทรกทุกสเตป)
+  QC           QC          - รอตรวจขึ้นโชว์ + ตรวจรอปล่อย · FULL_ROLES (สิทธิ์เยอะเท่าฝ่ายทะเบียน)
+  PaintIn      อู่สีใน     - อู่สีใน · FULL_ROLES (ตามที่ตั้ง)
 
-แนวคิด: บทบาททำงาน (Sales/Tech/Vendor/CarWash) เปลี่ยนสเตปได้ทาง "การสแกน" เท่านั้น
-        Executive/Purchasing/Registration เปลี่ยนตรงผ่าน UI ได้
+แนวคิด: บทบาททำงาน (Sales/Tech/Vendor/CarWash/Production) เปลี่ยนสเตปได้ทาง "การสแกน" เท่านั้น
+        Executive/Purchasing/Registration/QC/PaintIn เปลี่ยนตรงผ่าน UI ได้ (FULL_ROLES)
 """
 from functools import wraps
 
@@ -26,6 +29,9 @@ TECH = "Technician"
 VENDOR = "Vendor"
 REGIST = "Registration"
 CARWASH = "CarWash"
+PRODUCTION = "Production"
+QC = "QC"
+PAINTIN = "PaintIn"
 
 ROLES = [
     (EXEC, "ผู้บริหาร"),
@@ -36,35 +42,38 @@ ROLES = [
     (VENDOR, "อู่นอก"),
     (REGIST, "ฝ่ายทะเบียน"),
     (CARWASH, "ฝ่ายล้างรถ"),
+    (PRODUCTION, "โปรดักชัน"),
+    (QC, "QC"),
+    (PAINTIN, "อู่สีใน"),
 ]
 ROLE_LABEL = dict(ROLES)
 
-# สเตป -> เซตบทบาทที่ "กดเปลี่ยนเข้าสเตปนั้น" ได้ (Executive/Registration = FULL_ROLES ได้ทุกสเตปเสมอ)
-# จุดตรวจ (qc_*) = เซลล์/ทะเบียน · เด้งกลับ: ให้ SALES กดเข้า repair/paint/wash ได้ (ตรวจไม่ผ่าน→ทำใหม่ที่เดิม)
-# ทางแยกหลัง qc_repair (ทำสี/ล้าง/พร้อมขาย/อะไหล่/เบาะ) = ฝ่ายทะเบียนชี้ทางได้ทุกสเตป (FULL_ROLES)
+# สเตป -> เซตบทบาทที่ "กดเปลี่ยนเข้าสเตปนั้น" ได้ (FULL_ROLES = Exec/Regist/QC/PaintIn ได้ทุกสเตปเสมอ)
+# โปรดักชัน: photo_wait + route ไป repair/paint_out/wash · QC/อู่สีใน = full (ทำได้ทุกสเตป · qc_show/qc_release เป็นของ QC)
 STAGE_ROLES = {
     "intake":     {PURCHASING},
-    "repair":     {TECH, SALES},
-    "qc_repair":  {SALES, REGIST},
+    "photo_wait": {PRODUCTION},
+    "repair":     {TECH, PRODUCTION},
     "parts":      {TECH},
     "upholstery": {VENDOR, TECH},
-    "paint":      {VENDOR, SALES},
-    "qc_paint":   {SALES, REGIST},
+    "paint_in":   set(),                 # อู่สีใน = PAINTIN (FULL) เท่านั้น
+    "paint_out":  {VENDOR, PRODUCTION},
     "film":       {TECH},
-    "wash":       {CARWASH, SALES},
-    "qc_wash":    {SALES, REGIST},
+    "wash":       {CARWASH, PRODUCTION},
+    "qc_show":    set(),                 # QC (FULL) เท่านั้น
     "show":       {SALES},
     "reserve":    {SALES},
-    "finance":    {SALES, REGIST},
+    "finance":    {SALES},
     "closing":    {SALES},
-    "sold":       {SALES},
+    "qc_release": set(),                 # QC (FULL) · บังคับแนบรูป/วิดีโอ
+    "release":    {SALES},               # เซลล์ปิด (QC/ผู้บริหาร ก็ทำได้)
 }
 
 # บทบาทที่ต้อง "สแกนก่อน" ถึงจะเปลี่ยนสเตปได้ (เปลี่ยนตรงผ่าน UI ไม่ได้)
-SCAN_ONLY_ROLES = {SALES, TECH, VENDOR, CARWASH}
+SCAN_ONLY_ROLES = {SALES, TECH, VENDOR, CARWASH, PRODUCTION}
 
-# สิทธิ์เต็ม (ทำได้ทุกอย่าง = ผู้บริหาร) — ฝ่ายทะเบียนยกระดับมาเท่าผู้บริหาร (มิ.ย.69)
-FULL_ROLES = {EXEC, REGIST}
+# สิทธิ์เต็ม (ทำได้ทุกอย่าง = ผู้บริหาร) — ฝ่ายทะเบียน + QC + อู่สีใน ยกระดับมาเท่าผู้บริหาร
+FULL_ROLES = {EXEC, REGIST, QC, PAINTIN}
 
 
 def set_user_role(user, role_key):

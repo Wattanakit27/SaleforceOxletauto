@@ -72,8 +72,9 @@ def dashboard(request):
     stage = request.GET.get("stage", "")
     sort = request.GET.get("sort", "updated")
     # ★ แยก "ขายแล้ว" ออกจากตารางหลัก (เหมือนแท็บสถานะรถในแดชบอร์ดขาย) — default โชว์รถในระบบ
+    #   ปล่อยรถ (release) = จบ → status=sold → หลุดจากบอร์ด/ตารางรถในระบบ
     def _is_sold(c):
-        return c.status == "sold" or c.stage == "sold"
+        return c.status == "sold" or c.stage == "release"
     active_n = sum(1 for c in all_cars if not _is_sold(c))
     sold_n = len(all_cars) - active_n
     view = "sold" if request.GET.get("view", "active") == "sold" else "active"
@@ -103,7 +104,7 @@ def dashboard(request):
         _board_by.setdefault(c.stage, []).append(c)
     board_cols = []
     for k, n, i in C.STAGES:
-        if k == "sold":
+        if k == "release":       # ปล่อยรถ = จบ (status sold) → ไม่ต้องมีคอลัมน์บนบอร์ด
             continue
         lst = sorted(_board_by.get(k, []), key=lambda c: c.stage_since)  # ค้างนานสุดขึ้นก่อน
         board_cols.append({"key": k, "name": n, "icon": i, "mine": k in my_stages, "cars": lst})
@@ -249,6 +250,7 @@ def car_json(request, code):
         "note": car.note,
         "dateIn": timezone.localtime(car.date_in).strftime("%d/%m/%Y") if car.date_in else "",
         "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
+        "priority": car.priority, "priorityColor": car.priority_color, "priorityName": car.priority_name,
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
@@ -811,8 +813,9 @@ def cars_api(request):
             "code": c.code, "title": c.title, "name": ex.get("name") or c.title,
             "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
             "stage": c.stage, "stageName": c.stage_name, "stageIcon": c.stage_icon,
-            "status": c.status, "sold": (c.status == "sold" or c.stage == "sold"),
+            "status": c.status, "sold": (c.status == "sold" or c.stage == "release"),
             "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
+            "priority": c.priority, "priorityColor": c.priority_color, "priorityName": c.priority_name,
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
             "province": (ex.get("owner") or {}).get("จังหวัด", ""),
@@ -849,13 +852,29 @@ def api_set_stage(request):
     stage = data.get("stage", "")
     if not roles.can_set_stage(request.user, stage):
         return JsonResponse({"ok": False, "error": "ไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (บทบาทของคุณไม่ครอบสเตปนี้)"}, status=403)
+    media = data.get("media")
+    if not isinstance(media, list):
+        media = []
+    if stage in C.STAGE_FORCE_MEDIA and not media:   # ตรวจปล่อย/ปล่อยรถ = บังคับแนบรูป/วิดีโอ
+        return JsonResponse({"ok": False, "error": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน"}, status=400)
     note = (data.get("note") or "").strip()
+    pr = data.get("priority")
+    if pr in C.PRIORITY_NAME:                          # ปรับความด่วนพร้อมกัน (ถ้าส่งมา)
+        car.priority = pr
+        car.save(update_fields=["priority"])
     actor = _actor(request.user)
-    _, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
+    log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
+    if media:
+        try:
+            log.media = media
+            log.save(update_fields=["media"])
+        except Exception:
+            pass
     if should_notify:
         notify_stage_change(car, worker_name=actor)
     return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,
-                         "flag": car.flag, "days": car.days_in_stage})
+                         "flag": car.flag, "days": car.days_in_stage,
+                         "priority": car.priority, "priorityColor": car.priority_color})
 
 
 @csrf_exempt
@@ -895,6 +914,53 @@ def api_seller_set_stage(request):
                          "flag": car.flag, "days": car.days_in_stage})
 
 
+@csrf_exempt
+@login_required
+@require_POST
+def api_set_priority(request):
+    """ตั้ง "ความด่วน" ของรถ (สีการ์ด) — POST JSON {code, priority}.
+    ความด่วนเป็นการ "โฟกัส/จัดคิว" ไม่ใช่การเปลี่ยนสเตป → คนที่ล็อกอินติดตามรถทุกคนตั้งได้
+    (บอร์ดถูก scope ตามบทบาทอยู่แล้ว) · csrf_exempt (บอร์ดในหน้า sales/seller ไม่มี CSRF token)."""
+    data = json.loads(request.body or "{}")
+    car = get_object_or_404(Car, code=data.get("code"))
+    pr = data.get("priority")
+    if pr not in C.PRIORITY_NAME:
+        return JsonResponse({"ok": False, "error": "ความด่วนไม่ถูกต้อง"}, status=400)
+    car.priority = pr
+    car.save(update_fields=["priority"])
+    return JsonResponse({"ok": True, "priority": car.priority,
+                         "priorityColor": car.priority_color, "priorityName": car.priority_name})
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def api_content_shoot(request):
+    """บันทึก "ถ่ายคอนเทนต์" ที่สเตปปัจจุบัน — POST JSON {code, note?, media?}.
+    เป็น action แทรกได้ทุกสเตป (ไม่เปลี่ยนสเตป) → สร้าง ScanLog ที่สเตปเดิม + แนบรูป/วิดีโอ + โน้ต
+    เก็บลงไทม์ไลน์รถ (โปรดักชันถ่ายคอนเทนต์ระหว่างทำสภาพ/ขาย). ไม่ push LINE."""
+    data = json.loads(request.body or "{}")
+    car = get_object_or_404(Car, code=data.get("code"))
+    media = data.get("media")
+    if not isinstance(media, list):
+        media = []
+    note = (data.get("note") or "").strip()
+    note = ("ถ่ายคอนเทนต์ · " + note) if note else "ถ่ายคอนเทนต์"
+    actor = _actor(request.user)
+    log = ScanLog.objects.create(car=car, stage=car.stage, worker_name=actor, note=note)
+    if media:
+        try:
+            log.media = media
+            log.save(update_fields=["media"])
+        except Exception:
+            pass
+        try:
+            _label_stage_media(log, car)
+        except Exception:
+            pass
+    return JsonResponse({"ok": True, "stage": car.stage, "stageName": car.stage_name})
+
+
 @login_required
 @require_POST
 def api_add_car(request):
@@ -928,7 +994,7 @@ def api_add_car(request):
     car.stage_since = timezone.now()
     if stage == C.FRONTLINE_STAGE:
         car.frontline_at = timezone.now()
-    if stage == "sold":
+    if stage == "release":       # ปล่อยรถ = จบ → มาร์ค sold
         car.status = "sold"
 
     # รูปขาย — รับหลายรูป (id/path จาก api_upload) · รูปแรก = ปก · เก็บ list ใน extra['sale_photos']
@@ -1051,6 +1117,9 @@ def api_users(request):
         roles.VENDOR: "สแกน QR เปลี่ยนสเตป (งานอู่นอก — ทำสี/เบาะ)",
         roles.REGIST: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — คนประเมิน/ตรวจ ชี้ทางแยกได้ทุกสเตป + เพิ่ม/แก้/ลบรถ + จัดการบทบาท",
         roles.CARWASH: "สแกน QR เปลี่ยนสเตป (งานล้าง/ชงล้าง)",
+        roles.PRODUCTION: "รถรอถ่ายรูป + ส่งต่อไปซ่อม/สีนอก/ล้าง + ถ่ายคอนเทนต์ (แทรกได้ทุกสเตป)",
+        roles.QC: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — ตรวจรถขึ้นโชว์ + ตรวจรถรอปล่อย",
+        roles.PAINTIN: "ทำได้ทุกอย่าง (เท่าผู้บริหาร) — งานอู่สีใน",
     }
     role_help = [{"label": lbl, "cap": _caps.get(k, ""),
                   "stages": [] if k in roles.FULL_ROLES else role_stages.get(k, []),

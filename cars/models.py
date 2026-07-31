@@ -32,6 +32,8 @@ class Car(models.Model):
     frontline_at = models.DateTimeField("ขึ้นหน้าร้านเมื่อ", null=True, blank=True)
 
     status = models.CharField("สถานะ", max_length=10, choices=C.STATUS_CHOICES, default="active")
+    # ความด่วน — สีการ์ดมาจากนี่ (เลือกมือ · แทนวันค้างอัตโนมัติ)
+    priority = models.CharField("ความด่วน", max_length=16, choices=C.PRIORITY_CHOICES, default=C.DEFAULT_PRIORITY)
 
     # ----- ฝ่ายทะเบียน -----
     book_status = models.CharField("สถานะเล่ม", max_length=14, choices=C.BOOK_STATUS_CHOICES, blank=True)
@@ -106,7 +108,7 @@ class Car(models.Model):
         self.stage_since = now
         if new_stage == C.FRONTLINE_STAGE and not self.frontline_at:
             self.frontline_at = now
-        if new_stage == "sold":
+        if new_stage == "release":       # ปล่อยรถ = จบ (ส่งมอบ) → มาร์ค sold หลุดจากบอร์ด
             self.status = "sold"
         self.save()
 
@@ -151,6 +153,14 @@ class Car(models.Model):
     @property
     def stage_icon(self):
         return C.STAGE_ICON.get(self.stage, "circle")
+
+    @property
+    def priority_color(self):
+        return C.PRIORITY_COLOR.get(self.priority, "#eab308")
+
+    @property
+    def priority_name(self):
+        return C.PRIORITY_NAME.get(self.priority, self.priority)
 
     @property
     def stage_index(self):
