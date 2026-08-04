@@ -2438,41 +2438,45 @@
         } catch(e) { console.error('lead report table error', e); }
 
         // ── เวอร์ชันสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
-        // ★ ก.ค.69 v4: กลับเป็น "1 เซลล์ 1 แถว" (ตามที่ผู้ใช้ขอ) แต่ตัวใหญ่กว่าตารางเว็บมาก — แบ่ง 2 ชั้นความสำคัญในแถวเดียว:
-        // 5 ตัวหลัก (จอง/รอผล/รอปล่อย/ปล่อย/%จอง) เป็นกล่องขาวเด่นชิดซ้าย · 6 ตัวรอง (Lead/RJ/เฉลี่ย/ไลฟ์/คลิป/Lead ไลฟ์) ตัวเล็กกว่าชิดขวา
-        // ครบทุกคอลัมน์เหมือนเดิม (reuse _rpt/_RC) ไม่ตัดข้อมูล — แค่จัดเป็นแถวเดียวต่อคนแทนบล็อกซ้อนหลายแถว
+        // ★ ก.ค.69 v5: "1 เซลล์ 1 แถว" + label ชื่อคอลัมน์ขึ้นแค่หัวตารางครั้งเดียว (ไม่ซ้ำทุกแถว) — เดิมพิมพ์ label ใต้ตัวเลขทุกแถวๆ 11 ครั้ง รกและกินที่
+        // เหลือแค่ตัวเลขในแต่ละแถว (พื้นที่ที่ว่างจาก label เดิม → เอาไปขยายฟอนต์ตัวเลขแทน) · 5 ตัวหลัก (จอง/รอผล/รอปล่อย/ปล่อย/%จอง) กล่องขาวเด่น · 6 ตัวรอง (Lead/RJ/เฉลี่ย/ไลฟ์/คลิป/Lead ไลฟ์) เล็กกว่า
+        // ครบทุกคอลัมน์เหมือนเดิม (reuse _rpt/_RC) ไม่ตัดข้อมูล
         const _RC_MAIN = _RC.slice(0, 5), _RC_SUB = _RC.slice(5);
-        const _rowMain = (r,tCol)=>_RC_MAIN.map(c=>`<div style="min-width:92px;background:#fff;border-radius:12px;padding:9px 6px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-            <div style="font-size:24px;font-weight:800;color:#1f2333;font-variant-numeric:tabular-nums;line-height:1.1">${c.v(r)}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
+        const _rowMain = r=>_RC_MAIN.map(c=>`<div style="min-width:92px;background:#fff;border-radius:12px;padding:12px 6px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+            <div style="font-size:28px;font-weight:800;color:#1f2333;font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
           </div>`).join('');
-        const _rowSub = (r,subColor,labColor)=>_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
-            <div style="font-size:22px;font-weight:800;color:${subColor};font-variant-numeric:tabular-nums;line-height:1.1">${c.v(r)}</div>
-            <div style="font-size:11px;color:${labColor};margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
+        const _rowSub = (r,subColor)=>_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
+            <div style="font-size:24px;font-weight:800;color:${subColor};font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
           </div>`).join('');
+        // หัวตาราง — label โผล่แค่บรรทัดเดียวบนสุด ตรงกับ layout ของแถวข้อมูล (rank+ชื่อ+5หลัก+6รอง)
+        const _headRow = `<div style="display:flex;align-items:flex-end;gap:12px;padding:0 16px;margin-bottom:10px">
+            <div style="width:26px;flex-shrink:0"></div>
+            <div style="width:150px;flex-shrink:0;font-size:13px;color:#8b90a6;font-weight:700">เซลล์</div>
+            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:92px;text-align:center;font-size:12.5px;color:#6b7280;font-weight:700;line-height:1.2">${h(c.l)}</div>`).join('')}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center;font-size:11px;color:#9ca3af;font-weight:700;line-height:1.2">${h(c.l)}</div>`).join('')}</div>
+          </div>`;
         let SHOT = `<div style="font-size:34px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
-          <div style="font-size:18px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>`;
+          <div style="font-size:18px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>`
+          + _headRow;
         _rpt.forEach((r,i)=>{
           const _f=_rc((r.dn||0)+(r.wp||0)), _bg=_f==='g'?'#e6f7ea':_f==='y'?'#fdf5e2':'#fdeceb';
-          SHOT += `<div style="display:flex;align-items:center;gap:12px;background:${_bg};border-radius:16px;padding:14px 16px;margin-bottom:10px;border-left:8px solid ${_tcol(r.team)}">
+          SHOT += `<div style="display:flex;align-items:center;gap:12px;background:${_bg};border-radius:16px;padding:12px 16px;margin-bottom:8px;border-left:8px solid ${_tcol(r.team)}">
             <div style="width:26px;font-size:15px;font-weight:800;color:#a7abbe;text-align:center;flex-shrink:0">${i+1}</div>
             <div style="width:150px;flex-shrink:0">
               <div style="font-size:21px;font-weight:800;color:#1f2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(sname(r.name))}</div>
               <div style="display:inline-block;font-size:11px;color:#fff;background:${_tcol(r.team)};padding:2px 8px;border-radius:6px;font-weight:700;margin-top:3px">${h(r.team==='ADMIN'?'เทเลเซลล์':r.team)}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">${_rowMain(r)}</div>
-            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_rowSub(r,'#374151','#6b7280')}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_rowSub(r,'#374151')}</div>
           </div>`;
         });
-        SHOT += `<div style="display:flex;align-items:center;gap:12px;background:#6d28d9;border-radius:16px;padding:16px">
+        SHOT += `<div style="display:flex;align-items:center;gap:12px;background:#6d28d9;border-radius:16px;padding:14px 16px">
             <div style="width:176px;flex-shrink:0;font-size:22px;font-weight:800;color:#fff">รวมทั้งหมด</div>
-            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:92px;background:rgba(255,255,255,.16);border-radius:12px;padding:9px 6px;text-align:center">
-              <div style="font-size:24px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.1">${c.t(_rpt)}</div>
-              <div style="font-size:11px;color:#e0d4fb;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:92px;background:rgba(255,255,255,.16);border-radius:12px;padding:12px 6px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
             </div>`).join('')}</div>
             <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
-              <div style="font-size:22px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.1">${c.t(_rpt)}</div>
-              <div style="font-size:11px;color:#e0d4fb;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
+              <div style="font-size:24px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
             </div>`).join('')}</div>
           </div>`;
         html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:30px 28px">${SHOT}</div></div>`;
