@@ -2446,9 +2446,9 @@
             <div style="font-size:24px;font-weight:800;color:#1f2333;font-variant-numeric:tabular-nums;line-height:1.1">${c.v(r)}</div>
             <div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
           </div>`).join('');
-        const _rowSub = (r,subColor,labColor)=>_RC_SUB.map(c=>`<div style="min-width:62px;text-align:center">
-            <div style="font-size:15px;font-weight:700;color:${subColor};font-variant-numeric:tabular-nums;line-height:1.1">${c.v(r)}</div>
-            <div style="font-size:9.5px;color:${labColor};margin-top:2px;line-height:1.15">${h(c.l)}</div>
+        const _rowSub = (r,subColor,labColor)=>_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:${subColor};font-variant-numeric:tabular-nums;line-height:1.1">${c.v(r)}</div>
+            <div style="font-size:11px;color:${labColor};margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
           </div>`).join('');
         let SHOT = `<div style="font-size:34px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
           <div style="font-size:18px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>`;
@@ -2461,7 +2461,7 @@
               <div style="display:inline-block;font-size:11px;color:#fff;background:${_tcol(r.team)};padding:2px 8px;border-radius:6px;font-weight:700;margin-top:3px">${h(r.team==='ADMIN'?'เทเลเซลล์':r.team)}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">${_rowMain(r)}</div>
-            <div style="display:flex;gap:12px;flex-shrink:0;margin-left:6px">${_rowSub(r,'#4b5563','#9ca3af')}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_rowSub(r,'#374151','#6b7280')}</div>
           </div>`;
         });
         SHOT += `<div style="display:flex;align-items:center;gap:12px;background:#6d28d9;border-radius:16px;padding:16px">
@@ -2470,12 +2470,12 @@
               <div style="font-size:24px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.1">${c.t(_rpt)}</div>
               <div style="font-size:11px;color:#e0d4fb;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
             </div>`).join('')}</div>
-            <div style="display:flex;gap:12px;flex-shrink:0;margin-left:6px">${_RC_SUB.map(c=>`<div style="min-width:62px;text-align:center">
-              <div style="font-size:15px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;line-height:1.1">${c.t(_rpt)}</div>
-              <div style="font-size:9.5px;color:#c7b3ef;margin-top:2px;line-height:1.15">${h(c.l)}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
+              <div style="font-size:22px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.1">${c.t(_rpt)}</div>
+              <div style="font-size:11px;color:#e0d4fb;margin-top:3px;line-height:1.2;font-weight:600">${h(c.l)}</div>
             </div>`).join('')}</div>
           </div>`;
-        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1620px;background:#fff;padding:30px 28px">${SHOT}</div></div>`;
+        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:30px 28px">${SHOT}</div></div>`;
 
         // ── ตารางสรุปรายทีม (#rpt-shot-teams · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 2) — เป้า/จอง/เซ็น/อนุมัติ/ปล่อย/รวมปล่อยทั้งปี ──
         // สีหัวเดือนเปลี่ยนตามเดือน (_cm) · เซ็น=รอผล(wr) · อนุมัติ=รอปล่อย(wp) — ใช้เลขชุดเดียวกับตารางรายงานบนเว็บ
