@@ -2439,19 +2439,19 @@
 
         // ── เวอร์ชันสำหรับส่งไลน์ (#rpt-shot · ซ่อนบนเว็บด้วย wrapper height:0 · Playwright เปิดให้เห็นแล้วแคปเฉพาะตอนส่ง) ──
         // ครบทุกคอลัมน์ (เหมือนตารางเต็ม _RC) แต่สไตล์อ่านง่าย: แถวโค้ง ตัวใหญ่ขึ้น สีคงที่ (light เสมอ) ไม่อิงธีมเว็บ · reuse _rpt/_RC เดียวกัน
-        let SHOT = `<div style="font-size:24px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
-          <div style="font-size:15px;color:#8b90a6;margin:6px 0 16px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>
-          <table style="width:100%;border-collapse:separate;border-spacing:0 6px;font-size:15px">
-          <thead><tr style="color:#8b90a6;font-size:12.5px"><th style="text-align:center;padding:2px 8px">#</th><th style="text-align:left;padding:2px 10px">เซลล์</th>${_RC.map(c=>`<th style="text-align:right;padding:2px 10px;white-space:nowrap">${h(c.l)}</th>`).join('')}</tr></thead><tbody>`;
+        let SHOT = `<div style="font-size:30px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
+          <div style="font-size:18px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>
+          <table style="width:100%;border-collapse:separate;border-spacing:0 8px;font-size:19px">
+          <thead><tr style="color:#8b90a6;font-size:15px"><th style="text-align:center;padding:2px 10px">#</th><th style="text-align:left;padding:2px 12px">เซลล์</th>${_RC.map(c=>`<th style="text-align:right;padding:2px 13px;white-space:nowrap">${h(c.l)}</th>`).join('')}</tr></thead><tbody>`;
         _rpt.forEach((r,i)=>{
           const _f=_rc((r.dn||0)+(r.wp||0)), _bg=_f==='g'?'#e6f7ea':_f==='y'?'#fdf5e2':'#fdeceb';
-          SHOT += `<tr><td style="background:${_bg};padding:12px 8px;text-align:center;color:#a7abbe;font-size:13px;border-radius:10px 0 0 10px">${i+1}</td><td style="background:${_bg};padding:12px 11px;font-weight:700;color:#1f2333;border-left:5px solid ${_tcol(r.team)};white-space:nowrap">${h(sname(r.name))} <span style="font-size:11px;color:#fff;background:${_tcol(r.team)};padding:1px 6px;border-radius:5px;vertical-align:2px">${h(r.team==='ADMIN'?'AD':r.team)}</span></td>`;
-          _RC.forEach((c,ci)=>{ SHOT += `<td style="background:${_bg};padding:12px 11px;text-align:right;color:#2b2f42;font-variant-numeric:tabular-nums${ci===_RC.length-1?';border-radius:0 10px 10px 0':''}">${c.v(r)}</td>`; });
+          SHOT += `<tr><td style="background:${_bg};padding:16px 10px;text-align:center;color:#a7abbe;font-size:16px;border-radius:12px 0 0 12px">${i+1}</td><td style="background:${_bg};padding:16px 14px;font-weight:700;color:#1f2333;border-left:6px solid ${_tcol(r.team)};white-space:nowrap">${h(sname(r.name))} <span style="font-size:14px;color:#fff;background:${_tcol(r.team)};padding:2px 8px;border-radius:6px;vertical-align:2px">${h(r.team==='ADMIN'?'AD':r.team)}</span></td>`;
+          _RC.forEach((c,ci)=>{ SHOT += `<td style="background:${_bg};padding:16px 14px;text-align:right;color:#2b2f42;font-variant-numeric:tabular-nums${ci===_RC.length-1?';border-radius:0 12px 12px 0':''}">${c.v(r)}</td>`; });
           SHOT += `</tr>`;
         });
-        SHOT += `<tr style="font-weight:800;color:#fff"><td style="background:#6d28d9;padding:13px 8px;text-align:center;border-radius:10px 0 0 10px">รวม</td><td style="background:#6d28d9;padding:13px 11px">รวมทั้งหมด</td>${_RC.map((c,ci)=>`<td style="background:#6d28d9;padding:13px 11px;text-align:right${ci===_RC.length-1?';border-radius:0 10px 10px 0':''}">${c.t(_rpt)}</td>`).join('')}</tr>`;
+        SHOT += `<tr style="font-weight:800;color:#fff"><td style="background:#6d28d9;padding:17px 10px;text-align:center;border-radius:12px 0 0 12px">รวม</td><td style="background:#6d28d9;padding:17px 14px">รวมทั้งหมด</td>${_RC.map((c,ci)=>`<td style="background:#6d28d9;padding:17px 14px;text-align:right${ci===_RC.length-1?';border-radius:0 12px 12px 0':''}">${c.t(_rpt)}</td>`).join('')}</tr>`;
         SHOT += `</tbody></table>`;
-        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:26px 28px">${SHOT}</div></div>`;
+        html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1820px;background:#fff;padding:30px 32px">${SHOT}</div></div>`;
 
         // ── ตารางสรุปรายทีม (#rpt-shot-teams · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 2) — เป้า/จอง/เซ็น/อนุมัติ/ปล่อย/รวมปล่อยทั้งปี ──
         // สีหัวเดือนเปลี่ยนตามเดือน (_cm) · เซ็น=รอผล(wr) · อนุมัติ=รอปล่อย(wp) — ใช้เลขชุดเดียวกับตารางรายงานบนเว็บ
