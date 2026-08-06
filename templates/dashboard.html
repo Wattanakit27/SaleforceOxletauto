@@ -43,10 +43,14 @@
     #carTable th,#carTable td{padding:8px 5px;font-size:12px}
     #carTable .pill{font-size:11px;padding:3px 7px}
   }
+  /* ฝังในแท็บ "สถานะรถ" ของ sales / โหมดเซลล์ (iframe) → ซ่อนหัว+ปุ่มซ้ำ (toolbar อยู่นอกกรอบแล้ว)
+     ให้บอร์ดเต็มจอ · workers ที่เข้า /track/ ตรง (ไม่ใช่ iframe) ยังเห็นหัว/สลับภาษาปกติ */
+  html.embedded #trkHead{display:none}
+  html.embedded .kgrid{margin-top:2px}
 </style>
 
-<!-- หัว + ปุ่มจัดการ -->
-<div class="row" style="justify-content:space-between;margin-bottom:14px">
+<!-- หัว + ปุ่มจัดการ (ซ่อนเมื่อฝังในกรอบ sales/เซลล์ · ดู html.embedded #trkHead) -->
+<div class="row" id="trkHead" style="justify-content:space-between;margin-bottom:14px">
   <div><h1 style="margin:0" data-i18n="title">สถานะรถ</h1><span class="mut sm"><span data-i18n="subtitle">ภาพรวมไปป์ไลน์</span> · {{ total }}</span></div>
   <div class="row" style="gap:8px;align-items:center">
     <div class="row" id="langSw" style="gap:3px;margin-right:2px"><button class="btn sm" data-lang="th" onclick="setTrkLang('th')">ไทย</button><button class="btn sm" data-lang="en" onclick="setTrkLang('en')">EN</button><button class="btn sm" data-lang="mm" onclick="setTrkLang('mm')">မြန်မာ</button><button class="btn sm" data-lang="kh" onclick="setTrkLang('kh')">ខ្មែរ</button></div>

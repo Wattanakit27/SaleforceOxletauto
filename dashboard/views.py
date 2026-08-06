@@ -365,18 +365,38 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
     return user
 
 
+def _render_login(request, error=None, next_url="/dashboard/"):
+    """render หน้า login โดยส่ง context ครบเสมอ (line_login/show_breakglass).
+    กันบั๊ก error path ที่เผลอไม่ส่ง line_login → หน้าโชว์ 'ยังไม่ได้ตั้งค่า LINE Login' หลอก
+    + ซ่อนปุ่ม LINE + กางฟอร์มสำรอง (ทั้งที่ env ตั้งไว้จริง)."""
+    line_login = bool((getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip())
+    return render(request, "dashboard/login.html", {
+        "next": next_url, "error": error, "line_login": line_login,
+        "show_breakglass": bool(request.GET.get("bg")),
+    })
+
+
 @require_GET
 def line_login_start(request):
     """เริ่ม LINE Login (OAuth) — redirect ไปหน้า authorize ของ LINE."""
     cid = (getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip()
+    next_url = request.GET.get("next", "/dashboard/")
     if not cid:
-        return render(request, "dashboard/login.html",
-                      {"next": "/dashboard/", "error": "ยังไม่ได้ตั้ง LINE Login (LINE_LOGIN_CHANNEL_ID)"})
-    import secrets
+        return _render_login(request, error="ยังไม่ได้ตั้ง LINE Login (LINE_LOGIN_CHANNEL_ID)", next_url=next_url)
+    import secrets, time as _time
     from urllib.parse import urlencode
     state = secrets.token_urlsafe(16)
-    request.session["line_login_state"] = state
-    request.session["line_login_next"] = request.GET.get("next", "/dashboard/")
+    request.session["line_login_state"] = state          # fallback (คุกกี้ session · signed_cookies)
+    request.session["line_login_next"] = next_url
+    # ★ เก็บ state ฝั่งเซิร์ฟเวอร์ (KVStore) เป็นตัวหลัก — กัน Safari/WebKit ทิ้ง Set-Cookie ที่ติดมากับ
+    #   302 redirect ข้ามเว็บไป LINE (บั๊กคลาสสิก iOS: คุกกี้ที่เซ็ตพร้อม redirect ข้าม host ไม่ถูกเก็บ
+    #   รอบแรก → callback ไม่เจอ state → "state ไม่ตรง" ต้องกดสองรอบ). ยืนยัน state จากที่เก็บนี้
+    #   ได้โดยไม่พึ่งคุกกี้ → ผ่านรอบเดียวทุกเบราว์เซอร์. best-effort (DB ล่ม = fallback คุกกี้เดิม)
+    try:
+        from .services import cache_store
+        cache_store.set_kv(f"line_oauth:{state}", {"next": next_url, "ts": int(_time.time())})
+    except Exception:
+        pass
     params = urlencode({
         "response_type": "code",
         "client_id": cid,
@@ -394,11 +414,27 @@ def line_login_callback(request):
     state = (request.GET.get("state") or "").strip()
     if not code:
         err = request.GET.get("error_description") or "ยกเลิกการเข้าสู่ระบบ"
-        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"LINE Login: {err}"})
-    if not state or state != request.session.get("line_login_state"):
-        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": "state ไม่ตรง — ลองเข้าใหม่"})
-    next_url = request.session.pop("line_login_next", "/dashboard/")
+        return _render_login(request, error=f"LINE Login: {err}")
+    # ── ตรวจ state (anti-CSRF) — เช็คที่เก็บฝั่งเซิร์ฟเวอร์ก่อน (ทน Safari) แล้ว fallback คุกกี้ session ──
+    import time as _time
+    server_ok, server_next = False, None
+    if state:
+        try:
+            from .services import cache_store
+            _raw = cache_store.get_kv(f"line_oauth:{state}")
+            _rec = _raw.get("data") if isinstance(_raw, dict) else None
+            # ใช้ครั้งเดียว (used) + หมดอายุ 10 นาที กัน replay/ค้าง
+            if _rec and not _rec.get("used") and (int(_time.time()) - int(_rec.get("ts", 0)) < 600):
+                server_ok, server_next = True, _rec.get("next")
+                cache_store.set_kv(f"line_oauth:{state}", {"used": 1})
+        except Exception:
+            server_ok = False
+    cookie_ok = bool(state) and state == request.session.get("line_login_state")
+    if not (server_ok or cookie_ok):
+        return _render_login(request, error="state ไม่ตรง — ลองเข้าใหม่")
+    next_url = server_next or request.session.pop("line_login_next", "/dashboard/")
     request.session.pop("line_login_state", None)
+    request.session.pop("line_login_next", None)
     redirect_uri = (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip()
     try:
         tr = requests.post("https://api.line.me/oauth2/v2.1/token", data={
@@ -410,14 +446,14 @@ def line_login_callback(request):
         access_token = tok.get("access_token")
         if not access_token:
             msg = tok.get("error_description") or tok.get("error") or f"HTTP {tr.status_code}"
-            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"แลก token ไม่ได้: {msg}"})
+            return _render_login(request, error=f"แลก token ไม่ได้: {msg}")
         pr = requests.get("https://api.line.me/v2/profile",
                           headers={"Authorization": f"Bearer {access_token}"}, timeout=15)
         _prof = pr.json() or {}
         line_user_id = _prof.get("userId", "")
         line_display = _prof.get("displayName", "")
     except Exception as e:
-        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"LINE Login error: {str(e)[:200]}"})
+        return _render_login(request, error=f"LINE Login error: {str(e)[:200]}")
 
     # ตั้ง session sales (best-effort) — ถ้าเป็นพนักงาน/แอดมิน จะได้ oxlet_user + รู้ position
     sales_target, sales_err = _login_with_line_user_id(request, line_user_id, next_url)
@@ -433,18 +469,18 @@ def line_login_callback(request):
         # ★ กันคนนอก (มิ.ย.69 · ปิดช่องข้อมูลหลุด): ต้องเป็นพนักงานในชีต employees ก่อน (login sales ผ่าน = sales_err ว่าง)
         # เดิม bridge ทุก LINE id ที่ next=/track/ → ใครมี LINE ก็ถูกสร้างเป็น user role Sales เข้าดู/แก้ข้อมูลรถได้
         if sales_err:
-            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": sales_err})
+            return _render_login(request, error=sales_err)
         if not line_user_id:
-            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": "ไม่ได้รับ LINE user_id"})
+            return _render_login(request, error="ไม่ได้รับ LINE user_id")
         try:
             _bridge_line_to_django_user(request, line_user_id, line_display, make_exec=is_admin_user)
         except Exception as e:
-            return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": f"เชื่อมฐานข้อมูล tracking ไม่ได้: {str(e)[:160]}"})
+            return _render_login(request, error=f"เชื่อมฐานข้อมูล tracking ไม่ได้: {str(e)[:160]}")
         return HttpResponseRedirect(next_url)
 
     # sales (ปกติ)
     if sales_err:
-        return render(request, "dashboard/login.html", {"next": "/dashboard/", "error": sales_err})
+        return _render_login(request, error=sales_err)
     # bridge เผื่อดูแท็บ "สถานะรถ" (iframe /track/) ได้ไม่ต้อง login ซ้ำ — best-effort (DB ล่มก็ไม่พัง sales)
     try:
         _bridge_line_to_django_user(request, line_user_id, line_display, make_exec=is_admin_user)
