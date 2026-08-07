@@ -331,9 +331,9 @@
       </div>
       <div class="sm mut" style="margin:14px 0 6px">${T('flags')}</div>
       <div class="row" style="gap:14px;align-items:center;flex-wrap:wrap">
-        ${FLAG_DEFS.map(f=>`<label class="row sm" style="gap:6px;align-items:center;cursor:pointer">
-          <input type="checkbox" id="fl_${f.key}" ${d[f.js]?'checked':''} onchange="setFlag('${d.code}','${f.key}',this.checked)">
-          <i data-lucide="${f.icon}" style="width:14px;height:14px;color:${f.color}"></i> ${f.name}</label>`).join('')}
+        ${FLAG_DEFS.map(f=>`<label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600;padding:6px 0">
+          <input type="checkbox" id="fl_${f.key}" ${d[f.js]?'checked':''} onchange="setFlag('${d.code}','${f.key}',this.checked)" style="width:22px;height:22px;accent-color:${f.color};flex-shrink:0;cursor:pointer">
+          <i data-lucide="${f.icon}" style="width:18px;height:18px;color:${f.color}"></i> ${f.name}</label>`).join('')}
         <span id="flagMsg" class="mut sm"></span>
       </div>
       <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
