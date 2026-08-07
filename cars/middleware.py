@@ -42,10 +42,14 @@ class TrackSessionBridgeMiddleware:
                 if uid:
                     try:
                         from dashboard.views import _bridge_line_to_django_user
+                        _is_admin = (sess.get("position") == "admin")
                         _bridge_line_to_django_user(
                             request, uid,
                             sess.get("display_name") or sess.get("nickname") or "",
-                            make_exec=(sess.get("position") == "admin"),
+                            make_exec=_is_admin,
+                            # uid == "admin" = แอดมินระบบที่ login ด้วย user/password (break-glass)
+                            # → superuser ของ tracking (get_role คืน Executive ตายตัว · ล็อกตัวเองออกไม่ได้)
+                            make_super=(_is_admin and uid == "admin"),
                         )
                     except Exception:
                         pass

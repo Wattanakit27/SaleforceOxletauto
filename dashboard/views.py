@@ -343,11 +343,13 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
     return None, "ไม่พบบัญชี LINE นี้ในรายชื่อพนักงาน — แจ้งแอดมินเพิ่ม LINE ID ก่อน"
 
 
-def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exec=False):
+def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exec=False, make_super=False):
     """ผูก LINE user_id → Django User (แอป cars/ tracking ใช้ Django auth) + login.
     ใช้ LINE channel เดิมของ sales — เพื่อให้เข้า /track/ (เช่น iframe แท็บ "สถานะรถ") ได้ไม่ต้อง login ซ้ำ.
     make_exec=True (sales-admin) + ผู้ใช้เพิ่งสร้าง → ตั้งเป็น Executive ให้จัดการ tracking ได้เต็มทันที.
-    ผู้ใช้ใหม่ที่ไม่ใช่แอดมิน = "ยังไม่มีบทบาท" → แอดมินกำหนดบทบาทที่ /track/users/ ก่อนถึงใช้งานได้เต็ม.
+    make_super=True (แอดมินระบบ break-glass user/password) → **superuser** — `roles.get_role()` คืน
+      Executive ให้ superuser ตายตัว จึงล็อกตัวเองออกไม่ได้แม้ group จะหาย/ถูกแก้.
+    ผู้ใช้ใหม่ที่ไม่ใช่แอดมิน = Sales → แอดมินเปลี่ยนบทบาทให้ทีหลังที่ /track/users/ ได้.
     """
     from django.contrib.auth import login as auth_login
     from django.contrib.auth.models import User
@@ -356,11 +358,22 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
     if display_name and (user.first_name or "") != display_name[:150]:
         user.first_name = display_name[:150]
         user.save(update_fields=["first_name"])
-    # sales-admin ครั้งแรก → Executive · เซลล์ทั่วไป → Sales (เปลี่ยนสเตปขายของรถได้ในหน้าเซลล์)
-    # ตั้งเฉพาะตอนเพิ่งสร้าง user (ไม่ทับ role ที่แอดมินตั้งทีหลังใน /track/users/)
-    if created and not user.is_superuser:
-        from cars import roles as _troles
+    from cars import roles as _troles
+    if make_super:
+        # ★ แอดมินระบบ (รหัสผ่าน break-glass) = superuser เสมอ · เติมย้อนหลังให้บัญชีเก่าด้วย
+        #   (บั๊กเดิม: บัญชีถูกสร้างไว้ก่อนโดยไม่มีบทบาท → เข้า /track/ แล้วทำอะไรไม่ได้
+        #    และเข้า /track/users/ ไปตั้งบทบาทเองก็ไม่ได้ = ล็อกตัวเองออก)
+        if not (user.is_superuser and user.is_staff):
+            user.is_superuser = True
+            user.is_staff = True
+            user.save(update_fields=["is_superuser", "is_staff"])
+    elif created:
+        # sales-admin ครั้งแรก → Executive · เซลล์ทั่วไป → Sales (เปลี่ยนสเตปขายของรถได้ในหน้าเซลล์)
         _troles.set_user_role(user, _troles.EXEC if make_exec else _troles.SALES)
+    elif make_exec and _troles.get_role(user) is None:
+        # แอดมิน (จากชีต/LINE) ที่บัญชีมีอยู่แล้วแต่ "ไม่มีบทบาท" → เติม Executive กันล็อกตัวเองออก
+        # (ไม่ทับบทบาทที่ตั้งไว้แล้ว — เติมเฉพาะตอนว่างเปล่าเท่านั้น)
+        _troles.set_user_role(user, _troles.EXEC)
     auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     return user
 
