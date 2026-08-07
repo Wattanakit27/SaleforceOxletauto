@@ -12,6 +12,7 @@ STAGES = [
     ("photo_wait", "รถรอถ่ายรูป",          "camera"),
     # เฟส 3 — ทำสภาพ (ช่าง/อู่สีใน-นอก/ล้าง · อู่นอกยุบเข้าฝ่ายทะเบียน)
     ("repair",     "เช็คซ่อม",             "wrench"),
+    ("repair_done", "ซ่อมเสร็จรอตรวจ",     "clipboard-check"),
     ("parts",      "สั่งของ/รออะไหล่",     "package"),
     ("upholstery", "งานเบาะ",              "armchair"),
     ("paint_in",   "อู่สีใน",              "paintbrush"),
@@ -33,7 +34,7 @@ STAGES = [
 # เฟส (key, ชื่อไทย, [stage keys]) — จัดกลุ่มแสดงผล
 PHASES = [
     ("intake_phase", "รับเข้า",  ["intake", "photo_wait"]),
-    ("recon_phase",  "ทำสภาพ",   ["repair", "parts", "upholstery", "paint_in", "paint_out", "film", "wash", "qc_show"]),
+    ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "film", "wash", "qc_show"]),
     ("sale_phase",   "ขาย",      ["show", "reserve", "finance", "closing"]),
     ("release_phase","ปล่อยรถ",  ["qc_release", "release"]),
 ]
@@ -46,12 +47,14 @@ STAGE_ORDER = {key: i for i, key in enumerate(STAGE_KEYS)}
 
 # สเตปที่ push LINE เมื่อเปลี่ยนเข้า (จุดส่งต่อ/ตัดสินใจ — ไม่สแปมทุกขั้น)
 STAGE_NOTIFY = {
-    "intake", "photo_wait", "repair", "paint_in", "paint_out", "wash",
+    "intake", "photo_wait", "repair", "repair_done", "paint_in", "paint_out", "wash",
     "qc_show", "show", "reserve", "finance", "closing", "qc_release", "release",
 }
 
 # สเตปที่ถือว่า "ขึ้นหน้าร้าน" -> ตั้ง frontline_at (จุดจบ T2L)
 FRONTLINE_STAGE = "show"
+# สีการ์ดตอนถึงหน้าร้านแล้ว — เขียว = จบสายทำสภาพ พร้อมขาย (ทับสีความด่วน)
+FRONTLINE_COLOR = "#16a34a"
 
 # สเตปช่วงปลาย (ขาย/ปล่อย)
 OK_STAGES = {"show", "reserve", "finance", "closing", "qc_release", "release"}
@@ -62,7 +65,7 @@ PRIORITY_CHOICES = [
     ("urgent",      "ด่วน"),
     ("normal",      "ปกติ"),
     ("low",         "ไม่เร่ง"),
-    ("photo_wait",  "รอถ่ายรูปยังไม่เสร็จ"),
+    ("photo_wait",  "ยังไม่ได้ถ่ายรูป"),
 ]
 PRIORITY_KEYS = [p[0] for p in PRIORITY_CHOICES]
 PRIORITY_NAME = {p[0]: p[1] for p in PRIORITY_CHOICES}

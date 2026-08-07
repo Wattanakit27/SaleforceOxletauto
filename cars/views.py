@@ -915,6 +915,7 @@ def api_seller_set_stage(request):
 
 
 @csrf_exempt
+@csrf_exempt
 @login_required
 @require_POST
 def api_set_priority(request):

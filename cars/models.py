@@ -163,6 +163,18 @@ class Car(models.Model):
         return C.PRIORITY_NAME.get(self.priority, self.priority)
 
     @property
+    def card_color(self):
+        """สีการ์ดในบอร์ด — ถึง "รถพร้อมขาย/หน้าร้าน" = เขียว (จบสายทำสภาพแล้ว)
+        ไม่งั้นใช้สีความด่วนตามปกติ (รวมธง "ยังไม่ได้ถ่ายรูป" = น้ำเงิน)."""
+        return C.FRONTLINE_COLOR if self.stage == C.FRONTLINE_STAGE else self.priority_color
+
+    @property
+    def card_label(self):
+        """ป้ายบนหัวการ์ด — ใช้ป้ายทะเบียนเป็นหลัก (คนหน้างานจำทะเบียนไม่ใช่รหัส)
+        ไม่มีทะเบียน (รถเพิ่งเข้า/ยังไม่โอน) → fallback รหัสรถ."""
+        return (self.plate or "").strip() or self.code
+
+    @property
     def stage_index(self):
         return C.STAGE_ORDER.get(self.stage, 0)
 
