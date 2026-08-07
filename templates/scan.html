@@ -70,6 +70,18 @@
     <div class="mut sm" style="margin-top:2px">{{ car.title }}</div>
     <div class="mut sm row" style="gap:5px;margin-top:8px"><i data-lucide="map-pin"></i> {{ car.branch_name }}</div>
 
+    <!-- ความด่วน — เลือกจากหน้าสแกนได้ (สีการ์ดบนบอร์ด · บันทึกทันที) -->
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <div class="mut sm" data-i18n="prio">ความด่วน</div>
+      <div class="row" style="gap:10px;align-items:center;margin-top:6px;display:flex">
+        <select id="prioSel" onchange="scSetPriority(this.value)" style="flex:1;padding:11px 12px;border-radius:10px;font-size:14px">
+          {% for p in priorities %}<option value="{{ p.key }}" {% if car.priority == p.key %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        </select>
+        <span id="prioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;display:inline-block;background:{{ car.priority_color }}"></span>
+        <span id="prioMsg" class="mut sm"></span>
+      </div>
+    </div>
+
     <!-- ธงงานค้าง — ติ๊กจากหน้าสแกนได้ (หมายเหตุงานค้าง ไม่ใช่การเปลี่ยนสเตป · บันทึกทันที) -->
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
       <div class="mut sm" data-i18n="flags">ธงงานค้าง</div>
@@ -150,10 +162,10 @@
 <script>
   // i18n เฉพาะหน้าสแกน — ไทย/อังกฤษ/พม่า/เขมร (คำพม่า-เขมรเป็นฉบับแปลเบื้องต้น ให้ native ตรวจได้)
   var SCAN_I18N = {
-    th: {carCode:'รหัสรถ', changeStage:'เปลี่ยนสเตปรถ', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)', photoHint:'แตะเพื่อถ่าย/เลือกไฟล์', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ', pickFirst:'เลือกสเตปใหม่ก่อน', flags:'ธงงานค้าง', flagPhoto:'ยังไม่ได้ถ่ายรูป', flagContent:'ยังไม่ได้ถ่ายคอนเทนต์', saving:'กำลังบันทึก...', saved:'บันทึกแล้ว ✓', flagFail:'บันทึกไม่สำเร็จ'},
-    en: {carCode:'Car code', changeStage:'Change stage', note:'Note (optional)', photo:'Attach photos/videos (multiple)', photoHint:'Tap to take / pick files', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet', pickFirst:'Select a new stage first', flags:'Pending tasks', flagPhoto:'Photos not taken yet', flagContent:'Content not shot yet', saving:'Saving...', saved:'Saved ✓', flagFail:'Save failed'},
-    my: {carCode:'ကားကုဒ်', changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံ/ဗီဒီယို တွဲရန် (များစွာ)', photoHint:'ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ', pickFirst:'အဆင့်အသစ်အရင်ရွေးပါ', flags:'ကျန်ရှိသောအလုပ်', flagPhoto:'ဓာတ်ပုံ မရိုက်ရသေး', flagContent:'ကွန်တင့် မရိုက်ရသေး', saving:'သိမ်းနေသည်...', saved:'သိမ်းပြီး ✓', flagFail:'မအောင်မြင်ပါ'},
-    km: {carCode:'លេខកូដរថយន្ត', changeStage:'ប្ដូរដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូប/វីដេអូ (ច្រើន)', photoHint:'ចុចដើម្បីថត/ជ្រើសឯកសារ', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ', pickFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន', flags:'កិច្ចការនៅសល់', flagPhoto:'មិនទាន់ថតរូប', flagContent:'មិនទាន់ថតខ្លឹមសារ', saving:'កំពុងរក្សាទុក...', saved:'រក្សាទុករួច ✓', flagFail:'រក្សាទុកមិនបាន'}
+    th: {carCode:'รหัสรถ', changeStage:'เปลี่ยนสเตปรถ', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)', photoHint:'แตะเพื่อถ่าย/เลือกไฟล์', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ', pickFirst:'เลือกสเตปใหม่ก่อน', flags:'ธงงานค้าง', flagPhoto:'ยังไม่ได้ถ่ายรูป', flagContent:'ยังไม่ได้ถ่ายคอนเทนต์', saving:'กำลังบันทึก...', saved:'บันทึกแล้ว ✓', flagFail:'บันทึกไม่สำเร็จ', prio:'ความด่วน'},
+    en: {carCode:'Car code', changeStage:'Change stage', note:'Note (optional)', photo:'Attach photos/videos (multiple)', photoHint:'Tap to take / pick files', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet', pickFirst:'Select a new stage first', flags:'Pending tasks', flagPhoto:'Photos not taken yet', flagContent:'Content not shot yet', saving:'Saving...', saved:'Saved ✓', flagFail:'Save failed', prio:'Priority'},
+    my: {carCode:'ကားကုဒ်', changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံ/ဗီဒီယို တွဲရန် (များစွာ)', photoHint:'ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ', pickFirst:'အဆင့်အသစ်အရင်ရွေးပါ', flags:'ကျန်ရှိသောအလုပ်', flagPhoto:'ဓာတ်ပုံ မရိုက်ရသေး', flagContent:'ကွန်တင့် မရိုက်ရသေး', saving:'သိမ်းနေသည်...', saved:'သိမ်းပြီး ✓', flagFail:'မအောင်မြင်ပါ', prio:'အရေးပေါ်'},
+    km: {carCode:'លេខកូដរថយន្ត', changeStage:'ប្ដូរដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូប/វីដេអូ (ច្រើន)', photoHint:'ចុចដើម្បីថត/ជ្រើសឯកសារ', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ', pickFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន', flags:'កិច្ចការនៅសល់', flagPhoto:'មិនទាន់ថតរូប', flagContent:'មិនទាន់ថតខ្លឹមសារ', saving:'កំពុងរក្សាទុក...', saved:'រក្សាទុករួច ✓', flagFail:'រក្សាទុកមិនបាន', prio:'អាទិភាព'}
   };
   var STAGE_I18N = {
     en: {intake:'Intake', photo_wait:'Awaiting Photos', repair:'Repair', repair_done:'Repaired · Awaiting Check', parts:'Awaiting Parts', upholstery:'Upholstery', paint_in:'Paint (in-house)', paint_out:'Paint (outside)', film:'Window Film', wash:'Wash / Detail', qc_show:'Awaiting QC', sales_check:'Awaiting Sales Check', show:'Ready for Sale (showroom check)', reserve:'Reserved', finance:'Financing', closing:'Closing', qc_release:'QC before Release', release:'Release (send release photos)'},
@@ -183,6 +195,19 @@
     if(sp){ sp.setAttribute('data-key',k); sp.setAttribute('data-th',th); sp.textContent=scanStageText(k,th); sp.classList.add('sel'); }
   }
   (function(){ var l='th'; try{ l=localStorage.getItem('trk_scan_lang')||'th'; }catch(e){} setScanLang(l); })();
+
+  // ความด่วน — เลือกแล้วบันทึกทันที (endpoint เดียวกับป๊อปอัปบอร์ด · csrf_exempt + login_required)
+  var PRIO_COLOR={ {% for p in priorities %}'{{ p.key }}':'{{ p.color }}'{% if not forloop.last %},{% endif %}{% endfor %} };
+  async function scSetPriority(val){
+    var dot=document.getElementById('prioDot'), msg=document.getElementById('prioMsg'), t=SCAN_I18N[window._scanLang]||SCAN_I18N.th;
+    if(dot) dot.style.background=PRIO_COLOR[val]||'#eab308';
+    if(msg) msg.textContent=t.saving;
+    try{
+      var r=await fetch('/track/api/set_priority',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code:'{{ car.code }}',priority:val})});
+      var j=await r.json();
+      if(msg) msg.textContent=j.ok?t.saved:(j.error||t.flagFail);
+    }catch(e){ if(msg) msg.textContent=t.flagFail; }
+  }
 
   // ธงงานค้าง — ติ๊กแล้วบันทึกทันที (endpoint เดียวกับป๊อปอัปบอร์ด · csrf_exempt + login_required)
   async function scSetFlag(key,on){

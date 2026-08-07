@@ -139,9 +139,13 @@ class Car(models.Model):
 
     @property
     def flag(self):
-        """ok / amber / red ตามจำนวนวันค้างสเตป (ช่วงปลาย/ขายแล้ว/พัก = ok)"""
+        """ok / amber / red ตามจำนวนวันค้างสเตป (ช่วงปลาย/ขายแล้ว/พัก = ok)
+        ★ ติ๊กธง "ยังไม่ได้ถ่ายรูป" = "wait" — ไม่นับเป็นค้าง (รถรอทุกอย่างเสร็จก่อน ไม่ใช่งานดอง)
+        วันยังเดินตามจริง แค่ไม่ขึ้นแดง/เหลือง · ปลดธงเมื่อไหร่กลับมานับตามวันจริงทันที"""
         if self.status in ("sold", "hold") or self.stage in C.OK_STAGES:
             return "ok"
+        if self.need_photo:
+            return "wait"
         d = self.days_in_stage
         if d > C.STUCK_RED_DAYS:
             return "red"

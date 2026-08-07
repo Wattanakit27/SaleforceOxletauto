@@ -51,7 +51,7 @@ def _stage_options(keys):
 def dashboard(request):
     """หน้าเดียวจบ: ตัวเลขสรุปต่อสเตป + ตารางรถทั้งหมด (มีตัวกรอง) · กดรถ = popup (car_json)."""
     all_cars = list(Car.objects.filter(deleted_at__isnull=True))
-    flags = {"red": 0, "amber": 0, "ok": 0}
+    flags = {"red": 0, "amber": 0, "ok": 0, "wait": 0}
     counts = {k: 0 for k in C.STAGE_KEYS}
     for c in all_cars:
         flags[c.flag] += 1
@@ -103,10 +103,13 @@ def dashboard(request):
             continue
         _board_by.setdefault(c.stage, []).append(c)
     board_cols = []
+    _prio_rank = {p: i for i, p in enumerate(C.PRIORITY_KEYS)}   # ด่วนมาก=0 → ไม่เร่ง=3
     for k, n, i in C.STAGES:
         if k == "release":       # ปล่อยรถ = จบ (status sold) → ไม่ต้องมีคอลัมน์บนบอร์ด
             continue
-        lst = sorted(_board_by.get(k, []), key=lambda c: c.stage_since)  # ค้างนานสุดขึ้นก่อน
+        # เรียงการ์ด: ความด่วนก่อน (ด่วนมากบนสุด) → ค้างนานสุดขึ้นก่อนในความด่วนเดียวกัน
+        lst = sorted(_board_by.get(k, []),
+                     key=lambda c: (_prio_rank.get(c.priority, _prio_rank["normal"]), c.stage_since))
         board_cols.append({"key": k, "name": n, "icon": i, "mine": k in my_stages, "cars": lst})
     has_my = bool(my_stages)                        # มีสเตปตัวเอง → default โฟกัสงานตัวเอง + ปุ่มสลับ
 
@@ -451,6 +454,8 @@ def scan_page(request, code):
     } for l in _log_objs]
     return render(request, "scan.html", {
         "car": car, "stages": stages, "logs": logs, "actor": _actor(request.user),
+        # ความด่วน — เลือกได้จากหน้าสแกน (มือถือหน้างาน) เหมือนป๊อปอัปบอร์ด
+        "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
     })
@@ -790,7 +795,7 @@ def _parse_dateonly(s):
 def cars_api(request):
     """ข้อมูล dashboard ติดตามรถ (counts + รายการรถ) เป็น JSON → sales เรนเดอร์เองด้วยธีมเดียวกัน."""
     all_cars = list(Car.objects.filter(deleted_at__isnull=True))
-    flags = {"red": 0, "amber": 0, "ok": 0}
+    flags = {"red": 0, "amber": 0, "ok": 0, "wait": 0}
     counts = {k: 0 for k in C.STAGE_KEYS}
     for c in all_cars:
         flags[c.flag] += 1
