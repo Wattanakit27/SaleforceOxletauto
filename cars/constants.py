@@ -19,9 +19,10 @@ STAGES = [
     ("paint_out",  "อู่สีนอก",             "paintbrush"),
     ("film",       "ติดฟิล์ม",             "scan-line"),
     ("wash",       "ชงล้าง",               "sparkles"),
-    # เฟส 4 — ตรวจก่อนขึ้นโชว์ (QC)
-    ("qc_show",    "รอตรวจรถขึ้นโชว์",     "clipboard-check"),
-    # เฟส 5 — ขาย (เซลล์)
+    # เฟส 4 — ตรวจก่อนขึ้นโชว์ (QC) · ชื่อบอกชัดว่าเป็น "คิวของ QC" ไม่ใช่ของเซลล์
+    ("qc_show",    "รอ QC ตรวจ",           "clipboard-check"),
+    # เฟส 5 — ขาย (เซลล์) · QC ตรวจผ่านแล้วติ๊กส่งต่อให้เซลล์มาตรวจรับก่อนขึ้นหน้าร้านจริง
+    ("sales_check", "รอเซลล์ตรวจรถขึ้นโชว์", "user-check"),
     ("show",       "รถพร้อมขาย/หน้าร้าน",  "store"),
     ("reserve",    "จอง",                  "handshake"),
     ("finance",    "จัดไฟแนนซ์",           "landmark"),
@@ -35,7 +36,7 @@ STAGES = [
 PHASES = [
     ("intake_phase", "รับเข้า",  ["intake", "photo_wait"]),
     ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "film", "wash", "qc_show"]),
-    ("sale_phase",   "ขาย",      ["show", "reserve", "finance", "closing"]),
+    ("sale_phase",   "ขาย",      ["sales_check", "show", "reserve", "finance", "closing"]),
     ("release_phase","ปล่อยรถ",  ["qc_release", "release"]),
 ]
 
@@ -48,7 +49,7 @@ STAGE_ORDER = {key: i for i, key in enumerate(STAGE_KEYS)}
 # สเตปที่ push LINE เมื่อเปลี่ยนเข้า (จุดส่งต่อ/ตัดสินใจ — ไม่สแปมทุกขั้น)
 STAGE_NOTIFY = {
     "intake", "photo_wait", "repair", "repair_done", "paint_in", "paint_out", "wash",
-    "qc_show", "show", "reserve", "finance", "closing", "qc_release", "release",
+    "qc_show", "sales_check", "show", "reserve", "finance", "closing", "qc_release", "release",
 }
 
 # สเตปที่ถือว่า "ขึ้นหน้าร้าน" -> ตั้ง frontline_at (จุดจบ T2L)
