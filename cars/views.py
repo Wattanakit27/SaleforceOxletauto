@@ -251,6 +251,7 @@ def car_json(request, code):
         "dateIn": timezone.localtime(car.date_in).strftime("%d/%m/%Y") if car.date_in else "",
         "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
         "priority": car.priority, "priorityColor": car.priority_color, "priorityName": car.priority_name,
+        "needPhoto": car.need_photo, "needContent": car.need_content, "flags": car.flags,
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
@@ -816,6 +817,7 @@ def cars_api(request):
             "status": c.status, "sold": (c.status == "sold" or c.stage == "release"),
             "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
             "priority": c.priority, "priorityColor": c.priority_color, "priorityName": c.priority_name,
+            "needPhoto": c.need_photo, "needContent": c.need_content, "flags": c.flags,
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
             "province": (ex.get("owner") or {}).get("จังหวัด", ""),
@@ -936,6 +938,26 @@ def api_set_priority(request):
 @csrf_exempt
 @login_required
 @require_POST
+def api_set_flags(request):
+    """ติ๊ก/ปลด "ธงงานค้าง" ของรถ — POST JSON {code, need_photo?, need_content?} (ส่งมาเฉพาะตัวที่จะเปลี่ยน).
+    ธงเป็นการ "หมายเหตุงานที่ยังค้าง" ไม่ใช่การเปลี่ยนสเตป → คนที่ล็อกอินติดตามรถทุกคนติ๊กได้
+    (เหมือนความด่วน) · แยกจาก priority → ติดธงพร้อมบอกด่วน/ไม่ด่วนได้ · csrf_exempt (บอร์ดฝัง iframe)."""
+    data = json.loads(request.body or "{}")
+    car = get_object_or_404(Car, code=data.get("code"))
+    changed = []
+    for key in C.FLAG_KEYS:
+        if key in data:
+            setattr(car, key, bool(data[key]))
+            changed.append(key)
+    if changed:
+        car.save(update_fields=changed)
+    return JsonResponse({"ok": True, "needPhoto": car.need_photo,
+                         "needContent": car.need_content, "flags": car.flags})
+
+
+@csrf_exempt
+@login_required
+@require_POST
 def api_content_shoot(request):
     """บันทึก "ถ่ายคอนเทนต์" ที่สเตปปัจจุบัน — POST JSON {code, note?, media?}.
     เป็น action แทรกได้ทุกสเตป (ไม่เปลี่ยนสเตป) → สร้าง ScanLog ที่สเตปเดิม + แนบรูป/วิดีโอ + โน้ต
@@ -949,6 +971,9 @@ def api_content_shoot(request):
     note = ("ถ่ายคอนเทนต์ · " + note) if note else "ถ่ายคอนเทนต์"
     actor = _actor(request.user)
     log = ScanLog.objects.create(car=car, stage=car.stage, worker_name=actor, note=note)
+    if car.need_content:          # ถ่ายคอนเทนต์แล้ว → ปลดธงให้เอง ไม่ต้องมากดออกซ้ำ
+        car.need_content = False
+        car.save(update_fields=["need_content"])
     if media:
         try:
             log.media = media

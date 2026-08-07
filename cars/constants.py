@@ -61,20 +61,31 @@ FRONTLINE_COLOR = "#16a34a"
 OK_STAGES = {"show", "reserve", "finance", "closing", "qc_release", "release"}
 
 # ===== ความด่วน (priority) — สีการ์ดมาจากนี่ (เลือกมือ · แทนวันค้างอัตโนมัติ) =====
+# ★ ส.ค.69 — เอา "ยังไม่ได้ถ่ายรูป" ออกจากที่นี่ ไปเป็น "ธงงานค้าง" (CAR_FLAGS) แทน
+#   เพราะเป็นคนละเรื่องกับความด่วน · ช่องเดียวเลือกได้ค่าเดียว → ติดธงแล้วบอกด่วนไม่ได้
 PRIORITY_CHOICES = [
     ("urgent_high", "ด่วนมาก"),
     ("urgent",      "ด่วน"),
     ("normal",      "ปกติ"),
     ("low",         "ไม่เร่ง"),
-    ("photo_wait",  "ยังไม่ได้ถ่ายรูป"),
 ]
 PRIORITY_KEYS = [p[0] for p in PRIORITY_CHOICES]
 PRIORITY_NAME = {p[0]: p[1] for p in PRIORITY_CHOICES}
 PRIORITY_COLOR = {
-    "urgent_high": "#dc2626", "urgent": "#ea580c", "normal": "#eab308",
-    "low": "#d1d5db", "photo_wait": "#2563eb",
+    "urgent_high": "#dc2626", "urgent": "#ea580c", "normal": "#eab308", "low": "#d1d5db",
 }
 DEFAULT_PRIORITY = "normal"
+
+# ===== ธงงานค้าง (flags) — ติ๊กได้หลายอันพร้อมกัน + ใช้ร่วมกับความด่วนได้ =====
+# (field, ชื่อไทย, ไอคอน Lucide, สี) · รถติดธงแล้วยังย้ายไปสเตปอื่นได้ตามปกติ ธงติดตามรถไป
+CAR_FLAGS = [
+    ("need_photo",   "ยังไม่ได้ถ่ายรูป",      "camera", "#2563eb"),
+    ("need_content", "ยังไม่ได้ถ่ายคอนเทนต์", "video",  "#7c3aed"),
+]
+FLAG_KEYS = [f[0] for f in CAR_FLAGS]
+FLAG_NAME = {f[0]: f[1] for f in CAR_FLAGS}
+FLAG_ICON = {f[0]: f[2] for f in CAR_FLAGS}
+FLAG_COLOR = {f[0]: f[3] for f in CAR_FLAGS}
 
 # สเตปที่ "บังคับแนบรูป/วิดีโอ" ก่อนเปลี่ยนเข้า (ตรวจปล่อย/ปล่อยรถ)
 STAGE_FORCE_MEDIA = {"qc_release", "release"}

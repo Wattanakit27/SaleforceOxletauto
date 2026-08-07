@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/set_stage", views.api_set_stage, name="api_set_stage"),
     path("api/seller_set_stage", views.api_seller_set_stage, name="api_seller_set_stage"),
     path("api/set_priority", views.api_set_priority, name="api_set_priority"),  # ตั้งความด่วน (สีการ์ด)
+    path("api/set_flags", views.api_set_flags, name="api_set_flags"),  # ธงงานค้าง (ยังไม่ถ่ายรูป/คอนเทนต์)
     path("api/content_shoot", views.api_content_shoot, name="api_content_shoot"),  # ถ่ายคอนเทนต์ (แทรกทุกสเตป)
     path("api/add_car", views.api_add_car, name="api_add_car"),
     path("api/car/<str:code>/photos", views.api_car_photos, name="api_car_photos"),  # จัดการรูปขาย (เลือกปก/เพิ่ม/ลบ)

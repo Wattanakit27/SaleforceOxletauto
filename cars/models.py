@@ -34,6 +34,9 @@ class Car(models.Model):
     status = models.CharField("สถานะ", max_length=10, choices=C.STATUS_CHOICES, default="active")
     # ความด่วน — สีการ์ดมาจากนี่ (เลือกมือ · แทนวันค้างอัตโนมัติ)
     priority = models.CharField("ความด่วน", max_length=16, choices=C.PRIORITY_CHOICES, default=C.DEFAULT_PRIORITY)
+    # ธงงานค้าง — แยกจากความด่วน (ติ๊กพร้อมกันได้ · รถด่วนมาก + ยังไม่ถ่ายคอนเทนต์ ได้พร้อมกัน)
+    need_photo = models.BooleanField("ยังไม่ได้ถ่ายรูป", default=False)
+    need_content = models.BooleanField("ยังไม่ได้ถ่ายคอนเทนต์", default=False)
 
     # ----- ฝ่ายทะเบียน -----
     book_status = models.CharField("สถานะเล่ม", max_length=14, choices=C.BOOK_STATUS_CHOICES, blank=True)
@@ -165,8 +168,14 @@ class Car(models.Model):
     @property
     def card_color(self):
         """สีการ์ดในบอร์ด — ถึง "รถพร้อมขาย/หน้าร้าน" = เขียว (จบสายทำสภาพแล้ว)
-        ไม่งั้นใช้สีความด่วนตามปกติ (รวมธง "ยังไม่ได้ถ่ายรูป" = น้ำเงิน)."""
+        ไม่งั้นใช้สีความด่วนตามปกติ · ธงงานค้างโชว์แยกเป็นไอคอนบนการ์ด (ดู flags)"""
         return C.FRONTLINE_COLOR if self.stage == C.FRONTLINE_STAGE else self.priority_color
+
+    @property
+    def flags(self):
+        """ธงงานค้างที่ติดอยู่ → [{key, name, icon, color}] สำหรับโชว์เป็นไอคอนบนการ์ด/ป๊อปอัป"""
+        return [{"key": k, "name": C.FLAG_NAME[k], "icon": C.FLAG_ICON[k], "color": C.FLAG_COLOR[k]}
+                for k in C.FLAG_KEYS if getattr(self, k, False)]
 
     @property
     def card_label(self):
