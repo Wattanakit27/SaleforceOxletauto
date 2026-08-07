@@ -254,12 +254,17 @@ def login_view(request):
         if duser is not None:
             from django.contrib.auth import login as auth_login
             auth_login(request, duser)
-            # ตั้ง oxlet_user (position=worker) → เข้า /dashboard/ ได้ที่เดียว (dashboard_page เรนเดอร์บอร์ดติดตามรถ
+            # ตั้ง oxlet_user → เข้า /dashboard/ ได้ที่เดียว (dashboard_page เรนเดอร์บอร์ดติดตามรถ
             # เฉพาะสเตปตัวเองให้ · ไม่โหลด/ไม่เห็นข้อมูลขาย) — รวมเป็นลิงก์เดียว เลิก /track/ แยก
+            # ★ ส.ค.69 — **superuser = แอดมินระบบตัวจริง → position="admin"** (เห็นแดชบอร์ดขายเหมือน
+            #   break-glass · ปุ่ม "แดชบอร์ดขาย" ใน /track/ ก็โผล่). บั๊กเดิม: ตี position="worker" ให้ทุกคน
+            #   → superuser login ด้วย user/password แล้วเข้า /dashboard/ ได้แต่หน้าสถานะรถ เข้าแดชบอร์ดขายไม่ได้
+            #   คนงานทั่วไป (ไม่ใช่ superuser) = worker ตามเดิม — ไม่เห็นข้อมูลขาย/ลูกค้า (PDPA)
             _wname = duser.get_full_name() or duser.username
+            _pos = "admin" if duser.is_superuser else "worker"
             request.session["oxlet_user"] = {
                 "user_id": "django_" + duser.username,
-                "nickname": _wname, "display_name": _wname, "position": "worker",
+                "nickname": _wname, "display_name": _wname, "position": _pos,
             }
             request.session.set_expiry(60 * 60 * 24 * 14)
             log_login(request, identity=duser.username, name=_wname,
