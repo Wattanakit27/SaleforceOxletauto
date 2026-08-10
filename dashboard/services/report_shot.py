@@ -79,7 +79,8 @@ def _cleanup_old(days: int = 7) -> None:
 _SHOT_TARGETS = [
     ("rpt-shot", "rpt-shot-wrap"),            # ตารางรายงาน จอง/อนุมัติ/ปล่อย (เวอร์ชันอ่านง่าย)
     ("rpt-shot-teams", "rpt-shot-teams-wrap"),  # ตารางสรุปรายทีม
-    ("rpt-shot-fin", "rpt-shot-fin-wrap"),    # เคสจบตามไฟแนนซ์ (ชีตนับลีด "ชำระแบบ" · ไม่มีข้อมูล = div ไม่ถูกสร้าง → ข้ามเอง)
+    # rpt-shot-fin (เคสจบตามไฟแนนซ์) ถอดออกจากรายงานประจำวันตามผู้ใช้สั่ง (ส.ค.69) —
+    # ดูในแท็บ "สถานะจองปล่อย" (#fin-card) แทน · การ์ดมีปุ่ม "ส่งไลน์ ▾" ของตัวเอง (cardline)
 ]
 
 
@@ -386,6 +387,7 @@ _LINE_CARDS = {
     "scorecard-card": "ตารางคะแนนเซลล์",
     "clipweek-card": "ติดตามคอนเทนต์ (คลิป) รายสัปดาห์",
     "yodrot-card": "ยอดรถเข้า รายรุ่น (จัดซื้อ)",
+    "fin-card": "เคสจบตามไฟแนนซ์",
 }
 
 # การ์ดที่ไม่ได้อยู่แท็บ "ภาพรวม" → ต้องสลับแท็บก่อนแคป (ปุ่มแท็บชื่อไทยตรงกับ nav)
@@ -396,6 +398,7 @@ _CARD_TAB = {
     "mega-card": "LEAD", "rpt-card": "LEAD", "leadrecv-card": "LEAD",
     "purchase-card": "LEAD", "bought-card": "LEAD",
     "leadreport-card": "LEAD", "leadsummary-card": "LEAD",
+    "fin-card": "สถานะจองปล่อย",   # ตารางไฟแนนซ์อยู่แท็บสถานะจองปล่อย (มีเวอร์ชันสวย #fin-card-shot)
 }
 
 
