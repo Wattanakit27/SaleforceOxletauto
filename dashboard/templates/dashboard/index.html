@@ -1312,12 +1312,12 @@
         's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
         'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
-        'b': 'ติดตามสถานะเคสจอง — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา',
+        'b': 'สถานะจองปล่อย — จอง/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/ไม่อนุมัติ พร้อมราคา + เคสจบตามไฟแนนซ์',
         'p': 'จัดซื้อ — ยอดรถเข้า รายรุ่น: จอง/จบ ย้อนหลัง + สต๊อก(แก้ได้) + เหลือ/ต้องเติม + ผลงานซื้อ',
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
         'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
       };
-      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'ติดตามสถานะจอง'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
+      [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
         html += `<button class="ntab${tab===t.id?' on':''}" onclick="switchTab('${t.id}')">${ic(t.i,15)} ${t.l}</button>`;
       });
       html += `</div>`;
@@ -2442,41 +2442,41 @@
         // เหลือแค่ตัวเลขในแต่ละแถว (พื้นที่ที่ว่างจาก label เดิม → เอาไปขยายฟอนต์ตัวเลขแทน) · 5 ตัวหลัก (จอง/รอผล/รอปล่อย/ปล่อย/%จอง) กล่องขาวเด่น · 6 ตัวรอง (Lead/RJ/เฉลี่ย/ไลฟ์/คลิป/Lead ไลฟ์) เล็กกว่า
         // ครบทุกคอลัมน์เหมือนเดิม (reuse _rpt/_RC) ไม่ตัดข้อมูล
         const _RC_MAIN = _RC.slice(0, 5), _RC_SUB = _RC.slice(5);
-        const _rowMain = r=>_RC_MAIN.map(c=>`<div style="min-width:92px;background:#fff;border-radius:12px;padding:12px 6px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-            <div style="font-size:28px;font-weight:800;color:#1f2333;font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
+        const _rowMain = r=>_RC_MAIN.map(c=>`<div style="min-width:110px;background:#fff;border-radius:12px;padding:14px 6px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+            <div style="font-size:36px;font-weight:800;color:#1f2333;font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
           </div>`).join('');
-        const _rowSub = (r,subColor)=>_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
-            <div style="font-size:24px;font-weight:800;color:${subColor};font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
+        const _rowSub = (r,subColor)=>_RC_SUB.map(c=>`<div style="min-width:72px;text-align:center">
+            <div style="font-size:30px;font-weight:800;color:${subColor};font-variant-numeric:tabular-nums;line-height:1">${c.v(r)}</div>
           </div>`).join('');
         // หัวตาราง — แถบพื้นเข้มแยกจากแถวข้อมูลชัดเจน (ไม่ใช่แค่ตัวหนังสือจางๆ) ตรงกับ layout ของแถวข้อมูล (rank+ชื่อ+5หลัก+6รอง)
-        const _headRow = `<div style="display:flex;align-items:center;gap:12px;background:#1f2937;border-radius:14px;padding:12px 16px;margin-bottom:14px">
+        const _headRow = `<div style="display:flex;align-items:center;gap:12px;background:#1f2937;border-radius:14px;padding:14px 16px;margin-bottom:14px">
             <div style="width:26px;flex-shrink:0"></div>
-            <div style="width:150px;flex-shrink:0;font-size:17px;color:#fff;font-weight:800;letter-spacing:.2px">เซลล์</div>
-            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:92px;text-align:center;font-size:16px;color:#fff;font-weight:800;line-height:1.25">${h(c.l)}</div>`).join('')}</div>
-            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center;font-size:14px;color:#d1d5db;font-weight:800;line-height:1.25">${h(c.l)}</div>`).join('')}</div>
+            <div style="width:170px;flex-shrink:0;font-size:20px;color:#fff;font-weight:800;letter-spacing:.2px">เซลล์</div>
+            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:110px;text-align:center;font-size:18px;color:#fff;font-weight:800;line-height:1.25">${h(c.l)}</div>`).join('')}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:72px;text-align:center;font-size:16px;color:#d1d5db;font-weight:800;line-height:1.25">${h(c.l)}</div>`).join('')}</div>
           </div>`;
-        let SHOT = `<div style="font-size:34px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
-          <div style="font-size:18px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>`
+        let SHOT = `<div style="font-size:40px;font-weight:800;color:#1f2333">รายงาน จอง / อนุมัติ / ปล่อย</div>
+          <div style="font-size:21px;color:#8b90a6;margin:8px 0 20px">${h(rangeLabelTH())} · เรียงปล่อย+รอปล่อยมากสุด · <b style="color:#16a34a">เขียว ≥5</b> <b style="color:#d97706">เหลือง 3-4</b> <b style="color:#dc2626">แดง ≤2</b></div>`
           + _headRow;
         _rpt.forEach((r,i)=>{
           const _f=_rc((r.dn||0)+(r.wp||0)), _bg=_f==='g'?'#e6f7ea':_f==='y'?'#fdf5e2':'#fdeceb';
-          SHOT += `<div style="display:flex;align-items:center;gap:12px;background:${_bg};border-radius:16px;padding:12px 16px;margin-bottom:8px;border-left:8px solid ${_tcol(r.team)}">
-            <div style="width:26px;font-size:15px;font-weight:800;color:#a7abbe;text-align:center;flex-shrink:0">${i+1}</div>
-            <div style="width:150px;flex-shrink:0">
-              <div style="font-size:21px;font-weight:800;color:#1f2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(sname(r.name))}</div>
-              <div style="display:inline-block;font-size:11px;color:#fff;background:${_tcol(r.team)};padding:2px 8px;border-radius:6px;font-weight:700;margin-top:3px">${h(r.team==='ADMIN'?'เทเลเซลล์':r.team)}</div>
+          SHOT += `<div style="display:flex;align-items:center;gap:12px;background:${_bg};border-radius:16px;padding:14px 16px;margin-bottom:8px;border-left:8px solid ${_tcol(r.team)}">
+            <div style="width:26px;font-size:17px;font-weight:800;color:#a7abbe;text-align:center;flex-shrink:0">${i+1}</div>
+            <div style="width:170px;flex-shrink:0">
+              <div style="font-size:25px;font-weight:800;color:#1f2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(sname(r.name))}</div>
+              <div style="display:inline-block;font-size:13px;color:#fff;background:${_tcol(r.team)};padding:2px 9px;border-radius:6px;font-weight:700;margin-top:3px">${h(r.team==='ADMIN'?'เทเลเซลล์':r.team)}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">${_rowMain(r)}</div>
             <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_rowSub(r,'#374151')}</div>
           </div>`;
         });
-        SHOT += `<div style="display:flex;align-items:center;gap:12px;background:#6d28d9;border-radius:16px;padding:14px 16px">
-            <div style="width:176px;flex-shrink:0;font-size:22px;font-weight:800;color:#fff">รวมทั้งหมด</div>
-            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:92px;background:rgba(255,255,255,.16);border-radius:12px;padding:12px 6px;text-align:center">
-              <div style="font-size:28px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
+        SHOT += `<div style="display:flex;align-items:center;gap:12px;background:#6d28d9;border-radius:16px;padding:16px 16px">
+            <div style="width:196px;flex-shrink:0;font-size:26px;font-weight:800;color:#fff">รวมทั้งหมด</div>
+            <div style="display:flex;gap:6px;flex-shrink:0">${_RC_MAIN.map(c=>`<div style="min-width:110px;background:rgba(255,255,255,.16);border-radius:12px;padding:14px 6px;text-align:center">
+              <div style="font-size:36px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
             </div>`).join('')}</div>
-            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:58px;text-align:center">
-              <div style="font-size:24px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px">${_RC_SUB.map(c=>`<div style="min-width:72px;text-align:center">
+              <div style="font-size:30px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${c.t(_rpt)}</div>
             </div>`).join('')}</div>
           </div>`;
         html += `<div id="rpt-shot-wrap" style="height:0;overflow:hidden"><div id="rpt-shot" style="width:1560px;background:#fff;padding:30px 28px">${SHOT}</div></div>`;
@@ -2496,12 +2496,12 @@
         const _tRows = Object.entries(_tt).map(([tid,v])=>({tid,...v,yr:_yearDone(tid)}))
           .sort((a,b)=> (a.tid==='ADMIN'?1:0)-(b.tid==='ADMIN'?1:0) || (b.dn-a.dn) || (b.bk-a.bk));   // ปล่อยมากสุด · ADMIN ล่างสุด
         const _tSum = k => _tRows.reduce((a,x)=>a+(x[k]||0),0);
-        const _mHead = `padding:11px 8px;color:#fff;font-weight:800;font-size:15px;text-align:center;background:${_mcol}`;
-        const _lHead = `padding:11px 10px;font-weight:800;font-size:14px;color:#3a3f52;background:color-mix(in srgb,${_mcol} 12%,#fff)`;
+        const _mHead = `padding:12px 8px;color:#fff;font-weight:800;font-size:18px;text-align:center;background:${_mcol}`;
+        const _lHead = `padding:12px 10px;font-weight:800;font-size:17px;color:#3a3f52;background:color-mix(in srgb,${_mcol} 12%,#fff)`;
         const _lc = `background:color-mix(in srgb,${_mcol} 6%,#fff)`;   // พื้นหลังคอลัมน์ซ้าย/รวมปีอ่อนๆ
-        let TT = `<div style="font-size:23px;font-weight:800;color:#1f2333;margin-bottom:3px">สรุปรายทีม</div>
-          <div style="font-size:14px;color:#8b90a6;margin-bottom:16px">${h(_mLabel)} · เซ็น = รอผล · อนุมัติ = รอปล่อย</div>
-          <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:15px;border:1px solid #e6e7ef;border-radius:12px;overflow:hidden">
+        let TT = `<div style="font-size:28px;font-weight:800;color:#1f2333;margin-bottom:3px">สรุปรายทีม</div>
+          <div style="font-size:17px;color:#8b90a6;margin-bottom:16px">${h(_mLabel)} · เซ็น = รอผล · อนุมัติ = รอปล่อย</div>
+          <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:19px;border:1px solid #e6e7ef;border-radius:12px;overflow:hidden">
           <thead>
             <tr>
               <th rowspan="2" style="${_lHead}">ลำดับ</th>
@@ -2515,7 +2515,7 @@
         _tRows.forEach((x,i)=>{
           const cc=_tcol(x.tid);
           TT += `<tr style="border-top:1px solid #eef0f4">
-            <td style="padding:13px 8px;text-align:center;color:#a7abbe;font-size:14px;${_lc}">${i+1}</td>
+            <td style="padding:13px 8px;text-align:center;color:#a7abbe;font-size:16px;${_lc}">${i+1}</td>
             <td style="padding:13px 12px;font-weight:800;color:#1f2333;border-left:6px solid ${cc};white-space:nowrap;${_lc}">${h(_tName2(x.tid))}</td>
             <td style="padding:13px 8px;text-align:center;color:#6b7080;${_lc}">${x.target||0}</td>
             <td style="padding:13px 8px;text-align:center;color:#2b2f42;font-weight:700">${x.bk||0}</td>
@@ -2536,6 +2536,41 @@
           <td style="padding:14px 8px;text-align:center">${_tSum('yr')}</td>
         </tr></tbody></table>`;
         html += `<div id="rpt-shot-teams-wrap" style="height:0;overflow:hidden"><div id="rpt-shot-teams" style="width:1120px;background:#fff;padding:26px 28px">${TT}</div></div>`;
+
+        // ── ตารางเคสจบตามไฟแนนซ์ (#rpt-shot-fin · ซ่อนบนเว็บ · Playwright แคปเป็นรูปที่ 3) ──
+        // ข้อมูล D.financeSummary (ชีตนับลีด ฝั่งจบ คอลัมน์ ชำระแบบ) · คอลัมน์ = ทุกเดือนที่มีข้อมูล + รวม + %
+        try {
+          const FIN2 = D.financeSummary || {};
+          const finM2 = []; for(let m=1;m<=12;m++){ const mm=FIN2[m]||FIN2[String(m)]; if(mm && Object.keys(mm).length) finM2.push(m); }
+          if (finM2.length) {
+            const _MS2 = C.MONTHS_SHORT || [];
+            const tot2 = {};
+            finM2.forEach(m=>{ const mm=FIN2[m]||FIN2[String(m)]||{}; Object.entries(mm).forEach(([f,n])=>{ tot2[f]=(tot2[f]||0)+Number(n||0); }); });
+            const names2 = Object.keys(tot2).sort((a,b)=>tot2[b]-tot2[a]);
+            const grand2 = names2.reduce((a,f)=>a+tot2[f],0);
+            const _fh = `padding:12px 10px;color:#fff;font-weight:800;font-size:18px;text-align:center;background:${_mcol}`;
+            let FS = `<div style="font-size:28px;font-weight:800;color:#1f2333;margin-bottom:3px">เคสจบตามไฟแนนซ์</div>
+              <div style="font-size:17px;color:#8b90a6;margin-bottom:16px">ปี ${new Date().getFullYear()+543} · นับเคสปิดแล้วจากชีตนับลีด (ชำระแบบ)</div>
+              <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:19px;border:1px solid #e6e7ef;border-radius:12px;overflow:hidden">
+              <thead><tr><th style="${_fh};text-align:left;padding-left:14px">ไฟแนนซ์</th>`
+              + finM2.map(m=>`<th style="${_fh}">${h(_MS2[m-1]||('ด.'+m))}</th>`).join('')
+              + `<th style="${_fh}">รวม</th><th style="${_fh}">%</th></tr></thead><tbody>`;
+            names2.forEach((f,i)=>{
+              const isCash = /เงินสด|สด/.test(f);
+              FS += `<tr style="background:${i%2?'#fafafc':'#fff'}">
+                <td style="padding:13px 14px;font-weight:800;color:${isCash?'#16a34a':'#1f2333'};border-top:1px solid #eef0f4;white-space:nowrap">${h(f)}</td>`
+                + finM2.map(m=>{ const v=(FIN2[m]||FIN2[String(m)]||{})[f]||0; return `<td style="padding:13px 8px;text-align:center;border-top:1px solid #eef0f4;color:${v?'#2b2f42':'#c3c6d4'};font-weight:${v?700:400}">${v||'-'}</td>`; }).join('')
+                + `<td style="padding:13px 8px;text-align:center;border-top:1px solid #eef0f4;font-weight:800;color:#1f2333;background:color-mix(in srgb,${_mcol} 6%,#fff)">${tot2[f]}</td>`
+                + `<td style="padding:13px 8px;text-align:center;border-top:1px solid #eef0f4;color:#6b7080;background:color-mix(in srgb,${_mcol} 6%,#fff)">${grand2?Math.round(tot2[f]*100/grand2):0}%</td></tr>`;
+            });
+            FS += `<tr style="background:${_mcol};color:#fff;font-weight:800">
+              <td style="padding:14px 14px">รวมเคสจบ</td>`
+              + finM2.map(m=>{ const mm=FIN2[m]||FIN2[String(m)]||{}; const s=Object.values(mm).reduce((a,n)=>a+Number(n||0),0); return `<td style="padding:14px 8px;text-align:center">${s}</td>`; }).join('')
+              + `<td style="padding:14px 8px;text-align:center">${grand2}</td><td style="padding:14px 8px;text-align:center">100%</td></tr>`;
+            FS += `</tbody></table>`;
+            html += `<div id="rpt-shot-fin-wrap" style="height:0;overflow:hidden"><div id="rpt-shot-fin" style="width:1120px;background:#fff;padding:26px 28px">${FS}</div></div>`;
+          }
+        } catch(e) { console.error('finance shot table error', e); }
       } catch (e) { console.error('mega seller table error', e); }
 
       // ── 📞 การ์ดแยก "เทเลเซลล์" (ADMIN) — งานคือหาลีด/จอง ส่งต่อให้เซลล์ปิด → วัดที่ลีด/จอง ไม่ใช่ปล่อย/คะแนนปิดดีล ──
@@ -4024,6 +4059,40 @@
         html += `<div style="text-align:center;padding-top:7px"><span style="font-size:10px;color:var(--t3)">${ic('lucide:mouse-pointer-click',16)} กดดูรายละเอียด · ไทม์ไลน์</span></div>`;
         html += `</div></div>`;
       });
+
+      // ── 💳 เคสจบตามไฟแนนซ์ (ชีตนับลีด แท็บ จอง/จบ ฝั่งขวา คอลัมน์ "ชำระแบบ" · เดือน = เดือนของแท็บ) ──
+      try {
+        const FIN = D.financeSummary || {};
+        const _mF = (new Date(dfFrom+'T00:00:00')).getMonth()+1, _mT = (new Date(dfTo+'T00:00:00')).getMonth()+1;
+        const finMonths = []; for(let m=_mF;m<=_mT;m++){ const mm=FIN[m]||FIN[String(m)]; if(mm && Object.keys(mm).length) finMonths.push(m); }
+        const finTot = {};
+        finMonths.forEach(m=>{ const mm=FIN[m]||FIN[String(m)]||{}; Object.entries(mm).forEach(([f,n])=>{ finTot[f]=(finTot[f]||0)+Number(n||0); }); });
+        const finNames = Object.keys(finTot).sort((a,b)=>finTot[b]-finTot[a]);
+        const finGrand = finNames.reduce((a,f)=>a+finTot[f],0);
+        let FT = `<div class="card" id="fin-card" style="margin-top:16px;grid-column:1/-1"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:landmark',16)} เคสจบตามไฟแนนซ์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="นับจากชีตนับลีด แท็บ จอง/จบ ฝั่งขวา (จบ)\nคอลัมน์ ชำระแบบ (KK/KL/TTB/AY/เงินสด/...) เฉพาะเคสสถานะปิดแล้ว\nเดือน = เดือนของแท็บ · กรองตามช่วงวันที่ (ระดับเดือน)">?</span></span>${_cardLineBtn('fin-card','เคสจบตามไฟแนนซ์')}</div>`;
+        if (!finNames.length) {
+          FT += `<div style="color:var(--t3);font-size:12px;padding:10px 0">ยังไม่มีข้อมูลไฟแนนซ์ในช่วงนี้ — ระบบอ่านจากคอลัมน์ "ชำระแบบ" ฝั่งจบ ของชีตนับลีด (แท็บ จอง/จบ) · ใส่ข้อมูลแล้วรอ sync รอบถัดไป</div>`;
+        } else {
+          const _MS = C.MONTHS_SHORT || [];
+          FT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:13px;width:100%;white-space:nowrap">`;
+          FT += `<thead><tr><th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--bd);background:var(--bg2);font-weight:700">ไฟแนนซ์</th>`
+              + finMonths.map(m=>`<th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);font-weight:700">${h(_MS[m-1]||('ด.'+m))}</th>`).join('')
+              + `<th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);font-weight:800">รวม</th><th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--bd);background:var(--bg2);font-weight:700">%</th></tr></thead><tbody>`;
+          finNames.forEach(f=>{
+            const isCash = /เงินสด|สด/.test(f);
+            FT += `<tr><td style="padding:7px 12px;border-bottom:.5px solid var(--bd);font-weight:600;color:${isCash?'var(--green)':'var(--t1)'}">${isCash?ic('lucide:banknote',14)+' ':''}${h(f)}</td>`
+                + finMonths.map(m=>{ const v=(FIN[m]||FIN[String(m)]||{})[f]||0; return `<td style="padding:7px 10px;text-align:right;border-bottom:.5px solid var(--bd);${v?'font-weight:600':'color:var(--t3)'}">${v||'-'}</td>`; }).join('')
+                + `<td style="padding:7px 12px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:800">${finTot[f]}</td>`
+                + `<td style="padding:7px 12px;text-align:right;border-bottom:.5px solid var(--bd);color:var(--t2)">${finGrand?Math.round(finTot[f]*100/finGrand):0}%</td></tr>`;
+          });
+          FT += `<tr style="font-weight:800"><td style="padding:9px 12px;background:var(--blue);color:#fff">รวมเคสจบ</td>`
+              + finMonths.map(m=>{ const mm=FIN[m]||FIN[String(m)]||{}; const s=Object.values(mm).reduce((a,n)=>a+Number(n||0),0); return `<td style="padding:9px 10px;text-align:right;background:var(--blue);color:#fff">${s}</td>`; }).join('')
+              + `<td style="padding:9px 12px;text-align:right;background:var(--blue);color:#fff">${finGrand}</td><td style="padding:9px 12px;text-align:right;background:var(--blue);color:#fff">100%</td></tr>`;
+          FT += `</tbody></table></div>`;
+        }
+        FT += `</div>`;
+        html += FT;
+      } catch(e) { console.error('finance summary error', e); }
       return html;
     }
 

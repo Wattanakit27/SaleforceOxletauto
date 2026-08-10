@@ -1635,6 +1635,11 @@ def _compute_dashboard_data() -> dict:
         dc[chn] = dc.get(chn, 0) + 1
 
     _purchase_data = _fetch_purchase_data()   # ฝั่งจัดซื้อ (lead รับซื้อ + รถซื้อจริง) — อ่านครั้งเดียว
+    try:
+        from .google_sheets import fetch_finance_by_month_tabs
+        _finance_summary = fetch_finance_by_month_tabs()   # เคสจบตามไฟแนนซ์ (best-effort · error = {})
+    except Exception:
+        _finance_summary = {}
     _yod = _fetch_yod_rot_kao(now.month)       # ยอดรถเข้า รายรุ่น (เดือนปัจจุบัน) — สต๊อก/จอง-จบ/ต้องเติม
     if _yod and _yod.get("rows"):
         # สต๊อคต้นเดือน = เหลือปลายเดือนก่อน (carry อัตโนมัติ) — ดึงเดือนก่อนมาแมพตามรุ่น (แก้ทับได้)
@@ -1688,6 +1693,7 @@ def _compute_dashboard_data() -> dict:
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
         "leadreportPlan": _lr_plan,                    # เป้า lead ต่อช่องทาง (แอดมินตั้งเอง · {channel:target})
         "yodRotKao": _yod,                             # ยอดรถเข้า รายรุ่น (จัดซื้อ) — {month,months,rows[]} หรือ None
+        "financeSummary": _finance_summary,            # เคสจบตามไฟแนนซ์ {เดือน:{ไฟแนนซ์:จำนวน}} (ฝั่งจบ ชีตนับลีด)
     }
 
 

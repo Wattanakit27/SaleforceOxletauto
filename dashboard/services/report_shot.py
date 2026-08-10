@@ -78,7 +78,8 @@ def _cleanup_old(days: int = 7) -> None:
 # แต่ละรูปที่จะแคป: (element id, wrapper id ที่ซ่อนอยู่ height:0 ต้องเปิดก่อน)
 _SHOT_TARGETS = [
     ("rpt-shot", "rpt-shot-wrap"),            # ตารางรายงาน จอง/อนุมัติ/ปล่อย (เวอร์ชันอ่านง่าย)
-    ("rpt-shot-teams", "rpt-shot-teams-wrap"),  # กราฟแท่งการแข่งขันรายทีม (ปล่อย)
+    ("rpt-shot-teams", "rpt-shot-teams-wrap"),  # ตารางสรุปรายทีม
+    ("rpt-shot-fin", "rpt-shot-fin-wrap"),    # เคสจบตามไฟแนนซ์ (ชีตนับลีด "ชำระแบบ" · ไม่มีข้อมูล = div ไม่ถูกสร้าง → ข้ามเอง)
 ]
 
 

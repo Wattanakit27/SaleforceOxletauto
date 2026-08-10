@@ -1073,6 +1073,93 @@ def fetch_bookings_by_month_tabs() -> list[list[str]]:
         return fetch_sheet("bookings")
 
 
+def fetch_finance_by_month_tabs() -> dict:
+    """★ ส.ค.69 — นับ "เคสจบ" แยกตามไฟแนนซ์ จากฝั่ง "จบ" (บล็อกขวา) ของแท็บ 'จอง/จบ <เดือน> 69'
+    (ไฟล์นับลีด/bookings — ฝั่งที่ระบบไม่เคยอ่าน · ฝั่งจองอ่านแค่ A-K ใน fetch_bookings_by_month_tabs).
+
+    ผู้ใช้เพิ่มคอลัมน์ "ชำระแบบ" (dropdown: KK/KL/TTB/AY/NISSAN/เงินสด/...) ในฝั่งจบ → อยาก
+    เห็นสรุป "เดือนไหนจบด้วยไฟแนนซ์ไหนกี่คัน" ในแดชบอร์ด (แท็บสถานะจองปล่อย + รูปรายงาน LINE).
+
+    วิธีอ่าน (header-based — ตำแหน่งคอลัมน์ต่างกันได้ต่อแท็บ ห้าม fix index):
+    - สแกน 5 แถวแรกหา header "ชำระแบบ" → ได้คอลัมน์ไฟแนนซ์ของแท็บนั้น
+    - หา header สถานะปิดใกล้ๆ (คำว่า "ปิด" หรือ "สถานะ" ทางขวาของชำระแบบ) — เจอ = นับเฉพาะแถว
+      ที่สถานะมีคำว่า "ปิด" · ไม่เจอ = นับทุกแถวที่ชำระแบบไม่ว่าง (ฝั่งจบ = เคสจบอยู่แล้ว)
+    - เดือน = เดือนของแท็บ (แบบ _tab_month) · คืน {เดือน(int): {ชื่อไฟแนนซ์: จำนวน}} · error = {}
+    """
+    import urllib.parse
+    load_sheet_config_overrides()
+    cache_key = "finance_month_tabs"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from .fetch_dashboard import bangkok_now
+        sid = SHEET_CONFIG["bookings"]["spreadsheet_id"]
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        auth = {"Authorization": f"Bearer {creds.token}"}
+
+        now = bangkok_now()
+        be2 = (now.year + 543) % 100
+        want = {f"จอง/จบ {_THAI_MONTHS[m - 1]} {be2:02d}": m for m in range(1, now.month + 1)}
+
+        meta = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+                            headers=auth, timeout=20).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+        def _norm(t):
+            return "".join(t.split())
+        month_of = {_norm(k): m for k, m in want.items()}
+        tabs = [t for t in titles if _norm(t) in month_of]
+        if not tabs:
+            return {}
+
+        qs = "&".join(
+            "ranges=" + urllib.parse.quote(f"'{t}'!A1:BZ500", safe="") for t in tabs
+        )
+        url = f"{SHEETS_API}/{sid}/values:batchGet?{qs}&valueRenderOption=FORMATTED_VALUE"
+        r = requests.get(url, headers=auth, timeout=60)
+        if r.status_code != 200:
+            return {}
+
+        out: dict[int, dict[str, int]] = {}
+        for tab, vr in zip(tabs, r.json().get("valueRanges", [])):
+            rows = vr.get("values", [])
+            month = month_of[_norm(tab)]
+            pay_col = status_col = header_row = None
+            for ri, row in enumerate(rows[:5]):
+                for ci, cell in enumerate(row):
+                    if _norm(str(cell)) == "ชำระแบบ":
+                        pay_col, header_row = ci, ri
+                        break
+                if pay_col is not None:
+                    break
+            if pay_col is None:
+                continue
+            # หา col สถานะปิดทางขวาของชำระแบบ (ห่างไม่เกิน 8 ช่อง — อยู่บล็อกจบเดียวกัน)
+            hdr = rows[header_row]
+            for ci in range(pay_col + 1, min(pay_col + 9, len(hdr))):
+                head = _norm(str(hdr[ci]))
+                if "ปิด" in head or "สถานะ" in head:
+                    status_col = ci
+                    break
+            bucket = out.setdefault(month, {})
+            for row in rows[header_row + 1:]:
+                fin = str(row[pay_col]).strip() if pay_col < len(row) else ""
+                if not fin:
+                    continue
+                if status_col is not None:
+                    st = str(row[status_col]).strip() if status_col < len(row) else ""
+                    # นับเฉพาะ "ปิด..." จริง — กัน "ยังไม่ปิด"/"ไม่ปิด" หลุดมานับ (substring "ปิด" ตรงเฉยๆ ไม่พอ)
+                    if ("ปิด" not in st) or ("ไม่ปิด" in st) or ("ยังไม่" in st):
+                        continue
+                bucket[fin] = bucket.get(fin, 0) + 1
+        _cache_set(cache_key, out)
+        return out
+    except Exception:
+        return {}
+
+
 def fetch_live_by_month_tabs() -> list[list[str]]:
     """อ่าน live sessions จากแท็บรายเดือน 'สรุปไลฟ์สด <เดือน>' (สดกว่า 'รวม sheet' ที่ใช้สูตร — เดือนล่าสุดมัก lag)
     โครงสร้างแต่ละแท็บเหมือน 'รวม sheet' เป๊ะ (วันที่|เวลา|ทีม|ผู้ไลฟ์1-5|หัวข้อ|... → ตรง LIVE_COL).
