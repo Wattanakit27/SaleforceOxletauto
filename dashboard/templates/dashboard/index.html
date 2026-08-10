@@ -4035,7 +4035,7 @@
         finMonths.forEach(m=>{ const mm=FIN[m]||FIN[String(m)]||{}; Object.entries(mm).forEach(([f,n])=>{ finTot[f]=(finTot[f]||0)+Number(n||0); }); });
         const finNames = Object.keys(finTot).sort((a,b)=>finTot[b]-finTot[a]);
         const finGrand = finNames.reduce((a,f)=>a+finTot[f],0);
-        let FT = `<div class="card" id="fin-card" style="margin-top:16px;grid-column:1/-1"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:landmark',16)} เคสจบตามไฟแนนซ์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="นับจากชีตนับลีด แท็บ จอง/จบ ฝั่งขวา (จบ)\nคอลัมน์ ชำระแบบ (KK/KL/TTB/AY/เงินสด/...) เฉพาะเคสสถานะปิดแล้ว\nเดือน = เดือนของแท็บ · กรองตามช่วงวันที่ (ระดับเดือน)">?</span></span>${_cardLineBtn('fin-card','เคสจบตามไฟแนนซ์')}</div>`;
+        let FT = `<div class="card" id="fin-card" style="margin-bottom:16px;grid-column:1/-1"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:landmark',16)} เคสจบตามไฟแนนซ์ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="นับจากชีตนับลีด แท็บ จอง/จบ ฝั่งขวา (จบ)\nคอลัมน์ ชำระแบบ (KK/KL/TTB/AY/เงินสด/...) เฉพาะเคสสถานะปิดแล้ว\nเดือน = เดือนของแท็บ · กรองตามช่วงวันที่ (ระดับเดือน)">?</span></span>${_cardLineBtn('fin-card','เคสจบตามไฟแนนซ์')}</div>`;
         if (!finNames.length) {
           FT += `<div style="color:var(--t3);font-size:12px;padding:10px 0">ยังไม่มีข้อมูลไฟแนนซ์ในช่วงนี้ — ระบบอ่านจากคอลัมน์ "ชำระแบบ" ฝั่งจบ ของชีตนับลีด (แท็บ จอง/จบ) · ใส่ข้อมูลแล้วรอ sync รอบถัดไป</div>`;
         } else {
@@ -4057,7 +4057,7 @@
           FT += `</tbody></table></div>`;
         }
         FT += `</div>`;
-        html += FT;
+        html = FT + html;   // ★ การ์ดไฟแนนซ์อยู่บนสุดของแท็บ (ผู้ใช้สั่ง ส.ค.69 — อยู่ล่างสุดแล้วหาไม่เจอ)
 
         // ── เวอร์ชันสวยสำหรับส่งไลน์ (#fin-card-shot · ซ่อนใน wrapper height:0) ──
         // ปุ่ม "ส่งไลน์ ▾" ของ #fin-card → cardline แคปตัวนี้แทนการ์ดเว็บอัตโนมัติ (convention #<id>-shot)
