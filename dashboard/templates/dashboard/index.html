@@ -6942,5 +6942,6 @@
     if (typeof canViewAll !== 'undefined' && canViewAll) ensureTrackingForAlerts();
   </script>
   {% endif %}
+{% if APP_VERSION %}<div style="position:fixed;bottom:6px;right:10px;font-size:10.5px;color:#94a3b8;opacity:.75;z-index:9999;pointer-events:none">{{ APP_VERSION }}</div>{% endif %}
 </body>
 </html>
