@@ -38,10 +38,11 @@ def _actor(user):
     return (user.get_full_name() or user.username) if user.is_authenticated else ""
 
 
-def _stage_options(keys):
-    """[(key, name, icon), ...] ตามลำดับสเตป — สำหรับปุ่มเปลี่ยนสเตป"""
+def _stage_options(keys, role=None):
+    """[(key, name, icon), ...] ตามลำดับสเตป — สำหรับปุ่มเปลี่ยนสเตป
+    role ส่งมา = ใช้ป้ายปุ่มตามบทบาท (เช่น เซลล์เห็น qc_show เป็น "ตีกลับ QC")"""
     kset = set(keys)
-    return [(k, n, i) for k, n, i in C.STAGES if k in kset]
+    return [(k, roles.stage_button_label(role, k, n), i) for k, n, i in C.STAGES if k in kset]
 
 
 # =========================================================
@@ -71,10 +72,10 @@ def dashboard(request):
     branch = request.GET.get("branch", "")
     stage = request.GET.get("stage", "")
     sort = request.GET.get("sort", "updated")
-    # ★ แยก "ขายแล้ว" ออกจากตารางหลัก (เหมือนแท็บสถานะรถในแดชบอร์ดขาย) — default โชว์รถในระบบ
-    #   ปล่อยรถ (release) = จบ → status=sold → หลุดจากบอร์ด/ตารางรถในระบบ
+    # ★ แยก "ขายแล้ว" ออกจากตารางหลัก — default โชว์รถในระบบ
+    #   ส.ค.69: ปล่อยรถไม่จบแล้ว (เซลล์เก็บรูป · รถอยู่บนบอร์ด) — สเตป "ขายแล้ว" (sold) ถึงจบจริง
     def _is_sold(c):
-        return c.status == "sold" or c.stage == "release"
+        return c.status == "sold" or c.stage == "sold"
     active_n = sum(1 for c in all_cars if not _is_sold(c))
     sold_n = len(all_cars) - active_n
     view = "sold" if request.GET.get("view", "active") == "sold" else "active"
@@ -83,6 +84,10 @@ def dashboard(request):
         cars = [c for c in cars if c.branch == branch]
     if stage:
         cars = [c for c in cars if c.stage == stage]
+    # ★ ตัวกรองธงงานค้าง (ยังไม่ถ่ายรูป/คอนเทนต์) — เจ้าของขอให้หางานติดธงได้ง่าย (ส.ค.69)
+    flagf = request.GET.get("flag", "")
+    if flagf in C.FLAG_KEYS:
+        cars = [c for c in cars if getattr(c, flagf, False)]
     if sort == "stuck":
         cars = sorted(cars, key=lambda c: c.stage_since)
     elif sort == "newest":
@@ -105,7 +110,7 @@ def dashboard(request):
     board_cols = []
     _prio_rank = {p: i for i, p in enumerate(C.PRIORITY_KEYS)}   # ด่วนมาก=0 → ไม่เร่ง=3
     for k, n, i in C.STAGES:
-        if k == "release":       # ปล่อยรถ = จบ (status sold) → ไม่ต้องมีคอลัมน์บนบอร์ด
+        if k == "sold":          # ขายแล้ว = จบ (หลุดบอร์ดไปหน้ารถขายแล้ว) — ปล่อยรถยังมีคอลัมน์ (ส.ค.69)
             continue
         # เรียงการ์ด: ความด่วนก่อน (ด่วนมากบนสุด) → ค้างนานสุดขึ้นก่อนในความด่วนเดียวกัน
         lst = sorted(_board_by.get(k, []),
@@ -119,6 +124,7 @@ def dashboard(request):
         "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
+        "flag_choices": C.CAR_FLAGS, "cur_flag": flagf,
         "board_cols": board_cols, "has_my": has_my, "is_full": is_full,
         # ปุ่ม "แดชบอร์ดขาย" โชว์เฉพาะแอดมินขาย (มาจาก /track/ ตรง) — คนงาน (position=worker) ซ่อน (อยู่ /dashboard/ แล้ว)
         "show_sales_link": (request.session.get("oxlet_user") or {}).get("position") == "admin",
@@ -241,7 +247,8 @@ def car_json(request, code):
     } for l in _log_objs]
     # สเตปที่ user เปลี่ยนได้ตามบทบาท — ผ่อนกฎ scan-only: กดเปลี่ยนจากบอร์ด/โมดัลได้เลย
     # (คนงานที่ไม่มีสเตป/ไม่มีบทบาท = [] → โชว์ลิงก์สแกน QR แทน)
-    direct = [{"key": k, "name": n} for k, n, _ in _stage_options(roles.allowed_stages(request.user))]
+    direct = [{"key": k, "name": n} for k, n, _ in
+              _stage_options(roles.allowed_stages(request.user), roles.get_role(request.user))]
     return JsonResponse({
         "code": car.code, "title": car.title, "plate": car.plate,
         "brand": car.brand, "model": car.model, "year": car.year,
@@ -260,7 +267,7 @@ def car_json(request, code):
         "photo": car.photo.url if car.photo else "",
         "scanUrl": f"/track/scan/{car.code}/",
         "editUrl": f"/track/cars/{car.code}/edit/",
-        "logs": logs, "direct": direct, "canEdit": roles.can_edit_car(request.user),
+        "logs": logs, "direct": direct, "canEdit": roles.can_edit_this_car(request.user, car),
         "canDelete": roles.can_manage_users(request.user),  # ลบ = แอดมินเท่านั้น (Exec/Admin)
         # ข้อมูลนำเข้า (ราคา/เจ้าของ/รายละเอียดเครื่องยนต์ ฯลฯ) — เก็บครบใน extra
         "price": (car.extra or {}).get("price"),
@@ -337,9 +344,12 @@ def car_create(request):
     return render(request, "car_form.html", {"form": form, "mode": "create"})
 
 
-@roles.role_required(roles.can_edit_car)
+@login_required
 def car_edit(request, code):
+    # ★ ส.ค.69 สิทธิ์รายคัน: แอดมิน/จัดซื้อ/สิทธิ์เต็ม แก้ได้ทุกคัน · เซลล์แก้ได้เฉพาะรถพร้อมขาย/ปล่อย/ขายแล้ว
     car = get_object_or_404(Car, code=code)
+    if not roles.can_edit_this_car(request.user, car):
+        raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขรถคันนี้")
     if request.method == "POST":
         form = CarForm(request.POST, request.FILES, instance=car)
         if form.is_valid():
@@ -444,7 +454,7 @@ def car_stage(request, code):
 @login_required
 def scan_page(request, code):
     car = get_object_or_404(Car, code=code)
-    stages = _stage_options(roles.allowed_stages(request.user))
+    stages = _stage_options(roles.allowed_stages(request.user), roles.get_role(request.user))
     _log_objs, _hm = _fetch_logs(car, 20)
     logs = [{
         "stageKey": l.stage, "stageName": l.stage_name, "stageIcon": l.stage_icon,
@@ -819,7 +829,7 @@ def cars_api(request):
             "code": c.code, "title": c.title, "name": ex.get("name") or c.title,
             "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
             "stage": c.stage, "stageName": c.stage_name, "stageIcon": c.stage_icon,
-            "status": c.status, "sold": (c.status == "sold" or c.stage == "release"),
+            "status": c.status, "sold": (c.status == "sold" or c.stage == "sold"),
             "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
             "priority": c.priority, "priorityColor": c.priority_color, "priorityName": c.priority_name,
             "needPhoto": c.need_photo, "needContent": c.need_content, "flags": c.flags,
@@ -838,7 +848,8 @@ def cars_api(request):
         "branches": branch_pairs(), "stages": [[k, n] for k, n, _ in C.STAGES], "cars": cars,
         "statusChoices": list(C.STATUS_CHOICES), "bookChoices": list(C.BOOK_STATUS_CHOICES),
         # สเตปที่ user คนนี้ "เปลี่ยนได้" (Sales = qc/show/reserve/finance/closing/sold) → seller.html โชว์ปุ่มตามนี้
-        "myStages": [[k, C.STAGE_NAME[k]] for k in roles.allowed_stages(request.user)],
+        "myStages": [[k, roles.stage_button_label(roles.get_role(request.user), k, C.STAGE_NAME[k])]
+                     for k in roles.allowed_stages(request.user)],
         "me": _actor(request.user),
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
@@ -865,12 +876,12 @@ def api_set_stage(request):
     if stage in C.STAGE_FORCE_MEDIA and not media:   # ตรวจปล่อย/ปล่อยรถ = บังคับแนบรูป/วิดีโอ
         return JsonResponse({"ok": False, "error": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน"}, status=400)
     note = (data.get("note") or "").strip()
-    pr = data.get("priority")
-    if pr in C.PRIORITY_NAME:                          # ปรับความด่วนพร้อมกัน (ถ้าส่งมา)
-        car.priority = pr
-        car.save(update_fields=["priority"])
     actor = _actor(request.user)
     log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
+    pr = data.get("priority")
+    if pr in C.PRIORITY_NAME:   # ตั้งความด่วนพร้อมกัน (ถ้าส่งมา) — ต้องหลัง change_stage เพราะเปลี่ยนสเตปรีเซ็ตเป็นปกติ
+        car.priority = pr
+        car.save(update_fields=["priority"])
     if media:
         try:
             log.media = media
@@ -1025,7 +1036,7 @@ def api_add_car(request):
     car.stage_since = timezone.now()
     if stage == C.FRONTLINE_STAGE:
         car.frontline_at = timezone.now()
-    if stage == "release":       # ปล่อยรถ = จบ → มาร์ค sold
+    if stage == "sold":          # ขายแล้ว = จบ → มาร์ค sold (ส.ค.69 · ปล่อยรถไม่จบแล้ว)
         car.status = "sold"
 
     # รูปขาย — รับหลายรูป (id/path จาก api_upload) · รูปแรก = ปก · เก็บ list ใน extra['sale_photos']

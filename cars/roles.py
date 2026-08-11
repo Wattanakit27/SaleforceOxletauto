@@ -47,39 +47,60 @@ ROLES = [
 ]
 ROLE_LABEL = dict(ROLES)
 
-# สเตป -> เซตบทบาทที่ "กดเปลี่ยนเข้าสเตปนั้น" ได้ (FULL_ROLES = Exec/Regist/QC/PaintIn ได้ทุกสเตปเสมอ)
-# โปรดักชัน: photo_wait + route ไป repair/wash + ขึ้นหน้าร้าน (show) · ช่าง: ซ่อมเสร็จรอตรวจ/อะไหล่/เบาะ/ฟิล์ม
-# ฝ่ายล้างรถ: qc_show (ล้างเสร็จส่งรอ QC ตรวจ) · เซลล์: งานขาย + ส่งกลับ QC + ตรวจรถรอปล่อย
-# ★ ด่านตรวจ 2 ชั้นก่อนขึ้นหน้าร้าน: qc_show (QC ตรวจ) → sales_check (QC ติ๊กส่งให้เซลล์ตรวจรับ) → show
-# อู่สีนอก/อู่สีใน = ด่านสิทธิ์เต็ม (ฝ่ายทะเบียน/QC/ผู้บริหาร) · qc_release/release บังคับแนบรูป/วิดีโอ
+# สเตป -> เซตบทบาทที่ "กดเปลี่ยนเข้าสเตปนั้น" ได้ (STAGE_FULL_ROLES = Exec/QC/PaintIn ได้ทุกสเตป · ยกเว้น intake)
+# ★ ปรับใหญ่ ส.ค.69 (ตามเจ้าของสั่ง):
+#   - "รับเข้า" เอาออกทุกบทบาท (รถถูกสร้างที่สเตปรับเข้าอยู่แล้ว ไม่มีใครต้องกดเข้า)
+#   - โปรดักชัน: เอา "ชงล้าง" ออก · ช่าง: เอา "ติดฟิล์ม" ออก
+#   - ฝ่ายทะเบียน: ไม่ full สเตปแล้ว — ได้ทุกสเตปยกเว้น งานเบาะ/อะไหล่ (ดู REGIST_EXCLUDE)
+#   - "รอปิดการขาย" เหลือฝ่ายทะเบียน (+สิทธิ์เต็ม) เท่านั้น
+#   - เซลล์: ตัดรอปิดการขาย → ได้ "ตรวจขนส่ง" แทน + "ขายแล้ว" (จบจริง) + ปุ่ม qc_show ใช้ป้าย "ตีกลับ QC"
 STAGE_ROLES = {
-    "intake":      {PURCHASING},
+    "intake":      set(),                # ★ ไม่มีใครกดเข้า "รับเข้า" ได้ (ทุกบทบาทรวมสิทธิ์เต็ม — ดู NO_ONE_STAGES)
     "photo_wait":  {PRODUCTION},
     "repair":      {PRODUCTION},         # เช็คซ่อม = โปรดักชันเป็นคนใส่ (ส่งรถเข้าสายซ่อม)
     "repair_done": {TECH},               # ช่างซ่อมเสร็จ → กดส่ง "ซ่อมเสร็จรอตรวจ"
     "parts":       {TECH},
-    "upholstery":  {TECH},               # อู่นอกยุบเข้าฝ่ายทะเบียน (full) แล้ว · ช่างยังทำงานเบาะได้
+    "upholstery":  {TECH},
     "paint_in":    set(),                # อู่สีใน = PAINTIN (FULL) เท่านั้น
-    "paint_out":   set(),                # อู่สีนอก = สถานะ (อู่ภายนอก) · ฝ่ายทะเบียน (full) เป็นคนปล่อย/รับกลับ
-    "film":        {TECH},
-    "wash":        {PRODUCTION},         # ชงล้าง = โปรดักชันเป็นคนใส่ (ฝ่ายล้างรถลงมือล้าง)
-    "qc_show":     {CARWASH, SALES},     # ล้างเสร็จ → ฝ่ายล้างรถส่ง QC · เซลล์เจอปัญหา → ส่งกลับ QC
+    "paint_out":   set(),                # อู่สีนอก = สถานะ (อู่ภายนอก) · ฝ่ายทะเบียนเป็นคนปล่อย/รับกลับ
+    "paint_check": set(),                # ★ รอตรวจสี = ฝ่ายทะเบียน (+สิทธิ์เต็ม) เท่านั้น
+    "film":        set(),                # ★ เอาออกจากช่างแล้ว — เหลือฝ่ายทะเบียน/สิทธิ์เต็ม
+    "wash":        set(),                # ★ เอาออกจากโปรดักชันแล้ว — เหลือฝ่ายทะเบียน/สิทธิ์เต็ม
+    "qc_show":     {CARWASH, SALES},     # ล้างเสร็จ → ฝ่ายล้างรถส่ง QC · เซลล์ "ตีกลับ QC" (ป้ายปุ่มของเซลล์)
     "sales_check": {CARWASH},            # QC ตรวจผ่านแล้ว "ติ๊ก" ส่งต่อให้เซลล์มาตรวจรับ
                                          # ★ ยังไม่มีคน QC จริง → ให้ฝ่ายล้างรถติ๊กแทนไปก่อน (ส.ค.69)
-                                         #   มี QC เมื่อไหร่ค่อยเอา CARWASH ออก เหลือสิทธิ์เต็มอย่างเดียว
     "show":        {SALES, PRODUCTION},  # เซลล์ตรวจรับแล้วดันขึ้นหน้าร้าน (โปรดักชันถ่ายรูปเสร็จก็ดันได้)
     "reserve":     {SALES},
     "finance":     {SALES},
-    "closing":     {SALES},
-    "qc_release":  {SALES},              # เซลล์กดตรวจรถรอปล่อย (QC/สิทธิ์เต็ม ก็ทำได้) · บังคับแนบรูป
-    "release":     {SALES},              # เซลล์ปิด (QC/ผู้บริหาร ก็ทำได้) · บังคับแนบรูป
+    "transport_check": {SALES},          # ★ เซลล์พารถตรวจขนส่ง (แทนรอปิดการขายของเซลล์)
+    "closing":     set(),                # ★ รอปิดการขาย = ฝ่ายทะเบียน (+สิทธิ์เต็ม) เท่านั้น
+    "qc_release":  {SALES},              # บังคับแนบรูป
+    "release":     {SALES},              # ปล่อยรถ = เซลล์เก็บรูปส่งมอบ (ไม่จบ · รถยังอยู่บนบอร์ด) · บังคับแนบรูป
+    "sold":        {SALES},              # ★ ขายแล้ว = จบจริง → หลุดบอร์ดไปหน้ารถขายแล้ว
 }
+
+# สเตปที่ "ไม่มีใครกดเข้าได้" แม้สิทธิ์เต็ม (รับเข้า = จุดเกิดของรถตอนสร้าง ไม่ใช่ปุ่ม)
+NO_ONE_STAGES = {"intake"}
+# ฝ่ายทะเบียน: ทุกสเตปยกเว้นชุดนี้ (เจ้าของสั่งเอา เบาะ/อะไหล่ ออก · intake โดน NO_ONE_STAGES อยู่แล้ว)
+REGIST_EXCLUDE = {"upholstery", "parts"}
+
+# ป้ายปุ่มพิเศษต่อบทบาท — key สเตปเดิม แต่คำบนปุ่มเปลี่ยนตามบริบทผู้กด (ตอนนี้มีของเซลล์อันเดียว)
+STAGE_BUTTON_LABELS = {
+    SALES: {"qc_show": "ตีกลับ QC"},     # เซลล์เจอปัญหา → ตีรถกลับเข้าคิว "รอ QC ตรวจ" (QC เห็นในคอลัมน์เดิม)
+}
+
+
+def stage_button_label(role, stage_key, default_name):
+    """ชื่อปุ่มสเตปตามบทบาทผู้กด — ไม่มี override = ชื่อสเตปปกติ"""
+    return STAGE_BUTTON_LABELS.get(role, {}).get(stage_key, default_name)
 
 # บทบาทที่ต้อง "สแกนก่อน" ถึงจะเปลี่ยนสเตปได้ (เปลี่ยนตรงผ่าน UI ไม่ได้)
 SCAN_ONLY_ROLES = {SALES, TECH, CARWASH, PRODUCTION}
 
-# สิทธิ์เต็ม (ทำได้ทุกอย่าง = ผู้บริหาร) — ฝ่ายทะเบียน + QC + อู่สีใน ยกระดับมาเท่าผู้บริหาร
+# สิทธิ์เต็ม "การจัดการ" (จัดการรถ/ผู้ใช้ ฯลฯ) — ฝ่ายทะเบียนยังจัดการได้เต็ม
 FULL_ROLES = {EXEC, REGIST, QC, PAINTIN}
+# สิทธิ์เต็ม "สเตป" (กดได้ทุกสเตป ยกเว้น NO_ONE_STAGES) — ★ ส.ค.69 ฝ่ายทะเบียนไม่ full สเตปแล้ว (ดู REGIST_EXCLUDE)
+STAGE_FULL_ROLES = {EXEC, QC, PAINTIN}
 
 
 def set_user_role(user, role_key):
@@ -113,21 +134,41 @@ def is_exec(user):        return get_role(user) in FULL_ROLES
 def can_manage_users(user): return get_role(user) in (FULL_ROLES | {ADMIN})
 def can_add_car(user):    return get_role(user) in (FULL_ROLES | {PURCHASING})
 def can_edit_car(user):   return get_role(user) in (FULL_ROLES | {PURCHASING, ADMIN})
+
+
+# ★ ส.ค.69 — เซลล์แก้ข้อมูลรถได้เฉพาะ "รถพร้อมขาย" กับ "รถที่ปล่อย/ขายแล้ว" (เจ้าของสั่ง)
+SALES_EDIT_STAGES = {"show", "release", "sold"}
+
+
+def can_edit_this_car(user, car):
+    """สิทธิ์แก้ข้อมูลรถ "รายคัน" — ใช้แทน can_edit_car ตรงที่รู้ว่ารถคันไหน"""
+    if can_edit_car(user):
+        return True
+    return get_role(user) == SALES and car.stage in SALES_EDIT_STAGES
 def can_delete_car(user): return get_role(user) in FULL_ROLES
 def can_view_admin(user): return get_role(user) in (FULL_ROLES | {PURCHASING, ADMIN})
 def is_worker(user):      return get_role(user) in SCAN_ONLY_ROLES
 
 
 def allowed_stages(user):
-    """รายชื่อคีย์สเตปที่ user เปลี่ยนได้"""
+    """รายชื่อคีย์สเตปที่ user เปลี่ยนได้ (intake ไม่มีใครกดได้ · ฝ่ายทะเบียนเว้น เบาะ/อะไหล่)"""
     role = get_role(user)
-    if role in FULL_ROLES:
-        return list(STAGE_ROLES.keys())
+    if role in STAGE_FULL_ROLES:
+        return [s for s in STAGE_ROLES if s not in NO_ONE_STAGES]
+    if role == REGIST:
+        return [s for s in STAGE_ROLES if s not in NO_ONE_STAGES and s not in REGIST_EXCLUDE]
     return [s for s, rs in STAGE_ROLES.items() if role in rs]
 
 
 def can_set_stage(user, stage):
-    return get_role(user) in FULL_ROLES or (get_role(user) in STAGE_ROLES.get(stage, set()))
+    if stage in NO_ONE_STAGES:
+        return False
+    role = get_role(user)
+    if role in STAGE_FULL_ROLES:
+        return True
+    if role == REGIST:
+        return stage not in REGIST_EXCLUDE
+    return role in STAGE_ROLES.get(stage, set())
 
 
 def can_set_stage_direct(user, stage):

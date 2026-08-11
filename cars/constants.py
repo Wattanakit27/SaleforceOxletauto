@@ -17,6 +17,7 @@ STAGES = [
     ("upholstery", "งานเบาะ",              "armchair"),
     ("paint_in",   "อู่สีใน",              "paintbrush"),
     ("paint_out",  "อู่สีนอก",             "paintbrush"),
+    ("paint_check", "รอตรวจสี",            "clipboard-check"),   # ★ ส.ค.69 — ฝ่ายทะเบียนตรวจงานสีหลังอู่
     ("film",       "ติดฟิล์ม",             "scan-line"),
     ("wash",       "ชงล้าง",               "sparkles"),
     # เฟส 4 — ตรวจก่อนขึ้นโชว์ (QC) · ชื่อบอกชัดว่าเป็น "คิวของ QC" ไม่ใช่ของเซลล์
@@ -26,18 +27,21 @@ STAGES = [
     ("show",       "รถพร้อมขาย (ตรวจรถขึ้นโชว์)", "store"),
     ("reserve",    "จอง",                  "handshake"),
     ("finance",    "จัดไฟแนนซ์",           "landmark"),
-    ("closing",    "รอปิดการขาย",          "file-signature"),
-    # เฟส 6 — ปล่อยรถ (QC · บังคับแนบรูป/วิดีโอ) · ปล่อยรถ = จบ
+    ("transport_check", "ตรวจขนส่ง",       "truck"),             # ★ ส.ค.69 — เซลล์พารถตรวจขนส่ง (แทนรอปิดการขายของเซลล์)
+    ("closing",    "รอปิดการขาย",          "file-signature"),    # เหลือฝ่ายทะเบียนเท่านั้น (ส.ค.69)
+    # เฟส 6 — ปล่อยรถ (บังคับแนบรูป/วิดีโอ) · ★ ส.ค.69: ปล่อยรถไม่จบแล้ว (เซลล์เก็บรูปต่อได้)
+    # กด "ขายแล้ว" ถึงจบจริง → status=sold หลุดบอร์ดไปหน้ารถขายแล้ว
     ("qc_release", "ตรวจรถรอปล่อย",        "clipboard-check"),
     ("release",    "ปล่อยรถ (ส่งรูปปล่อยรถ)", "banknote"),
+    ("sold",       "ขายแล้ว",              "badge-check"),
 ]
 
 # เฟส (key, ชื่อไทย, [stage keys]) — จัดกลุ่มแสดงผล
 PHASES = [
     ("intake_phase", "รับเข้า",  ["intake", "photo_wait"]),
-    ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "film", "wash", "qc_show"]),
-    ("sale_phase",   "ขาย",      ["sales_check", "show", "reserve", "finance", "closing"]),
-    ("release_phase","ปล่อยรถ",  ["qc_release", "release"]),
+    ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "paint_check", "film", "wash", "qc_show"]),
+    ("sale_phase",   "ขาย",      ["sales_check", "show", "reserve", "finance", "transport_check", "closing"]),
+    ("release_phase","ปล่อยรถ",  ["qc_release", "release", "sold"]),
 ]
 
 STAGE_KEYS = [s[0] for s in STAGES]
@@ -48,8 +52,9 @@ STAGE_ORDER = {key: i for i, key in enumerate(STAGE_KEYS)}
 
 # สเตปที่ push LINE เมื่อเปลี่ยนเข้า (จุดส่งต่อ/ตัดสินใจ — ไม่สแปมทุกขั้น)
 STAGE_NOTIFY = {
-    "intake", "photo_wait", "repair", "repair_done", "paint_in", "paint_out", "wash",
-    "qc_show", "sales_check", "show", "reserve", "finance", "closing", "qc_release", "release",
+    "intake", "photo_wait", "repair", "repair_done", "paint_in", "paint_out", "paint_check", "wash",
+    "qc_show", "sales_check", "show", "reserve", "finance", "transport_check", "closing",
+    "qc_release", "release", "sold",
 }
 
 # สเตปที่ถือว่า "ขึ้นหน้าร้าน" -> ตั้ง frontline_at (จุดจบ T2L)
@@ -58,7 +63,7 @@ FRONTLINE_STAGE = "show"
 FRONTLINE_COLOR = "#16a34a"
 
 # สเตปช่วงปลาย (ขาย/ปล่อย)
-OK_STAGES = {"show", "reserve", "finance", "closing", "qc_release", "release"}
+OK_STAGES = {"show", "reserve", "finance", "transport_check", "closing", "qc_release", "release", "sold"}
 
 # ===== ความด่วน (priority) — สีการ์ดมาจากนี่ (เลือกมือ · แทนวันค้างอัตโนมัติ) =====
 # ★ ส.ค.69 — เอา "ยังไม่ได้ถ่ายรูป" ออกจากที่นี่ ไปเป็น "ธงงานค้าง" (CAR_FLAGS) แทน

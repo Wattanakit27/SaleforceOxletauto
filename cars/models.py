@@ -105,15 +105,25 @@ class Car(models.Model):
 
     # ----- เปลี่ยนสเตป -----
     def change_stage(self, new_stage, worker_name="", worker_id="", note="", photo=None):
-        """เปลี่ยนสเตป + บันทึก ScanLog + ตั้ง frontline_at + คืน (log, should_notify)"""
+        """เปลี่ยนสเตป + บันทึก ScanLog + ตั้ง frontline_at + คืน (log, should_notify)
+        ★ ส.ค.69: "ปล่อยรถ" ไม่จบแล้ว (เซลล์เก็บรูปต่อ · รถอยู่บนบอร์ด) — "ขายแล้ว" ถึง sold หลุดบอร์ด
+        ★ เปลี่ยนสเตปแล้วความด่วนรีเซ็ตเป็น "ปกติ" เสมอ (เว้นแต่ไปตั้งด่วนใหม่เอง — เจ้าของสั่ง)
+        ★ save เฉพาะฟิลด์ที่เกี่ยว (update_fields) — ธงงานค้าง need_photo/need_content โดนเขียนทับ
+          จากการเปลี่ยนสเตปไม่ได้เด็ดขาด (ธงค้างจนกว่าจะติ๊กออกเอง/กดถ่ายคอนเทนต์)"""
         now = timezone.now()
         self.stage = new_stage
         self.stage_since = now
+        fields = ["stage", "stage_since"]
         if new_stage == C.FRONTLINE_STAGE and not self.frontline_at:
             self.frontline_at = now
-        if new_stage == "release":       # ปล่อยรถ = จบ (ส่งมอบ) → มาร์ค sold หลุดจากบอร์ด
+            fields.append("frontline_at")
+        if new_stage == "sold":          # ขายแล้ว = จบจริง → หลุดบอร์ดไปหน้ารถขายแล้ว
             self.status = "sold"
-        self.save()
+            fields.append("status")
+        if self.priority != C.DEFAULT_PRIORITY:
+            self.priority = C.DEFAULT_PRIORITY
+            fields.append("priority")
+        self.save(update_fields=fields)
 
         log = ScanLog.objects.create(
             car=self, stage=new_stage, worker_name=worker_name,
