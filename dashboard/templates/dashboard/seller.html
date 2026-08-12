@@ -2320,8 +2320,8 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       const list = by[k]||[], mine=_my.has(k);
       const cards = list.map(c=>{ const fc=_scFlag[c.flag]||'var(--t3)';
         return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="cursor:pointer;background:var(--bg);border:.5px solid var(--bd);border-left:3px solid ${fc};border-radius:9px;padding:7px 8px">
-          <div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:11.5px;color:var(--t1)">${h(c.code)}</b><span style="width:7px;height:7px;border-radius:50%;background:${fc};margin-top:3px;flex-shrink:0"></span></div>
-          <div style="font-size:11px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.title||c.code)}</div>
+          <div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:13px;color:var(--t1)">${h(c.plate||c.code)}</b><span style="width:7px;height:7px;border-radius:50%;background:${fc};margin-top:3px;flex-shrink:0"></span></div>
+          <div style="font-size:11.5px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.title||c.code)}</div>
           <div style="font-size:10px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.branch||'')} · ${c.days} ${h(scT('days'))}</div>
         </div>`; }).join('') || `<div style="font-size:11px;color:var(--t3);text-align:center;padding:8px 0">—</div>`;
       return `<div style="width:178px;flex:0 0 auto;background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:9px${mine?';outline:2px solid color-mix(in srgb,var(--blue) 50%,transparent);outline-offset:-1px':''}">
@@ -2397,8 +2397,8 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="display:flex;gap:10px;padding:12px 4px;border-top:.5px solid var(--bd);align-items:center;cursor:pointer">
         ${ph}
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;color:var(--t1);font-size:13px">${h(c.code)} · ${h(c.title||'')}</div>
-          <div style="font-size:11px;color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.plate):''}</div>
+          <div style="font-weight:800;color:var(--t1);font-size:15px">${h(c.plate||c.code)} <span style="font-weight:500;color:var(--t2);font-size:13px">· ${h(c.title||'')}</span></div>
+          <div style="font-size:12px;color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.code):''}</div>
           <div style="margin-top:5px"><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(scStageName(c.stage,c.stageName))} · ${c.days} ${h(scT('days'))}</span></div>
         </div>
         <span style="color:var(--t3);flex-shrink:0">${ic('lucide:arrow-up-right',18)}</span>
@@ -2435,13 +2435,12 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
         <div style="padding:14px 15px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
             <div style="min-width:0">
-              <div style="font-size:11px;color:var(--t3);letter-spacing:.3px">${h(scT('carCode'))}</div>
-              <div style="font-size:20px;font-weight:800;color:var(--t1)">${h(car.code||'')}</div>
+              <div style="font-size:24px;font-weight:800;color:var(--t1);line-height:1.15">${h(car.plate||car.code||'')}</div>
+              ${car.plate?`<div style="font-size:12.5px;color:var(--t3);margin-top:2px">${h(scT('carCode'))}: ${h(car.code||'')}</div>`:''}
             </div>
             <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--blue-bg,#eaf2fe);color:var(--blue)"><span style="width:7px;height:7px;border-radius:50%;background:${flagCol}"></span>${h(scStageName(car.stage,car.stageName))}</span>
           </div>
-          ${car.plate?`<div style="font-size:17px;font-weight:700;color:var(--t1);margin-top:8px">${h(car.plate)}</div>`:''}
-          <div style="font-size:13px;color:var(--t2);margin-top:2px">${h(car.title||[car.brand,car.model,car.year].filter(Boolean).join(' '))}</div>
+          <div style="font-size:14.5px;color:var(--t2);margin-top:8px">${h(car.title||[car.brand,car.model,car.year].filter(Boolean).join(' '))}</div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--t3)">
             <span>${ic('lucide:map-pin',13)} ${h(scT('branch'))}: ${h(car.branch||'-')}</span>
             <span>${ic('lucide:calendar',13)} ${h(scT('currentStage'))}: ${car.daysInStage} ${h(scT('days'))}</span>
@@ -2458,6 +2457,10 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
           <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:4px">${ic('lucide:repeat',16)} ${h(scT('changeStage'))}</div>
           <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">${h(scT('pickStage'))}</div>
           <div id="scChanger"></div>
+          <div id="scChkWrap" style="display:none;margin-top:14px;border:.5px solid var(--bd);border-radius:12px;padding:11px 13px;background:var(--bg2)">
+            <div style="font-size:12.5px;font-weight:700;color:var(--t2);margin-bottom:4px">เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา</div>
+            ${(((_scData||{}).checklist||{}).items||[]).map(it=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:5px 0;font-size:13px;color:var(--t1)"><input type="checkbox" class="sc-chk" value="${h(it)}" checked style="width:19px;height:19px;accent-color:#16a34a;flex-shrink:0">${h(it)}</label>`).join('')}
+          </div>
           <div style="margin-top:14px">
             <label style="font-size:12.5px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${h(scT('note'))}</label>
             <textarea id="scNote" rows="2" placeholder="${h(scT('notePh'))}" style="width:100%;padding:10px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;font-family:inherit;line-height:1.5;resize:vertical"></textarea>
@@ -2503,7 +2506,13 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const btn = document.getElementById('scConfirmBtn');
     if (btn) { btn.disabled = !_scSel; btn.style.opacity = _scSel ? '1' : '.55'; }
   }
-  function scPickStage(stage) { _scSel = (_scSel === stage) ? '' : stage; renderScChanger(); }
+  function scPickStage(stage) {
+    _scSel = (_scSel === stage) ? '' : stage; renderScChanger();
+    // เช็คลิสต์ตรวจรถ — โชว์เมื่อเลือกสเตปกลุ่มตรวจ/ขึ้นโชว์/ปล่อย (รายการจาก cars_api .checklist)
+    const cw = document.getElementById('scChkWrap');
+    const chkStages = new Set((((_scData||{}).checklist||{}).stages)||[]);
+    if (cw) { cw.style.display = (_scSel && chkStages.has(_scSel)) ? 'block' : 'none'; if(_scSel) cw.querySelectorAll('.sc-chk').forEach(c=>{c.checked=true;}); }
+  }
 
   // ── อัปรูป/วิดีโอ (POST เข้าเซิร์ฟเวอร์ → Google Drive · เข้าโฟลเดอร์ของรถคันนั้น) ──
   async function scAddPhotos(input) {
@@ -2543,7 +2552,17 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const car = _scCar; if (!car) return;
     if (!_scSel) { alert(scT('selectFirst')); return; }
     if (_scMedia.some(m => m.up)) { alert(scT('uploading')); return; }
-    const note = (document.getElementById('scNote')?.value || '').trim();
+    let note = (document.getElementById('scNote')?.value || '').trim();
+    // เช็คลิสต์ตรวจรถ → ต่อท้ายหมายเหตุ (❌ ไม่ผ่านชูก่อน · ✅ ผ่านตามหลัง)
+    const cw = document.getElementById('scChkWrap');
+    if (cw && cw.style.display !== 'none') {
+      const ok = [], bad = [];
+      cw.querySelectorAll('.sc-chk').forEach(c => { (c.checked ? ok : bad).push(c.value); });
+      const parts = [];
+      if (bad.length) parts.push('❌ ไม่ผ่าน: ' + bad.join(' · '));
+      if (ok.length) parts.push('✅ ผ่าน: ' + ok.join(' · '));
+      if (parts.length) note = '[ตรวจรถ] ' + parts.join('\n') + (note ? '\n' + note : '');
+    }
     const media = _scMedia.filter(m => m.fileId).map(m => ({ id: m.fileId, video: m.video }));
     const btn = document.getElementById('scConfirmBtn');
     if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = scT('saving'); }

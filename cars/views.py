@@ -125,6 +125,7 @@ def dashboard(request):
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
         "flag_choices": C.CAR_FLAGS, "cur_flag": flagf,
+        "checklist_stages": sorted(C.CHECKLIST_STAGES), "checklist_items": C.CHECKLIST_ITEMS,
         "board_cols": board_cols, "has_my": has_my, "is_full": is_full,
         # ปุ่ม "แดชบอร์ดขาย" โชว์เฉพาะแอดมินขาย (มาจาก /track/ ตรง) — คนงาน (position=worker) ซ่อน (อยู่ /dashboard/ แล้ว)
         "show_sales_link": (request.session.get("oxlet_user") or {}).get("position") == "admin",
@@ -472,6 +473,7 @@ def scan_page(request, code):
     return render(request, "scan.html", {
         "car": car, "stages": stages, "stage_groups": stage_groups,
         "logs": logs, "actor": _actor(request.user),
+        "checklist_stages": sorted(C.CHECKLIST_STAGES), "checklist_items": C.CHECKLIST_ITEMS,
         # ความด่วน — เลือกได้จากหน้าสแกน (มือถือหน้างาน) เหมือนป๊อปอัปบอร์ด
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
@@ -859,6 +861,8 @@ def cars_api(request):
         "myStages": [[k, roles.stage_button_label(roles.get_role(request.user), k, C.STAGE_NAME[k]),
                       C.STAGE_PHASE.get(k, ("", ""))[0]]   # [2]=คีย์เฟส — จัดกลุ่มปุ่มในหน้าเซลล์
                      for k in roles.allowed_stages(request.user)],
+        # เช็คลิสต์ตรวจรถ — โผล่ตอนเลือกสเตปกลุ่มตรวจ/โชว์/ปล่อย ผลต่อท้ายหมายเหตุ (ส.ค.69)
+        "checklist": {"stages": sorted(C.CHECKLIST_STAGES), "items": C.CHECKLIST_ITEMS},
         "me": _actor(request.user),
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),

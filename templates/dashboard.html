@@ -210,6 +210,13 @@
   <div class="modal" style="max-width:400px">
     <h2 style="font-size:16px;margin:0 0 6px" data-i18n="confirmTitle">ยืนยันเปลี่ยนสเตป</h2>
     <div id="stageMsg" class="mut sm" style="margin-bottom:12px"></div>
+    <!-- เช็คลิสต์ตรวจรถ (โชว์เมื่อสเตปกลุ่มตรวจ/ขึ้นโชว์/ปล่อย · ผลต่อท้ายหมายเหตุ · default ติ๊กหมด เอาออกเฉพาะข้อมีปัญหา) -->
+    <div id="stageChkWrap" style="display:none;border:.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg2);margin-bottom:10px;max-height:220px;overflow-y:auto">
+      <div class="sm" style="font-weight:700;margin-bottom:2px">เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา</div>
+      {% for it in checklist_items %}
+      <label class="row sm" style="gap:8px;align-items:center;cursor:pointer;padding:4px 0"><input type="checkbox" class="stage-chk" value="{{ it }}" checked style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"> {{ it }}</label>
+      {% endfor %}
+    </div>
     <label class="mut sm" data-i18n="note">หมายเหตุ (ถ้ามี)</label>
     <textarea id="stageNote" rows="3" data-i18n-ph="notePh" placeholder="เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ" style="width:100%;margin-top:4px;box-sizing:border-box;font-family:inherit"></textarea>
     <!-- แนบรูป/วิดีโอ (โชว์เมื่อสเตปบังคับ เช่น ตรวจรถรอปล่อย/ปล่อยรถ · แนบเพิ่มได้ทุกสเตป) -->
@@ -298,12 +305,12 @@
     const flagTxt={red:T('fRed'),amber:T('fAmber'),ok:T('fOk'),wait:T('fWaitNote')}[d.flag]||'';
     b.innerHTML=`
       <div class="row" style="justify-content:space-between;align-items:flex-start">
-        <div><h2 style="margin:0">${d.code}</h2><div class="mut sm">${d.title||''} ${d.plate?'· '+d.plate:''}</div></div>
+        <div><h2 style="margin:0;font-size:26px;line-height:1.15">${d.plate||d.code}</h2><div class="mut" style="font-size:14.5px;margin-top:3px">${d.title||''}${d.plate?' · '+d.code:''}</div></div>
         <button class="btn sm" onclick="closeCar()">✕</button>
       </div>
-      <div class="row" style="gap:6px;margin:8px 0 12px">
-        <span class="pill" data-stage="${d.stage}">${stgName(d.stage)}</span>
-        <span class="pill"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
+      <div class="row" style="gap:6px;margin:10px 0 12px">
+        <span class="pill" data-stage="${d.stage}" style="font-size:13.5px;padding:5px 12px">${stgName(d.stage)}</span>
+        <span class="pill" style="font-size:13.5px;padding:5px 12px"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
@@ -370,10 +377,13 @@
   // เปลี่ยนสเตป — เด้ง dialog ยืนยัน + ช่องหมายเหตุ ก่อน (กันเผลอกด · เก็บหมายเหตุต่อการเปลี่ยน)
   // สเตปใน FORCE_MEDIA (ตรวจรถรอปล่อย/ปล่อยรถ) = บังคับแนบรูป/วิดีโอก่อนยืนยัน
   let _stagePend={code:'',stage:''}, _stageMedia=[], _stageForce=false;
+  const CHK_STAGES=new Set({{ checklist_stages|safe }});   // สเตปที่โชว์เช็คลิสต์ตรวจรถ
   function askStage(code,stage,stageName,curName){
     _stagePend={code,stage}; _stageMedia=[]; _stageForce=FORCE_MEDIA.has(stage);
     document.getElementById('stageMsg').innerHTML=(curName?esc(curName)+' → ':'')+'<b>'+esc(stageName||stage)+'</b>';
     document.getElementById('stageNote').value='';
+    const cw=document.getElementById('stageChkWrap');
+    if(cw){ cw.style.display=CHK_STAGES.has(stage)?'block':'none'; cw.querySelectorAll('.stage-chk').forEach(c=>{c.checked=true;}); }
     const wrap=document.getElementById('stageMediaWrap'), lbl=document.getElementById('stageMediaLbl');
     wrap.style.display=_stageForce?'block':'none';   // บังคับแนบเฉพาะสเตปตรวจ/ปล่อย
     if(lbl) lbl.textContent=T('mediaReq');
@@ -388,7 +398,17 @@
   async function doStage(){
     const {code,stage}=_stagePend; if(!code||!stage) return;
     if(_stageForce && !_stageMedia.length){ alert(T('mediaReq')); return; }
-    const note=document.getElementById('stageNote').value.trim();
+    let note=document.getElementById('stageNote').value.trim();
+    // เช็คลิสต์ตรวจรถ → ต่อท้ายหมายเหตุ (❌ ชูก่อนให้เห็นปัญหา · ✅ ตามหลัง)
+    const cw=document.getElementById('stageChkWrap');
+    if(cw && cw.style.display!=='none'){
+      const ok=[],bad=[];
+      cw.querySelectorAll('.stage-chk').forEach(c=>{(c.checked?ok:bad).push(c.value);});
+      const parts=[];
+      if(bad.length) parts.push('❌ ไม่ผ่าน: '+bad.join(' · '));
+      if(ok.length) parts.push('✅ ผ่าน: '+ok.join(' · '));
+      if(parts.length) note='[ตรวจรถ] '+parts.join('\n')+(note?'\n'+note:'');
+    }
     const btn=document.getElementById('stageGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
     try{
       const r=await fetch('/track/api/set_stage',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,stage,note,media:_stageMedia})});
