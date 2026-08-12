@@ -74,6 +74,13 @@ def _stage_options(keys, role=None):
 @login_required
 def dashboard(request):
     """หน้าเดียวจบ: ตัวเลขสรุปต่อสเตป + ตารางรถทั้งหมด (มีตัวกรอง) · กดรถ = popup (car_json)."""
+    # ★ ส.ค.69 เจ้าของสั่ง: แอดมินฝั่งขายไม่ควรมี /track/ เป็นหน้าแยก (ซ้ำกับแท็บ "สถานะรถ")
+    #   เปิดตรงแบบหน้าเต็ม → เด้งไปแดชบอร์ดแท็บสถานะรถ · เช็ค iframe ด้วย Sec-Fetch-Dest
+    #   ('iframe' = โหลดในกรอบ (แท็บสถานะรถ/หน้าเซลล์) = ให้ผ่าน · เบราว์เซอร์เก่าไม่ส่ง header = ไม่เด้ง กันพัง)
+    #   คนงาน (position=worker/ไม่มี sales session) ใช้ /track/ ตรงเหมือนเดิม — เข้าแดชบอร์ดขายไม่ได้ (PDPA)
+    if ((request.session.get("oxlet_user") or {}).get("position") == "admin"
+            and request.headers.get("Sec-Fetch-Dest") == "document"):
+        return redirect("/dashboard/?tab=t")
     all_cars = list(Car.objects.filter(deleted_at__isnull=True))
     flags = {"red": 0, "amber": 0, "ok": 0, "wait": 0}
     counts = {k: 0 for k in C.STAGE_KEYS}

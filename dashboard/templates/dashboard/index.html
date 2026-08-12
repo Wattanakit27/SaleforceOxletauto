@@ -99,10 +99,10 @@
   <div class="app" id="app">
     {% if error %}
     <div style="text-align:center;padding-top:80px">
-      <div style="font-size:48px;margin-bottom:14px">${ic('lucide:triangle-alert',16)}</div>
+      <div style="font-size:48px;margin-bottom:14px">⚠️</div>
       <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:6px">เกิดข้อผิดพลาด</div>
       <div style="font-size:13px;color:var(--t2)">{{ error }}</div>
-      <button onclick="location.reload()" class="bbtn" style="margin-top:12px">${ic('lucide:refresh-cw',16)} ลองอีกครั้ง</button>
+      <button onclick="location.reload()" class="bbtn" style="margin-top:12px">🔄 ลองอีกครั้ง</button>
     </div>
     {% else %}
     <div class="loading-container" id="loading">
