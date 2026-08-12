@@ -5230,7 +5230,26 @@
 
     // 📤 ส่งการ์ด (ตาราง) เข้าไลน์ — generic ต่อการ์ด (ปุ่มบนหัวการ์ดแต่ละใบ · config แยกต่อ id)
     let _clCard='', _clName='';
-    function _cardLineBtn(cardId, name){ return canViewAll?`<button class="linesend-btn" onclick="openCardLine('${cardId}','${(name||'').replace(/'/g,'')}')" title="ตั้งค่า/ส่ง '${h(name)}' เข้าไลน์กลุ่ม + ตั้งเวลาอัตโนมัติ" style="font-size:11px;padding:4px 11px;border-radius:13px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0">${ic('lucide:send',13)} ส่งไลน์ ▾</button>`:''; }
+    function _cardLineBtn(cardId, name){ return canViewAll?`<span style="display:inline-flex;gap:5px;flex-shrink:0"><button class="linesend-btn" onclick="event.stopPropagation();exportCardCSV('${cardId}','${(name||'').replace(/'/g,'')}')" title="ดาวน์โหลดตาราง '${h(name)}' เป็นไฟล์ CSV (ตามตัวกรองวันที่)" style="font-size:11px;padding:4px 10px;border-radius:13px;border:.5px solid var(--green);background:transparent;color:var(--green);cursor:pointer;font-weight:600;white-space:nowrap">${ic('lucide:download',13)} CSV</button><button class="linesend-btn" onclick="openCardLine('${cardId}','${(name||'').replace(/'/g,'')}')" title="ตั้งค่า/ส่ง '${h(name)}' เข้าไลน์กลุ่ม + ตั้งเวลาอัตโนมัติ" style="font-size:11px;padding:4px 11px;border-radius:13px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap">${ic('lucide:send',13)} ส่งไลน์ ▾</button></span>`:''; }
+
+    // ── ⬇ Export CSV (ส.ค.69) — ดึงข้อมูลจากตารางในการ์ดตรงๆ (ตรงกับที่ตาเห็น · ตามตัวกรองวันที่) ──
+    // BOM ﻿ = เปิดใน Excel แล้วภาษาไทยไม่เพี้ยน · เซลล์มี , " ขึ้นบรรทัดใหม่ → ครอบ quote ตามสเปค CSV
+    function dlCSV(filename, rows){
+      const esc = v => { v = (v==null?'':String(v)).trim(); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+      const csv = '\ufeff' + rows.map(r=>r.map(esc).join(',')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+      a.download = filename; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }
+    function exportCardCSV(cardId, name){
+      const card = document.getElementById(cardId);
+      const tbl = card ? card.querySelector('table') : null;
+      if(!tbl){ alert('การ์ดนี้ไม่มีตารางให้ export'); return; }
+      const rows = [...tbl.querySelectorAll('tr')].map(tr =>
+        [...tr.querySelectorAll('th,td')].map(td => td.innerText.replace(/\s+/g,' ').trim()));
+      dlCSV(`${(name||cardId).replace(/[\\/:*?"<>|]/g,'')}_${dfFrom}_ถึง_${dfTo}.csv`, rows.filter(r=>r.length));
+    }
     async function openCardLine(cardId, name){ _clCard=cardId; _clName=name||''; const ov=_trkOverlay('card-line','<p class="mut">กำลังโหลด…</p>'); await renderCardLine(ov); }
     async function renderCardLine(ov){
       ov=ov||document.getElementById('card-line'); if(!ov) return;

@@ -38,6 +38,29 @@ def _actor(user):
     return (user.get_full_name() or user.username) if user.is_authenticated else ""
 
 
+def _fmt_dur(secs):
+    """วินาที → ข้อความไทยสั้น ('3 วัน 4 ชม.' / '5 ชม. 20 นาที' / '15 นาที') — ระยะเวลาช่วงต่อช่วงใน timeline"""
+    secs = max(0, int(secs))
+    d, r = divmod(secs, 86400)
+    hh, r = divmod(r, 3600)
+    mm = r // 60
+    if d:
+        return f"{d} วัน" + (f" {hh} ชม." if hh else "")
+    if hh:
+        return f"{hh} ชม." + (f" {mm} นาที" if mm else "")
+    return f"{mm} นาที"
+
+
+def _logs_with_dur(log_objs):
+    """[(log, dur_text, is_current)] — dur = เวลาที่รถ 'อยู่ในสเตปของ log นั้น' (จนถึง log ถัดไป · อันล่าสุด = ถึงตอนนี้)
+    log_objs เรียงใหม่→เก่า (ตาม _fetch_logs)"""
+    out = []
+    for idx, l in enumerate(log_objs):
+        end = log_objs[idx - 1].created_at if idx > 0 else timezone.now()
+        out.append((l, _fmt_dur((end - l.created_at).total_seconds()), idx == 0))
+    return out
+
+
 def _stage_options(keys, role=None):
     """[(key, name, icon), ...] ตามลำดับสเตป — สำหรับปุ่มเปลี่ยนสเตป
     role ส่งมา = ใช้ป้ายปุ่มตามบทบาท (เช่น เซลล์เห็น qc_show เป็น "ตีกลับ QC")"""
@@ -244,8 +267,9 @@ def car_json(request, code):
     logs = [{
         "stage": l.stage_name, "stageKey": l.stage, "worker": l.worker_name,
         "note": l.note, "at": timezone.localtime(l.created_at).strftime("%d/%m/%y %H:%M"),
+        "dur": dur, "cur": cur,   # ⏱ เวลาที่อยู่ในช่วงนั้น (ช่วงนี้→ช่วงถัดไป · อันล่าสุด = ถึงตอนนี้)
         "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
-    } for l in _log_objs]
+    } for l, dur, cur in _logs_with_dur(_log_objs)]
     # สเตปที่ user เปลี่ยนได้ตามบทบาท — ผ่อนกฎ scan-only: กดเปลี่ยนจากบอร์ด/โมดัลได้เลย
     # (คนงานที่ไม่มีสเตป/ไม่มีบทบาท = [] → โชว์ลิงก์สแกน QR แทน)
     direct = [{"key": k, "name": n, "ph": C.STAGE_PHASE.get(k, ("", ""))[0]} for k, n, _ in
@@ -468,8 +492,9 @@ def scan_page(request, code):
         "stageKey": l.stage, "stageName": l.stage_name, "stageIcon": l.stage_icon,
         "at": timezone.localtime(l.created_at).strftime("%d/%m %H:%M"),
         "worker": l.worker_name, "note": l.note,
+        "dur": dur, "cur": cur,   # ⏱ เวลาที่อยู่ในช่วงนั้น
         "media": _media_urls(l.media if _hm else None, l.photo.name if l.photo else None),
-    } for l in _log_objs]
+    } for l, dur, cur in _logs_with_dur(_log_objs)]
     return render(request, "scan.html", {
         "car": car, "stages": stages, "stage_groups": stage_groups,
         "logs": logs, "actor": _actor(request.user),

@@ -289,7 +289,7 @@
     catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }
     const kv=(k,v)=> (v!==''&&v!=null)?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
     const dump=(o)=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut sm">—</span>';
-    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
+    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.dur?` <span class="mut">· ⏱ ${l.cur?'อยู่มาแล้ว ':''}${l.dur}</span>`:''}${l.note?'<div class="mut" style="margin-top:2px;white-space:pre-line">'+l.note+'</div>':''}</div>`).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
     let stageBtns;
     if(d.direct && d.direct.length){
       const _mkBtn=s=>{const c=STAGE_COLOR[s.key]||'#64748b';

@@ -2592,8 +2592,8 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
             ${i<logs.length-1?'<span style="flex:1;width:1.5px;background:var(--bd);margin-top:3px"></span>':''}
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${h(scStageName(l.stageKey, l.stage))}</div>
-            ${l.note?`<div style="font-size:11.5px;color:var(--t2);margin-top:1px">${h(l.note)}</div>`:''}
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${h(scStageName(l.stageKey, l.stage))}${l.dur?` <span style="font-weight:600;font-size:11px;color:var(--blue)">⏱ ${l.cur?'อยู่มาแล้ว ':''}${h(l.dur)}</span>`:''}</div>
+            ${l.note?`<div style="font-size:11.5px;color:var(--t2);margin-top:1px;white-space:pre-line">${h(l.note)}</div>`:''}
             <div style="font-size:11px;color:var(--t3);margin-top:2px">${h(l.at||'')}${l.worker?' · '+h(l.worker):''}</div>
             ${media?`<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${media}</div>`:''}
           </div>
