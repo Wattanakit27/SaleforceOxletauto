@@ -129,6 +129,12 @@ class Car(models.Model):
             car=self, stage=new_stage, worker_name=worker_name,
             worker_id=worker_id, note=note, photo=photo,
         )
+        if note:   # หมายเหตุภาษาพม่า/เขมร → แปลไทยเบื้องหลังด้วย Gemini (best-effort · ดู cars/translate.py)
+            try:
+                from .translate import translate_log_async
+                translate_log_async(log.pk)
+            except Exception:
+                pass
         return log, new_stage in C.STAGE_NOTIFY
 
     # ----- computed -----

@@ -7,7 +7,7 @@
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260624a">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260812a">
   <script>
     // ตั้งธีมก่อน paint (กันจอกระพริบ) — ใช้ค่าที่บันทึก หรือตามระบบ
     (function(){
@@ -1366,16 +1366,21 @@
       if (!nav || !ind) return;
       const active = nav.querySelector('.ntab.on');
       if (!active) { ind.style.opacity = '0'; return; }
-      const target = { left: active.offsetLeft, width: active.offsetWidth };
+      // ★ ส.ค.69 sidebar: จอกว้าง = แถบแนวตั้งด้านข้าง → แคปซูลต้องสไลด์แกน Y ด้วย (จับ top/height เพิ่ม)
+      const target = { left: active.offsetLeft, width: active.offsetWidth, top: active.offsetTop, height: active.offsetHeight };
       const from = __navIndLast || target;     // ครั้งแรก = วางเลย ไม่สไลด์
       ind.style.transition = 'none';            // วางที่ตำแหน่งเดิมก่อน (ไม่ animate)
       ind.style.left = from.left + 'px';
       ind.style.width = from.width + 'px';
+      ind.style.top = from.top + 'px';
+      ind.style.height = from.height + 'px';
       ind.style.opacity = '1';
       void ind.offsetWidth;                     // force reflow
       ind.style.transition = '';                // คืน transition จาก CSS แล้วค่อยสไลด์ไป target
       ind.style.left = target.left + 'px';
       ind.style.width = target.width + 'px';
+      ind.style.top = target.top + 'px';
+      ind.style.height = target.height + 'px';
       __navIndLast = target;
     }
     window.addEventListener('resize', positionNavInd);
