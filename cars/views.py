@@ -308,6 +308,179 @@ def car_json(request, code):
     }, json_dumps_params={"ensure_ascii": False})
 
 
+# ──────────────────── Export ไทม์ไลน์รถ (CSV · เลือกแนบรูปได้) ────────────────────
+_EXPORT_COLS = ["รหัสรถ", "ทะเบียน", "ลำดับ", "วันที่-เวลา", "สเตป", "ผู้เปลี่ยน",
+                "ระยะเวลาช่วงนี้", "หมายเหตุ", "จำนวนไฟล์", "ไฟล์แนบ (ในโฟลเดอร์ photos)"]
+
+
+def _safe_name(s, fallback="file"):
+    """ตัดอักขระที่ตั้งชื่อไฟล์บน Windows/zip ไม่ได้ออก (\\ / : * ? \" < > |) — กันไฟล์ zip เปิดไม่ออก"""
+    s = re.sub(r'[\\/:*?"<>|]+', "-", str(s or "")).strip().strip(".")
+    return s[:60] or fallback
+
+
+def _attachment(resp, filename):
+    """ตั้งชื่อไฟล์ดาวน์โหลดให้รองรับชื่อไทย (RFC 5987 `filename*`) + fallback ASCII ให้เบราว์เซอร์เก่า
+    ⚠️ ถ้าใส่ชื่อไทยดิบลง Content-Disposition ตรงๆ Django จะเข้ารหัสเป็น =?utf-8?b?..?=
+       ซึ่งเบราว์เซอร์ไม่แปลงกลับ → ผู้ใช้ได้ไฟล์ชื่อขยะ"""
+    from urllib.parse import quote
+    ascii_fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("_") or "download"
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{ascii_fallback}"; ' + f"filename*=UTF-8''{quote(filename)}"
+    )
+    return resp
+
+
+def _media_bytes(token):
+    """โหลดไฟล์แนบมาเป็น bytes จากที่เก็บจริง — คืน (bytes, นามสกุล) หรือ (None, '')
+    token มี "/" = ไฟล์บนดิสก์ (MEDIA_ROOT) · ไม่มี "/" = Drive file id
+    ⚠️ อ่านดิสก์ตรงจาก MEDIA_ROOT ไม่ผ่าน default_storage — เพราะถ้าตั้ง GDRIVE_* ไว้
+       default_storage จะเป็น GoogleDriveStorage แล้วเอา path ดิสก์ไปหาใน Drive → ไม่เจอ
+       (ให้ตรงกับ _media_urls ที่ map path → /media/<path> = ไฟล์บนดิสก์)"""
+    if not token:
+        return None, ""
+    try:
+        if "/" in token:                       # ดิสก์ VPS
+            root = str(getattr(settings, "MEDIA_ROOT", "") or "")
+            if not root:
+                return None, ""
+            full = os.path.abspath(os.path.join(root, token.replace("/", os.sep)))
+            if not full.startswith(os.path.abspath(root) + os.sep):   # กัน path traversal (../)
+                return None, ""
+            if not os.path.isfile(full):
+                return None, ""
+            with open(full, "rb") as fh:
+                return fh.read(), os.path.splitext(token)[1]
+        from . import gdrive               # Google Drive
+        if not gdrive.is_configured():
+            return None, ""
+        return gdrive.download(token), os.path.splitext(gdrive.get_name(token) or "")[1]
+    except Exception:
+        return None, ""
+
+
+def _timeline_rows(car):
+    """[(ลำดับ, log, dur, cur, media list)] ของรถ 1 คัน เรียง เก่า→ใหม่ (อ่านเป็นไทม์ไลน์)"""
+    log_objs, has_media = _fetch_logs(car, 500)
+    rows = list(_logs_with_dur(log_objs))
+    rows.reverse()
+    out = []
+    for seq, (l, dur, cur) in enumerate(rows, 1):
+        media = list(l.media or []) if has_media else []
+        if l.photo:
+            media = media + [{"id": l.photo.name, "video": False}]
+        out.append((seq, l, dur, cur, media))
+    return out
+
+
+def _csv_row(car, seq, l, dur, cur, names):
+    """1 แถวของ CSV — ใช้ร่วมกันทั้ง export รถคันเดียวและทุกคัน (คอลัมน์ต้องตรงกันเสมอ)"""
+    return [
+        car.code, car.plate or "", seq,
+        timezone.localtime(l.created_at).strftime("%d/%m/%Y %H:%M"),
+        l.stage_name, l.worker_name or "",
+        (("อยู่มาแล้ว " if cur else "") + dur) if dur else "",
+        l.note or "", len(names), " | ".join(names),
+    ]
+
+
+@login_required
+def export_timeline_all(request):
+    """ไทม์ไลน์ของรถ 'ทุกคัน' รวมเป็น CSV ไฟล์เดียว (สำหรับปุ่มในเมนู ที่ยังไม่ได้เลือกคัน)
+    คอลัมน์ชุดเดียวกับ export รายคัน + มีรหัสรถ/ทะเบียนทุกแถว → กรอง/แยกใน Excel ได้
+    ⚠️ CSV ล้วนเท่านั้น ไม่แนบรูป — zip รูปของรถทุกคันอาจใหญ่หลาย GB และสร้างในแรม เสี่ยงเซิร์ฟเวอร์ล้ม
+       (อยากได้รูป → เปิดป๊อปอัปรถคันนั้นแล้วกด Export ทีละคัน)"""
+    import csv
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(_EXPORT_COLS)
+    qs = Car.objects.all().order_by("code")
+    if request.GET.get("scope") == "active":       # ไม่รวมรถที่ขายไปแล้ว
+        qs = qs.exclude(status="sold")
+    for car in qs.iterator():
+        for seq, l, dur, cur, media in _timeline_rows(car):
+            names = [f"{seq:02d}_{_safe_name(l.stage_name, l.stage)}_{n}"
+                     for n, m in enumerate(media, 1)
+                     if ((m or {}).get("id") or (m or {}).get("path"))]
+            w.writerow(_csv_row(car, seq, l, dur, cur, names))
+    csv_bytes = "﻿".encode("utf-8") + buf.getvalue().encode("utf-8")
+    stamp = timezone.localtime(timezone.now()).strftime("%Y%m%d")
+    return _attachment(HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8"),
+                       f"timeline_ทุกคัน_{stamp}.csv")
+
+
+@login_required
+def export_timeline(request, code):
+    """ดาวน์โหลดไทม์ไลน์ของรถ 1 คัน
+      ?photos=1 → .zip (CSV + โฟลเดอร์ photos/ ตั้งชื่อไฟล์ตามลำดับแถวใน CSV)
+      ไม่ใส่    → .csv อย่างเดียว (เร็ว ไฟล์เล็ก)
+    CSV ใส่ BOM ให้ Excel ไทยอ่านไม่เพี้ยน (แบบเดียวกับปุ่ม CSV ในแดชบอร์ดขาย)"""
+    import csv
+    car = get_object_or_404(Car, code=code)
+    want_photos = request.GET.get("photos") in ("1", "true", "yes")
+
+    rows = _timeline_rows(car)                      # เก่า→ใหม่
+
+    # เตรียมไฟล์แนบก่อน เพื่อให้ชื่อไฟล์ใน CSV กับใน zip ตรงกันเป๊ะ
+    files = []            # [(ชื่อไฟล์ใน zip, bytes)]
+    names_per_row = []    # ชื่อไฟล์ของแต่ละแถว (list ของ str)
+    for seq, l, _dur, _cur, media in rows:
+        picked = []
+        for n, m in enumerate(media, 1):
+            token = (m or {}).get("id") or (m or {}).get("path") or ""
+            if not token:
+                continue
+            base = f"{seq:02d}_{_safe_name(l.stage_name, l.stage)}_{n}"
+            if not want_photos:                     # โหมด CSV ล้วน — ไม่โหลดไฟล์ ใส่แค่ชื่อไว้อ้างอิง
+                picked.append(base)
+                continue
+            data, ext = _media_bytes(token)
+            if data is None:                        # โหลดไม่ได้ (Drive ล่ม/ไฟล์หาย) — ข้าม ไม่ล้มทั้ง export
+                continue
+            ext = ext or (".mp4" if (m or {}).get("video") else ".jpg")
+            fname = base + ext
+            files.append((f"photos/{fname}", data))
+            picked.append(fname)
+        names_per_row.append(picked)
+
+    # รูปหน้าปกรถ (ถ้ามี) — ใส่เป็นไฟล์แรก แยกจากไทม์ไลน์
+    cover_note = ""
+    if car.photo and car.photo.name:
+        if want_photos:
+            data, ext = _media_bytes(car.photo.name)
+            if data is not None:
+                files.insert(0, (f"photos/00_ปกรถ{ext or '.jpg'}", data))
+                cover_note = f"00_ปกรถ{ext or '.jpg'}"
+        else:
+            cover_note = "00_ปกรถ"
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(_EXPORT_COLS)
+    for (seq, l, dur, cur, _media), names in zip(rows, names_per_row):
+        w.writerow(_csv_row(car, seq, l, dur, cur, names))
+    csv_bytes = "﻿".encode("utf-8") + buf.getvalue().encode("utf-8")
+
+    stem = _safe_name(f"timeline_{car.code}_{car.plate or ''}".rstrip("_"), f"timeline_{car.code}")
+    if not want_photos:
+        return _attachment(HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8"),
+                           f"{stem}.csv")
+
+    import zipfile
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{stem}.csv", csv_bytes)
+        for name, data in files:
+            z.writestr(name, data)
+        if not files:
+            # ติ๊กเอารูปแต่ไม่ได้ไฟล์เลย — บอกเหตุผลไว้ ไม่งั้นผู้ใช้เปิด zip แล้วนึกว่าระบบพัง
+            z.writestr("photos/อ่านก่อน.txt",
+                       ("รถคันนี้ยังไม่มีรูป/วิดีโอแนบในไทม์ไลน์\n"
+                        "(หรือดึงไฟล์จากที่เก็บไม่ได้ชั่วคราว — ลองใหม่อีกครั้ง)\n").encode("utf-8"))
+    return _attachment(HttpResponse(zbuf.getvalue(), content_type="application/zip"),
+                       f"{stem}.zip")
+
+
 @login_required
 def kanban(request):
     cars = list(Car.objects.exclude(status="sold"))

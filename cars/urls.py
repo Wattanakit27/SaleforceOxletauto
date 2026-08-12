@@ -51,5 +51,9 @@ urlpatterns = [
     path("cars/<str:code>/delete/", views.car_delete, name="car_delete"),
     path("cars/<str:code>/stage/", views.car_stage, name="car_stage"),
     path("cars/<str:code>/json", views.car_json, name="car_json"),
+    # Export ไทม์ไลน์ — ?photos=1 = .zip พร้อมรูป · ไม่ใส่ = .csv ล้วน
+    path("cars/<str:code>/export", views.export_timeline, name="export_timeline"),
+    # Export ไทม์ไลน์ทุกคัน (CSV ล้วน · ?scope=active = ตัดรถที่ขายแล้ว) — ปุ่มในเมนู
+    path("export", views.export_timeline_all, name="export_timeline_all"),
     path("cars/<str:code>/", views.car_detail, name="car_detail"),
 ]

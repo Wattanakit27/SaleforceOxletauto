@@ -201,6 +201,29 @@ def get_name(file_id):
     return ""
 
 
+def download(file_id, max_bytes=60 * 1024 * 1024):
+    """โหลดไฟล์จาก Drive มาเป็น bytes (ใช้ตอน export timeline มัดรูปลง zip)
+    คืน None ถ้าโหลดไม่ได้/ใหญ่เกิน max_bytes — best-effort ไม่ throw
+    (สตรีมทีละ chunk + ตัดที่เพดาน กันไฟล์วิดีโอใหญ่กินแรมจนเซิร์ฟเวอร์ล้ม)"""
+    if not file_id:
+        return None
+    try:
+        r = requests.get(f"{_FILES}/{quote(file_id)}?alt=media",
+                         headers=_auth(), timeout=90, stream=True)
+        if r.status_code != 200:
+            return None
+        buf = bytearray()
+        for chunk in r.iter_content(chunk_size=256 * 1024):
+            if not chunk:
+                continue
+            buf.extend(chunk)
+            if len(buf) > max_bytes:
+                return None
+        return bytes(buf)
+    except Exception:
+        return None
+
+
 def rename(file_id, name):
     """เปลี่ยนชื่อไฟล์/โฟลเดอร์ใน Drive — best-effort คืน True/False"""
     if not (file_id and name):

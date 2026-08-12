@@ -5,5 +5,6 @@ REM เปิดเว็บที่  http://127.0.0.1:8000/login/?bg=1   (admi
 cd /d "%~dp0"
 set DB_HOST=
 set DEBUG=True
+set SECURE_SSL_REDIRECT=False
 python manage.py runserver 127.0.0.1:8000 --noreload
 pause

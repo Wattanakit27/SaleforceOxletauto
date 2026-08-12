@@ -120,22 +120,59 @@ body {
 .ntab:hover { color: var(--t1); }
 .ntab.on { background: var(--grad); color: #fff; font-weight: 600; box-shadow: 0 3px 10px rgba(124,58,237,.35); }
 
-/* slide nav — แคปซูล gradient เลื่อนนุ่มระหว่างแท็บ (container id=nav-slide + .nav-ind) */
-.nav-slide { position: relative; scrollbar-width: none; }
+/* slide nav — แคปซูล gradient เลื่อนนุ่มระหว่างแท็บ (container id=nav-slide + .nav-ind)
+   ⚠️ สไตล์ฐาน (แถบนอน) ต้องอยู่ในคลาสนี้ ห้ามเขียน inline บน element ใน index.html —
+   ไม่งั้น media query sidebar ข้างล่าง override ไม่ได้ (inline style ชนะ CSS เสมอ) */
+.nav-slide { position: relative; scrollbar-width: none; display: flex; gap: 2px; background: var(--bg2); padding: 3px; border-radius: 24px; border: .5px solid var(--bd); margin-bottom: 6px; overflow-x: auto; }
 .nav-slide::-webkit-scrollbar { display: none; }
 .nav-slide .ntab { position: relative; z-index: 1; transition: color .2s var(--ease); }
 .nav-slide .ntab.on { background: transparent; box-shadow: none; }
 .nav-ind { position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; background: var(--grad); border-radius: 20px; box-shadow: 0 3px 10px rgba(124,58,237,.35); transition: left .25s var(--ease), width .25s var(--ease), top .25s var(--ease), height .25s var(--ease); z-index: 0; pointer-events: none; opacity: 0; }
 
-/* ★ ส.ค.69 — จอกว้าง: แถบแท็บย้ายเป็น sidebar แนวตั้งด้านซ้าย (จอแคบ/มือถือ = แถบนอนเลื่อนได้เหมือนเดิม)
-   ใช้ grid บน #root: คอลัมน์ซ้าย = #nav-slide (sticky) · เนื้อหาทุกชิ้นลงคอลัมน์ขวา */
-@media (min-width: 1100px) {
-  #root:has(> #nav-slide) { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: 16px; align-items: start; }
-  #root:has(> #nav-slide) > * { grid-column: 2; min-width: 0; }
-  #root > #nav-slide { grid-column: 1; grid-row: 1 / span 99; position: sticky; top: 12px; flex-direction: column; align-items: stretch; gap: 3px; border-radius: 16px; padding: 8px; overflow-x: visible; max-height: calc(100vh - 24px); overflow-y: auto; }
-  #nav-slide .ntab { justify-content: flex-start; padding: 10px 14px; font-size: 13px; border-radius: 12px; }
-  .nav-ind { border-radius: 12px; }
-}
+/* ★ ส.ค.69 — เมนูสามขีด (hamburger drawer): ซ่อนแถบแท็บไว้ กดปุ่ม ☰ แล้วเลื่อนออกมาจากซ้าย + ฉากหลังมืด
+   ใช้ทุกขนาดจอ (มือถือ/คอมเหมือนกัน) · drawer ลอยทับ ไม่กินพื้นที่ → เนื้อหาได้ความกว้างเต็มตลอด
+   ⚠️ บทเรียนจากรอบ sidebar (อย่าให้กลับมา):
+     1) container ของ index.html คือ #dashboard-root (ไม่ใช่ #root ซึ่งเป็นของ seller.html และไม่มี nav-slide)
+     2) JS ต้องใช้ root.style.display='' (ล้าง inline) ห้าม ='block' — inline style ชนะ CSS เสมอ
+     3) สไตล์ฐานของ #nav-slide อยู่ในคลาส .nav-slide เท่านั้น ห้าม inline บน element ใน render() */
+
+/* ปุ่มสามขีดในหัวเว็บ */
+.nav-burger { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t1); cursor: pointer; transition: background .18s ease, color .18s ease, transform .12s ease; }
+.nav-burger:hover { background: var(--purple-bg); color: var(--purple); }
+.nav-burger:active { transform: scale(.94); }
+
+/* ฉากหลังมืด — กดที่ไหนก็ปิด drawer */
+.nav-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .48); opacity: 0; pointer-events: none; transition: opacity .25s var(--ease); z-index: 1250; }
+body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
+
+/* ตัว drawer = #nav-slide เดิม (แถบแท็บ) แค่เปลี่ยนเป็นแผงลอยด้านซ้าย */
+#nav-slide { position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh; width: 244px; z-index: 1260;
+  transform: translateX(-104%); transition: transform .3s var(--ease);
+  flex-direction: column; align-items: stretch; gap: 4px;
+  margin: 0; padding: 14px 10px; border-radius: 0 18px 18px 0; border-left: none;
+  overflow-x: visible; overflow-y: auto; box-shadow: 6px 0 28px rgba(0, 0, 0, .18); }
+body.nav-open #nav-slide { transform: translateX(0); }
+/* คืน scrollbar ให้ drawer — .nav-slide ฐานซ่อนไว้ (เขียนตอนยังเป็นแถบนอน) แต่แนวตั้งรายการยาวเกินจอ
+   ถ้าซ่อนต่อ ผู้ใช้จะไม่รู้ว่ามีเมนูอยู่ข้างล่างอีก */
+#nav-slide { scrollbar-width: thin; scrollbar-color: var(--bd2) transparent; }
+#nav-slide::-webkit-scrollbar { display: block; width: 6px; }
+#nav-slide::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 3px; }
+#nav-slide::-webkit-scrollbar-track { background: transparent; }
+#nav-slide .ntab { justify-content: flex-start; padding: 11px 14px; font-size: 13.5px; border-radius: 12px; }
+#nav-slide .nav-ind { border-radius: 12px; }
+/* หัวข้อหมวดใน drawer (หน้าหลัก / ทีม & สิทธิ์ / ตั้งค่าระบบ / ตรวจสอบ & Log) */
+.nav-sec { margin: 12px 0 3px; padding: 9px 12px 4px; font-size: 10px; font-weight: 800; letter-spacing: .6px; color: var(--t3); border-top: .5px solid var(--bd); position: relative; z-index: 1; }
+.nav-sec:first-of-type { margin-top: 2px; border-top: none; }
+/* รายการเมนูจัดการใน drawer (กดแล้วเปิด modal — ไม่ใช่แท็บ จึงไม่มีแคปซูล gradient) */
+.nav-act { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; flex-shrink: 0; padding: 9px 14px; font-size: 12.5px; border-radius: 10px; border: none; background: transparent; color: var(--t1); font-family: inherit; cursor: pointer; white-space: nowrap; position: relative; z-index: 1; transition: background .16s ease, color .16s ease; }
+.nav-act:hover { background: var(--purple-bg); color: var(--purple); }
+
+/* หัว drawer (โลโก้/ชื่อ + ปุ่มปิด) — ไม่ให้แคปซูล gradient ไปวางทับ */
+.nav-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px 12px; margin-bottom: 6px; border-bottom: .5px solid var(--bd); position: relative; z-index: 1; }
+.nav-head-t { font-size: 13px; font-weight: 800; color: var(--t1); letter-spacing: -.2px; }
+.nav-close { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); cursor: pointer; flex-shrink: 0; }
+.nav-close:hover { background: var(--red-bg); color: var(--red); }
+@media (prefers-reduced-motion: reduce) { #nav-slide, .nav-backdrop { transition: none; } }
 
 .btn-sm { font-size: 11px; padding: 4px 10px; border-radius: 7px; border: 0.5px solid var(--bd2); background: var(--bg2); color: var(--t2); cursor: pointer; font-family: inherit; transition: background .15s ease, border-color .15s ease, transform .12s ease; }
 .btn-sm:hover { background: var(--bg3); border-color: var(--blue); color: var(--t1); }

@@ -45,6 +45,24 @@
   }
   /* ฝังในแท็บ "สถานะรถ" ของ sales / โหมดเซลล์ (iframe) → ซ่อนหัว+ปุ่มซ้ำ (toolbar อยู่นอกกรอบแล้ว)
      ให้บอร์ดเต็มจอ · workers ที่เข้า /track/ ตรง (ไม่ใช่ iframe) ยังเห็นหัว/สลับภาษาปกติ */
+  /* ── เมนูสามขีดของหน้า /track/ (ยุบปุ่มจัดการทั้งหมดไว้ในนี้ · ส.ค.69) ──
+     ฝังในกรอบ (แท็บสถานะรถ/หน้าเซลล์) = ซ่อนทั้งชุด เพราะแดชบอร์ดขายมีเมนู ☰ ของตัวเองแล้ว */
+  .trk-burger{display:inline-flex;align-items:center;gap:7px}
+  .trk-bd{position:fixed;inset:0;background:rgba(15,23,42,.5);opacity:0;pointer-events:none;
+          transition:opacity .25s ease;z-index:120}
+  body.trknav-open .trk-bd{opacity:1;pointer-events:auto}
+  .trk-drawer{position:fixed;top:0;left:0;height:100vh;height:100dvh;width:250px;z-index:121;
+              background:var(--card);border-right:1px solid var(--line);box-shadow:6px 0 28px rgba(0,0,0,.18);
+              transform:translateX(-104%);transition:transform .3s ease;
+              display:flex;flex-direction:column;gap:6px;padding:14px 12px;overflow-y:auto}
+  body.trknav-open .trk-drawer{transform:translateX(0)}
+  .trk-drawer .btn{width:100%;justify-content:flex-start}
+  .trk-drawer .sec{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--mut);
+                   padding:10px 4px 4px;margin-top:6px;border-top:1px solid var(--line)}
+  .trk-drawer .sec:first-of-type{margin-top:0;border-top:none}
+  .trk-dhead{display:flex;align-items:center;justify-content:space-between;gap:8px;
+             padding-bottom:10px;border-bottom:1px solid var(--line)}
+  html.embedded #trkHead,html.embedded .trk-drawer,html.embedded .trk-bd{display:none}
   html.embedded #trkHead{display:none}
   html.embedded .kgrid{margin-top:2px}
 </style>
@@ -53,14 +71,35 @@
 <div class="row" id="trkHead" style="justify-content:space-between;margin-bottom:14px">
   <div><h1 style="margin:0" data-i18n="title">สถานะรถ</h1><span class="mut sm"><span data-i18n="subtitle">ภาพรวมไปป์ไลน์</span> · {{ total }}</span></div>
   <div class="row" style="gap:8px;align-items:center">
-    <div class="row" id="langSw" style="gap:3px;margin-right:2px"><button class="btn sm" data-lang="th" onclick="setTrkLang('th')">ไทย</button><button class="btn sm" data-lang="en" onclick="setTrkLang('en')">EN</button><button class="btn sm" data-lang="mm" onclick="setTrkLang('mm')">မြန်မာ</button><button class="btn sm" data-lang="kh" onclick="setTrkLang('kh')">ខ្មែរ</button></div>
-    {% if show_sales_link %}<a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>{% endif %}
     {% if can_add %}<button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> เพิ่มรถ</button>{% endif %}
-    {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
-    {% if can_manage_users %}<a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>
-    <a class="btn" href="{% url 'login_log' %}"><i data-lucide="log-in"></i> Log เข้าระบบ</a>{% endif %}
+    <button class="btn trk-burger" onclick="toggleTrkNav()" aria-label="เมนู"><i data-lucide="menu"></i> <span data-i18n="menu">เมนู</span></button>
   </div>
 </div>
+
+<!-- เมนูสามขีด — รวมปุ่มจัดการ + สลับภาษา (ซ่อนตอนฝังในกรอบ) -->
+<div class="trk-bd" onclick="closeTrkNav()"></div>
+<aside class="trk-drawer" id="trkDrawer">
+  <div class="trk-dhead">
+    <b data-i18n="menu">เมนู</b>
+    <button class="btn sm" onclick="closeTrkNav()" aria-label="ปิด"><i data-lucide="x"></i></button>
+  </div>
+
+  {% if show_sales_link %}<a class="btn" href="/dashboard/" target="_top"><i data-lucide="arrow-left"></i> แดชบอร์ดขาย</a>{% endif %}
+  {% if can_view_admin %}<a class="btn" href="{% url 'qr_print' %}"><i data-lucide="qr-code"></i> พิมพ์ QR</a>{% endif %}
+
+  {% if can_manage_users %}
+  <div class="sec" data-i18n="secAdmin">ผู้ใช้ & Log</div>
+  <a class="btn" href="{% url 'manage_users' %}"><i data-lucide="users"></i> ผู้ใช้/บทบาท</a>
+  <a class="btn" href="{% url 'login_log' %}"><i data-lucide="log-in"></i> Log เข้าระบบ</a>
+  {% endif %}
+
+  <div class="sec" data-i18n="secExport">ดาวน์โหลด</div>
+  <a class="btn" href="{% url 'export_timeline_all' %}" onclick="closeTrkNav()"><i data-lucide="download"></i> <span data-i18n="expAll">Export ไทม์ไลน์ทุกคัน (beta)</span></a>
+  <div class="mut" style="font-size:11px;padding:2px 4px 0;line-height:1.5" data-i18n="expAllHint">CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน</div>
+
+  <div class="sec" data-i18n="secLang">ภาษา</div>
+  <div class="row" id="langSw" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-lang="th" onclick="setTrkLang('th')">ไทย</button><button class="btn sm" data-lang="en" onclick="setTrkLang('en')">EN</button><button class="btn sm" data-lang="mm" onclick="setTrkLang('mm')">မြန်မာ</button><button class="btn sm" data-lang="kh" onclick="setTrkLang('kh')">ខ្មែរ</button></div>
+</aside>
 
 <!-- KPI -->
 <div class="kgrid">
@@ -251,7 +290,7 @@
 
   // ─────────── i18n (TH/EN/MM/KH) — บอร์ด/โมดัลคนงานหลายสัญชาติ ───────────
   const STG={"intake":{"th":"รับเข้า","en":"Intake","mm":"ကားဝင်ရောက်","kh":"ទទួលចូល"},"photo_wait":{"th":"รถรอถ่ายรูป","en":"Awaiting Photos","mm":"ဓာတ်ပုံစောင့်","kh":"រង់ចាំថតរូប"},"repair":{"th":"เช็คซ่อม","en":"Repair","mm":"ပြုပြင်ရန်","kh":"ជួសជុល"},"repair_done":{"th":"ซ่อมเสร็จรอตรวจ","en":"Repaired · Awaiting Check","mm":"ပြင်ပြီး · စစ်ဆေးရန်","kh":"ជួសជុលរួច · រង់ចាំពិនិត្យ"},"parts":{"th":"สั่งของ/รออะไหล่","en":"Awaiting Parts","mm":"အပိုပစ္စည်းစောင့်","kh":"រង់ចាំគ្រឿងបន្លាស់"},"upholstery":{"th":"งานเบาะ","en":"Upholstery","mm":"ထိုင်ခုံအလုပ်","kh":"កៅអី"},"paint_in":{"th":"อู่สีใน","en":"Paint (in-house)","mm":"အတွင်းဆေးသုတ်","kh":"លាបថ្នាំក្នុង"},"paint_out":{"th":"อู่สีนอก","en":"Paint (outside)","mm":"အပြင်ဆေးသုတ်","kh":"លាបថ្នាំក្រៅ"},"paint_check":{"th":"รอตรวจสี","en":"Paint Check","mm":"ဆေးသုတ်စစ်ဆေးရန်","kh":"រង់ចាំពិនិត្យថ្នាំ"},"film":{"th":"ติดฟิล์ม","en":"Window Film","mm":"ဖလင်ကပ်","kh":"បិទហ្វីល"},"wash":{"th":"ชงล้าง","en":"Wash / Detail","mm":"ကားဆေးကြော","kh":"លាងសម្អាត"},"qc_show":{"th":"รอ QC ตรวจ","en":"Awaiting QC","mm":"QC စစ်ဆေးရန်","kh":"រង់ចាំ QC ពិនិត្យ"},"sales_check":{"th":"รอเซลล์ตรวจรถขึ้นโชว์","en":"Awaiting Sales Check","mm":"အရောင်းစစ်ဆေးရန်","kh":"រង់ចាំផ្នែកលក់ពិនិត្យ"},"show":{"th":"รถพร้อมขาย (ตรวจรถขึ้นโชว์)","en":"Ready for Sale (showroom check)","mm":"ရောင်းရန်အသင့်","kh":"ត្រៀមលក់"},"reserve":{"th":"จอง","en":"Reserved","mm":"ကြိုတင်မှာ","kh":"កក់ទុក"},"finance":{"th":"จัดไฟแนนซ์","en":"Financing","mm":"ငွေချေး","kh":"ហិរញ្ញវត្ថុ"},"transport_check":{"th":"ตรวจขนส่ง","en":"DLT Inspection","mm":"ယာဉ်စစ်ဆေးရေး","kh":"ត្រួតពិនិត្យយានយន្ត"},"closing":{"th":"รอปิดการขาย","en":"Closing","mm":"အရောင်းပိတ်","kh":"បិទការលក់"},"qc_release":{"th":"ตรวจรถรอปล่อย","en":"QC before Release","mm":"ထုတ်ပေးရန် QC","kh":"ត្រួតពិនិត្យមុនប្រគល់"},"release":{"th":"ปล่อยรถ (ส่งรูปปล่อยรถ)","en":"Release (send release photos)","mm":"ကားထုတ်ပေး","kh":"ប្រគល់រថយន្ត"},"sold":{"th":"ขายแล้ว","en":"Sold","mm":"ရောင်းပြီး","kh":"លក់រួច"}};
-  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ถ้ามี)", "en": "Note (optional)", "mm": "မှတ်ချက် (ရှိလျှင်)", "kh": "កំណត់ចំណាំ (បើមាន)"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fWait": {"th": "รอถ่ายรูป", "en": "Waiting for photos", "mm": "ဓာတ်ပုံစောင့်နေ", "kh": "រង់ចាំថតរូប"}, "fWaitNote": {"th": "รอถ่ายรูป — รอทุกอย่างเสร็จก่อน", "en": "Waiting for photos — on hold until all done", "mm": "ဓာတ်ပုံစောင့် — အားလုံးပြီးမှ", "kh": "រង់ចាំថតរូប — រួចរាល់ទាំងអស់សិន"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}, "prio": {"th": "ความด่วน", "en": "Priority", "mm": "အရေးပေါ်", "kh": "អាទិភាព"}, "flags": {"th": "ธงงานค้าง (ติ๊กพร้อมกันได้)", "en": "Pending work flags", "mm": "ကျန်ရှိသောအလုပ်", "kh": "ការងារនៅសល់"}, "shoot": {"th": "ถ่ายคอนเทนต์", "en": "Shoot content", "mm": "ကွန်တင့်ရိုက်", "kh": "ថតខ្លឹមសារ"}, "shootDone": {"th": "บันทึกคอนเทนต์แล้ว", "en": "Content saved"}, "mediaReq": {"th": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน", "en": "This stage needs a photo/video first", "mm": "ဓာတ်ပုံ/ဗီဒီယို လိုအပ်သည်", "kh": "ត្រូវការរូប/វីដេអូ"}, "addMedia": {"th": "แนบรูป/วิดีโอ", "en": "Add photo/video", "mm": "ဓာတ်ပုံ/ဗီဒီယို ထည့်", "kh": "ភ្ជាប់រូប/វីដេអូ"}, "uploading": {"th": "กำลังอัปโหลด…", "en": "Uploading…"}, "saved": {"th": "บันทึกแล้ว", "en": "Saved"}};
+  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ถ้ามี)", "en": "Note (optional)", "mm": "မှတ်ချက် (ရှိလျှင်)", "kh": "កំណត់ចំណាំ (បើមាន)"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fWait": {"th": "รอถ่ายรูป", "en": "Waiting for photos", "mm": "ဓာတ်ပုံစောင့်နေ", "kh": "រង់ចាំថតរូប"}, "fWaitNote": {"th": "รอถ่ายรูป — รอทุกอย่างเสร็จก่อน", "en": "Waiting for photos — on hold until all done", "mm": "ဓာတ်ပုံစောင့် — အားလုံးပြီးမှ", "kh": "រង់ចាំថតរូប — រួចរាល់ទាំងអស់សិន"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}, "prio": {"th": "ความด่วน", "en": "Priority", "mm": "အရေးပေါ်", "kh": "អាទិភាព"}, "flags": {"th": "ธงงานค้าง (ติ๊กพร้อมกันได้)", "en": "Pending work flags", "mm": "ကျန်ရှိသောအလုပ်", "kh": "ការងារនៅសល់"}, "shoot": {"th": "ถ่ายคอนเทนต์", "en": "Shoot content", "mm": "ကွန်တင့်ရိုက်", "kh": "ថតខ្លឹមសារ"}, "shootDone": {"th": "บันทึกคอนเทนต์แล้ว", "en": "Content saved"}, "mediaReq": {"th": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน", "en": "This stage needs a photo/video first", "mm": "ဓာတ်ပုံ/ဗီဒီယို လိုအပ်သည်", "kh": "ត្រូវការរូប/វីដេអូ"}, "addMedia": {"th": "แนบรูป/วิดีโอ", "en": "Add photo/video", "mm": "ဓာတ်ပုံ/ဗီဒီယို ထည့်", "kh": "ភ្ជាប់រូប/វីដេអូ"}, "uploading": {"th": "กำลังอัปโหลด…", "en": "Uploading…"}, "saved": {"th": "บันทึกแล้ว", "en": "Saved"}, "expBtn": {"th": "Export ไทม์ไลน์ (beta)", "en": "Export timeline (beta)", "mm": "အချိန်ဇယား ထုတ်ယူ (beta)", "kh": "នាំចេញកាលវិភាគ (beta)"}, "expPhotos": {"th": "เอารูป/วิดีโอมาด้วย (ได้ไฟล์ zip)", "en": "Include photos/videos (zip file)", "mm": "ဓာတ်ပုံ/ဗီဒီယို ပါထည့် (zip)", "kh": "រួមបញ្ចូលរូប/វីដេអូ (zip)"}, "expWait": {"th": "กำลังเตรียมไฟล์ zip… รูปเยอะอาจใช้เวลาสักครู่", "en": "Preparing zip… may take a moment", "mm": "zip ပြင်ဆင်နေသည်…", "kh": "កំពុងរៀបចំ zip…"}, "expGo": {"th": "กำลังดาวน์โหลด…", "en": "Downloading…", "mm": "ဒေါင်းလုဒ်နေသည်…", "kh": "កំពុងទាញយក…"}, "menu": {"th": "เมนู", "en": "Menu", "mm": "မီနူး", "kh": "ម៉ឺនុយ"}, "secAdmin": {"th": "ผู้ใช้ & Log", "en": "Users & Log", "mm": "အသုံးပြုသူ & မှတ်တမ်း", "kh": "អ្នកប្រើ & កំណត់ហេតុ"}, "secExport": {"th": "ดาวน์โหลด", "en": "Download", "mm": "ဒေါင်းလုဒ်", "kh": "ទាញយក"}, "secLang": {"th": "ภาษา", "en": "Language", "mm": "ဘာသာစကား", "kh": "ភាសា"}, "expAll": {"th": "Export ไทม์ไลน์ทุกคัน (beta)", "en": "Export all timelines (beta)", "mm": "အားလုံး ထုတ်ယူ (beta)", "kh": "នាំចេញទាំងអស់ (beta)"}, "expAllHint": {"th": "CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน", "en": "CSV of all cars · for photos, export one car at a time", "mm": "CSV အားလုံး · ဓာတ်ပုံလိုလျှင် တစ်စီးချင်း", "kh": "CSV ទាំងអស់ · បើចង់បានរូប សូមនាំចេញម្តងមួយ"}};
   const TRK_LANG_KEY='trkLang';
   let TLANG=(function(){try{return localStorage.getItem(TRK_LANG_KEY)||'th';}catch(e){return 'th';}})();
   function stgName(k){const x=STG[k];return x?(x[TLANG]||x.en||x.th):k;}
@@ -343,6 +382,14 @@
       <div>${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
       <div style="max-height:160px;overflow:auto">${logs}</div>
+      <div class="row" style="gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:.5px solid var(--line)">
+        <label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600">
+          <input type="checkbox" id="expPhotos" style="width:22px;height:22px;flex-shrink:0;cursor:pointer">
+          <i data-lucide="image" style="width:18px;height:18px"></i> ${T('expPhotos')}
+        </label>
+        <button class="btn sm" onclick="exportTimeline('${d.code}')"><i data-lucide="download"></i> ${T('expBtn')}</button>
+        <span id="expMsg" class="mut sm"></span>
+      </div>
       <div class="row" style="justify-content:space-between;gap:8px;margin-top:14px;align-items:center">
         <a href="${d.qrUrl}" target="_blank" class="btn sm"><i data-lucide="qr-code"></i> ${T('openQR')}</a>
         ${d.canEdit?`<a href="${d.editUrl}" class="btn sm">${T('edit')}</a>`:''}
@@ -352,6 +399,22 @@
   }
 
   function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+  // เมนูสามขีดของหน้า /track/ — เก็บสถานะเป็น class บน <body> (ไม่โดน re-render ของบอร์ดล้าง)
+  function openTrkNav(){ document.body.classList.add('trknav-open'); }
+  function closeTrkNav(){ document.body.classList.remove('trknav-open'); }
+  function toggleTrkNav(){ document.body.classList.toggle('trknav-open'); }
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeTrkNav(); });
+
+  // Export ไทม์ไลน์รถ → CSV (ติ๊กเอารูปด้วย = ได้ .zip ที่มี CSV + โฟลเดอร์ photos/)
+  // ใช้ location.href ให้เบราว์เซอร์จัดการดาวน์โหลดเอง (เซิร์ฟเวอร์ส่ง Content-Disposition: attachment
+  // → ไม่เปลี่ยนหน้า ป๊อปอัปยังเปิดค้างอยู่)
+  function exportTimeline(code){
+    const withPhotos = !!(document.getElementById('expPhotos')||{}).checked;
+    const msg = document.getElementById('expMsg');
+    if(msg){ msg.textContent = T(withPhotos ? 'expWait' : 'expGo'); setTimeout(()=>{ if(msg) msg.textContent=''; }, 7000); }
+    location.href = `/track/cars/${encodeURIComponent(code)}/export` + (withPhotos ? '?photos=1' : '');
+  }
 
   // อัปโหลดไฟล์รูป/วิดีโอ → /track/api/upload (Drive ถ้าตั้งไว้ · ไม่งั้นดิสก์) → คืน {id,video}
   async function trkUpload(file,code){
