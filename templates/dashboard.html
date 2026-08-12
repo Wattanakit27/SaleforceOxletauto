@@ -229,24 +229,8 @@
   </div>
 </div>
 
-<!-- Modal: ถ่ายคอนเทนต์ (แทรกได้ทุกสเตป · ไม่เปลี่ยนสเตป) -->
-<div id="shootModal" class="ov" onclick="if(event.target===this)closeShoot()" style="z-index:120">
-  <div class="modal" style="max-width:400px">
-    <h2 style="font-size:16px;margin:0 0 6px"><i data-lucide="camera"></i> <span data-i18n="shoot">ถ่ายคอนเทนต์</span></h2>
-    <div id="shootMsg" class="mut sm" style="margin-bottom:10px"></div>
-    <input type="file" id="shootFile" accept="image/*,video/*" multiple capture="environment" style="display:none" onchange="onShootFiles(this.files)">
-    <div class="row" style="gap:8px;align-items:center">
-      <button type="button" class="btn sm" onclick="document.getElementById('shootFile').click()"><i data-lucide="camera"></i> <span data-i18n="addMedia">แนบรูป/วิดีโอ</span></button>
-      <span id="shootUpMsg" class="mut sm"></span>
-    </div>
-    <div id="shootThumbs" class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"></div>
-    <textarea id="shootNote" rows="2" placeholder="โน้ต (ถ้ามี)" style="width:100%;margin-top:8px;box-sizing:border-box;font-family:inherit"></textarea>
-    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
-      <button class="btn" onclick="closeShoot()" data-i18n="cancel">ยกเลิก</button>
-      <button class="btn pri" id="shootGo" onclick="doShoot()" data-i18n="confirm">บันทึก</button>
-    </div>
-  </div>
-</div>
+<!-- (ปุ่ม/โมดัล "ถ่ายคอนเทนต์" ถอดออกแล้ว ส.ค.69 — เจ้าของบอกซับซ้อนเกิน · ธงคอนเทนต์ปลดด้วยการติ๊ก checkbox เอง
+     backend /track/api/content_shoot ยังอยู่เผื่อเอากลับ) -->
 
 {{ phase_rows|json_script:"phaseData" }}
 {{ flags|json_script:"flagData" }}
@@ -340,7 +324,6 @@
         </select>
         <span id="prioDot" class="dot" style="background:${d.priorityColor||PRIORITY_COLOR[d.priority]||'#eab308'}"></span>
         <span id="prioMsg" class="mut sm"></span>
-        <button class="btn sm" style="margin-left:auto" onclick="openShoot('${d.code}')"><i data-lucide="camera"></i> ${T('shoot')}</button>
       </div>
       <div class="sm mut" style="margin:14px 0 6px">${T('flags')}</div>
       <div class="row" style="gap:14px;align-items:center;flex-wrap:wrap">
@@ -377,7 +360,7 @@
       : `<span style="position:relative;display:inline-block"><img src="${m.url}" style="width:46px;height:46px;object-fit:cover;border-radius:6px"><button onclick="rmMedia('${el.id}',${i})" style="position:absolute;top:-6px;right:-6px;border:0;border-radius:50%;background:var(--red);color:#fff;width:18px;height:18px;cursor:pointer;font-size:11px">✕</button></span>`
     ).join('');
   }
-  function rmMedia(elId,i){ const a=(elId==='stageThumbs')?_stageMedia:_shootMedia; a.splice(i,1); renderThumbs(document.getElementById(elId),a); }
+  function rmMedia(elId,i){ _stageMedia.splice(i,1); renderThumbs(document.getElementById(elId),_stageMedia); }   // เหลือชุดเดียว (ถ่ายคอนเทนต์ถอดแล้ว ส.ค.69)
   async function _uploadInto(files,arr,thumbsId,msgId,code){
     const msg=document.getElementById(msgId); if(msg) msg.textContent=T('uploading');
     for(const f of files){ try{ arr.push(await trkUpload(f,code)); }catch(e){ if(msg){msg.textContent=String(e.message||e); return;} } }
@@ -439,31 +422,7 @@
     }catch(e){ if(msg) msg.textContent=T('changeFail'); }
   }
 
-  // ถ่ายคอนเทนต์ — แทรกได้ทุกสเตป (ไม่เปลี่ยนสเตป) · แนบรูป/วิดีโอ + โน้ต → บันทึกลงไทม์ไลน์
-  let _shootCode='', _shootMedia=[];
-  function openShoot(code){
-    _shootCode=code; _shootMedia=[];
-    document.getElementById('shootMsg').textContent=code;
-    document.getElementById('shootNote').value='';
-    document.getElementById('shootThumbs').innerHTML=''; document.getElementById('shootUpMsg').textContent='';
-    const f=document.getElementById('shootFile'); if(f) f.value='';
-    document.getElementById('shootModal').style.display='flex'; _scrollParent();
-    if(window.lucide)lucide.createIcons();
-  }
-  function onShootFiles(files){ if(files&&files.length) _uploadInto(files,_shootMedia,'shootThumbs','shootUpMsg',_shootCode); }
-  function closeShoot(){ document.getElementById('shootModal').style.display='none'; }
-  async function doShoot(){
-    if(!_shootCode) return;
-    if(!_shootMedia.length){ alert(T('mediaReq')); return; }
-    const note=document.getElementById('shootNote').value.trim();
-    const btn=document.getElementById('shootGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
-    try{
-      const r=await fetch('/track/api/content_shoot',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code:_shootCode,note,media:_shootMedia})});
-      const j=await r.json();
-      if(!j.ok){ alert(j.error||T('changeFail')); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } return; }
-      closeShoot(); alert(T('shootDone'));
-    }catch(e){ alert('ผิดพลาด: '+e); if(btn){ btn.disabled=false; btn.textContent=T('confirm'); } }
-  }
+  // (ถ่ายคอนเทนต์ ถอดออกแล้ว ส.ค.69 — โค้ด openShoot/doShoot/shootModal ลบทิ้ง · ดู git history ถ้าจะกู้)
   // บอร์ด: สลับ "งานของฉัน" (เฉพาะคอลัมน์สเตปตัวเอง) / "ทั้งหมด"
   function setBoardMode(m){
     document.querySelectorAll('.bcol').forEach(el=>{ el.style.display=(m==='all'||el.getAttribute('data-mine')==='1')?'':'none'; });
