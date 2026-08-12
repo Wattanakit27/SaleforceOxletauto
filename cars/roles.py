@@ -132,7 +132,7 @@ def role_label(user):
 # ===== ความสามารถ ===== (FULL_ROLES = ผู้บริหาร+ฝ่ายทะเบียน ทำได้ทุกอย่าง)
 def is_exec(user):        return get_role(user) in FULL_ROLES
 def can_manage_users(user): return get_role(user) in (FULL_ROLES | {ADMIN})
-def can_add_car(user):    return get_role(user) in (FULL_ROLES | {PURCHASING})
+def can_add_car(user):    return get_role(user) in {EXEC, ADMIN, PURCHASING}   # ★ ส.ค.69 เจ้าของสั่ง: เพิ่มรถ = แอดมิน+จัดซื้อ (+ผู้บริหาร/superuser) เท่านั้น
 def can_edit_car(user):   return get_role(user) in (FULL_ROLES | {PURCHASING, ADMIN})
 
 
