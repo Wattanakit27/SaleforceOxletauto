@@ -2483,17 +2483,23 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const myStages = (_scData && _scData.myStages) || [];
     const curName = scStageName(_scCar.stage, _scCar.stageName);
     const selName = _scSel ? scStageName(_scSel) : '—';
-    const chips = myStages.filter(s => s[0] !== _scCar.stage).map(s => {
+    const _chip = s => {
       const on = _scSel === s[0];
       return `<button onclick="scPickStage('${s[0]}')" style="font-size:12.5px;padding:8px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}</button>`;
-    }).join('');
+    };
+    // จัดกลุ่มปุ่มตามเฟส (myStages[2] = คีย์เฟสจาก cars_api · ส.ค.69) — กลุ่มเดียวไม่ต้องมีหัว
+    const SC_PH = {intake_phase:{TH:'รับเข้า',EN:'Intake',MM:'ဝင်ရောက်',KH:'ទទួលចូល'}, recon_phase:{TH:'ทำสภาพ',EN:'Recondition',MM:'ပြင်ဆင်ရေး',KH:'កែសម្ផស្ស'}, sale_phase:{TH:'ขาย',EN:'Sales',MM:'အရောင်း',KH:'លក់'}, release_phase:{TH:'ปล่อยรถ',EN:'Release',MM:'ထုတ်ပေး',KH:'ប្រគល់'}};
+    const _phLbl = k => { const x = SC_PH[k]; return x ? (x[_scLang] || x.TH) : ''; };
+    const items = myStages.filter(s => s[0] !== _scCar.stage);
+    const groups = []; items.forEach(s => { const ph = s[2] || ''; if (!groups.length || groups[groups.length-1].ph !== ph) groups.push({ph, items: []}); groups[groups.length-1].items.push(s); });
+    const chips = groups.map(g => `${groups.length>1?`<div style="font-size:11px;color:var(--t3);font-weight:700;margin:9px 0 5px;display:flex;align-items:center;gap:8px">${h(_phLbl(g.ph))}<span style="flex:1;height:1px;background:var(--bd)"></span></div>`:''}<div style="display:flex;gap:7px;flex-wrap:wrap">${g.items.map(_chip).join('')}</div>`).join('');
     box.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px;font-size:13px">
         <span style="padding:6px 12px;border-radius:999px;background:var(--bg2);color:var(--t2);font-weight:600">${h(curName)}</span>
         <span style="color:var(--t3)">→</span>
         <span style="padding:6px 12px;border-radius:999px;background:${_scSel?'var(--blue-bg,#eaf2fe)':'var(--bg2)'};color:${_scSel?'var(--blue)':'var(--t3)'};font-weight:700">${h(selName)}</span>
       </div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap">${chips}</div>`;
+      <div>${chips}</div>`;
     const btn = document.getElementById('scConfirmBtn');
     if (btn) { btn.disabled = !_scSel; btn.style.opacity = _scSel ? '1' : '.55'; }
   }

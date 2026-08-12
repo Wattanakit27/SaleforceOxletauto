@@ -264,6 +264,9 @@
   const TRK_LANG_KEY='trkLang';
   let TLANG=(function(){try{return localStorage.getItem(TRK_LANG_KEY)||'th';}catch(e){return 'th';}})();
   function stgName(k){const x=STG[k];return x?(x[TLANG]||x.en||x.th):k;}
+  // ชื่อเฟส (หัวกลุ่มปุ่มเปลี่ยนสเตปในป๊อปอัป) — 4 ภาษาเหมือน STG
+  const PHN={"intake_phase":{"th":"รับเข้า","en":"Intake","mm":"ဝင်ရောက်","kh":"ទទួលចូល"},"recon_phase":{"th":"ทำสภาพ","en":"Recondition","mm":"ပြင်ဆင်ရေး","kh":"កែសម្ផស្ស"},"sale_phase":{"th":"ขาย","en":"Sales","mm":"အရောင်း","kh":"លក់"},"release_phase":{"th":"ปล่อยรถ","en":"Release","mm":"ထုတ်ပေး","kh":"ប្រគល់"}};
+  function phName(k){const x=PHN[k];return x?(x[TLANG]||x.en||x.th):'';}
   function T(k){const x=UT[k];return x?(x[TLANG]||x.en||x.th):k;}
   function setTrkLang(l){TLANG=l;try{localStorage.setItem(TRK_LANG_KEY,l);}catch(e){}applyLang();}
   function applyLang(){
@@ -298,10 +301,13 @@
     const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.note?' · '+l.note:''}</div>`).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
     let stageBtns;
     if(d.direct && d.direct.length){
-      stageBtns=d.direct.map(s=>{const c=STAGE_COLOR[s.key]||'#64748b';
+      const _mkBtn=s=>{const c=STAGE_COLOR[s.key]||'#64748b';
         // ป้ายปุ่ม: เซิร์ฟเวอร์ส่งชื่อ override ตามบทบาท (เช่น เซลล์เห็น qc_show = "ตีกลับ QC") — ถ้าไม่ override ใช้ i18n ตามภาษา
         const thDef=(STG[s.key]||{}).th, lbl=(s.name && s.name!==thDef)?s.name:stgName(s.key);
-        return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="askStage('${d.code}','${s.key}','${lbl.replace(/'/g,'')}','${stgName(d.stage).replace(/'/g,'')}')">${lbl}</button>`;}).join(' ');
+        return `<button class="btn sm" style="border-color:color-mix(in srgb,${c} 55%,transparent);color:${c}" onclick="askStage('${d.code}','${s.key}','${lbl.replace(/'/g,'')}','${stgName(d.stage).replace(/'/g,'')}')">${lbl}</button>`;};
+      // จัดกลุ่มตามเฟส (ส.ค.69) — สิทธิ์เต็มมี 20 ปุ่ม กองเดียวรกเกิน · กลุ่มเดียว = ไม่ต้องมีหัว
+      const _gs=[]; d.direct.forEach(s=>{ if(!_gs.length||_gs[_gs.length-1].ph!==s.ph) _gs.push({ph:s.ph,items:[]}); _gs[_gs.length-1].items.push(s); });
+      stageBtns=_gs.map(g=>`${_gs.length>1?`<div class="sm mut" style="font-weight:700;margin:9px 0 4px;display:flex;align-items:center;gap:8px">${phName(g.ph)}<span style="flex:1;height:1px;background:var(--line)"></span></div>`:''}<div class="row" style="gap:6px;flex-wrap:wrap">${g.items.map(_mkBtn).join(' ')}</div>`).join('');
     }else{
       stageBtns=`<a class="btn sm" href="${d.scanUrl}">${T('scanChange')}</a>`;
     }
@@ -344,7 +350,7 @@
         <span id="flagMsg" class="mut sm"></span>
       </div>
       <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
-      <div class="row" style="gap:6px">${stageBtns}</div>
+      <div>${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
       <div style="max-height:160px;overflow:auto">${logs}</div>
       <div class="row" style="justify-content:space-between;gap:8px;margin-top:14px;align-items:center">

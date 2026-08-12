@@ -44,6 +44,9 @@ PHASES = [
     ("release_phase","ปล่อยรถ",  ["qc_release", "release", "sold"]),
 ]
 
+# map สเตป → (คีย์เฟส, ชื่อเฟส) — ใช้จัดกลุ่มปุ่มเปลี่ยนสเตปให้ไม่รก (ส.ค.69)
+STAGE_PHASE = {k: (pk, pn) for pk, pn, keys in PHASES for k in keys}
+
 STAGE_KEYS = [s[0] for s in STAGES]
 STAGE_CHOICES = [(s[0], s[1]) for s in STAGES]
 STAGE_NAME = {s[0]: s[1] for s in STAGES}
