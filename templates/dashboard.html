@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}สถานะรถ · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <style>
@@ -283,7 +284,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'dashboard/js/chart.umd.min.js' %}"></script>{# ★ ส.ค.69 โฮสต์เอง — เดิมดึงจาก jsdelivr แล้วบล็อกการอ่านหน้าเว็บ ~12 วิ #}
 <script>
   const CSRF='{{ csrf_token }}';
   // สีสเตปตามเฟส — ให้ pill/ปุ่มเปลี่ยนสเตปมีสี อ่านง่าย (ตรงกับแท็บสถานะรถในแดชบอร์ดขาย)

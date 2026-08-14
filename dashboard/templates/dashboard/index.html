@@ -18,7 +18,7 @@
       } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="{% static 'dashboard/js/chart.umd.min.js' %}"></script>{# ★ ส.ค.69 โฮสต์เอง — เดิมดึงจาก jsdelivr แล้วบล็อกการอ่านหน้าเว็บ ~12 วิ #}
   <style>
     /* Mobile safety — ป้องกัน horizontal scroll + KPI grid overflow */
     * { box-sizing: border-box; }

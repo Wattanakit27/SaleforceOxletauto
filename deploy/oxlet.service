@@ -7,9 +7,12 @@ User=oxlet
 Group=oxlet
 WorkingDirectory=/opt/oxlet
 # gunicorn อ่าน .env เองผ่าน python-dotenv (load_dotenv ใน settings.py) — ไม่ต้อง EnvironmentFile
+# ★ ส.ค.69 workers 3 → 5: งานแคปรูปรายงาน (Playwright) กินคิวนาน 15-90 วิ และ "เปิดเบราว์เซอร์
+#   มาขอหน้าแดชบอร์ดจากเซิร์ฟเวอร์ตัวเอง" = 1 งานกิน 2 คิว → เหลือคิวว่างแค่ 1 คนใช้งานจริงต้องต่อคิว
+#   (เคยวัดได้หน้า login ช้าจาก 1 วิ เป็น 22 วิ ตอนแคปทำงาน) · แรม VPS 7.9 GB ใช้จริง ~1.1 GB รองรับสบาย
 ExecStart=/opt/oxlet/.venv/bin/gunicorn oxlet.wsgi:application \
     --bind 127.0.0.1:8000 \
-    --workers 3 \
+    --workers 5 \
     --timeout 300 \
     --access-logfile - \
     --error-logfile -
