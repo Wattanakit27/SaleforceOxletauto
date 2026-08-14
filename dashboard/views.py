@@ -354,7 +354,11 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
     make_exec=True (sales-admin) + ผู้ใช้เพิ่งสร้าง → ตั้งเป็น Executive ให้จัดการ tracking ได้เต็มทันที.
     make_super=True (แอดมินระบบ break-glass user/password) → **superuser** — `roles.get_role()` คืน
       Executive ให้ superuser ตายตัว จึงล็อกตัวเองออกไม่ได้แม้ group จะหาย/ถูกแก้.
-    ผู้ใช้ใหม่ที่ไม่ใช่แอดมิน = Sales → แอดมินเปลี่ยนบทบาทให้ทีหลังที่ /track/users/ ได้.
+
+    ★ ส.ค.69 (แก้ช่องโหว่): **ผู้ใช้ใหม่ที่ไม่ใช่แอดมิน = ไม่มีบทบาท** — แอดมินต้องไปตั้งเองที่ /track/users/
+      เดิมแจก Sales อัตโนมัติ → พนักงานคนไหนก็ได้ที่มีชื่อในชีต employees พอ login LINE ครั้งแรก
+      กลายเป็นเซลล์ทันที กดเปลี่ยนสเตปรถได้เลย (จอง/ไฟแนนซ์/ปล่อยรถ) โดยไม่มีใครอนุมัติ
+      ตอนนี้เข้ามาได้แต่ "ดูอย่างเดียว" จนกว่าแอดมินจะให้บทบาท (ดู CLAUDE.md หัวข้อ bridge)
     """
     from django.contrib.auth import login as auth_login
     from django.contrib.auth.models import User
@@ -372,9 +376,10 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
             user.is_superuser = True
             user.is_staff = True
             user.save(update_fields=["is_superuser", "is_staff"])
-    elif created:
-        # sales-admin ครั้งแรก → Executive · เซลล์ทั่วไป → Sales (เปลี่ยนสเตปขายของรถได้ในหน้าเซลล์)
-        _troles.set_user_role(user, _troles.EXEC if make_exec else _troles.SALES)
+    elif created and make_exec:
+        # sales-admin ครั้งแรก → Executive (กันแอดมินล็อกตัวเองออกจากระบบรถ)
+        # ★ คนอื่นไม่ตั้งบทบาทให้ — เข้ามาได้แต่ดูอย่างเดียว รอแอดมินกำหนดที่ /track/users/
+        _troles.set_user_role(user, _troles.EXEC)
     elif make_exec and _troles.get_role(user) is None:
         # แอดมิน (จากชีต/LINE) ที่บัญชีมีอยู่แล้วแต่ "ไม่มีบทบาท" → เติม Executive กันล็อกตัวเองออก
         # (ไม่ทับบทบาทที่ตั้งไว้แล้ว — เติมเฉพาะตอนว่างเปล่าเท่านั้น)
