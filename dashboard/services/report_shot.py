@@ -57,6 +57,37 @@ def _capture_fail_msg() -> str:
     return "แคปรูปไม่สำเร็จ — " + (err or "ไม่ทราบสาเหตุ (ดู log: journalctl -u oxlet -n 80)")
 
 
+# ชื่อแท็บที่โชว์บนปุ่ม → id ที่ switchTab() ใช้ (ต้องตรงกับรายการแท็บใน index.html)
+_TAB_ID = {
+    "ภาพรวม": "o", "เซลล์": "s", "LEAD": "c", "ไลฟ์": "a",
+    "สถานะจองปล่อย": "b", "จัดซื้อ": "p", "สถานะรถ": "t", "เบิก-คืนรถ": "ck",
+}
+
+
+def _goto_tab(page, tab_label: str, timeout: int = 15000) -> bool:
+    """สลับไปแท็บที่ต้องการ — **เรียก switchTab() ตรง ไม่ใช่กดปุ่ม**
+    ★ ส.ค.69: ปุ่มแท็บย้ายเข้าเมนูสามขีด (drawer ปิด = อยู่นอกจอด้วย transform) → Playwright กดไม่โดน
+      ทำให้แคปการ์ดที่อยู่คนละแท็บพังเงียบๆ · เรียกฟังก์ชันตรงจึงไม่ขึ้นกับหน้าตา/ตำแหน่งปุ่ม
+    คืน True ถ้าสลับได้ (คง click เดิมเป็น fallback เผื่อหน้าเว็บเวอร์ชันเก่า)"""
+    if not tab_label:
+        return True
+    tid = _TAB_ID.get(tab_label)
+    try:
+        if tid:
+            page.wait_for_function("typeof switchTab === 'function'", timeout=timeout)
+            page.evaluate(f"switchTab('{tid}')")
+            page.wait_for_timeout(1200)
+            return True
+    except Exception as e:
+        _set_err(f"สลับไปแท็บ {tab_label} ไม่ได้ · {type(e).__name__}: {str(e)[:150]}")
+    try:
+        page.click(f"button.ntab:has-text('{tab_label}')", timeout=8000)
+        page.wait_for_timeout(1200)
+        return True
+    except Exception:
+        return False
+
+
 def _apply_date_mode(page, cfg) -> None:
     """ตั้งตัวกรองวันที่ของแดชบอร์ดก่อนแคป ตาม config ของการ์ด (เรียกหลัง login/สลับแท็บ · best-effort)"""
     mode = (cfg or {}).get("date_mode") or "month"
@@ -177,17 +208,7 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
             #   เดิม page.click("button.ntab:has-text('LEAD')") → พอย้ายแท็บเข้าเมนูสามขีด (drawer ปิดอยู่ =
             #   เลื่อนออกนอกจอด้วย transform) Playwright กดไม่โดน → แท็บไม่เปลี่ยน → ไม่มีตารางให้แคป
             #   = รายงานรายวันหยุดส่งเงียบๆ · เรียกฟังก์ชันตรงจึงไม่ขึ้นกับหน้าตา/ตำแหน่งปุ่มอีกต่อไป
-            try:
-                page.wait_for_function("typeof switchTab === 'function'", timeout=left_ms(15000))
-                page.evaluate("switchTab('c')")
-                page.wait_for_timeout(1200)
-            except Exception as e:
-                _set_err(f"สลับไปแท็บ LEAD ไม่ได้ · {type(e).__name__}: {str(e)[:150]}")
-                try:      # fallback: กดปุ่มแบบเดิม (เผื่อหน้าเว็บเวอร์ชันเก่าที่ยังไม่มี switchTab)
-                    page.click("button.ntab:has-text('LEAD')", timeout=left_ms(8000))
-                    page.wait_for_timeout(1200)
-                except Exception:
-                    pass
+            _goto_tab(page, "LEAD", timeout=left_ms(15000))
             # #rpt-shot / #rpt-shot-teams ซ่อนใน wrapper height:0 → เปิดให้เห็นก่อนแคป
             # timeout สูง (35s) กัน cold start: /api/dashboard คำนวณสด ~8-20s ตอน cache เย็น
             try:
@@ -375,6 +396,13 @@ def capture_leadsummary() -> str | None:
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
             page.wait_for_url("**/dashboard/**", timeout=30000)
+            # #leadsummary-card อยู่ในแท็บ LEAD (ย้ายมา ก.ค.69) → ต้องสลับแท็บก่อน ไม่งั้นหาไม่เจอ
+            try:
+                page.wait_for_selector(".ntab", state="attached", timeout=45000)
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
+            _goto_tab(page, _CARD_TAB.get("leadsummary-card", "LEAD"))
             page.wait_for_selector("#leadsummary-card", state="visible", timeout=35000)   # cold start เผื่อ ~8-20s
             page.wait_for_timeout(1800)
             el = page.query_selector("#leadsummary-card")
@@ -527,14 +555,13 @@ def _capture_element(card_id: str, cfg: dict | None = None) -> str | None:
                 pass
             _apply_date_mode(page, cfg)   # ช่วงวันที่ตามที่ตั้งไว้ต่อการ์ด (อ่านมาก่อน launch browser)
             _tab = _CARD_TAB.get(card_id)
-            if _tab:   # การ์ดอยู่คนละแท็บ → กดแท็บก่อน (ไม่งั้นหา element ไม่เจอ)
+            if _tab:   # การ์ดอยู่คนละแท็บ → สลับแท็บก่อน (ไม่งั้นหา element ไม่เจอ)
                 try:
-                    page.wait_for_selector(".ntab", state="visible", timeout=45000)
+                    page.wait_for_selector(".ntab", state="attached", timeout=45000)
                     page.wait_for_timeout(600)
-                    page.click(f"button.ntab:has-text('{_tab}')")
-                    page.wait_for_timeout(1200)
                 except Exception:
                     pass
+                _goto_tab(page, _tab)
             page.wait_for_selector("#" + card_id, state="attached", timeout=35000)
             page.wait_for_timeout(1800)
             # ซ่อนปุ่ม "ส่งไลน์" + ไอคอน "?" (ตัวช่วย UI · ไม่ใช่ข้อมูล) ก่อนแคป — รูปสะอาดขึ้น
