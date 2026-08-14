@@ -298,6 +298,17 @@ sudo -u oxlet git pull
 systemctl restart oxlet
 ```
 
+> **⚠️ ถ้ารัน `pip install -r requirements.txt` แล้ว Playwright ถูกอัปเกรด → ต้องลง Chromium ใหม่ทุกครั้ง**
+> ```bash
+> sudo -u oxlet PLAYWRIGHT_BROWSERS_PATH=/opt/oxlet/pw-browsers \
+>   /opt/oxlet/.venv/bin/python -m playwright install chromium --with-deps
+> systemctl restart oxlet
+> ```
+> เหตุผล: `requirements.txt` เขียน `playwright>=1.40` (ไม่ล็อกเวอร์ชัน) · Playwright **แต่ละเวอร์ชันผูกกับเลข build
+> ของ Chromium คนละตัว** (เช่น `chromium_headless_shell-1234`) พออัปเกรดแพ็กเกจแต่ไม่ลงเบราว์เซอร์ใหม่
+> จะหาไฟล์ไม่เจอ → **รายงานเข้าไลน์ส่งไม่ออก "แคปรูปไม่สำเร็จ"** ทั้งที่เมื่อวานยังส่งได้
+> เช็คสาเหตุจริงได้ที่ **เมนูจัดการ → รายงานเข้าไลน์ → ส่งทดสอบ** (ข้อความจะบอกพาธที่มันหา)
+
 ---
 
 ## คำสั่ง debug ที่ใช้บ่อย

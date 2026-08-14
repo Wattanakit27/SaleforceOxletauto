@@ -14,6 +14,48 @@ _DEFAULT_CFG = {"enabled": False, "time": "17:30", "mode": "test", "test_id": ""
                 # ช่วงวันที่ของข้อมูลในรูปที่ส่ง: month=เดือนปัจจุบัน · today=วันปัจจุบัน · range=ระบุเอง
                 "date_mode": "month", "date_from": "", "date_to": ""}
 
+# ★ ส.ค.69 — เก็บ "สาเหตุจริง" ของการแคปที่พังไว้บอกผู้ใช้
+#   เดิม except Exception: pass ทุกจุด แล้วผู้เรียกเดาว่า "เช็ค playwright/chromium" ซึ่งมักไม่ใช่สาเหตุจริง
+#   (อาจเป็น login ไม่ผ่าน / แดชบอร์ดโหลดไม่ทัน / อ่าน Google Sheet ไม่ได้ ก็ได้) → แอดมินไล่ผิดทาง
+_LAST_ERR = ""
+
+
+def _set_err(msg: str) -> None:
+    global _LAST_ERR
+    _LAST_ERR = (msg or "")[:400]
+
+
+def last_error() -> str:
+    return _LAST_ERR
+
+
+def diagnose() -> str:
+    """ตรวจว่า playwright/chromium พร้อมใช้ไหม — คืนข้อความอธิบาย ('' = ไม่มีปัญหาที่ชั้นนี้)
+    ใช้ตอน capture พังเพื่อแยกให้ออกว่า 'เบราว์เซอร์ไม่พร้อม' หรือ 'เบราว์เซอร์โอเคแต่หน้าเว็บมีปัญหา'"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        return f"ยังไม่ได้ติดตั้ง playwright (pip install playwright) · {type(e).__name__}: {e}"
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+            b.close()
+    except Exception as e:
+        path_hint = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "(ไม่ได้ตั้ง)")
+        return (f"เปิด Chromium ไม่ได้ · PLAYWRIGHT_BROWSERS_PATH={path_hint} · "
+                f"{type(e).__name__}: {str(e)[:300]}")
+    return ""
+
+
+def _capture_fail_msg() -> str:
+    """ข้อความอธิบายว่าทำไมแคปไม่สำเร็จ — บอกสาเหตุจริงแทนการเดาว่าเป็นเรื่อง chromium
+    ถ้าเบราว์เซอร์ไม่พร้อม → บอกวิธีติดตั้ง · ถ้าเบราว์เซอร์โอเค → บอก error จริงจากขั้นตอนแคป"""
+    env = diagnose()
+    if env:
+        return f"แคปรูปไม่สำเร็จ — {env} · แก้: playwright install chromium --with-deps"
+    err = last_error()
+    return "แคปรูปไม่สำเร็จ — " + (err or "ไม่ทราบสาเหตุ (ดู log: journalctl -u oxlet -n 80)")
+
 
 def _apply_date_mode(page, cfg) -> None:
     """ตั้งตัวกรองวันที่ของแดชบอร์ดก่อนแคป ตาม config ของการ์ด (เรียกหลัง login/สลับแท็บ · best-effort)"""
@@ -87,9 +129,11 @@ _SHOT_TARGETS = [
 def capture_report_images(cfg: dict | None = None) -> list[str]:
     """login แดชบอร์ด → แคป #rpt-shot + #rpt-shot-teams → เซฟ PNG · คืน list ของ path (ว่าง = พัง/ไม่มี playwright)
     ทำใน browser session เดียว (login ครั้งเดียว แคปหลายรูป)"""
+    _set_err("")
     try:
         from playwright.sync_api import sync_playwright
-    except Exception:
+    except Exception as e:
+        _set_err(f"import playwright ไม่ได้ (pip install playwright) · {type(e).__name__}: {e}")
         return []
     # ยิงที่ SITE_URL (dev=http://127.0.0.1:8000 · prod=https://โดเมนจริง ผ่าน nginx)
     # → CSRF referer scheme ตรง (อย่าใส่ X-Forwarded-Proto เอง จะทำ CSRF เพี้ยนตอน POST login)
@@ -144,7 +188,8 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
                     el.screenshot(path=pth)
                     if os.path.exists(pth):
                         outs.append(pth)
-                except Exception:
+                except Exception as e:
+                    _set_err(f"แคป #{el_id} ไม่ได้ · {type(e).__name__}: {str(e)[:200]}")
                     continue
             # fallback: ถ้าแคป #rpt-shot ไม่ได้เลย → ลอง #rpt-card (ตารางเว็บตัวเต็ม)
             if not outs:
@@ -155,10 +200,14 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
                     page.query_selector("#rpt-card").screenshot(path=pth)
                     if os.path.exists(pth):
                         outs.append(pth)
-                except Exception:
-                    pass
+                except Exception as e:
+                    # ไม่เจอทั้ง #rpt-shot และ #rpt-card = หน้าแดชบอร์ดไม่ได้ render ตาราง
+                    # (login ไม่ผ่าน / ข้อมูลโหลดไม่ขึ้น / ยังอยู่คนละแท็บ) — ไม่ใช่เรื่อง chromium
+                    _set_err(f"หน้าแดชบอร์ดไม่มีตารางให้แคป (login ผ่านไหม/ข้อมูลขึ้นไหม) · "
+                             f"url={page.url} · {type(e).__name__}: {str(e)[:180]}")
             browser.close()
-    except Exception:
+    except Exception as e:
+        _set_err(f"{type(e).__name__}: {str(e)[:300]}")
         return outs
     return outs
 
@@ -207,7 +256,7 @@ def send_report_to_line(target_id: str, caption: str = "", mention_all: bool = F
         return False, "ไม่มีปลายทาง (target_id)"
     paths = capture_report_images()
     if not paths:
-        return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium ติดตั้งไหม (playwright install chromium --with-deps)"
+        return False, _capture_fail_msg()
     urls = [_public_url(p) for p in paths]
     bad = [u for u in urls if not u.lower().startswith("https://")]
     if bad:
@@ -328,7 +377,7 @@ def send_leadsummary_to_line(target_id: str, caption: str = "", mention_all: boo
         return False, "ไม่มีปลายทาง (target_id)"
     path = capture_leadsummary()
     if not path:
-        return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium (playwright install chromium --with-deps)"
+        return False, _capture_fail_msg()
     url = _public_url(path)
     if not url.lower().startswith("https://"):
         return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={url}"
@@ -530,7 +579,7 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         return False, "ไม่มีปลายทาง (target_id)"
     paths = capture_card(card_id)
     if not paths:
-        return False, "แคปรูปไม่สำเร็จ — เช็ค playwright/chromium (playwright install chromium --with-deps)"
+        return False, _capture_fail_msg()
     urls = [_public_url(p) for p in paths]
     bad = [u for u in urls if not u.lower().startswith("https://")]
     if bad:
