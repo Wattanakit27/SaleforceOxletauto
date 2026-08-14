@@ -5188,7 +5188,7 @@
         const j=await r.json(); _rlStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _rlStatus('ผิดพลาด','var(--red)'); }
     }
     async function testReportLine(){
-      _rlStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      _rlStatus('กำลังแคป + ส่ง… ใช้เวลา 30–60 วิ (เปิดเบราว์เซอร์ + ล็อกอิน + รอข้อมูลโหลด) อย่าเพิ่งปิดหน้าต่าง');
       try{ const r=await fetch('/api/admin/report_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({target:_rlV('rl_test').trim()})});
         const j=await r.json(); _rlStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _rlStatus('ผิดพลาด: '+e,'var(--red)'); }
     }
@@ -5240,7 +5240,7 @@
         const j=await r.json(); _llStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _llStatus('ผิดพลาด','var(--red)'); }
     }
     async function testLeadLine(){
-      _llStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      _llStatus('กำลังแคป + ส่ง… ใช้เวลา 30–60 วิ (เปิดเบราว์เซอร์ + ล็อกอิน + รอข้อมูลโหลด) อย่าเพิ่งปิดหน้าต่าง');
       try{ const r=await fetch('/api/admin/leadsummary_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({target:_llV('ll_test').trim()})});
         const j=await r.json(); _llStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _llStatus('ผิดพลาด: '+e,'var(--red)'); }
     }
@@ -5332,7 +5332,7 @@
         const j=await r.json(); _clStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด','var(--red)'); }
     }
     async function testCardLine(){
-      _clStatus('กำลังแคป + ส่ง… (~10 วิ)');
+      _clStatus('กำลังแคป + ส่ง… ใช้เวลา 30–60 วิ (เปิดเบราว์เซอร์ + ล็อกอิน + รอข้อมูลโหลด) อย่าเพิ่งปิดหน้าต่าง');
       try{ const r=await fetch('/api/admin/card_line_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({card:_clCard, target:_clV('cl_test').trim()})});
         const j=await r.json(); _clStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด: '+e,'var(--red)'); }
     }

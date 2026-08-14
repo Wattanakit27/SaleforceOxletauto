@@ -142,30 +142,52 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
     pw = getattr(settings, "OXLET_ADMIN_PASSWORD", "")
     ts = time.strftime("%Y%m%d_%H%M%S")
     outs: list[str] = []
+    # ★ ส.ค.69 — งบเวลารวมทั้งงาน (วินาที)
+    #   nginx ตัดที่ proxy_read_timeout 120s (location / ใน deploy/nginx-oxlet.conf) แต่ผลรวม timeout
+    #   ทุกขั้นเดิม ~186s → ตอนพังจริง คำขอโดน nginx ตัดก่อน ผู้ใช้เห็นแค่ "หมุนค้าง" ไม่เคยได้ข้อความบอกสาเหตุ
+    #   จึงคุมให้จบใน ~90s เสมอ (เหลือที่ให้ขั้นตอนส่ง LINE + ตอบกลับก่อนโดนตัด)
+    budget = float(getattr(settings, "REPORT_SHOT_BUDGET_SEC", 90))
+    t0 = time.time()
+
+    def left_ms(cap_ms: int) -> int:
+        """เวลาที่เหลือในงบ (มิลลิวินาที) — ไม่เกิน cap_ms · ขั้นต่ำ 1s กัน timeout=0 แล้วรอไม่จำกัด"""
+        return max(1000, min(cap_ms, int((budget - (time.time() - t0)) * 1000)))
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
             page = browser.new_page(device_scale_factor=3, viewport={"width": 1680, "height": 1000})   # 3x = คมชัดขึ้น (แตะดูเต็มในไลน์แล้วคม)
-            page.goto(base + "/login/?bg=1", wait_until="domcontentloaded", timeout=30000)
+            page.set_default_timeout(left_ms(30000))
+            page.goto(base + "/login/?bg=1", wait_until="domcontentloaded", timeout=left_ms(25000))
             page.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")  # เปิดฟอร์ม break-glass (อยู่ใน <details> พับไว้)
-            page.wait_for_selector("input[name=username]", state="visible", timeout=10000)
+            page.wait_for_selector("input[name=username]", state="visible", timeout=left_ms(10000))
             page.fill("input[name=username]", user)
             page.fill("input[name=password]", pw)
             page.click("button[type=submit]")
-            page.wait_for_url("**/dashboard/**", timeout=30000)
+            page.wait_for_url("**/dashboard/**", timeout=left_ms(25000))
             # รอ render เสร็จก่อนตั้งช่วงวันที่ (ไม่งั้นโดน init ทับ)
             try:
-                page.wait_for_selector(".ntab", state="visible", timeout=45000)
+                page.wait_for_selector(".ntab", state="visible", timeout=left_ms(30000))
                 page.wait_for_timeout(600)
             except Exception:
                 pass
             _apply_date_mode(page, cfg)   # ช่วงวันที่ตามที่ตั้งไว้ (None = เดือนปัจจุบัน)
-            # #rpt-shot / #rpt-shot-teams ย้ายไปแท็บ "LEAD" แล้ว (ก.ค.69) → ต้องสลับไปแท็บนั้นก่อน ไม่งั้นหา element ไม่เจอ
+            # #rpt-shot / #rpt-shot-teams อยู่ในแท็บ "LEAD" (id='c') เท่านั้น → ต้องสลับแท็บก่อน ไม่งั้นหา element ไม่เจอ
+            # ★ ส.ค.69 — เรียก switchTab('c') ตรงๆ แทนการ "กดปุ่มแท็บ"
+            #   เดิม page.click("button.ntab:has-text('LEAD')") → พอย้ายแท็บเข้าเมนูสามขีด (drawer ปิดอยู่ =
+            #   เลื่อนออกนอกจอด้วย transform) Playwright กดไม่โดน → แท็บไม่เปลี่ยน → ไม่มีตารางให้แคป
+            #   = รายงานรายวันหยุดส่งเงียบๆ · เรียกฟังก์ชันตรงจึงไม่ขึ้นกับหน้าตา/ตำแหน่งปุ่มอีกต่อไป
             try:
-                page.click("button.ntab:has-text('LEAD')")
+                page.wait_for_function("typeof switchTab === 'function'", timeout=left_ms(15000))
+                page.evaluate("switchTab('c')")
                 page.wait_for_timeout(1200)
-            except Exception:
-                pass
+            except Exception as e:
+                _set_err(f"สลับไปแท็บ LEAD ไม่ได้ · {type(e).__name__}: {str(e)[:150]}")
+                try:      # fallback: กดปุ่มแบบเดิม (เผื่อหน้าเว็บเวอร์ชันเก่าที่ยังไม่มี switchTab)
+                    page.click("button.ntab:has-text('LEAD')", timeout=left_ms(8000))
+                    page.wait_for_timeout(1200)
+                except Exception:
+                    pass
             # #rpt-shot / #rpt-shot-teams ซ่อนใน wrapper height:0 → เปิดให้เห็นก่อนแคป
             # timeout สูง (35s) กัน cold start: /api/dashboard คำนวณสด ~8-20s ตอน cache เย็น
             try:
@@ -183,6 +205,8 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
                     page.wait_for_timeout(350)
                     el = page.query_selector("#" + el_id)
                     if not el:
+                        # เดิม continue เฉยๆ ไม่บันทึกอะไร → ผู้ใช้เห็น "ไม่ทราบสาเหตุ" (ทางนี้แหละที่ทำให้งง)
+                        _set_err(f"ไม่พบ #{el_id} ในหน้า (แท็บ LEAD เปิดอยู่ไหม / ข้อมูลขึ้นครบไหม) · url={page.url}")
                         continue
                     pth = os.path.join(_report_dir(), f"report_{ts}_{el_id}.png")
                     el.screenshot(path=pth)
