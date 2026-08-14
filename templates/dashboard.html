@@ -311,7 +311,8 @@
   const PRIORITY_COLOR={urgent_high:'#dc2626',urgent:'#ea580c',normal:'#eab308',low:'#d1d5db'};
   const PRIORITY_NAME={urgent_high:'ด่วนมาก',urgent:'ด่วน',normal:'ปกติ',low:'ไม่เร่ง'};
   const PRIORITY_KEYS=['urgent_high','urgent','normal','low'];
-  const FLAG_DEFS=[{key:'need_photo',js:'needPhoto',name:'ยังไม่ได้ถ่ายรูป',icon:'camera',color:'#2563eb'},{key:'need_content',js:'needContent',name:'ยังไม่ได้ถ่ายคอนเทนต์',icon:'video',color:'#7c3aed'}];
+  // ⚠️ ต้องตรงกับ CAR_FLAGS ใน cars/constants.py (ตารางนี้ hardcode ไม่ได้ดึงจากเซิร์ฟเวอร์)
+  const FLAG_DEFS=[{key:'need_photo',js:'needPhoto',name:'ยังไม่ได้ถ่ายรูป',icon:'camera',color:'#2563eb'},{key:'need_content',js:'needContent',name:'ยังไม่ได้ถ่ายคอนเทนต์',icon:'video',color:'#7c3aed'},{key:'need_tire',js:'needTire',name:'รอเปลี่ยนยาง',icon:'disc',color:'#475569'}];
   const FORCE_MEDIA=new Set(['qc_release','release']);
   function tintPill(el,stage){ const c=STAGE_COLOR[stage]||'#64748b'; el.style.background=`color-mix(in srgb,${c} 14%,transparent)`; el.style.color=c; el.style.border=`.5px solid color-mix(in srgb,${c} 45%,transparent)`; }
   function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }

@@ -76,13 +76,17 @@ STAGE_ROLES = {
     "closing":     set(),                # ★ รอปิดการขาย = ฝ่ายทะเบียน (+สิทธิ์เต็ม) เท่านั้น
     "qc_release":  {SALES},              # บังคับแนบรูป
     "release":     {SALES},              # ปล่อยรถ = เซลล์เก็บรูปส่งมอบ (ไม่จบ · รถยังอยู่บนบอร์ด) · บังคับแนบรูป
-    "sold":        {SALES},              # ★ ขายแล้ว = จบจริง → หลุดบอร์ดไปหน้ารถขายแล้ว
+    "sold":        set(),                # ★ ขายแล้ว = จบจริง → ฝ่ายทะเบียน (+สิทธิ์เต็ม) เป็นคนกด
+                                         #   (ส.ค.69 เอาออกจากเซลล์ตามที่เจ้าของสั่ง)
 }
 
 # สเตปที่ "ไม่มีใครกดเข้าได้" แม้สิทธิ์เต็ม (รับเข้า = จุดเกิดของรถตอนสร้าง ไม่ใช่ปุ่ม)
 NO_ONE_STAGES = {"intake"}
 # ฝ่ายทะเบียน: ทุกสเตปยกเว้นชุดนี้ (เจ้าของสั่งเอา เบาะ/อะไหล่ ออก · intake โดน NO_ONE_STAGES อยู่แล้ว)
 REGIST_EXCLUDE = {"upholstery", "parts"}
+# ★ QC: ทุกสเตปยกเว้น "ปุ่มที่เกี่ยวกับการขาย" (ส.ค.69 · เจ้าของสั่ง — QC มีหน้าที่ตรวจ ไม่ใช่ขาย)
+#   คงไว้ 2 ตัวที่เป็นงานตรวจของ QC เอง: sales_check (ตรวจผ่านแล้วติ๊กส่งต่อเซลล์) · qc_release (ตรวจรถรอปล่อย)
+QC_EXCLUDE = {"show", "reserve", "finance", "transport_check", "closing", "release", "sold"}
 
 # ป้ายปุ่มพิเศษต่อบทบาท — key สเตปเดิม แต่คำบนปุ่มเปลี่ยนตามบริบทผู้กด (ตอนนี้มีของเซลล์อันเดียว)
 STAGE_BUTTON_LABELS = {
@@ -150,13 +154,21 @@ def can_view_admin(user): return get_role(user) in (FULL_ROLES | {PURCHASING, AD
 def is_worker(user):      return get_role(user) in SCAN_ONLY_ROLES
 
 
-def allowed_stages(user):
-    """รายชื่อคีย์สเตปที่ user เปลี่ยนได้ (intake ไม่มีใครกดได้ · ฝ่ายทะเบียนเว้น เบาะ/อะไหล่)"""
-    role = get_role(user)
-    if role in STAGE_FULL_ROLES:
-        return [s for s in STAGE_ROLES if s not in NO_ONE_STAGES]
+def _stage_exclude(role):
+    """สเตปที่บทบาทนี้ถูกตัดออก แม้จะอยู่ในกลุ่มสิทธิ์เต็ม — คืน set() ถ้าไม่มีข้อยกเว้น"""
     if role == REGIST:
-        return [s for s in STAGE_ROLES if s not in NO_ONE_STAGES and s not in REGIST_EXCLUDE]
+        return REGIST_EXCLUDE          # ฝ่ายทะเบียน: เว้น เบาะ/อะไหล่
+    if role == QC:
+        return QC_EXCLUDE              # QC: เว้นปุ่มฝั่งขาย (ตรวจได้ ขายไม่ได้)
+    return set()
+
+
+def allowed_stages(user):
+    """รายชื่อคีย์สเตปที่ user เปลี่ยนได้ (intake ไม่มีใครกดได้ · ทะเบียนเว้นเบาะ/อะไหล่ · QC เว้นฝั่งขาย)"""
+    role = get_role(user)
+    skip = _stage_exclude(role)
+    if role in STAGE_FULL_ROLES or role == REGIST:
+        return [s for s in STAGE_ROLES if s not in NO_ONE_STAGES and s not in skip]
     return [s for s, rs in STAGE_ROLES.items() if role in rs]
 
 
@@ -164,10 +176,8 @@ def can_set_stage(user, stage):
     if stage in NO_ONE_STAGES:
         return False
     role = get_role(user)
-    if role in STAGE_FULL_ROLES:
-        return True
-    if role == REGIST:
-        return stage not in REGIST_EXCLUDE
+    if role in STAGE_FULL_ROLES or role == REGIST:
+        return stage not in _stage_exclude(role)
     return role in STAGE_ROLES.get(stage, set())
 
 

@@ -2261,10 +2261,10 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   // ── i18n (TH/EN/MM/KH) สำหรับคนงานหลายสัญชาติ — พม่า/เขมรเป็นฉบับร่าง ควรให้เจ้าของภาษาตรวจ ──
   const SC_LANGS = [['TH','ไทย'],['EN','Eng'],['MM','မြန်မာ'],['KH','ខ្មែរ']];
   const SC_T = {
-    TH:{carStatus:'สถานะรถ',back:'กลับ',carCode:'รหัสรถ',branch:'สาขา',changeStage:'เปลี่ยนสเตปรถ',currentStage:'สเตปปัจจุบัน',pickStage:'เลือกสเตปใหม่',changeTo:'เปลี่ยนเป็น',note:'หมายเหตุ (ถ้ามี)',notePh:'พิมพ์รายละเอียดเพิ่มเติม…',addPhoto:'เพิ่มรูป / วิดีโอ',photoHint:'ถ่ายตอนเปลี่ยนสเตป · ได้หลายไฟล์',confirm:'ยืนยันเปลี่ยนสเตป',by:'ผู้ทำ',history:'ประวัติล่าสุด',noHistory:'ยังไม่มีประวัติ',noPerm:'บัญชีนี้ยังไม่มีสิทธิ์เปลี่ยนสเตป — แจ้งแอดมินตั้งบทบาทในระบบรถ',selectFirst:'เลือกสเตปใหม่ก่อน',saving:'กำลังบันทึก…',uploading:'กำลังอัปโหลด…',saved:'บันทึกแล้ว',searchPh:'ค้นหา ทะเบียน / รุ่น / รหัส',allStages:'ทุกสเตป',cars:'คัน',noCars:'ไม่มีรถตามตัวกรอง',loading:'กำลังโหลดข้อมูลรถ…',loadErr:'โหลดข้อมูลรถไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อม',days:'วัน',tapCar:'แตะรถเพื่อเปลี่ยนสเตป',failed:'เปลี่ยนสเตปไม่สำเร็จ',upFail:'อัปไฟล์ไม่สำเร็จ'},
-    EN:{carStatus:'Car Status',back:'Back',carCode:'Car Code',branch:'Branch',changeStage:'Change Stage',currentStage:'Current stage',pickStage:'Select new stage',changeTo:'Change to',note:'Note (optional)',notePh:'Add details…',addPhoto:'Add photo / video',photoHint:'Take at stage change · multiple files',confirm:'Confirm stage change',by:'By',history:'Recent history',noHistory:'No history yet',noPerm:"This account can't change stages — ask admin to set your role",selectFirst:'Select a new stage first',saving:'Saving…',uploading:'Uploading…',saved:'Saved',searchPh:'Search plate / model / code',allStages:'All stages',cars:'cars',noCars:'No cars match the filter',loading:'Loading car data…',loadErr:'Could not load car data',days:'days',tapCar:'Tap a car to change stage',failed:'Failed to change stage',upFail:'Upload failed'},
-    MM:{carStatus:'ကားအခြေအနေ',back:'နောက်သို့',carCode:'ကားကုဒ်',branch:'ဌာနခွဲ',changeStage:'အဆင့်ပြောင်းရန်',currentStage:'လက်ရှိအဆင့်',pickStage:'အဆင့်အသစ်ရွေးပါ',changeTo:'သို့ပြောင်းရန်',note:'မှတ်ချက် (ရှိလျှင်)',notePh:'အသေးစိတ်ထည့်ပါ…',addPhoto:'ဓာတ်ပုံ / ဗီဒီယိုထည့်ပါ',photoHint:'အဆင့်ပြောင်းချိန်ရိုက်ပါ · ဖိုင်များစွာ',confirm:'အဆင့်ပြောင်းရန်အတည်ပြုပါ',by:'ပြုလုပ်သူ',history:'မှတ်တမ်း',noHistory:'မှတ်တမ်းမရှိသေးပါ',noPerm:'ဤအကောင့်တွင် အဆင့်ပြောင်းခွင့်မရှိပါ',selectFirst:'အဆင့်အသစ်အရင်ရွေးပါ',saving:'သိမ်းနေသည်…',uploading:'တင်နေသည်…',saved:'သိမ်းပြီးပါပြီ',searchPh:'နံပါတ် / မော်ဒယ် / ကုဒ် ရှာရန်',allStages:'အဆင့်အားလုံး',cars:'စီး',noCars:'ကားမတွေ့ပါ',loading:'ကားအချက်အလက်ဖွင့်နေသည်…',loadErr:'ကားအချက်အလက်မဖွင့်နိုင်ပါ',days:'ရက်',tapCar:'အဆင့်ပြောင်းရန် ကားကိုနှိပ်ပါ',failed:'အဆင့်ပြောင်းမအောင်မြင်ပါ',upFail:'ဖိုင်တင်မအောင်မြင်ပါ'},
-    KH:{carStatus:'ស្ថានភាពរថយន្ត',back:'ត្រឡប់',carCode:'លេខកូដរថយន្ត',branch:'សាខា',changeStage:'ប្តូរដំណាក់កាល',currentStage:'ដំណាក់កាលបច្ចុប្បន្ន',pickStage:'ជ្រើសដំណាក់កាលថ្មី',changeTo:'ប្តូរទៅ',note:'កំណត់សម្គាល់ (បើមាន)',notePh:'បន្ថែមព័ត៌មាន…',addPhoto:'បន្ថែមរូប / វីដេអូ',photoHint:'ថតពេលប្តូរដំណាក់កាល · បានច្រើនឯកសារ',confirm:'បញ្ជាក់ការប្តូរ',by:'ដោយ',history:'ប្រវត្តិថ្មីៗ',noHistory:'មិនទាន់មានប្រវត្តិ',noPerm:'គណនីនេះគ្មានសិទ្ធិប្តូរដំណាក់កាល',selectFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន',saving:'កំពុងរក្សាទុក…',uploading:'កំពុងផ្ទុកឡើង…',saved:'បានរក្សាទុក',searchPh:'ស្វែងរក ស្លាក / ម៉ូដែល / លេខកូដ',allStages:'គ្រប់ដំណាក់កាល',cars:'គ្រឿង',noCars:'រកមិនឃើញរថយន្ត',loading:'កំពុងផ្ទុកទិន្នន័យរថយន្ត…',loadErr:'មិនអាចផ្ទុកទិន្នន័យរថយន្ត',days:'ថ្ងៃ',tapCar:'ចុចរថយន្តដើម្បីប្តូរ',failed:'ប្តូរដំណាក់កាលមិនបានសម្រេច',upFail:'ផ្ទុកឯកសារមិនបានសម្រេច'},
+    TH:{carStatus:'สถานะรถ',back:'กลับ',carCode:'รหัสรถ',branch:'สาขา',changeStage:'เปลี่ยนสเตปรถ',currentStage:'สเตปปัจจุบัน',pickStage:'เลือกสเตปใหม่',changeTo:'เปลี่ยนเป็น',note:'หมายเหตุ (ถ้ามี)',notePh:'พิมพ์รายละเอียดเพิ่มเติม…',addPhoto:'เพิ่มรูป / วิดีโอ',photoHint:'ถ่ายตอนเปลี่ยนสเตป · ได้หลายไฟล์',confirm:'ยืนยันเปลี่ยนสเตป',by:'ผู้ทำ',history:'ประวัติล่าสุด',noHistory:'ยังไม่มีประวัติ',noPerm:'บัญชีนี้ยังไม่มีสิทธิ์เปลี่ยนสเตป — แจ้งแอดมินตั้งบทบาทในระบบรถ',selectFirst:'เลือกสเตปใหม่ก่อน',saving:'กำลังบันทึก…',uploading:'กำลังอัปโหลด…',saved:'บันทึกแล้ว',searchPh:'ค้นหา ทะเบียน / รุ่น / รหัส',allStages:'ทุกสเตป',cars:'คัน',noCars:'ไม่มีรถตามตัวกรอง',loading:'กำลังโหลดข้อมูลรถ…',loadErr:'โหลดข้อมูลรถไม่ได้ — ระบบติดตามรถอาจยังไม่พร้อม',days:'วัน',tapCar:'แตะรถเพื่อเปลี่ยนสเตป',failed:'เปลี่ยนสเตปไม่สำเร็จ',upFail:'อัปไฟล์ไม่สำเร็จ',prio:'ความด่วน',flags:'ธงงานค้าง (ติ๊กพร้อมกันได้)'},
+    EN:{carStatus:'Car Status',back:'Back',carCode:'Car Code',branch:'Branch',changeStage:'Change Stage',currentStage:'Current stage',pickStage:'Select new stage',changeTo:'Change to',note:'Note (optional)',notePh:'Add details…',addPhoto:'Add photo / video',photoHint:'Take at stage change · multiple files',confirm:'Confirm stage change',by:'By',history:'Recent history',noHistory:'No history yet',noPerm:"This account can't change stages — ask admin to set your role",selectFirst:'Select a new stage first',saving:'Saving…',uploading:'Uploading…',saved:'Saved',searchPh:'Search plate / model / code',allStages:'All stages',cars:'cars',noCars:'No cars match the filter',loading:'Loading car data…',loadErr:'Could not load car data',days:'days',tapCar:'Tap a car to change stage',failed:'Failed to change stage',upFail:'Upload failed',prio:'Priority',flags:'Pending work flags'},
+    MM:{carStatus:'ကားအခြေအနေ',back:'နောက်သို့',carCode:'ကားကုဒ်',branch:'ဌာနခွဲ',changeStage:'အဆင့်ပြောင်းရန်',currentStage:'လက်ရှိအဆင့်',pickStage:'အဆင့်အသစ်ရွေးပါ',changeTo:'သို့ပြောင်းရန်',note:'မှတ်ချက် (ရှိလျှင်)',notePh:'အသေးစိတ်ထည့်ပါ…',addPhoto:'ဓာတ်ပုံ / ဗီဒီယိုထည့်ပါ',photoHint:'အဆင့်ပြောင်းချိန်ရိုက်ပါ · ဖိုင်များစွာ',confirm:'အဆင့်ပြောင်းရန်အတည်ပြုပါ',by:'ပြုလုပ်သူ',history:'မှတ်တမ်း',noHistory:'မှတ်တမ်းမရှိသေးပါ',noPerm:'ဤအကောင့်တွင် အဆင့်ပြောင်းခွင့်မရှိပါ',selectFirst:'အဆင့်အသစ်အရင်ရွေးပါ',saving:'သိမ်းနေသည်…',uploading:'တင်နေသည်…',saved:'သိမ်းပြီးပါပြီ',searchPh:'နံပါတ် / မော်ဒယ် / ကုဒ် ရှာရန်',allStages:'အဆင့်အားလုံး',cars:'စီး',noCars:'ကားမတွေ့ပါ',loading:'ကားအချက်အလက်ဖွင့်နေသည်…',loadErr:'ကားအချက်အလက်မဖွင့်နိုင်ပါ',days:'ရက်',tapCar:'အဆင့်ပြောင်းရန် ကားကိုနှိပ်ပါ',failed:'အဆင့်ပြောင်းမအောင်မြင်ပါ',upFail:'ဖိုင်တင်မအောင်မြင်ပါ',prio:'အရေးပေါ်',flags:'ကျန်ရှိသောအလုပ်'},
+    KH:{carStatus:'ស្ថានភាពរថយន្ត',back:'ត្រឡប់',carCode:'លេខកូដរថយន្ត',branch:'សាខា',changeStage:'ប្តូរដំណាក់កាល',currentStage:'ដំណាក់កាលបច្ចុប្បន្ន',pickStage:'ជ្រើសដំណាក់កាលថ្មី',changeTo:'ប្តូរទៅ',note:'កំណត់សម្គាល់ (បើមាន)',notePh:'បន្ថែមព័ត៌មាន…',addPhoto:'បន្ថែមរូប / វីដេអូ',photoHint:'ថតពេលប្តូរដំណាក់កាល · បានច្រើនឯកសារ',confirm:'បញ្ជាក់ការប្តូរ',by:'ដោយ',history:'ប្រវត្តិថ្មីៗ',noHistory:'មិនទាន់មានប្រវត្តិ',noPerm:'គណនីនេះគ្មានសិទ្ធិប្តូរដំណាក់កាល',selectFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន',saving:'កំពុងរក្សាទុក…',uploading:'កំពុងផ្ទុកឡើង…',saved:'បានរក្សាទុក',searchPh:'ស្វែងរក ស្លាក / ម៉ូដែល / លេខកូដ',allStages:'គ្រប់ដំណាក់កាល',cars:'គ្រឿង',noCars:'រកមិនឃើញរថយន្ត',loading:'កំពុងផ្ទុកទិន្នន័យរថយន្ត…',loadErr:'មិនអាចផ្ទុកទិន្នន័យរថយន្ត',days:'ថ្ងៃ',tapCar:'ចុចរថយន្តដើម្បីប្តូរ',failed:'ប្តូរដំណាក់កាលមិនបានសម្រេច',upFail:'ផ្ទុកឯកសារមិនបានសម្រេច',prio:'អាទិភាព',flags:'ការងារនៅសល់'},
   };
   // ชื่อสเตป EN/MM/KH (TH ใช้ค่าจากเซิร์ฟเวอร์ใน myStages/stages)
   const SC_STAGE_I18N = {
@@ -2448,6 +2448,27 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
         </div>
       </div>`;
 
+    // ★ ความด่วน + ธงงานค้าง (ส.ค.69) — เดิมหน้าเซลล์ตั้งไม่ได้เลย ต้องไปหน้าสแกน/บอร์ด
+    //   โชว์เสมอแม้บทบาทไม่มีสเตปให้กด (ตั้งความด่วน/ติ๊กธง = ใครล็อกอินก็ทำได้ ไม่ผูกบทบาท)
+    const _prios = (_scData && _scData.priorities) || [];
+    const _flagDefs = (_scData && _scData.flagDefs) || [];
+    const prioCard = `
+      <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow);margin-bottom:12px">
+        <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:flame',16)} ${h(scT('prio'))}</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <select id="scPrio" onchange="scSetPriority(this.value)" style="flex:1;padding:11px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit;cursor:pointer">
+            ${_prios.map(p=>`<option value="${h(p.key)}" ${car.priority===p.key?'selected':''}>${h(p.name)}</option>`).join('')}
+          </select>
+          <span id="scPrioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;background:${h(car.priorityColor||'#eab308')}"></span>
+        </div>
+        <div style="font-size:12.5px;font-weight:800;color:var(--t1);margin:14px 0 4px">${h(scT('flags'))}</div>
+        ${_flagDefs.map(f=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:6px 0;font-size:13.5px;font-weight:600;color:var(--t1)">
+          <input type="checkbox" ${car[f.key==='need_photo'?'needPhoto':f.key==='need_content'?'needContent':'needTire']?'checked':''}
+                 onchange="scSetFlag('${h(f.key)}',this.checked)" style="width:22px;height:22px;accent-color:${h(f.color)};flex-shrink:0;cursor:pointer">
+          ${h(f.name)}</label>`).join('')}
+        <span id="scPrioMsg" style="font-size:12px;color:var(--t3)"></span>
+      </div>`;
+
     let body;
     if (!myStages.length) {
       body = `<div style="padding:14px;background:var(--amber-bg,#fff7e6);border-radius:12px;color:var(--amber);font-size:12.5px">${h(scT('noPerm'))}</div>`;
@@ -2477,7 +2498,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
           <div style="text-align:center;font-size:11px;color:var(--t3);margin-top:7px">${h(scT('by'))}: ${h((_scData&&_scData.me) || car.lastWorker || '')}</div>
         </div>`;
     }
-    wrap.innerHTML = hdr + hero + body + scHistoryHtml(car);
+    wrap.innerHTML = hdr + hero + prioCard + body + scHistoryHtml(car);
     if (myStages.length) { renderScChanger(); renderScPhotos(); }
   }
 
@@ -2512,6 +2533,45 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const cw = document.getElementById('scChkWrap');
     const chkStages = new Set((((_scData||{}).checklist||{}).stages)||[]);
     if (cw) { cw.style.display = (_scSel && chkStages.has(_scSel)) ? 'block' : 'none'; if(_scSel) cw.querySelectorAll('.sc-chk').forEach(c=>{c.checked=true;}); }
+  }
+
+  // ── ความด่วน + ธงงานค้าง (ส.ค.69) — บันทึกทันทีที่เลือก/ติ๊ก · ใครล็อกอินก็ตั้งได้ ไม่ผูกบทบาท ──
+  function _scPrioMsg(t) {
+    const el = document.getElementById('scPrioMsg');
+    if (!el) return;
+    el.textContent = t;
+    if (t) setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2500);
+  }
+  async function scSetPriority(pr) {
+    const code = (_scCar && _scCar.code) || ''; if (!code) return;
+    _scPrioMsg(scT('saving'));
+    try {
+      const r = await fetch('/track/api/set_priority', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify({ code, priority: pr })
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'error');
+      _scCar.priority = d.priority; _scCar.priorityColor = d.priorityColor;   // optimistic (mirror ตามรอบ sync)
+      const dot = document.getElementById('scPrioDot');
+      if (dot) dot.style.background = d.priorityColor || '#eab308';
+      _scPrioMsg(scT('saved'));
+    } catch (e) { _scPrioMsg(scT('failed')); }
+  }
+  async function scSetFlag(key, on) {
+    const code = (_scCar && _scCar.code) || ''; if (!code) return;
+    _scPrioMsg(scT('saving'));
+    try {
+      const body = { code }; body[key] = !!on;
+      const r = await fetch('/track/api/set_flags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify(body)
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'error');
+      _scCar.needPhoto = d.needPhoto; _scCar.needContent = d.needContent; _scCar.needTire = d.needTire;
+      _scPrioMsg(scT('saved'));
+    } catch (e) { _scPrioMsg(scT('failed')); }
   }
 
   // ── อัปรูป/วิดีโอ (POST เข้าเซิร์ฟเวอร์ → Google Drive · เข้าโฟลเดอร์ของรถคันนั้น) ──

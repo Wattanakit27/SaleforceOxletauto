@@ -89,6 +89,7 @@ DEFAULT_PRIORITY = "normal"
 CAR_FLAGS = [
     ("need_photo",   "ยังไม่ได้ถ่ายรูป",      "camera", "#2563eb"),
     ("need_content", "ยังไม่ได้ถ่ายคอนเทนต์", "video",  "#7c3aed"),
+    ("need_tire",    "รอเปลี่ยนยาง",          "disc",   "#475569"),
 ]
 FLAG_KEYS = [f[0] for f in CAR_FLAGS]
 FLAG_NAME = {f[0]: f[1] for f in CAR_FLAGS}

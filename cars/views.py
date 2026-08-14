@@ -142,9 +142,11 @@ def dashboard(request):
     for k, n, i in C.STAGES:
         if k == "sold":          # ขายแล้ว = จบ (หลุดบอร์ดไปหน้ารถขายแล้ว) — ปล่อยรถยังมีคอลัมน์ (ส.ค.69)
             continue
-        # เรียงการ์ด: ความด่วนก่อน (ด่วนมากบนสุด) → ค้างนานสุดขึ้นก่อนในความด่วนเดียวกัน
+        # เรียงการ์ด: ★ ติดธงงานค้าง (รอถ่ายรูป/คอนเทนต์/เปลี่ยนยาง) ขึ้นบนสุดก่อน (ส.ค.69 เจ้าของสั่ง
+        # ให้หางานถ่ายคอนเทนต์เจอง่าย) → แล้วค่อยความด่วน → ค้างนานสุดขึ้นก่อนในระดับเดียวกัน
         lst = sorted(_board_by.get(k, []),
-                     key=lambda c: (_prio_rank.get(c.priority, _prio_rank["normal"]), c.stage_since))
+                     key=lambda c: (0 if any(getattr(c, f, False) for f in C.FLAG_KEYS) else 1,
+                                    _prio_rank.get(c.priority, _prio_rank["normal"]), c.stage_since))
         board_cols.append({"key": k, "name": n, "icon": i, "mine": k in my_stages, "cars": lst})
     has_my = bool(my_stages)                        # มีสเตปตัวเอง → default โฟกัสงานตัวเอง + ปุ่มสลับ
 
@@ -293,7 +295,7 @@ def car_json(request, code):
         "dateIn": timezone.localtime(car.date_in).strftime("%d/%m/%Y") if car.date_in else "",
         "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
         "priority": car.priority, "priorityColor": car.priority_color, "priorityName": car.priority_name,
-        "needPhoto": car.need_photo, "needContent": car.need_content, "flags": car.flags,
+        "needPhoto": car.need_photo, "needContent": car.need_content, "needTire": car.need_tire, "flags": car.flags,
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
@@ -1047,7 +1049,7 @@ def cars_api(request):
             "status": c.status, "sold": (c.status == "sold" or c.stage == "sold"),
             "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
             "priority": c.priority, "priorityColor": c.priority_color, "priorityName": c.priority_name,
-            "needPhoto": c.need_photo, "needContent": c.need_content, "flags": c.flags,
+            "needPhoto": c.need_photo, "needContent": c.need_content, "needTire": c.need_tire, "flags": c.flags,
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
             "province": (ex.get("owner") or {}).get("จังหวัด", ""),
@@ -1068,6 +1070,9 @@ def cars_api(request):
                      for k in roles.allowed_stages(request.user)],
         # เช็คลิสต์ตรวจรถ — โผล่ตอนเลือกสเตปกลุ่มตรวจ/โชว์/ปล่อย ผลต่อท้ายหมายเหตุ (ส.ค.69)
         "checklist": {"stages": sorted(C.CHECKLIST_STAGES), "items": C.CHECKLIST_ITEMS},
+        # ตัวเลือกความด่วน + ธงงานค้าง — หน้าเซลล์เอาไปทำ dropdown/checkbox (ส.ค.69)
+        "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
+        "flagDefs": [{"key": k, "name": n, "icon": i, "color": cl} for k, n, i, cl in C.CAR_FLAGS],
         "me": _actor(request.user),
         "canAdd": roles.can_add_car(request.user),
         "canManageUsers": roles.can_manage_users(request.user),
@@ -1186,7 +1191,8 @@ def api_set_flags(request):
     if changed:
         car.save(update_fields=changed)
     return JsonResponse({"ok": True, "needPhoto": car.need_photo,
-                         "needContent": car.need_content, "flags": car.flags})
+                         "needContent": car.need_content, "needTire": car.need_tire,
+                         "flags": car.flags})
 
 
 @csrf_exempt

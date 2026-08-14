@@ -35,8 +35,11 @@ class Car(models.Model):
     # ความด่วน — สีการ์ดมาจากนี่ (เลือกมือ · แทนวันค้างอัตโนมัติ)
     priority = models.CharField("ความด่วน", max_length=16, choices=C.PRIORITY_CHOICES, default=C.DEFAULT_PRIORITY)
     # ธงงานค้าง — แยกจากความด่วน (ติ๊กพร้อมกันได้ · รถด่วนมาก + ยังไม่ถ่ายคอนเทนต์ ได้พร้อมกัน)
-    need_photo = models.BooleanField("ยังไม่ได้ถ่ายรูป", default=False)
-    need_content = models.BooleanField("ยังไม่ได้ถ่ายคอนเทนต์", default=False)
+    # ★ ส.ค.69: รูป/คอนเทนต์ default = True → รถรับเข้าใหม่ติดธง 2 อันนี้ให้อัตโนมัติ
+    #   (เจ้าของสั่ง: "ตอนรับรถเข้ายังไม่ได้ถ่ายรูป/คอนเทนต์ ปรับเป็นออโต้") · ปลดเองเมื่อถ่ายเสร็จ
+    need_photo = models.BooleanField("ยังไม่ได้ถ่ายรูป", default=True)
+    need_content = models.BooleanField("ยังไม่ได้ถ่ายคอนเทนต์", default=True)
+    need_tire = models.BooleanField("รอเปลี่ยนยาง", default=False)
 
     # ----- ฝ่ายทะเบียน -----
     book_status = models.CharField("สถานะเล่ม", max_length=14, choices=C.BOOK_STATUS_CHOICES, blank=True)
