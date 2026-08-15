@@ -2452,16 +2452,19 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     //   โชว์เสมอแม้บทบาทไม่มีสเตปให้กด (ตั้งความด่วน/ติ๊กธง = ใครล็อกอินก็ทำได้ ไม่ผูกบทบาท)
     const _prios = (_scData && _scData.priorities) || [];
     const _flagDefs = (_scData && _scData.flagDefs) || [];
+    // ★ ส.ค.69 — โชว์ช่องความด่วนเฉพาะสเตปที่ "มีคิวให้แย่ง" (รับเข้า+ทำสภาพ) · ช่วงขาย/ปล่อยซ่อน
+    const _prioStages = (_scData && _scData.priorityStages) || [];
+    const _showPrio = !_prioStages.length || _prioStages.indexOf(car.stage) >= 0;
     const prioCard = `
       <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow);margin-bottom:12px">
-        <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:flame',16)} ${h(scT('prio'))}</div>
+        ${!_showPrio ? '' : `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:flame',16)} ${h(scT('prio'))}</div>
         <div style="display:flex;gap:10px;align-items:center">
           <select id="scPrio" onchange="scSetPriority(this.value)" ${(_scData&&_scData.canPriority===false)?'disabled':''} style="flex:1;padding:11px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit;cursor:pointer">
             ${_prios.map(p=>`<option value="${h(p.key)}" ${car.priority===p.key?'selected':''}>${h(p.name)}</option>`).join('')}
           </select>
           <span id="scPrioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;background:${h(car.priorityColor||'#eab308')}"></span>
-        </div>
-        <div style="font-size:12.5px;font-weight:800;color:var(--t1);margin:14px 0 4px">${h(scT('flags'))}</div>
+        </div>`}
+        <div style="font-size:12.5px;font-weight:800;color:var(--t1);margin:${_showPrio?'14px':'0'} 0 4px">${h(scT('flags'))}</div>
         ${_flagDefs.map(f=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:6px 0;font-size:13.5px;font-weight:600;color:var(--t1)">
           <input type="checkbox" ${car[f.key==='need_photo'?'needPhoto':f.key==='need_content'?'needContent':'needTire']?'checked':''}
                  onchange="scSetFlag('${h(f.key)}',this.checked)" ${(((_scData||{}).flagPerms||{})[f.key]===false)?'disabled title="ดูได้อย่างเดียว"':''} style="width:22px;height:22px;accent-color:${h(f.color)};flex-shrink:0;cursor:pointer">

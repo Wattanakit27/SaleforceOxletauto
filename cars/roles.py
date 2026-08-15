@@ -123,8 +123,14 @@ FLAG_EDIT_ROLES = {
 FLAG_ALWAYS_ROLES = {EXEC}
 
 
-def can_set_priority(user) -> bool:
-    """ตั้ง "ความด่วน" ได้ไหม — ทุกบทบาทได้ ยกเว้น READONLY_PRIORITY_ROLES"""
+def can_set_priority(user, stage=None) -> bool:
+    """ตั้ง "ความด่วน" ได้ไหม
+    - บทบาท: ทุกบทบาท ยกเว้น READONLY_PRIORITY_ROLES (ฝ่ายล้างรถ = ดูอย่างเดียว)
+    - สเตป: ★ ส.ค.69 โชว์เฉพาะช่วงที่ "มีคิวให้แย่ง" (รับเข้า+ทำสภาพ) · ช่วงขาย/ปล่อยซ่อน
+      (ส่ง stage=None = เช็คเฉพาะบทบาท เช่นตอนทำ UI รวมที่ยังไม่รู้ว่ารถคันไหน)"""
+    from . import constants as _C
+    if stage is not None and stage not in _C.PRIORITY_STAGES:
+        return False
     return get_role(user) not in READONLY_PRIORITY_ROLES
 
 

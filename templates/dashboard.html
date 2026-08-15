@@ -365,14 +365,14 @@
       </div>
       ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">${T('detailAll')}</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
       ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">${T('owner')}</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
-      <div class="sm mut" style="margin:14px 0 6px">${T('prio')}</div>
+      ${d.showPriority===false?'':`<div class="sm mut" style="margin:14px 0 6px">${T('prio')}</div>
       <div class="row" style="gap:8px;align-items:center">
         <select id="prioSel" onchange="setPriority('${d.code}',this.value)" ${d.canPriority===false?'disabled title="ดูได้อย่างเดียว"':''} style="width:auto">
           ${PRIORITY_KEYS.map(k=>`<option value="${k}" ${d.priority===k?'selected':''}>${PRIORITY_NAME[k]}</option>`).join('')}
         </select>
         <span id="prioDot" class="dot" style="background:${d.priorityColor||PRIORITY_COLOR[d.priority]||'#eab308'}"></span>
         <span id="prioMsg" class="mut sm"></span>
-      </div>
+      </div>`}
       <div class="sm mut" style="margin:14px 0 6px">${T('flags')}</div>
       <div class="row" style="gap:14px;align-items:center;flex-wrap:wrap">
         ${FLAG_DEFS.map(f=>`<label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600;padding:6px 0">

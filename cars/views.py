@@ -301,7 +301,8 @@ def car_json(request, code):
         "t2l": car.t2l, "daysInStage": car.days_in_stage, "flag": car.flag,
         "priority": car.priority, "priorityColor": car.priority_color, "priorityName": car.priority_name,
         "needPhoto": car.need_photo, "needContent": car.need_content, "needTire": car.need_tire, "flags": car.flags,
-        "canPriority": roles.can_set_priority(request.user), "flagPerms": roles.flag_perms(request.user),
+        "canPriority": roles.can_set_priority(request.user, car.stage),
+        "showPriority": car.stage in C.PRIORITY_STAGES, "flagPerms": roles.flag_perms(request.user),
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
@@ -690,7 +691,8 @@ def scan_page(request, code):
         # ความด่วน — เลือกได้จากหน้าสแกน (มือถือหน้างาน) เหมือนป๊อปอัปบอร์ด
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         # ★ ส.ค.69 — ฝ่ายล้างรถ "เห็นสถานะแต่แก้ไม่ได้" (ความด่วน + ธงงานค้าง)
-        "can_set_priority": roles.can_set_priority(request.user),
+        "can_set_priority": roles.can_set_priority(request.user, car.stage),
+        "show_priority": car.stage in C.PRIORITY_STAGES,
         "flag_perms": roles.flag_perms(request.user),   # ★ สิทธิ์ติ๊กรายช่อง
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
@@ -1085,6 +1087,7 @@ def cars_api(request):
         # ตัวเลือกความด่วน + ธงงานค้าง — หน้าเซลล์เอาไปทำ dropdown/checkbox (ส.ค.69)
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         "canPriority": roles.can_set_priority(request.user), "flagPerms": roles.flag_perms(request.user),
+        "priorityStages": sorted(C.PRIORITY_STAGES),
         "flagDefs": [{"key": k, "name": n, "icon": i, "color": cl} for k, n, i, cl in C.CAR_FLAGS],
         "me": _actor(request.user),
         "canAdd": roles.can_add_car(request.user),
@@ -1176,10 +1179,11 @@ def api_set_priority(request):
     """ตั้ง "ความด่วน" ของรถ (สีการ์ด) — POST JSON {code, priority}.
     ความด่วนเป็นการ "โฟกัส/จัดคิว" ไม่ใช่การเปลี่ยนสเตป → คนที่ล็อกอินติดตามรถทุกคนตั้งได้
     (บอร์ดถูก scope ตามบทบาทอยู่แล้ว) · csrf_exempt (บอร์ดในหน้า sales/seller ไม่มี CSRF token)."""
-    if not roles.can_set_priority(request.user):   # ★ ฝ่ายล้างรถ = ดูได้ แก้ไม่ได้ (ส.ค.69)
-        return JsonResponse({"ok": False, "error": "บทบาทของคุณดูได้อย่างเดียว แก้ความด่วนไม่ได้"}, status=403)
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
+    if not roles.can_set_priority(request.user, car.stage):   # ★ เช็คทั้งบทบาทและสเตป (ส.ค.69)
+        return JsonResponse(
+            {"ok": False, "error": "ตั้งความด่วนตอนรถอยู่สเตป \"%s\" ไม่ได้" % car.stage_name}, status=403)
     pr = data.get("priority")
     if pr not in C.PRIORITY_NAME:
         return JsonResponse({"ok": False, "error": "ความด่วนไม่ถูกต้อง"}, status=400)
