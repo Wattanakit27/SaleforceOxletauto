@@ -728,7 +728,17 @@ CRON_SECRET=xxx...
       - **`wash_release` วางติดกับ `wash` ใน `STAGES`** เพื่อให้ **คอลัมน์บนบอร์ดอยู่ข้างกัน** (ลำดับคอลัมน์ = ลำดับใน `STAGES`) · อยู่ใน `recon_phase`
       - **flow**: เซลล์กด **"ล้างรถรอปล่อย"** (`wash_release`) → ฝ่ายล้างกด **"ล้างเสร็จรถรอปล่อย"** (= `qc_release`) → **เด้งกลับไปหน้าเซลล์ให้ทำงานต่อ** (บางเคสสั่งล้างด่วนตอนรอขาย)
       - **ฝ่ายล้างรถเหลือ 2 ปุ่ม**: รอตรวจ QC (`qc_show`) · ล้างเสร็จรถรอปล่อย (`qc_release`) — **เอา `sales_check` ออก** (มีคน QC จริงแล้ว ไม่ต้องติ๊กแทน)
-      - **★ ฝ่ายล้างรถ "เห็นสถานะแต่แก้ไม่ได้"**: ความด่วน + ธงงานค้าง 3 อัน โชว์ค่าปกติแต่กดไม่ได้ · `READONLY_FLAG_ROLES={CARWASH}` + `can_set_priority_flags()` ([roles.py](cars/roles.py)) · บล็อก **ทั้งฝั่ง UI** (`can_set_flags` → `disabled` ใน [scan.html](templates/scan.html)) **และฝั่งเซิร์ฟเวอร์** (`api_set_priority`/`api_set_flags` คืน 403) — UI อย่างเดียวไม่พอ เพราะยิง API ตรงได้
+      - **★ สิทธิ์ติ๊กธง "แยกรายช่อง" (ส.ค.69 รอบ 5 · `FLAG_EDIT_ROLES` ใน [roles.py](cars/roles.py))** — ไม่ใช่สิทธิ์เดียวคุมทั้ง 3 · คนที่ไม่อยู่ในลิสต์ของช่องนั้น **เห็นสถานะได้ แต่ติ๊กไม่ได้**:
+
+        | ช่อง | ใครติ๊กได้ |
+        |---|---|
+        | ยังไม่ได้ถ่ายรูป · ยังไม่ได้ถ่ายคอนเทนต์ | **โปรดักชัน** (ทีมคอนเทนต์) |
+        | รอเปลี่ยนยาง | **ช่าง + ฝ่ายทะเบียน** |
+        | ความด่วน (แยกจากธง · `READONLY_PRIORITY_ROLES`) | ทุกบทบาท **ยกเว้นฝ่ายล้างรถ** |
+
+        **ผู้บริหาร (+superuser) ติ๊กได้ทุกช่องเสมอ** (`FLAG_ALWAYS_ROLES` — กันล็อกตัวเองออก) · helper: `can_set_priority()` · `can_set_flag(user, key)` · `flag_perms(user)`
+      - **บล็อก 2 ชั้นเสมอ**: **UI** (`flag_perms`/`flagPerms` → `disabled` ราย checkbox ใน [scan.html](templates/scan.html) + ป๊อปอัปบอร์ด + [seller.html](dashboard/templates/dashboard/seller.html)) **และเซิร์ฟเวอร์** (`api_set_flags` เช็ครายคีย์ → 403) — ปิดแค่ UI ไม่พอ เพราะยิง API ตรงได้
+      - **เพิ่ม/แก้สิทธิ์ช่องไหน = แก้ `FLAG_EDIT_ROLES` ที่เดียว** (UI ทั้ง 3 จุดอ่านจาก `flag_perms()` อัตโนมัติ)
       - **ป้ายปุ่มต่อบทบาท (`STAGE_BUTTON_LABELS`)** ขยายเป็น 3 บทบาท — สเตปเดียวกันแต่คำบนปุ่มต่างกันตามคนกด: **QC** paint_check="ตีกลับฝ่ายทะเบียน" · sales_check="รอตรวจเซลล์" · qc_show="แก้ไขรอตรวจขึ้นโชว์" · qc_release="แก้ไขรอตรวจรอปล่อย" (**เพิ่มป้าย ไม่ได้ตัดปุ่มเดิมของ QC ออก**) · **CARWASH** qc_show="รอตรวจ QC" · qc_release="ล้างเสร็จรถรอปล่อย" · **SALES** +wash_release="ล้างรถรอปล่อย"
     - **★ ส.ค.69 รอบ 3 (เจ้าของสั่ง)**: **"ขายแล้ว" (`sold`) เอาออกจากเซลล์** → ฝ่ายทะเบียน(+สิทธิ์เต็ม)เป็นคนกด · **QC ไม่ full สเตปแล้ว** — เพิ่ม **`QC_EXCLUDE`** = show/reserve/finance/transport_check/closing/release/sold (ปุ่มฝั่งขาย) **แต่คงไว้ `sales_check` + `qc_release`** เพราะเป็นงาน "ตรวจ" ของ QC เอง · logic รวมที่ helper **`_stage_exclude(role)`** ใน [roles.py](cars/roles.py) (ใช้ทั้ง `allowed_stages` และ `can_set_stage` — แก้ที่เดียว)
   - **board (board เปลี่ยนได้ตรงจาก UI ผ่อน scan-only)**: `api_set_stage`/`api_seller_set_stage` ใช้ `can_set_stage` (ไม่ใช่ `_direct`) · `cars_api`/`car_json` ส่ง `priority`/`priorityColor` · dashboard.html การ์ดสีจาก priority + dropdown ความด่วน + ปุ่มถ่ายคอนเทนต์ + upload รูปในกล่องยืนยันสเตปบังคับ · `seed_role_accounts` = **10 บัญชีทดสอบ** (รหัส `1234` · exec/regist/qc/paintin/purchase/prod/tech/wash/sales/admintrk)

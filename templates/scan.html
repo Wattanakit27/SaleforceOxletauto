@@ -75,9 +75,9 @@
 
     <!-- ความด่วน — เลือกจากหน้าสแกนได้ (สีการ์ดบนบอร์ด · บันทึกทันที) -->
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-      <div class="mut sm" data-i18n="prio">ความด่วน{% if not can_set_flags %} <span data-i18n="viewOnly">(ดูอย่างเดียว)</span>{% endif %}</div>
+      <div class="mut sm" data-i18n="prio">ความด่วน{% if not can_set_priority %} <span data-i18n="viewOnly">(ดูอย่างเดียว)</span>{% endif %}</div>
       <div class="row" style="gap:10px;align-items:center;margin-top:6px;display:flex">
-        <select id="prioSel" onchange="scSetPriority(this.value)" {% if not can_set_flags %}disabled{% endif %} style="flex:1;padding:11px 12px;border-radius:10px;font-size:14px">
+        <select id="prioSel" onchange="scSetPriority(this.value)" {% if not can_set_priority %}disabled{% endif %} style="flex:1;padding:11px 12px;border-radius:10px;font-size:14px">
           {% for p in priorities %}<option value="{{ p.key }}" {% if car.priority == p.key %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
         </select>
         <span id="prioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;display:inline-block;background:{{ car.priority_color }}"></span>
@@ -87,17 +87,17 @@
 
     <!-- ธงงานค้าง — ติ๊กจากหน้าสแกนได้ (หมายเหตุงานค้าง ไม่ใช่การเปลี่ยนสเตป · บันทึกทันที) -->
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-      <div class="mut sm" data-i18n="flags">ธงงานค้าง{% if not can_set_flags %} <span data-i18n="viewOnly">(ดูอย่างเดียว)</span>{% endif %}</div>
+      <div class="mut sm" data-i18n="flags">ธงงานค้าง</div>
       <label class="sc-flag">
-        <input type="checkbox" style="accent-color:#2563eb" {% if car.need_photo %}checked{% endif %} onchange="scSetFlag('need_photo',this.checked)" {% if not can_set_flags %}disabled{% endif %}>
+        <input type="checkbox" style="accent-color:#2563eb" {% if car.need_photo %}checked{% endif %} onchange="scSetFlag('need_photo',this.checked)" {% if not flag_perms.need_photo %}disabled title="ดูได้อย่างเดียว — บทบาทของคุณติ๊กช่องนี้ไม่ได้"{% endif %}>
         <i data-lucide="camera" style="width:18px;height:18px;color:#2563eb"></i> <span data-i18n="flagPhoto">ยังไม่ได้ถ่ายรูป</span>
       </label>
       <label class="sc-flag">
-        <input type="checkbox" style="accent-color:#7c3aed" {% if car.need_content %}checked{% endif %} onchange="scSetFlag('need_content',this.checked)" {% if not can_set_flags %}disabled{% endif %}>
+        <input type="checkbox" style="accent-color:#7c3aed" {% if car.need_content %}checked{% endif %} onchange="scSetFlag('need_content',this.checked)" {% if not flag_perms.need_content %}disabled title="ดูได้อย่างเดียว — บทบาทของคุณติ๊กช่องนี้ไม่ได้"{% endif %}>
         <i data-lucide="video" style="width:18px;height:18px;color:#7c3aed"></i> <span data-i18n="flagContent">ยังไม่ได้ถ่ายคอนเทนต์</span>
       </label>
       <label class="sc-flag">
-        <input type="checkbox" style="accent-color:#475569" {% if car.need_tire %}checked{% endif %} onchange="scSetFlag('need_tire',this.checked)" {% if not can_set_flags %}disabled{% endif %}>
+        <input type="checkbox" style="accent-color:#475569" {% if car.need_tire %}checked{% endif %} onchange="scSetFlag('need_tire',this.checked)" {% if not flag_perms.need_tire %}disabled title="ดูได้อย่างเดียว — บทบาทของคุณติ๊กช่องนี้ไม่ได้"{% endif %}>
         <i data-lucide="disc" style="width:18px;height:18px;color:#475569"></i> <span data-i18n="flagTire">รอเปลี่ยนยาง</span>
       </label>
       <span id="flagMsg" class="mut sm"></span>

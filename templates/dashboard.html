@@ -367,7 +367,7 @@
       ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">${T('owner')}</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
       <div class="sm mut" style="margin:14px 0 6px">${T('prio')}</div>
       <div class="row" style="gap:8px;align-items:center">
-        <select id="prioSel" onchange="setPriority('${d.code}',this.value)" style="width:auto">
+        <select id="prioSel" onchange="setPriority('${d.code}',this.value)" ${d.canPriority===false?'disabled title="ดูได้อย่างเดียว"':''} style="width:auto">
           ${PRIORITY_KEYS.map(k=>`<option value="${k}" ${d.priority===k?'selected':''}>${PRIORITY_NAME[k]}</option>`).join('')}
         </select>
         <span id="prioDot" class="dot" style="background:${d.priorityColor||PRIORITY_COLOR[d.priority]||'#eab308'}"></span>
@@ -376,7 +376,7 @@
       <div class="sm mut" style="margin:14px 0 6px">${T('flags')}</div>
       <div class="row" style="gap:14px;align-items:center;flex-wrap:wrap">
         ${FLAG_DEFS.map(f=>`<label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600;padding:6px 0">
-          <input type="checkbox" id="fl_${f.key}" ${d[f.js]?'checked':''} onchange="setFlag('${d.code}','${f.key}',this.checked)" style="width:22px;height:22px;accent-color:${f.color};flex-shrink:0;cursor:pointer">
+          <input type="checkbox" id="fl_${f.key}" ${d[f.js]?'checked':''} onchange="setFlag('${d.code}','${f.key}',this.checked)" ${((d.flagPerms||{})[f.key]===false)?'disabled title="ดูได้อย่างเดียว — บทบาทของคุณติ๊กช่องนี้ไม่ได้"':''} style="width:22px;height:22px;accent-color:${f.color};flex-shrink:0;cursor:pointer">
           <i data-lucide="${f.icon}" style="width:18px;height:18px;color:${f.color}"></i> ${f.name}</label>`).join('')}
         <span id="flagMsg" class="mut sm"></span>
       </div>

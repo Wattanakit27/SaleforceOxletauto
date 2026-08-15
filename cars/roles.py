@@ -108,14 +108,36 @@ STAGE_BUTTON_LABELS = {
     },
 }
 
-# ★ ส.ค.69 — บทบาทที่ "ดูได้แต่แก้ไม่ได้" สำหรับความด่วน + ธงงานค้าง
-#   ฝ่ายล้างรถเห็นสถานะ (จะได้รู้ว่ารถคันนี้ด่วน/ยังไม่ถ่ายรูป) แต่ไม่ให้ติ๊กเอง กันตั้งค่ามั่ว
-READONLY_FLAG_ROLES = {CARWASH}
+# ★ ส.ค.69 — ความด่วน: ฝ่ายล้างรถเห็นสถานะแต่ตั้งเองไม่ได้ (บทบาทอื่นตั้งได้ตามเดิม)
+READONLY_PRIORITY_ROLES = {CARWASH}
+
+# ★ ส.ค.69 รอบ 5 (เจ้าของสั่ง) — ธงงานค้าง "แยกสิทธิ์รายช่อง" ไม่ใช่สิทธิ์เดียวคุมทั้ง 3
+#   ใครไม่อยู่ในลิสต์ของช่องนั้น = เห็นสถานะได้ แต่ติ๊กไม่ได้
+#   เหตุผล: คนที่ "รู้จริง" ว่างานนั้นค้างอยู่ไหม คือคนที่ทำงานนั้นเอง (กันคนอื่นติ๊กมั่ว)
+FLAG_EDIT_ROLES = {
+    "need_photo":   {PRODUCTION},          # ทีมคอนเทนต์ (โปรดักชัน — เจ้าของสเตป "รถรอถ่ายรูป")
+    "need_content": {PRODUCTION},          # ทีมคอนเทนต์
+    "need_tire":    {TECH, REGIST},        # ช่าง + ฝ่ายทะเบียน
+}
+# ผู้บริหาร/แอดมินระบบ (superuser → get_role คืน EXEC) ติ๊กได้ทุกช่องเสมอ — กันล็อกตัวเองออก
+FLAG_ALWAYS_ROLES = {EXEC}
 
 
-def can_set_priority_flags(user) -> bool:
-    """ตั้งความด่วน/ติ๊กธงงานค้างได้ไหม — ทุกบทบาทได้ ยกเว้นที่อยู่ใน READONLY_FLAG_ROLES"""
-    return get_role(user) not in READONLY_FLAG_ROLES
+def can_set_priority(user) -> bool:
+    """ตั้ง "ความด่วน" ได้ไหม — ทุกบทบาทได้ ยกเว้น READONLY_PRIORITY_ROLES"""
+    return get_role(user) not in READONLY_PRIORITY_ROLES
+
+
+def can_set_flag(user, flag_key) -> bool:
+    """ติ๊ก "ธงงานค้าง" ช่องนั้นได้ไหม — ดูตาม FLAG_EDIT_ROLES รายช่อง"""
+    role = get_role(user)
+    return role in FLAG_ALWAYS_ROLES or role in FLAG_EDIT_ROLES.get(flag_key, set())
+
+
+def flag_perms(user) -> dict:
+    """{flag_key: ติ๊กได้ไหม} — ส่งให้หน้าเว็บไปปิด/เปิด checkbox รายช่อง"""
+    from . import constants as _C
+    return {k: can_set_flag(user, k) for k in _C.FLAG_KEYS}
 
 
 def stage_button_label(role, stage_key, default_name):
