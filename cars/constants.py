@@ -20,6 +20,9 @@ STAGES = [
     ("paint_check", "รอตรวจสี",            "clipboard-check"),   # ★ ส.ค.69 — ฝ่ายทะเบียนตรวจงานสีหลังอู่
     ("film",       "ติดฟิล์ม",             "scan-line"),
     ("wash",       "ชงล้าง",               "sparkles"),
+    # ★ ส.ค.69 — ล้างรอบสองก่อนส่งมอบ (เซลล์สั่งล้างด่วนตอนรถใกล้ปล่อย/รอขาย)
+    #   วางติดกับ "ชงล้าง" เพื่อให้คอลัมน์บนบอร์ดอยู่ข้างกันตามที่เจ้าของขอ
+    ("wash_release", "ชงล้างรอปล่อย",      "sparkles"),
     # เฟส 4 — ตรวจก่อนขึ้นโชว์ (QC) · ชื่อบอกชัดว่าเป็น "คิวของ QC" ไม่ใช่ของเซลล์
     ("qc_show",    "รอ QC ตรวจ",           "clipboard-check"),
     # เฟส 5 — ขาย (เซลล์) · QC ตรวจผ่านแล้วติ๊กส่งต่อให้เซลล์มาตรวจรับก่อนขึ้นหน้าร้านจริง
@@ -39,7 +42,7 @@ STAGES = [
 # เฟส (key, ชื่อไทย, [stage keys]) — จัดกลุ่มแสดงผล
 PHASES = [
     ("intake_phase", "รับเข้า",  ["intake", "photo_wait"]),
-    ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "paint_check", "film", "wash", "qc_show"]),
+    ("recon_phase",  "ทำสภาพ",   ["repair", "repair_done", "parts", "upholstery", "paint_in", "paint_out", "paint_check", "film", "wash", "wash_release", "qc_show"]),
     ("sale_phase",   "ขาย",      ["sales_check", "show", "reserve", "finance", "transport_check", "closing"]),
     ("release_phase","ปล่อยรถ",  ["qc_release", "release", "sold"]),
 ]

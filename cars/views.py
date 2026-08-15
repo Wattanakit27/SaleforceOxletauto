@@ -683,6 +683,8 @@ def scan_page(request, code):
         "checklist_stages": sorted(C.CHECKLIST_STAGES), "checklist_items": C.CHECKLIST_ITEMS,
         # ความด่วน — เลือกได้จากหน้าสแกน (มือถือหน้างาน) เหมือนป๊อปอัปบอร์ด
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
+        # ★ ส.ค.69 — ฝ่ายล้างรถ "เห็นสถานะแต่แก้ไม่ได้" (ความด่วน + ธงงานค้าง)
+        "can_set_flags": roles.can_set_priority_flags(request.user),
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
     })
@@ -1163,6 +1165,8 @@ def api_set_priority(request):
     """ตั้ง "ความด่วน" ของรถ (สีการ์ด) — POST JSON {code, priority}.
     ความด่วนเป็นการ "โฟกัส/จัดคิว" ไม่ใช่การเปลี่ยนสเตป → คนที่ล็อกอินติดตามรถทุกคนตั้งได้
     (บอร์ดถูก scope ตามบทบาทอยู่แล้ว) · csrf_exempt (บอร์ดในหน้า sales/seller ไม่มี CSRF token)."""
+    if not roles.can_set_priority_flags(request.user):   # ★ ฝ่ายล้างรถ = ดูได้ แก้ไม่ได้ (ส.ค.69)
+        return JsonResponse({"ok": False, "error": "บทบาทของคุณดูได้อย่างเดียว แก้ความด่วนไม่ได้"}, status=403)
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
     pr = data.get("priority")
@@ -1181,6 +1185,8 @@ def api_set_flags(request):
     """ติ๊ก/ปลด "ธงงานค้าง" ของรถ — POST JSON {code, need_photo?, need_content?} (ส่งมาเฉพาะตัวที่จะเปลี่ยน).
     ธงเป็นการ "หมายเหตุงานที่ยังค้าง" ไม่ใช่การเปลี่ยนสเตป → คนที่ล็อกอินติดตามรถทุกคนติ๊กได้
     (เหมือนความด่วน) · แยกจาก priority → ติดธงพร้อมบอกด่วน/ไม่ด่วนได้ · csrf_exempt (บอร์ดฝัง iframe)."""
+    if not roles.can_set_priority_flags(request.user):   # ★ ฝ่ายล้างรถ = ดูได้ แก้ไม่ได้ (ส.ค.69)
+        return JsonResponse({"ok": False, "error": "บทบาทของคุณดูได้อย่างเดียว ติ๊กธงไม่ได้"}, status=403)
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
     changed = []
