@@ -65,7 +65,11 @@ def _stage_options(keys, role=None):
     """[(key, name, icon), ...] ตามลำดับสเตป — สำหรับปุ่มเปลี่ยนสเตป
     role ส่งมา = ใช้ป้ายปุ่มตามบทบาท (เช่น เซลล์เห็น qc_show เป็น "ตีกลับ QC")"""
     kset = set(keys)
-    return [(k, roles.stage_button_label(role, k, n), i) for k, n, i in C.STAGES if k in kset]
+    # (key, ชื่อปุ่ม, ไอคอน, สีเฟส, ฝ่ายที่รับช่วงต่อ) — 2 ตัวท้ายเพิ่ม ส.ค.69 (แต้มสี + tooltip)
+    return [(k, roles.stage_button_label(role, k, n), i,
+             C.PHASE_COLOR.get(C.STAGE_PHASE.get(k, ("", ""))[0], "#64748b"),
+             C.STAGE_OWNER.get(k, ""))
+            for k, n, i in C.STAGES if k in kset]
 
 
 # =========================================================
@@ -281,7 +285,8 @@ def car_json(request, code):
     } for l, dur, cur in _logs_with_dur(_log_objs)]
     # สเตปที่ user เปลี่ยนได้ตามบทบาท — ผ่อนกฎ scan-only: กดเปลี่ยนจากบอร์ด/โมดัลได้เลย
     # (คนงานที่ไม่มีสเตป/ไม่มีบทบาท = [] → โชว์ลิงก์สแกน QR แทน)
-    direct = [{"key": k, "name": n, "ph": C.STAGE_PHASE.get(k, ("", ""))[0]} for k, n, _ in
+    direct = [{"key": k, "name": n, "ph": C.STAGE_PHASE.get(k, ("", ""))[0], "color": col, "owner": own}
+              for k, n, _, col, own in
               _stage_options(roles.allowed_stages(request.user), roles.get_role(request.user))]
     return JsonResponse({
         "code": car.code, "title": car.title, "plate": car.plate,
@@ -665,11 +670,11 @@ def scan_page(request, code):
     stages = _stage_options(roles.allowed_stages(request.user), roles.get_role(request.user))
     # จัดกลุ่มปุ่มตามเฟส (รับเข้า/ทำสภาพ/ขาย/ปล่อยรถ) — บทบาทสิทธิ์เต็มมี 20 ปุ่ม กองเดียวรกเกิน (ส.ค.69)
     stage_groups = []
-    for k, n, i in stages:
+    for k, n, i, col, own in stages:
         pk, pn = C.STAGE_PHASE.get(k, ("", ""))
         if not stage_groups or stage_groups[-1]["key"] != pk:
             stage_groups.append({"key": pk, "name": pn, "items": []})
-        stage_groups[-1]["items"].append((k, n, i))
+        stage_groups[-1]["items"].append((k, n, i, col, own))
     _log_objs, _hm = _fetch_logs(car, 20)
     logs = [{
         "stageKey": l.stage, "stageName": l.stage_name, "stageIcon": l.stage_icon,
@@ -1069,8 +1074,11 @@ def cars_api(request):
         "branches": branch_pairs(), "stages": [[k, n] for k, n, _ in C.STAGES], "cars": cars,
         "statusChoices": list(C.STATUS_CHOICES), "bookChoices": list(C.BOOK_STATUS_CHOICES),
         # สเตปที่ user คนนี้ "เปลี่ยนได้" (Sales = qc/show/reserve/finance/closing/sold) → seller.html โชว์ปุ่มตามนี้
+        # [2]=คีย์เฟส (จัดกลุ่มปุ่ม) · [3]=สีเฟส · [4]=ฝ่ายที่รับช่วงต่อ (โชว์ตอนเอาเมาส์ทาบ) — ส.ค.69
         "myStages": [[k, roles.stage_button_label(roles.get_role(request.user), k, C.STAGE_NAME[k]),
-                      C.STAGE_PHASE.get(k, ("", ""))[0]]   # [2]=คีย์เฟส — จัดกลุ่มปุ่มในหน้าเซลล์
+                      C.STAGE_PHASE.get(k, ("", ""))[0],
+                      C.PHASE_COLOR.get(C.STAGE_PHASE.get(k, ("", ""))[0], "#64748b"),
+                      C.STAGE_OWNER.get(k, "")]
                      for k in roles.allowed_stages(request.user)],
         # เช็คลิสต์ตรวจรถ — โผล่ตอนเลือกสเตปกลุ่มตรวจ/โชว์/ปล่อย ผลต่อท้ายหมายเหตุ (ส.ค.69)
         "checklist": {"stages": sorted(C.CHECKLIST_STAGES), "items": C.CHECKLIST_ITEMS},

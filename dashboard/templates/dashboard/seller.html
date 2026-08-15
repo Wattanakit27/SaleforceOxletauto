@@ -2507,9 +2507,15 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const myStages = (_scData && _scData.myStages) || [];
     const curName = scStageName(_scCar.stage, _scCar.stageName);
     const selName = _scSel ? scStageName(_scSel) : '—';
+    // s = [key, ชื่อปุ่ม, คีย์เฟส, สีเฟส, ฝ่ายที่รับช่วงต่อ] — 2 ตัวท้ายเพิ่ม ส.ค.69
+    //   แต้มสีตามเฟส (แถบซ้าย) + บอกว่ากดแล้วงานไปอยู่ฝ่ายไหนต่อ (ตัวเล็กในปุ่ม + tooltip ตอนเอาเมาส์ทาบ)
     const _chip = s => {
       const on = _scSel === s[0];
-      return `<button onclick="scPickStage('${s[0]}')" style="font-size:12.5px;padding:8px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}</button>`;
+      const col = s[3] || 'var(--bd2)';
+      const own = s[4] || '';
+      const tip = own ? ` title="กดแล้วงานไปที่: ${h(own)}"` : '';
+      const ownTxt = own ? `<span style="font-size:10.5px;opacity:${on?'.92':'.6'};margin-left:4px;font-weight:500">→ ${h(own)}</span>` : '';
+      return `<button onclick="scPickStage('${s[0]}')"${tip} style="font-size:12.5px;padding:8px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?col:'var(--bd2)'};border-left:5px solid ${col};background:${on?col:'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}${ownTxt}</button>`;
     };
     // จัดกลุ่มปุ่มตามเฟส (myStages[2] = คีย์เฟสจาก cars_api · ส.ค.69) — กลุ่มเดียวไม่ต้องมีหัว
     const SC_PH = {intake_phase:{TH:'รับเข้า',EN:'Intake',MM:'ဝင်ရောက်',KH:'ទទួលចូល'}, recon_phase:{TH:'ทำสภาพ',EN:'Recondition',MM:'ပြင်ဆင်ရေး',KH:'កែសម្ផស្ស'}, sale_phase:{TH:'ขาย',EN:'Sales',MM:'အရောင်း',KH:'លក់'}, release_phase:{TH:'ปล่อยรถ',EN:'Release',MM:'ထုတ်ပေး',KH:'ប្រគល់'}};

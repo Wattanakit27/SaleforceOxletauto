@@ -27,6 +27,10 @@
   #scanRoot .sc-ph::after{content:"";flex:1;height:1px;background:var(--line)}
   #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
   #scanRoot .sc-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  /* ★ ส.ค.69 — บอกว่ากดแล้วงานไปอยู่ฝ่ายไหนต่อ (จอแคบซ่อน เหลือ tooltip ตอนกดค้าง/ทาบ) */
+  #scanRoot .sc-own{font-size:11px;opacity:.62;margin-left:3px;white-space:nowrap}
+  #scanRoot .sc-chip.on .sc-own{opacity:.9}
+  @media (max-width:560px){ #scanRoot .sc-own{display:none} }
   #scanRoot .sc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--mut);background:var(--bg2);text-align:center}
   #scanRoot .sc-drop i{width:26px;height:26px}
   #scanRoot .sc-confirm{width:100%;justify-content:center;padding:14px;font-size:15px;font-weight:800;border-radius:12px}
@@ -118,7 +122,7 @@
       {% for g in stage_groups %}
       {% if stage_groups|length > 1 %}<div class="sc-ph" data-i18n="{{ g.key }}">{{ g.name }}</div>{% endif %}
       <div class="sc-chips">
-        {% for k,n,i in g.items %}<button type="button" class="sc-chip" data-stage="{{ k }}" onclick="scPickStage('{{ k }}', this)"><i data-lucide="{{ i }}"></i> <span data-key="{{ k }}" data-th="{{ n }}">{{ n }}</span></button>{% endfor %}
+        {% for k,n,i,color,owner in g.items %}<button type="button" class="sc-chip" data-stage="{{ k }}" onclick="scPickStage('{{ k }}', this)" style="border-left:5px solid {{ color }}"{% if owner %} title="กดแล้วงานไปที่: {{ owner }}"{% endif %}><i data-lucide="{{ i }}" style="color:{{ color }}"></i> <span data-key="{{ k }}" data-th="{{ n }}">{{ n }}</span>{% if owner %}<span class="sc-own">→ {{ owner }}</span>{% endif %}</button>{% endfor %}
       </div>
       {% endfor %}
       <input type="hidden" name="stage" id="stageInput">

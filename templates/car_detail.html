@@ -38,7 +38,7 @@
         {% csrf_token %}
         <input type="hidden" name="next" value="{% url 'car_detail' car.code %}">
         <select name="stage" style="width:auto">
-          {% for k,n,i in direct_stages %}<option value="{{ k }}" {% if k == car.stage %}selected{% endif %}>{{ n }}</option>{% endfor %}
+          {% for k,n,i,color,owner in direct_stages %}<option value="{{ k }}" {% if k == car.stage %}selected{% endif %}>{{ n }}</option>{% endfor %}
         </select>
         <button class="btn pri"><i data-lucide="arrow-right"></i> เปลี่ยน</button>
       </form>
