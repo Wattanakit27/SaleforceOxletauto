@@ -123,8 +123,11 @@ class Car(models.Model):
         if new_stage == "sold":          # ขายแล้ว = จบจริง → หลุดบอร์ดไปหน้ารถขายแล้ว
             self.status = "sold"
             fields.append("status")
-        if self.priority != C.DEFAULT_PRIORITY:
-            self.priority = C.DEFAULT_PRIORITY
+        # ความด่วนตอนเข้าสเตปใหม่: ปกติเสมอ ยกเว้นสเตปที่ตั้งค่าไว้ใน STAGE_AUTO_PRIORITY
+        # (ชงล้างรอปล่อย → ด่วนมากอัตโนมัติ · ลูกค้ารอรับรถ ต้องแซงคิวชงล้างธรรมดา)
+        _want_prio = C.STAGE_AUTO_PRIORITY.get(new_stage, C.DEFAULT_PRIORITY)
+        if self.priority != _want_prio:
+            self.priority = _want_prio
             fields.append("priority")
         self.save(update_fields=fields)
 
