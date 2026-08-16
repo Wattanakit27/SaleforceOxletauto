@@ -10,3 +10,5 @@ qrcode[pil]>=7.4            # gen QR แปะหน้ารถ
 Pillow>=10.0               # ImageField/FileField ของ cars/ + render QR PNG
 # ── รายงานเข้าไลน์รายวัน (แคปตารางแดชบอร์ดเป็นรูป) ──
 playwright>=1.40           # headless Chromium แคป #rpt-card → ส่งรูปเข้า LINE · ต้อง `playwright install chromium --with-deps` หลัง pip install
+# ── ดึงรถสดจากเว็บ Car Spend (cars/carspend.py + manage.py sync_carspend) ──
+beautifulsoup4>=4.12       # parse HTML หน้า list/detail ของ autosoftware.co.th

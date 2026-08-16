@@ -802,6 +802,23 @@ CRON_SECRET=xxx...
 - **ทิศทางเดียว** (backend → โชว์รูม) · lead/จอง จากโชว์รูมยังไม่ sync กลับ · ยังไม่มี pull สำรอง (webhook พลาด = เงียบ)
 - **ฝั่งรับ (oxlet_web)**: `Vehicle.stock_code` (0021) + `VehicleImage.src` (0022 · ผูกรูปกับต้นทาง reconcile/dedup กันซ้ำ) · view `api_stock_update` + `_sync_car_photos` · **ต้อง `migrate` ตอน deploy**
 
+### 🔄 ดึงรถสดจากเว็บ Car Spend (ส.ค.69) — `manage.py sync_carspend`
+นำเข้ารถจากระบบต้นทาง **Car Spend** (`autosoftware.co.th/oxletauto` · Prosoft Car) เข้าตาราง `Car` **ผ่าน HTTP สด** — ไม่ต้อง export zip มือเหมือน [import_cars](cars/management/commands/import_cars.py)
+- **[cars/carspend.py](cars/carspend.py)** = client อ่านอย่างเดียว (login → list → detail) คืน dict **รูปร่างเดียวกับ cars.json ใน zip** → [sync_carspend](cars/management/commands/sync_carspend.py) `import` **mapping/helper ชุดเดียวกับ import_cars** (`STATUS_TO_STAGE`, `BRANCH_MAP`, `_parse_date`, `_int`, `_model`) — **อย่า copy ไปแก้แยก ไม่งั้นกติกาแตกเป็นสองมาตรฐาน**
+- **ต้องเข้า 2 หน้าเสมอ** — หน้า list มีแค่ชื่อรถ/ราคา/สถานะ: `?p=cars&sts=&pg=N` (หน้าละ 100 · ได้ `key` md5 + สถานะ) → `?p=car_detail&key=<md5>` (ข้อมูลครบ + อัลบัมรูป)
+- **⚠️ Cloudflare หน่วง client ที่ส่ง header น้อยอย่างหนัก** (~90 วิ/หน้า จนโดนตัดสาย `ConnectionResetError`) — ต้องส่ง `HEADERS` ชุดเต็มแบบ Chrome ถึงได้ ~0.8 วิ/หน้า · **ห้ามใส่ `br` ใน Accept-Encoding** (requests ถอด brotli ไม่ได้ → ได้ข้อความเละ เช็ค `"ออกจากระบบ" in html` จะ false หลอก)
+- **`--status`** — **รถขายแล้วไม่อยู่ในรายการปกติ**: `stock` (default) = สต็อกปัจจุบัน **236 คัน** (พร้อมขาย 118 · ซ่อม 39 · จอง 36 · รอปิดการขาย 22 · จัดไฟแนนซ์ 21 · **ไม่มี "ขายแล้ว" ปนเลย**) · `sold` = **~3,540 คัน** (~75-90 นาที · ควรรันใน `screen`) · ตัวกรอง `sts` ใช้ได้ **ต่อเมื่อใส่ `pg` คู่กัน** (ไม่งั้น cap 100 แถวและนับซ้ำมั่ว)
+- **⚠️ "รหัสรถ" ของต้นทางไม่ unique** — เจอ 2 คู่ที่เป็นคนละคันจริงแต่รหัสเดียวกัน (`CS03820` = TRITON/MG 3 · `CS03789` = VIOS/Hilux Revo) แต่ `Car.code` เป็น **primary key** → `_resolve_code()` เทียบ `extra.source_key` (md5 จาก URL = unique จริง) ก่อน ถ้าชนคันอื่นเติม suffix `-2` พร้อม warning (**ไม่ปล่อยให้รถหายเงียบ**)
+- **สเตป/วันรับเข้า ตั้งเฉพาะตอนสร้างใหม่** (`create_defaults`) → re-sync ไม่รีเซ็ตสเตปที่หน้างานขยับไปแล้ว · สถานะต้นทาง "ขายแล้ว" → `stage=sold` + `status=sold` (หลุดบอร์ดตามกติกาเดิม)
+- **`--photos`** โหลด **รูปปกคันละ 1 รูป** (~260 KB · อัลบัมเฉลี่ย ~13 รูป/คัน) ลง **ดิสก์ VPS ตรง** ผ่าน `FileSystemStorage` — **ไม่ใช้ `default_storage`** เพราะถ้าตั้ง `GDRIVE_*` ไว้ default จะเป็น Drive แต่กติกาคือ "รูปหน้าปกรถ → ดิสก์เสมอ" · ชื่อไฟล์มี `/` → `GoogleDriveStorage.url()` เสิร์ฟจาก `MEDIA_URL` ให้เอง · ข้ามคันที่มีรูปแล้ว
+- **รูปบนเว็บต้นทางเปิดสาธารณะ** (ไม่ต้องล็อกอิน) → `extra.image_urls` = `[{file, full(1280x960), thumb}]` ทั้งอัลบัม เอาไปแปะ `<img src>` ตรงได้โดยไม่ต้องโหลดเก็บ (ประหยัด ~900 MB)
+- **env**: `CARSPEND_USER` / `CARSPEND_PASS` · **dep ใหม่**: `beautifulsoup4`
+- **`--dry-run` ก่อนเสมอ** (ไม่เขียน DB แค่บอกว่าจะสร้าง/อัปเดตกี่คัน + สถานะ/สาขาที่ยัง map ไม่ได้)
+```bash
+cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --dry-run --limit 5
+cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
+```
+
 ### 🔖 ป้ายเวอร์ชันมุมขวาล่าง (ส.ค.69)
 ทุกหน้า (login/index/seller/track base) โชว์เวอร์ชันมุมขวาล่าง — **สูตร: จำนวน git commit ÷ 10** (100 commits = v10.0 · เจ้าของกำหนด) · `app_version()` ใน [cars/context.py](cars/context.py) (git rev-list --count HEAD · cache ต่อ process · ไม่มี .git = ป้ายซ่อน) → `APP_VERSION` ผ่าน context processor `cars.context.nav` · ใช้เช็คว่า deploy ล่าสุดติดหรือยัง (ดูได้ตั้งแต่หน้า login)
 
