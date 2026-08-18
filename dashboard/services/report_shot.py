@@ -482,6 +482,7 @@ _LINE_CARDS = {
     "purchase-card": "ฝั่งจัดซื้อ (รับซื้อรถ)",
     "bought-card": "รถซื้อเข้า รายคน",
     "leadreport-card": "รายงาน lead (แยกช่องทาง)",
+    "leadconv-card": "Lead → จอง → จบ (แยกช่องทาง)",
     "leadsummary-card": "ยอด LEAD (สรุปย่อ)",
     "mega-card": "สรุปเต็มรายเซลล์",
     "alloc-card": "จัดสรร Lead ตามคะแนน",
@@ -498,7 +499,7 @@ _CARD_TAB = {
     # ★ ย้ายไปแท็บ "LEAD" แล้ว (ก.ค.69 · จากภาพรวม) → ต้องสลับแท็บก่อนแคป ไม่งั้นหา element ไม่เจอ
     "mega-card": "LEAD", "rpt-card": "LEAD", "leadrecv-card": "LEAD",
     "purchase-card": "LEAD", "bought-card": "LEAD",
-    "leadreport-card": "LEAD", "leadsummary-card": "LEAD",
+    "leadreport-card": "LEAD", "leadsummary-card": "LEAD", "leadconv-card": "LEAD",
     "fin-card": "สถานะจองปล่อย",   # ตารางไฟแนนซ์อยู่แท็บสถานะจองปล่อย (มีเวอร์ชันสวย #fin-card-shot)
 }
 

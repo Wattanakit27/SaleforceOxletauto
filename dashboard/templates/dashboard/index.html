@@ -2443,6 +2443,51 @@
           LR += `</tbody></table></div></div>`;
           html += LR;
 
+          // ══ ตาราง Lead → จอง → จบ (แยกช่องทาง) — ส.ค.69 ตามที่เจ้าของขอ ══
+          //   Lead   = จาก leadChannelByMonth (ช่องทางฝั่งลีด = dropdown สะอาด)
+          //   จอง/จบ = จาก bookingCases โดยใช้ `channelClean` (เซิร์ฟเวอร์เทียบชื่อให้แล้ว —
+          //            ฝั่งจองพิมพ์มือ 198 แบบ ตรงกับฝั่งลีดเป๊ะแค่ 8 · เทียบด้วยรหัสลีดก่อน แล้วค่อยล้างชื่อ)
+          //   นับตามช่วงวันที่เหมือนทุกการ์ด: จอง=วันจอง · จบ=วันปล่อย (เติมปีให้ถ้าชีตเขียนแค่ "d/m")
+          {
+            const _relD = b => {                       // วันปล่อยที่ใช้กรองช่วง (กติกาเดียวกับแท็บสถานะจองปล่อย)
+              const rd = b.releaseDate;
+              if(!rd) return '';
+              if(_parseDmy(rd)) return rd;
+              const p = String(rd).trim().split('/');
+              if(p.length===2){ const dd=+p[0], mo=+p[1];
+                if(dd>=1&&dd<=31&&mo>=1&&mo<=12) return `${dd}/${mo}/${_dfYear}`; }
+              return '';
+            };
+            const NA = 'ไม่ระบุ';
+            const st = {};                              // ช่องทาง → {lead, jong, done}
+            const _get = c => (st[c] = st[c] || {lead:0, jong:0, done:0});
+            Object.entries(chSum).forEach(([c,n]) => { _get(c).lead += (Number(n)||0); });
+            (FD.bookingCases||[]).forEach(b => {
+              const c = (b.channelClean || '').trim() || NA;
+              if(ir(b.date)) _get(c).jong++;                                  // จอง = นับตามวันจอง
+              if(b.status==='ปล่อย' && ir(_relD(b))) _get(c).done++;          // จบ  = นับตามวันปล่อย
+            });
+            const rows = Object.entries(st).map(([c,v]) => ({c, ...v}))
+              .filter(x => x.lead || x.jong || x.done)
+              .sort((a,b) => (b.lead-a.lead) || (b.done-a.done));
+            rows.sort((a,b) => (a.c===NA?1:0)-(b.c===NA?1:0));                // "ไม่ระบุ" ไว้ล่างสุดเสมอ
+            const tot = rows.reduce((t,x)=>({lead:t.lead+x.lead, jong:t.jong+x.jong, done:t.done+x.done}), {lead:0,jong:0,done:0});
+            const pc = (a,b) => b ? (a*100/b).toFixed(2).replace(/\.?0+$/,'')+'%' : '–';
+            const _th = (t,al) => `<th style="padding:7px 10px;text-align:${al||'right'};border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700;white-space:nowrap">${t}</th>`;
+            let CV = `<div class="card" id="leadconv-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:trending-up',16)} Lead → จอง → จบ (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ช่องทางไหนได้ลีดเยอะ · ปิดเป็นจองได้กี่ %\nและจบจริงกี่ % — ดูว่าช่องทางไหนคุ้มที่สุด\n\nLead = วันรับลีด · จอง = วันจอง · จบ = วันปล่อย (ตามช่วงวันที่ด้านบน)\nแถว 'ไม่ระบุ' = เคสที่ชีตฝั่งจองพิมพ์ช่องทางไม่ตรงกับฝั่งลีด จับคู่ไม่ได้">?</span></span>${_cardLineBtn('leadconv-card','Lead → จอง → จบ (แยกช่องทาง)')}</div>`;
+            CV += `<div class="card-sub">ช่องทางไหนได้ลีดเยอะ และปิดจบได้จริงกี่ % · เรียงตามจำนวน Lead</div>`;
+            CV += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap"><thead><tr>${_th('ช่องทาง','left')}${_th('Lead')}${_th('จอง')}${_th('จบ')}${_th('จอง/Lead')}${_th('จบ/จอง')}${_th('จบ/Lead')}</tr></thead><tbody>`;
+            rows.forEach(x => {
+              const col = x.c===NA ? 'var(--t3)' : _platColor(_platGroup(x.c));
+              const td = (v,b2) => `<td style="padding:5px 10px;text-align:right;border-bottom:.5px solid var(--bd)${b2?';font-weight:800':''}">${v}</td>`;
+              CV += `<tr><td style="padding:5px 10px;border-bottom:.5px solid var(--bd)">${x.c===NA?`<span style="color:var(--t3)">${NA}</span>`:_platPill(x.c,col)}</td>${td(x.lead)}${td(x.jong)}${td(x.done)}${td(pc(x.jong,x.lead))}${td(pc(x.done,x.jong))}${td(pc(x.done,x.lead),1)}</tr>`;
+            });
+            const tt = (v,b2) => `<td style="padding:7px 10px;text-align:right;background:var(--purple);color:#fff${b2?';font-weight:800':''}">${v}</td>`;
+            CV += `<tr style="font-weight:800"><td style="padding:7px 10px;background:var(--purple);color:#fff">รวมทุกช่องทาง</td>${tt(tot.lead)}${tt(tot.jong)}${tt(tot.done)}${tt(pc(tot.jong,tot.lead))}${tt(pc(tot.done,tot.jong))}${tt(pc(tot.done,tot.lead),1)}</tr>`;
+            CV += `</tbody></table></div></div>`;
+            html += CV;
+          }
+
           // ── สรุปย่อ: รวมช่องทางย่อยเป็นกลุ่มใหญ่ (FACEBOOK/TIKTOK/LIVE TIKTOK...) + หลีดรับซื้อรถ · ใช้ _platGroup/สี ที่ประกาศด้านบน ──
           const grp = {}; chArr.forEach(x=>{ const g=_platGroup(x.c); grp[g]=(grp[g]||0)+x.n; });
           // กลุ่มหลักโชว์เสมอตามรูป (แม้ 0) + กลุ่มเสริมเฉพาะที่มีข้อมูล

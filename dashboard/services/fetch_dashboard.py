@@ -439,6 +439,38 @@ def _mask_phone(p) -> str:
     return d[:3] + "-xxx-" + d[-2:]
 
 
+# ── ช่องทางของเคสจอง/ปล่อย → เทียบให้ตรงกับ "ช่องทาง" ฝั่งลีด (ตาราง Lead แยกช่องทาง · ส.ค.69) ──
+# ปัญหา: ฝั่งลีดเป็น dropdown (26 ค่าสะอาด) แต่ฝั่งจองพิมพ์มือ (198 แบบ) ตรงกันเป๊ะแค่ 8 แบบ
+#   เช่น Line@ / line@ / LINE@ / ": line@"  ·  Live tiktok ช่องขายบอส / Tiktok ช่องขายบอส / ไลฟ์ TT ช่องขายบอส
+# วิธี: (1) ใช้ "รหัสลีด" หาช่องทางจากชีตลีดก่อน (แม่นสุด) → (2) ไม่มีก็ล้างชื่อแล้วเทียบ
+#   วัดจริง: ครอบคลุม 94-95% ของเคสจอง/ปล่อย · ที่เหลือขึ้นเป็น "ไม่ระบุ" ในตาราง (ไม่กลืนหาย)
+def _norm_channel(s: str) -> str:
+    """ล้างชื่อช่องทางให้เทียบกันได้ — ตัดตัวพิมพ์/ช่องว่าง/": " นำหน้า + รวมคำที่สะกดต่างแต่หมายถึงอันเดียวกัน"""
+    s = (s or "").lower().strip()
+    s = re.sub(r"^[:\-\s]+", "", s)
+    s = s.replace("ไลฟ์", "live").replace("tt", "tiktok")
+    s = re.sub(r"[\s/\-_.]+", "", s)
+    return s.replace("livetiktok", "tiktok")
+
+
+def _attach_clean_channel(cases: list[dict], code_to_channel: dict, lead_channels) -> None:
+    """เติม `channelClean` ให้ทุกเคส (in-place) — '' = จับช่องทางไม่ได้ (frontend โชว์เป็น "ไม่ระบุ")"""
+    norm2clean: dict = {}
+    for ch in lead_channels:
+        norm2clean.setdefault(_norm_channel(ch), ch)
+    for b in cases:
+        ch = code_to_channel.get((b.get("leadCode") or "").strip())
+        if not ch:
+            n = _norm_channel(b.get("channel"))
+            ch = norm2clean.get(n) or ""
+            if not ch and n:      # เผื่อพิมพ์เกิน เช่น "หน้าร้าน/พักอยู่แถวนี้"
+                for k, v in norm2clean.items():
+                    if k and (k in n or n in k):
+                        ch = v
+                        break
+        b["channelClean"] = ch
+
+
 def _dedup_booking_cases(cases: list[dict]) -> list[dict]:
     """เคสจองที่ค้าง (ไม่จบใน 1 เดือน) ถูกก๊อปไปแท็บเดือนถัดไปเรื่อยๆ โดยวันจองยังเป็นเดือนเดิม
     → เคสเดียวโผล่หลายแท็บ ทำให้ตัวนับสถานะ (จอง/รอเซ็น/รอผล/รอปล่อย/รีเจ็ก) ซ้ำ 2-2.6 เท่า
@@ -757,10 +789,17 @@ def _compute_dashboard_data() -> dict:
     # ถ้า code ซ้ำ (admin เปิดเคสใหม่ใช้ code เดิม) → เลือกวันที่ล่าสุด
     # ไม่งั้นจะคำนวณ velocity ผิด (lead จาก ก.พ. แต่จองจริง พ.ค. = 94 วัน)
     lead_received_map = {}
+    lead_code_channel = {}    # code → ช่องทาง (จากชีตลีด = dropdown สะอาด) · ใช้เทียบช่องทางเคสจอง
+    lead_channel_set = set()  # ชื่อช่องทางทั้งหมดฝั่งลีด (ตัวตั้งต้นในการล้างชื่อฝั่งจอง)
     for r in year_leads:
+        _ch = cell(r, L.channel).strip()
+        if _ch:
+            lead_channel_set.add(_ch)
         code = cell(r, L.lead_code).strip()
         if not code:
             continue
+        if _ch:
+            lead_code_channel.setdefault(code, _ch)
         new_date_str = cell(r, L.received_date)
         new_d = parse_date(new_date_str)
         if not new_d:
@@ -824,6 +863,8 @@ def _compute_dashboard_data() -> dict:
     # booking_cases (dedup) = ใช้กับ summary รวม + ส่งให้ frontend (กัน date-range นับซ้ำ)
     # booking_cases_raw (ไม่ dedup) = ใช้นับ "รายเดือนตามแท็บ" ให้ตรงสูตรชีต (เคสข้ามเดือนนับในทุกแท็บที่มันอยู่)
     booking_cases_raw = booking_cases
+    # เติมช่องทางที่เทียบกับฝั่งลีดแล้ว (ตาราง "Lead แยกช่องทาง" ใช้ตัวนี้ ไม่ใช่ข้อความดิบที่พิมพ์มือ)
+    _attach_clean_channel(booking_cases, lead_code_channel, lead_channel_set)
     booking_cases = _dedup_booking_cases(booking_cases)
 
     # Live sessions from this year
