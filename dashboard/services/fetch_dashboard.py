@@ -445,12 +445,38 @@ def _mask_phone(p) -> str:
 # วิธี: (1) ใช้ "รหัสลีด" หาช่องทางจากชีตลีดก่อน (แม่นสุด) → (2) ไม่มีก็ล้างชื่อแล้วเทียบ
 #   วัดจริง: ครอบคลุม 94-95% ของเคสจอง/ปล่อย · ที่เหลือขึ้นเป็น "ไม่ระบุ" ในตาราง (ไม่กลืนหาย)
 def _norm_channel(s: str) -> str:
-    """ล้างชื่อช่องทางให้เทียบกันได้ — ตัดตัวพิมพ์/ช่องว่าง/": " นำหน้า + รวมคำที่สะกดต่างแต่หมายถึงอันเดียวกัน"""
+    """ล้างชื่อช่องทางให้เทียบกันได้ — คนละชีตสะกดไม่เหมือนกันแต่หมายถึงช่องทางเดียวกัน
+    ตัวอย่างที่ต้องจับให้เป็นอันเดียวกัน:
+        LINE@ = Line@ = line@                          → 'line@'
+        LIVE Tiktok / ช่องขายบอส = Live ช่องขายบอส      → 'liveขายบอส'
+        Tiktok Guru = TIKTOK GURU                       → 'guru'
+    ⚠️ ต้องแยก "ไลฟ์" ออกจาก "ติ๊กต๊อกธรรมดา" — ฝั่งลีดนับเป็นคนละช่องทาง
+        LIVE Tiktok / ช่องขายบอส  →  'liveขายบอส'
+        TIKTOK ช่องขายบอส         →  'ขายบอส'   (คนละอัน ห้ามยุบรวม)
+    """
     s = (s or "").lower().strip()
     s = re.sub(r"^[:\-\s]+", "", s)
     s = s.replace("ไลฟ์", "live").replace("tt", "tiktok")
     s = re.sub(r"[\s/\-_.]+", "", s)
-    return s.replace("livetiktok", "tiktok")
+    is_live = s.startswith("live")
+    s = s.replace("live", "").replace("tiktok", "").replace("ช่อง", "")
+    return ("live" + s) if is_live else s
+
+
+def _remap_channel_keys(by_month: dict, lead_channels) -> dict:
+    """เปลี่ยนชื่อช่องทางในตาราง {เดือน:{วัน:{ช่องทาง:n}}} ให้ใช้ "ชื่อฝั่งลีด" เป็นตัวยืน
+    (ชื่อที่เทียบไม่ได้ = ช่องทางที่ไม่มีลีดจริงๆ เช่น หน้าร้าน/ลูกค้าเก่า/นายหน้า → คงชื่อเดิมไว้)"""
+    canon = {}
+    for ch in lead_channels:
+        canon.setdefault(_norm_channel(ch), ch)
+    out: dict = {}
+    for m, days in (by_month or {}).items():
+        for d, chs in (days or {}).items():
+            for ch, n in (chs or {}).items():
+                name = canon.get(_norm_channel(ch), ch)
+                dd = out.setdefault(m, {}).setdefault(d, {})
+                dd[name] = dd.get(name, 0) + n
+    return out
 
 
 def _attach_clean_channel(cases: list[dict], code_to_channel: dict, lead_channels) -> None:
@@ -469,6 +495,62 @@ def _attach_clean_channel(cases: list[dict], code_to_channel: dict, lead_channel
                         ch = v
                         break
         b["channelClean"] = ch
+
+
+def _channel_names(by_month: dict) -> set:
+    """ดึงรายชื่อช่องทางทั้งหมดออกจากตาราง {เดือน:{วัน:{ช่องทาง:n}}}"""
+    out = set()
+    for days in (by_month or {}).values():
+        for chs in (days or {}).values():
+            out |= set(chs)
+    return out
+
+
+def _done_channel_by_month(cases: list[dict], code_to_channel: dict, lead_channels) -> dict:
+    """นับ "เคสจบ (ปล่อย) แยกช่องทาง" จาก booking_cases (= ชีตรายงานฝ่ายขาย ที่แดชบอร์ดใช้เป็นหลัก)
+    → {เดือน: {วัน: {ช่องทาง: n}}} รูปเดียวกับ leadChannelByMonth (frontend กรองช่วงวันที่ได้)
+
+    ★ ส.ค.69 เจ้าของเลือกให้ยึดชีตรายงานฝ่ายขายเป็นตัวเลข "จบ" (ไม่ใช่บล็อกจบในชีตจอง/จบ ที่กรอกไม่ครบ)
+    ปัญหาคือช่องทางในชีตนี้เป็น "ข้อความที่เซลล์พิมพ์เอง" (~198 แบบ) → หาช่องทางแบบ 2 ชั้น:
+      1) ใช้ "รหัสลีด" เปิดดูช่องทางจากชีตลีด (แม่นสุด — ได้ชื่อ dropdown ตรงๆ)
+      2) ไม่มีรหัส/หาไม่เจอ → ล้างข้อความแล้วเทียบกับชื่อช่องทางฝั่งลีด
+    จับไม่ได้จริง ๆ = ลงแถว "ไม่ระบุ" (ไม่ทิ้ง — ยอดรวมจะได้ตรงกับตัวเลขปล่อยของแดชบอร์ด)
+
+    วัน = วันปล่อย (parse_month_day) ให้ตรงกับกราฟรายวัน/ตัวเลขตามช่วงวันที่ของแดชบอร์ด
+    """
+    # ⚠️ ต้องเป็น "ลำดับ" ไม่ใช่ set — ชื่อที่ใส่มาก่อนชนะเป็นตัวยืน (ฝั่งลีดก่อน ฝั่งจองทีหลัง)
+    #    ถ้าส่ง set มา ลำดับสุ่ม → บางรอบชื่อฝั่งจอง ("Live ช่องหลัก") แย่งเป็นตัวยืนแทนชื่อฝั่งลีด
+    #    ("LIVE Tiktok / ช่องหลัก") ทำให้แถวแตกคนละรอบไม่เหมือนกัน
+    norm2clean: dict = {}
+    for ch in lead_channels:
+        norm2clean.setdefault(_norm_channel(ch), ch)
+    out: dict = {}
+    for b in cases:
+        if (b.get("status") or "").strip() != "ปล่อย":
+            continue
+        md = parse_month_day(b.get("releaseDate") or "")
+        if not md:
+            # ★ วันปล่อยว่าง/อ่านไม่ได้ (94 เคส — ส่วนใหญ่แท็บต้นปีที่คอลัมน์วันปล่อยย้ายตำแหน่ง)
+            #   แดชบอร์ดนับพวกนี้ "ตามแท็บ" (get_done_month) → ทำเหมือนกันไม่งั้นยอดรวมขาด
+            #   ไม่รู้วันจริง → ลงวันที่ 1 ของเดือนแท็บ (ช่วงวันที่ที่เลือกทั้งเดือนจะนับครบตามที่ควร)
+            tab = str(b.get("sheetTab") or "").strip()
+            tm = next((i + 1 for i, mn in enumerate(MONTHS_FULL_TH) if tab.startswith(mn)), 0)
+            if not tm:
+                continue
+            md = (tm, 1)
+        ch = code_to_channel.get((b.get("leadCode") or "").strip())
+        if not ch:
+            n = _norm_channel(b.get("channel"))
+            ch = norm2clean.get(n) or ""
+            if not ch and n:      # เผื่อพิมพ์เกิน เช่น "หน้าร้าน/พักอยู่แถวนี้"
+                for k, v in norm2clean.items():
+                    if k and (k in n or n in k):
+                        ch = v
+                        break
+        dd = out.setdefault(md[0], {}).setdefault(md[1], {})
+        name = ch or "ไม่ระบุ"
+        dd[name] = dd.get(name, 0) + 1
+    return out
 
 
 def _dedup_booking_cases(cases: list[dict]) -> list[dict]:
@@ -863,8 +945,6 @@ def _compute_dashboard_data() -> dict:
     # booking_cases (dedup) = ใช้กับ summary รวม + ส่งให้ frontend (กัน date-range นับซ้ำ)
     # booking_cases_raw (ไม่ dedup) = ใช้นับ "รายเดือนตามแท็บ" ให้ตรงสูตรชีต (เคสข้ามเดือนนับในทุกแท็บที่มันอยู่)
     booking_cases_raw = booking_cases
-    # เติมช่องทางที่เทียบกับฝั่งลีดแล้ว (ตาราง "Lead แยกช่องทาง" ใช้ตัวนี้ ไม่ใช่ข้อความดิบที่พิมพ์มือ)
-    _attach_clean_channel(booking_cases, lead_code_channel, lead_channel_set)
     booking_cases = _dedup_booking_cases(booking_cases)
 
     # Live sessions from this year
@@ -1677,6 +1757,11 @@ def _compute_dashboard_data() -> dict:
 
     _purchase_data = _fetch_purchase_data()   # ฝั่งจัดซื้อ (lead รับซื้อ + รถซื้อจริง) — อ่านครั้งเดียว
     try:
+        from .google_sheets import fetch_channel_stats_by_month_tabs
+        _ch_stats = fetch_channel_stats_by_month_tabs()    # จอง/จบ แยกช่องทาง (คอลัมน์ D/Y ในแท็บจอง/จบ)
+    except Exception:
+        _ch_stats = {"jong": {}, "done": {}}
+    try:
         from .google_sheets import fetch_finance_by_month_tabs
         _finance_summary = fetch_finance_by_month_tabs()   # เคสจบตามไฟแนนซ์ (best-effort · error = {})
     except Exception:
@@ -1732,6 +1817,17 @@ def _compute_dashboard_data() -> dict:
         "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
+        # ★ ส.ค.69 — จอง/จบ แยกช่องทาง จากแท็บ "จอง/จบ" (คอลัมน์ที่ชีตล้างไว้ให้สูตร: D=จอง · Y=จบ)
+        #   ไม่ใช้ช่องทางใน sales_reports เพราะนั่นเป็นข้อความเซลล์พิมพ์เอง (198 แบบ)
+        "bookChannelByMonth": _remap_channel_keys(_ch_stats.get("jong") or {}, lead_channel_set),
+        # จบ = ชีตรายงานฝ่ายขาย (แหล่งเดียวกับตัวเลข "ปล่อย" ที่แดชบอร์ดใช้) ตามที่เจ้าของเลือก
+        #   ชื่อช่องทางตั้งต้น = ฝั่งลีด + ฝั่งจอง — เพราะบางช่องทางไม่มีลีดเลย (หน้าร้าน/นายหน้า/ลูกค้าเก่า)
+        #   ถ้าใช้แต่ฝั่งลีด "หน้าร้าน/พักอยู่แถวนี้" จะจับคู่กับ "หน้าร้าน" ไม่ได้ → แตกเป็นคนละแถว
+        "doneChannelByMonth": _done_channel_by_month(
+            booking_cases, lead_code_channel,
+            # ลำดับสำคัญ: ชื่อฝั่งลีดก่อน (เป็นตัวยืน) แล้วค่อยเติมชื่อฝั่งจองที่ลีดไม่มี
+            # (หน้าร้าน/นายหน้า/ลูกค้าเก่า ไม่มีลีด — ต้องมีชื่อไว้ให้ "หน้าร้าน/พักอยู่แถวนี้" จับคู่ได้)
+            sorted(lead_channel_set) + sorted(_channel_names(_ch_stats.get("jong") or {}))),
         "leadreportPlan": _lr_plan,                    # เป้า lead ต่อช่องทาง (แอดมินตั้งเอง · {channel:target})
         "yodRotKao": _yod,                             # ยอดรถเข้า รายรุ่น (จัดซื้อ) — {month,months,rows[]} หรือ None
         "financeSummary": _finance_summary,            # เคสจบตามไฟแนนซ์ {เดือน:{ไฟแนนซ์:จำนวน}} (ฝั่งจบ ชีตนับลีด)

@@ -1160,6 +1160,102 @@ def fetch_finance_by_month_tabs() -> dict:
         return {}
 
 
+def fetch_channel_stats_by_month_tabs() -> dict:
+    """★ ส.ค.69 — "จอง/จบ แยกช่องทาง" จากแท็บ 'จอง/จบ <เดือน> 69' (ไฟล์นับลีด) ตามที่เจ้าของชี้
+
+    ทำไมต้องอ่านจากที่นี่ (ไม่ใช่ sales_reports):
+      แท็บนี้มี "คอลัมน์ช่องทางที่ล้างแล้ว" ไว้ให้สูตรใช้อยู่แล้ว = dropdown สะอาด ~27 ค่า
+      ตรงกับช่องทางฝั่งลีดเป๊ะ · ต่างจาก sales_reports ที่เป็นข้อความเซลล์พิมพ์เอง (198 แบบ)
+        ฝั่งจอง (บล็อกซ้าย)  D = "ช่องทางที่ใช้ใส่สูตร"  (E = ที่เซลล์พิมพ์มา — ห้ามใช้ มั่ว)
+        ฝั่งจบ  (บล็อกขวา)   Y = "ที่มาสูตร"             (Z = เซลล์ใส่ — ห้ามใช้ มั่ว)
+
+    อ่านแบบ header-based (ตำแหน่งคอลัมน์ย้ายได้ต่อแท็บ ห้าม fix index)
+    คืน {"jong": {เดือน: {วัน: {ช่องทาง: n}}}, "done": {...}} — รูปเดียวกับ leadChannelByMonth
+    เพื่อให้ frontend กรองตามช่วงวันที่ได้เหมือนกัน · error = {"jong": {}, "done": {}}
+    """
+    import urllib.parse
+    load_sheet_config_overrides()
+    cache_key = "channel_stats_month_tabs"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    empty = {"jong": {}, "done": {}}
+    try:
+        from .fetch_dashboard import bangkok_now, parse_month_day
+        sid = SHEET_CONFIG["bookings"]["spreadsheet_id"]
+        creds = _get_credentials()
+        creds.refresh(AuthRequest())
+        auth = {"Authorization": f"Bearer {creds.token}"}
+
+        now = bangkok_now()
+        be2 = (now.year + 543) % 100
+        want = {f"จอง/จบ {_THAI_MONTHS[m - 1]} {be2:02d}": m for m in range(1, now.month + 1)}
+        meta = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title",
+                            headers=auth, timeout=20).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+        def _norm(t):
+            return "".join(str(t).split())
+
+        month_of = {_norm(k): m for k, m in want.items()}
+        tabs = [t for t in titles if _norm(t) in month_of]
+        if not tabs:
+            return empty
+
+        qs = "&".join("ranges=" + urllib.parse.quote(f"'{t}'!A1:BZ500", safe="") for t in tabs)
+        url = f"{SHEETS_API}/{sid}/values:batchGet?{qs}&valueRenderOption=FORMATTED_VALUE"
+        r = requests.get(url, headers=auth, timeout=60)
+        if r.status_code != 200:
+            return empty
+
+        jong: dict = {}
+        done: dict = {}
+
+        def _add(bucket, m, d, ch):
+            bucket.setdefault(m, {}).setdefault(d, {})
+            bucket[m][d][ch] = bucket[m][d].get(ch, 0) + 1
+
+        for tab, vr in zip(tabs, r.json().get("valueRanges", [])):
+            rows = vr.get("values", [])
+            month = month_of[_norm(tab)]
+            # หาแถวหัวตาราง + คอลัมน์ที่ต้องใช้ (ชื่อหัวตรงตามที่ผู้ใช้ตั้งไว้ในชีต)
+            hrow = jd = jch = dd = dch = None
+            for ri, row in enumerate(rows[:5]):
+                for ci, cv in enumerate(row):
+                    h = _norm(cv)
+                    if h == "DATE" and jd is None:
+                        jd, hrow = ci, ri
+                    elif "ช่องทางที่ใช้ใส่สูตร" in h and jch is None:
+                        jch = ci
+                    elif "วันที่ปล่อย" in h and dd is None:
+                        dd = ci
+                    elif "ที่มาสูตร" in h and dch is None:
+                        dch = ci
+                if hrow is not None and jch is not None and dch is not None:
+                    break
+            if hrow is None:
+                continue
+            for row in rows[hrow + 1:]:
+                def _g(i):
+                    return str(row[i]).strip() if (i is not None and i < len(row)) else ""
+                # ฝั่งจอง — นับตามวันจอง (B)
+                ch = _g(jch)
+                md = parse_month_day(_g(jd))
+                if ch and md:
+                    _add(jong, md[0], md[1], ch)
+                # ฝั่งจบ — นับตามวันที่ปล่อย (AD)
+                ch2 = _g(dch)
+                md2 = parse_month_day(_g(dd))
+                if ch2 and md2:
+                    _add(done, md2[0], md2[1], ch2)
+
+        out = {"jong": jong, "done": done}
+        _cache_set(cache_key, out)
+        return out
+    except Exception:
+        return empty
+
+
 def fetch_live_by_month_tabs() -> list[list[str]]:
     """อ่าน live sessions จากแท็บรายเดือน 'สรุปไลฟ์สด <เดือน>' (สดกว่า 'รวม sheet' ที่ใช้สูตร — เดือนล่าสุดมัก lag)
     โครงสร้างแต่ละแท็บเหมือน 'รวม sheet' เป๊ะ (วันที่|เวลา|ทีม|ผู้ไลฟ์1-5|หัวข้อ|... → ตรง LIVE_COL).

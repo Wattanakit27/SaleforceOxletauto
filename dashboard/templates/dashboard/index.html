@@ -2449,24 +2449,22 @@
           //            ฝั่งจองพิมพ์มือ 198 แบบ ตรงกับฝั่งลีดเป๊ะแค่ 8 · เทียบด้วยรหัสลีดก่อน แล้วค่อยล้างชื่อ)
           //   นับตามช่วงวันที่เหมือนทุกการ์ด: จอง=วันจอง · จบ=วันปล่อย (เติมปีให้ถ้าชีตเขียนแค่ "d/m")
           {
-            const _relD = b => {                       // วันปล่อยที่ใช้กรองช่วง (กติกาเดียวกับแท็บสถานะจองปล่อย)
-              const rd = b.releaseDate;
-              if(!rd) return '';
-              if(_parseDmy(rd)) return rd;
-              const p = String(rd).trim().split('/');
-              if(p.length===2){ const dd=+p[0], mo=+p[1];
-                if(dd>=1&&dd<=31&&mo>=1&&mo<=12) return `${dd}/${mo}/${_dfYear}`; }
-              return '';
-            };
+            // จอง/จบ มาจากแท็บ "จอง/จบ" ของชีตนับลีด (คอลัมน์ที่ชีตล้างไว้ให้สูตร D=จอง · Y=จบ)
+            // — ไม่ใช้ช่องทางใน sales_reports เพราะเป็นข้อความเซลล์พิมพ์เอง (198 แบบ ไม่ตรงกับฝั่งลีด)
+            // รูปข้อมูลเหมือน leadChannelByMonth ทุกอย่าง → กรองตามช่วงวันที่ด้วย _rd ชุดเดียวกัน
             const NA = 'ไม่ระบุ';
-            const st = {};                              // ช่องทาง → {lead, jong, done}
+            const st = {};
             const _get = c => (st[c] = st[c] || {lead:0, jong:0, done:0});
+            const _sumInto = (src, key) => {
+              _rd.forEach(([m,d]) => {
+                const mm = src[m] || src[String(m)] || {};
+                const dc = mm[d] || mm[String(d)] || {};
+                for(const [c,v] of Object.entries(dc)) _get((c||'').trim()||NA)[key] += (Number(v)||0);
+              });
+            };
             Object.entries(chSum).forEach(([c,n]) => { _get(c).lead += (Number(n)||0); });
-            (FD.bookingCases||[]).forEach(b => {
-              const c = (b.channelClean || '').trim() || NA;
-              if(ir(b.date)) _get(c).jong++;                                  // จอง = นับตามวันจอง
-              if(b.status==='ปล่อย' && ir(_relD(b))) _get(c).done++;          // จบ  = นับตามวันปล่อย
-            });
+            _sumInto(D.bookChannelByMonth || {}, 'jong');
+            _sumInto(D.doneChannelByMonth || {}, 'done');
             const rows = Object.entries(st).map(([c,v]) => ({c, ...v}))
               .filter(x => x.lead || x.jong || x.done)
               .sort((a,b) => (b.lead-a.lead) || (b.done-a.done));
