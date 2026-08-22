@@ -338,7 +338,19 @@
     catch(e){ b.innerHTML='<p class="tag-red">โหลดข้อมูลไม่ได้</p>'; return; }
     const kv=(k,v)=> (v!==''&&v!=null)?`<div class="kv"><span>${k}</span><span>${v}</span></div>`:'';
     const dump=(o)=>Object.entries(o||{}).map(([k,v])=>kv(k,v)).join('')||'<span class="mut sm">—</span>';
-    const logs=(d.logs||[]).map(l=>`<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.dur?` <span class="mut">· ⏱ ${l.cur?'อยู่มาแล้ว ':''}${l.dur}</span>`:''}${l.note?'<div class="mut" style="margin-top:2px;white-space:pre-line">'+l.note+'</div>':''}</div>`).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
+    // รูป/วิดีโอที่แนบมากับ log — ★ ส.ค.69 เพิ่ม (เดิมหน้านี้ทิ้ง l.media ทั้งที่ car_json ส่งมาให้อยู่แล้ว
+    //   → มือถือ (หน้าสแกน) เห็นรูป แต่คอม (ป๊อปอัปบอร์ด) ไม่เห็น) · สไตล์เดียวกับหน้าสแกน/หน้าเซลล์
+    const _thumbs = l => (l.media||[]).map(m=>{
+      const u = (m && typeof m==='object') ? m.url : m;
+      if(!u) return '';
+      return (m && m.video)
+        ? `<a href="${u}" target="_blank" title="วิดีโอ" style="width:56px;height:56px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:13px">▶</a>`
+        : `<a href="${u}" target="_blank"><img src="${u}" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block"></a>`;
+    }).join('');
+    const logs=(d.logs||[]).map(l=>{
+      const th=_thumbs(l);
+      return `<div class="sm" style="padding:5px 0;border-bottom:.5px solid var(--line)">${l.at} · <b>${l.stage}</b>${l.worker?' · '+l.worker:''}${l.dur?` <span class="mut">· ⏱ ${l.cur?'อยู่มาแล้ว ':''}${l.dur}</span>`:''}${l.note?'<div class="mut" style="margin-top:2px;white-space:pre-line">'+l.note+'</div>':''}${th?`<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${th}</div>`:''}</div>`;
+    }).join('')||('<span class="mut sm">'+T('noHistory')+'</span>');
     let stageBtns;
     if(d.direct && d.direct.length){
       const _mkBtn=s=>{const c=STAGE_COLOR[s.key]||'#64748b';
@@ -391,7 +403,7 @@
       <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
       <div>${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
-      <div style="max-height:160px;overflow:auto">${logs}</div>
+      <div style="max-height:300px;overflow:auto">${logs}</div>
       <div class="row" style="gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:.5px solid var(--line)">
         <label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600">
           <input type="checkbox" id="expPhotos" style="width:22px;height:22px;flex-shrink:0;cursor:pointer">
