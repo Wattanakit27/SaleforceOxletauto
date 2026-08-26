@@ -2463,6 +2463,15 @@
               });
             };
             Object.entries(chSum).forEach(([c,n]) => { _get(c).lead += (Number(n)||0); });
+            // ★ ส.ค.69 — ลีดที่ไม่ได้กรอกช่องทาง ลงแถว "ไม่ระบุ" → ยอด Lead รวมตรงกับตัวเลขลีดของแดชบอร์ด
+            //   (เดิมถูกตัดทิ้งตั้งแต่ฝั่งเซิร์ฟเวอร์ ตารางนี้เลยรวมได้น้อยกว่าความจริง ~25%)
+            {
+              const nc = D.leadNoChannelByMonth || {};
+              _rd.forEach(([m,d]) => {
+                const mm = nc[m] || nc[String(m)] || {};
+                _get(NA).lead += (Number(mm[d] ?? mm[String(d)]) || 0);
+              });
+            }
             _sumInto(D.bookChannelByMonth || {}, 'jong');
             _sumInto(D.doneChannelByMonth || {}, 'done');
             const rows = Object.entries(st).map(([c,v]) => ({c, ...v}))
@@ -2472,7 +2481,12 @@
             const tot = rows.reduce((t,x)=>({lead:t.lead+x.lead, jong:t.jong+x.jong, done:t.done+x.done}), {lead:0,jong:0,done:0});
             const pc = (a,b) => b ? (a*100/b).toFixed(2).replace(/\.?0+$/,'')+'%' : '–';
             const _th = (t,al) => `<th style="padding:7px 10px;text-align:${al||'right'};border-bottom:1px solid var(--bd);background:var(--bg2);color:var(--t2);font-weight:700;white-space:nowrap">${t}</th>`;
-            let CV = `<div class="card" id="leadconv-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:trending-up',16)} Lead → จอง → จบ (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ช่องทางไหนได้ลีดเยอะ · ปิดเป็นจองได้กี่ %\nและจบจริงกี่ % — ดูว่าช่องทางไหนคุ้มที่สุด\n\nLead = วันรับลีด · จอง = วันจอง · จบ = วันปล่อย (ตามช่วงวันที่ด้านบน)\nแถว 'ไม่ระบุ' = เคสที่ชีตฝั่งจองพิมพ์ช่องทางไม่ตรงกับฝั่งลีด จับคู่ไม่ได้">?</span></span>${_cardLineBtn('leadconv-card','Lead → จอง → จบ (แยกช่องทาง)')}</div>`;
+            let CV = `<div class="card" id="leadconv-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:trending-up',16)} Lead → จอง → จบ (แยกช่องทาง) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="ช่องทางไหนได้ลีดเยอะ · ปิดเป็นจองได้กี่ %\nและจบจริงกี่ % — ดูว่าช่องทางไหนคุ้มที่สุด\n\nLead = วันรับลีด · จอง = วันจอง · จบ = วันปล่อย (ตามช่วงวันที่ด้านบน)
+
+ยอด Lead ที่นี่น้อยกว่าตัวเลขลีดรวมของแดชบอร์ด เพราะตั้งใจตัด 2 อย่าง:
+  1) RJ / RB (ไม่ใช่ลีดขายรถ)
+  2) รหัสลีดซ้ำ — นับครั้งเดียว\nแถว 'ไม่ระบุ' = ลีดที่ไม่ได้กรอกช่องทาง + เคสจอง/จบ ที่ชีตพิมพ์ชื่อไม่ตรงกับฝั่งลีด
+(รวมไว้เพื่อให้ยอด Lead ตรงกับตัวเลขลีดจริง)">?</span></span>${_cardLineBtn('leadconv-card','Lead → จอง → จบ (แยกช่องทาง)')}</div>`;
             CV += `<div class="card-sub">ช่องทางไหนได้ลีดเยอะ และปิดจบได้จริงกี่ % · เรียงตามจำนวน Lead</div>`;
             CV += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px"><table style="border-collapse:collapse;font-size:12px;width:100%;white-space:nowrap"><thead><tr>${_th('ช่องทาง','left')}${_th('Lead')}${_th('จอง')}${_th('จบ')}${_th('จอง/Lead')}${_th('จบ/จอง')}${_th('จบ/Lead')}</tr></thead><tbody>`;
             rows.forEach(x => {

@@ -107,6 +107,22 @@
         <i data-lucide="disc" style="width:18px;height:18px;color:#475569"></i> <span data-i18n="flagTire">รอเปลี่ยนยาง</span>
       </label>
       <span id="flagMsg" class="mut sm"></span>
+      <!-- ★ ส.ค.69 (เจ้าของสั่ง) — เอาติ๊ก "ยังไม่ได้ถ่ายรูป" ออก ต้องแนบรูปที่ถ่ายแล้ว + หมายเหตุ
+           (เก็บลงไทม์ไลน์รถให้ด้วย · ติ๊กกลับเข้าไม่ต้องมีหลักฐาน) -->
+      <div id="fpWrap" style="display:none;margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg2)">
+        <div class="sm" style="font-weight:700" id="fpTitle">ยืนยันว่าถ่ายเสร็จแล้ว</div>
+        <div class="mut sm" style="margin-bottom:6px" id="fpSub">แนบรูปที่ถ่าย + ใส่หมายเหตุ ก่อนถึงจะเอาติ๊กออกได้</div>
+        <textarea id="fpNote" rows="3" placeholder="เช่น ถ่ายครบรอบคัน + ห้องเครื่อง" style="width:100%;box-sizing:border-box;font-family:inherit;line-height:1.6;resize:vertical"></textarea>
+        <label class="sc-drop" style="margin-top:8px">
+          <input type="file" id="fpFiles" accept="image/*,video/*" multiple style="display:none">
+          <i data-lucide="camera"></i><span class="sm" data-i18n="photoHint">แตะเพื่อถ่าย/เลือกไฟล์</span>
+        </label>
+        <div id="fpPrev" class="mut sm" style="margin-top:6px"></div>
+        <div class="row" style="gap:8px;margin-top:10px">
+          <button type="button" class="btn" onclick="fpCancel()" data-i18n="cancel">ยกเลิก</button>
+          <button type="button" class="btn pri" id="fpGo" onclick="fpConfirm()">ยืนยัน</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -247,15 +263,63 @@
       var r=await fetch('/track/api/set_priority',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code:'{{ car.code }}',priority:val})});
       var j=await r.json();
       if(msg) msg.textContent=j.ok?t.saved:(j.error||t.flagFail);
-    }catch(e){ if(msg) msg.textContent=t.flagFail; }
+      if(!j.ok && j.error) alert(j.error);
+      return !!j.ok;
+    }catch(e){ if(msg) msg.textContent=t.flagFail; return false; }
   }
+  // เลือกไฟล์ในแผงหลักฐาน (สะสมได้หลายรูป)
+  document.addEventListener('DOMContentLoaded',function(){
+    var fi=document.getElementById('fpFiles'); if(!fi) return;
+    fi.addEventListener('change',function(){
+      for(var i=0;i<fi.files.length;i++) _fpFiles.push(fi.files[i]);
+      document.getElementById('fpPrev').textContent='เลือกแล้ว '+_fpFiles.length+' ไฟล์';
+      fi.value='';
+    });
+  });
 
   // ธงงานค้าง — ติ๊กแล้วบันทึกทันที (endpoint เดียวกับป๊อปอัปบอร์ด · csrf_exempt + login_required)
+  // ★ ส.ค.69 — ธงที่ "ปลดออกเฉยๆ ไม่ได้" ต้องแนบรูป+โน้ต (sync กับ C.FLAG_PROOF_REQUIRED ฝั่งเซิร์ฟเวอร์)
+  var FLAG_PROOF=new Set(['need_photo']);
+  var _fpKey='', _fpFiles=[];
+  function fpCancel(){
+    document.getElementById('fpWrap').style.display='none';
+    var cb=document.querySelector('input[onchange*="'+_fpKey+'"]'); if(cb) cb.checked=true;   // ยกเลิก = ติ๊กกลับ
+    _fpKey=''; _fpFiles=[];
+  }
+  async function fpConfirm(){
+    var note=(document.getElementById('fpNote').value||'').trim();
+    if(!note){ alert('ต้องใส่หมายเหตุก่อนยืนยัน'); return; }
+    if(!_fpFiles.length){ alert('ต้องแนบรูปที่ถ่ายแล้วก่อนยืนยัน'); return; }
+    var btn=document.getElementById('fpGo'); btn.disabled=true; btn.textContent='กำลังอัปโหลด...';
+    var out=[];
+    for(var i=0;i<_fpFiles.length;i++){
+      try{
+        var res=await window.__scUpload(_fpFiles[i], '{{ car.code }}', function(){});
+        out.push({id:res.id, video:(_fpFiles[i].type||'').indexOf('video')===0});
+      }catch(err){ alert('อัปโหลดไม่สำเร็จ: '+(err.message||err)); btn.disabled=false; btn.textContent='ยืนยัน'; return; }
+    }
+    btn.textContent='กำลังบันทึก...';
+    var ok=await scPostFlags(_fpKey,false,note,out);
+    btn.disabled=false; btn.textContent='ยืนยัน';
+    if(ok){ document.getElementById('fpWrap').style.display='none'; location.reload(); }
+  }
   async function scSetFlag(key,on){
+    if(!on && FLAG_PROOF.has(key)){       // ปลดธง = ต้องมีหลักฐาน → เปิดแผงก่อน
+      _fpKey=key; _fpFiles=[];
+      document.getElementById('fpNote').value='';
+      document.getElementById('fpPrev').textContent='';
+      var fi=document.getElementById('fpFiles'); if(fi) fi.value='';
+      document.getElementById('fpWrap').style.display='block';
+      if(window.lucide)lucide.createIcons();
+      return;
+    }
+    await scPostFlags(key,on,'',[]);
+  }
+  async function scPostFlags(key,on,note,media){
     var msg=document.getElementById('flagMsg'), t=SCAN_I18N[window._scanLang]||SCAN_I18N.th;
     if(msg) msg.textContent=t.saving;
     try{
-      var body={code:'{{ car.code }}'}; body[key]=on;
+      var body={code:'{{ car.code }}', note:note, media:media}; body[key]=on;
       var r=await fetch('/track/api/set_flags',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
       var j=await r.json();
       if(msg) msg.textContent=j.ok?t.saved:(j.error||t.flagFail);
@@ -294,6 +358,7 @@
     var barFill = document.getElementById('upBarFill');
     function setPct(p){ p=Math.max(0,Math.min(100,p)); if(barFill) barFill.style.width=p.toFixed(1)+'%'; return Math.round(p); }
     // POST ไฟล์เข้าเซิร์ฟเวอร์ (อัปต่อเข้า Google Drive) — XHR เพื่อจับ progress จริง
+    window.__scUpload = uploadToDrive;   // ★ ส.ค.69 — ให้แผง "ยืนยันว่าถ่ายเสร็จ" ใช้ตัวอัปโหลดตัวเดียวกัน
     function uploadToDrive(file, code, onLoaded){
       return new Promise(function(resolve,reject){
         var fd=new FormData(); fd.append('file', file); if(code) fd.append('code', code);

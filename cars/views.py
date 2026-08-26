@@ -1237,7 +1237,11 @@ def api_set_flags(request):
     (เหมือนความด่วน) · แยกจาก priority → ติดธงพร้อมบอกด่วน/ไม่ด่วนได้ · csrf_exempt (บอร์ดฝัง iframe)."""
     data = json.loads(request.body or "{}")
     car = get_object_or_404(Car, code=data.get("code"))
-    changed = []
+    media = data.get("media")
+    if not isinstance(media, list):
+        media = []
+    note = (data.get("note") or "").strip()
+    changed, cleared_proof = [], []
     for key in C.FLAG_KEYS:
         if key in data:
             # ★ ส.ค.69 รอบ 5 — เช็คสิทธิ์ "รายช่อง" (รูป/คอนเทนต์ = ทีมคอนเทนต์ · ยาง = ช่าง+ทะเบียน)
@@ -1245,10 +1249,37 @@ def api_set_flags(request):
                 return JsonResponse(
                     {"ok": False, "error": "บทบาทของคุณติ๊ก \"%s\" ไม่ได้ (ดูได้อย่างเดียว)" % C.FLAG_NAME.get(key, key)},
                     status=403)
+            # ★ ส.ค.69 (เจ้าของสั่ง) — ปลดธงบางตัว = ประกาศว่างานเสร็จ ต้องมีหลักฐาน
+            #   (ติ๊กกลับเข้า = แค่บอกว่ายังค้าง ไม่ต้องมีหลักฐาน)
+            if key in C.FLAG_PROOF_REQUIRED and getattr(car, key) and not data[key]:
+                miss = []
+                if not media:
+                    miss.append("แนบรูปที่ถ่ายแล้ว")
+                if not note:
+                    miss.append("ใส่หมายเหตุ")
+                if miss:
+                    return JsonResponse({"ok": False, "error": "เอาติ๊ก \"%s\" ออก ต้อง%s"
+                                         % (C.FLAG_NAME.get(key, key), " และ ".join(miss))}, status=400)
+                cleared_proof.append(C.FLAG_DONE_NAME.get(key, C.FLAG_NAME.get(key, key)))
             setattr(car, key, bool(data[key]))
             changed.append(key)
     if changed:
         car.save(update_fields=changed)
+    # เก็บหลักฐานลงไทม์ไลน์รถ (สเตปเดิม ไม่เปลี่ยน) — ทุกคนย้อนดูได้ว่าถ่ายเสร็จตอนไหน รูปไหน
+    if cleared_proof:
+        log = ScanLog.objects.create(
+            car=car, stage=car.stage, worker_name=_actor(request.user),
+            note="%s · %s" % (" / ".join(cleared_proof), note))
+        if media:
+            try:
+                log.media = media
+                log.save(update_fields=["media"])
+            except Exception:
+                pass
+            try:
+                _label_stage_media(log, car)
+            except Exception:
+                pass
     return JsonResponse({"ok": True, "needPhoto": car.need_photo,
                          "needContent": car.need_content, "needTire": car.need_tire,
                          "flags": car.flags})

@@ -252,6 +252,27 @@
 </div>
 
 <!-- Modal: ยืนยันเปลี่ยนสเตป + หมายเหตุ (กันเผลอกด) -->
+<!-- ★ ส.ค.69 — ปลดธง "ยังไม่ได้ถ่ายรูป" ต้องมีหลักฐาน (เจ้าของสั่ง): แนบรูปที่ถ่ายแล้ว + หมายเหตุ
+     ระบบเก็บลงไทม์ไลน์รถให้ด้วย → ย้อนดูได้ว่าถ่ายเสร็จตอนไหน รูปหน้าตายังไง -->
+<div id="flagModal" class="ov" onclick="if(event.target===this)closeFlagProof()" style="z-index:130">
+  <div class="modal" style="max-width:520px">
+    <h3 style="margin:0 0 4px" id="flagProofTitle">ยืนยันว่าถ่ายเสร็จแล้ว</h3>
+    <div class="mut sm" id="flagProofSub">แนบรูปที่ถ่าย + ใส่หมายเหตุ ก่อนเอาติ๊กออก</div>
+    <label class="mut sm" style="display:block;margin-top:12px">หมายเหตุ <span style="color:#dc2626">*</span></label>
+    <textarea id="flagProofNote" rows="3" placeholder="เช่น ถ่ายครบ 20 รูป รอบคัน + ห้องเครื่อง" style="width:100%;box-sizing:border-box;font-family:inherit;line-height:1.6;resize:vertical"></textarea>
+    <label class="mut sm" style="display:block;margin-top:10px">แนบรูป/วิดีโอ <span style="color:#dc2626">*</span></label>
+    <label class="stage-drop">
+      <input type="file" id="flagProofFile" accept="image/*,video/*" multiple capture="environment" style="display:none" onchange="onFlagProofFiles(this.files)">
+      <i data-lucide="camera"></i><span class="sm" data-i18n="photoHint">แตะเพื่อถ่าย/เลือกไฟล์</span>
+    </label>
+    <div class="row" style="gap:8px;margin-top:4px;align-items:center"><span id="flagProofUpMsg" class="mut sm"></span></div>
+    <div id="flagProofThumbs" class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn" onclick="closeFlagProof()" data-i18n="cancel">ยกเลิก</button>
+      <button class="btn pri" id="flagProofGo" onclick="doFlagProof()">ยืนยัน</button>
+    </div>
+  </div>
+</div>
 <div id="stageModal" class="ov" onclick="if(event.target===this)closeStage()" style="z-index:120">
   <div class="modal" style="max-width:400px">
     <h2 style="font-size:16px;margin:0 0 6px" data-i18n="confirmTitle">ยืนยันเปลี่ยนสเตป</h2>
@@ -521,15 +542,50 @@
   }
 
   // ธงงานค้าง (ยังไม่ถ่ายรูป/คอนเทนต์) — แยกจากความด่วน · ติ๊กพร้อมกันได้ · บันทึกทันที
+  // ★ ส.ค.69 — ธงที่ "ปลดออกเฉยๆ ไม่ได้" (ต้องแนบรูป+โน้ต) · sync กับ C.FLAG_PROOF_REQUIRED ฝั่งเซิร์ฟเวอร์
+  const FLAG_PROOF=new Set(['need_photo']);
+  let _fpPend={code:'',key:''}, _fpMedia=[];
+  function onFlagProofFiles(files){ if(files&&files.length) _uploadInto(files,_fpMedia,'flagProofThumbs','flagProofUpMsg',_fpPend.code); }
+  function openFlagProof(code,key){
+    _fpPend={code,key}; _fpMedia=[];
+    const f=FLAG_DEFS.find(x=>x.key===key)||{name:key};
+    document.getElementById('flagProofTitle').textContent='เอาติ๊ก "'+f.name+'" ออก';
+    document.getElementById('flagProofSub').textContent='แนบรูปที่ถ่ายแล้ว + ใส่หมายเหตุ ก่อนถึงจะเอาติ๊กออกได้';
+    document.getElementById('flagProofNote').value='';
+    document.getElementById('flagProofThumbs').innerHTML='';
+    document.getElementById('flagProofUpMsg').textContent='';
+    const fi=document.getElementById('flagProofFile'); if(fi) fi.value='';
+    document.getElementById('flagModal').style.display='flex';
+    if(window.lucide)lucide.createIcons();
+  }
+  function closeFlagProof(){
+    document.getElementById('flagModal').style.display='none';
+    const cb=document.getElementById('fl_'+_fpPend.key); if(cb) cb.checked=true;   // ยกเลิก = ติ๊กกลับ
+  }
+  async function doFlagProof(){
+    const note=document.getElementById('flagProofNote').value.trim();
+    if(!note){ alert('ต้องใส่หมายเหตุก่อนยืนยัน'); return; }
+    if(!_fpMedia.length){ alert('ต้องแนบรูปที่ถ่ายแล้วก่อนยืนยัน'); return; }
+    const btn=document.getElementById('flagProofGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
+    const ok=await _postFlags(_fpPend.code,_fpPend.key,false,note,_fpMedia);
+    if(btn){ btn.disabled=false; btn.textContent='ยืนยัน'; }
+    if(ok){ document.getElementById('flagModal').style.display='none'; location.reload(); }
+  }
   async function setFlag(code,key,on){
+    if(!on && FLAG_PROOF.has(key)){ openFlagProof(code,key); return; }   // ปลดธง = ต้องมีหลักฐาน
+    await _postFlags(code,key,on,'',[]);
+  }
+  async function _postFlags(code,key,on,note,media){
     const msg=document.getElementById('flagMsg');
     if(msg) msg.textContent=T('uploading');
     try{
-      const body={code}; body[key]=on;
+      const body={code,note,media}; body[key]=on;
       const r=await fetch('/track/api/set_flags',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
       const j=await r.json();
       if(msg) msg.textContent=j.ok?T('saved'):(j.error||T('changeFail'));
-    }catch(e){ if(msg) msg.textContent=T('changeFail'); }
+      if(!j.ok && j.error) alert(j.error);
+      return !!j.ok;
+    }catch(e){ if(msg) msg.textContent=T('changeFail'); return false; }
   }
 
   // (ถ่ายคอนเทนต์ ถอดออกแล้ว ส.ค.69 — โค้ด openShoot/doShoot/shootModal ลบทิ้ง · ดู git history ถ้าจะกู้)
@@ -541,7 +597,7 @@
     if(ba) ba.classList.toggle('pri', m==='all');
   }
   {% if has_my %}setBoardMode('mine');{% endif %}
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeShoot();} });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeFlagProof();closeShoot();} });
 
   // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
   const PHASES = JSON.parse(document.getElementById('phaseData').textContent);

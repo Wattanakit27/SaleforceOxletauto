@@ -1733,6 +1733,10 @@ def _compute_dashboard_data() -> dict:
     # ── Lead แยกช่องทาง (platform) รายเดือน — ตาราง "รายงาน lead" (ช่องทาง=คอลัมน์ H) ──
     # {month: {day: {channel: count}}} — ตัด RJ/RB + แยกรายวัน + dedup เคสซ้ำ (lead_code ละครั้ง) ให้ frontend กรองตามช่วงวันจริง
     lead_channel_by_month: dict = {}
+    # ★ ส.ค.69 — ลีดที่ "ไม่ได้กรอกช่องทาง" นับแยกไว้ (เดิม continue ทิ้งทั้งแถว)
+    #   เก็บแยกแทนที่จะยัดเป็นช่องทางชื่อ "ไม่ระบุ" ใน lead_channel_by_month
+    #   เพราะ map นั้นถูกใช้โดยการ์ด "ยอด LEAD (สรุปย่อ)" ที่ใช้กันมานานแล้ว — ไม่ควรทำตัวเลขเดิมขยับเงียบๆ
+    lead_nochannel_by_month: dict = {}
     _lc_seen: set = set()   # lead_code ที่นับแล้ว (กันเคสซ้ำ · code ว่าง = นับปกติ)
     for r in year_leads:
         ty = cell(r, L.type).upper().replace(" ", "")
@@ -1744,13 +1748,15 @@ def _compute_dashboard_data() -> dict:
                 continue   # เคสซ้ำ (code เดิม) — นับครั้งเดียว
             _lc_seen.add(code)
         chn = cell(r, L.channel).strip()
-        if not chn:
-            continue
         md = parse_month_day(cell(r, L.received_date))   # (month, day) — นับตามวันที่จริง
         if not md:
             continue
         m, d = md
         if not (1 <= m <= 12):
+            continue
+        if not chn:   # ไม่ได้กรอกช่องทาง → นับแยก (ตาราง Lead→จอง→จบ เอาไปลงแถว "ไม่ระบุ")
+            nd = lead_nochannel_by_month.setdefault(m, {})
+            nd[d] = nd.get(d, 0) + 1
             continue
         dc = lead_channel_by_month.setdefault(m, {}).setdefault(d, {})
         dc[chn] = dc.get(chn, 0) + 1
@@ -1817,6 +1823,7 @@ def _compute_dashboard_data() -> dict:
         "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
+        "leadNoChannelByMonth": lead_nochannel_by_month,   # lead ที่ไม่ได้กรอกช่องทาง {m:{d:count}}
         # ★ ส.ค.69 — จอง/จบ แยกช่องทาง จากแท็บ "จอง/จบ" (คอลัมน์ที่ชีตล้างไว้ให้สูตร: D=จอง · Y=จบ)
         #   ไม่ใช้ช่องทางใน sales_reports เพราะนั่นเป็นข้อความเซลล์พิมพ์เอง (198 แบบ)
         "bookChannelByMonth": _remap_channel_keys(_ch_stats.get("jong") or {}, lead_channel_set),
