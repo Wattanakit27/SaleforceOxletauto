@@ -3249,3 +3249,127 @@ def _render_seller_page(request, seller_name):
         "data_json": json.dumps(filtered, ensure_ascii=False, default=str),
         "constants_json": json.dumps(constants, ensure_ascii=False),
     })
+
+
+# =========================================================
+#  API สาธารณะสำหรับระบบภายนอก (v1) — อ่านอย่างเดียว ต้องมีคีย์
+#  ★ ส.ค.69 (เจ้าของขอ) — ให้ n8n / เว็บโชว์รูม / partner ดึงรายชื่อพนักงาน + LINE id + group id ได้
+#
+#  ทำไมต้องมีคีย์: ข้อมูลนี้คือ LINE user id + ชื่อพนักงาน = ข้อมูลส่วนบุคคล (PDPA)
+#    ใครถือ LINE user id ก็ทักหาพนักงานได้โดยตรง → เปิดโล่งไม่ได้
+#  ไม่ตั้ง EXTERNAL_API_KEY = ปิดสนิท (503) — เปิดใช้ต่อเมื่อจงใจตั้งคีย์เท่านั้น
+# =========================================================
+def _api_key_ok(request):
+    """ตรวจคีย์จาก header X-API-Key หรือ ?key= — คืน (ผ่านไหม, HttpResponse ถ้าไม่ผ่าน)"""
+    import hmac
+    keys = getattr(settings, "EXTERNAL_API_KEYS", []) or []
+    if not keys:
+        return False, JsonResponse(
+            {"ok": False, "error": "API ยังไม่เปิดใช้งาน (ผู้ดูแลระบบยังไม่ได้ตั้ง EXTERNAL_API_KEY)"},
+            status=503, json_dumps_params={"ensure_ascii": False})
+    got = (request.headers.get("X-API-Key") or request.GET.get("key") or "").strip()
+    # compare_digest = เทียบแบบไม่บอกใบ้ความยาว/ตำแหน่งที่ต่าง (กันเดาคีย์ทีละตัว)
+    if not got or not any(hmac.compare_digest(got, k) for k in keys):
+        return False, JsonResponse(
+            {"ok": False, "error": "คีย์ไม่ถูกต้อง — ส่งมาที่ header X-API-Key หรือ ?key="},
+            status=401, json_dumps_params={"ensure_ascii": False})
+    return True, None
+
+
+def _api_json(payload, status=200):
+    """JSON ที่อ่านภาษาไทยออกตรงๆ (ไม่แปลงเป็นรหัส) — ปลายทางอ่านง่ายกว่า"""
+    return JsonResponse(payload, status=status, json_dumps_params={"ensure_ascii": False})
+
+
+@require_GET
+def api_v1_index(request):
+    """สารบัญ API — ให้คนภายนอกรู้ว่ามีอะไรให้เรียกบ้าง (ยังต้องใช้คีย์)"""
+    ok, resp = _api_key_ok(request)
+    if not ok:
+        return resp
+    base = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+    return _api_json({
+        "ok": True,
+        "version": "v1",
+        "auth": "ส่งคีย์มาที่ header 'X-API-Key: <คีย์>' หรือ query '?key=<คีย์>'",
+        "endpoints": [
+            {"path": f"{base}/api/v1/employees",
+             "method": "GET",
+             "desc": "รายชื่อพนักงาน + LINE user id + ชื่อเล่น + Display Name + group id",
+             "filters": {"nickname": "กรองด้วยชื่อเล่น (ตรงตัว ไม่สนตัวพิมพ์)",
+                         "user_id": "กรองด้วย LINE user id",
+                         "position": "กรองด้วยตำแหน่ง (คำบางส่วนก็ได้)",
+                         "q": "ค้นหาแบบกว้าง (ชื่อเล่น/Display Name/ตำแหน่ง)"}},
+            {"path": f"{base}/api/v1/groups",
+             "method": "GET",
+             "desc": "กลุ่ม LINE ที่บอทรู้จัก (id + ชื่อกลุ่ม)"},
+        ],
+    })
+
+
+@require_GET
+def api_v1_employees(request):
+    """รายชื่อพนักงานสำหรับระบบภายนอก — GET /api/v1/employees
+
+    คืน: userId (LINE) · displayName (ชื่อที่ตั้งใน LINE) · nickname (ชื่อเล่นที่ใช้ในระบบ)
+         · position (ตำแหน่ง/ทีม) · groupId (กลุ่ม LINE ที่ผูกกับพนักงานคนนั้นในชีต)
+    ไม่คืน: รูปโปรไฟล์ · reply token · เวลาเข้างาน/วันหยุด — ไม่ได้ขอ และเป็นข้อมูลส่วนตัวเกินจำเป็น
+    """
+    ok, resp = _api_key_ok(request)
+    if not ok:
+        return resp
+    from .services.google_sheets import fetch_sheet, EMPLOYEE_COL as EM
+    try:
+        rows = fetch_sheet("employees")
+    except Exception as e:
+        return _api_json({"ok": False, "error": f"อ่านข้อมูลพนักงานไม่ได้: {e}"}, status=502)
+
+    f_nick = (request.GET.get("nickname") or "").strip().lower()
+    f_uid = (request.GET.get("user_id") or "").strip()
+    f_pos = (request.GET.get("position") or "").strip().lower()
+    f_q = (request.GET.get("q") or "").strip().lower()
+
+    data = []
+    for r in rows:
+        uid = cell(r, EM.user_id)
+        if not uid:
+            continue          # แถวว่าง/ไม่ครบ — ข้าม (ชีตมีแถวกว้าง 0-4 ปนอยู่)
+        item = {
+            "userId": uid,
+            "displayName": cell(r, EM.display_name),
+            "nickname": cell(r, EM.nickname),
+            "position": cell(r, EM.position),
+            "groupId": cell(r, EM.group_id),
+        }
+        if f_uid and item["userId"] != f_uid:
+            continue
+        if f_nick and item["nickname"].lower() != f_nick:
+            continue
+        if f_pos and f_pos not in item["position"].lower():
+            continue
+        if f_q and f_q not in " ".join(
+                [item["nickname"], item["displayName"], item["position"]]).lower():
+            continue
+        data.append(item)
+    return _api_json({"ok": True, "count": len(data), "data": data})
+
+
+@require_GET
+def api_v1_groups(request):
+    """กลุ่ม LINE ที่บอทรู้จัก — GET /api/v1/groups
+
+    ที่มา: KVStore 'line_groups' (บอทจำเองตอนได้ event จากกลุ่ม — LINE ไม่มี API ลิสต์กลุ่ม)
+    กลุ่มจะโผล่ก็ต่อเมื่อเพิ่มบอทเข้ากลุ่มแล้วมีคนพิมพ์อะไรในกลุ่มอย่างน้อย 1 ครั้ง
+    """
+    ok, resp = _api_key_ok(request)
+    if not ok:
+        return resp
+    from .services import cache_store
+    try:
+        groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+    except Exception as e:
+        return _api_json({"ok": False, "error": f"อ่านรายชื่อกลุ่มไม่ได้: {e}"}, status=502)
+    data = [{"groupId": gid, "name": (v or {}).get("name", ""),
+             "lastSeen": (v or {}).get("lastSeen", "")}
+            for gid, v in sorted(groups.items(), key=lambda kv: (kv[1] or {}).get("name", ""))]
+    return _api_json({"ok": True, "count": len(data), "data": data})

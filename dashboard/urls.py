@@ -58,4 +58,9 @@ urlpatterns = [
     path("api/cron/sync", views.cron_sync, name="cron_sync"),
     path("api/cron/send_line", views.cron_send_line, name="cron_send_line"),
     path("api/cron/tick", views.cron_tick, name="cron_tick"),
+
+    # ===== API สาธารณะสำหรับระบบภายนอก (ต้องมีคีย์ · อ่านอย่างเดียว) =====
+    path("api/v1/", views.api_v1_index, name="api_v1_index"),
+    path("api/v1/employees", views.api_v1_employees, name="api_v1_employees"),
+    path("api/v1/groups", views.api_v1_groups, name="api_v1_groups"),
 ]

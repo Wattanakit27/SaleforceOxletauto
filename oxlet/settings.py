@@ -102,6 +102,13 @@ FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c
 
 # Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น) — SECRET ต้องตั้งบน Vercel
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+# ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
+# อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)
+# ★ ไม่ตั้งค่า = ปิดสนิท (endpoint คืน 503) — ข้อมูลพนักงาน/LINE id เป็นข้อมูลส่วนบุคคล
+#   จึงเลือกเป็น "ปิดโดยปริยาย" ไม่ใช่ "เปิดโดยปริยาย"
+# หลายคีย์ได้: คั่นด้วย comma (จะได้เพิกถอนทีละเจ้าโดยไม่กระทบเจ้าอื่น)
+EXTERNAL_API_KEYS = [k.strip() for k in os.getenv("EXTERNAL_API_KEY", "").split(",") if k.strip()]
 # โมเดล OCR (ไม่ลับ — ชื่อโมเดล): pro = แม่นสุด (ลายมือ), flash = เร็ว/ถูกกว่า
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 

@@ -119,9 +119,22 @@ python manage.py runserver
 | `/api/seller/loan_submit` | `loan_submit` | เซลล์ (token) POST: ส่งฟอร์มขอสินเชื่อ → สร้าง Flex (`build_loan_flex`) push เข้า `FINANCE_TEST_LINE_ID` + เก็บ Supabase `loan_applications` (best-effort) |
 | `/api/insights/seller` | `insights_seller` | **ต้อง login (any)** POST `{seller, stats}` → Gemini โค้ชเซลล์ (`gemini_insights.analyze_seller`) คืน `{ok, analysis}` (cache 30 นาที) |
 | `/api/insights/forecast` | `insights_forecast` | **admin/exec** POST `{summary}` → Gemini อธิบายเทรนด์ยอด+ปัจจัยตลาด (`gemini_insights.forecast_narrative`) คืน `{ok, narrative}` |
+| `/api/v1/` | `api_v1_index` | **API สาธารณะ (ต้องมีคีย์)** — สารบัญ endpoint + วิธี auth |
+| `/api/v1/employees` | `api_v1_employees` | **API สาธารณะ** GET: รายชื่อพนักงาน — `userId`(LINE) · `displayName` · `nickname` · `position` · `groupId` · กรองได้ `?nickname=` `?user_id=` `?position=` `?q=` |
+| `/api/v1/groups` | `api_v1_groups` | **API สาธารณะ** GET: กลุ่ม LINE ที่บอทรู้จัก (`groupId`/`name`/`lastSeen` จาก KVStore `line_groups`) |
 | `/api/cron/sync` | `cron_sync` | public (`?secret=xxx`) — sync sheets → Supabase `sheet_cache` + precompute dashboard (cron tick ตัวเดียวก็พอ · นี่เป็น endpoint แยกสำรอง) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
+
+### 🔑 API สำหรับระบบภายนอก (v1 · ส.ค.69 — เจ้าของขอ)
+ให้ **n8n / เว็บโชว์รูม / partner** ดึงรายชื่อพนักงาน + LINE id + group id ได้โดยไม่ต้อง login เข้าเว็บ
+- **อ่านอย่างเดียว (GET)** · `/api/v1/employees` · `/api/v1/groups` · `/api/v1/` (สารบัญ)
+- **auth = คีย์**: header `X-API-Key: <คีย์>` หรือ `?key=<คีย์>` · เทียบด้วย `hmac.compare_digest` (กันเดาคีย์ทีละตัว)
+- **env `EXTERNAL_API_KEY`** → `settings.EXTERNAL_API_KEYS` (**คั่น comma ได้หลายคีย์** = แจกคนละคีย์ต่อเจ้า → เพิกถอนทีละเจ้าโดยไม่กระทบคนอื่น)
+- **★ ไม่ตั้งคีย์ = ปิดสนิท (503)** — ตั้งใจให้ "ปิดโดยปริยาย" เพราะ LINE user id + ชื่อพนักงาน = **ข้อมูลส่วนบุคคล (PDPA)** ใครถือ id ก็ทักหาพนักงานได้ตรง
+- **ไม่คืน**: รูปโปรไฟล์ · reply token · เวลาเข้างาน/วันหยุด (มีในชีตแต่ไม่ได้ขอ + เกินจำเป็น)
+- JSON ตอบเป็นภาษาไทยอ่านออก (`ensure_ascii=False`) · ไม่เปิด CORS (ตั้งใจ — ให้เรียกแบบ server-to-server ถ้าต้องเรียกจากเบราว์เซอร์ค่อยเพิ่มทีหลัง)
+- **⚠️ ยังไม่มี rate limit / log การเรียก** — ถ้าเปิดให้ partner ภายนอกจริงควรเพิ่ม
 
 ## Roles (สิทธิ์ผู้ใช้)
 
