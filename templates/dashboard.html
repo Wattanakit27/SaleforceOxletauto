@@ -350,8 +350,11 @@
   function colorizeStagePills(root){ (root||document).querySelectorAll('.pill[data-stage]').forEach(el=>tintPill(el, el.getAttribute('data-stage'))); }
   function _scrollParent(){ try{ if(window.self!==window.top) parent.postMessage({oxletScrollTop:true},'*'); }catch(e){} }
   function openAdd(){document.getElementById('addModal').style.display='flex'; _scrollParent();}
-  function closeAdd(){document.getElementById('addModal').style.display='none';}
-  function closeCar(){document.getElementById('carModal').style.display='none';}
+  // ★ ส.ค.69 — ปิดโมดัลแบบทนทาน: บางโมดัลไม่ได้ render ทุกบทบาท (addModal อยู่ใน {% templatetag openblock %} if can_add {% templatetag closeblock %})
+  //   ของเดิมเข้าถึง .style ตรงๆ -> คนที่เพิ่มรถไม่ได้ (ทะเบียน/ช่าง/ล้างรถ/QC/เซลล์) กด Esc ทีไร error ทุกที
+  function _hide(id){ const e=document.getElementById(id); if(e) e.style.display='none'; }
+  function closeAdd(){ _hide('addModal'); }
+  function closeCar(){ _hide('carModal'); }
 
   async function openCar(code){
     const m=document.getElementById('carModal'), b=document.getElementById('carBody');
@@ -502,7 +505,7 @@
     const ta=document.getElementById('stageNote'); if(ta) setTimeout(()=>ta.focus(),50);
   }
   function onStageFiles(files){ if(files&&files.length) _uploadInto(files,_stageMedia,'stageThumbs','stageUpMsg',_stagePend.code); }
-  function closeStage(){ document.getElementById('stageModal').style.display='none'; }
+  function closeStage(){ _hide('stageModal'); }
   async function doStage(){
     const {code,stage}=_stagePend; if(!code||!stage) return;
     // ★ ส.ค.69 — บังคับ หมายเหตุ + รูป (เตือนตามลำดับช่องกรอก: หมายเหตุอยู่บน รูปอยู่ล่าง)
@@ -559,7 +562,7 @@
     if(window.lucide)lucide.createIcons();
   }
   function closeFlagProof(){
-    document.getElementById('flagModal').style.display='none';
+    _hide('flagModal');
     const cb=document.getElementById('fl_'+_fpPend.key); if(cb) cb.checked=true;   // ยกเลิก = ติ๊กกลับ
   }
   async function doFlagProof(){
@@ -569,7 +572,7 @@
     const btn=document.getElementById('flagProofGo'); if(btn){ btn.disabled=true; btn.textContent=T('saving'); }
     const ok=await _postFlags(_fpPend.code,_fpPend.key,false,note,_fpMedia);
     if(btn){ btn.disabled=false; btn.textContent='ยืนยัน'; }
-    if(ok){ document.getElementById('flagModal').style.display='none'; location.reload(); }
+    if(ok){ _hide('flagModal'); location.reload(); }
   }
   async function setFlag(code,key,on){
     if(!on && FLAG_PROOF.has(key)){ openFlagProof(code,key); return; }   // ปลดธง = ต้องมีหลักฐาน
@@ -597,7 +600,8 @@
     if(ba) ba.classList.toggle('pri', m==='all');
   }
   {% if has_my %}setBoardMode('mine');{% endif %}
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeFlagProof();closeShoot();} });
+  // (closeShoot ถูกถอดไปพร้อมปุ่มถ่ายคอนเทนต์ ส.ค.69 — เคยเรียกต่อ = ReferenceError ทุกครั้งที่กด Esc)
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeFlagProof();} });
 
   // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
   const PHASES = JSON.parse(document.getElementById('phaseData').textContent);
