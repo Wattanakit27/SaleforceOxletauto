@@ -121,6 +121,21 @@ FLAG_EDIT_ROLES = {
 FLAG_ALWAYS_ROLES = {EXEC}
 
 
+# ★ ส.ค.69 (เจ้าของสั่ง) — บทบาทที่ "ไม่ต้องเห็นเช็คลิสต์ตรวจรถ"
+#   ฝ่ายล้างรถมีปุ่ม "ล้างเสร็จรถรอปล่อย" (qc_release) ซึ่งบังเอิญอยู่ในสเตปเช็คลิสต์
+#   แต่เช็คลิสต์ 15 ข้อเป็นการ "ตรวจสภาพรถ" (งานของ QC/เซลล์) ไม่ใช่งานของเด็กล้างรถ
+#   → ซ่อนทั้งชุด ไม่ใช่แค่ปิดติ๊ก (ให้เขาเหลือแค่ รูป+หมายเหตุ ซึ่งเป็นงานเขาจริงๆ)
+CHECKLIST_HIDE_ROLES = {CARWASH}
+
+
+def checklist_stages_for(user) -> list:
+    """สเตปที่ต้องโชว์เช็คลิสต์ตรวจรถ "สำหรับ user คนนี้" — บางบทบาทไม่ต้องเห็น (ดู CHECKLIST_HIDE_ROLES)"""
+    from . import constants as _C
+    if get_role(user) in CHECKLIST_HIDE_ROLES:
+        return []
+    return sorted(_C.CHECKLIST_STAGES)
+
+
 def can_set_priority(user, stage=None) -> bool:
     """ตั้ง "ความด่วน" ได้ไหม
     - บทบาท: ทุกบทบาท ยกเว้น READONLY_PRIORITY_ROLES (ฝ่ายล้างรถ = ดูอย่างเดียว)
@@ -224,6 +239,12 @@ def allowed_stages(user):
 
 
 def can_set_stage(user, stage):
+    # ★ ส.ค.69 (เจอตอนทดสอบ) — กันสเตปที่ "ไม่มีอยู่จริง"
+    #   เดิมบทบาทสิทธิ์เต็ม/ฝ่ายทะเบียนเช็คแบบ "ไม่อยู่ในลิสต์ห้าม = ผ่าน" → ส่งค่าว่าง/คีย์มั่วมาก็ผ่าน
+    #   ผลคือรถกลายเป็นสเตปว่าง หลุดทุกคอลัมน์บนบอร์ด (เจอจริงตอนฟอร์มส่ง stage="" มา)
+    from . import constants as _C
+    if stage not in _C.STAGE_NAME:
+        return False
     if stage in NO_ONE_STAGES:
         return False
     role = get_role(user)

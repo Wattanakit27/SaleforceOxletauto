@@ -138,9 +138,9 @@
         {% endfor %}
       </div>
 
-      <div><label class="sm mut" data-i18n="note">หมายเหตุ (ถ้ามี)</label><textarea name="note" rows="5" placeholder="เช่น ยางปี 26 · ภาษีปี 70 · ไฟเลี้ยวซ้ายไม่ติด" style="min-height:120px;line-height:1.6;resize:vertical"></textarea></div>
+      <div><label class="sm mut" data-i18n="note">หมายเหตุ <span style="color:#dc2626">*</span></label><textarea name="note" id="scanNote" rows="5" placeholder="เช่น ยางปี 26 · ภาษีปี 70 · ไฟเลี้ยวซ้ายไม่ติด" style="min-height:120px;line-height:1.6;resize:vertical"></textarea></div>
       <div>
-        <label class="sm mut" data-i18n="photo">แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)</label>
+        <label class="sm mut" data-i18n="photo">แนบรูป/วิดีโอ <span style="color:#dc2626">*</span></label>
         <label class="sc-drop">
           <input type="file" id="scanFiles" accept="image/*,video/*" multiple style="display:none">
           <i data-lucide="camera"></i><span class="sm" data-i18n="photoHint">แตะเพื่อถ่าย/เลือกไฟล์</span>
@@ -188,10 +188,10 @@
 <script>
   // i18n เฉพาะหน้าสแกน — ไทย/อังกฤษ/พม่า/เขมร (คำพม่า-เขมรเป็นฉบับแปลเบื้องต้น ให้ native ตรวจได้)
   var SCAN_I18N = {
-    th: {carCode:'รหัสรถ', changeStage:'เปลี่ยนสเตปรถ', note:'หมายเหตุ (ถ้ามี)', photo:'แนบรูป/วิดีโอ (เลือกได้หลายไฟล์)', photoHint:'แตะเพื่อถ่าย/เลือกไฟล์', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ', pickFirst:'เลือกสเตปใหม่ก่อน', flags:'ธงงานค้าง', flagPhoto:'ยังไม่ได้ถ่ายรูป', flagContent:'ยังไม่ได้ถ่ายคอนเทนต์', flagTire:'รอเปลี่ยนยาง', viewOnly:'(ดูอย่างเดียว)', saving:'กำลังบันทึก...', saved:'บันทึกแล้ว ✓', flagFail:'บันทึกไม่สำเร็จ', prio:'ความด่วน', intake_phase:'รับเข้า', recon_phase:'ทำสภาพ', sale_phase:'ขาย', release_phase:'ปล่อยรถ', chkTitle:'เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา', durNow:'อยู่มาแล้ว'},
-    en: {carCode:'Car code', changeStage:'Change stage', note:'Note (optional)', photo:'Attach photos/videos (multiple)', photoHint:'Tap to take / pick files', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet', pickFirst:'Select a new stage first', flags:'Pending tasks', flagPhoto:'Photos not taken yet', flagContent:'Content not shot yet', flagTire:'Waiting for tyre change', viewOnly:'(view only)', saving:'Saving...', saved:'Saved ✓', flagFail:'Save failed', prio:'Priority', intake_phase:'Intake', recon_phase:'Recondition', sale_phase:'Sales', release_phase:'Release', chkTitle:'Inspection checklist — untick only problem items', durNow:'in stage for'},
-    my: {carCode:'ကားကုဒ်', changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (ရှိလျှင်)', photo:'ဓာတ်ပုံ/ဗီဒီယို တွဲရန် (များစွာ)', photoHint:'ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ', pickFirst:'အဆင့်အသစ်အရင်ရွေးပါ', flags:'ကျန်ရှိသောအလုပ်', flagPhoto:'ဓာတ်ပုံ မရိုက်ရသေး', flagContent:'ကွန်တင့် မရိုက်ရသေး', flagTire:'တာယာလဲရန် စောင့်နေ', viewOnly:'(ကြည့်ရုံသာ)', saving:'သိမ်းနေသည်...', saved:'သိမ်းပြီး ✓', flagFail:'မအောင်မြင်ပါ', prio:'အရေးပေါ်', intake_phase:'ဝင်ရောက်', recon_phase:'ပြင်ဆင်ရေး', sale_phase:'အရောင်း', release_phase:'ထုတ်ပေး', chkTitle:'ကားစစ်ဆေးစာရင်း — ပြဿနာရှိသည့်အချက်ကိုသာ ဖြုတ်ပါ', durNow:'ကြာပြီ'},
-    km: {carCode:'លេខកូដរថយន្ត', changeStage:'ប្ដូរដំណាក់កាល', note:'កំណត់ចំណាំ (បើមាន)', photo:'ភ្ជាប់រូប/វីដេអូ (ច្រើន)', photoHint:'ចុចដើម្បីថត/ជ្រើសឯកសារ', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ', pickFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន', flags:'កិច្ចការនៅសល់', flagPhoto:'មិនទាន់ថតរូប', flagContent:'មិនទាន់ថតខ្លឹមសារ', flagTire:'រង់ចាំប្តូរកង់', viewOnly:'(មើលតែប៉ុណ្ណោះ)', saving:'កំពុងរក្សាទុក...', saved:'រក្សាទុករួច ✓', flagFail:'រក្សាទុកមិនបាន', prio:'អាទិភាព', intake_phase:'ទទួលចូល', recon_phase:'កែសម្ផស្ស', sale_phase:'លក់', release_phase:'ប្រគល់', chkTitle:'បញ្ជីត្រួតពិនិត្យរថយន្ត — ដោះធីកតែចំណុចមានបញ្ហា', durNow:'បានស្នាក់នៅ'}
+    th: {carCode:'รหัสรถ', changeStage:'เปลี่ยนสเตปรถ', note:'หมายเหตุ (ต้องใส่)', photo:'แนบรูป/วิดีโอ (ต้องแนบ)', needNote:'ต้องใส่หมายเหตุก่อนบันทึก', needPhoto:'ต้องแนบรูป/วิดีโอก่อนบันทึก', photoHint:'แตะเพื่อถ่าย/เลือกไฟล์', save:'บันทึกเปลี่ยนสเตป', by:'ผู้ทำ', noStage:'บทบาทของคุณไม่มีสเตปที่กดได้กับรถคันนี้', history:'ประวัติล่าสุด', noHistory:'ยังไม่มีประวัติ', pickFirst:'เลือกสเตปใหม่ก่อน', flags:'ธงงานค้าง', flagPhoto:'ยังไม่ได้ถ่ายรูป', flagContent:'ยังไม่ได้ถ่ายคอนเทนต์', flagTire:'รอเปลี่ยนยาง', viewOnly:'(ดูอย่างเดียว)', saving:'กำลังบันทึก...', saved:'บันทึกแล้ว ✓', flagFail:'บันทึกไม่สำเร็จ', prio:'ความด่วน', intake_phase:'รับเข้า', recon_phase:'ทำสภาพ', sale_phase:'ขาย', release_phase:'ปล่อยรถ', chkTitle:'เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา', durNow:'อยู่มาแล้ว'},
+    en: {carCode:'Car code', changeStage:'Change stage', note:'Note (required)', photo:'Attach photos/videos (required)', needNote:'Please add a note first', needPhoto:'Please attach a photo/video first', photoHint:'Tap to take / pick files', save:'Save stage change', by:'By', noStage:'Your role has no stage you can set for this car', history:'Recent history', noHistory:'No history yet', pickFirst:'Select a new stage first', flags:'Pending tasks', flagPhoto:'Photos not taken yet', flagContent:'Content not shot yet', flagTire:'Waiting for tyre change', viewOnly:'(view only)', saving:'Saving...', saved:'Saved ✓', flagFail:'Save failed', prio:'Priority', intake_phase:'Intake', recon_phase:'Recondition', sale_phase:'Sales', release_phase:'Release', chkTitle:'Inspection checklist — untick only problem items', durNow:'in stage for'},
+    my: {carCode:'ကားကုဒ်', changeStage:'အဆင့်ပြောင်းရန်', note:'မှတ်ချက် (မဖြစ်မနေ)', photo:'ဓာတ်ပုံ/ဗီဒီယို (မဖြစ်မနေ)', needNote:'မှတ်ချက် အရင်ထည့်ပါ', needPhoto:'ဓာတ်ပုံ/ဗီဒီယို အရင်တွဲပါ', photoHint:'ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ', save:'အဆင့်ပြောင်း သိမ်းမည်', by:'လုပ်ဆောင်သူ', noStage:'သင့်တာဝန်တွင် ဤကားအတွက် ပြောင်းနိုင်သည့်အဆင့်မရှိပါ', history:'မကြာသေးမီမှတ်တမ်း', noHistory:'မှတ်တမ်းမရှိသေးပါ', pickFirst:'အဆင့်အသစ်အရင်ရွေးပါ', flags:'ကျန်ရှိသောအလုပ်', flagPhoto:'ဓာတ်ပုံ မရိုက်ရသေး', flagContent:'ကွန်တင့် မရိုက်ရသေး', flagTire:'တာယာလဲရန် စောင့်နေ', viewOnly:'(ကြည့်ရုံသာ)', saving:'သိမ်းနေသည်...', saved:'သိမ်းပြီး ✓', flagFail:'မအောင်မြင်ပါ', prio:'အရေးပေါ်', intake_phase:'ဝင်ရောက်', recon_phase:'ပြင်ဆင်ရေး', sale_phase:'အရောင်း', release_phase:'ထုတ်ပေး', chkTitle:'ကားစစ်ဆေးစာရင်း — ပြဿနာရှိသည့်အချက်ကိုသာ ဖြုတ်ပါ', durNow:'ကြာပြီ'},
+    km: {carCode:'លេខកូដរថយន្ត', changeStage:'ប្ដូរដំណាក់កាល', note:'កំណត់ចំណាំ (ត្រូវការ)', photo:'ភ្ជាប់រូប/វីដេអូ (ត្រូវការ)', needNote:'សូមបញ្ចូលកំណត់ចំណាំជាមុន', needPhoto:'សូមភ្ជាប់រូប/វីដេអូជាមុន', photoHint:'ចុចដើម្បីថត/ជ្រើសឯកសារ', save:'រក្សាទុកការប្ដូរ', by:'អ្នកធ្វើ', noStage:'តួនាទីរបស់អ្នកគ្មានដំណាក់កាលសម្រាប់រថយន្តនេះទេ', history:'ប្រវត្តិថ្មីៗ', noHistory:'មិនទាន់មានប្រវត្តិ', pickFirst:'ជ្រើសដំណាក់កាលថ្មីជាមុនសិន', flags:'កិច្ចការនៅសល់', flagPhoto:'មិនទាន់ថតរូប', flagContent:'មិនទាន់ថតខ្លឹមសារ', flagTire:'រង់ចាំប្តូរកង់', viewOnly:'(មើលតែប៉ុណ្ណោះ)', saving:'កំពុងរក្សាទុក...', saved:'រក្សាទុករួច ✓', flagFail:'រក្សាទុកមិនបាន', prio:'អាទិភាព', intake_phase:'ទទួលចូល', recon_phase:'កែសម្ផស្ស', sale_phase:'លក់', release_phase:'ប្រគល់', chkTitle:'បញ្ជីត្រួតពិនិត្យរថយន្ត — ដោះធីកតែចំណុចមានបញ្ហា', durNow:'បានស្នាក់នៅ'}
   };
   var STAGE_I18N = {
     en: {intake:'Intake', photo_wait:'Awaiting Photos', repair:'Repair', repair_done:'Repaired · Awaiting Check', parts:'Awaiting Parts', upholstery:'Upholstery', paint_in:'Paint (in-house)', paint_out:'Paint (outside)', paint_check:'Paint Check', film:'Window Film', wash:'Wash / Detail', wash_release:'Wash before release', qc_show:'Awaiting QC', sales_check:'Awaiting Sales Check', show:'Ready for Sale (showroom check)', reserve:'Reserved', finance:'Financing', transport_check:'DLT Inspection', closing:'Closing', qc_release:'QC before Release', release:'Release (send release photos)', sold:'Sold'},
@@ -213,7 +213,10 @@
     document.documentElement.lang = lang;
   }
   // เลือกสเตปแบบ chip → set hidden input + อัปเดต current→selected
-  var CHK_STAGES = new Set({{ checklist_stages|safe }});   // สเตปที่ต้องโชว์เช็คลิสต์ตรวจรถ
+  var CHK_STAGES = new Set({{ checklist_stages|safe }});
+  // ★ ส.ค.69 — สเตปที่บังคับ "รูป + หมายเหตุ" (มาจากเซิร์ฟเวอร์ · เซิร์ฟเวอร์เช็คซ้ําอีกชั้น)
+  var FORCE_MEDIA = new Set({{ force_media_stages|safe }});
+  var FORCE_NOTE  = new Set({{ force_note_stages|safe }});
   function scPickStage(k, btn){
     var inp=document.getElementById('stageInput'); if(inp) inp.value=k;
     document.querySelectorAll('.sc-chip').forEach(function(c){ c.classList.toggle('on', c===btn); });
@@ -314,6 +317,13 @@
         alert((SCAN_I18N[window._scanLang]||SCAN_I18N.th).pickFirst);
         return;
       }
+      // ★ ส.ค.69 — บังคับ รูป + หมายเหตุ ก่อนบันทึก (ทุกบทบาท ทุกสเตป)
+      //   เช็ค "ก่อน" ต่อผลเช็คลิสต์ — ไม่งั้นผลเช็คลิสต์ที่ระบบเติมเอง จะนับเป็นหมายเหตุ = กดผ่านได้โดยไม่พิมพ์อะเลย
+      var _stg=(document.getElementById('stageInput')||{}).value;
+      var _TT=(SCAN_I18N[window._scanLang]||SCAN_I18N.th);
+      var _ta=form.querySelector('textarea[name=note]');
+      if(FORCE_NOTE.has(_stg) && !(_ta && _ta.value.trim())){ e.preventDefault(); alert(_TT.needNote); if(_ta) _ta.focus(); return; }
+      if(FORCE_MEDIA.has(_stg) && !picked.length){ e.preventDefault(); alert(_TT.needPhoto); return; }
       // เช็คลิสต์ตรวจรถ → ต่อท้ายหมายเหตุ (ทำก่อน submit ทุกทาง · กันใส่ซ้ำด้วย marker [ตรวจรถ])
       var ta=form.querySelector('textarea[name=note]');
       var cs=chkSummary();

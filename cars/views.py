@@ -161,7 +161,9 @@ def dashboard(request):
         "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
         "flag_choices": C.CAR_FLAGS, "cur_flag": flagf,
-        "checklist_stages": sorted(C.CHECKLIST_STAGES), "checklist_items": C.CHECKLIST_ITEMS,
+        # สเตปที่บังคับ รูป/หมายเหตุ — ส่งจากเซิร์ฟเวอร์ ไม่ให้ JS hardcode หลุดจากกติกาจริง
+        "force_media_stages": sorted(C.STAGE_FORCE_MEDIA), "force_note_stages": sorted(C.STAGE_FORCE_NOTE),
+        "checklist_stages": roles.checklist_stages_for(request.user), "checklist_items": C.CHECKLIST_ITEMS,
         "board_cols": board_cols, "has_my": has_my, "is_full": is_full,
         # ปุ่ม "แดชบอร์ดขาย" โชว์เฉพาะแอดมินขาย (มาจาก /track/ ตรง) — คนงาน (position=worker) ซ่อน (อยู่ /dashboard/ แล้ว)
         "show_sales_link": (request.session.get("oxlet_user") or {}).get("position") == "admin",
@@ -262,6 +264,23 @@ def _media_urls(lst, photo_name=None):
         if u:
             out.append(u)
     return out
+
+
+def _proof_error(stage, note, media):
+    """บังคับ "แนบรูป + ใส่หมายเหตุ" ก่อนเปลี่ยนสเตป (★ ส.ค.69 · เจ้าของสั่ง — ทุกบทบาท ทุกสเตป)
+
+    คืนข้อความ error ถ้ายังขาด · คืน None ถ้าผ่าน
+    ต้องเช็คที่เซิร์ฟเวอร์ ไม่ใช่แค่ปิดปุ่มใน UI — เพราะยิง API ตรงข้ามหน้าเว็บได้
+    (ยกเว้นรายสเตปตั้งที่ C.PROOF_EXEMPT_STAGES จุดเดียว)
+    """
+    miss = []
+    if stage in C.STAGE_FORCE_MEDIA and not media:
+        miss.append("แนบรูป/วิดีโอ")
+    if stage in C.STAGE_FORCE_NOTE and not (note or "").strip():
+        miss.append("ใส่หมายเหตุ")
+    if not miss:
+        return None
+    return "ต้อง" + " และ ".join(miss) + " ก่อนเปลี่ยนสเตป"
 
 
 def _fetch_logs(car, limit):
@@ -654,6 +673,12 @@ def car_stage(request, code):
         new_stage = request.POST.get("stage", "")
         if not roles.can_set_stage_direct(request.user, new_stage):
             raise PermissionDenied("คุณไม่มีสิทธิ์เปลี่ยนเป็นสเตปนี้ (ลองผ่านหน้าสแกน)")
+        # ★ ส.ค.69 — ทางนี้ไม่มีช่องแนบรูป/หมายเหตุ (หน้า car_detail เก่า ไม่ได้ลิงก์จากเมนูแล้ว)
+        #   ถ้าปล่อยไว้จะกลายเป็นรูรั่วข้ามกฎ "ต้องมีหลักฐาน" → ไล่ไปใช้หน้าสแกน/บอร์ดแทน
+        err = _proof_error(new_stage, "", [])
+        if err:
+            messages.error(request, err + " — เปลี่ยนจากหน้าสแกน QR หรือบอร์ดแทน")
+            return redirect("scan", code=car.code)
         actor = _actor(request.user)
         _, should_notify = car.change_stage(new_stage=new_stage, worker_name=actor)
         if should_notify:
@@ -687,7 +712,8 @@ def scan_page(request, code):
     return render(request, "scan.html", {
         "car": car, "stages": stages, "stage_groups": stage_groups,
         "logs": logs, "actor": _actor(request.user),
-        "checklist_stages": sorted(C.CHECKLIST_STAGES), "checklist_items": C.CHECKLIST_ITEMS,
+        "checklist_stages": roles.checklist_stages_for(request.user), "checklist_items": C.CHECKLIST_ITEMS,
+        "force_media_stages": sorted(C.STAGE_FORCE_MEDIA), "force_note_stages": sorted(C.STAGE_FORCE_NOTE),
         # ความด่วน — เลือกได้จากหน้าสแกน (มือถือหน้างาน) เหมือนป๊อปอัปบอร์ด
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         # ★ ส.ค.69 — ฝ่ายล้างรถ "เห็นสถานะแต่แก้ไม่ได้" (ความด่วน + ธงงานค้าง)
@@ -867,6 +893,10 @@ def scan_submit(request, code):
         media = json.loads(request.POST.get("media") or "[]")
     except (ValueError, TypeError):
         media = []
+    err = _proof_error(stage, note, media)      # ★ บังคับ รูป + หมายเหตุ (ส.ค.69)
+    if err:
+        messages.error(request, err)
+        return redirect("scan", code=code)
     log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
     if media:
         try:  # กันช่วง deploy ที่คอลัมน์ media ยังไม่ migrate — เปลี่ยนสเตปต้องไม่ 500
@@ -1083,7 +1113,8 @@ def cars_api(request):
                       C.STAGE_OWNER.get(k, "")]
                      for k in roles.allowed_stages(request.user)],
         # เช็คลิสต์ตรวจรถ — โผล่ตอนเลือกสเตปกลุ่มตรวจ/โชว์/ปล่อย ผลต่อท้ายหมายเหตุ (ส.ค.69)
-        "checklist": {"stages": sorted(C.CHECKLIST_STAGES), "items": C.CHECKLIST_ITEMS},
+        "checklist": {"stages": roles.checklist_stages_for(request.user), "items": C.CHECKLIST_ITEMS},
+        "forceMediaStages": sorted(C.STAGE_FORCE_MEDIA), "forceNoteStages": sorted(C.STAGE_FORCE_NOTE),
         # ตัวเลือกความด่วน + ธงงานค้าง — หน้าเซลล์เอาไปทำ dropdown/checkbox (ส.ค.69)
         "priorities": [{"key": k, "name": n, "color": C.PRIORITY_COLOR[k]} for k, n in C.PRIORITY_CHOICES],
         "canPriority": roles.can_set_priority(request.user), "flagPerms": roles.flag_perms(request.user),
@@ -1112,9 +1143,10 @@ def api_set_stage(request):
     media = data.get("media")
     if not isinstance(media, list):
         media = []
-    if stage in C.STAGE_FORCE_MEDIA and not media:   # ตรวจปล่อย/ปล่อยรถ = บังคับแนบรูป/วิดีโอ
-        return JsonResponse({"ok": False, "error": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน"}, status=400)
     note = (data.get("note") or "").strip()
+    err = _proof_error(stage, note, media)      # ★ บังคับ รูป + หมายเหตุ (ส.ค.69)
+    if err:
+        return JsonResponse({"ok": False, "error": err}, status=400)
     actor = _actor(request.user)
     log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
     pr = data.get("priority")
@@ -1153,6 +1185,9 @@ def api_seller_set_stage(request):
     media = data.get("media")
     if not isinstance(media, list):
         media = []
+    err = _proof_error(stage, note, media)      # ★ บังคับ รูป + หมายเหตุ (ส.ค.69)
+    if err:
+        return JsonResponse({"ok": False, "error": err}, status=400)
     actor = _actor(request.user)
     log, should_notify = car.change_stage(new_stage=stage, worker_name=actor, note=note)
     if media:
