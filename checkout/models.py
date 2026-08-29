@@ -99,6 +99,9 @@ class CarMovement(models.Model):
     status = models.CharField("สถานะ", max_length=20, choices=STATUS_CHOICES, default=OUT_WAITING)
     approved_by = models.CharField("อนุมัติ/ผ่านโดย", max_length=80, blank=True)  # มีชื่อคนกำกับเสมอถ้า override
     damage_reported = models.BooleanField("แจ้งความเสียหายตอนคืน", default=False)
+    # ★ ส.ค.69 — จาก log จริง "เบิกน้ำมัน" มักพ่วงมากับการเบิกรถ (และมียกเลิกกลางคันด้วย)
+    fuel_requested = models.BooleanField("ขอเบิกน้ำมันด้วย", default=False)
+    purpose_key = models.CharField("ประเภทงาน", max_length=20, blank=True)   # ดู constants.PURPOSES
     note = models.TextField("หมายเหตุ", blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

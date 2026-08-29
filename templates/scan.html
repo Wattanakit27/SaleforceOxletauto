@@ -107,6 +107,53 @@
         <i data-lucide="disc" style="width:18px;height:18px;color:#475569"></i> <span data-i18n="flagTire">รอเปลี่ยนยาง</span>
       </label>
       <span id="flagMsg" class="mut sm"></span>
+      <!-- ═══ เบิก-คืนรถ (ส.ค.69) — ปุ่มอยู่ในหน้าสแกนที่คนงานใช้อยู่แล้วทุกวัน ═══
+           กดแล้วบอทสรุปเข้ากลุ่ม LINE ให้หัวหน้าเห็นเหมือนเดิม (ไม่ต้องเปลี่ยนวิธีอนุมัติ) -->
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <div class="mut sm">เบิก-คืนรถ</div>
+        {% if ck_open %}
+        <div class="sm" style="margin:6px 0;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,#f59e0b 14%,transparent);border:1px solid color-mix(in srgb,#f59e0b 45%,transparent)">
+          <b>รถถูกเบิกอยู่</b> — {{ ck_open.borrower_name }} · {{ ck_open.purpose }}{% if ck_open.destination %} · {{ ck_open.destination }}{% endif %}
+        </div>
+        <button type="button" class="btn pri" style="width:100%" onclick="ckOpenPanel('in')"><i data-lucide="corner-down-left"></i> คืนรถ</button>
+        {% else %}
+        <button type="button" class="btn" style="width:100%" onclick="ckOpenPanel('out')"><i data-lucide="log-out"></i> เบิกรถ</button>
+        {% endif %}
+
+        <div id="ckWrap" style="display:none;margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg2)">
+          <div class="sm" style="font-weight:700;margin-bottom:6px" id="ckTitle">เบิกรถ</div>
+
+          <div id="ckPurposeBox">
+            <div class="mut sm">ไปทำอะไร <span style="color:#dc2626">*</span></div>
+            <div class="sc-chips" style="margin:5px 0 9px">
+              {% for p in ck_purposes %}<button type="button" class="sc-chip" data-ck="{{ p.key }}" onclick="ckPick('{{ p.key }}',this)"><i data-lucide="{{ p.icon }}"></i> {{ p.name }}</button>{% endfor %}
+            </div>
+            <input id="ckDest" placeholder="ปลายทาง (เช่น ขนส่งชลบุรี · ศูนย์ฮอนด้าแสงหงษ์)" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14px">
+            <label class="sc-flag" style="margin-top:8px"><input type="checkbox" id="ckFuel" style="accent-color:#f59e0b"> <i data-lucide="fuel" style="width:18px;height:18px;color:#f59e0b"></i> <span>ขอเบิกน้ำมันด้วย</span></label>
+          </div>
+
+          <div style="margin-top:8px"><div class="mut sm" id="ckOdoLabel">เลขไมล์ตอนเบิก</div>
+            <input id="ckOdo" inputmode="numeric" placeholder="เช่น 45120" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14px"></div>
+
+          <label class="sc-flag" id="ckDamageRow" style="display:none;margin-top:8px"><input type="checkbox" id="ckDamage" style="accent-color:#dc2626"> <i data-lucide="alert-triangle" style="width:18px;height:18px;color:#dc2626"></i> <span>มีความเสียหาย/รอยใหม่</span></label>
+
+          <div style="margin-top:8px"><div class="mut sm">หมายเหตุ</div>
+            <textarea id="ckNote" rows="2" placeholder="เช่น พาลูกค้าไปดูรถ กลับบ่าย" style="width:100%;box-sizing:border-box;line-height:1.6;resize:vertical"></textarea></div>
+
+          <div style="margin-top:8px">
+            <div class="mut sm" id="ckShotHint">ถ่ายรูป <span style="color:#dc2626">*</span></div>
+            <ul class="mut sm" id="ckShotList" style="margin:4px 0 6px;padding-left:18px"></ul>
+            <label class="sc-drop"><input type="file" id="ckFiles" accept="image/*,video/*" multiple style="display:none"><i data-lucide="camera"></i><span class="sm" data-i18n="photoHint">แตะเพื่อถ่าย/เลือกไฟล์</span></label>
+            <div id="ckPrev" class="mut sm" style="margin-top:6px"></div>
+          </div>
+
+          <div class="row" style="gap:8px;margin-top:10px">
+            <button type="button" class="btn" onclick="ckClose()" data-i18n="cancel">ยกเลิก</button>
+            <button type="button" class="btn pri" id="ckGo" onclick="ckSubmit()">ยืนยัน</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ★ ส.ค.69 (เจ้าของสั่ง) — เอาติ๊ก "ยังไม่ได้ถ่ายรูป" ออก ต้องแนบรูปที่ถ่ายแล้ว + หมายเหตุ
            (เก็บลงไทม์ไลน์รถให้ด้วย · ติ๊กกลับเข้าไม่ต้องมีหลักฐาน) -->
       <div id="fpWrap" style="display:none;margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg2)">
@@ -278,6 +325,74 @@
   });
 
   // ธงงานค้าง — ติ๊กแล้วบันทึกทันที (endpoint เดียวกับป๊อปอัปบอร์ด · csrf_exempt + login_required)
+  // ═══ เบิก-คืนรถ (ส.ค.69) ═══ ใช้ตัวอัปโหลดตัวเดียวกับหน้าสแกน (window.__scUpload)
+  var CK_OUT_MIN = {{ ck_out_min }}, CK_IN_MIN = {{ ck_in_min }};
+  var CK_OUT_ITEMS = {{ ck_out_items|safe }}, CK_IN_ITEMS = {{ ck_in_items|safe }};
+  var _ckMode='out', _ckPurpose='', _ckFiles=[];
+  function ckOpenPanel(mode){
+    _ckMode=mode; _ckPurpose=''; _ckFiles=[];
+    var out = (mode==='out');
+    document.getElementById('ckTitle').textContent = out?'เบิกรถ':'คืนรถ';
+    document.getElementById('ckPurposeBox').style.display = out?'block':'none';
+    document.getElementById('ckDamageRow').style.display = out?'none':'flex';
+    document.getElementById('ckOdoLabel').textContent = out?'เลขไมล์ตอนเบิก':'เลขไมล์ตอนคืน';
+    document.getElementById('ckOdo').value=''; document.getElementById('ckNote').value='';
+    document.getElementById('ckPrev').textContent='';
+    var f=document.getElementById('ckFiles'); if(f) f.value='';
+    var items = out?CK_OUT_ITEMS:CK_IN_ITEMS;
+    document.getElementById('ckShotList').innerHTML = items.map(function(i){
+      return '<li>'+i.label+(i.required?' <b style="color:#dc2626">(บังคับ)</b>':' (ถ้ามี)')+'</li>'; }).join('');
+    document.getElementById('ckWrap').style.display='block';
+    document.querySelectorAll('[data-ck]').forEach(function(b){ b.classList.remove('on'); });
+    if(window.lucide)lucide.createIcons();
+  }
+  function ckClose(){ document.getElementById('ckWrap').style.display='none'; _ckFiles=[]; }
+  function ckPick(k, el){
+    _ckPurpose=k;
+    document.querySelectorAll('[data-ck]').forEach(function(b){ b.classList.remove('on'); });
+    el.classList.add('on');
+  }
+  async function ckSubmit(){
+    var out = (_ckMode==='out');
+    if(out && !_ckPurpose){ alert('เลือกว่าไปทำอะไรก่อน'); return; }
+    var need = out?CK_OUT_MIN:CK_IN_MIN;
+    if(_ckFiles.length < need){ alert('ต้องแนบรูปอย่างน้อย '+need+' รูป'); return; }
+    var btn=document.getElementById('ckGo'); btn.disabled=true; btn.textContent='กำลังอัปโหลด...';
+    var media=[];
+    for(var i=0;i<_ckFiles.length;i++){
+      try{
+        var r=await window.__scUpload(_ckFiles[i], '{{ car.code }}', function(){});
+        media.push({id:r.id, video:(_ckFiles[i].type||'').indexOf('video')===0});
+      }catch(e){ alert('อัปโหลดไม่สำเร็จ: '+(e.message||e)); btn.disabled=false; btn.textContent='ยืนยัน'; return; }
+    }
+    btn.textContent='กำลังบันทึก...';
+    var body={ code:'{{ car.code }}', media:media,
+               note:(document.getElementById('ckNote').value||'').trim() };
+    if(out){ body.purpose=_ckPurpose;
+             body.destination=(document.getElementById('ckDest').value||'').trim();
+             body.odo_out=(document.getElementById('ckOdo').value||'').trim();
+             body.fuel=document.getElementById('ckFuel').checked; }
+    else   { body.odo_in=(document.getElementById('ckOdo').value||'').trim();
+             body.damage=document.getElementById('ckDamage').checked; }
+    try{
+      var res=await fetch('/checkout/api/'+(out?'car_out':'car_return'),
+        {method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+         credentials:'same-origin',body:JSON.stringify(body)});
+      var j=await res.json();
+      if(!j.ok){ alert(j.error||'บันทึกไม่สำเร็จ'); btn.disabled=false; btn.textContent='ยืนยัน'; return; }
+      alert((out?'เบิกรถเรียบร้อย':'คืนรถเรียบร้อย') + (j.lineSent?' · แจ้งกลุ่ม LINE แล้ว':' (ยังไม่ได้ตั้งกลุ่ม LINE)'));
+      location.reload();
+    }catch(e){ alert('ผิดพลาด: '+e); btn.disabled=false; btn.textContent='ยืนยัน'; }
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    var f=document.getElementById('ckFiles'); if(!f) return;
+    f.addEventListener('change',function(){
+      for(var i=0;i<f.files.length;i++) _ckFiles.push(f.files[i]);
+      document.getElementById('ckPrev').textContent='เลือกแล้ว '+_ckFiles.length+' ไฟล์';
+      f.value='';
+    });
+  });
+
   // ★ ส.ค.69 — ธงที่ "ปลดออกเฉยๆ ไม่ได้" ต้องแนบรูป+โน้ต (sync กับ C.FLAG_PROOF_REQUIRED ฝั่งเซิร์ฟเวอร์)
   var FLAG_PROOF=new Set(['need_photo']);
   var _fpKey='', _fpFiles=[];

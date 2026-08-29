@@ -154,6 +154,15 @@ def dashboard(request):
         board_cols.append({"key": k, "name": n, "icon": i, "mine": k in my_stages, "cars": lst})
     has_my = bool(my_stages)                        # มีสเตปตัวเอง → default โฟกัสงานตัวเอง + ปุ่มสลับ
 
+    # ★ ส.ค.69 — แนบข้อมูล "ถูกเบิกออกไปแล้วยังไม่คืน" ไปกับรถแต่ละคัน (ป้ายบนการ์ด/ตาราง)
+    _out = out_now_codes()
+    for _c in cars:
+        m = _out.get(_c.code)
+        _c.out_now = {"who": m.borrower_name, "why": m.purpose, "where": m.destination} if m else None
+    for _col in board_cols:
+        for _c in (_col.get("cars") or []):
+            m = _out.get(_c.code)
+            _c.out_now = {"who": m.borrower_name, "why": m.purpose, "where": m.destination} if m else None
     return render(request, "dashboard.html", {
         "total": len(all_cars), "flags": flags, "phase_rows": phase_rows,
         "avg_t2l": avg_t2l, "t2l_target": C.T2L_TARGET_DAYS,
@@ -322,6 +331,9 @@ def car_json(request, code):
         "needPhoto": car.need_photo, "needContent": car.need_content, "needTire": car.need_tire, "flags": car.flags,
         "canPriority": roles.can_set_priority(request.user, car.stage),
         "showPriority": car.stage in C.PRIORITY_STAGES, "flagPerms": roles.flag_perms(request.user),
+        "outNow": (lambda m: {"who": m.borrower_name, "why": m.purpose, "where": m.destination,
+                              "since": timezone.localtime(m.checked_out_at).strftime("%d/%m %H:%M") if m.checked_out_at else ""}
+                   if m else None)(out_now_codes().get(car.code)),
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
@@ -690,6 +702,40 @@ def car_stage(request, code):
 # =========================================================
 #  สแกน (มือถือ)
 # =========================================================
+def out_now_codes():
+    """รหัสรถที่ "ถูกเบิกออกไปแล้วยังไม่คืน" — ใช้ติดป้ายบนบอร์ด/ป๊อปอัป
+    ตอบคำถามที่ทุกวันนี้ต้องไล่อ่านแชตเอาว่า "รถคันนี้อยู่ไหน ใครเอาไป"
+    (checkout ยังไม่ migrate/ล่ม = คืน set ว่าง ไม่ทำให้บอร์ดพัง)"""
+    try:
+        from checkout.models import CarMovement
+        return {m.car_id: m for m in CarMovement.objects
+                .filter(returned_at__isnull=True, car__isnull=False)
+                .exclude(status=CarMovement.CANCELLED).select_related("car")}
+    except Exception:
+        return {}
+
+
+def _checkout_ctx(car):
+    """context เบิก-คืนรถสำหรับหน้าสแกน — แยกเป็นฟังก์ชันเผื่อ checkout ยังไม่ได้ migrate (ไม่ให้หน้าสแกนพัง)"""
+    try:
+        from checkout.views import open_movement_for, web_checklist
+        from checkout import constants as CK
+        mv = open_movement_for(car.code)
+        out_items, in_items = web_checklist("out"), web_checklist("in")
+        # ★ ต้องส่งเป็น JSON ไม่ใช่ list ของ Python — ไม่งั้นฝั่ง JS ได้ True/False + single quote = พัง
+        return {
+            "ck_open": mv,
+            "ck_purposes": [{"key": k, "name": n, "icon": i} for k, n, i in CK.PURPOSES],
+            "ck_out_items": json.dumps(out_items, ensure_ascii=False),
+            "ck_in_items": json.dumps(in_items, ensure_ascii=False),
+            "ck_out_min": sum(i["min_count"] for i in out_items if i.get("required")),
+            "ck_in_min": sum(i["min_count"] for i in in_items if i.get("required")),
+        }
+    except Exception:
+        return {"ck_open": None, "ck_purposes": [], "ck_out_items": "[]", "ck_in_items": "[]",
+                "ck_out_min": 0, "ck_in_min": 0}
+
+
 @login_required
 def scan_page(request, code):
     car = get_object_or_404(Car, code=code)
@@ -720,6 +766,9 @@ def scan_page(request, code):
         "can_set_priority": roles.can_set_priority(request.user, car.stage),
         "show_priority": car.stage in C.PRIORITY_STAGES,
         "flag_perms": roles.flag_perms(request.user),   # ★ สิทธิ์ติ๊กรายช่อง
+        # ★ ส.ค.69 — เบิก-คืนรถ (แบบ C: กดในเว็บ → บอทสรุปเข้ากลุ่ม LINE)
+        #   รถถูกเบิกอยู่ไหม ตัดสินว่าจะโชว์ปุ่ม "เบิกรถ" หรือ "คืนรถ"
+        **_checkout_ctx(car),
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
     })

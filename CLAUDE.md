@@ -846,6 +846,21 @@ CRON_SECRET=xxx...
 - **ขั้นตอนเปิดใช้ (ยังไม่ทำ — รอต่อ DB)**: (1) สร้าง DB — Vercel Postgres (Storage→Create→Postgres, ใส่ env ให้เอง) หรือ Supabase (Postgres + bucket `car-photos` public) → (2) ตั้ง `DATABASE_URL`/`POSTGRES_URL`=direct(5432) ในเครื่อง → `python manage.py migrate` + `createsuperuser` (=Executive) [+ `seed_demo` สาขา/รถตัวอย่าง ถ้าต้องการ] → (3) ตั้ง env บน Vercel (pooled 6543) → redeploy. **ไม่ต้องตั้ง bucket ก็ใช้ได้** (แค่อัปรูปรถยังไม่ได้ จนกว่าจะตั้ง Storage)
 - **ตรวจแล้ว (local, sqlite)**: `manage.py check` ผ่าน · migrate ผ่าน · ทุกหน้า /track/* render 200 + QR PNG ออก · sales เดิมไม่กระทบ (/login/ 200, /dashboard/ redirect ปกติ)
 
+### 🚗 ระบบเบิก-คืนรถ (checkout/ · เฟส 2 ส.ค.69) — "กดในเว็บ บอทสรุปเข้ากลุ่ม LINE"
+แทนการพิมพ์ "เบิกรถ/คืนรถ" ในกลุ่ม LINE ล้วน (เดิมไม่มี state — ไม่รู้ว่ารถอยู่กับใคร ใครเบิกไม่คืน ต้องมีคนไล่ทวงรูปเอง)
+- **เลือกแบบ C (ลูกผสม) ตามที่เจ้าของเคาะ**: คนงาน**สแกน QR ที่รถ** (ซึ่งทำอยู่แล้วทุกวัน) → กดเบิก/คืนในหน้าสแกน → **บอทโพสต์สรุปเข้ากลุ่ม LINE** ให้หัวหน้าเห็น/อนุมัติเหมือนเดิม
+  - เหตุผล: เว็บล้วน = หัวหน้าไม่เห็นความเคลื่อนไหว ระบบจะถูกเมิน · LINE ล้วน = ต้องเดาใจจากข้อความ ไม่มี state
+- **[checkout/constants.py](checkout/constants.py)** — `PURPOSES` 6 ประเภท (สังเคราะห์จาก log จริง: ตรวจขนส่ง/เข้าศูนย์/ส่งลูกค้า/ไฟแนนซ์/ย้ายสาขา/งานทั่วไป) = **กดปุ่ม ไม่ต้องพิมพ์** → นับสถิติได้ (ของเดิมพิมพ์อิสระ นับไม่ได้เลย)
+  - `DEFAULT_CHECKLIST` (ตอนเบิก) = **บังคับ 2 ข้อ** (รอบคัน ≥2 · เลขไมล์ 1) + ตัวเลือก 3 · `RETURN_CHECKLIST` (ตอนคืน) บังคับ 2 รูป
+  - **⚠️ ตั้งใจบังคับน้อย**: seed เดิมมี 7 ข้อ (~11 ไฟล์/ครั้ง) แต่ log จริงคนส่ง 1-3 รูป → บังคับเยอะ = ไม่มีใครทำตาม · แก้เพิ่มได้ทีหลังผ่าน `ChecklistConfig`/`ChecklistItem` ในฐานข้อมูล (คีย์ `WEB_CONFIG_KEY="__web__"`)
+- **API** (`login_required` · csrf_exempt เพราะหน้าสแกนโพสต์ JSON): `POST /checkout/api/car_out` · `POST /checkout/api/car_return` — ใช้ตัวอัปโหลดเดิม `/track/api/upload` แล้วส่ง `media:[{id,video}]` มา · เก็บ token ลง `MovementPhoto.file.name` (วิธีเดียวกับ `Car.photo`)
+- **[checkout/lineout.py](checkout/lineout.py)** — สรุปเข้ากลุ่ม (ข้อความหน้าตาใกล้เคียงที่คนพิมพ์กันอยู่ จะได้คุ้นทันที) · กลุ่มปลายทางเก็บที่ KVStore **`checkout_line_config`** = `{enabled, group_id}` · **ไม่ตั้ง = ไม่ส่ง ระบบยังทำงานปกติ**
+- **หน้าสแกน** ([scan.html](templates/scan.html)): ปุ่ม **เบิกรถ / คืนรถ** สลับตามสถานะจริง (`ck_open`) · แผง `#ckWrap` (`ckOpenPanel`/`ckSubmit`) · ตอนคืนซ่อนช่องเลือกงาน + โชว์ช่อง "มีความเสียหาย"
+- **ป้าย "🚗 ออกนอกลาน"** บนการ์ดบอร์ด + `car_json.outNow` — `out_now_codes()` ([cars/views.py](cars/views.py)) แนบ `.out_now` ให้รถแต่ละคัน → **ตอบคำถาม "รถคันนี้อยู่ไหน ใครเอาไป" ได้ทันที** (เดิมต้องไล่อ่านแชต)
+- **สถานะเคส**: เบิกแล้ว = `PENDING_HUMAN` (รอหัวหน้ารับทราบในกลุ่ม เหมือนที่ทำกันอยู่) · คืนแล้วไม่มีความเสียหาย = `APPROVED_HUMAN` · มีความเสียหาย = `PENDING_HUMAN` ให้หัวหน้าตรวจ
+- **⚠️ เบิก-คืน ≠ สเตปรถ** — รถพร้อมขายที่เอาไปตรวจขนส่ง **ยังพร้อมขายอยู่** แค่ไม่อยู่ที่ลาน → เป็นชั้นแยก ไม่แตะ `Car.stage` เด็ดขาด (ถ้าเอาไปปนจะพังทั้งบอร์ด)
+- **ยังไม่ได้ทำ (เฟสถัดไป)**: บอทอ่านกลุ่ม LINE เพื่อจับคนที่ยังพิมพ์แบบเดิม · AI จำแนกว่ารูปไหนคือข้อไหนในเช็คลิสต์ (`MovementPhoto.checklist_item`/`ai_label` รองรับไว้แล้ว · ตอนนี้เช็คแค่ "จำนวนรวมพอไหม") · OCR เลขไมล์ · ทวงอัตโนมัติเมื่อค้างเกิน `OVERDUE_HOURS` · หน้าตั้งค่ากลุ่ม LINE ในเมนูแอดมิน (ตอนนี้ตั้งผ่าน KVStore)
+
 ### 🔗 เชื่อมเว็บโชว์รูม (oxlet_web) — sync รถ+รูป ผ่าน webhook (ก.ค.69)
 รถในสต็อก (tracking `cars.Car`) → ประกาศขายบนเว็บโชว์รูม **oxlet_web** (Django project แยก · repo `github.com/Wattanakit27/oxletauto_web` · DB คนละตัว) — เชื่อมด้วย **webhook (HTTP POST) ไม่ใช่แชร์ DB** (decoupled):
 - **ตัวผูก**: `Car.code` ↔ `Vehicle.stock_code` (1 รถจริง = 1 ประกาศ)
