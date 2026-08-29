@@ -50,6 +50,10 @@ def _mv_json(m):
         "returned": _t(m.returned_at),
         "photos": m.photos.count(),
         "approvedBy": m.approved_by,
+        # ★ ส.ค.69 — งานที่ไปทำ + "ค้างนานแค่ไหน" (จาก log จริง เบิกแล้วไม่คืนคือปัญหาที่มองไม่เห็นเลย)
+        "fuel": m.fuel_requested,
+        "outHours": (round((timezone.now() - m.checked_out_at).total_seconds() / 3600, 1)
+                     if (m.checked_out_at and not m.returned_at) else None),
     }
 
 

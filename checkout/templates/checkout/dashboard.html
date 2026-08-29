@@ -45,7 +45,7 @@
   <div class="deny">หน้านี้สำหรับหัวหน้า/ออฟฟิศ (แอดมิน) เท่านั้น — กรุณาเข้าสู่ระบบด้วยบัญชีแอดมิน</div>
 {% else %}
   <h1>เบิก-คืนรถส่วนกลาง</h1>
-  <div class="sub">ดูสถานะรถทุกคัน · อนุมัติ/ปิดเคส · <span class="muted">(ก้อน 2 — ยังไม่ต่อบอท LINE · เพิ่มเคสมือเพื่อทดสอบได้)</span></div>
+  <div class="sub">ดูสถานะรถทุกคัน · อนุมัติ/ปิดเคส · <span class="muted">คนงานกดเบิก/คืนจากหน้าสแกน QR ที่รถ → บอทสรุปเข้ากลุ่ม LINE ให้อัตโนมัติ</span></div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -67,10 +67,10 @@
   <div class="card scroll">
     <table>
       <thead><tr>
-        <th>ทะเบียน</th><th>ผู้เบิก</th><th>สถานะ</th><th>ปลายทาง</th>
+        <th>ทะเบียน</th><th>ผู้เบิก</th><th>สถานะ</th><th>งาน</th><th>ปลายทาง</th>
         <th>เบิก</th><th>คืน</th><th>ไมล์</th><th>รูป</th><th>จัดการ</th>
       </tr></thead>
-      <tbody id="rows"><tr><td colspan="9" class="muted" style="padding:20px;text-align:center">กำลังโหลด…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="10" class="muted" style="padding:20px;text-align:center">กำลังโหลด…</td></tr></tbody>
     </table>
   </div>
 
@@ -82,6 +82,12 @@ function statusChip(m){
           : (m.status==='pending_human'||m.status==='system_error') ? 'var(--amber)'
           : m.status==='cancelled' ? 'var(--t3)' : 'var(--blue)';
   return `<span class="chip" style="background:color-mix(in srgb,${c} 16%,transparent);color:${c}">${esc(m.statusLabel)}</span>`;
+}
+function overdueChip(m){
+  if(m.outHours==null) return '';
+  if(m.outHours>=12) return ' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red);font-weight:700">ค้าง '+Math.round(m.outHours)+' ชม.</span>';
+  if(m.outHours>=4)  return ' <span class="chip" style="background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)">ออกมา '+Math.round(m.outHours)+' ชม.</span>';
+  return '';
 }
 function actionsFor(m){
   let out = '';
@@ -97,7 +103,7 @@ async function load(){
   $('status').textContent = 'กำลังโหลด…';
   let d; try{ d = await (await fetch('/checkout/api/movements',{credentials:'same-origin'})).json(); }
   catch(e){ $('status').textContent = 'โหลดไม่ได้'; return; }
-  if(!d.ok){ $('rows').innerHTML = `<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--red)">${esc(d.error||'ผิดพลาด')}</td></tr>`; $('status').textContent=''; return; }
+  if(!d.ok){ $('rows').innerHTML = `<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--red)">${esc(d.error||'ผิดพลาด')}</td></tr>`; $('status').textContent=''; return; }
   const c = d.counts;
   $('kpis').innerHTML = [
     ['รถออกอยู่', c.open, 'var(--blue)'],
@@ -106,18 +112,21 @@ async function load(){
     ['ระงับ (อุปกรณ์)', c.hold, 'var(--red)'],
     ['บันทึกฝ่าฝืน', c.violations, 'var(--purple)'],
   ].map(([l,n,col])=>`<div class="kpi"><div class="n" style="color:${col}">${n}</div><div class="l">${l}</div></div>`).join('');
+  // ★ ส.ค.69 — ป้ายเตือน "ค้างนาน" : เบิกแล้วไม่คืนคือปัญหาที่ log ในกลุ่มมองไม่เห็นเลย
+  //   (เจอ 5+ เคสใน 4 วัน แต่แยกไม่ออกว่าลืมโพสต์คืน หรือค้างจริง)
   const rows = d.movements;
   $('rows').innerHTML = rows.length ? rows.map(m=>`<tr>
     <td style="font-weight:700">${esc(m.plate)}</td>
     <td>${esc(m.borrower)||'<span class="muted">—</span>'}</td>
-    <td>${statusChip(m)}${m.damage?' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)">เสียหาย</span>':''}</td>
+    <td>${statusChip(m)}${m.damage?' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)">เสียหาย</span>':''}${overdueChip(m)}</td>
+    <td>${esc(m.purpose)||'<span class="muted">—</span>'}${m.fuel?' <span title="ขอเบิกน้ำมัน">⛽</span>':''}</td>
     <td>${esc(m.destination)||'<span class="muted">—</span>'}</td>
     <td class="muted">${esc(m.checkedOut)}</td>
     <td class="muted">${esc(m.returned)||'—'}</td>
     <td class="muted">${m.odoOut||'—'}${m.odoIn?(' → '+m.odoIn):''}</td>
     <td class="muted">${m.photos}</td>
     <td>${actionsFor(m)}</td>
-  </tr>`).join('') : '<tr><td colspan="9" class="muted" style="padding:20px;text-align:center">ยังไม่มีเคส</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="10" class="muted" style="padding:20px;text-align:center">ยังไม่มีเคส</td></tr>';
   $('status').textContent = '';
 }
 function toggleAdd(){ $('addform').classList.toggle('show'); }
