@@ -1,0 +1,142 @@
+{% load static %}<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เฝ้าดูกลุ่ม LINE — เบิก-คืนรถ</title>
+<style>
+  :root{ --bg:#f5f6fa; --bg2:#fff; --bd:#e6e7ef; --t1:#1f2333; --t2:#5a6072; --t3:#9195a8;
+         --blue:#3b82f6; --green:#16a34a; --amber:#d97706; --red:#dc2626; --purple:#7c3aed; }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14161d; --bg2:#1c1f28; --bd:#2a2e3a; --t1:#e8eaf0; --t2:#a7abbe; --t3:#7c8194;
+           --blue:#60a5fa; --green:#4ade80; --amber:#fbbf24; --red:#f87171; --purple:#a78bfa; } }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Sarabun',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;padding:14px}
+  h1{font-size:18px;font-weight:800;margin:0 0 3px}
+  .sub{font-size:12px;color:var(--t3);margin-bottom:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+  .kpi{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:12px 14px}
+  .kpi .n{font-size:24px;font-weight:800;line-height:1.1}
+  .kpi .l{font-size:11.5px;color:var(--t3);margin-top:3px}
+  .bar{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,select{padding:8px 10px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--t1);font-family:inherit;font-size:13px}
+  .btn{padding:8px 14px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg2);color:var(--t1);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.on{background:var(--green);border-color:var(--green);color:#fff}
+  .btn.bad{background:var(--red);border-color:var(--red);color:#fff}
+  table{width:100%;border-collapse:collapse;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 11px;text-align:left;border-bottom:.5px solid var(--bd);vertical-align:top}
+  th{font-size:11.5px;color:var(--t3);font-weight:700;background:var(--bg)}
+  .muted{color:var(--t3)}
+  .chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .c-out{background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)}
+  .c-in{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+  .c-hi{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+  .c-lo{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+  .off{background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 40%,transparent);color:var(--red);padding:10px 14px;border-radius:10px;margin-bottom:14px;font-weight:600}
+</style>
+</head>
+<body>
+{% if not is_admin %}
+  <h1>เฝ้าดูกลุ่ม LINE</h1>
+  <div class="sub">ต้อง login เป็นแอดมิน/ผู้บริหารก่อน</div>
+{% else %}
+  <h1>เฝ้าดูกลุ่ม LINE — เบิก-คืนรถ</h1>
+  <div class="sub">เก็บข้อความในกลุ่มไว้ดูว่าระบบตีความตรงกับที่ทีมสื่อสารจริงไหม · <b>ยังไม่สร้างเคสอะไรทั้งสิ้น</b> — กดถูก/ผิด เพื่อวัดความแม่นก่อนเปิดใช้จริง</div>
+
+  <div id="offbox"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="bar">
+    <label><input type="checkbox" id="obsOn" onchange="toggleObs()"> <b>เปิดโหมดเฝ้าดู</b></label>
+    <input id="gid" placeholder="LINE group id ของกลุ่มเบิกรถ" style="width:330px">
+    <button class="btn" onclick="saveGid()">บันทึกกลุ่ม</button>
+    <button class="btn" onclick="load()">รีเฟรช</button>
+    <select id="filt" onchange="render()">
+      <option value="">ทั้งหมด</option>
+      <option value="hit">เฉพาะที่ระบบจับได้</option>
+      <option value="low">เฉพาะที่ไม่มั่นใจ</option>
+      <option value="miss">เฉพาะที่จับไม่ได้</option>
+      <option value="wrong">ที่คนบอกว่าผิด</option>
+    </select>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:78px">เวลา</th><th>ข้อความจริงในกลุ่ม</th><th style="width:70px">ตีความ</th>
+      <th style="width:78px">ทะเบียน</th><th style="width:150px">งานที่เดา</th><th style="width:90px">มั่นใจ</th>
+      <th style="width:132px">ระบบเข้าใจถูกไหม</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="7" class="muted" style="padding:20px;text-align:center">กำลังโหลด…</td></tr></tbody>
+  </table>
+{% endif %}
+
+<script>
+var $=function(i){ return document.getElementById(i); };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+var DATA=[];
+async function post(u,b){
+  var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},
+    credentials:'same-origin',body:JSON.stringify(b)});
+  return r.json();
+}
+async function load(){
+  var r=await fetch('/checkout/api/observe',{credentials:'same-origin'});
+  var d=await r.json();
+  if(!d.ok){ $('rows').innerHTML='<tr><td colspan="7" class="muted">'+esc(d.error)+'</td></tr>'; return; }
+  DATA=d.rows; $('obsOn').checked=!!d.enabled;
+  $('offbox').innerHTML = d.enabled ? ''
+    : '<div class="off">โหมดเฝ้าดูปิดอยู่ — ยังไม่เก็บข้อความใหม่ (ติ๊ก "เปิดโหมดเฝ้าดู" ด้านล่าง)</div>';
+  var s=d.stats;
+  var cards=[['ข้อความที่เก็บได้',s.messages,'var(--blue)'],
+             ['ระบบจับว่าเป็นเบิก/คืน',s.detected,'var(--purple)'],
+             ['ตรวจแล้ว',s.judged,'var(--amber)'],
+             ['ระบบเข้าใจถูก',s.correct,'var(--green)'],
+             ['ความแม่น',(s.accuracy==null?'—':(s.accuracy+'%')),'var(--green)']];
+  $('kpis').innerHTML=cards.map(function(c){
+    return '<div class="kpi"><div class="n" style="color:'+c[2]+'">'+c[1]+'</div><div class="l">'+c[0]+'</div></div>';
+  }).join('');
+  render();
+}
+function render(){
+  var f=$('filt').value;
+  var rows=DATA.filter(function(m){
+    if(f==='hit') return !!m.kind;
+    if(f==='low') return m.conf==='low';
+    if(f==='miss') return !m.kind && m.type==='text' && m.text;
+    if(f==='wrong') return m.verdict==='wrong';
+    return true;
+  });
+  if(!rows.length){
+    $('rows').innerHTML='<tr><td colspan="7" class="muted" style="padding:20px;text-align:center">ยังไม่มีข้อความ — เอาบอทเข้ากลุ่มแล้วรอให้มีคนพิมพ์</td></tr>';
+    return;
+  }
+  $('rows').innerHTML=rows.map(function(m){
+    var txt=(m.type!=='text'?'<span class="muted">['+esc(m.type)+']</span> ':'')+(esc(m.text)||'<span class="muted">—</span>');
+    var who=m.who?'<div class="muted" style="font-size:11px">'+esc(m.who)+'</div>':'';
+    var kind=m.kind?'<span class="chip '+(m.kind==='out'?'c-out':'c-in')+'">'+esc(m.kindLabel)+'</span>':'<span class="muted">—</span>';
+    var plate=(esc(m.plate)||'<span class="muted">—</span>')+(m.car?'<div class="muted" style="font-size:11px">'+esc(m.car)+'</div>':'');
+    var conf=m.conf?'<span class="chip '+(m.conf==='high'?'c-hi':'c-lo')+'">'+(m.conf==='high'?'มั่นใจ':'เดา')+'</span>':'<span class="muted">—</span>';
+    var why=m.why?'<div class="muted" style="font-size:10.5px">'+esc(m.why)+'</div>':'';
+    var act=m.kind
+      ? '<button class="btn '+(m.verdict==='ok'?'on':'')+'" onclick="judge('+m.id+',\'ok\')">ถูก</button> '
+        +'<button class="btn '+(m.verdict==='wrong'?'bad':'')+'" onclick="judge('+m.id+',\'wrong\')">ผิด</button>'
+      : '<span class="muted">—</span>';
+    return '<tr><td class="muted">'+esc(m.at)+'</td><td>'+txt+who+'</td><td>'+kind+'</td><td>'+plate
+      +'</td><td>'+(esc(m.purpose)||'<span class="muted">—</span>')+'</td><td>'+conf+why+'</td><td>'+act+'</td></tr>';
+  }).join('');
+}
+async function judge(id,v){
+  var cur=null;
+  for(var i=0;i<DATA.length;i++){ if(DATA[i].id===id){ cur=DATA[i]; break; } }
+  var nv=(cur && cur.verdict===v) ? '' : v;      // กดซ้ำ = ยกเลิกคำตัดสิน
+  var d=await post('/checkout/api/observe/verdict',{id:id,verdict:nv});
+  if(d.ok){ load(); }
+}
+async function toggleObs(){ await post('/checkout/api/observe/toggle',{observe:$('obsOn').checked}); load(); }
+async function saveGid(){
+  var d=await post('/checkout/api/observe/toggle',{group_id:$('gid').value});
+  if(d.ok) alert('บันทึกกลุ่มแล้ว');
+}
+{% if is_admin %}load();{% endif %}
+</script>
+</body>
+</html>

@@ -289,3 +289,141 @@ def api_car_return(request):
     sent = lineout.notify_return(m)
     return JsonResponse({"ok": True, "id": m.id, "lineSent": sent},
                         json_dumps_params={"ensure_ascii": False})
+
+
+# =========================================================
+#  โหมดเฝ้าดู (observe) — เก็บข้อความในกลุ่ม LINE ไว้ "ดูเฉยๆ" ก่อนเปิดใช้จริง
+#  เจ้าของขอ: เอาบอทเข้ากลุ่ม → นั่งดูว่าระบบตีความตรงไหม → ค่อยเปิดทำงาน
+# =========================================================
+def observe_enabled() -> bool:
+    """เปิดเก็บ log ไหม — ตั้งที่ KVStore 'checkout_line_config' {observe: true}"""
+    try:
+        from dashboard.services import cache_store
+        cfg = (cache_store.get_kv("checkout_line_config") or {}).get("data") or {}
+        return bool(cfg.get("observe"))
+    except Exception:
+        return False
+
+
+def record_group_events(data):
+    """เก็บข้อความจาก payload ของ LINE webhook — best-effort ล้วน
+    ★ อ่านอย่างเดียว ไม่สร้าง/แก้เคสเบิก-คืนใดๆ ทั้งสิ้น (นั่นคือประเด็นของโหมดนี้)"""
+    if not observe_enabled():
+        return 0
+    from datetime import datetime, timezone as _dtz
+    from .models import GroupMessage
+    from . import parser as P
+    from cars.models import Car
+
+    events = data.get("events") if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    saved = 0
+    for ev in (events or []):
+        if not isinstance(ev, dict) or ev.get("type") != "message":
+            continue
+        src = ev.get("source") or {}
+        gid = src.get("groupId") or ""
+        if not gid:
+            continue
+        msg = ev.get("message") or {}
+        mid = str(msg.get("id") or "")
+        if mid and GroupMessage.objects.filter(message_id=mid).exists():
+            continue          # กันซ้ำ (LINE ส่งซ้ำได้)
+        text = msg.get("text") or ""
+        r = P.parse(text)
+        car = None
+        if r.get("plate"):
+            # คนพิมพ์เลขท้ายทะเบียน 3-4 ตัว → หารถที่ทะเบียนลงท้ายด้วยเลขนั้น
+            car = Car.objects.filter(plate__endswith=r["plate"]).first()
+        ts = ev.get("timestamp")
+        sent = None
+        if ts:
+            try:
+                sent = datetime.fromtimestamp(int(ts) / 1000, tz=_dtz.utc)
+            except Exception:
+                sent = None
+        GroupMessage.objects.create(
+            group_id=gid, message_id=mid,
+            sender_id=(src.get("userId") or ""),
+            msg_type=str(msg.get("type") or ""), text=text,
+            parsed_kind=r["kind"], parsed_plate=r["plate"], parsed_purpose=r["purpose"],
+            parsed_conf=r["confidence"], parsed_why=r["why"][:120],
+            matched_car=car, sent_at=sent or timezone.now(),
+        )
+        saved += 1
+    return saved
+
+
+def observe_page(request):
+    """หน้าเทียบ "ข้อความจริง vs ระบบตีความว่าอะไร" — กดบอกถูก/ผิด แล้ววัดความแม่น"""
+    return render(request, "checkout/observe.html", {"is_admin": bool(_admin(request))})
+
+
+@csrf_exempt
+def api_observe(request):
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    from .models import GroupMessage
+    from . import parser as P
+    rows = []
+    for m in GroupMessage.objects.select_related("matched_car")[:400]:
+        rows.append({
+            "id": m.id,
+            "at": timezone.localtime(m.sent_at).strftime("%d/%m %H:%M") if m.sent_at else "",
+            "who": m.sender_name or ((m.sender_id[:8] + "…") if m.sender_id else ""),
+            "type": m.msg_type, "text": m.text,
+            "kind": m.parsed_kind,
+            "kindLabel": {"out": "เบิก", "in": "คืน"}.get(m.parsed_kind, "—"),
+            "plate": m.parsed_plate, "purpose": P.purpose_name(m.parsed_purpose),
+            "conf": m.parsed_conf, "why": m.parsed_why,
+            "car": (m.matched_car.code + " · " + (m.matched_car.plate or "")) if m.matched_car_id else "",
+            "verdict": m.human_verdict,
+        })
+    total = GroupMessage.objects.count()
+    detected = GroupMessage.objects.exclude(parsed_kind="").count()
+    judged = GroupMessage.objects.exclude(human_verdict="")
+    nj = judged.count()
+    ok = judged.filter(human_verdict="ok").count()
+    return JsonResponse({
+        "ok": True, "rows": rows, "enabled": observe_enabled(),
+        "stats": {"messages": total, "detected": detected, "judged": nj, "correct": ok,
+                  "accuracy": round(ok * 100.0 / nj, 1) if nj else None},
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def api_observe_verdict(request):
+    """คนตรวจกดบอกว่าระบบตีความถูก/ผิด — POST {id, verdict: ok|wrong|''}"""
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    try:
+        b = json.loads(request.body or "{}")
+    except Exception:
+        b = {}
+    from .models import GroupMessage
+    m = GroupMessage.objects.filter(id=b.get("id")).first()
+    if not m:
+        return JsonResponse({"ok": False, "error": "ไม่พบข้อความ"}, status=404)
+    v = (b.get("verdict") or "").strip()
+    m.human_verdict = v if v in ("ok", "wrong") else ""
+    m.save(update_fields=["human_verdict"])
+    return JsonResponse({"ok": True, "verdict": m.human_verdict})
+
+
+@csrf_exempt
+def api_observe_toggle(request):
+    """เปิด/ปิดโหมดเฝ้าดู + ตั้ง group id — POST {observe?, group_id?, enabled?}"""
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    try:
+        b = json.loads(request.body or "{}")
+    except Exception:
+        b = {}
+    from dashboard.services import cache_store
+    cfg = (cache_store.get_kv("checkout_line_config") or {}).get("data") or {}
+    for k in ("observe", "enabled"):
+        if k in b:
+            cfg[k] = bool(b[k])
+    if "group_id" in b:
+        cfg["group_id"] = (b.get("group_id") or "").strip()
+    cache_store.set_kv("checkout_line_config", cfg)
+    return JsonResponse({"ok": True, "config": cfg}, json_dumps_params={"ensure_ascii": False})

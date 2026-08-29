@@ -210,3 +210,39 @@ class LineEventLog(models.Model):
         ordering = ["created_at"]
         verbose_name = "LINE event (คิวโหลดไฟล์)"
         verbose_name_plural = "LINE event (คิวโหลดไฟล์)"
+
+
+class GroupMessage(models.Model):
+    """★ โหมดเฝ้าดู (ส.ค.69) — เก็บข้อความในกลุ่ม LINE ไว้ "ดูเฉยๆ" ยังไม่ทำอะไรทั้งสิ้น
+
+    เจตนา: เอาบอทเข้ากลุ่มแล้วนั่งดูก่อนว่า ระบบตีความข้อความของทีมได้ตรงแค่ไหน
+    ก่อนจะเปิดให้ทำงานจริง (กันระบบเดาผิดแล้วไปสร้างเคสมั่ว)
+    เก็บ: ข้อความดิบ + ผลที่ระบบ "จะตีความ" (parsed) → เอามาเทียบกันในหน้า /checkout/observe/
+    """
+    group_id = models.CharField("LINE group id", max_length=64, db_index=True)
+    message_id = models.CharField("LINE message id", max_length=64, blank=True, db_index=True)
+    sender_id = models.CharField("LINE user id ผู้ส่ง", max_length=64, blank=True)
+    sender_name = models.CharField("ชื่อผู้ส่ง", max_length=80, blank=True)
+    msg_type = models.CharField("ชนิด", max_length=20, blank=True)   # text/image/video/sticker/location
+    text = models.TextField("ข้อความ", blank=True)
+
+    # ผลที่ระบบตีความได้ (ยังไม่เอาไปใช้ — ไว้ให้คนตรวจว่าตรงไหม)
+    parsed_kind = models.CharField("ตีความว่า", max_length=10, blank=True)      # out/in/''
+    parsed_plate = models.CharField("ทะเบียนที่จับได้", max_length=20, blank=True)
+    parsed_purpose = models.CharField("ประเภทงานที่เดา", max_length=20, blank=True)
+    parsed_conf = models.CharField("ความมั่นใจ", max_length=10, blank=True)     # high/low/''
+    parsed_why = models.CharField("เพราะอะไร", max_length=120, blank=True)
+    matched_car = models.ForeignKey("cars.Car", on_delete=models.SET_NULL, null=True, blank=True)
+
+    # คนตรวจแล้วบอกว่าถูก/ผิด (ไว้วัดความแม่นจริง)
+    human_verdict = models.CharField("คนตรวจว่า", max_length=10, blank=True)    # ok/wrong/''
+    sent_at = models.DateTimeField("เวลาในกลุ่ม", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-sent_at", "-id"]
+        verbose_name = "ข้อความในกลุ่ม (เฝ้าดู)"
+        verbose_name_plural = "ข้อความในกลุ่ม (เฝ้าดู)"
+
+    def __str__(self):
+        return f"{self.sender_name}: {self.text[:40]}"

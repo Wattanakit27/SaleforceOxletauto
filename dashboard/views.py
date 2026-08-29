@@ -2622,6 +2622,16 @@ def _store_line_groups(pairs):
     return added
 
 
+def _observe_record(data):
+    """โหมดเฝ้าดูเบิก-คืนรถ — เก็บข้อความไว้ตรวจว่าระบบตีความตรงไหม (อ่านอย่างเดียว)
+    best-effort ล้วน: checkout ยังไม่ migrate / ปิดโหมดอยู่ = ไม่ทำอะไร ไม่ทำ webhook พัง"""
+    try:
+        from checkout.views import record_group_events
+        record_group_events(data)
+    except Exception:
+        pass
+
+
 @csrf_exempt
 def line_webhook(request):
     """LINE Messaging API webhook (ต่อตรงจาก LINE) — จับ group id + ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message)
@@ -2648,6 +2658,7 @@ def line_webhook(request):
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
     _store_line_groups(adds)
     _remove_line_groups(leaves)
+    _observe_record(data)
     return HttpResponse("ok")
 
 
