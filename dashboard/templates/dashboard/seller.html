@@ -1669,7 +1669,7 @@
 
           <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">ไทม์ไลน์</div>
           ${_canEdit ? _dateEditRow('วันที่จอง', b.date, 2, idx, 'แก้วันจองถ้าปีผิด (เช่น 1969) → บันทึก') : row('วันที่จอง', b.date)}
-          ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, 14, idx) : row('วันที่เซ็นต์', b.signDate)}
+          ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, b.signCol||14, idx) : row('วันที่เซ็นต์', b.signDate)}
           ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, b.resultCol||19, idx) : row('วันที่รู้ผล', b.resultDate)}
           ${row('เอกสารครบ', b.docsDate)}
           ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol||23, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
@@ -1732,7 +1732,7 @@
     try {
       const res = await fetch('/api/admin/update_release_date', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tab: b.sheetTab, row: parseInt(b.sheetRow), col: 13, value: val, token })
+        body: JSON.stringify({ tab: b.sheetTab, row: parseInt(b.sheetRow), col: (b.statusCol||13), field: 'status', value: val, token })
       });
       const d = await res.json();
       if (!res.ok || !d.ok) {

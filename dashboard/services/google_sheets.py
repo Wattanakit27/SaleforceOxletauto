@@ -920,6 +920,80 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
         return fetch_sheet("leads")
 
 
+# ===== แผนที่คอลัมน์ของชีตยอดขาย (header-based · ส.ค.69) =====
+# ★ ทำไมต้องมี: แท็บรายเดือนของชีตยอดขาย "ขยับคอลัมน์" เรื่อยๆ เมื่อแอดมินแทรกช่องใหม่
+#   วัดจริง ส.ค.69: เม.ย.69 แทรก 5 ช่อง (อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/อายุ) ก่อนช่อง "สถานะ"
+#   → สถานะเลื่อน 13→18 · นัดเซ็น 14→19 · ปล่อยรถ 21/22→27/28
+#   ผลตอนนั้น: เม.ย.+พ.ค. หายทั้งเดือน (ตัวกรอง "สถานะไม่ว่าง" ไปอ่านช่องอาชีพที่ว่าง)
+#             มิ.ย.-ส.ค. อ่าน "พนักงานบริษัท/ค้าขาย" มาเป็นสถานะ
+#   → เลิก fix ตำแหน่งตายตัว อ่านจาก "ชื่อหัวตาราง" ของแต่ละแท็บแทน (แบบเดียวกับชีตลีด)
+#   เพิ่ม/เปลี่ยนชื่อหัวคอลัมน์ในชีต = เติม alias ตรงนี้ที่เดียว
+_SALES_HDR_RULES = [
+    # (ฟิลด์, ตรวจแบบ, คำ) — เรียงจาก "เจาะจงสุด" ลงมา · คอลัมน์แรกที่เข้าเงื่อนไขได้ฟิลด์นั้น
+    ("sign_date",         "in", "นัดเซ็น"),
+    ("result_date",       "in", "ผลออกจริง"),
+    ("_result_est",       "in", "ผลน่าจะออก"),      # ไม่ใช้ (กันไปชนกับวันผลจริง)
+    ("doc_complete_date", "in", "เอกสารครบ"),
+    ("car_release_date",  "in", "ปล่อยรถ"),
+    ("deposit_amount",    "in", "เงินจอง"),
+    ("sale_price",        "in", "ราคาขาย"),
+    ("license_plate",     "in", "ทะเบียน"),
+    ("car_detail",        "in", "รายละเอียดรถ"),
+    ("car_year",          "in", "ปีรถ"),
+    ("phone",             "in", "เบอร์โทร"),
+    ("customer_name",     "in", "ชื่อ-นามสกุล"),
+    ("booking_no",        "in", "เลขที่จอง"),
+    ("lead_code",         "in", "โค้ด"),
+    ("channel",           "in", "ช่องทาง"),
+    ("order_num",         "in", "ลำดับ"),
+    ("finance_main",      "in", "ไฟแนนซ์หลัก"),
+    ("finance_backup",    "in", "ไฟแนนซ์สำรอง"),
+    ("grade",             "in", "เกรด"),
+    ("occupation",        "in", "อาชีพ"),
+    ("income",            "in", "รายได้"),
+    ("job_tenure",        "in", "อายุงาน"),
+    ("payment_history",   "in", "ประวัติผ่อน"),
+    ("status",            "eq", "สถานะ"),
+    ("date",              "eq", "วันที่"),
+    ("note",              "eq", "หมายเหตุ"),
+    ("age",               "eq", "อายุ"),
+]
+# ตำแหน่ง canonical ที่โค้ดทั้งระบบใช้ (ต้องตรงกับ class SALES_COL) — normalize แล้วทุกแท็บหน้าตาเหมือนกัน
+_SALES_CANON = {
+    "order_num": 1, "date": 2, "channel": 3, "lead_code": 4, "booking_no": 5,
+    "customer_name": 6, "phone": 7, "car_detail": 8, "car_year": 9, "license_plate": 10,
+    "sale_price": 11, "deposit_amount": 12, "status": 13, "sign_date": 14,
+    "finance_main": 15, "finance_backup": 16, "grade": 17, "doc_complete_date": 18,
+    "result_date": 19, "note": 20, "car_release_date": 21,
+    # ช่องใหม่ที่แอดมินแทรกเข้ามา — เก็บไว้ท้ายแถว (ยังไม่มีใครใช้ แต่ไม่ทิ้งข้อมูล)
+    "occupation": 23, "income": 24, "job_tenure": 25, "payment_history": 26, "age": 27,
+}
+SALES_ROW_WIDTH = 28          # 0..27 (0 = ชื่อเซลล์)
+SALES_IDX_TAB = 28            # ชื่อแท็บ
+SALES_IDX_ROW = 29            # เลขแถวในชีต (1-based)
+SALES_IDX_RESULT_COL = 30     # คอลัมน์จริงของ "วันผลออกจริง" ในชีต (ไว้เขียนกลับ)
+SALES_IDX_RELEASE_COL = 31    # คอลัมน์จริงของ "วันที่ปล่อยรถ" ในชีต (ไว้เขียนกลับ)
+SALES_IDX_STATUS_COL = 32     # คอลัมน์จริงของ "สถานะ" (เลื่อน 13->18 ตั้งแต่ เม.ย.69)
+SALES_IDX_SIGN_COL = 33       # คอลัมน์จริงของ "วันที่นัดเซ็น" (เลื่อน 14->19)
+
+
+def _resolve_sales_colmap(header_row) -> dict:
+    """อ่านหัวตารางของแท็บ → {ฟิลด์: index จริงในชีต} · ฟิลด์ที่ไม่เจอ = ไม่มีในแผนที่"""
+    import re as _re
+    out = {}
+    for j, raw in enumerate(header_row or []):
+        txt = _re.sub(r"\s+", "", str(raw or ""))
+        if not txt:
+            continue
+        for field, how, word in _SALES_HDR_RULES:
+            if field in out or field.startswith("_"):
+                continue
+            if (word in txt) if how == "in" else (txt == word):
+                out[field] = j
+                break
+    return out
+
+
 def fetch_sales_by_month_tabs() -> list[list[str]]:
     """อ่านยอดขายจากแท็บรายเดือน '<เดือน>69' ตรงๆ (แทน 'รวม sheet' ที่ใช้สูตร REDUCE).
 
@@ -982,6 +1056,13 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                 b = (row[1] if len(row) > 1 else "") or ""
                 if isinstance(b, str) and b.strip().startswith("ชื่อเซลล์"):
                     markers.append((i, b.strip()[len("ชื่อเซลล์"):].strip()))
+            # ★ ส.ค.69 — อ่าน "หัวตาราง" ของแท็บนี้ (แถวถัดจาก marker แรก) แล้วทำแผนที่คอลัมน์
+            #   แต่ละเดือนคอลัมน์ไม่ตรงกัน (แอดมินแทรกช่องใหม่) → fix ตำแหน่งตายตัวไม่ได้อีกแล้ว
+            cmap = _resolve_sales_colmap(vals[markers[0][0] + 1]) if markers and markers[0][0] + 1 < len(vals) else {}
+            if "status" not in cmap:      # หาหัวตารางไม่เจอ → กลับไปใช้ตำแหน่งเดิม (กันแท็บรูปแบบแปลก)
+                cmap = {k: v for k, v in _SALES_CANON.items()}
+            c_status = cmap.get("status", 13)
+            c_seq = cmap.get("order_num", 1)
             for k, (mi, raw_name) in enumerate(markers):
                 name = normalize_seller(raw_name)
                 end = markers[k + 1][0] if k + 1 < len(markers) else len(vals)
@@ -994,15 +1075,15 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     if len(rn) < 2 or rn.upper() == "A":
                         continue
                     if not any(
-                        str(vals[j][1] if len(vals[j]) > 1 else "").strip().isdigit()
-                        and str(vals[j][13] if len(vals[j]) > 13 else "").strip()
+                        str(vals[j][c_seq] if len(vals[j]) > c_seq else "").strip().isdigit()
+                        and str(vals[j][c_status] if len(vals[j]) > c_status else "").strip()
                         for j in range(mi + 1, end)
                     ):
                         continue   # บล็อกว่าง (ไม่มีเคส)
                 for j in range(mi + 1, end):
                     row = vals[j]
-                    seq = str(row[1] if len(row) > 1 else "").strip()
-                    status = str(row[13] if len(row) > 13 else "").strip()
+                    seq = str(row[c_seq] if len(row) > c_seq else "").strip()
+                    status = str(row[c_status] if len(row) > c_status else "").strip()
                     if not seq.isdigit() or not status:
                         continue   # ข้าม sub-header / แถวว่าง (ตรง filter N<>"" ในสูตร)
                     # col 0=ชื่อเซลล์, col 1-27=ตรง tab · col 28=tab name, col 29=แถวในชีต (1-based) — ใช้ inline edit เขียนกลับ
@@ -1011,9 +1092,22 @@ def fetch_sales_by_month_tabs() -> list[list[str]]:
                     # ★ (มิ.ย.69→ก.ค.69) เอากฎยกเว้น "ปล่อย" ออกแล้ว: เดิมบังคับเทปล่อยให้เซลล์เจ้าของบล็อกเสมอ
                     #   ตอนนี้ผู้ใช้เลือก "มาร์คต่างคำ" — เคสที่เทเลเซลล์แค่หาลีดให้แล้ว "เซลล์เป็นคนปิด"
                     #   = ไม่ต้องมาร์ค ADMIN (ลบมาร์คทิ้ง) → ปล่อยเป็นของเซลล์เจ้าของบล็อกตามปกติ
-                    admin_flag = any(str(row[c] if c < len(row) else "").strip().upper() == "ADMIN" for c in range(24, 30))
+                    # มาร์ค ADMIN อยู่ช่องโน้ตท้ายแถว — ตำแหน่งขยับตามเดือน จึงกวาดตั้งแต่ช่องสถานะไปจนจบแถว
+                    # (เทียบแบบ "ทั้งช่องเท่ากับ ADMIN" เท่านั้น จึงไม่ไปชนข้อความอื่น)
+                    admin_flag = any(str(c).strip().upper() == "ADMIN" for c in row[c_status:])
                     seller_out = "ADMIN" if admin_flag else name
-                    all_rows.append([seller_out] + [(row[i] if i < len(row) else "") for i in range(1, 28)] + [tab, str(j + 1)])
+                    # ★ normalize เข้าตำแหน่ง canonical → โค้ดที่อ่าน (SALES_COL) ใช้ได้เหมือนเดิมทุกเดือน
+                    out_row = [""] * SALES_ROW_WIDTH
+                    out_row[0] = seller_out
+                    for field, dst in _SALES_CANON.items():
+                        src = cmap.get(field)
+                        if src is not None and src < len(row):
+                            out_row[dst] = row[src] or ""
+                    all_rows.append(out_row + [tab, str(j + 1),
+                                               str(cmap.get("result_date", "")),
+                                               str(cmap.get("car_release_date", "")),
+                                               str(cmap.get("status", "")),
+                                               str(cmap.get("sign_date", ""))])
         _cache_set(cache_key, all_rows)
         return all_rows
     except Exception:

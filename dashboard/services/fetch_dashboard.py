@@ -222,6 +222,11 @@ def extract_release_date(r) -> str:
             return m.group()
         return None
 
+    # ★ ส.ค.69 — แถวที่ normalize แล้ว (มีตัวแนบตำแหน่งจริง) วันปล่อยอยู่ canonical 21 เสมอ
+    #   อ่านช่องนั้นตรงๆ ก่อน ไม่ต้องไล่เดาหลายคอลัมน์ (การไล่เดาเคยไปคว้าวันที่ในโน้ตมาแทน)
+    if _sheet_col(r, 31):
+        got = _clean(cell(r, S.car_release_date)) or _embed(cell(r, S.car_release_date))
+        return got or ""
     bd = parse_date(cell(r, S.date))          # วันจอง (เชื่อถือได้) ใช้ดูว่าเป็นเดือน พ.ค.+ ไหม
     is_may = bool(bd and bd.month >= 5)
     # X=23, W=22, V=21, U=20 ; พ.ค.+ release อยู่ X(23) · เดือนก่อน release อยู่ V(21) (ตรงกับ _release_col + CLAUDE.md)
@@ -246,6 +251,9 @@ def release_date_primary(r) -> str:
     """วันปล่อยจาก 'คอลัมน์หลัก' เท่านั้น (X(23) สำหรับ พ.ค.+, W(22) สำหรับเดือนก่อนหน้า) — ไม่ fallback คอลัมน์อื่น.
     ใช้ในกระดิ่งแจ้งเตือน: ถ้าว่าง = admin ยังไม่กรอกวันปล่อยในช่องที่ถูก (แม้ extract_release_date จะไปเจอ
     วันที่ใน V/U/โน้ตมาแทน — เคสปล่อยแต่ "ช่องวันปล่อยจริงว่าง" เช่น กรอก V ไว้แต่ X ว่าง)."""
+    if _sheet_col(r, 31):        # normalize แล้ว → ช่องวันปล่อยจริงคือ canonical 21
+        val = (cell(r, S.car_release_date) or "").strip()
+        return val if re.search(r"\d{1,2}/\d{1,2}", val) else ""
     bd = parse_date(cell(r, S.date))
     if bd and bd.month >= 5:
         # พ.ค.+ : วันปล่อยจริงอยู่ X(23) — ถือว่า "กรอกแล้ว" ถ้ามี pattern วันที่ใน X (มี/ไม่มีปีก็ได้ เช่น 24/05)
@@ -256,23 +264,42 @@ def release_date_primary(r) -> str:
     return extract_release_date(r)
 
 
+def _sheet_col(r, idx) -> int:
+    """คอลัมน์จริงในชีต ที่ fetch_sales_by_month_tabs แนบมาท้ายแถว (ส.ค.69) — 0 = ไม่มี/แถวเก่า"""
+    try:
+        v = str(r[idx]).strip()
+        return int(v) if v.isdigit() else 0
+    except Exception:
+        return 0
+
+
 def _release_col(r) -> int:
-    """คอลัมน์ 'วันปล่อยจริง' (0-based) สำหรับ inline edit เขียนกลับ: พ.ค.+ = 23(X) · เดือนก่อน = 21(V)."""
+    """คอลัมน์ 'วันปล่อยจริง' ในชีต (0-based) สำหรับ inline edit เขียนกลับ
+    ★ ส.ค.69 — ใช้ตำแหน่งจริงที่อ่านจากหัวตารางของแท็บนั้น (แนบมาท้ายแถว)
+      เดิมเดาจากเดือน (พ.ค.+ = 23 · ก่อนหน้า = 21) → พอแอดมินแทรกคอลัมน์ใหม่ก็เขียนผิดช่องทันที
+      แถวจาก 'รวม sheet' (fallback) ไม่มีตัวแนบ → ใช้การเดาแบบเดิม"""
+    c = _sheet_col(r, 31)
+    if c:
+        return c
     d = parse_date(cell(r, S.date))
     return 23 if (d and d.month >= 5) else 21
 
 
 def result_date_for(r) -> str:
-    """วันผล (อนุมัติเครดิต) — layout ย้ายตามเดือนเหมือนวันปล่อย: พ.ค.+ = U(20) · เดือนก่อน = T(19).
-    ★ เดิม fix ที่ T(19) เสมอ → เดือนปัจจุบัน (พ.ค.+) ได้ค่าว่างทุกเคส เพราะผลย้ายไป U(20)
-      → velocity ช่วง 2-3 (เซ็น→ผล, ผล→ปล่อย) = 0 → ตัน 3.3. อ่านคอลัมน์ตามเดือนให้ตรง layout จริง."""
+    """วันผล (อนุมัติเครดิต)
+    ★ ส.ค.69 — แถวถูก normalize มาแล้ว (อ่านจากหัวตาราง) → อยู่ที่ canonical 19 ทุกเดือน
+      แถวเก่าจาก 'รวม sheet' ไม่ได้ normalize → ใช้การเดาตามเดือนแบบเดิม (พ.ค.+ = 20 · ก่อนหน้า = 19)"""
+    if _sheet_col(r, 30):            # มีตัวแนบ = แถว normalize แล้ว
+        return cell(r, S.result_date)
     d = parse_date(cell(r, S.date))
     return cell(r, 20) if (d and d.month >= 5) else cell(r, 19)
 
 
 def result_col_for(r) -> int:
-    """คอลัมน์ 'วันผล' (0-based) สำหรับ inline edit เขียนกลับ: พ.ค.+ = 20(U) · เดือนก่อน = 19(T)
-    (ต้องตรงกับ result_date_for ที่อ่าน ไม่งั้นเขียนแล้วถูกอ่านคนละช่อง = 'บันทึกแล้วไม่ติด')."""
+    """คอลัมน์ 'วันผล' ในชีต (0-based) สำหรับ inline edit เขียนกลับ — ตำแหน่งจริงจากหัวตาราง (ส.ค.69)"""
+    c = _sheet_col(r, 30)
+    if c:
+        return c
     d = parse_date(cell(r, S.date))
     return 20 if (d and d.month >= 5) else 19
 
@@ -935,7 +962,9 @@ def _compute_dashboard_data() -> dict:
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
             "releaseDatePrimary": release_date_primary(r),
-            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันผล/ปล่อย — คอลัมน์ตามเดือน)
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),
+            # ★ ส.ค.69 — คอลัมน์จริงของ สถานะ/วันเซ็น ก็ขยับตามเดือนเหมือนกัน (13->18, 14->19 ตั้งแต่ เม.ย.69)
+            "statusCol": _sheet_col(r, 32) or S.status, "signCol": _sheet_col(r, 33) or S.sign_date,
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -2190,7 +2219,9 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "docsDate": cell(r, S.doc_complete_date),
             "releaseDate": chosen_release,
             "releaseDatePrimary": release_date_primary(r),
-            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),   # ตำแหน่งในชีต (inline edit วันผล/ปล่อย — คอลัมน์ตามเดือน)
+            "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),
+            # ★ ส.ค.69 — คอลัมน์จริงของ สถานะ/วันเซ็น ก็ขยับตามเดือนเหมือนกัน (13->18, 14->19 ตั้งแต่ เม.ย.69)
+            "statusCol": _sheet_col(r, 32) or S.status, "signCol": _sheet_col(r, 33) or S.sign_date,
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
