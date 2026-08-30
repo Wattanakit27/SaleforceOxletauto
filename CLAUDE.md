@@ -121,7 +121,7 @@ python manage.py runserver
 | `/api/insights/forecast` | `insights_forecast` | **admin/exec** POST `{summary}` → Gemini อธิบายเทรนด์ยอด+ปัจจัยตลาด (`gemini_insights.forecast_narrative`) คืน `{ok, narrative}` |
 | `/api/v1/` | `api_v1_index` | **API สาธารณะ (ต้องมีคีย์)** — สารบัญ endpoint + วิธี auth |
 | `/api/v1/employees` | `api_v1_employees` | **API สาธารณะ** GET: รายชื่อพนักงาน — `userId`(LINE) · `displayName` · `nickname` · `position` · `groupId` · กรองได้ `?nickname=` `?user_id=` `?position=` `?q=` |
-| `/api/v1/groups` | `api_v1_groups` | **API สาธารณะ** GET: กลุ่ม LINE ที่บอทรู้จัก (`groupId`/`name`/`lastSeen` จาก KVStore `line_groups`) |
+| `/api/v1/groups` | `api_v1_groups` | **API สาธารณะ** GET: กลุ่ม LINE — **รวม 2 ที่**: KVStore `line_groups` (บอทจำเอง มีชื่อกลุ่ม) + **คอลัมน์ group id ในชีตพนักงาน** (ใช้ได้ทันทีไม่ต้องรอบอท) · คืน `groupId`/`name`/`lastSeen`/`source`(bot\|sheet\|both)/`employeeCount` |
 | `/api/cron/sync` | `cron_sync` | public (`?secret=xxx`) — sync sheets → Supabase `sheet_cache` + precompute dashboard (cron tick ตัวเดียวก็พอ · นี่เป็น endpoint แยกสำรอง) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
@@ -134,6 +134,8 @@ python manage.py runserver
 - **★ ไม่ตั้งคีย์ = ปิดสนิท (503)** — ตั้งใจให้ "ปิดโดยปริยาย" เพราะ LINE user id + ชื่อพนักงาน = **ข้อมูลส่วนบุคคล (PDPA)** ใครถือ id ก็ทักหาพนักงานได้ตรง
 - **ไม่คืน**: รูปโปรไฟล์ · reply token · เวลาเข้างาน/วันหยุด (มีในชีตแต่ไม่ได้ขอ + เกินจำเป็น)
 - JSON ตอบเป็นภาษาไทยอ่านออก (`ensure_ascii=False`) · ไม่เปิด CORS (ตั้งใจ — ให้เรียกแบบ server-to-server ถ้าต้องเรียกจากเบราว์เซอร์ค่อยเพิ่มทีหลัง)
+- **★ `/api/v1/groups` รวม 2 แหล่ง (ส.ค.69 · เจ้าของแจ้งว่า "group id ยังไม่ออกมา")**: เดิมอ่านจาก KVStore `line_groups` อย่างเดียว ซึ่ง **ว่างจนกว่าบอทจะได้ event จากกลุ่มจริง** (ต้องตั้ง Webhook URL + มีคนพิมพ์ในกลุ่ม) → บนโปรดักชันเลยคืน 0 กลุ่ม · เพิ่มการอ่าน **group id จากชีตพนักงาน** (คอลัมน์ D `EMPLOYEE_COL.group_id`) มา merge → ใช้ได้ทันที · `source` บอกที่มา · `employeeCount` = มีพนักงานผูกกับกลุ่มนั้นกี่คน
+- **⚠️ ข้อมูลในชีตยังไม่ครบ (วัด ส.ค.69)**: พนักงาน 48 คน **มี group id แค่ 36 คน · ขาด 12 คน** (ส่วนใหญ่เด็กฝึกงาน/พนักงานใหม่) — เป็นช่องว่างใน**ชีต** ไม่ใช่บั๊กโค้ด · ชีตมี group id แค่ **2 ค่า** (ต่างกันตัวท้าย `…ded1` 35 คน · `…ded2` 1 คน)
 - **⚠️ ยังไม่มี rate limit / log การเรียก** — ถ้าเปิดให้ partner ภายนอกจริงควรเพิ่ม
 
 ## Roles (สิทธิ์ผู้ใช้)

@@ -3374,18 +3374,39 @@ def api_v1_employees(request):
 def api_v1_groups(request):
     """กลุ่ม LINE ที่บอทรู้จัก — GET /api/v1/groups
 
-    ที่มา: KVStore 'line_groups' (บอทจำเองตอนได้ event จากกลุ่ม — LINE ไม่มี API ลิสต์กลุ่ม)
-    กลุ่มจะโผล่ก็ต่อเมื่อเพิ่มบอทเข้ากลุ่มแล้วมีคนพิมพ์อะไรในกลุ่มอย่างน้อย 1 ครั้ง
+    ★ ส.ค.69 — รวมจาก 2 ที่ (เดิมมีแต่ที่ (1) ซึ่งว่างจนกว่าบอทจะได้ event จากกลุ่มจริง):
+      (1) KVStore 'line_groups' = กลุ่มที่บอทจำเอง (มีชื่อกลุ่ม · LINE ไม่มี API ลิสต์กลุ่ม)
+          โผล่ก็ต่อเมื่อเพิ่มบอทเข้ากลุ่มแล้วมีคนพิมพ์อย่างน้อย 1 ครั้ง + ตั้ง Webhook URL แล้ว
+      (2) คอลัมน์ group id ในชีตพนักงาน = ใช้ได้ทันทีโดยไม่ต้องรอบอท (แต่ไม่รู้ชื่อกลุ่ม)
+    ฟิลด์ source บอกว่าแต่ละกลุ่มมาจากไหน: bot / sheet / both
     """
     ok, resp = _api_key_ok(request)
     if not ok:
         return resp
-    from .services import cache_store
+    merged = {}
+    # (1) กลุ่มที่บอทรู้จัก
     try:
-        groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+        from .services import cache_store
+        for gid, v in ((cache_store.get_kv("line_groups") or {}).get("data") or {}).items():
+            merged[gid] = {"groupId": gid, "name": (v or {}).get("name", ""),
+                           "lastSeen": (v or {}).get("lastSeen", ""),
+                           "source": "bot", "employeeCount": 0}
+    except Exception:
+        pass          # ไม่มี KV / DB ล่ม → ใช้จากชีตอย่างเดียว ยังตอบได้
+    # (2) group id ที่อยู่ในชีตพนักงาน (+ นับว่ามีพนักงานผูกอยู่กี่คน)
+    try:
+        from .services.google_sheets import fetch_sheet, EMPLOYEE_COL as EM
+        for r in fetch_sheet("employees"):
+            gid = cell(r, EM.group_id)
+            if not gid or not cell(r, EM.user_id):
+                continue
+            row = merged.setdefault(gid, {"groupId": gid, "name": "", "lastSeen": "",
+                                          "source": "sheet", "employeeCount": 0})
+            row["employeeCount"] += 1
+            if row["source"] == "bot":
+                row["source"] = "both"
     except Exception as e:
-        return _api_json({"ok": False, "error": f"อ่านรายชื่อกลุ่มไม่ได้: {e}"}, status=502)
-    data = [{"groupId": gid, "name": (v or {}).get("name", ""),
-             "lastSeen": (v or {}).get("lastSeen", "")}
-            for gid, v in sorted(groups.items(), key=lambda kv: (kv[1] or {}).get("name", ""))]
+        if not merged:
+            return _api_json({"ok": False, "error": f"อ่านรายชื่อกลุ่มไม่ได้: {e}"}, status=502)
+    data = sorted(merged.values(), key=lambda x: (-x["employeeCount"], x["name"] or x["groupId"]))
     return _api_json({"ok": True, "count": len(data), "data": data})
