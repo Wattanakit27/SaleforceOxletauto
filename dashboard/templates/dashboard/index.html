@@ -4193,7 +4193,16 @@
           CP += `<div class="card-sub">ปิดการขาย ${done.length} เคส · มีโปรไฟล์ ${filled.length} เคส`
               + (median!=null?` · รายได้กลาง ${median.toLocaleString()} บาท`:'') + `</div>`;
           if(!filled.length){
-            CP += `<div class="mut sm" style="padding:14px 2px">ยังไม่มีเคสที่กรอกโปรไฟล์ในช่วงนี้ — เริ่มเก็บตั้งแต่ เม.ย.69</div>`;
+            // ★ แยกให้ออกระหว่าง "ยังไม่ได้กรอกในชีต" กับ "ผลคำนวณเก่ายังไม่มีช่องพวกนี้"
+            //   (เคสหลังเกิดตอนเพิ่งอัปเดตโค้ด แต่ cron ยังไม่ได้คำนวณใหม่ → ทุกช่องว่างหมดทั้งที่ชีตกรอกแล้ว)
+            //   ไม่แยกไว้ = ผู้ใช้เห็น "0 เคส" แล้วนึกว่าระบบพัง/ชีตหาย
+            const hasField = done.some(b => 'occupation' in b);
+            CP += hasField
+              ? `<div class="mut sm" style="padding:14px 2px">ยังไม่มีเคสที่กรอกโปรไฟล์ในช่วงนี้ — เริ่มเก็บตั้งแต่ เม.ย.69</div>`
+              : `<div style="padding:12px 14px;margin-top:8px;border-radius:10px;background:color-mix(in srgb,#f59e0b 12%,transparent);border:1px solid color-mix(in srgb,#f59e0b 45%,transparent);font-size:12.5px;line-height:1.7">
+                   <b>ข้อมูลยังไม่อัปเดต</b> — ผลคำนวณที่ระบบเก็บไว้ยังเป็นของเวอร์ชันก่อนหน้า จึงไม่มีช่องโปรไฟล์ลูกค้า<br>
+                   แก้: เมนูจัดการ → <b>สถานะระบบ</b> → กด <b>"รีเฟรชข้อมูลเดี๋ยวนี้"</b> แล้วโหลดหน้านี้ใหม่ (ประมาณ 20 วินาที)
+                 </div>`;
           }else{
             CP += `<div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:8px">`
                 + mini('อาชีพ', occ) + mini('รายได้ต่อเดือน', inc, INC_ORDER) + mini('อายุ', age, AGE_ORDER)
