@@ -4110,6 +4110,8 @@
       });
 
       // ── 💳 เคสจบตามไฟแนนซ์ (ชีตนับลีด แท็บ จอง/จบ ฝั่งขวา คอลัมน์ "ชำระแบบ" · เดือน = เดือนของแท็บ) ──
+      // ⚠️ try นี้เคยกลืน error เงียบ — พลาดบรรทัดเดียวในบล็อกนี้ = การ์ดหายทั้งใบ หาสาเหตุไม่ได้
+      //    (เจอจริง ส.ค.69 ตอนเพิ่มการ์ดโปรไฟล์ลูกค้า: เรียกฟังก์ชันผิดขอบเขต → ทั้งไฟแนนซ์+โปรไฟล์หายพร้อมกัน)
       try {
         const FIN = D.financeSummary || {};
         const _mF = (new Date(dfFrom+'T00:00:00')).getMonth()+1, _mT = (new Date(dfTo+'T00:00:00')).getMonth()+1;
@@ -4140,7 +4142,67 @@
           FT += `</tbody></table></div>`;
         }
         FT += `</div>`;
-        html = FT + html;   // ★ การ์ดไฟแนนซ์อยู่บนสุดของแท็บ (ผู้ใช้สั่ง ส.ค.69 — อยู่ล่างสุดแล้วหาไม่เจอ)
+
+        // ══ ตารางโปรไฟล์ลูกค้าที่ปิดการขายได้ (ส.ค.69 · เจ้าของขอ — วางข้างตารางไฟแนนซ์) ══
+        //   ที่มา: ชีตรายงานฝ่ายขาย 5 ช่องที่แอดมินแทรกเข้ามาเม.ย.69
+        //          อาชีพ · รายได้ · อายุงาน · ประวัติผ่อน · อายุ
+        //   นับเฉพาะเคส "ปล่อย" (ขายจบจริง) ตามช่วงวันที่ของหน้า → ตอบว่า "คนที่ซื้อรถเราเป็นใคร"
+        //   ⚠️ ข้อมูลกรอกไม่ครบทุกเคส (เริ่มเก็บ เม.ย.69) → โชว์ "กรอกแล้วกี่เคส" กำกับเสมอ
+        //      ไม่งั้นคนอ่านจะเข้าใจว่าเป็นสัดส่วนของลูกค้าทั้งหมด
+        let CP = '';
+        {
+          // base = เคสในช่วงวันที่ (ตัวแปรของ renderBookings) — อย่าเรียก bookingsInRange() ตรงนี้ ไม่มีในขอบเขตนี้
+          const done = base.filter(b => (b.status||'').trim() === 'ปล่อย');
+          const ok = v => { const t=String(v==null?'':v).trim(); return (t && t!=='-') ? t : ''; };
+          const num = v => { const n=parseFloat(String(v||'').replace(/[, ]/g,'')); return isFinite(n)?n:null; };
+          const filled = done.filter(b => ok(b.occupation) || ok(b.income) || ok(b.age));
+
+          // จัดกลุ่มรายได้/อายุเป็นช่วง — ค่าดิบเป็นข้อความอิสระ ดูทีละค่าไม่ได้ความหมาย
+          const incBand = v => { const n=num(v); if(n==null) return null;
+            return n<15000?'ต่ำกว่า 15,000':n<25000?'15,000–25,000':n<40000?'25,000–40,000':n<70000?'40,000–70,000':'70,000 ขึ้นไป'; };
+          const ageBand = v => { const n=num(v); if(n==null||n<15||n>90) return null;
+            return n<25?'ต่ำกว่า 25':n<31?'25–30':n<41?'31–40':n<51?'41–50':'51 ขึ้นไป'; };
+          const INC_ORDER=['ต่ำกว่า 15,000','15,000–25,000','25,000–40,000','40,000–70,000','70,000 ขึ้นไป'];
+          const AGE_ORDER=['ต่ำกว่า 25','25–30','31–40','41–50','51 ขึ้นไป'];
+
+          const tally = (rows, fn) => { const m={}; rows.forEach(b=>{ const k=fn(b); if(k) m[k]=(m[k]||0)+1; }); return m; };
+          const occ = tally(done, b => ok(b.occupation));
+          const inc = tally(done, b => incBand(b.income));
+          const age = tally(done, b => ageBand(b.age));
+          const incomes = done.map(b=>num(b.income)).filter(n=>n!=null && n>0).sort((a,b)=>a-b);
+          const median = incomes.length ? incomes[Math.floor(incomes.length/2)] : null;
+
+          const mini = (title, obj, order) => {
+            const ent = order ? order.filter(k=>obj[k]).map(k=>[k,obj[k]])
+                              : Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8);
+            const tot = Object.values(obj).reduce((a,n)=>a+n,0) || 1;
+            if(!ent.length) return `<div style="flex:1;min-width:210px"><div style="font-weight:800;font-size:12.5px;margin-bottom:5px">${title}</div><div class="mut sm">ยังไม่มีข้อมูล</div></div>`;
+            return `<div style="flex:1;min-width:210px"><div style="font-weight:800;font-size:12.5px;margin-bottom:5px">${title}</div>`
+              + `<table style="width:100%;border-collapse:collapse;font-size:12px">${ent.map(([k,n])=>`<tr>
+                   <td style="padding:4px 6px;border-bottom:.5px solid var(--bd)">${h(k)}</td>
+                   <td style="padding:4px 6px;text-align:right;border-bottom:.5px solid var(--bd);font-weight:700">${n}</td>
+                   <td style="padding:4px 6px;text-align:right;border-bottom:.5px solid var(--bd);color:var(--t3);width:44px">${Math.round(n*100/tot)}%</td>
+                 </tr>`).join('')}</table></div>`;
+          };
+
+          CP = `<div class="card" id="custprofile-card" style="margin-bottom:16px;grid-column:1/-1"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center">${ic('lucide:users',16)} โปรไฟล์ลูกค้าที่ปิดการขายได้ · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="ลูกค้าที่ซื้อรถเราเป็นใคร — นับเฉพาะเคสสถานะ 'ปล่อย' ตามช่วงวันที่ด้านบน
+ที่มา: ชีตรายงานฝ่ายขาย (อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/อายุ)
+
+เริ่มเก็บ เม.ย.69 · ยังกรอกไม่ครบทุกเคส
+% คิดจากเฉพาะเคสที่กรอกช่องนั้น ไม่ใช่เคสปล่อยทั้งหมด">?</span></span>${_cardLineBtn('custprofile-card','โปรไฟล์ลูกค้าที่ปิดการขายได้')}</div>`;
+          CP += `<div class="card-sub">ปิดการขาย ${done.length} เคส · มีโปรไฟล์ ${filled.length} เคส`
+              + (median!=null?` · รายได้กลาง ${median.toLocaleString()} บาท`:'') + `</div>`;
+          if(!filled.length){
+            CP += `<div class="mut sm" style="padding:14px 2px">ยังไม่มีเคสที่กรอกโปรไฟล์ในช่วงนี้ — เริ่มเก็บตั้งแต่ เม.ย.69</div>`;
+          }else{
+            CP += `<div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:8px">`
+                + mini('อาชีพ', occ) + mini('รายได้ต่อเดือน', inc, INC_ORDER) + mini('อายุ', age, AGE_ORDER)
+                + `</div>`;
+          }
+          CP += `</div>`;
+        }
+
+        html = FT + CP + html;   // ★ ไฟแนนซ์ + โปรไฟล์ลูกค้า อยู่บนสุดของแท็บ (ผู้ใช้สั่ง ส.ค.69)
 
         // ── เวอร์ชันสวยสำหรับส่งไลน์ (#fin-card-shot · ซ่อนใน wrapper height:0) ──
         // ปุ่ม "ส่งไลน์ ▾" ของ #fin-card → cardline แคปตัวนี้แทนการ์ดเว็บอัตโนมัติ (convention #<id>-shot)

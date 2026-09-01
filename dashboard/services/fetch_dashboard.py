@@ -978,6 +978,10 @@ def _compute_dashboard_data() -> dict:
             "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),
             # ★ ส.ค.69 — คอลัมน์จริงของ สถานะ/วันเซ็น ก็ขยับตามเดือนเหมือนกัน (13->18, 14->19 ตั้งแต่ เม.ย.69)
             "statusCol": _sheet_col(r, 32) or S.status, "signCol": _sheet_col(r, 33) or S.sign_date,
+            # ★ ส.ค.69 — โปรไฟล์ลูกค้า (ช่องที่แอดมินแทรกเข้ามาเม.ย.69) เก็บไว้ท้ายแถวตอน normalize
+            #   ใช้ทำตาราง "ลูกค้าที่ปิดการขายได้เป็นใคร" คู่กับตารางไฟแนนซ์
+            "occupation": cell(r, 23), "income": cell(r, 24), "jobTenure": cell(r, 25),
+            "payHistory": cell(r, 26), "age": cell(r, 27),
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
@@ -2235,6 +2239,10 @@ def _fetch_seller_stats_impl(seller_name: str) -> dict:
             "sheetTab": cell(r, 28), "sheetRow": cell(r, 29), "resultCol": result_col_for(r), "releaseCol": _release_col(r),
             # ★ ส.ค.69 — คอลัมน์จริงของ สถานะ/วันเซ็น ก็ขยับตามเดือนเหมือนกัน (13->18, 14->19 ตั้งแต่ เม.ย.69)
             "statusCol": _sheet_col(r, 32) or S.status, "signCol": _sheet_col(r, 33) or S.sign_date,
+            # ★ ส.ค.69 — โปรไฟล์ลูกค้า (ช่องที่แอดมินแทรกเข้ามาเม.ย.69) เก็บไว้ท้ายแถวตอน normalize
+            #   ใช้ทำตาราง "ลูกค้าที่ปิดการขายได้เป็นใคร" คู่กับตารางไฟแนนซ์
+            "occupation": cell(r, 23), "income": cell(r, 24), "jobTenure": cell(r, 25),
+            "payHistory": cell(r, 26), "age": cell(r, 27),
             "finance": cell(r, S.finance_main),
             "grade": cell(r, S.grade),
             "note": cell(r, S.note),
