@@ -2131,6 +2131,11 @@ def admin_system_health(request):
         if _ct2 and _ct2.get("ok") is False:
             issues.append({"level": "err",
                            "msg": "cron ยิงถึงแล้วแต่อุ่นข้อมูลไม่สำเร็จ: %s" % (_ct2.get("error") or "ไม่ทราบสาเหตุ")})
+        _sf = (_gkv("sheets_fetch_last") or {}).get("data") or {}
+        if _sf and _sf.get("ok") is False:
+            issues.append({"level": "err",
+                           "msg": "อ่านชีตบางเดือนไม่สำเร็จ (%s) — ตัวเลขเดือนนั้นจะขาด · กดรีเฟรชอีกครั้ง"
+                                  % ", ".join(_sf.get("failed") or [])})
         _pc = (_gkv("precompute_last") or {}).get("data") or {}
         if _pc and _pc.get("ok") is False:
             issues.append({"level": "err",

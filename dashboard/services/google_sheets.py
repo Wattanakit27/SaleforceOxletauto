@@ -173,8 +173,14 @@ def _norm_header(s: str) -> str:
     return "".join((s or "").split()).lower()
 
 
-def _resolve_lead_colmap(header: list) -> dict:
-    """header row → {canonical_index: source_index} จับคู่ตามชื่อหัวตาราง (เจอตัวแรกชนะ)."""
+def _resolve_lead_colmap(header: list, sample_rows: list | None = None) -> dict:
+    """header row → {canonical_index: source_index} จับคู่ตามชื่อหัวตาราง (เจอตัวแรกชนะ).
+
+    ★ ส.ค.69 — เพิ่ม sample_rows: ถ้าหา "ช่องวันที่" จากหัวตารางไม่เจอ ให้ดูจากเนื้อข้อมูลแทน
+      เหตุ: แท็บ "กันยายน 69" มีคนพิมพ์ทับหัวตาราง A1 จาก "ว/ด/ป" เป็นตัวเลข (46234 = วันที่ในรูป serial)
+      → จับคู่ช่องวันที่ไม่ได้ → ทุกแถวถูกล้างวันที่ → **ทั้งเดือนหายไปจากระบบเงียบๆ** (48 ลีดจริงกลายเป็น 0)
+      ช่องวันที่เป็นหัวใจ (ใช้กรองว่าแถวอยู่เดือนไหน) พังช่องเดียว = เดือนนั้นสูญทั้งเดือน จึงต้องมีทางสำรอง
+    """
     norm = [_norm_header(c) for c in header]
     colmap: dict[int, int] = {}
     for canon_idx, aliases in _LEAD_FIELD_ALIASES:
@@ -185,6 +191,24 @@ def _resolve_lead_colmap(header: list) -> dict:
                 break
     # เตือนเมื่อ match ไม่เจอ "เกินครึ่ง" ของ field → header เปลี่ยนชื่อ/ผิด tab → _normalize_lead_row จะล้างคอลัมน์เงียบๆ
     # (ไม่เตือนตอนขาดไม่กี่ field เพราะเดือนเก่าไม่มีคอลัมน์ใหม่ Z/U-Y เป็นปกติ)
+    # ── ทางสำรองของ "ช่องวันที่": หาคอลัมน์ที่เนื้อข้อมูลเป็นวันที่จริง ──
+    if LEADS_COL.received_date not in colmap and sample_rows:
+        from .fetch_dashboard import parse_month_day
+        best, best_hits = None, 0
+        for src_idx in range(0, min(4, max((len(r) for r in sample_rows), default=0))):
+            hits = sum(1 for r in sample_rows
+                       if src_idx < len(r) and parse_month_day(str(r[src_idx] or "").strip()))
+            if hits > best_hits:
+                best, best_hits = src_idx, hits
+        # ต้องดูเป็นวันที่จริงเกินครึ่งของตัวอย่าง ถึงจะเชื่อ (กันไปหยิบคอลัมน์เบอร์โทร/เวลา)
+        if best is not None and best_hits >= max(3, len(sample_rows) // 2):
+            colmap[LEADS_COL.received_date] = best
+            import logging
+            logging.getLogger("oxlet.sheets").warning(
+                "lead colmap: หัวตารางช่องวันที่ผิด/หาย — เดาจากเนื้อข้อมูลได้คอลัมน์ %d "
+                "(%d/%d แถวตัวอย่างเป็นวันที่) · ควรแก้หัวตารางในชีตให้เป็น 'ว/ด/ป'",
+                best, best_hits, len(sample_rows))
+
     _missing = len(_LEAD_FIELD_ALIASES) - len(colmap)
     if _missing > len(_LEAD_FIELD_ALIASES) // 2:
         import logging
@@ -475,7 +499,7 @@ def update_lead_field(code: str, field: str, value: str, month: int | None = Non
         vals = r.json().get("values", [])
         if not vals:
             continue
-        colmap = _resolve_lead_colmap(vals[0])
+        colmap = _resolve_lead_colmap(vals[0], vals[1:21])
         code_src = colmap.get(LEADS_COL.lead_code)
         field_src = colmap.get(canon)
         rep_src = colmap.get(LEADS_COL.sales_rep)
@@ -848,22 +872,42 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
             return fetch_sheet("leads")
 
         def _fetch_tab(tab: str) -> list[list[str]]:
-            # เก็บ header (แถวแรก) ไว้ด้วย เพื่อ map คอลัมน์ตามชื่อหัวตาราง
+            """★ ส.ค.69 — ลองซ้ำ 1 ครั้งถ้าพลาด
+            เดิมพลาดครั้งเดียว = คืนลิสต์ว่าง → "เดือนนั้นหายทั้งเดือน" แบบเงียบๆ
+            (เจอจริงตอนตรวจ: ก.พ. หาย 2,787 ลีดจากการดึงพลาดชั่วคราวรอบเดียว)"""
             encoded = urllib.parse.quote(f"'{tab}'")
             url = f"{SHEETS_API}/{sid}/values/{encoded}?valueRenderOption=FORMATTED_VALUE"
-            r = requests.get(url, headers=headers_auth, timeout=30)
-            return r.json().get("values", []) if r.status_code == 200 else []
+            import time as _t
+            last = ""
+            for _attempt in range(3):
+                try:
+                    r = requests.get(url, headers=headers_auth, timeout=30)
+                    if r.status_code == 200:
+                        return r.json().get("values", [])
+                    last = "HTTP %s" % r.status_code
+                except Exception as _e:
+                    last = str(_e)[:60]
+                # 429 = Google จำกัดจำนวนครั้ง (เราอ่าน 9 แท็บพร้อมกัน แต่ละแท็บหลายพันแถว)
+                # ต้องรอแล้วค่อยลองใหม่ ยิงซ้ำทันทีจะโดนปฏิเสธซ้ำ
+                _t.sleep(1.0 + _attempt * 2.0)
+            import logging
+            logging.getLogger("oxlet.sheets").warning("อ่านแท็บ '%s' ไม่สำเร็จ (%s)", tab, last)
+            return []
 
         # Fetch all tabs in parallel
         tab_rows: dict[str, tuple[int, list[list[str]]]] = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        failed_tabs: list[str] = []      # ★ แท็บที่อ่านไม่ได้ — ต้องรู้ ไม่ใช่เงียบ
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
             futs = {ex.submit(_fetch_tab, tab): (m_int, tab) for m_int, tab in monthly_tabs}
             for fut in concurrent.futures.as_completed(futs):
                 m_int, tab = futs[fut]
                 try:
-                    tab_rows[tab] = (m_int, fut.result())
+                    vals_ = fut.result()
                 except Exception:
-                    tab_rows[tab] = (m_int, [])
+                    vals_ = []
+                if not vals_:
+                    failed_tabs.append(tab)
+                tab_rows[tab] = (m_int, vals_)
 
         # ดึง parse_date จาก fetch_dashboard (avoid circular import — late import)
         from .fetch_dashboard import parse_date
@@ -880,7 +924,7 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
             _, vals = tab_rows.get(tab, (m_int, []))
             if not vals:
                 continue
-            cmz = _resolve_lead_colmap(vals[0])
+            cmz = _resolve_lead_colmap(vals[0], vals[1:21])
             csrc = cmz.get(LEADS_COL.lead_code)
             if csrc is None:
                 continue
@@ -903,7 +947,7 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
             if not vals:
                 continue
             # map คอลัมน์ตามชื่อหัวตารางของ tab นี้ (แต่ละเดือน layout อาจต่างกัน)
-            colmap = _resolve_lead_colmap(vals[0])
+            colmap = _resolve_lead_colmap(vals[0], vals[1:21])
             for raw in vals[1:]:
                 row = _normalize_lead_row(raw, colmap)
                 d = parse_date(cell(row, LEADS_COL.received_date))
@@ -913,10 +957,42 @@ def fetch_leads_by_month_tabs() -> list[list[str]]:
                         if _code in latest[f]:
                             row[f] = latest[f][_code]
                     all_rows.append(row)
+        # ★ ส.ค.69 — อ่านแท็บไหนไม่ได้ = ผลลัพธ์ "ขาดทั้งเดือน"
+        #   ห้าม cache ผลที่ขาด (ไม่งั้นตัวเลขผิดค้าง 60 วิ + ถูกเขียนลง precompute ต่อ)
+        #   และต้องบันทึกไว้ให้หน้าสถานะระบบเห็น — เดิมเงียบสนิท
+        if failed_tabs:
+            try:
+                from . import cache_store
+                cache_store.set_kv("sheets_fetch_last",
+                                   {"ok": False, "source": "leads", "failed": failed_tabs[:6]})
+            except Exception:
+                pass
+            import logging
+            logging.getLogger("oxlet.sheets").warning(
+                "อ่านแท็บ leads ไม่สำเร็จ %d แท็บ: %s — ตัวเลขเดือนนั้นจะขาด (ไม่ cache ผลนี้)",
+                len(failed_tabs), ", ".join(failed_tabs[:6]))
+            return all_rows          # คืนของเท่าที่ได้ แต่ไม่ cache → รอบหน้าลองใหม่
+        try:
+            from . import cache_store
+            cache_store.set_kv("sheets_fetch_last", {"ok": True, "source": "leads"})
+        except Exception:
+            pass
         _cache_set(cache_key, all_rows)
         return all_rows
-    except Exception:
+    except Exception as e:
         # graceful fallback — อย่างน้อยมีข้อมูลจาก "รวม sheet"
+        # ★ ส.ค.69 — เดิมกลืนเงียบ: พอ fallback ตัวเลขเปลี่ยนไปคนละชุด (รวม sheet ไม่ครบเดือนใหม่)
+        #   แต่ไม่มีใครรู้ว่าเกิดอะไร → ต้อง log + บันทึกให้หน้าสถานะระบบเห็น
+        import logging, traceback
+        logging.getLogger("oxlet.sheets").error(
+            "fetch_leads_by_month_tabs ล้มเหลว → ตกไปใช้ 'รวม sheet' (ตัวเลขจะไม่ตรงกับแท็บรายเดือน): %s%s",
+            e, chr(10) + traceback.format_exc()[-800:])
+        try:
+            from . import cache_store
+            cache_store.set_kv("sheets_fetch_last",
+                               {"ok": False, "source": "leads", "fallback": True, "error": str(e)[:200]})
+        except Exception:
+            pass
         return fetch_sheet("leads")
 
 
