@@ -126,6 +126,18 @@ python manage.py runserver
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
 
+> **★ ส.ค.69 — บั๊ก "ข้อมูลค้างเป็นสัปดาห์" ที่แก้แล้ว (ต้องไม่ให้กลับมาอีก)**
+> `cron_tick` เคยเช็ค `LINE_CHANNEL_ACCESS_TOKEN` แล้ว **`return 500` ก่อน** เขียน heartbeat และก่อนอุ่น dashboard
+> → ไม่มี LINE token = **การรีเฟรชข้อมูลทั้งระบบตาย** ทั้งที่ 2 เรื่องนี้ไม่เกี่ยวกัน
+> อาการ: แดชบอร์ดแช่ค้างเป็นสัปดาห์ · กดปุ่มรีเฟรชมือหายชั่วคราว (ปุ่มนั้นไม่เช็ค token) แล้วกลับมาค้างอีก
+> · หน้าสถานะระบบขึ้น "cron ไม่ทำงาน" ทั้งที่ cron ยิงถึงจริง → **แยกไม่ออกว่าไม่ถูกยิง หรือถูกยิงแล้วตาย**
+> โผล่ตอนขึ้นเดือนใหม่ (ตัวกรองเด้งไปเดือนที่ไม่เคยถูกคำนวณ → โชว์ 0)
+> **กฎที่ต้องรักษา**: งานข้อมูล (heartbeat + อุ่น cache) ต้องทำ **ก่อน** และ **ไม่ผูก** กับ LINE/Playwright เสมอ
+> · ของช้า (แคปรูป ~90 วิ) ต้องอยู่ท้ายสุด ไม่งั้น nginx ตัดที่ 120 วิ แล้วงานข้อมูลไม่ได้ทำ
+> · `precompute_dashboard` เลิก `except: pass` แล้ว — เก็บผลไม่ได้จะบันทึกไว้ที่ kv `precompute_last`
+> · heartbeat `cron_tick` เก็บ `{ok, refreshed, error, lineToken}` (เดิม `ok:True` เสมอ = เขียวหลอก)
+
+
 ### 🔑 API สำหรับระบบภายนอก (v1 · ส.ค.69 — เจ้าของขอ)
 ให้ **n8n / เว็บโชว์รูม / partner** ดึงรายชื่อพนักงาน + LINE id + group id ได้โดยไม่ต้อง login เข้าเว็บ
 - **อ่านอย่างเดียว (GET)** · `/api/v1/employees` · `/api/v1/groups` · `/api/v1/` (สารบัญ)

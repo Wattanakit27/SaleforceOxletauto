@@ -1159,18 +1159,48 @@ def cron_tick(request):
     if submitted != secret_setting:
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
+    # ★ ส.ค.69 — LINE token "ไม่ใช่" เงื่อนไขของงานข้อมูลอีกต่อไป
+    #   บั๊กเดิม: ไม่มี token → return 500 ตรงนี้ → ข้ามทั้ง heartbeat และการอุ่น dashboard
+    #   ผลคือแดชบอร์ดค้างแช่เป็นสัปดาห์ (กดรีเฟรชมือหายชั่วคราว เพราะปุ่มนั้นไม่เช็ค token)
+    #   และหน้าสถานะระบบขึ้นว่า "cron ไม่ทำงาน" ทั้งที่ cron ยิงถึงจริง → ไล่ไม่เจอ
+    #   ตอนนี้: ไม่มี token = ข้ามเฉพาะส่วนแจ้งเตือน LINE · งานข้อมูลยังทำครบ
     channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
-    if not channel_token:
-        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
 
     from .services.line_notify import push_line_message
     from .services.fetch_dashboard import bangkok_now
 
     now = bangkok_now()
-    # heartbeat — บันทึกว่า cron ทำงานล่าสุดเมื่อไหร่ (โชว์ในหน้าสถานะระบบ → รู้ว่า n8n ยิงถึงไหม)
+
+    # ══ งานหลัก: อุ่น dashboard cache ══
+    # ★ ย้ายขึ้นมาทำ "ก่อน" งานส่ง LINE/แคปรูป — ของพวกนั้นช้า (Playwright ได้ถึง 90 วิ)
+    #   ถ้า nginx ตัดที่ 120 วิ ระหว่างแคปรูป งานอุ่น cache ที่อยู่ท้ายสุดจะไม่ได้ทำเลย
+    # threshold 120 = อุ่นใหม่เมื่อผลเก่า > 2 นาที (cron ยิง 1 นาที · precompute ~8-15s ไม่ซ้อน)
+    refreshed = False
+    refresh_error = None
+    try:
+        from .services.cache_store import available, get_dashboard_cache_age
+        if not available():
+            refresh_error = "ไม่มีที่เก็บผล (Postgres/Supabase)"
+        else:
+            age = get_dashboard_cache_age()
+            if age is None or age > 120:
+                from .services.fetch_dashboard import precompute_dashboard, _dash_cache
+                _dash_cache["data"] = None   # บังคับคำนวณสดจาก Google (ไม่ใช้ของเก่าใน memory)
+                precompute_dashboard()       # → เขียนผลลง store + อุ่น in-memory ของ worker นี้
+                refreshed = True
+    except Exception as e:
+        refresh_error = str(e)[:200]
+
+    # heartbeat — ★ บันทึก "ผลจริง" ไม่ใช่แค่ ok:True
+    #   ของเดิมเขียน ok:True เสมอ → หน้าสถานะระบบเขียวทั้งที่ข้อมูลไม่ได้อัปเดต
     try:
         from .services.cache_store import set_kv as _set_kv
-        _set_kv("cron_tick", {"ok": True})
+        _set_kv("cron_tick", {
+            "ok": refresh_error is None,
+            "refreshed": refreshed,
+            "error": refresh_error,
+            "lineToken": bool(channel_token),
+        })
     except Exception:
         pass
 
@@ -1178,9 +1208,11 @@ def cron_tick(request):
     # อ่านตารางจากชีต "ตั้งเวลาส่ง" (แทน hardcode) → แอดมินแก้เวลา/ผู้รับ/test ได้เองในแดชบอร์ด
     # test_target ว่าง = ส่งเซลล์จริงแต่ละคน · ใส่ user_id = ส่งเข้า user นั้นแทน (ทดสอบ)
     followup_sent = 0
+    followup_error = None if channel_token else "ไม่มี LINE token — ข้ามการแจ้งเตือน"
     try:
         from .services.line_notify import load_schedules, schedule_matches_now
-        _matched = [s for s in load_schedules() if schedule_matches_now(s, now)]
+        # ไม่มี token = ไม่ต้องหา schedule (บล็อกทั้งก้อนด้วยลิสต์ว่าง — อ่านง่ายกว่าโยน exception)
+        _matched = [s for s in load_schedules() if schedule_matches_now(s, now)] if channel_token else []
         if _matched:
             from .services.fetch_dashboard import build_followup_messages
             from .services.constants import normalize_seller
@@ -1227,38 +1259,28 @@ def cron_tick(request):
                 _set_kv("cron_followup", {"count": followup_sent, "time": _sched.get("time"), "label": _sched.get("label", "")})
             except Exception:
                 pass
-    except Exception:
-        pass
+    except Exception as e:
+        followup_error = str(e)[:200]     # ★ เดิมกลืนเงียบ → ส่งไม่ออกก็ไม่มีใครรู้
 
     # ── 📊 ส่งการ์ด (ตาราง) เข้าไลน์รายวัน (แคปด้วย Playwright → ส่งรูป) — ตั้งเวลาที่ปุ่ม "ส่งไลน์" บนหัวการ์ดแต่ละใบ ──
     cards_result = None   # สรุปผลส่งการ์ด → โชว์ใน response ให้ debug จาก cron log ได้เลย
-    try:
-        from .services.report_shot import maybe_send_cards
-        cards_result = maybe_send_cards(now.strftime("%H:%M"), now.date().isoformat())
-    except Exception as e:
-        cards_result = {"error": str(e)[:200]}
-
-    # ── อุ่น dashboard cache: cron คำนวณผลใหม่เก็บลง store (Postgres ในเครื่อง/Supabase) ──
-    # ทุก worker อ่าน store ที่อุ่นแล้ว → dashboard อุ่นตลอด ไม่มีใครเจอ recompute สด ~8.5 วิ
-    # threshold 120 = อุ่นใหม่เมื่อผลเก่า > 2 นาที (cron ยิง 1 นาที · precompute ~8-15s < 60s ไม่ซ้อน)
-    refreshed = False
-    try:
-        from .services.cache_store import available, get_dashboard_cache_age
-        if available():
-            age = get_dashboard_cache_age()
-            if age is None or age > 120:
-                from .services.fetch_dashboard import precompute_dashboard, _dash_cache
-                _dash_cache["data"] = None   # บังคับคำนวณสดจาก Google (ไม่ใช้ของเก่าใน memory)
-                precompute_dashboard()       # → เขียนผลลง store + อุ่น in-memory ของ worker นี้
-                refreshed = True
-    except Exception:
-        pass   # best-effort
+    if not channel_token:
+        cards_result = {"skipped": "ไม่มี LINE token"}
+    else:
+        try:
+            from .services.report_shot import maybe_send_cards
+            cards_result = maybe_send_cards(now.strftime("%H:%M"), now.date().isoformat())
+        except Exception as e:
+            cards_result = {"error": str(e)[:200]}
 
     return JsonResponse({
-        "ok": True,
+        "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
         "followup_sent": followup_sent,
+        "followup_error": followup_error,      # ★ เดิมกลืนเงียบ
         "dashboard_refreshed": refreshed,
+        "refresh_error": refresh_error,        # ★ เดิมกลืนเงียบ — ต้นเหตุ "ข้อมูลค้างเป็นสัปดาห์"
+        "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
     }, json_dumps_params={"ensure_ascii": False})
 
@@ -2099,6 +2121,22 @@ def admin_system_health(request):
     # heartbeat เก็บใน store (Postgres ในเครื่อง) → เตือนถ้า cron ไม่ยิงเกิน 10 นาที
     if sb_ok and (cron_tick_age is None or cron_tick_age > 600):
         issues.append({"level": "err", "msg": "cron ไม่ทำงาน (> 10 นาที หรือไม่เคยยิง) — เช็ค crontab บน VPS (ยิง /api/cron/tick ทุกนาที)"})
+
+    # ★ ส.ค.69 — แยกให้ออกระหว่าง "cron ไม่ถูกยิง" กับ "cron ถูกยิงแต่ทำงานล้มเหลว"
+    #   ของเดิมทั้ง 2 กรณีหน้าตาเหมือนกันเป๊ะ (heartbeat เก่าเหมือนกัน) → ไล่ปัญหาไม่เจอ
+    #   เคสจริง ส.ค.69: cron ถูกยิงทุกนาที แต่ตาย 500 ที่ด่านเช็ค LINE token → ข้อมูลค้างเป็นสัปดาห์
+    try:
+        from .services.cache_store import get_kv as _gkv
+        _ct2 = (_gkv("cron_tick") or {}).get("data") or {}
+        if _ct2 and _ct2.get("ok") is False:
+            issues.append({"level": "err",
+                           "msg": "cron ยิงถึงแล้วแต่อุ่นข้อมูลไม่สำเร็จ: %s" % (_ct2.get("error") or "ไม่ทราบสาเหตุ")})
+        _pc = (_gkv("precompute_last") or {}).get("data") or {}
+        if _pc and _pc.get("ok") is False:
+            issues.append({"level": "err",
+                           "msg": "คำนวณเสร็จแต่เก็บผลไม่ได้: %s (แดชบอร์ดจะโชว์ข้อมูลเก่าค้างไว้)" % (_pc.get("error") or "")})
+    except Exception:
+        pass
 
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 

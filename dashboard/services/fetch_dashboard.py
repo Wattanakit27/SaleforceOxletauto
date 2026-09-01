@@ -368,10 +368,23 @@ def precompute_dashboard() -> dict:
     ทำให้คนเข้าเว็บอ่าน "ผลสำเร็จรูป" ไม่ต้องคำนวณ 15k lead สดทุกโหลด."""
     import time
     data = _compute_dashboard_data()
+    # ★ ส.ค.69 — เดิม `except: pass` เงียบสนิท: เขียนผลไม่สำเร็จ (payload ใหญ่/DB ตึง) ก็ไม่มีใครรู้
+    #   แดชบอร์ดจะเสิร์ฟผลเก่าต่อไปเรื่อยๆ เหมือนปกติทุกอย่าง → เป็นบั๊กที่มองไม่เห็น
+    #   ตอนนี้บันทึกความผิดพลาดไว้ให้หน้าสถานะระบบอ่านได้
+    save_error = None
     try:
         from .cache_store import save_dashboard_cache, available
         if available():
             save_dashboard_cache(data)
+        else:
+            save_error = "ไม่มีที่เก็บผล (Postgres/Supabase)"
+    except Exception as e:
+        save_error = str(e)[:200]
+    try:
+        from .cache_store import set_kv
+        set_kv("precompute_last", {"ok": save_error is None, "error": save_error,
+                                   "rows": {"bookingCases": len(data.get("bookingCases") or []),
+                                            "followCases": len(data.get("followCases") or [])}})
     except Exception:
         pass
     _dash_cache["ts"] = time.time()
