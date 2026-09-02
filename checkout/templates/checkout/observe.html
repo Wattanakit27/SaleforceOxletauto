@@ -48,7 +48,10 @@
 
   <div class="bar">
     <label><input type="checkbox" id="obsOn" onchange="toggleObs()"> <b>เปิดโหมดเฝ้าดู</b></label>
-    <input id="gid" placeholder="LINE group id ของกลุ่มเบิกรถ" style="width:330px">
+    <select id="gpick" onchange="if(this.value)document.getElementById('gid').value=this.value" style="min-width:190px">
+      <option value="">— เลือกกลุ่มที่บอทรู้จัก —</option>
+    </select>
+    <input id="gid" placeholder="หรือวาง LINE group id เอง" style="width:300px">
     <button class="btn" onclick="saveGid()">บันทึกกลุ่ม</button>
     <button class="btn" onclick="load()">รีเฟรช</button>
     <select id="filt" onchange="render()">
@@ -83,8 +86,24 @@ async function load(){
   var d=await r.json();
   if(!d.ok){ $('rows').innerHTML='<tr><td colspan="7" class="muted">'+esc(d.error)+'</td></tr>'; return; }
   DATA=d.rows; $('obsOn').checked=!!d.enabled;
-  $('offbox').innerHTML = d.enabled ? ''
-    : '<div class="off">โหมดเฝ้าดูปิดอยู่ — ยังไม่เก็บข้อความใหม่ (ติ๊ก "เปิดโหมดเฝ้าดู" ด้านล่าง)</div>';
+  // แสดงกลุ่มที่ตั้งไว้ + รายชื่อกลุ่มที่บอทจำได้
+  var cfg=d.config||{};
+  if(cfg.groupId && !$('gid').value) $('gid').value=cfg.groupId;
+  var sel=$('gpick');
+  if(sel && sel.options.length<=1){
+    (d.groups||[]).forEach(function(g){
+      var o=document.createElement('option'); o.value=g.id;
+      o.textContent=(g.name||'(ยังไม่รู้ชื่อ)')+' — '+g.id.slice(0,10)+'…';
+      sel.appendChild(o);
+    });
+  }
+  // ★ ต้องสร้างข้อความทั้งหมดก่อนแล้วค่อยเขียนลง offbox ทีเดียว
+  //   (เดิมเขียนคำเตือนแล้วบรรทัดถัดไปเขียนทับ = คำเตือนหายทันที)
+  var warn=[];
+  if(!d.enabled) warn.push('โหมดเฝ้าดูปิดอยู่ — ยังไม่เก็บข้อความใหม่ (ติ๊ก "เปิดโหมดเฝ้าดู" ด้านล่าง)');
+  if(!cfg.groupId) warn.push('ยังไม่ได้ตั้งกลุ่มปลายทาง — บอทจะยังไม่โพสต์อะไรเข้ากลุ่ม');
+  if(d.lineToken===false) warn.push('ยังไม่ได้ตั้ง LINE token บนเซิร์ฟเวอร์ — ส่งเข้ากลุ่มไม่ได้');
+  $('offbox').innerHTML = warn.length ? '<div class="off">'+warn.join('<br>')+'</div>' : '';
   var s=d.stats;
   var cards=[['ข้อความที่เก็บได้',s.messages,'var(--blue)'],
              ['ระบบจับว่าเป็นเบิก/คืน',s.detected,'var(--purple)'],

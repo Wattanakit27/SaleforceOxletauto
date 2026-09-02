@@ -5,6 +5,7 @@
 """
 import json
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -383,8 +384,22 @@ def api_observe(request):
     judged = GroupMessage.objects.exclude(human_verdict="")
     nj = judged.count()
     ok = judged.filter(human_verdict="ok").count()
+    # ★ ก.ย.69 — ส่ง config ปัจจุบัน + รายชื่อกลุ่มที่บอทจำไว้ (KVStore 'line_groups')
+    #   ให้แอดมิน "เลือกกลุ่มตามชื่อ" ได้เลย ไม่ต้องไปหา group id เอง
+    cfg, groups = {}, []
+    try:
+        from dashboard.services import cache_store
+        cfg = (cache_store.get_kv("checkout_line_config") or {}).get("data") or {}
+        _g = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+        groups = [{"id": gid, "name": (v or {}).get("name", "")} for gid, v in _g.items()]
+        groups.sort(key=lambda x: (x["name"] or x["id"]))
+    except Exception:
+        pass
     return JsonResponse({
         "ok": True, "rows": rows, "enabled": observe_enabled(),
+        "config": {"groupId": cfg.get("group_id", ""), "sendEnabled": cfg.get("enabled", True)},
+        "groups": groups,
+        "lineToken": bool(getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")),
         "stats": {"messages": total, "detected": detected, "judged": nj, "correct": ok,
                   "accuracy": round(ok * 100.0 / nj, 1) if nj else None},
     }, json_dumps_params={"ensure_ascii": False})
