@@ -59,11 +59,59 @@ def _mv_json(m):
     }
 
 
+def _top_cars(limit=10):
+    """รถที่ถูกเบิกบ่อยสุด — นับจาก **ทุกเคสในระบบ** ไม่ใช่แค่หน้าที่โหลดมา
+
+    ★ ก.ย.69 (เจ้าของขอ): "อยากรู้ว่ารถคันไหนโดนเบิกบ่อยที่สุด"
+      ใช้ตอบว่า รถคันไหนควรเป็น "รถส่วนกลาง" จริงๆ · คันไหนถูกหยิบไปใช้จนไม่ได้ขาย
+    จัดกลุ่มด้วย car_id ถ้ารู้ว่าคันไหน ไม่งั้นใช้ทะเบียนที่พิมพ์ (เคสที่ยังจับคู่รถไม่ได้)
+    """
+    rows = CarMovement.objects.exclude(status=CarMovement.CANCELLED).values_list(
+        "car_id", "plate_text", "checked_out_at", "returned_at")
+    agg = {}
+    for car_id, plate, out_at, back_at in rows:
+        key = car_id or (("p:" + plate) if plate else "")
+        if not key:
+            continue                      # ไม่รู้ว่าคันไหนเลย — นับไม่ได้
+        a = agg.setdefault(key, {"carId": car_id, "plate": plate, "n": 0,
+                                 "last": None, "outNow": False})
+        a["n"] += 1
+        if not a["plate"] and plate:
+            a["plate"] = plate
+        if out_at and (a["last"] is None or out_at > a["last"]):
+            a["last"] = out_at
+        if out_at and not back_at:
+            a["outNow"] = True
+    top = sorted(agg.values(), key=lambda x: (-x["n"], x["plate"]))[:limit]
+
+    names = {}
+    ids = [t["carId"] for t in top if t["carId"]]
+    if ids:
+        try:
+            from cars.models import Car
+            for c in Car.objects.filter(code__in=ids):
+                names[c.code] = {"plate": c.plate or "", "model": (c.brand + " " + c.model).strip()}
+        except Exception:
+            pass
+    out = []
+    for t in top:
+        info = names.get(t["carId"] or "", {})
+        out.append({
+            "plate": t["plate"] or info.get("plate") or (t["carId"] or "-"),
+            "model": info.get("model", ""),
+            "count": t["n"],
+            "last": timezone.localtime(t["last"]).strftime("%d/%m") if t["last"] else "",
+            "outNow": t["outNow"],
+        })
+    return out
+
+
 @csrf_exempt
 def api_movements(request):
     if not _admin(request):
         return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
-    movements = list(CarMovement.objects.select_related("car")[:300])
+    # โหลดกว้างขึ้นเพื่อให้ "ค้นหา" ฝั่งหน้าเว็บครอบคลุมของเก่าด้วย (เดิม 300)
+    movements = list(CarMovement.objects.select_related("car")[:1000])
     rows = [_mv_json(m) for m in movements]
     counts = {
         "open": sum(1 for m in movements if m.is_open),
@@ -71,11 +119,16 @@ def api_movements(request):
         "pending": sum(1 for m in movements if m.status == CarMovement.PENDING_HUMAN),
         "hold": sum(1 for m in movements if m.status == CarMovement.EQUIPMENT_HOLD),
         "violations": ViolationLog.objects.count(),
+        "overdue": sum(1 for m in movements
+                       if m.is_open and m.checked_out_at
+                       and (timezone.now() - m.checked_out_at).total_seconds() / 3600 >= C.OVERDUE_HOURS),
     }
     # ★ ก.ย.69 — ส่งเกณฑ์ "ค้างกี่ชม." จาก constants ไม่ให้หน้าเว็บ hardcode ซ้ำ
     #   (เดิม template ฝัง 12/4 ไว้เอง → แก้ constants แล้วหน้าเว็บไม่เปลี่ยนตาม)
-    from . import constants as C
+    #   ⚠️ ห้าม import C ในฟังก์ชันนี้ — จะกลายเป็นตัวแปร local แล้ว counts ข้างบนพัง (UnboundLocalError)
     return JsonResponse({"ok": True, "movements": rows, "counts": counts,
+                         "topCars": _top_cars(),
+                         "total": CarMovement.objects.count(),
                          "config": {"overdueHours": C.OVERDUE_HOURS, "warnHours": C.WARN_HOURS}},
                         json_dumps_params={"ensure_ascii": False})
 
