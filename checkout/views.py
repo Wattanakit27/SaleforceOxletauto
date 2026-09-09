@@ -296,6 +296,9 @@ def api_car_return(request):
 #  โหมดเฝ้าดู (observe) — เก็บข้อความในกลุ่ม LINE ไว้ "ดูเฉยๆ" ก่อนเปิดใช้จริง
 #  เจ้าของขอ: เอาบอทเข้ากลุ่ม → นั่งดูว่าระบบตีความตรงไหม → ค่อยเปิดทำงาน
 # =========================================================
+SAMPLE_GROUP_ID = "SAMPLE_LOG"      # group id ของชุดตัวอย่างที่นำเข้าด้วย seed_group_log
+
+
 def observe_enabled() -> bool:
     """เปิดเก็บ log ไหม — ตั้งที่ KVStore 'checkout_line_config' {observe: true}"""
     try:
@@ -366,18 +369,20 @@ def api_observe(request):
     from .models import GroupMessage
     from . import parser as P
     rows = []
-    for m in GroupMessage.objects.select_related("matched_car")[:400]:
+    for m in GroupMessage.objects.select_related("matched_car")[:500]:
         rows.append({
             "id": m.id,
             "at": timezone.localtime(m.sent_at).strftime("%d/%m %H:%M") if m.sent_at else "",
             "who": m.sender_name or ((m.sender_id[:8] + "…") if m.sender_id else ""),
             "type": m.msg_type, "text": m.text,
             "kind": m.parsed_kind,
-            "kindLabel": {"out": "เบิก", "in": "คืน"}.get(m.parsed_kind, "—"),
+            "kindLabel": P.kind_name(m.parsed_kind) or "—",
             "plate": m.parsed_plate, "purpose": P.purpose_name(m.parsed_purpose),
             "conf": m.parsed_conf, "why": m.parsed_why,
             "car": (m.matched_car.code + " · " + (m.matched_car.plate or "")) if m.matched_car_id else "",
             "verdict": m.human_verdict,
+            # แถวจากชุดตัวอย่าง (manage.py seed_group_log) — ไม่ใช่ข้อความสดจากกลุ่ม
+            "sample": m.group_id == SAMPLE_GROUP_ID,
         })
     total = GroupMessage.objects.count()
     detected = GroupMessage.objects.exclude(parsed_kind="").count()

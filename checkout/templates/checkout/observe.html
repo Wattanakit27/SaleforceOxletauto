@@ -129,7 +129,8 @@ function render(){
     return;
   }
   $('rows').innerHTML=rows.map(function(m){
-    var txt=(m.type!=='text'?'<span class="muted">['+esc(m.type)+']</span> ':'')+(esc(m.text)||'<span class="muted">—</span>');
+    var tag=m.sample?'<span class="chip c-lo" title="ข้อความจากชุดตัวอย่างที่นำเข้า ไม่ใช่ของสดจากกลุ่ม">ตัวอย่าง</span> ':'';
+    var txt=tag+(m.type!=='text'?'<span class="muted">['+esc(m.type)+']</span> ':'')+(esc(m.text)||'<span class="muted">—</span>');
     var who=m.who?'<div class="muted" style="font-size:11px">'+esc(m.who)+'</div>':'';
     var kind=m.kind?'<span class="chip '+(m.kind==='out'?'c-out':'c-in')+'">'+esc(m.kindLabel)+'</span>':'<span class="muted">—</span>';
     var plate=(esc(m.plate)||'<span class="muted">—</span>')+(m.car?'<div class="muted" style="font-size:11px">'+esc(m.car)+'</div>':'');
