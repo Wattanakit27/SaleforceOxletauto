@@ -83,10 +83,12 @@ function statusChip(m){
           : m.status==='cancelled' ? 'var(--t3)' : 'var(--blue)';
   return `<span class="chip" style="background:color-mix(in srgb,${c} 16%,transparent);color:${c}">${esc(m.statusLabel)}</span>`;
 }
+// เกณฑ์ชั่วโมงมาจากเซิร์ฟเวอร์ (checkout/constants.py) — ค่าตั้งต้นเผื่อ API เก่า
+var CK_OVERDUE = 4, CK_WARN = 2;
 function overdueChip(m){
   if(m.outHours==null) return '';
-  if(m.outHours>=12) return ' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red);font-weight:700">ค้าง '+Math.round(m.outHours)+' ชม.</span>';
-  if(m.outHours>=4)  return ' <span class="chip" style="background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)">ออกมา '+Math.round(m.outHours)+' ชม.</span>';
+  if(m.outHours>=CK_OVERDUE) return ' <span class="chip" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red);font-weight:700">ค้าง '+Math.round(m.outHours)+' ชม.</span>';
+  if(m.outHours>=CK_WARN)  return ' <span class="chip" style="background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)">ออกมา '+Math.round(m.outHours)+' ชม.</span>';
   return '';
 }
 function actionsFor(m){
@@ -104,6 +106,7 @@ async function load(){
   let d; try{ d = await (await fetch('/checkout/api/movements',{credentials:'same-origin'})).json(); }
   catch(e){ $('status').textContent = 'โหลดไม่ได้'; return; }
   if(!d.ok){ $('rows').innerHTML = `<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--red)">${esc(d.error||'ผิดพลาด')}</td></tr>`; $('status').textContent=''; return; }
+  if(d.config){ CK_OVERDUE = d.config.overdueHours || CK_OVERDUE; CK_WARN = d.config.warnHours || CK_WARN; }
   const c = d.counts;
   $('kpis').innerHTML = [
     ['รถออกอยู่', c.open, 'var(--blue)'],

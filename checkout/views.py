@@ -71,7 +71,11 @@ def api_movements(request):
         "hold": sum(1 for m in movements if m.status == CarMovement.EQUIPMENT_HOLD),
         "violations": ViolationLog.objects.count(),
     }
-    return JsonResponse({"ok": True, "movements": rows, "counts": counts},
+    # ★ ก.ย.69 — ส่งเกณฑ์ "ค้างกี่ชม." จาก constants ไม่ให้หน้าเว็บ hardcode ซ้ำ
+    #   (เดิม template ฝัง 12/4 ไว้เอง → แก้ constants แล้วหน้าเว็บไม่เปลี่ยนตาม)
+    from . import constants as C
+    return JsonResponse({"ok": True, "movements": rows, "counts": counts,
+                         "config": {"overdueHours": C.OVERDUE_HOURS, "warnHours": C.WARN_HOURS}},
                         json_dumps_params={"ensure_ascii": False})
 
 
