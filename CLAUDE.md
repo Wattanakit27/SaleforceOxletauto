@@ -892,6 +892,15 @@ CRON_SECRET=xxx...
   - `DEFAULT_CHECKLIST` (ตอนเบิก) = **บังคับ 2 ข้อ** (รอบคัน ≥2 · เลขไมล์ 1) + ตัวเลือก 3 · `RETURN_CHECKLIST` (ตอนคืน) บังคับ 2 รูป
   - **⚠️ ตั้งใจบังคับน้อย**: seed เดิมมี 7 ข้อ (~11 ไฟล์/ครั้ง) แต่ log จริงคนส่ง 1-3 รูป → บังคับเยอะ = ไม่มีใครทำตาม · แก้เพิ่มได้ทีหลังผ่าน `ChecklistConfig`/`ChecklistItem` ในฐานข้อมูล (คีย์ `WEB_CONFIG_KEY="__web__"`)
 - **API** (`login_required` · csrf_exempt เพราะหน้าสแกนโพสต์ JSON): `POST /checkout/api/car_out` · `POST /checkout/api/car_return` — ใช้ตัวอัปโหลดเดิม `/track/api/upload` แล้วส่ง `media:[{id,video}]` มา · เก็บ token ลง `MovementPhoto.file.name` (วิธีเดียวกับ `Car.photo`)
+- **📁 รูปเบิก/คืน → Google Drive โฟลเดอร์ของรถคันนั้น** (เหมือนรูปสเตป — ใช้ท่อเดียวกันทั้งหมด)
+  - หน้าสแกนเรียก `window.__scUpload(file, car.code)` → `/track/api/upload` **ไม่ส่ง `target`** → เข้า Drive ถ้าตั้ง `GDRIVE_*` (ไม่ตั้ง = ดิสก์ VPS) · โฟลเดอร์ต่อรถจาก `_ensure_car_folder()`
+  - **★ ก.ย.69 — `_label_movement_media(m, phase)`** ([checkout/views.py](checkout/views.py)): ตั้งชื่อไฟล์ใน Drive เป็น **`เบิกรถ(ใหม่) 9ก.ย.69 11-02 01.jpg`** / **`คืนรถ(ใหม่) 9ก.ย.69 12-52 01.jpg`**
+    - เดิม**ไม่ตั้งชื่อเลย** → กองเป็น `IMG_1234.jpg` ในโฟลเดอร์รถ แยกไม่ออกว่ารูปไหนตอนเบิก/ตอนคืน ใครถ่าย เมื่อไหร่
+    - **เลขลำดับเติม 0 (`01`,`02`)** ให้ Drive เรียงถูก · ใช้ `_safe_filename`/`_THAI_MON` ชุดเดียวกับ `cars.views._label_stage_media` (อย่าเขียนกติกาชื่อไฟล์ซ้ำ)
+    - best-effort — Drive ล่ม/ไม่ตั้งค่า = ไม่เปลี่ยนชื่อ ไม่ทำให้การเบิก/คืนพัง (ลิงก์แสดงผลอิง id ไม่ใช่ชื่อ)
+  - **★ ดูรูปจากหน้าเว็บได้แล้ว**: `_mv_json` ส่ง `media:{out:[],in:[]}` (สร้าง URL ด้วย `cars.views._media_urls`) → ตารางโชว์ **thumbnail 26px กดเปิดไฟล์เต็ม** (`thumbs()` · เกิน 3 รูปโชว์ `+N` · โหลดรูปไม่ขึ้น → `imgFail()` เปลี่ยนเป็นไอคอน)
+    - **⚠️ ต้อง `prefetch_related("photos")` + ใช้ `len(list(m.photos.all()))` ไม่ใช่ `.count()`** — ตารางโหลด 1000 แถว ถ้ายิง query ต่อแถวจะได้ 2000 query · วัดแล้ว: 72 เคส = **2 query**
+    - เคสที่นำเข้าจาก log โชว์เป็น**ตัวเลขเทา** (รู้ว่าส่งกี่ไฟล์ในกลุ่ม แต่ไฟล์อยู่ใน LINE ไม่ได้อยู่ในระบบ)
 - **[checkout/lineout.py](checkout/lineout.py)** — สรุปเข้ากลุ่ม (ข้อความหน้าตาใกล้เคียงที่คนพิมพ์กันอยู่ จะได้คุ้นทันที) · กลุ่มปลายทางเก็บที่ KVStore **`checkout_line_config`** = `{enabled, group_id}` · **ไม่ตั้ง = ไม่ส่ง ระบบยังทำงานปกติ**
 - **หน้าสแกน** ([scan.html](templates/scan.html)): ปุ่ม **เบิกรถ / คืนรถ** สลับตามสถานะจริง (`ck_open`) · แผง `#ckWrap` (`ckOpenPanel`/`ckSubmit`) · ตอนคืนซ่อนช่องเลือกงาน + โชว์ช่อง "มีความเสียหาย"
 - **ป้าย "🚗 ออกนอกลาน"** บนการ์ดบอร์ด + `car_json.outNow` — `out_now_codes()` ([cars/views.py](cars/views.py)) แนบ `.out_now` ให้รถแต่ละคัน → **ตอบคำถาม "รถคันนี้อยู่ไหน ใครเอาไป" ได้ทันที** (เดิมต้องไล่อ่านแชต)

@@ -32,6 +32,9 @@ def supervisor(request):
 
 
 def _mv_json(m):
+    # prefetch_related("photos") ทำให้บรรทัดนี้ไม่ยิง query เพิ่ม (อย่าเปลี่ยนไปใช้ .count())
+    photos = list(m.photos.all())
+
     def _t(dt):
         return timezone.localtime(dt).strftime("%d/%m %H:%M") if dt else ""
     return {
@@ -50,7 +53,9 @@ def _mv_json(m):
         "odoIn": m.odo_in,
         "checkedOut": _t(m.checked_out_at),
         "returned": _t(m.returned_at),
-        "photos": m.photos.count(),
+        "photos": len(photos),
+        # รูปแยกช่วง (เบิก/คืน) — หน้าเว็บโชว์ thumbnail กดดูเต็มได้
+        "media": _photo_urls(photos),
         "approvedBy": m.approved_by,
         # ★ ส.ค.69 — งานที่ไปทำ + "ค้างนานแค่ไหน" (จาก log จริง เบิกแล้วไม่คืนคือปัญหาที่มองไม่เห็นเลย)
         "fuel": m.fuel_requested,
@@ -111,7 +116,7 @@ def api_movements(request):
     if not _admin(request):
         return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
     # โหลดกว้างขึ้นเพื่อให้ "ค้นหา" ฝั่งหน้าเว็บครอบคลุมของเก่าด้วย (เดิม 300)
-    movements = list(CarMovement.objects.select_related("car")[:1000])
+    movements = list(CarMovement.objects.select_related("car").prefetch_related("photos")[:1000])
     rows = [_mv_json(m) for m in movements]
     counts = {
         "open": sum(1 for m in movements if m.is_open),
@@ -248,6 +253,55 @@ def _actor_name(request):
     return people.safe_name(user.get_full_name() or user.username) or "ไม่ทราบชื่อ"
 
 
+def _label_movement_media(m, phase):
+    """ตั้งชื่อไฟล์รูป/วิดีโอใน Google Drive ให้ **เรียงลำดับและอ่านออก**
+
+    ได้ชื่อแบบ `เบิกรถ(ใหม่) 9ก.ย.69 11-02 01.jpg` / `คืนรถ(ใหม่) 9ก.ย.69 12-52 01.jpg`
+    → เปิดโฟลเดอร์ของรถคันนั้นใน Drive แล้วรู้ทันทีว่ารูปไหนตอนเบิก ตอนคืน ใครถ่าย เมื่อไหร่
+    ★ ก.ย.69 (เจ้าของสั่ง "เก็บรูปทุกขั้นตอนเบิก/คืน ไว้ใน Drive เหมือนตัวอื่น")
+      — ไฟล์ขึ้น Drive อยู่แล้ว (ผ่าน /track/api/upload พร้อม code → เข้าโฟลเดอร์รถ)
+        แต่เดิม **ไม่ตั้งชื่อ** เลยเป็น IMG_1234.jpg กองรวมกัน แยกไม่ออก
+    ใช้กติกาเดียวกับฝั่งสเตป (`cars.views._label_stage_media`) — เลขลำดับเติม 0 ให้เรียงถูกใน Drive
+    best-effort: ล้มเหลว = ไม่ทำให้การเบิก/คืนพัง (ชื่อเป็นแค่ป้าย ลิงก์แสดงผลอิง id)
+    """
+    import os as _os
+    from cars import gdrive
+    from cars.views import _safe_filename, _THAI_MON
+    if not gdrive.is_configured():
+        return
+    at = m.checked_out_at if phase == MovementPhoto.OUT else (m.returned_at or timezone.now())
+    now = timezone.localtime(at or timezone.now())
+    action = "เบิกรถ" if phase == MovementPhoto.OUT else "คืนรถ"
+    who = _safe_filename(people.safe_name(m.borrower_name)) or "-"
+    datestr = "%d%s%02d %02d-%02d" % (now.day, _THAI_MON[now.month - 1],
+                                      (now.year + 543) % 100, now.hour, now.minute)
+    n = 0
+    for p in m.photos.filter(phase=phase).order_by("id"):
+        fid = p.file.name or ""
+        if not fid or "/" in fid:      # "/" = เก็บบนดิสก์ VPS → ข้าม (ฟีเจอร์นี้สำหรับ Drive)
+            continue
+        n += 1
+        ext = _os.path.splitext(gdrive.get_name(fid))[1]
+        if not ext:
+            ext = ".mp4" if p.media_type == MovementPhoto.VIDEO else ".jpg"
+        gdrive.rename(fid, "%s(%s) %s %02d%s" % (action, who, datestr, n, ext))
+
+
+def _photo_urls(photos):
+    """รูปของเคสนี้แยกตามช่วง (เบิก/คืน) สำหรับโชว์ในตาราง — ใช้ตัวสร้าง URL ตัวเดียวกับฝั่งสเตป
+    ⚠️ รับ **list ที่ prefetch มาแล้ว** ไม่ใช่ queryset — ตารางมีได้ 1000 แถว ถ้ายิง query ต่อแถวจะพังทันที"""
+    from cars.views import _media_urls
+    out = {"out": [], "in": []}
+    for p in photos:
+        token = p.file.name or ""
+        if not token:
+            continue               # เคสที่นำเข้าจาก log — รู้ว่าส่งกี่ไฟล์ แต่ไฟล์อยู่ใน LINE
+        u = _media_urls([{"id": token, "video": p.media_type == MovementPhoto.VIDEO}])
+        if u:
+            out["out" if p.phase == MovementPhoto.OUT else "in"].append(u[0])
+    return out
+
+
 def _save_photos(m, phase, media):
     """เก็บไฟล์แนบ — media = [{id, video}] จาก /track/api/upload (Drive id หรือ path บนดิสก์)
     เก็บ token ลง FileField.name ตรงๆ (วิธีเดียวกับ Car.photo ที่ใช้อยู่) → แสดงผลด้วยตัวเดิมได้"""
@@ -318,6 +372,10 @@ def api_car_out(request):
         status=CarMovement.PENDING_HUMAN,   # รอหัวหน้ารับทราบในกลุ่ม (เหมือนที่ทำกันอยู่)
     )
     _save_photos(m, MovementPhoto.OUT, media)
+    try:
+        _label_movement_media(m, MovementPhoto.OUT)
+    except Exception:
+        pass
     sent = lineout.notify_out(m)
     return JsonResponse({"ok": True, "id": m.id, "lineSent": sent},
                         json_dumps_params={"ensure_ascii": False})
@@ -355,6 +413,10 @@ def api_car_return(request):
     m.status = CarMovement.APPROVED_HUMAN if not m.damage_reported else CarMovement.PENDING_HUMAN
     m.save()
     _save_photos(m, MovementPhoto.IN, media)
+    try:
+        _label_movement_media(m, MovementPhoto.IN)
+    except Exception:
+        pass
     sent = lineout.notify_return(m)
     return JsonResponse({"ok": True, "id": m.id, "lineSent": sent},
                         json_dumps_params={"ensure_ascii": False})
