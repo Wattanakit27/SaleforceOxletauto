@@ -70,6 +70,10 @@ def notify_out(m, missing=None) -> bool:
         lines.append("⛽ ขอเบิกน้ำมันด้วย")
     n = m.photos.filter(phase="out").count()
     lines.append(f"รูป: {n} ไฟล์" + (" ✅ ครบ" if not missing else f" ⚠️ ขาด {', '.join(missing)}"))
+    # ★ ก.ย.69 — มุมที่คนงานติ๊กว่ายังไม่ได้ถ่าย (ให้หัวหน้าในกลุ่มเห็นทันทีว่าหลักฐานไม่ครบ)
+    miss_shot = C.missing_shots("out", m.shots_out)
+    if miss_shot:
+        lines.append("⚠️ ยังไม่ได้ถ่าย: " + " · ".join(miss_shot))
     if m.note:
         lines.append(f"หมายเหตุ: {m.note}")
     return _push("\n".join(lines), m.borrower_line_id or "")
@@ -85,6 +89,9 @@ def notify_return(m) -> bool:
     if m.odo_in:
         run = (m.odo_in - m.odo_out) if (m.odo_out and m.odo_in >= m.odo_out) else None
         lines.append(f"ไมล์คืน: {m.odo_in:,}" + (f" (วิ่ง {run:,} กม.)" if run else ""))
+    miss_shot = C.missing_shots("in", m.shots_in)
+    if miss_shot:
+        lines.append("⚠️ ยังไม่ได้ถ่าย: " + " · ".join(miss_shot))
     if m.damage_reported:
         lines.append("⚠️ แจ้งความเสียหาย — ให้หัวหน้าตรวจ")
     if m.note:

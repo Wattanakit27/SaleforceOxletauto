@@ -104,6 +104,12 @@ class CarMovement(models.Model):
     purpose_key = models.CharField("ประเภทงาน", max_length=20, blank=True)   # ดู constants.PURPOSES
     note = models.TextField("หมายเหตุ", blank=True)
 
+    # ★ ก.ย.69 — มุมที่คนงาน "ติ๊กเอง" ว่าถ่ายครบ (คีย์ตาม constants.SHOT_ANGLES_*)
+    #   เก็บเป็นลิสต์คีย์ เช่น ["left","right","front","rear","engine","odometer"]
+    #   ไม่ครบก็บันทึกได้ — ระบบแค่จดไว้ว่าขาดมุมไหน ให้หัวหน้าเห็น (ไม่บล็อกรถไม่ให้ออก)
+    shots_out = models.JSONField("มุมที่ถ่ายตอนเบิก", default=list, blank=True)
+    shots_in = models.JSONField("มุมที่ถ่ายตอนคืน", default=list, blank=True)
+
     # ★ ก.ย.69 — เคสนี้เกิดจากไหน (ใช้แยก "ของจริงจากหน้าเว็บ" ออกจาก "ที่ระบบเดาจากกลุ่ม LINE")
     #   line = บอทอ่านข้อความในกลุ่มแล้วตีความเอง (ยังไม่ยืนยัน — ต้องมีคนตรวจ)
     SRC_WEB, SRC_LINE, SRC_IMPORT = "web", "line", "import"

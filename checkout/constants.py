@@ -35,6 +35,39 @@ RETURN_CHECKLIST = [
     dict(key="odometer", label="เลขไมล์ตอนคืน",              media_type="photo", required=True, min_count=1),
 ]
 
+# ★ ก.ย.69 (เจ้าของเลือกแนวทาง A) — "มุมที่ต้องถ่าย" ให้คนงาน **ติ๊กเอง** ว่าถ่ายครบมุมไหนบ้าง
+#   ทำไมให้คนติ๊กแทนให้ AI เดา: แม่น 100% ไม่ต้องเชื่อ AI · ทำได้เลยไม่มีค่าใช้จ่ายต่อรูป
+#   UX: อัปรูปรวมทีเดียว (หลายไฟล์) แล้วติ๊ก 6 ช่อง — มีปุ่ม "ครบทุกมุม" ติ๊กรวดเดียว
+#   ⚠️ ติ๊กไม่ครบ = **ยังไปต่อได้** แต่ระบบจดว่าขาดมุมไหน ให้หัวหน้าเห็น
+#      (บทเรียนเดิม: บังคับเยอะ = ไม่มีใครทำ แล้วกลับไปพิมพ์ในกลุ่มเหมือนเดิม)
+SHOT_ANGLES_OUT = [
+    ("left",     "ด้านซ้าย"),
+    ("right",    "ด้านขวา"),
+    ("front",    "ด้านหน้า"),
+    ("rear",     "ด้านหลัง"),
+    ("engine",   "ห้องเครื่อง"),
+    ("odometer", "เลขไมล์"),
+]
+SHOT_ANGLES_IN = [
+    ("around",   "รอบคัน"),
+    ("odometer", "เลขไมล์ตอนคืน"),
+    ("damage",   "จุดที่มีปัญหา (ถ้ามี)"),
+]
+SHOT_NAME = {k: n for k, n in SHOT_ANGLES_OUT + SHOT_ANGLES_IN}
+
+
+def shot_angles(phase="out"):
+    return SHOT_ANGLES_OUT if phase == "out" else SHOT_ANGLES_IN
+
+
+def missing_shots(phase, ticked):
+    """มุมที่ยังไม่ได้ติ๊ก — คืนเป็นชื่อไทยไว้โชว์/บันทึก
+    ตอนคืน 'จุดที่มีปัญหา' ไม่บังคับ (ไม่มีรอยก็ไม่ต้องถ่าย)"""
+    got = set(ticked or [])
+    skip = {"damage"} if phase != "out" else set()
+    return [n for k, n in shot_angles(phase) if k not in got and k not in skip]
+
+
 # คีย์ config ใน ChecklistConfig สำหรับ "เบิกผ่านเว็บ" (ไม่ผูกกับกลุ่ม LINE ห้องไหน)
 WEB_CONFIG_KEY = "__web__"
 

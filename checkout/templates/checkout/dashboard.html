@@ -184,6 +184,13 @@ function overdueChip(m){
 }
 // โหลดรูปไม่ขึ้น (ไฟล์หาย/Drive ล่ม) → โชว์ไอคอนแทนกรอบขาว จะได้ไม่ดูเหมือนหน้าพัง
 function imgFail(img){ const a = img.parentNode; a.classList.add('vid'); a.textContent = '🖼'; }
+// มุมที่ยังไม่ได้ถ่าย (คนงานติ๊กเองตอนเบิก/คืน) — ว่าง = ครบ ไม่ต้องโชว์อะไร
+function shotChip(m){
+  const miss = (m.missOut||[]).concat(m.missIn||[]);
+  if(!miss.length) return '';
+  return ` <span class="chip" style="background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)"
+    title="ยังไม่ได้ถ่าย: ${esc(miss.join(' · '))}">ขาด ${miss.length}</span>`;
+}
 function thumbs(m){
   const md = m.media || {out:[], in:[]};
   const all = (md.out||[]).map(x => ({url:x.url, video:x.video, ph:'ตอนเบิก'}))
@@ -240,7 +247,7 @@ function render(){
     <td class="muted">${esc(m.checkedOut)}</td>
     <td class="muted">${esc(m.returned)||'—'}</td>
     <td class="muted">${m.odoOut||'—'}${m.odoIn?(' → '+m.odoIn):''}</td>
-    <td>${thumbs(m)}</td>
+    <td>${thumbs(m)}${shotChip(m)}</td>
     <td>${actionsFor(m)}</td>
   </tr>`).join('')
   : `<tr><td colspan="10" class="muted" style="padding:20px;text-align:center">${q||FILTER!=='all'?'ไม่เจอเคสที่ตรงกับที่ค้นหา':'ยังไม่มีเคส'}</td></tr>`;

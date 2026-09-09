@@ -730,10 +730,15 @@ def _checkout_ctx(car):
             "ck_in_items": json.dumps(in_items, ensure_ascii=False),
             "ck_out_min": sum(i["min_count"] for i in out_items if i.get("required")),
             "ck_in_min": sum(i["min_count"] for i in in_items if i.get("required")),
+            # ★ ก.ย.69 — มุมที่ต้องถ่าย (คนงานติ๊กเองว่าถ่ายครบมุมไหน)
+            "ck_shots_out": json.dumps([{"key": k, "name": n} for k, n in CK.SHOT_ANGLES_OUT],
+                                       ensure_ascii=False),
+            "ck_shots_in": json.dumps([{"key": k, "name": n} for k, n in CK.SHOT_ANGLES_IN],
+                                      ensure_ascii=False),
         }
     except Exception:
         return {"ck_open": None, "ck_purposes": [], "ck_out_items": "[]", "ck_in_items": "[]",
-                "ck_out_min": 0, "ck_in_min": 0}
+                "ck_out_min": 0, "ck_in_min": 0, "ck_shots_out": "[]", "ck_shots_in": "[]"}
 
 
 @login_required

@@ -54,6 +54,9 @@ def _mv_json(m):
         "checkedOut": _t(m.checked_out_at),
         "returned": _t(m.returned_at),
         "source": m.source,
+        # มุมที่ยังไม่ได้ถ่าย (ชื่อไทย) — ว่าง = ครบ · หัวหน้าเห็นได้ทันทีในตาราง
+        "missOut": C.missing_shots("out", m.shots_out),
+        "missIn": C.missing_shots("in", m.shots_in) if m.returned_at else [],
         "photos": len(photos),
         # รูปแยกช่วง (เบิก/คืน) — หน้าเว็บโชว์ thumbnail กดดูเต็มได้
         "media": _photo_urls(photos),
@@ -303,6 +306,12 @@ def _photo_urls(photos):
     return out
 
 
+def _clean_shots(raw, phase="out"):
+    """คีย์มุมที่คนงานติ๊กมา — กรองให้เหลือเฉพาะคีย์ที่มีจริง (กันส่งอะไรมาก็ได้)"""
+    ok = {k for k, _ in C.shot_angles(phase)}
+    return [k for k in (raw or []) if isinstance(k, str) and k in ok]
+
+
 def _save_photos(m, phase, media):
     """เก็บไฟล์แนบ — media = [{id, video}] จาก /track/api/upload (Drive id หรือ path บนดิสก์)
     เก็บ token ลง FileField.name ตรงๆ (วิธีเดียวกับ Car.photo ที่ใช้อยู่) → แสดงผลด้วยตัวเดิมได้"""
@@ -371,6 +380,8 @@ def api_car_out(request):
         fuel_requested=bool(b.get("fuel")),
         note=(b.get("note") or "").strip(),
         status=CarMovement.PENDING_HUMAN,   # รอหัวหน้ารับทราบในกลุ่ม (เหมือนที่ทำกันอยู่)
+        # ★ ก.ย.69 — มุมที่คนงานติ๊กว่าถ่ายแล้ว (ไม่ครบก็บันทึกได้ · แค่จดว่าขาดอะไร)
+        shots_out=_clean_shots(b.get("shots"), "out"),
     )
     _save_photos(m, MovementPhoto.OUT, media)
     try:
@@ -408,6 +419,7 @@ def api_car_return(request):
         odo = None
     m.returned_at = timezone.now()
     m.odo_in = odo
+    m.shots_in = _clean_shots(b.get("shots"), "in")
     m.damage_reported = bool(b.get("damage"))
     if b.get("note"):
         m.note = (m.note + "\n" if m.note else "") + "คืน: " + str(b.get("note")).strip()
