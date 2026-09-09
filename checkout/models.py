@@ -104,6 +104,14 @@ class CarMovement(models.Model):
     purpose_key = models.CharField("ประเภทงาน", max_length=20, blank=True)   # ดู constants.PURPOSES
     note = models.TextField("หมายเหตุ", blank=True)
 
+    # ★ ก.ย.69 — เคสนี้เกิดจากไหน (ใช้แยก "ของจริงจากหน้าเว็บ" ออกจาก "ที่ระบบเดาจากกลุ่ม LINE")
+    #   line = บอทอ่านข้อความในกลุ่มแล้วตีความเอง (ยังไม่ยืนยัน — ต้องมีคนตรวจ)
+    SRC_WEB, SRC_LINE, SRC_IMPORT = "web", "line", "import"
+    SOURCE_CHOICES = [(SRC_WEB, "กดในเว็บ"), (SRC_LINE, "บอทอ่านจากกลุ่ม LINE"),
+                      (SRC_IMPORT, "นำเข้าจาก log")]
+    source = models.CharField("ที่มา", max_length=10, choices=SOURCE_CHOICES,
+                              default=SRC_WEB, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

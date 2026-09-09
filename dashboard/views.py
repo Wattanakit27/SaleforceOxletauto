@@ -2665,6 +2665,34 @@ def _store_line_groups(pairs):
     return added
 
 
+def _checkout_ingest(data):
+    """ให้ระบบเบิก-คืนรถอ่านข้อความจากกลุ่มที่ตั้งไว้ (อ่านอย่างเดียว ไม่ตอบกลับ)
+
+    ★ ทำใน daemon thread — **ห้ามบล็อก webhook** เพราะการเทียบชื่อเล่นต้องอ่านชีตพนักงาน
+      (ครั้งแรกหลังรีสตาร์ทอาจกินหลายวินาที) ส่วน LINE รอ response แป๊บเดียวแล้ว retry
+      ถ้าช้า → ได้ event ซ้ำ (มี _seen กันซ้ำอยู่แล้ว แต่ตอบเร็วดีกว่า)
+    best-effort: ปิดโหมด/ยังไม่ migrate/พัง = ไม่ทำอะไร ไม่ทำ webhook เดิมพัง"""
+    import threading
+
+    def _work():
+        try:
+            from checkout.views import ingest_group_events
+            ingest_group_events(data)
+        except Exception:
+            pass
+        finally:
+            try:
+                from django.db import connection
+                connection.close()      # thread แยกมี connection ของตัวเอง ต้องปิดเอง
+            except Exception:
+                pass
+
+    try:
+        threading.Thread(target=_work, daemon=True).start()
+    except Exception:
+        pass
+
+
 @csrf_exempt
 def line_webhook(request):
     """LINE Messaging API webhook (ต่อตรงจาก LINE) — จับ group id + ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message)
@@ -2691,6 +2719,7 @@ def line_webhook(request):
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
     _store_line_groups(adds)
     _remove_line_groups(leaves)
+    _checkout_ingest(data)
     return HttpResponse("ok")
 
 

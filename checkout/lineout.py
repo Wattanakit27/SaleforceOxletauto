@@ -15,6 +15,12 @@ def _cfg():
         return {}
 
 
+def send_on() -> bool:
+    """ให้บอทโพสต์เข้ากลุ่มไหม — **ปิดโดยปริยาย** (ก.ย.69 เจ้าของสั่ง "อย่าเพิ่งส่งอะไร")
+    เปิดได้ที่พาเนล "ตั้งค่ากลุ่ม LINE" ในหน้า /checkout/ · คีย์ `send` ใน checkout_line_config"""
+    return bool(_cfg().get("send"))
+
+
 def is_configured() -> bool:
     return bool(_cfg().get("group_id") and getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", ""))
 
@@ -38,7 +44,7 @@ def _push(text: str, mention_user_id: str = "") -> bool:
     cfg = _cfg()
     gid = (cfg.get("group_id") or "").strip()
     token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
-    if not (gid and token) or not cfg.get("enabled", True):
+    if not (gid and token) or not cfg.get("send"):   # ไม่เปิดสวิตช์ = ไม่ส่ง (ค่าเริ่มต้น)
         return False
     try:
         from dashboard.services.line_notify import push_line_message

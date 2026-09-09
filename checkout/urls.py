@@ -10,4 +10,6 @@ urlpatterns = [
     # เบิก/คืน จากหน้าสแกน QR (คนงาน — ไม่ใช่แอดมิน)
     path("api/car_out", views.api_car_out, name="checkout_car_out"),
     path("api/car_return", views.api_car_return, name="checkout_car_return"),
+    # ตั้งค่ากลุ่ม LINE ที่จะดักเก็บข้อมูล (+ สวิตช์ "ให้บอทส่งเข้ากลุ่ม")
+    path("api/line_config", views.api_line_config, name="checkout_line_config"),
 ]

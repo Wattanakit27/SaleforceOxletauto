@@ -197,6 +197,7 @@ class Command(BaseCommand):
                 note=note,
                 # คืนแล้ว = จบ (หัวหน้าเห็นในกลุ่มแล้ว) · ยังไม่คืน = ค้าง รอคนยืนยัน
                 status=CarMovement.APPROVED_HUMAN if returned else CarMovement.PENDING_HUMAN,
+                source=CarMovement.SRC_IMPORT,
             )
             # รูปที่ส่งในกลุ่มจริง — เก็บเป็นหลักฐานว่า "ส่งกี่ไฟล์" (ไม่มีตัวไฟล์ เพราะอยู่ใน LINE)
             for t in c["out_media"]:

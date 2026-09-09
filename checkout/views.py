@@ -53,6 +53,7 @@ def _mv_json(m):
         "odoIn": m.odo_in,
         "checkedOut": _t(m.checked_out_at),
         "returned": _t(m.returned_at),
+        "source": m.source,
         "photos": len(photos),
         # รูปแยกช่วง (เบิก/คืน) — หน้าเว็บโชว์ thumbnail กดดูเต็มได้
         "media": _photo_urls(photos),
@@ -420,3 +421,159 @@ def api_car_return(request):
     sent = lineout.notify_return(m)
     return JsonResponse({"ok": True, "id": m.id, "lineSent": sent},
                         json_dumps_params={"ensure_ascii": False})
+
+
+# =========================================================
+#  ตั้งค่ากลุ่ม LINE + "ดักเก็บข้อความจากกลุ่ม" (ก.ย.69 — เจ้าของสั่ง)
+#  ★ โหมดตอนนี้ = อ่านอย่างเดียว: บอทอ่านข้อความในกลุ่มที่เลือก แล้วสร้างเคสให้ดู
+#    **ไม่ตอบกลับ ไม่โพสต์อะไรเข้ากลุ่มทั้งสิ้น** (เจ้าของ: "อย่าเพิ่งส่งอะไร เก็บไว้ก่อน เดี๋ยวตามมาดู")
+#  เปิดการส่งเมื่อไหร่ = ติ๊ก "ให้บอทส่งสรุปเข้ากลุ่ม" ในพาเนลตั้งค่า
+# =========================================================
+LINE_CFG_KEY = "checkout_line_config"
+_SEEN_KEY = "checkout_seen_msgs"      # กัน LINE ส่ง webhook ซ้ำ (เก็บ message id ล่าสุด)
+_SEEN_MAX = 300
+
+
+def line_cfg() -> dict:
+    try:
+        from dashboard.services import cache_store
+        return (cache_store.get_kv(LINE_CFG_KEY) or {}).get("data") or {}
+    except Exception:
+        return {}
+
+
+def _save_cfg(cfg):
+    from dashboard.services import cache_store
+    cache_store.set_kv(LINE_CFG_KEY, cfg)
+
+
+@csrf_exempt
+def api_line_config(request):
+    """GET = ค่าที่ตั้งไว้ + รายชื่อกลุ่มที่บอทรู้จัก · POST {group_id?, listen?, send?} = บันทึก"""
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    cfg = line_cfg()
+    if request.method == "POST":
+        try:
+            b = json.loads(request.body or "{}")
+        except Exception:
+            b = {}
+        if "group_id" in b:
+            cfg["group_id"] = (b.get("group_id") or "").strip()
+        for k in ("listen", "send"):
+            if k in b:
+                cfg[k] = bool(b[k])
+        _save_cfg(cfg)
+
+    groups = []
+    try:
+        from dashboard.services import cache_store
+        for gid, v in ((cache_store.get_kv("line_groups") or {}).get("data") or {}).items():
+            groups.append({"id": gid, "name": (v or {}).get("name", "")})
+        groups.sort(key=lambda x: (x["name"] or x["id"]))
+    except Exception:
+        pass
+
+    from django.conf import settings as _st
+    n_line = CarMovement.objects.filter(source=CarMovement.SRC_LINE).count()
+    return JsonResponse({
+        "ok": True,
+        "config": {"groupId": cfg.get("group_id", ""),
+                   "listen": bool(cfg.get("listen")),
+                   "send": bool(cfg.get("send"))},
+        "groups": groups,
+        "lineToken": bool(getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")),
+        "webhookUrl": (getattr(_st, "SITE_URL", "") or "").rstrip("/") + "/api/line/webhook",
+        "fromLine": n_line,
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+def _seen(mid) -> bool:
+    """เคยประมวลผลข้อความนี้แล้วหรือยัง (LINE ยิง webhook ซ้ำได้)"""
+    if not mid:
+        return False
+    try:
+        from dashboard.services import cache_store
+        ids = (cache_store.get_kv(_SEEN_KEY) or {}).get("data") or []
+        if mid in ids:
+            return True
+        ids.append(mid)
+        cache_store.set_kv(_SEEN_KEY, ids[-_SEEN_MAX:])
+    except Exception:
+        return False
+    return False
+
+
+def _open_of(uid, name):
+    """รอบที่ยังไม่คืนของคนนี้ (ล่าสุดก่อน) — เทียบด้วย LINE id ก่อน ไม่มีค่อยเทียบชื่อ"""
+    qs = CarMovement.objects.filter(returned_at__isnull=True).exclude(status=CarMovement.CANCELLED)
+    m = qs.filter(borrower_line_id=uid).order_by("-checked_out_at").first() if uid else None
+    if not m and name:
+        m = qs.filter(borrower_name=name).order_by("-checked_out_at").first()
+    return m
+
+
+def ingest_group_events(data) -> int:
+    """อ่าน event จากกลุ่ม LINE ที่เลือกไว้ → สร้าง/ปิดเคสเบิก-คืน ตาม pattern ที่ parser จับได้
+
+    **อ่านอย่างเดียว — ไม่ส่งข้อความตอบกลับเข้ากลุ่มเด็ดขาด** (การส่งอยู่ที่ lineout ซึ่งปิดอยู่)
+    เก็บเฉพาะข้อความที่ "จับ pattern ได้" เท่านั้น ไม่ได้ดูดทั้งกลุ่มลงฐานข้อมูล
+    best-effort ทั้งก้อน: พังตรงไหน = เงียบ ไม่ทำให้ webhook เดิม (เก็บ group id) พัง
+    """
+    cfg = line_cfg()
+    gid_want = (cfg.get("group_id") or "").strip()
+    if not (cfg.get("listen") and gid_want):
+        return 0
+    from . import parser as P
+    from cars.models import Car
+
+    events = data.get("events") if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    made = 0
+    for ev in (events or []):
+        if not isinstance(ev, dict) or ev.get("type") != "message":
+            continue
+        src = ev.get("source") or {}
+        if (src.get("groupId") or "") != gid_want:
+            continue                      # กลุ่มอื่น = ไม่ยุ่ง
+        msg = ev.get("message") or {}
+        if msg.get("type") != "text":
+            continue                      # รูป/สติกเกอร์ — ยังไม่ดึงไฟล์จาก LINE (เฟสถัดไป)
+        if _seen(str(msg.get("id") or "")):
+            continue
+        r = P.parse(msg.get("text") or "")
+        if not r["kind"]:
+            continue                      # ไม่ใช่การเบิก/คืน = ไม่เก็บ
+
+        uid = (src.get("userId") or "").strip()
+        who = people.nickname_for(user_id=uid)
+        cur = _open_of(uid, who)
+
+        if r["kind"] == "out":
+            car = None
+            if r["plate"]:
+                try:
+                    car = Car.objects.filter(plate__endswith=r["plate"]).first()
+                except Exception:
+                    car = None
+            CarMovement.objects.create(
+                car=car, plate_text=r["plate"] or "",
+                borrower_name=who, borrower_line_id=uid,
+                purpose_key=r["purpose"], purpose=C.PURPOSE_NAME.get(r["purpose"], ""),
+                checked_out_at=timezone.now(), fuel_requested=bool(r["fuel"]),
+                note=(msg.get("text") or "").strip()[:500],
+                status=CarMovement.PENDING_HUMAN,
+                source=CarMovement.SRC_LINE,
+            )
+            made += 1
+        elif r["kind"] == "in" and cur:
+            cur.returned_at = timezone.now()
+            cur.note = (cur.note + "\n" if cur.note else "") + "คืน: " + (msg.get("text") or "").strip()[:200]
+            cur.save(update_fields=["returned_at", "note", "updated_at"])
+            made += 1
+        elif r["kind"] == "fuel" and cur and not cur.fuel_requested:
+            cur.fuel_requested = True
+            cur.save(update_fields=["fuel_requested", "updated_at"])
+        elif r["kind"] == "plate_only" and cur and not cur.plate_text and r["plate"]:
+            cur.plate_text = r["plate"]
+            cur.save(update_fields=["plate_text", "updated_at"])
+    return made
