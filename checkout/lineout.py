@@ -19,7 +19,22 @@ def is_configured() -> bool:
     return bool(_cfg().get("group_id") and getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", ""))
 
 
-def _push(text: str) -> bool:
+def _msg(text, uid):
+    """ข้อความเดียว — มี uid = แท็กคนนั้นท้ายข้อความ (textV2) · ไม่มี = ข้อความธรรมดา"""
+    if not uid:
+        return {"type": "text", "text": text}
+    return {"type": "textV2", "text": text + " {who}",
+            "substitution": {"who": {"type": "mention",
+                                     "mentionee": {"type": "user", "userId": uid}}}}
+
+
+def _push(text: str, mention_user_id: str = "") -> bool:
+    """ส่งเข้ากลุ่ม — ถ้ามี LINE user id ของผู้เบิก จะ **แท็กตัวจริงในกลุ่ม** ให้ด้วย
+
+    ★ ก.ย.69 (เจ้าของสั่ง): หน้าเว็บโชว์ "ชื่อเล่น" · แต่ในกลุ่ม LINE ใช้ **userId แท็ก**
+      → หัวหน้าเห็นแล้วกดหาตัวคนนั้นได้ทันที ไม่ต้องเดาว่าใคร
+    ใช้ข้อความชนิด textV2 + substitution (แบบเดียวกับ @All ของรายงานรายวัน)
+    เทียบชื่อในชีตไม่เจอ = ส่งข้อความธรรมดาเหมือนเดิม"""
     cfg = _cfg()
     gid = (cfg.get("group_id") or "").strip()
     token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
@@ -27,7 +42,7 @@ def _push(text: str) -> bool:
         return False
     try:
         from dashboard.services.line_notify import push_line_message
-        code, _ = push_line_message(gid, [{"type": "text", "text": text}], token)
+        code, _ = push_line_message(gid, [_msg(text, mention_user_id)], token)
         return code == 200
     except Exception:
         return False
@@ -51,7 +66,7 @@ def notify_out(m, missing=None) -> bool:
     lines.append(f"รูป: {n} ไฟล์" + (" ✅ ครบ" if not missing else f" ⚠️ ขาด {', '.join(missing)}"))
     if m.note:
         lines.append(f"หมายเหตุ: {m.note}")
-    return _push("\n".join(lines))
+    return _push("\n".join(lines), m.borrower_line_id or "")
 
 
 def notify_return(m) -> bool:
@@ -68,4 +83,4 @@ def notify_return(m) -> bool:
         lines.append("⚠️ แจ้งความเสียหาย — ให้หัวหน้าตรวจ")
     if m.note:
         lines.append(f"หมายเหตุ: {m.note}")
-    return _push("\n".join(lines))
+    return _push("\n".join(lines), m.borrower_line_id or "")
