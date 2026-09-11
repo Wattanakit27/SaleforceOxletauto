@@ -2819,10 +2819,18 @@ def line_group_ingest(request):
     except Exception:
         want, listening, store_chat_on = "", False, False
     for_group = sum(1 for e in texts if ((e.get("source") or {}).get("groupId") or "") == want) if want else 0
+    # ★ นับแชทสะสมกลับไปด้วยตอนเปิดเก็บ — กด "Execute step" ใน n8n แล้วเห็นเลขขยับ = ยืนยันว่าเก็บจริง
+    chat_total = None
+    if store_chat_on:
+        try:
+            from checkout.models import GroupChat
+            chat_total = GroupChat.objects.count()
+        except Exception:
+            chat_total = None
     return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
                          "events": len(evs), "textEvents": len(texts),
                          "forGroup": for_group, "listening": listening,
-                         "storeChat": store_chat_on},
+                         "storeChat": store_chat_on, "chatTotal": chat_total},
                         json_dumps_params={"ensure_ascii": False})
 
 
