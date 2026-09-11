@@ -175,9 +175,19 @@ class Command(BaseCommand):
             add("สรุป: ทำงานอยู่ — อ่านไป %d ข้อความ เก็บเป็นเคสได้ %d เคส" % (len(seen), qs.count()))
         elif newest_h is not None and newest_h <= 24:
             add("สรุป: ⚠️ บอท **ได้ยินกลุ่มเมื่อไม่กี่ชั่วโมงก่อน** แต่ยังไม่ได้อ่านข้อความสักข้อความ")
-            add("      = ตัว forward ส่งมาแต่ 'groupId' ไม่ได้ส่ง 'ตัวข้อความ' มาด้วย")
-            add("      → ใน n8n: HTTP Request node ต้องส่ง body ดิบทั้งก้อนที่ LINE ส่งมา")
-            add("        แล้วดู response ว่าได้ textEvents >= 1 ไหม (ถ้าได้ 0 = ยังไม่ครบ)")
+            # ★ อย่าเดา — ข้อ 2.5 บอกหน้าตา body จริงแล้ว ให้ชี้สาเหตุตามหลักฐาน
+            _keys = set(dbg.get("topKeys") or [])
+            if dbg.get("at") and int(dbg.get("bytes") or 0) <= 4 and not _keys:
+                add("      = โหนดใน n8n ส่ง body **ว่างเปล่า** ({}) มา ไม่ใช่ข้อมูลของ LINE")
+                add("      → โหนดนั้นรับ input มาจากโหนดที่ไม่มีข้อมูล (เช่นต่อท้าย HTTP node อื่น)")
+                add("        แก้: ตั้ง body เป็น  {{ JSON.stringify($('Webhook').first().json.body) }}")
+                add("        (อ้างชื่อโหนด Webhook ตรงๆ → วางไว้ตรงไหนในสายก็ทำงาน)")
+            elif _keys and not (_keys & {"events", "destination"}):
+                add("      = ตัว forward ส่งมาแต่ %s ไม่ได้ส่ง 'ตัวข้อความ' มาด้วย" % sorted(_keys)[:4])
+                add("      → ใน n8n: HTTP Request node ต้องส่ง body ดิบทั้งก้อนที่ LINE ส่งมา")
+            else:
+                add("      → ใน n8n: HTTP Request node ต้องส่ง body ดิบทั้งก้อนที่ LINE ส่งมา")
+                add("        แล้วดู response ว่าได้ textEvents >= 1 ไหม (ถ้าได้ 0 = ยังไม่ครบ)")
         else:
             when = ("ล่าสุด %s" % _ago(rows[0][1].get("lastSeen"))[0]) if rows else "-"
             add("สรุป: บอทเคยได้ยินกลุ่ม (%s) แต่ช่วงนี้เงียบ + ยังไม่มีข้อความถูกอ่าน" % when)

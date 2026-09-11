@@ -15,24 +15,29 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body || $json) }}",
+        "jsonBody": "={{ JSON.stringify($('Webhook').first().json.body || $json.body || $json) }}",
         "options": {
           "timeout": 15000
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 620],
+      "position": [
+        460,
+        620
+      ],
       "id": "a7c1e5b2-9d3f-4a86-b0c4-11f2d8e30a55",
       "name": "Send Chat to Oxlet",
-      "notes": "ส่ง body ดิบที่ LINE ส่งมา -> เก็บแชทแยกกลุ่ม + สร้างเคสเบิก-คืน (ต่อจาก Webhook ตรงๆ ห้ามต่อจาก Get Group Summary)",
+      "notes": "ส่ง body ดิบที่ LINE ส่งมา -> เก็บแชทแยกกลุ่ม + สร้างเคสเบิก-คืน\nอ้างชื่อโหนด Webhook ตรงๆ -> วางไว้ตรงไหนในสายก็ได้ ไม่ต้องต่อจาก Webhook เท่านั้น\n** ถ้าโหนด Webhook ของคุณชื่ออื่น ให้แก้ 'Webhook' ในสูตรให้ตรงชื่อจริง **",
       "notesInFlow": true,
       "onError": "continueRegularOutput"
     }
   ],
   "connections": {
     "Send Chat to Oxlet": {
-      "main": [[]]
+      "main": [
+        []
+      ]
     }
   },
   "pinData": {},
