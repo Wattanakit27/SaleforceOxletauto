@@ -937,6 +937,9 @@ CRON_SECRET=xxx...
     - ⚠️ `timezone` **ไม่ได้ import ระดับไฟล์** ใน `dashboard/views.py` → ต้อง `from django.utils import timezone as _tz` ในฟังก์ชัน ไม่งั้น NameError โดน `except` กลืน = heartbeat ไม่เขียนแบบเงียบ
   - **⚠️ อย่าสรุปจาก heartbeat อย่างเดียว** — `line_webhook_last` เพิ่งมี ก.ย.69 **นับตั้งแต่รีสตาร์ทเท่านั้น** · หลักฐานย้อนหลังที่เชื่อได้คือ **`line_groups[gid].lastSeen`** (บอทได้ยินกลุ่มนั้นล่าสุดเมื่อไหร่ — มีมานานแล้ว)
     - **ลายเซ็นชี้ขาด**: `lastSeen` สดๆ (ไม่กี่ ชม.) **แต่** `checkout_seen_msgs` = 0 → **ตัว forward ส่งมาแต่ `groupId` ไม่ได้ส่งตัวข้อความ** (ไม่ใช่ "webhook ไม่ถึง")
+  - **`python manage.py checkout_config [--store-chat on|off] [--customer-chat on|off] [--listen on|off] [--send on|off] [--group Cxxx]`** ([checkout_config.py](checkout/management/commands/checkout_config.py)) — ดู/ตั้งค่าจาก SSH ตรงๆ **ไม่ต้องเปิดเว็บ**
+    - ทำขึ้นเพราะเวลาตั้งผ่านหน้าเว็บแล้วข้อมูลยังไม่เข้า **แยกไม่ออก**ว่า ลืมกดบันทึก / เบราว์เซอร์ค้างหน้าเก่า / ค่าไม่ถูกเก็บจริง — คำสั่งนี้อ่านกลับจาก DB หลังเขียนเสมอ
+    - ไม่มีเรียกใช้ = แค่โชว์ค่าปัจจุบัน + จำนวนแชทที่เก็บแล้ว + เตือนถ้ายังไม่ได้เปิดเก็บ
   - **`python manage.py checkout_status [--days N] [--out ไฟล์]`** ([checkout_status.py](checkout/management/commands/checkout_status.py)) — ตรวจว่าติดตรงไหนในหน้าเดียว ไล่ 6 ขั้นจากต้นทางไปปลายทาง: webhook เข้าไหม → ลายเซ็นผ่านไหม → บอทได้ยินกลุ่มไหน → ตั้งกลุ่ม/ติ๊กเก็บแล้วยัง → อ่านไปกี่ข้อความ → เป็นเคสกี่เคส + เตือนเคสที่เทียบชื่อเล่นไม่ได้/ไม่รู้ทะเบียน
   - **★★ ก.ย.69 — เก็บแชทแยกกลุ่มลง Postgres (`GroupChat` · migration 0007)** — เจ้าของสั่งหลังเห็นว่า n8n forward ได้แล้ว
     - **ต่างจาก `GroupMessage` เดิมที่ยุบทิ้ง**: แยกตามกลุ่มชัดเจน (`group_id` + ชื่อกลุ่ม) · เก็บ **สติกเกอร์ / LINE emoji / พิกัด / ตำแหน่งไฟล์** ไม่ใช่ข้อความล้วน · **มีอายุข้อมูล `CHAT_KEEP_DAYS`=90 วัน** ลบเก่าอัตโนมัติ (`_cleanup_chat()` วันละครั้งผ่าน KV `chat_cleanup_last`) — คลังแชทที่ไม่มีวันหมดอายุ = กองข้อมูลส่วนบุคคลที่โตไม่หยุด
