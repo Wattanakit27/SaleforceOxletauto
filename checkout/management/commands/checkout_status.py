@@ -19,6 +19,25 @@ from checkout import constants as C
 from checkout.models import CarMovement
 
 
+def _ago(iso):
+    """'2 ชม.ที่แล้ว' จาก ISO string — คืน (ข้อความ, ชั่วโมงที่ผ่านไป) · อ่านไม่ได้ = (ค่าเดิม, None)"""
+    from datetime import datetime
+    if not iso:
+        return "-", None
+    try:
+        dt = datetime.fromisoformat(str(iso))
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt)
+        h = (timezone.now() - dt).total_seconds() / 3600
+        if h < 1:
+            return "%d นาทีที่แล้ว" % max(1, int(h * 60)), h
+        if h < 48:
+            return "%.0f ชม.ที่แล้ว" % h, h
+        return "%d วันที่แล้ว" % int(h / 24), h
+    except Exception:
+        return str(iso), None
+
+
 def _kv(key):
     try:
         from dashboard.services import cache_store
@@ -38,6 +57,7 @@ class Command(BaseCommand):
         L = []
         add = L.append
         now = timezone.localtime()
+        cfg0 = _kv("checkout_line_config") or {}      # อ่านก่อน เพราะข้อ 3 ต้องรู้ว่าตั้งกลุ่มไหนไว้
         add("=" * 60)
         add("สถานะการดักเก็บข้อมูลจากกลุ่ม LINE   (ตอนนี้ %s)" % now.strftime("%d/%m %H:%M"))
         add("=" * 60)
@@ -45,12 +65,12 @@ class Command(BaseCommand):
         # --- 1-2) webhook เข้ามาถึงไหม ---
         beat = _kv("line_webhook_last") or {}
         if not beat.get("at"):
-            add("1) webhook จาก LINE : ❌ ยังไม่เคยมีเข้ามาเลย")
-            add("   → ไปตั้ง Webhook URL ใน LINE Developers Console + เปิด Use webhook")
-            add("     แล้วเพิ่มบอทเข้ากลุ่ม + พิมพ์อะไรก็ได้ในกลุ่ม 1 ครั้ง")
+            add("1) webhook เข้ามาไหม : ยังไม่มี **นับตั้งแต่รีสตาร์ทรอบล่าสุด**")
+            add("   (ตัวจับนี้เพิ่งมี ก.ย.69 — ไม่ได้ย้อนหลัง · ดูข้อ 3 ว่าเคยถึงไหม)")
         else:
-            add("1) webhook จาก LINE : ✅ เข้ามาแล้ว %s ครั้ง · ล่าสุด %s (ทาง %s)"
-                % (beat.get("hits", 0), beat.get("at", "-"), beat.get("path", "-")))
+            txt, _h = _ago(beat.get("at"))
+            add("1) webhook เข้ามาไหม : ✅ %s ครั้ง · ล่าสุด %s (ทาง %s)"
+                % (beat.get("hits", 0), txt, beat.get("path", "-")))
         if beat.get("sigFail"):
             add("2) ลายเซ็น          : ⚠️ ไม่ผ่าน %s ครั้ง (ล่าสุด %s)"
                 % (beat["sigFail"], beat.get("lastSigFailAt", "-")))
@@ -61,12 +81,19 @@ class Command(BaseCommand):
         # --- 3) บอทรู้จักกลุ่มไหนบ้าง ---
         groups = _kv("line_groups") or {}
         add("")
-        add("3) กลุ่มที่บอทได้ยิน : %d กลุ่ม" % len(groups))
-        for gid, v in list(groups.items())[:10]:
-            add("     %s  %s" % ((v or {}).get("name") or "(ยังไม่รู้ชื่อ)", gid[:14] + "…"))
+        add("3) กลุ่มที่บอทได้ยิน : %d กลุ่ม  (เวลา = ได้ยินข้อความจากกลุ่มนั้นล่าสุด)" % len(groups))
+        rows = sorted(groups.items(), key=lambda kv: (kv[1] or {}).get("lastSeen") or "", reverse=True)
+        newest_h = None
+        for gid, v in rows[:10]:
+            txt, h = _ago((v or {}).get("lastSeen"))
+            if newest_h is None or (h is not None and h < newest_h):
+                newest_h = h
+            mark = " ←ตั้งไว้" if gid == (cfg0 or {}).get("group_id") else ""
+            add("     %-26s %-16s %s%s"
+                % (((v or {}).get("name") or "(ยังไม่รู้ชื่อ)")[:26], txt, gid[:12] + "…", mark))
 
         # --- 4) ตั้งค่าแล้วหรือยัง ---
-        cfg = _kv("checkout_line_config") or {}
+        cfg = cfg0
         gid = (cfg.get("group_id") or "").strip()
         add("")
         add("4) ตั้งค่า")
@@ -117,18 +144,29 @@ class Command(BaseCommand):
         # --- สรุปสั้น ---
         add("")
         add("-" * 60)
-        if not beat.get("at"):
-            add("สรุป: LINE ยังไม่ได้ยิง webhook มาเลย — ติดที่การตั้งค่าใน LINE Console")
+        # ★ ใช้ "ได้ยินกลุ่มล่าสุดเมื่อไหร่" เป็นหลักฐานหลัก — ย้อนหลังได้จริง
+        #   (heartbeat ข้อ 1 เพิ่งมี ก.ย.69 นับตั้งแต่รีสตาร์ทเท่านั้น จะสรุปจากมันอย่างเดียวไม่ได้)
+        if not groups:
+            add("สรุป: บอทไม่เคยได้ยินกลุ่มไหนเลย → webhook ยังมาไม่ถึงเซิร์ฟเวอร์นี้")
+            add("      เช็คว่า Webhook URL ชี้มาที่นี่ หรือถ้าชี้ไป n8n ให้ n8n forward มาที่")
+            add("      POST /api/line/group_ingest (header X-Cron-Secret)")
         elif beat.get("sigFail") and not seen:
-            add("สรุป: webhook เข้ามาแต่ลายเซ็นไม่ผ่าน → แก้ LINE_CHANNEL_SECRET")
+            add("สรุป: webhook เข้ามาแต่ลายเซ็นไม่ผ่าน → แก้ LINE_CHANNEL_SECRET ให้ตรง channel")
         elif not gid:
             add("สรุป: บอทได้ยินกลุ่มแล้ว แต่ยังไม่ได้เลือกว่าจะเก็บกลุ่มไหน")
         elif not cfg.get("listen"):
             add("สรุป: เลือกกลุ่มแล้วแต่ยังไม่ติ๊ก 'เก็บข้อมูลจากกลุ่มนี้'")
-        elif not seen:
-            add("สรุป: ตั้งครบแล้วแต่ยังไม่มีข้อความเข้า — เช็คว่ากลุ่มที่ตั้งตรงกับกลุ่มที่ใช้งานจริง")
-        else:
+        elif seen:
             add("สรุป: ทำงานอยู่ — อ่านไป %d ข้อความ เก็บเป็นเคสได้ %d เคส" % (len(seen), qs.count()))
+        elif newest_h is not None and newest_h <= 24:
+            add("สรุป: ⚠️ บอท **ได้ยินกลุ่มเมื่อไม่กี่ชั่วโมงก่อน** แต่ยังไม่ได้อ่านข้อความสักข้อความ")
+            add("      = ตัว forward ส่งมาแต่ 'groupId' ไม่ได้ส่ง 'ตัวข้อความ' มาด้วย")
+            add("      → ใน n8n: HTTP Request node ต้องส่ง body ดิบทั้งก้อนที่ LINE ส่งมา")
+            add("        แล้วดู response ว่าได้ textEvents >= 1 ไหม (ถ้าได้ 0 = ยังไม่ครบ)")
+        else:
+            when = ("ล่าสุด %s" % _ago(rows[0][1].get("lastSeen"))[0]) if rows else "-"
+            add("สรุป: บอทเคยได้ยินกลุ่ม (%s) แต่ช่วงนี้เงียบ + ยังไม่มีข้อความถูกอ่าน" % when)
+            add("      ลองให้คนพิมพ์อะไรก็ได้ในกลุ่มที่ตั้งไว้ 1 ครั้ง แล้วรันคำสั่งนี้ใหม่")
         report = "\n".join(L)
 
         if o["out"]:
