@@ -2665,6 +2665,29 @@ def _store_line_groups(pairs):
     return added
 
 
+def _webhook_beat(path, events=0, sig_fail=False):
+    """จดว่า webhook เข้ามาเมื่อไหร่/กี่ event — ★ ก.ย.69
+
+    ไม่มีตัวนี้ = เวลาข้อมูลไม่เข้า **แยกไม่ออกเลย** ว่า (ก) LINE ไม่ได้ยิงมา
+    (ข) ยิงมาแต่ลายเซ็นไม่ผ่าน (ค) ยิงถึงแล้วแต่ไม่ตรงกลุ่ม/ไม่เข้า pattern
+    เก็บที่ KVStore `line_webhook_last` · best-effort (เขียนไม่ได้ = ข้าม)
+    """
+    try:
+        from django.utils import timezone as _tz
+        from dashboard.services import cache_store
+        cur = (cache_store.get_kv("line_webhook_last") or {}).get("data") or {}
+        cur["at"] = _tz.localtime().isoformat(timespec="seconds")
+        cur["path"] = path
+        cur["events"] = int(events or 0)
+        cur["hits"] = int(cur.get("hits") or 0) + 1
+        if sig_fail:
+            cur["sigFail"] = int(cur.get("sigFail") or 0) + 1
+            cur["lastSigFailAt"] = cur["at"]
+        cache_store.set_kv("line_webhook_last", cur)
+    except Exception:
+        pass
+
+
 def _checkout_ingest(data):
     """ให้ระบบเบิก-คืนรถอ่านข้อความจากกลุ่มที่ตั้งไว้ (อ่านอย่างเดียว ไม่ตอบกลับ)
 
@@ -2709,6 +2732,7 @@ def line_webhook(request):
         import hmac, hashlib, base64
         mac = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
         if not hmac.compare_digest(mac, request.headers.get("X-Line-Signature", "")):
+            _webhook_beat("webhook", 0, sig_fail=True)   # จดไว้ ไม่งั้นเงียบจนหาสาเหตุไม่เจอ
             return HttpResponse(status=403)
     try:
         data = json.loads(body or b"{}")
@@ -2719,6 +2743,7 @@ def line_webhook(request):
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
     _store_line_groups(adds)
     _remove_line_groups(leaves)
+    _webhook_beat("webhook", len((data or {}).get("events") or []))
     _checkout_ingest(data)
     return HttpResponse("ok")
 
@@ -2745,6 +2770,11 @@ def line_group_ingest(request):
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
     added = _store_line_groups(adds)
     removed = _remove_line_groups(leaves)
+    # ★ ก.ย.69 — ต้องให้ระบบเบิก-คืนอ่านทางนี้ด้วย
+    #   เดิม hook อยู่แค่ใน line_webhook → ถ้า LINE channel ชี้ไป n8n (ซึ่งตั้งได้ที่เดียว/channel)
+    #   ข้อความจะเข้าทางนี้ทั้งหมด แล้ว "ไม่เก็บอะไรเลย" โดยไม่มีใครรู้
+    _webhook_beat("n8n", len((data or {}).get("events") or []))
+    _checkout_ingest(data)
     return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed},
                         json_dumps_params={"ensure_ascii": False})
 
