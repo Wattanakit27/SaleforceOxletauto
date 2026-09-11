@@ -303,7 +303,8 @@ class LineProfile(models.Model):
 
     user_id = models.CharField("LINE user id", max_length=64, unique=True)
     display_name = models.CharField("ชื่อที่ตั้งใน LINE", max_length=120, blank=True)
-    picture_url = models.URLField("รูปโปรไฟล์", max_length=500, blank=True)
+    # ★ ก.ย.69 — **ไม่เก็บรูปโปรไฟล์** (เจ้าของสั่ง) · เก็บน้อยที่สุดเท่าที่ใช้จริงพอ (PDPA)
+    #   ที่เคยเก็บคือ "ลิงก์" ไม่ใช่ไฟล์ จึงไม่ได้กินที่ แต่ก็ไม่มีใครใช้ → ตัดออก
     status_message = models.TextField("สเตตัส", blank=True)
     language = models.CharField("ภาษา", max_length=16, blank=True)
 

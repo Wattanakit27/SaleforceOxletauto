@@ -337,10 +337,6 @@ async function loadLine(){
       + '<div style="margin-top:6px;display:flex;flex-direction:column;gap:5px">'
       + (ch.customers||[]).map(u =>
           '<div style="display:flex;align-items:center;gap:7px">'
-          + (u.picture
-              ? '<img src="' + esc(u.picture) + '" alt="" loading="lazy" onerror="this.remove()"'
-                + ' style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto">'
-              : '<span style="width:26px;height:26px;border-radius:50%;background:var(--bd2);flex:0 0 auto"></span>')
           + '<span style="min-width:0"><b>' + esc(u.name) + '</b> — ' + u.n + ' ข้อความ'
           + (u.last ? ' <span class="muted">(ล่าสุด ' + esc(u.last) + ')</span>' : '')
           + (u.userId

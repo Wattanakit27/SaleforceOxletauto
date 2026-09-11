@@ -151,9 +151,8 @@ class Command(BaseCommand):
             from checkout.models import LineProfile
             n_prof = LineProfile.objects.count()
             n_emp = LineProfile.objects.filter(is_employee=True).count()
-            add("     โปรไฟล์ที่เก็บ   : %d คน  (ลูกค้า %d · พนักงาน %d · มีรูป %d)"
-                % (n_prof, n_prof - n_emp, n_emp,
-                   LineProfile.objects.exclude(picture_url="").count()))
+            add("     โปรไฟล์ที่เก็บ   : %d คน  (ลูกค้า %d · พนักงาน %d)"
+                % (n_prof, n_prof - n_emp, n_emp))
             last = _kv("chat_store_last") or {}
             if last.get("at"):
                 txt, _h = _ago(last.get("at"))

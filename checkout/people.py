@@ -171,7 +171,7 @@ def fetch_profile(user_id="", group_id="", room_id="") -> dict:
     ⚠️ **ต้องเลือก endpoint ให้ถูกตามที่มา** ไม่งั้นได้ 404 ทั้งที่ข้อมูลมีอยู่:
       - `/v2/bot/profile/<uid>` ใช้ได้เฉพาะคนที่ **เพิ่มบอทเป็นเพื่อนแล้ว** (ลูกค้าที่ทักเข้า OA)
       - คนในกลุ่มที่ไม่ได้เพิ่มเพื่อน ต้องใช้ **group member API** แทน
-        (ได้แค่ชื่อ + รูป · ไม่มี statusMessage/language)
+        (ได้แค่ชื่อ · ไม่มี statusMessage/language)
     """
     uid = (user_id or "").strip()
     if not uid:
@@ -262,11 +262,11 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user") -> dict
     if prof:
         fields.update({
             "display_name": (prof.get("displayName") or "")[:120],
-            "picture_url": (prof.get("pictureUrl") or "")[:500],
             "status_message": prof.get("statusMessage") or "",
             "language": (prof.get("language") or "")[:16],
             "fetched_at": now,
-            "raw": prof,
+            # เก็บคำตอบดิบไว้เผื่อตรวจ แต่ **ตัด pictureUrl ทิ้ง** (เจ้าของสั่งไม่เก็บรูป)
+            "raw": {k: v for k, v in prof.items() if k != "pictureUrl"},
         })
     try:
         if row:

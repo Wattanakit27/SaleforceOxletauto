@@ -747,18 +747,17 @@ def _profile_counts():
         from .models import LineProfile
         tot = LineProfile.objects.count()
         emp = LineProfile.objects.filter(is_employee=True).count()
-        return {"total": tot, "employees": emp, "customers": tot - emp,
-                "withPicture": LineProfile.objects.exclude(picture_url="").count()}
+        return {"total": tot, "employees": emp, "customers": tot - emp}
     except Exception:
-        return {"total": 0, "employees": 0, "customers": 0, "withPicture": 0}
+        return {"total": 0, "employees": 0, "customers": 0}
 
 
 def _cust_row(r, prof=None):
-    """1 แถวของ "ลูกค้าที่ทักเข้ามา" สำหรับพาเนล — ชื่อ/รูป/จำนวน/ช่วงเวลา + user id"""
+    """1 แถวของ "ลูกค้าที่ทักเข้ามา" สำหรับพาเนล — ชื่อ/จำนวน/ช่วงเวลา + user id
+    (ไม่มีรูปโปรไฟล์ — เจ้าของสั่งไม่เก็บ ก.ย.69)"""
     return {
         "name": (prof.show_name if prof else "") or r["sender_name"] or "(ไม่รู้ชื่อ)",
         "userId": r["sender_id"] or "",
-        "picture": (prof.picture_url if prof else "") or "",
         "status": (prof.status_message if prof else "") or "",
         "n": r["n"],
         "first": (timezone.localtime(prof.first_seen).strftime("%d/%m/%y")
