@@ -67,6 +67,15 @@ class Command(BaseCommand):
             self.stdout.write("  แชทที่เก็บแล้ว     : %d ข้อความ" % n)
             if not (cfg.get("store_chat") or cfg.get("store_customer_chat")):
                 self.stdout.write("  ⚠️ ยังไม่ได้เปิดเก็บแชทเลย → จะไม่มีอะไรเข้ามา")
+            last = (cache_store.get_kv("chat_store_last") or {}).get("data") or {}
+            if last.get("at"):
+                self.stdout.write("  ลองเก็บล่าสุด      : %s — เก็บได้ %s · ข้าม %s (จาก %s event)"
+                                  % (last.get("at"), last.get("saved"), last.get("skipped"),
+                                     last.get("events")))
+                if last.get("error"):
+                    self.stdout.write("  ⚠️ error: %s" % last["error"])
+            elif n == 0:
+                self.stdout.write("  (ยังไม่เคยมีข้อความวิ่งเข้ามาให้เก็บเลย — ลองให้คนพิมพ์ในกลุ่ม 1 ครั้ง)")
         except Exception as e:
             self.stdout.write("")
             self.stdout.write("  ⚠️ อ่านตารางแชทไม่ได้ (%s) — ยัง migrate ไม่ครบหรือเปล่า?" % e)

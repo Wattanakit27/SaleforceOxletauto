@@ -600,6 +600,22 @@ def ingest_group_events(data) -> int:
 #  ต่างจากการ "สร้างเคส" (ingest_group_events) ซึ่งดูเฉพาะกลุ่มที่ตั้งไว้กลุ่มเดียว
 # =========================================================
 _CHAT_CLEAN_KEY = "chat_cleanup_last"
+_CHAT_LOG_KEY = "chat_store_last"      # ผลการเก็บแชทรอบล่าสุด (รวม error) — กันพังแบบเงียบ
+
+
+def _chat_log(**kw):
+    """จดผลรอบล่าสุดของ store_chat — ★ ก.ย.69
+
+    `store_chat` ถูกเรียกใน daemon thread ที่ except กลืนทุกอย่าง → ถ้าเขียน DB ไม่ได้
+    (คอลัมน์ไม่ตรง/สิทธิ์/ตารางหาย) จะได้ 0 ข้อความแบบ **ไม่มีร่องรอยเลย**
+    เก็บไว้ให้ `checkout_config` โชว์ได้ว่าพยายามเก็บแล้วเกิดอะไรขึ้น
+    """
+    try:
+        from dashboard.services import cache_store
+        kw["at"] = timezone.localtime().isoformat(timespec="seconds")
+        cache_store.set_kv(_CHAT_LOG_KEY, kw)
+    except Exception:
+        pass
 
 
 def _event_time(ev):
@@ -659,7 +675,7 @@ def store_chat(data) -> int:
     except Exception:
         pass
 
-    made = 0
+    made, skipped, err = 0, 0, ""
     for ev in events:
         if not isinstance(ev, dict) or ev.get("type") != "message":
             continue
@@ -701,8 +717,11 @@ def store_chat(data) -> int:
                 sent_at=_event_time(ev),
             )
             made += 1
-        except Exception:
+        except Exception as e:
+            skipped += 1
+            err = err or ("%s: %s" % (type(e).__name__, e))[:200]
             continue                     # ชนกันเพราะ webhook ซ้ำ = ข้าม ไม่ล้มทั้งก้อน
+    _chat_log(saved=made, skipped=skipped, events=len(events), error=err)
     if made:
         _cleanup_chat()
     return made
