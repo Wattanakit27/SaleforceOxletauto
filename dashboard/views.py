@@ -2831,8 +2831,17 @@ def _checkout_ingest(data):
             from checkout.views import ingest_group_events, store_chat
             store_chat(data)             # เก็บแชทแยกกลุ่มลง Postgres (ถ้าเปิดไว้)
             ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
-        except Exception:
-            pass
+        except Exception as e:
+            # ★ ก.ย.69 — เดิม `except: pass` เฉยๆ: งานอยู่คนละ thread กับ response
+            #   พังเมื่อไหร่ก็เงียบสนิท ไม่มีร่องรอยให้ตามเลย (เช่นยังไม่ migrate)
+            try:
+                from django.utils import timezone as _tz
+                from dashboard.services import cache_store
+                cache_store.set_kv("checkout_ingest_last", {
+                    "at": _tz.localtime().isoformat(timespec="seconds"),
+                    "error": ("%s: %s" % (type(e).__name__, e))[:300]})
+            except Exception:
+                pass
         finally:
             try:
                 from django.db import connection
@@ -2925,18 +2934,27 @@ def line_group_ingest(request):
     except Exception:
         want, listening, store_chat_on = "", False, False
     for_group = sum(1 for e in texts if ((e.get("source") or {}).get("groupId") or "") == want) if want else 0
-    # ★ นับแชทสะสมกลับไปด้วยตอนเปิดเก็บ — กด "Execute step" ใน n8n แล้วเห็นเลขขยับ = ยืนยันว่าเก็บจริง
-    chat_total = None
+    # ★ นับแชทสะสมกลับไปด้วยตอนเปิดเก็บ
+    #   ⚠️ `chatTotal` = ยอด "ก่อน" ข้อความรอบนี้ถูกเก็บ — เพราะ `_checkout_ingest` ทำใน
+    #   daemon thread (ห้ามบล็อก webhook) เลยยังเขียนไม่เสร็จตอนตอบกลับ
+    #   → ยิงรอบที่ 2 ถึงจะเห็นเลขขยับ · ดูผลรอบก่อนหน้าได้จาก `lastStore` ที่แนบไปด้วย
+    chat_total, last_store = None, None
     if store_chat_on:
         try:
             from checkout.models import GroupChat
             chat_total = GroupChat.objects.count()
         except Exception:
             chat_total = None
+        try:
+            from dashboard.services import cache_store as _cs
+            last_store = (_cs.get_kv("chat_store_last") or {}).get("data")
+        except Exception:
+            last_store = None
     return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
                          "events": len(evs), "textEvents": len(texts),
                          "forGroup": for_group, "listening": listening,
-                         "storeChat": store_chat_on, "chatTotal": chat_total},
+                         "storeChat": store_chat_on, "chatTotal": chat_total,
+                         "lastStore": last_store},
                         json_dumps_params={"ensure_ascii": False})
 
 
