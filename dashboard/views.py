@@ -2554,6 +2554,34 @@ def admin_line_group_name(request):
         return JsonResponse({"ok": False, "error": str(e)[:150]}, status=500)
 
 
+def _unwrap_payload(data):
+    """แกะห่อที่ n8n ชอบใส่มา → คืนก้อนที่หน้าตาเหมือน LINE raw
+
+    ★ ก.ย.69 — n8n ส่งมาได้หลายทรง แล้วแต่ว่าต่อโหนดยังไง:
+      {"body": {...}} · {"json": {...}} · [{...}] · หรือส่ง **event เดี่ยว** (พบบ่อยสุด
+      เพราะ n8n แตกเป็นรายการทีละ item อยู่แล้ว) → ต้องห่อกลับเป็น {"events":[ev]}
+    ไม่ทำตรงนี้ = group id เข้า (dropdown มีชื่อกลุ่ม) แต่ **ข้อความไม่ถูกอ่านเลย**
+    """
+    for _ in range(3):                      # แกะซ้อนได้ไม่เกิน 3 ชั้น กันวนไม่จบ
+        if isinstance(data, dict) and not data.get("events"):
+            inner = data.get("body") or data.get("json") or data.get("payload")
+            if isinstance(inner, (dict, list)):
+                data = inner
+                continue
+        break
+    if isinstance(data, list):
+        evs = [x for x in data if isinstance(x, dict)]
+        # list ของ event → ห่อเป็น events · list ของ {body:...} → แกะแต่ละอันก่อน
+        evs = [(_unwrap_payload(x) if ("events" in x or "body" in x or "json" in x) else x) for x in evs]
+        flat = []
+        for x in evs:
+            flat.extend(x.get("events") or []) if isinstance(x, dict) and x.get("events") else flat.append(x)
+        return {"events": flat}
+    if isinstance(data, dict) and not data.get("events") and (data.get("source") or data.get("message")):
+        return {"events": [data]}           # event เดี่ยวจาก n8n
+    return data if isinstance(data, dict) else {}
+
+
 def _extract_group_events(data):
     """ดึง [(groupId, groupName)] จาก payload หลายรูปแบบ:
       - LINE raw: {events:[{source:{type:'group',groupId,...}}]}
@@ -2735,7 +2763,7 @@ def line_webhook(request):
             _webhook_beat("webhook", 0, sig_fail=True)   # จดไว้ ไม่งั้นเงียบจนหาสาเหตุไม่เจอ
             return HttpResponse(status=403)
     try:
-        data = json.loads(body or b"{}")
+        data = _unwrap_payload(json.loads(body or b"{}"))
     except Exception:
         data = {}
     leaves = set(_extract_group_leaves(data))
@@ -2763,7 +2791,7 @@ def line_group_ingest(request):
     if given != secret_setting:
         return JsonResponse({"ok": False, "error": "secret ไม่ถูกต้อง"}, status=403)
     try:
-        data = json.loads(request.body or b"{}")
+        data = _unwrap_payload(json.loads(request.body or b"{}"))
     except Exception:
         data = {}
     leaves = set(_extract_group_leaves(data))
@@ -2773,9 +2801,15 @@ def line_group_ingest(request):
     # ★ ก.ย.69 — ต้องให้ระบบเบิก-คืนอ่านทางนี้ด้วย
     #   เดิม hook อยู่แค่ใน line_webhook → ถ้า LINE channel ชี้ไป n8n (ซึ่งตั้งได้ที่เดียว/channel)
     #   ข้อความจะเข้าทางนี้ทั้งหมด แล้ว "ไม่เก็บอะไรเลย" โดยไม่มีใครรู้
-    _webhook_beat("n8n", len((data or {}).get("events") or []))
+    evs = (data or {}).get("events") or []
+    texts = [e for e in evs if isinstance(e, dict) and e.get("type") == "message"
+             and (e.get("message") or {}).get("type") == "text"]
+    _webhook_beat("n8n", len(evs))
     _checkout_ingest(data)
-    return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed},
+    # ★ ตอบ events/textEvents กลับไปด้วย — เปิด execution ใน n8n แล้วรู้ทันทีว่า
+    #   forward body มาครบไหม (ถ้าได้ 0 แปลว่าส่งมาแต่ groupId ไม่ได้ส่งข้อความมา)
+    return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
+                         "events": len(evs), "textEvents": len(texts)},
                         json_dumps_params={"ensure_ascii": False})
 
 

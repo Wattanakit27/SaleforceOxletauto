@@ -924,6 +924,12 @@ CRON_SECRET=xxx...
     - **ข้ามกลุ่มอื่นทั้งหมด** — เทียบ `groupId` กับที่ตั้งไว้เท่านั้น
     - **⚠️ รันใน daemon thread** (`_checkout_ingest`) — การเทียบชื่อเล่นต้องอ่านชีตพนักงาน ครั้งแรกหลังรีสตาร์ทกินหลายวินาที **ห้ามบล็อก webhook** ไม่งั้น LINE timeout แล้ว retry รัว · ปิด DB connection ท้าย thread เอง
   - **`CarMovement.source`** (migration **0005_movement_source**) = `web` (กดในเว็บ) · `line` (บอทเดาจากกลุ่ม — **ยังไม่มีคนยืนยัน**) · `import` (นำเข้าจาก log) → ตารางติดป้าย **LINE** สีฟ้า + มีตัวกรอง "จากกลุ่ม LINE" ให้ไล่ตรวจ
+  - **★★ ก.ย.69 — `_unwrap_payload()` แกะห่อที่ n8n ส่งมา (ต้นเหตุ "push ได้ แต่เก็บข้อความไม่ได้")**
+    - **push กับ receive คนละเส้นทางกัน**: push ใช้แค่ `LINE_CHANNEL_ACCESS_TOKEN` + group id → ทำงานได้โดยไม่ต้องมี webhook เลย · **receive ต้องให้ข้อความวิ่งมาถึงเซิร์ฟเวอร์นี้จริงๆ** → "บอทตัวอื่นส่งเข้ากลุ่มได้" **ไม่ได้แปลว่า** การดักเก็บจะทำงาน
+    - n8n ส่ง body มาได้หลายทรงแล้วแต่ต่อโหนดยังไง: `{"body":{...}}` · `{"json":{...}}` · `[{...}]` · **event เดี่ยว** (พบบ่อยสุด เพราะ n8n แตกเป็น item ทีละอันอยู่แล้ว)
+    - เดิม `_extract_group_events` รับ **flat `{groupId}`** ได้ → **group id เข้า dropdown มีชื่อกลุ่ม** แต่ `ingest_group_events` อ่านแค่ `data["events"]` → **ข้อความไม่ถูกอ่านสักข้อความ** = อาการ "ตั้งค่าครบแล้วแต่ไม่มีเคสเลย"
+    - `_unwrap_payload()` normalize ทุกทรงให้เป็น `{"events":[...]}` ก่อน แล้วใช้ทั้ง `line_webhook` และ `line_group_ingest` · **ทดสอบครบ 7 ทรง** (LINE raw / body / json ซ้อน / event เดี่ยว / list / list ห่อ body / แค่ groupId)
+    - `line_group_ingest` ตอบ **`events` + `textEvents`** กลับไปด้วย → เปิด execution ใน n8n แล้วรู้ทันทีว่า forward body มาครบไหม (ได้ `0` = ส่งมาแต่ groupId)
   - **★ ก.ย.69 — `line_group_ingest` (ทาง n8n) ก็ต้อง ingest ด้วย**: เดิม hook `_checkout_ingest` อยู่แค่ใน `line_webhook` → ถ้า LINE channel ชี้ Webhook URL ไป **n8n** (ตั้งได้ที่เดียวต่อ channel) ข้อความจะเข้าทาง `/api/line/group_ingest` ทั้งหมด แล้ว **ไม่เก็บอะไรเลยโดยไม่มีใครรู้**
   - **★ heartbeat `line_webhook_last`** (`_webhook_beat()` ใน [dashboard/views.py](dashboard/views.py)) — จด `{at, path(webhook|n8n), events, hits, sigFail}` ทุกครั้งที่ webhook เข้า **รวมตอนลายเซ็นไม่ผ่าน (403)** · ไม่มีตัวนี้ = เวลาข้อมูลไม่เข้าจะ **แยกไม่ออกว่า LINE ไม่ยิง / ยิงแล้วลายเซ็นไม่ผ่าน / ยิงถึงแล้วแต่ไม่ตรงกลุ่ม**
     - ⚠️ `timezone` **ไม่ได้ import ระดับไฟล์** ใน `dashboard/views.py` → ต้อง `from django.utils import timezone as _tz` ในฟังก์ชัน ไม่งั้น NameError โดน `except` กลืน = heartbeat ไม่เขียนแบบเงียบ
