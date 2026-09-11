@@ -1,0 +1,42 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://srv1793506.hstgr.cloud/api/line/group_ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Cron-Secret",
+              "value": "ใส่ค่า CRON_SECRET ตรงนี้"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || $json) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 620],
+      "id": "a7c1e5b2-9d3f-4a86-b0c4-11f2d8e30a55",
+      "name": "Send Chat to Oxlet",
+      "notes": "ส่ง body ดิบที่ LINE ส่งมา -> เก็บแชทแยกกลุ่ม + สร้างเคสเบิก-คืน (ต่อจาก Webhook ตรงๆ ห้ามต่อจาก Get Group Summary)",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Send Chat to Oxlet": {
+      "main": [[]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "oxlet-checkout-chat-ingest"
+  }
+}
