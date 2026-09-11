@@ -2620,9 +2620,24 @@ def _unwrap_payload(data):
       เพราะ n8n แตกเป็นรายการทีละ item อยู่แล้ว) → ต้องห่อกลับเป็น {"events":[ev]}
     ไม่ทำตรงนี้ = group id เข้า (dropdown มีชื่อกลุ่ม) แต่ **ข้อความไม่ถูกอ่านเลย**
     """
+    # ★ n8n ส่ง body เป็น "สตริงของ JSON" ได้ (ตั้ง Body=JSON แล้วใส่ JSON.stringify(...) เข้าไป
+    #   → โดน encode ซ้ำอีกชั้น) · ได้ str มาแทน dict แล้วทุกอย่างข้างล่างพังเงียบ
+    for _ in range(2):
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                return {}
+        else:
+            break
     for _ in range(3):                      # แกะซ้อนได้ไม่เกิน 3 ชั้น กันวนไม่จบ
         if isinstance(data, dict) and not data.get("events"):
             inner = data.get("body") or data.get("json") or data.get("payload")
+            if isinstance(inner, str):      # ห่ออยู่ใน body แต่ข้างในเป็นสตริง JSON อีกที
+                try:
+                    inner = json.loads(inner)
+                except Exception:
+                    inner = None
             if isinstance(inner, (dict, list)):
                 data = inner
                 continue
@@ -2774,6 +2789,34 @@ def _webhook_beat(path, events=0, sig_fail=False):
         pass
 
 
+def _ingest_debug(path, raw, data):
+    """จด "หน้าตาของ body ที่ส่งมา" ตอนอ่าน event ไม่ได้สักอัน — ★ ก.ย.69
+
+    ทำไมต้องมี: `line_webhook_last` บอกได้แค่ **events = 0** ซึ่งยัง**แยกไม่ออก**ว่า
+    n8n ส่ง `{groupId}` มาแทน body ดิบ / ส่งเป็นสตริง JSON ซ้อน / หรือ body ว่างเปล่า
+    → ไล่ต่อไม่ได้ ต้องเดาเอา (เสียเวลาไปแล้ว 2 รอบ)
+
+    **เก็บเฉพาะตอนมีปัญหา** (events = 0) และ **ทับค่าเดิมทุกครั้ง** — ไม่ใช่คลังข้อมูล
+    ตัด preview ที่ 600 ตัวอักษร (พอเห็นโครง ไม่ได้เก็บบทสนทนา) · ล้างได้ด้วยการ set_kv ทับ
+    """
+    try:
+        from django.utils import timezone as _tz
+        from dashboard.services import cache_store
+        txt = (raw or b"")
+        if isinstance(txt, bytes):
+            txt = txt.decode("utf-8", "replace")
+        cache_store.set_kv("line_ingest_last", {
+            "at": _tz.localtime().isoformat(timespec="seconds"),
+            "path": path,
+            "bytes": len(raw or b""),
+            "parsedType": type(data).__name__,
+            "topKeys": sorted(data.keys())[:12] if isinstance(data, dict) else [],
+            "preview": txt[:600],
+        })
+    except Exception:
+        pass
+
+
 def _checkout_ingest(data):
     """ให้ระบบเบิก-คืนรถอ่านข้อความจากกลุ่มที่ตั้งไว้ (อ่านอย่างเดียว ไม่ตอบกลับ)
 
@@ -2830,7 +2873,10 @@ def line_webhook(request):
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
     _store_line_groups(adds)
     _remove_line_groups(leaves)
-    _webhook_beat("webhook", len((data or {}).get("events") or []))
+    _n = len((data or {}).get("events") or [])
+    _webhook_beat("webhook", _n)
+    if not _n:
+        _ingest_debug("webhook", body, data)
     _checkout_ingest(data)
     return HttpResponse("ok")
 
@@ -2864,6 +2910,8 @@ def line_group_ingest(request):
     texts = [e for e in evs if isinstance(e, dict) and e.get("type") == "message"
              and (e.get("message") or {}).get("type") == "text"]
     _webhook_beat("n8n", len(evs))
+    if not evs:
+        _ingest_debug("n8n", request.body, data)
     _checkout_ingest(data)
     # ★ ตอบสรุปกลับไปด้วย — เปิด execution ใน n8n แล้ววินิจฉัยได้ครบในบรรทัดเดียว:
     #   events/textEvents = forward body มาครบไหม (0 = ส่งมาแต่ groupId)

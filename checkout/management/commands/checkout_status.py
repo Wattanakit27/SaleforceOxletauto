@@ -78,6 +78,21 @@ class Command(BaseCommand):
         elif beat.get("at"):
             add("2) ลายเซ็น          : ✅ ผ่าน")
 
+        # --- 2.5) อ่าน event ไม่ได้เลย → โชว์ "หน้าตา body ที่ส่งมา" ---
+        #   ★ ตัวชี้ขาดว่า n8n forward "body ดิบ" มาจริงไหม · ไม่มีตัวนี้ได้แค่ตัวเลข events=0
+        dbg = _kv("line_ingest_last") or {}
+        if dbg.get("at") and not beat.get("events"):
+            txt, _h = _ago(dbg.get("at"))
+            add("")
+            add("2.5) body ล่าสุดที่อ่าน event ไม่ได้ (%s · ทาง %s · %s bytes)"
+                % (txt, dbg.get("path", "-"), dbg.get("bytes", 0)))
+            add("     ชนิดที่ parse ได้ : %s" % dbg.get("parsedType", "-"))
+            add("     คีย์ชั้นบนสุด    : %s" % (dbg.get("topKeys") or "(ไม่มี)"))
+            add("     ตัวอย่าง         : %s" % (dbg.get("preview") or "")[:300])
+            keys = set(dbg.get("topKeys") or [])
+            if keys and not (keys & {"events", "destination"}):
+                add("     → ไม่ใช่ body ดิบของ LINE (ต้องมีคีย์ 'events') = โหนดใน n8n ส่งผลของโหนดอื่นมาแทน")
+
         # --- 3) บอทรู้จักกลุ่มไหนบ้าง ---
         groups = _kv("line_groups") or {}
         add("")
