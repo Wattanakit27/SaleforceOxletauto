@@ -956,6 +956,23 @@ CRON_SECRET=xxx...
     - **★ วินิจฉัยจริงที่เจอ (ก.ย.69)**: workflow n8n ต่อเป็น `Webhook → Get Group Summary → Send Group Info` — โหนดที่ยิงมาหาเราส่ง **ผลของ Get Group Summary** (`{groupId, groupName}`) **ไม่ใช่ body ดิบที่ LINE ส่งมา** → กลุ่มเข้า dropdown ครบ 6 กลุ่มพร้อมชื่อ แต่ `events=0` ตลอด · **แก้ที่ n8n**: ต่อ `Webhook → HTTP Request` ตรงๆ แล้วส่ง body = `{{ $json }}` (ทั้ง item ของ Webhook node — `_unwrap_payload` แกะ `.body` ให้เอง) · **ไม่ต้องมี Get Group Summary** เพราะเซิร์ฟเวอร์ดึงชื่อกลุ่มเองอยู่แล้วใน `_store_line_groups`
     - `line_group_ingest` ตอบ **`events` + `textEvents` + `forGroup` + `listening`** กลับไปด้วย (`forGroup` = ข้อความที่ส่งมาตรงกับกลุ่มที่ตั้งดักเก็บกี่ข้อความ) → เปิด execution ใน n8n แล้วรู้ทันทีว่า forward body มาครบไหม (ได้ `0` = ส่งมาแต่ groupId)
   - **★ ก.ย.69 — `line_group_ingest` (ทาง n8n) ก็ต้อง ingest ด้วย**: เดิม hook `_checkout_ingest` อยู่แค่ใน `line_webhook` → ถ้า LINE channel ชี้ Webhook URL ไป **n8n** (ตั้งได้ที่เดียวต่อ channel) ข้อความจะเข้าทาง `/api/line/group_ingest` ทั้งหมด แล้ว **ไม่เก็บอะไรเลยโดยไม่มีใครรู้**
+  - **★★ ก.ย.69 — `line_ingest_last` จด "หน้าตา body" ตอนอ่าน event ไม่ได้** (`_ingest_debug()` ใน [dashboard/views.py](dashboard/views.py))
+    - **ปัญหาที่แก้**: heartbeat บอกได้แค่ `events = 0` ซึ่ง **ยังแยกไม่ออก** ว่า n8n ส่ง `{groupId}` มาแทน body ดิบ / ส่งเป็นสตริง JSON ซ้อน / หรือ **body ว่างเปล่า** → ไล่ต่อไม่ได้ ต้องเดา (เสียเวลาไป 3 รอบ)
+    - เก็บ `{at, path, bytes, parsedType, topKeys, preview(600 ตัว)}` — **เฉพาะตอน events=0** + **ทับค่าเดิมทุกครั้ง** (เป็นร่องรอยดีบัก ไม่ใช่คลังข้อมูล)
+    - `checkout_status` โชว์เป็น **ข้อ 2.5** + สรุปสาเหตุตามหลักฐานจริง (body ว่าง / ส่งคีย์อื่นมา) — เลิกเดาเหมาว่า "ส่งมาแต่ groupId" เสมอ
+    - **สาเหตุจริงที่เจอ (ก.ย.69)**: body = `{}` (2 bytes) เพราะโหนด HTTP ใน n8n **รับ input จากโหนดที่ไม่มีข้อมูล** (ต่อท้าย HTTP node อื่น) → สูตร `$json.body || $json` ได้ `{}`
+      **แก้ด้วยการอ้างชื่อโหนดตรงๆ**: `{{ JSON.stringify($('Webhook').first().json.body) }}` → วางโหนดไว้ตรงไหนในสายก็ทำงาน (แก้ใน [deploy/n8n_send_chat_to_oxlet.json](deploy/n8n_send_chat_to_oxlet.json) แล้ว · **ชื่อโหนดต้องตรงของจริง** ไม่งั้น expression พัง = n8n ไม่ยิงออกมาเลย)
+    - `_unwrap_payload` รองรับ **body ที่เป็นสตริง JSON** เพิ่มแล้ว ทั้งชั้นนอก (`"{...}"`) และชั้นใน (`{"body": "{...}"}`) — n8n ตั้ง Body=JSON แล้วใส่ `JSON.stringify(...)` จะโดน encode ซ้ำ · **ทดสอบครบ 11 ทรง**
+  - **★ ⚠️ `chatTotal` ใน response ของ `line_group_ingest` = ยอด "ก่อน" รอบนี้** — `_checkout_ingest` ทำใน **daemon thread** (ห้ามบล็อก webhook) เลยยังเขียนไม่เสร็จตอนตอบกลับ → **ยิงรอบ 2 ถึงเห็นเลขขยับ** · เคยทำให้เข้าใจผิดว่า "ไม่เก็บ" ทั้งที่เก็บแล้ว · ตอนนี้แนบ **`lastStore`** (= `chat_store_last` ของรอบก่อน) ไปด้วย · **ยอดจริงดูที่ `manage.py checkout_config`**
+  - **★ `checkout_ingest_last`** — งานใน daemon thread เดิม `except Exception: pass` เฉยๆ **พังเมื่อไหร่ก็เงียบสนิท** (คนละ thread กับ response ไม่มีใครเห็น error) → ตอนนี้จด `{at, error}` ลง KV
+  - **วิธียืนยันว่าฝั่งเซิร์ฟเวอร์ปกติ โดยไม่ผ่าน n8n/LINE** (แยกให้ขาดว่าปัญหาอยู่ฝั่งไหน):
+    ```bash
+    cd /opt/oxlet && SECRET=$(grep -m1 '^CRON_SECRET=' .env | cut -d= -f2-) && \
+    curl -s -X POST "$SITE/api/line/group_ingest" -H "X-Cron-Secret: $SECRET" \
+      -H "Content-Type: application/json" \
+      -d '{"events":[{"type":"message","source":{"type":"user","userId":"Utest…"},"message":{"id":"test-1","type":"text","text":"ทดสอบ"}}]}'
+    ```
+    ได้ `"events": 1` = เซิร์ฟเวอร์ถูกต้องครบ → ที่เหลือเป็นเรื่อง n8n 100%
   - **★ heartbeat `line_webhook_last`** (`_webhook_beat()` ใน [dashboard/views.py](dashboard/views.py)) — จด `{at, path(webhook|n8n), events, hits, sigFail}` ทุกครั้งที่ webhook เข้า **รวมตอนลายเซ็นไม่ผ่าน (403)** · ไม่มีตัวนี้ = เวลาข้อมูลไม่เข้าจะ **แยกไม่ออกว่า LINE ไม่ยิง / ยิงแล้วลายเซ็นไม่ผ่าน / ยิงถึงแล้วแต่ไม่ตรงกลุ่ม**
     - ⚠️ `timezone` **ไม่ได้ import ระดับไฟล์** ใน `dashboard/views.py` → ต้อง `from django.utils import timezone as _tz` ในฟังก์ชัน ไม่งั้น NameError โดน `except` กลืน = heartbeat ไม่เขียนแบบเงียบ
   - **⚠️ อย่าสรุปจาก heartbeat อย่างเดียว** — `line_webhook_last` เพิ่งมี ก.ย.69 **นับตั้งแต่รีสตาร์ทเท่านั้น** · หลักฐานย้อนหลังที่เชื่อได้คือ **`line_groups[gid].lastSeen`** (บอทได้ยินกลุ่มนั้นล่าสุดเมื่อไหร่ — มีมานานแล้ว)
