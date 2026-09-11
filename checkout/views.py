@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from . import people
-from .models import CarMovement, ViolationLog
+from .models import CarMovement, GroupChat, ViolationLog
 
 
 # ผู้ที่เห็นหน้ารวม /dashboard/ ได้ (admin + ผู้บริหาร) = supervisor เบิก-คืนรถ
@@ -472,7 +472,7 @@ def api_line_config(request):
             b = {}
         if "group_id" in b:
             cfg["group_id"] = (b.get("group_id") or "").strip()
-        for k in ("listen", "send"):
+        for k in ("listen", "send", "store_chat"):
             if k in b:
                 cfg[k] = bool(b[k])
         _save_cfg(cfg)
@@ -492,7 +492,9 @@ def api_line_config(request):
         "ok": True,
         "config": {"groupId": cfg.get("group_id", ""),
                    "listen": bool(cfg.get("listen")),
-                   "send": bool(cfg.get("send"))},
+                   "send": bool(cfg.get("send")),
+                   "storeChat": bool(cfg.get("store_chat"))},
+        "chat": chat_stats(),
         "groups": groups,
         "lineToken": bool(getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")),
         "webhookUrl": (getattr(_st, "SITE_URL", "") or "").rstrip("/") + "/api/line/webhook",
@@ -589,3 +591,117 @@ def ingest_group_events(data) -> int:
             cur.plate_text = r["plate"]
             cur.save(update_fields=["plate_text", "updated_at"])
     return made
+
+
+# =========================================================
+#  เก็บแชทในกลุ่ม LINE ลง Postgres แยกตามกลุ่ม (ก.ย.69 — เจ้าของสั่ง)
+#  n8n ยิง body ดิบของ LINE มาที่ /api/line/group_ingest → เก็บทุกกลุ่มที่บอทอยู่
+#  ต่างจากการ "สร้างเคส" (ingest_group_events) ซึ่งดูเฉพาะกลุ่มที่ตั้งไว้กลุ่มเดียว
+# =========================================================
+_CHAT_CLEAN_KEY = "chat_cleanup_last"
+
+
+def _event_time(ev):
+    """เวลาในกลุ่มจาก event.timestamp (มิลลิวินาที) — ไม่มี = ใช้เวลาตอนนี้"""
+    ts = ev.get("timestamp")
+    try:
+        if ts:
+            from datetime import datetime, timezone as _dtz
+            return datetime.fromtimestamp(int(ts) / 1000, tz=_dtz.utc)
+    except Exception:
+        pass
+    return timezone.now()
+
+
+def _cleanup_chat():
+    """ลบแชทที่เกินอายุ — ทำมากสุดวันละครั้ง (เช็คผ่าน KV) ไม่ให้ถ่วง webhook"""
+    try:
+        from dashboard.services import cache_store
+        today = timezone.localdate().isoformat()
+        last = (cache_store.get_kv(_CHAT_CLEAN_KEY) or {}).get("data") or {}
+        if last.get("day") == today:
+            return
+        cut = timezone.now() - timezone.timedelta(days=C.CHAT_KEEP_DAYS)
+        n = GroupChat.objects.filter(sent_at__lt=cut).delete()[0]
+        cache_store.set_kv(_CHAT_CLEAN_KEY, {"day": today, "deleted": n})
+    except Exception:
+        pass
+
+
+def store_chat(data) -> int:
+    """เก็บข้อความในกลุ่มลง `GroupChat` — คืนจำนวนที่เก็บใหม่
+
+    เก็บ **ทุกกลุ่มที่บอทอยู่** (แยกด้วย group_id) ไม่ใช่แค่กลุ่มที่ตั้งดักเก็บเคส
+    เปิด/ปิดที่ `checkout_line_config["store_chat"]` · ปิดอยู่ = ไม่เก็บอะไรเลย
+    กันซ้ำด้วย `message_id` (unique) — LINE ยิง webhook ซ้ำได้
+    """
+    if not line_cfg().get("store_chat"):
+        return 0
+    events = (data or {}).get("events") or []
+    if not events:
+        return 0
+
+    # ชื่อกลุ่มที่บอทจำไว้ (ไม่ต้องยิง LINE API ซ้ำทุกข้อความ)
+    names = {}
+    try:
+        from dashboard.services import cache_store
+        names = {g: (v or {}).get("name", "")
+                 for g, v in ((cache_store.get_kv("line_groups") or {}).get("data") or {}).items()}
+    except Exception:
+        pass
+
+    made = 0
+    for ev in events:
+        if not isinstance(ev, dict) or ev.get("type") != "message":
+            continue
+        src = ev.get("source") or {}
+        gid = (src.get("groupId") or "").strip()
+        if not gid:
+            continue                     # แชทส่วนตัว/ห้องคุย — ไม่เก็บ (เก็บเฉพาะกลุ่ม)
+        msg = ev.get("message") or {}
+        mid = str(msg.get("id") or "").strip()
+        if not mid or GroupChat.objects.filter(message_id=mid).exists():
+            continue
+        mtype = (msg.get("type") or "").strip()
+        uid = (src.get("userId") or "").strip()
+        try:
+            who = people.nickname_for(user_id=uid) if uid else ""
+        except Exception:
+            who = ""
+        try:
+            GroupChat.objects.create(
+                group_id=gid, group_name=names.get(gid, ""), message_id=mid,
+                sender_id=uid, sender_name=("" if who == "ไม่ทราบชื่อ" else who),
+                msg_type=mtype, text=(msg.get("text") or "")[:5000],
+                sticker_id=str(msg.get("stickerId") or "")[:32],
+                sticker_package=str(msg.get("packageId") or "")[:32],
+                emojis=msg.get("emojis") or [],
+                extra={k: v for k, v in msg.items()
+                       if k in ("keywords", "address", "latitude", "longitude",
+                                "fileName", "fileSize", "duration", "title")},
+                has_media=mtype in (GroupChat.IMAGE, GroupChat.VIDEO,
+                                    GroupChat.AUDIO, GroupChat.FILE),
+                sent_at=_event_time(ev),
+            )
+            made += 1
+        except Exception:
+            continue                     # ชนกันเพราะ webhook ซ้ำ = ข้าม ไม่ล้มทั้งก้อน
+    if made:
+        _cleanup_chat()
+    return made
+
+
+def chat_stats():
+    """สรุปคลังแชทสำหรับพาเนลตั้งค่า — {total, groups:[{id,name,n,last}], media}"""
+    from django.db.models import Count, Max
+    rows = (GroupChat.objects.values("group_id", "group_name")
+            .annotate(n=Count("id"), last=Max("sent_at")).order_by("-n")[:10])
+    return {
+        "total": GroupChat.objects.count(),
+        "media": GroupChat.objects.filter(has_media=True).count(),
+        "keepDays": C.CHAT_KEEP_DAYS,
+        "groups": [{"id": r["group_id"], "name": r["group_name"] or "",
+                    "n": r["n"],
+                    "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else ""}
+                   for r in rows],
+    }

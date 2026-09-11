@@ -224,3 +224,53 @@ class LineEventLog(models.Model):
         ordering = ["created_at"]
         verbose_name = "LINE event (คิวโหลดไฟล์)"
         verbose_name_plural = "LINE event (คิวโหลดไฟล์)"
+
+
+class GroupChat(models.Model):
+    """แชทในกลุ่ม LINE เก็บแยกตามกลุ่ม (★ ก.ย.69 — เจ้าของสั่งให้เก็บลง Postgres)
+
+    ต่างจาก `GroupMessage` เดิมที่ยุบทิ้งไปยังไง:
+      - **แยกตามกลุ่มชัดเจน** (`group_id` + ชื่อกลุ่ม) → ใช้เป็นคลังแชทของแต่ละกลุ่มได้จริง
+      - เก็บ **สติกเกอร์ / LINE emoji / ตำแหน่งรูป** ด้วย ไม่ใช่แค่ข้อความล้วน
+      - มี **อายุข้อมูล** (`CHAT_KEEP_DAYS`) ลบของเก่าอัตโนมัติ — คลังแชทที่ไม่มีวันหมดอายุ
+        = กองข้อมูลส่วนบุคคลที่โตไม่หยุด (PDPA)
+
+    ⚠️ `sender_id` (LINE userId) เก็บไว้เพื่อ **เทียบชื่อเล่น + แท็กในกลุ่ม** เท่านั้น
+       เวลาโชว์บนหน้าเว็บให้ใช้ `sender_name` (ชื่อเล่น) เสมอ — ดู [people.py](people.py)
+    ⚠️ รูปภาพ: LINE ไม่ได้ส่งไฟล์มากับ webhook — ส่งมาแค่ `message.id` แล้วต้องไปโหลดจาก
+       content API ภายในเวลาจำกัด · ตอนนี้เก็บ `has_media` + `message_id` ไว้ก่อน
+       (`media_token` จะถูกเติมตอนทำเฟสโหลดไฟล์เข้า Drive)
+    """
+    group_id = models.CharField("LINE group id", max_length=64, db_index=True)
+    group_name = models.CharField("ชื่อกลุ่ม", max_length=120, blank=True)
+    message_id = models.CharField("LINE message id", max_length=64, unique=True)
+
+    sender_id = models.CharField("LINE user id ผู้ส่ง", max_length=64, blank=True)
+    sender_name = models.CharField("ชื่อเล่นผู้ส่ง", max_length=80, blank=True)
+
+    TEXT, IMAGE, VIDEO, AUDIO, FILE, STICKER, LOCATION = (
+        "text", "image", "video", "audio", "file", "sticker", "location")
+    msg_type = models.CharField("ชนิด", max_length=12, blank=True, db_index=True)
+    text = models.TextField("ข้อความ", blank=True)
+
+    # สติกเกอร์ + LINE emoji (อิโมจิยูนิโค้ดปกติอยู่ใน text อยู่แล้ว)
+    sticker_id = models.CharField("sticker id", max_length=32, blank=True)
+    sticker_package = models.CharField("sticker package", max_length=32, blank=True)
+    emojis = models.JSONField("LINE emoji ในข้อความ", default=list, blank=True)
+    extra = models.JSONField("ข้อมูลอื่นของ event", default=dict, blank=True)
+
+    has_media = models.BooleanField("มีไฟล์แนบ", default=False, db_index=True)
+    media_token = models.CharField("ไฟล์ที่โหลดเก็บแล้ว", max_length=200, blank=True)
+
+    sent_at = models.DateTimeField("เวลาในกลุ่ม", null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-sent_at", "-id"]
+        indexes = [models.Index(fields=["group_id", "-sent_at"])]
+        verbose_name = "แชทในกลุ่ม LINE"
+        verbose_name_plural = "แชทในกลุ่ม LINE"
+
+    def __str__(self):
+        return "%s · %s: %s" % (self.group_name or self.group_id[:10],
+                                self.sender_name or "-", (self.text or self.msg_type)[:40])

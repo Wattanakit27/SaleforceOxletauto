@@ -2727,8 +2727,9 @@ def _checkout_ingest(data):
 
     def _work():
         try:
-            from checkout.views import ingest_group_events
-            ingest_group_events(data)
+            from checkout.views import ingest_group_events, store_chat
+            store_chat(data)             # เก็บแชทแยกกลุ่มลง Postgres (ถ้าเปิดไว้)
+            ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
         except Exception:
             pass
         finally:
@@ -2811,14 +2812,17 @@ def line_group_ingest(request):
     #   forGroup           = ข้อความที่ส่งมา ตรงกับ "กลุ่มที่ตั้งให้ดักเก็บ" ไหม
     try:
         from checkout.views import line_cfg as _ck_cfg
-        want = (_ck_cfg().get("group_id") or "").strip()
-        listening = bool(_ck_cfg().get("listen"))
+        _c = _ck_cfg()
+        want = (_c.get("group_id") or "").strip()
+        listening = bool(_c.get("listen"))
+        store_chat_on = bool(_c.get("store_chat"))
     except Exception:
-        want, listening = "", False
+        want, listening, store_chat_on = "", False, False
     for_group = sum(1 for e in texts if ((e.get("source") or {}).get("groupId") or "") == want) if want else 0
     return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
                          "events": len(evs), "textEvents": len(texts),
-                         "forGroup": for_group, "listening": listening},
+                         "forGroup": for_group, "listening": listening,
+                         "storeChat": store_chat_on},
                         json_dumps_params={"ensure_ascii": False})
 
 
