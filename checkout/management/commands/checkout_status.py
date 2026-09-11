@@ -125,8 +125,43 @@ class Command(BaseCommand):
         add("")
         add("5) ข้อความจากกลุ่มที่อ่านแล้ว : %d ข้อความ %s"
             % (len(seen), "(เก็บย้อนหลังสูงสุด 300)" if len(seen) >= 300 else ""))
+        add("   (นับเฉพาะข้อความใน 'กลุ่มที่ตั้งดักเก็บเคส' เท่านั้น — แชทลูกค้า 1:1 ไปโผล่ข้อ 5.5)")
         if beat.get("at") and gid and cfg.get("listen") and not seen:
-            add("   ⚠️ webhook เข้าแต่ไม่มีข้อความถูกอ่านเลย → มักเป็นเพราะ **กลุ่มที่ตั้งไว้ไม่ตรงกับกลุ่มที่คนพิมพ์**")
+            add("   ⚠️ webhook เข้าแต่ยังไม่มีข้อความ 'จากกลุ่มนั้น' ถูกอ่านเลย")
+            add("      → ถ้าเพิ่งทดสอบด้วยการทักแชทส่วนตัว/กลุ่มอื่น ถือว่าปกติ (ดูข้อ 5.5 แทน)")
+            add("      → ถ้าพิมพ์ในกลุ่มนั้นจริงแล้วยังไม่ขึ้น = กลุ่มที่ตั้งไว้ไม่ตรงกับกลุ่มที่คนพิมพ์")
+
+        # --- 5.5) คลังแชท (คนละเรื่องกับข้อ 5) ---
+        #   ★ ข้อ 5 นับเฉพาะ "ข้อความในกลุ่มที่ตั้งดักเก็บเคส" → ลูกค้าทัก 1:1 ไม่เคยขึ้นที่นั่น
+        #     เคยทำให้เข้าใจผิดว่า "ไม่เก็บอะไรเลย" ทั้งที่เก็บแชทลูกค้าอยู่
+        add("")
+        try:
+            from checkout.models import GroupChat
+            n_all = GroupChat.objects.count()
+            n_grp = GroupChat.objects.filter(chat_type=GroupChat.GROUP).count()
+            add("5.5) คลังแชทที่เก็บไว้ : %d ข้อความ  (กลุ่ม %d · ลูกค้า 1:1 %d)"
+                % (n_all, n_grp, n_all - n_grp))
+            add("     สวิตช์          : กลุ่ม %s · ลูกค้า %s"
+                % ("เปิด" if cfg.get("store_chat") else "ปิด",
+                   "เปิด" if cfg.get("store_customer_chat") else "ปิด"))
+            for r in GroupChat.objects.order_by("-sent_at")[:5]:
+                add("     %s  %-6s %-14s %s"
+                    % (timezone.localtime(r.sent_at).strftime("%d/%m %H:%M"), r.chat_type,
+                       (r.sender_name or "-")[:14], (r.text or "(ไม่ใช่ข้อความ)")[:34]))
+            last = _kv("chat_store_last") or {}
+            if last.get("at"):
+                txt, _h = _ago(last.get("at"))
+                add("     ลองเก็บล่าสุด   : %s — เก็บได้ %s · ข้าม %s (จาก %s event)%s"
+                    % (txt, last.get("saved"), last.get("skipped"), last.get("events"),
+                       ("  ⚠️ %s" % last["error"]) if last.get("error") else ""))
+            elif n_all == 0:
+                add("     (ยังไม่เคยมีข้อความถูกส่งเข้ามาให้เก็บเลย)")
+        except Exception as e:
+            add("5.5) คลังแชท : ⚠️ อ่านไม่ได้ (%s) — migrate ครบหรือยัง?" % e)
+        errb = _kv("checkout_ingest_last") or {}
+        if errb.get("error"):
+            txt, _h = _ago(errb.get("at"))
+            add("     ⚠️ งานเบื้องหลังพังล่าสุด %s: %s" % (txt, errb["error"]))
 
         # --- 6) กลายเป็นเคสกี่เคส ---
         qs = CarMovement.objects.filter(source=CarMovement.SRC_LINE)
