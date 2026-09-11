@@ -2806,10 +2806,19 @@ def line_group_ingest(request):
              and (e.get("message") or {}).get("type") == "text"]
     _webhook_beat("n8n", len(evs))
     _checkout_ingest(data)
-    # ★ ตอบ events/textEvents กลับไปด้วย — เปิด execution ใน n8n แล้วรู้ทันทีว่า
-    #   forward body มาครบไหม (ถ้าได้ 0 แปลว่าส่งมาแต่ groupId ไม่ได้ส่งข้อความมา)
+    # ★ ตอบสรุปกลับไปด้วย — เปิด execution ใน n8n แล้ววินิจฉัยได้ครบในบรรทัดเดียว:
+    #   events/textEvents = forward body มาครบไหม (0 = ส่งมาแต่ groupId)
+    #   forGroup           = ข้อความที่ส่งมา ตรงกับ "กลุ่มที่ตั้งให้ดักเก็บ" ไหม
+    try:
+        from checkout.views import line_cfg as _ck_cfg
+        want = (_ck_cfg().get("group_id") or "").strip()
+        listening = bool(_ck_cfg().get("listen"))
+    except Exception:
+        want, listening = "", False
+    for_group = sum(1 for e in texts if ((e.get("source") or {}).get("groupId") or "") == want) if want else 0
     return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
-                         "events": len(evs), "textEvents": len(texts)},
+                         "events": len(evs), "textEvents": len(texts),
+                         "forGroup": for_group, "listening": listening},
                         json_dumps_params={"ensure_ascii": False})
 
 
