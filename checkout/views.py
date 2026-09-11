@@ -645,7 +645,18 @@ def _cleanup_chat():
             sent_at__lt=now - timezone.timedelta(days=C.CHAT_KEEP_DAYS)).delete()[0]
         n += GroupChat.objects.exclude(chat_type=GroupChat.GROUP).filter(
             sent_at__lt=now - timezone.timedelta(days=C.CUSTOMER_CHAT_KEEP_DAYS)).delete()[0]
-        cache_store.set_kv(_CHAT_CLEAN_KEY, {"day": today, "deleted": n})
+        # ★ โปรไฟล์ก็มีอายุเหมือนกัน — ข้อมูลส่วนบุคคลที่ไม่มีวันหมดอายุ = กองโตไม่หยุด (PDPA)
+        #   ลบเฉพาะ "ลูกค้าที่หายไปนาน" · โปรไฟล์พนักงานเก็บไว้ (ใช้เทียบชื่อในงานประจำ)
+        p = 0
+        try:
+            from .models import LineProfile
+            p = LineProfile.objects.filter(
+                is_employee=False,
+                last_seen__lt=now - timezone.timedelta(days=C.CUSTOMER_CHAT_KEEP_DAYS)
+            ).delete()[0]
+        except Exception:
+            pass
+        cache_store.set_kv(_CHAT_CLEAN_KEY, {"day": today, "deleted": n, "profiles": p})
     except Exception:
         pass
 
@@ -696,8 +707,11 @@ def store_chat(data) -> int:
         mtype = (msg.get("type") or "").strip()
         uid = (src.get("userId") or "").strip()
         try:
-            # ลูกค้าไม่มีในชีตพนักงาน → ดึงชื่อที่เขาตั้งไว้ใน LINE มาแทน (cache ต่อคน)
-            who = people.display_name_for(uid) if uid else ""
+            # ★ ก.ย.69 — เก็บ user id + โปรไฟล์ลงตาราง `LineProfile` ไปในตัว (เจ้าของสั่ง)
+            #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"
+            #   ไว้ที่เดียว · เดิมเรียก display_name_for() ซึ่งได้แค่ชื่อ ไม่ได้เก็บอะไรไว้เลย
+            who = people.touch_profile(uid, group_id=gid, room_id=(src.get("roomId") or ""),
+                                       chat_type=ctype).get("name") if uid else ""
         except Exception:
             who = ""
         try:
@@ -727,6 +741,32 @@ def store_chat(data) -> int:
     return made
 
 
+def _profile_counts():
+    """นับโปรไฟล์ที่เก็บไว้ — แยกลูกค้า/พนักงาน (ตอบ "มีลูกค้าทักเข้ามากี่คน")"""
+    try:
+        from .models import LineProfile
+        tot = LineProfile.objects.count()
+        emp = LineProfile.objects.filter(is_employee=True).count()
+        return {"total": tot, "employees": emp, "customers": tot - emp,
+                "withPicture": LineProfile.objects.exclude(picture_url="").count()}
+    except Exception:
+        return {"total": 0, "employees": 0, "customers": 0, "withPicture": 0}
+
+
+def _cust_row(r, prof=None):
+    """1 แถวของ "ลูกค้าที่ทักเข้ามา" สำหรับพาเนล — ชื่อ/รูป/จำนวน/ช่วงเวลา + user id"""
+    return {
+        "name": (prof.show_name if prof else "") or r["sender_name"] or "(ไม่รู้ชื่อ)",
+        "userId": r["sender_id"] or "",
+        "picture": (prof.picture_url if prof else "") or "",
+        "status": (prof.status_message if prof else "") or "",
+        "n": r["n"],
+        "first": (timezone.localtime(prof.first_seen).strftime("%d/%m/%y")
+                  if prof and prof.first_seen else ""),
+        "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else "",
+    }
+
+
 def chat_stats():
     """สรุปคลังแชทสำหรับพาเนลตั้งค่า — {total, groups:[{id,name,n,last}], media}"""
     from django.db.models import Count, Max
@@ -734,8 +774,16 @@ def chat_stats():
             .values("group_id", "group_name")
             .annotate(n=Count("id"), last=Max("sent_at")).order_by("-n")[:10])
     cust = GroupChat.objects.exclude(chat_type=GroupChat.GROUP)
-    cust_rows = (cust.values("sender_id", "sender_name")
-                 .annotate(n=Count("id"), last=Max("sent_at")).order_by("-last")[:8])
+    cust_rows = list(cust.values("sender_id", "sender_name")
+                     .annotate(n=Count("id"), last=Max("sent_at")).order_by("-last")[:8])
+    # ★ ก.ย.69 — ต่อโปรไฟล์เข้ามาด้วย (รูป + ทักครั้งแรกเมื่อไหร่) · ดึงทีเดียวไม่ยิงต่อแถว
+    profs = {}
+    try:
+        from .models import LineProfile
+        profs = {p.user_id: p for p in LineProfile.objects.filter(
+            user_id__in=[r["sender_id"] for r in cust_rows if r["sender_id"]])}
+    except Exception:
+        profs = {}
     return {
         "total": GroupChat.objects.count(),
         "media": GroupChat.objects.filter(has_media=True).count(),
@@ -743,10 +791,12 @@ def chat_stats():
         "custKeepDays": C.CUSTOMER_CHAT_KEEP_DAYS,
         "custTotal": cust.count(),
         "custPeople": cust.values("sender_id").distinct().count(),
-        # ★ ไม่ส่ง sender_id ออกหน้าเว็บ — โชว์แค่ชื่อ (กติกาเดิม: ห้ามโชว์ LINE user id)
-        "customers": [{"name": r["sender_name"] or "(ไม่รู้ชื่อ)", "n": r["n"],
-                       "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else ""}
-                      for r in cust_rows],
+        "profiles": _profile_counts(),
+        # ★ กติกาเรื่อง LINE user id (ก.ย.69 · ปรับตามที่เจ้าของสั่งเพิ่ม):
+        #   - **พนักงาน** = ห้ามโชว์ id เด็ดขาด (โชว์ชื่อเล่นอย่างเดียว) — ของเดิม
+        #   - **ลูกค้า** = ส่ง id ออกได้ เพราะเจ้าของขอไว้ใช้ "ทักกลับหาลูกค้า" (push ต้องใช้ id)
+        #     และคนที่เห็นหน้านี้มีแค่ admin/ผู้บริหารอยู่แล้ว
+        "customers": [_cust_row(r, profs.get(r["sender_id"])) for r in cust_rows],
         "groups": [{"id": r["group_id"], "name": r["group_name"] or "",
                     "n": r["n"],
                     "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else ""}

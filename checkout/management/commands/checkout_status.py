@@ -148,6 +148,12 @@ class Command(BaseCommand):
                 add("     %s  %-6s %-14s %s"
                     % (timezone.localtime(r.sent_at).strftime("%d/%m %H:%M"), r.chat_type,
                        (r.sender_name or "-")[:14], (r.text or "(ไม่ใช่ข้อความ)")[:34]))
+            from checkout.models import LineProfile
+            n_prof = LineProfile.objects.count()
+            n_emp = LineProfile.objects.filter(is_employee=True).count()
+            add("     โปรไฟล์ที่เก็บ   : %d คน  (ลูกค้า %d · พนักงาน %d · มีรูป %d)"
+                % (n_prof, n_prof - n_emp, n_emp,
+                   LineProfile.objects.exclude(picture_url="").count()))
             last = _kv("chat_store_last") or {}
             if last.get("at"):
                 txt, _h = _ago(last.get("at"))

@@ -281,3 +281,55 @@ class GroupChat(models.Model):
     def __str__(self):
         return "%s · %s: %s" % (self.group_name or self.group_id[:10],
                                 self.sender_name or "-", (self.text or self.msg_type)[:40])
+
+
+class LineProfile(models.Model):
+    """คนที่เคยคุยกับบอท — **1 แถวต่อคน** (ไม่ใช่ต่อข้อความ)
+
+    ★ ก.ย.69 — เจ้าของสั่ง: *"อย่าลืมเก็บ User ID ของลูกค้าด้วย แล้วก็ Profile"*
+
+    ทำไมต้องแยกตาราง ไม่ยัดลง `GroupChat`:
+      - โปรไฟล์เป็นของ "คน" ไม่ใช่ของ "ข้อความ" — ถ้ายัดรวมจะซ้ำทุกแถวและตกยุคคนละเวลา
+      - ตอบคำถามที่ตารางแชทตอบไม่ได้: **ลูกค้าที่ทักเข้ามามีกี่คน · ใครทักบ่อย · ทักครั้งแรกเมื่อไหร่**
+      - ได้ `user_id` ไว้ **ทักกลับหาลูกค้าได้ตรง** (push ต้องใช้ id ไม่ใช่ชื่อ)
+
+    ⚠️ นี่คือ **ข้อมูลส่วนบุคคล** (PDPA) — มีอายุข้อมูลเท่าแชท (`_cleanup_chat` ลบให้)
+       และ `is_employee` แยกไว้ชัดเพื่อไม่ให้เอาโปรไฟล์พนักงานไปปนกับลูกค้า
+    ⚠️ `status_message` / `language` **ได้เฉพาะคนที่เพิ่มบอทเป็นเพื่อน (แชท 1:1)**
+       — คนในกลุ่มที่ไม่ได้เพิ่มเพื่อน ดึงได้แค่ชื่อ + รูป ผ่าน group member API
+    """
+    USER, GROUP, ROOM = "user", "group", "room"
+    SRC_CHOICES = [(USER, "ทักเข้า OA"), (GROUP, "เจอในกลุ่ม"), (ROOM, "ห้องคุย")]
+
+    user_id = models.CharField("LINE user id", max_length=64, unique=True)
+    display_name = models.CharField("ชื่อที่ตั้งใน LINE", max_length=120, blank=True)
+    picture_url = models.URLField("รูปโปรไฟล์", max_length=500, blank=True)
+    status_message = models.TextField("สเตตัส", blank=True)
+    language = models.CharField("ภาษา", max_length=16, blank=True)
+
+    # ถ้าเทียบกับชีตพนักงานได้ = คนใน ไม่ใช่ลูกค้า
+    nickname = models.CharField("ชื่อเล่น (จากชีตพนักงาน)", max_length=80, blank=True)
+    is_employee = models.BooleanField("เป็นพนักงาน", default=False, db_index=True)
+
+    source = models.CharField("เจอครั้งแรกจาก", max_length=8, choices=SRC_CHOICES,
+                              default=USER, db_index=True)
+    group_id = models.CharField("กลุ่มที่เจอ", max_length=64, blank=True)
+
+    msg_count = models.PositiveIntegerField("จำนวนข้อความที่เคยส่ง", default=0)
+    first_seen = models.DateTimeField("ทักครั้งแรก", default=timezone.now)
+    last_seen = models.DateTimeField("ล่าสุด", default=timezone.now, db_index=True)
+    fetched_at = models.DateTimeField("ดึงโปรไฟล์ล่าสุด", null=True, blank=True)
+    raw = models.JSONField("คำตอบดิบจาก LINE", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "โปรไฟล์คน LINE"
+        verbose_name_plural = "โปรไฟล์คน LINE"
+        indexes = [models.Index(fields=["is_employee", "-last_seen"])]
+
+    @property
+    def show_name(self):
+        """ชื่อที่เอาไปโชว์ได้ — พนักงานใช้ชื่อเล่น · ลูกค้าใช้ชื่อที่เขาตั้งใน LINE"""
+        return self.nickname or self.display_name or "ไม่ทราบชื่อ"
+
+    def __str__(self):
+        return "%s (%s)" % (self.show_name, "พนักงาน" if self.is_employee else "ลูกค้า")

@@ -160,3 +160,127 @@ def display_name_for(user_id="") -> str:
     if n and n != "ไม่ทราบชื่อ":
         return n
     return line_display_name(user_id) or ""
+
+
+# ---------------------------------------------------------------
+#  โปรไฟล์เต็ม → เก็บลงตาราง `LineProfile` (★ ก.ย.69 เจ้าของสั่ง)
+# ---------------------------------------------------------------
+def fetch_profile(user_id="", group_id="", room_id="") -> dict:
+    """ดึงโปรไฟล์จาก LINE — คืน {} ถ้าดึงไม่ได้ (ไม่โยน exception)
+
+    ⚠️ **ต้องเลือก endpoint ให้ถูกตามที่มา** ไม่งั้นได้ 404 ทั้งที่ข้อมูลมีอยู่:
+      - `/v2/bot/profile/<uid>` ใช้ได้เฉพาะคนที่ **เพิ่มบอทเป็นเพื่อนแล้ว** (ลูกค้าที่ทักเข้า OA)
+      - คนในกลุ่มที่ไม่ได้เพิ่มเพื่อน ต้องใช้ **group member API** แทน
+        (ได้แค่ชื่อ + รูป · ไม่มี statusMessage/language)
+    """
+    uid = (user_id or "").strip()
+    if not uid:
+        return {}
+    try:
+        from django.conf import settings
+        import requests
+    except Exception:
+        return {}
+    token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not token:
+        return {}
+
+    urls = []
+    if group_id:
+        urls.append("https://api.line.me/v2/bot/group/%s/member/%s" % (group_id, uid))
+    if room_id:
+        urls.append("https://api.line.me/v2/bot/room/%s/member/%s" % (room_id, uid))
+    urls.append("https://api.line.me/v2/bot/profile/%s" % uid)   # เผื่อเขาเพิ่มเพื่อนไว้ (ได้ข้อมูลครบกว่า)
+
+    best = {}
+    for u in urls:
+        try:
+            r = requests.get(u, headers={"Authorization": "Bearer %s" % token}, timeout=8)
+            if r.status_code != 200:
+                continue
+            data = r.json() or {}
+        except Exception:
+            continue
+        if not isinstance(data, dict) or not data.get("displayName"):
+            continue
+        # ตัวที่มี statusMessage = มาจาก /profile (ข้อมูลครบกว่า) → เอาตัวนั้น
+        if data.get("statusMessage") or data.get("language") or not best:
+            best = data
+        if best.get("statusMessage"):
+            break
+    return best
+
+
+def touch_profile(user_id="", group_id="", room_id="", chat_type="user") -> dict:
+    """บันทึก/อัปเดตโปรไฟล์คนนี้ แล้วคืน `{"name": ชื่อที่โชว์ได้, "is_employee": bool}`
+
+    รวมงาน 3 อย่างไว้ที่เดียว (เดิมกระจายอยู่หลายที่แล้วยิง LINE API ซ้ำ):
+      1. เทียบชีตพนักงาน → ได้ชื่อเล่น (คนใน)
+      2. ไม่ใช่พนักงาน → ดึงโปรไฟล์จาก LINE (ลูกค้า)
+      3. upsert ลง `LineProfile` + นับจำนวนข้อความ + ปั๊มเวลาล่าสุด
+
+    **ดึงโปรไฟล์ซ้ำเฉพาะตอนของเก่าเกิน `PROFILE_REFRESH_DAYS`** — ไม่ใช่ทุกข้อความ
+    best-effort ทั้งหมด: ตารางยังไม่ migrate / LINE ล่ม = คืนชื่อเท่าที่รู้ ไม่ทำให้การเก็บแชทพัง
+    """
+    uid = (user_id or "").strip()
+    if not uid:
+        return {"name": "", "is_employee": False}
+
+    nick = ""
+    try:
+        n = nickname_for(user_id=uid)
+        nick = "" if n == "ไม่ทราบชื่อ" else n
+    except Exception:
+        nick = ""
+
+    try:
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        from . import constants as C
+        from .models import LineProfile
+    except Exception:
+        return {"name": nick, "is_employee": bool(nick)}
+
+    now = tz.now()
+    try:
+        row = LineProfile.objects.filter(user_id=uid).first()
+    except Exception:
+        return {"name": nick, "is_employee": bool(nick)}
+
+    stale = (not row or not row.fetched_at
+             or (now - row.fetched_at) > timedelta(days=C.PROFILE_REFRESH_DAYS))
+    prof = {}
+    # พนักงานมีชื่อเล่นในชีตอยู่แล้ว ไม่ต้องไปถาม LINE ว่าเขาชื่ออะไร
+    if stale and not nick:
+        prof = fetch_profile(uid, group_id=group_id, room_id=room_id)
+
+    fields = {
+        "nickname": nick,
+        "is_employee": bool(nick),
+        "last_seen": now,
+    }
+    if prof:
+        fields.update({
+            "display_name": (prof.get("displayName") or "")[:120],
+            "picture_url": (prof.get("pictureUrl") or "")[:500],
+            "status_message": prof.get("statusMessage") or "",
+            "language": (prof.get("language") or "")[:16],
+            "fetched_at": now,
+            "raw": prof,
+        })
+    try:
+        if row:
+            for k, v in fields.items():
+                setattr(row, k, v)
+            row.msg_count = (row.msg_count or 0) + 1
+            row.save(update_fields=list(fields.keys()) + ["msg_count"])
+        else:
+            row = LineProfile.objects.create(
+                user_id=uid, msg_count=1, first_seen=now,
+                source=chat_type if chat_type in ("user", "group", "room") else "user",
+                group_id=group_id or "", **fields)
+    except Exception:
+        return {"name": nick or (prof.get("displayName") or ""), "is_employee": bool(nick)}
+
+    return {"name": row.show_name if row.show_name != "ไม่ทราบชื่อ" else "",
+            "is_employee": bool(nick)}

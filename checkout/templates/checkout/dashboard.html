@@ -173,6 +173,18 @@
 
 <script>
 const $ = id => document.getElementById(id);
+// คัดลอก LINE user id ของลูกค้า (เอาไปทักกลับ — push ต้องใช้ id ไม่ใช่ชื่อ)
+function ckCopy(el){
+  const t = el.textContent.trim(), old = el.style.opacity;
+  const done = () => { el.style.opacity = 1; el.title = 'คัดลอกแล้ว';
+                       setTimeout(() => el.style.opacity = old, 900); };
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, () => ckSelect(el));
+  else ckSelect(el);
+}
+function ckSelect(el){                     // คลิปบอร์ดใช้ไม่ได้ (http/เบราว์เซอร์เก่า) → ไฮไลท์ให้กดคัดลอกเอง
+  const r = document.createRange(); r.selectNode(el);
+  getSelection().removeAllRanges(); getSelection().addRange(r);
+}
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 // เกณฑ์ชั่วโมงมาจากเซิร์ฟเวอร์ (checkout/constants.py) — ค่าตั้งต้นเผื่อ API เก่า
 var CK_OVERDUE = 4, CK_WARN = 2;
@@ -314,11 +326,29 @@ async function loadLine(){
           + ' ข้อความ' + (g.last ? ' (ล่าสุด ' + esc(g.last) + ')' : '')).join('<br>')
     : (c.storeChat ? 'ยังไม่มีแชทเข้ามา' : '');
   $('ckStoreCust').checked = !!c.storeCustomerChat;
+  // ★ ก.ย.69 — โชว์โปรไฟล์ลูกค้า (รูป + ชื่อ + LINE user id ที่กดคัดลอกได้)
+  //   user id ของ "ลูกค้า" โชว์ได้ เพราะต้องใช้ทักกลับ (push ต้องใช้ id ไม่ใช่ชื่อ)
+  //   — ต่างจาก id ของ "พนักงาน" ที่ห้ามโชว์ (ยังไม่ส่งออกจาก API อยู่แล้ว)
+  const pf = ch.profiles || {};
   $('custBox').innerHTML = ch.custTotal
     ? 'ลูกค้า <b>' + ch.custPeople + '</b> คน · <b>' + ch.custTotal + '</b> ข้อความ · เก็บไว้ '
-      + (ch.custKeepDays||60) + ' วัน<br>'
-      + (ch.customers||[]).map(u => '· ' + esc(u.name) + ' — ' + u.n + ' ข้อความ'
-          + (u.last ? ' (ล่าสุด ' + esc(u.last) + ')' : '')).join('<br>')
+      + (ch.custKeepDays||60) + ' วัน'
+      + (pf.total ? ' · โปรไฟล์ที่เก็บ <b>' + pf.customers + '</b> คน' : '')
+      + '<div style="margin-top:6px;display:flex;flex-direction:column;gap:5px">'
+      + (ch.customers||[]).map(u =>
+          '<div style="display:flex;align-items:center;gap:7px">'
+          + (u.picture
+              ? '<img src="' + esc(u.picture) + '" alt="" loading="lazy" onerror="this.remove()"'
+                + ' style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto">'
+              : '<span style="width:26px;height:26px;border-radius:50%;background:var(--bd2);flex:0 0 auto"></span>')
+          + '<span style="min-width:0"><b>' + esc(u.name) + '</b> — ' + u.n + ' ข้อความ'
+          + (u.last ? ' <span class="muted">(ล่าสุด ' + esc(u.last) + ')</span>' : '')
+          + (u.userId
+              ? '<br><code onclick="ckCopy(this)" title="กดเพื่อคัดลอก LINE user id (ใช้ทักกลับ)"'
+                + ' style="font-size:10px;cursor:pointer;opacity:.65">' + esc(u.userId) + '</code>'
+              : '')
+          + '</span></div>').join('')
+      + '</div>'
     : (c.storeCustomerChat ? 'ยังไม่มีลูกค้าทักเข้ามา' : '');
   const sel = $('gpick');
   if(sel.options.length <= 1) (d.groups||[]).forEach(g => {
