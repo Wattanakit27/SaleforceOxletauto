@@ -51,6 +51,62 @@ def _is_admin(user) -> bool:
     return bool(user) and (user.get("position") or "").strip().lower() == "admin"
 
 
+def _is_boss(request) -> bool:
+    """เห็นหน้า "ฐานข้อมูล" ได้ไหม — **แอดมินสูงสุด (superuser) + ผู้บริหาร เท่านั้น**
+
+    ทำไมไม่ใช้ `_is_admin` เฉยๆ: position=="admin" ครอบถึง **เซลล์ที่ติ๊กเป็นแอดมิน**
+    และ "แอดมินไอดี" (เทเลเซลล์/ออฟฟิศ) ด้วย ซึ่งกว้างเกินสำหรับสารบัญฐานข้อมูล
+    (บอกว่าเก็บอะไรไว้ที่ไหน = ข้อมูลที่ควรอยู่ในมือเจ้าของ/ผู้บริหาร)
+
+    ผ่านได้ 4 ทาง:
+      1. LINE user id อยู่ใน `SUPER_ADMIN_IDS` (เจ้าของ/แอดมินสูงสุด)
+      2. แอดมินระบบ break-glass (user/password จาก env — เทียบเท่า superuser)
+      3. Django superuser
+      4. บทบาท Executive ในระบบติดตามรถ
+    ★ ข้อ 3-4 มักใช้ไม่ได้บน /dashboard/ เพราะ bridge ทำเฉพาะ path /track/
+      → `request.user` เป็น anonymous ที่นี่ · ข้อ 1-2 (session ฝั่งขาย) จึงเป็นทางหลัก
+    """
+    u = _session_user(request)
+    uid = ((u or {}).get("user_id") or "").strip()
+    if uid:
+        try:
+            from .services.constants import SUPER_ADMIN_IDS
+            if uid in SUPER_ADMIN_IDS:
+                return True
+        except Exception:
+            pass
+        if uid == "admin" and _is_admin(u):     # break-glass (ป้องกันด้วย env password)
+            return True
+    du = getattr(request, "user", None)
+    if du is not None and getattr(du, "is_authenticated", False):
+        if getattr(du, "is_superuser", False):
+            return True
+        try:
+            from cars.roles import get_role, EXEC
+            if get_role(du) == EXEC:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def admin_db_tables(request):
+    """สารบัญฐานข้อมูล — เก็บอะไรไว้กี่ตาราง กี่แถว อันไหนมีข้อมูลส่วนบุคคล
+
+    **นับแถว + อธิบาย เท่านั้น ไม่ดึงเนื้อข้อมูลออกมา** (ดู [db_inventory.py] ประกอบ)
+    สิทธิ์: superuser + ผู้บริหาร (`_is_boss`) — แอดมิน/เซลล์แอดมินทั่วไปไม่เห็น
+    """
+    if not _is_boss(request):
+        return JsonResponse({"ok": False, "error": "สิทธิ์ไม่ถึง — หน้านี้เฉพาะแอดมินสูงสุด/ผู้บริหาร"},
+                            status=403, json_dumps_params={"ensure_ascii": False})
+    try:
+        from .services.db_inventory import inventory
+        return JsonResponse(inventory(), json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+
+
 def _trends_payload():
     """{daily, weekly} จาก FollowupLog (รายวัน) + SellerWeekly (รายสัปดาห์) — best-effort
     (DB ล่ม/ยังไม่ migrate = คืนว่าง ไม่พัง). ฝังเข้า dashboard (inline) + ใช้ใน admin_trends API"""
@@ -147,6 +203,7 @@ def dashboard_page(request):
         "constants_json": json.dumps(constants, ensure_ascii=False),
         "session_user_json": json.dumps(user),
         "trends_json": json.dumps(_trends_payload(), ensure_ascii=False),
+        "is_boss": _is_boss(request),   # เมนู "ฐานข้อมูล" — superuser/ผู้บริหาร เท่านั้น
         "error": None,
     })
 
@@ -194,6 +251,7 @@ def admin_page(request):
         "data_json": json.dumps(data, ensure_ascii=False, default=str),
         "constants_json": json.dumps(constants, ensure_ascii=False),
         "session_user_json": json.dumps(user),
+        "is_boss": _is_boss(request),
         "error": None,
         "is_admin_page": True,  # frontend ใช้ flag นี้ตัดสินใจ UI
     })

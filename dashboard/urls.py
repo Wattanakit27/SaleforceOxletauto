@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/admin/list_drive_sheets", views.admin_list_drive_sheets, name="admin_list_drive_sheets"),
     path("api/admin/list_tabs", views.admin_list_tabs, name="admin_list_tabs"),
     path("api/admin/system_health", views.admin_system_health, name="admin_system_health"),
+    path("api/admin/db_tables", views.admin_db_tables, name="admin_db_tables"),
     path("api/admin/refresh_data", views.admin_refresh_data, name="admin_refresh_data"),
     path("api/admin/report_config", views.admin_report_config, name="admin_report_config"),
     path("api/admin/purchase_method_config", views.admin_purchase_method_config, name="admin_purchase_method_config"),

@@ -104,6 +104,7 @@ python manage.py runserver
 | `/api/admin/list_drive_sheets` | `admin_list_drive_sheets` | admin GET: รายชื่อไฟล์ Google Sheets ที่ service account เข้าถึงได้ (Drive API) — ทำ dropdown เลือกไฟล์แบบ n8n |
 | `/api/admin/list_tabs` | `admin_list_tabs` | admin GET `?sid=`: รายชื่อ tab ของ spreadsheet — ทำ dropdown เลือก tab |
 | `/api/admin/system_health` | `admin_system_health` | admin GET: สถานะระบบ — อายุ sync, จำนวนข้อมูล, Supabase/LINE, + เช็กข้อมูลผิดอัตโนมัติ (sync ค้าง/วันนี้ไม่มี lead/lead=0) → ให้แอดมินเช็คเองโดยไม่ต้องมี dev |
+| `/api/admin/db_tables` | `admin_db_tables` | **superuser/ผู้บริหารเท่านั้น** (`_is_boss`) GET: สารบัญฐานข้อมูล — ทุกตาราง + จำนวนแถว + คำอธิบายว่าเก็บอะไร + ป้าย PDPA + คีย์ใน `dash_kv` (นับแถวอย่างเดียว **ไม่ดึงเนื้อข้อมูล**) → เมนูจัดการ "ฐานข้อมูล" · ดู section "สารบัญฐานข้อมูล" |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -546,6 +547,28 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 - **`sheet_config`** — override แหล่งข้อมูล (ย้ายไฟล์/tab จากแอดมิน) — ดู section ย้าย spreadsheet ด้านบน
 - **`finance_checks` / `loan_applications`** — เก็บฟอร์ม finance/loan ที่เซลล์ส่ง (best-effort) · `ping()` เช็คว่ามี table ครบไหม
 - ทุก helper เป็น **silent-fail** — Supabase ล่ม/ไม่ตั้งค่า = ระบบ fallback อ่าน Sheet สด ไม่พัง
+
+### 🗂️ สารบัญฐานข้อมูล (เมนู "ฐานข้อมูล" · ก.ย.69 — เจ้าของขอ)
+ตอบคำถาม **"ตอนนี้ระบบเก็บอะไรไว้บ้าง"** ในหน้าเดียว — เป็นคำถามแรกที่ต้องตอบได้เวลาคุยเรื่อง PDPA / จะลบข้อมูลทิ้ง
+- **[db_inventory.py](dashboard/services/db_inventory.py)** `inventory()` — เดินตาม `apps.get_models()` เอง
+  (**เพิ่มโมเดลใหม่ = โผล่อัตโนมัติ ไม่ต้องมาไล่เพิ่มลิสต์**) + นับแถว + เทียบกับตารางจริงใน DB
+  (`connection.introspection`) → ตารางที่ยังไม่ migrate ติดป้าย "ยังไม่ migrate" · อ่านไม่ได้ติดป้าย "อ่านไม่ได้"
+  - `TABLES` = คำอธิบายรายตาราง (ชื่อไทย · เก็บอะไร · `pii` · นโยบายเก็บ) — **เพิ่มตารางใหม่ควรเติมคำอธิบายที่นี่**
+    (ไม่เติมก็ไม่พัง แค่โชว์ชื่อโมเดลดิบ)
+  - `KV_LABEL` = อธิบายคีย์ใน **`dash_kv`** ซึ่งเป็น "ที่เก็บของรวม" — ชื่อตารางไม่บอกอะไรเลย จึงลิสต์คีย์ข้างในให้ดู
+    พร้อมขนาด KB (เห็นทันทีว่า `main` คือก้อนใหญ่สุด)
+  - `SHEET_NOTE` = **ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้** (อยู่ใน Google Sheets) — ขึ้นเป็นกล่องเตือนสีเหลือง
+    **ห้ามเอาออก** ไม่งั้นคนอ่านเข้าใจผิดว่า "ระบบเก็บแค่นี้"
+- **นับแถว + อธิบาย เท่านั้น ไม่ดึงเนื้อข้อมูลออกมาโชว์** (หน้านี้ตอบ "มีอะไร" ไม่ใช่ "ข้อมูลใครบ้าง")
+- **สิทธิ์ = `_is_boss(request)`** ([views.py](dashboard/views.py)) — **แอดมินสูงสุด + ผู้บริหาร เท่านั้น**
+  ผ่านได้ 4 ทาง: `SUPER_ADMIN_IDS` · แอดมินระบบ break-glass (`user_id=="admin"`) · Django superuser · บทบาท `Executive`
+  - **ทำไมไม่ใช้ `_is_admin`**: `position=="admin"` ครอบถึง **เซลล์ที่ติ๊กแอดมิน** + **แอดมินไอดี (เทเลเซลล์/ออฟฟิศ)** ด้วย → กว้างเกิน
+  - **⚠️ ข้อ 3-4 ใช้ไม่ได้บน `/dashboard/`** เพราะ `TrackSessionBridgeMiddleware` bridge เฉพาะ path `/track/`
+    → `request.user` เป็น anonymous ที่นี่ · **ข้อ 1-2 (session ฝั่งขาย) จึงเป็นทางหลัก**
+  - **บล็อก 2 ชั้น**: frontend ซ่อนเมนู (`IS_BOSS` จาก context `is_boss` + `boss:true` ใน `ADMIN_MENU`)
+    **และ** endpoint เช็คเอง (403) — ปิดแค่ UI ไม่พอ ยิง API ตรงได้
+- UI: เมนูสามขีด → "ตรวจสอบ & Log" → **ฐานข้อมูล** (`openDbPanel`/`renderDbPanel` · มีช่องค้นหา กรองทั้งตารางและคีย์ kv)
+- **ไอคอน `database` ต้องมีใน dict `LUCIDE`** ([index.html](dashboard/templates/dashboard/index.html)) — dict นี้ hardcode ไม่ได้โหลดจาก CDN
 
 **Helpers**:
 - `fetch_sheet(key)` — อ่าน 1 tab ตาม SHEET_CONFIG.
