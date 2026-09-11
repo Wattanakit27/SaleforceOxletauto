@@ -134,6 +134,10 @@
       <span><b>เก็บแชทของทุกกลุ่มลงฐานข้อมูล</b>
         <span class="muted">(ข้อความ/สติกเกอร์/อิโมจิ + ตำแหน่งรูป · แยกตามกลุ่ม)</span></span></label>
     <div id="chatBox" class="muted" style="font-size:12px;line-height:1.7;margin:2px 0 8px 26px"></div>
+    <label class="opt"><input type="checkbox" id="ckStoreCust">
+      <span><b>เก็บแชทลูกค้าที่ทักเข้า LINE OA</b>
+        <span class="muted">(แชท 1:1 · เก็บสั้นกว่าแชทกลุ่ม เพราะเป็นบทสนทนากับคนนอก)</span></span></label>
+    <div id="custBox" class="muted" style="font-size:12px;line-height:1.7;margin:2px 0 8px 26px"></div>
     <div class="row2" style="margin-top:10px">
       <button class="g" onclick="saveLine()">บันทึก</button>
       <button onclick="toggleLine()">ปิด</button>
@@ -309,6 +313,13 @@ async function loadLine(){
       + (ch.groups||[]).map(g => '· ' + esc(g.name || g.id.slice(0,10)+'…') + ' — ' + g.n
           + ' ข้อความ' + (g.last ? ' (ล่าสุด ' + esc(g.last) + ')' : '')).join('<br>')
     : (c.storeChat ? 'ยังไม่มีแชทเข้ามา' : '');
+  $('ckStoreCust').checked = !!c.storeCustomerChat;
+  $('custBox').innerHTML = ch.custTotal
+    ? 'ลูกค้า <b>' + ch.custPeople + '</b> คน · <b>' + ch.custTotal + '</b> ข้อความ · เก็บไว้ '
+      + (ch.custKeepDays||60) + ' วัน<br>'
+      + (ch.customers||[]).map(u => '· ' + esc(u.name) + ' — ' + u.n + ' ข้อความ'
+          + (u.last ? ' (ล่าสุด ' + esc(u.last) + ')' : '')).join('<br>')
+    : (c.storeCustomerChat ? 'ยังไม่มีลูกค้าทักเข้ามา' : '');
   const sel = $('gpick');
   if(sel.options.length <= 1) (d.groups||[]).forEach(g => {
     const o = document.createElement('option');
@@ -331,6 +342,7 @@ async function saveLine(){
     listen: $('ckListen').checked,
     send: $('ckSend').checked,
     store_chat: $('ckStoreChat').checked,
+    store_customer_chat: $('ckStoreCust').checked,
   });
   $('lineMsg').textContent = d.ok ? 'บันทึกแล้ว' : (d.error||'ผิดพลาด');
   if(d.ok){ loadLine(); load(); }

@@ -96,3 +96,67 @@ def safe_name(name="") -> str:
     if is_line_user_id(n):
         return nickname_for(user_id=n)
     return n
+
+
+# ---------------------------------------------------------------
+#  ชื่อที่แสดงของคนนอกองค์กร (ลูกค้าที่ทักเข้า LINE OA)
+# ---------------------------------------------------------------
+_PROFILE_KEY = "line_profiles"      # KVStore: {userId: {"name":..., "at": iso}}
+_PROFILE_MAX = 2000                 # กันโตไม่หยุด — เกินนี้ตัดตัวเก่าทิ้ง
+
+
+def line_display_name(user_id="") -> str:
+    """ชื่อที่ลูกค้าตั้งไว้ใน LINE — ใช้กับ "คนที่ไม่ใช่พนักงาน" เท่านั้น
+
+    ทำไมต้องมี: พนักงานเทียบชื่อเล่นจากชีตได้ ([nickname_for]) แต่ **ลูกค้าไม่มีในชีต**
+    → ถ้าไม่ดึงชื่อมา หน้าเว็บจะเห็นแต่ "ไม่ทราบชื่อ" ทุกแถว ใช้งานไม่ได้จริง
+    ดึงจาก LINE profile API แล้ว **cache ถาวรใน KVStore** (ชื่อคนแทบไม่เปลี่ยน)
+      → ยิง API ครั้งเดียวต่อคน ไม่ใช่ทุกข้อความ
+    ไม่มี token / ยิงไม่ผ่าน = คืน "" (ไม่พัง · ค่อยได้ชื่อรอบหน้า)
+    """
+    uid = (user_id or "").strip()
+    if not uid:
+        return ""
+    try:
+        from django.conf import settings
+        from dashboard.services import cache_store
+    except Exception:
+        return ""
+    try:
+        cache = (cache_store.get_kv(_PROFILE_KEY) or {}).get("data") or {}
+    except Exception:
+        cache = {}
+    hit = cache.get(uid)
+    if isinstance(hit, dict) and hit.get("name"):
+        return hit["name"]
+
+    token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    if not token:
+        return ""
+    try:
+        import requests
+        r = requests.get("https://api.line.me/v2/bot/profile/%s" % uid,
+                         headers={"Authorization": "Bearer %s" % token}, timeout=8)
+        name = r.json().get("displayName", "") if r.status_code == 200 else ""
+    except Exception:
+        name = ""
+    if not name:
+        return ""
+    try:
+        cache[uid] = {"name": name, "at": time.strftime("%Y-%m-%d")}
+        if len(cache) > _PROFILE_MAX:               # ตัดตัวเก่าสุดทิ้ง
+            for k in list(cache)[: len(cache) - _PROFILE_MAX]:
+                cache.pop(k, None)
+        cache_store.set_kv(_PROFILE_KEY, cache)
+    except Exception:
+        pass
+    return name
+
+
+def display_name_for(user_id="") -> str:
+    """ชื่อที่เอาไปโชว์ได้ — พนักงานใช้ชื่อเล่นจากชีตก่อน · ไม่ใช่พนักงานค่อยดึงชื่อ LINE
+    **ไม่คืน userId ดิบเด็ดขาด**"""
+    n = nickname_for(user_id=user_id)
+    if n and n != "ไม่ทราบชื่อ":
+        return n
+    return line_display_name(user_id) or ""

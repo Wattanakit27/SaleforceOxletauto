@@ -227,7 +227,8 @@ class LineEventLog(models.Model):
 
 
 class GroupChat(models.Model):
-    """แชทในกลุ่ม LINE เก็บแยกตามกลุ่ม (★ ก.ย.69 — เจ้าของสั่งให้เก็บลง Postgres)
+    """แชท LINE ที่วิ่งเข้ามาหาบอท — **ทั้งแชทกลุ่ม และแชท 1:1 กับลูกค้า**
+    (★ ก.ย.69 — เจ้าของสั่งให้เก็บลง Postgres · ชื่อคลาสคงเดิมไว้ ไม่ rename ตาราง)
 
     ต่างจาก `GroupMessage` เดิมที่ยุบทิ้งไปยังไง:
       - **แยกตามกลุ่มชัดเจน** (`group_id` + ชื่อกลุ่ม) → ใช้เป็นคลังแชทของแต่ละกลุ่มได้จริง
@@ -241,7 +242,13 @@ class GroupChat(models.Model):
        content API ภายในเวลาจำกัด · ตอนนี้เก็บ `has_media` + `message_id` ไว้ก่อน
        (`media_token` จะถูกเติมตอนทำเฟสโหลดไฟล์เข้า Drive)
     """
-    group_id = models.CharField("LINE group id", max_length=64, db_index=True)
+    # ★ ก.ย.69 — แยกว่าเป็นแชทกลุ่ม หรือแชทเดี่ยวกับลูกค้า (อายุข้อมูลคนละเกณฑ์)
+    GROUP, USER, ROOM = "group", "user", "room"
+    TYPE_CHOICES = [(GROUP, "แชทกลุ่ม"), (USER, "ลูกค้าทักเข้า OA"), (ROOM, "ห้องคุย")]
+    chat_type = models.CharField("ประเภทแชท", max_length=8, choices=TYPE_CHOICES,
+                                 default=GROUP, db_index=True)
+    # แชทเดี่ยวไม่มี group id → ว่างได้ (คู่สนทนาดูจาก sender_id แทน)
+    group_id = models.CharField("LINE group id", max_length=64, blank=True, db_index=True)
     group_name = models.CharField("ชื่อกลุ่ม", max_length=120, blank=True)
     message_id = models.CharField("LINE message id", max_length=64, unique=True)
 

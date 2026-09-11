@@ -472,7 +472,7 @@ def api_line_config(request):
             b = {}
         if "group_id" in b:
             cfg["group_id"] = (b.get("group_id") or "").strip()
-        for k in ("listen", "send", "store_chat"):
+        for k in ("listen", "send", "store_chat", "store_customer_chat"):
             if k in b:
                 cfg[k] = bool(b[k])
         _save_cfg(cfg)
@@ -493,7 +493,8 @@ def api_line_config(request):
         "config": {"groupId": cfg.get("group_id", ""),
                    "listen": bool(cfg.get("listen")),
                    "send": bool(cfg.get("send")),
-                   "storeChat": bool(cfg.get("store_chat"))},
+                   "storeChat": bool(cfg.get("store_chat")),
+                   "storeCustomerChat": bool(cfg.get("store_customer_chat"))},
         "chat": chat_stats(),
         "groups": groups,
         "lineToken": bool(getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")),
@@ -621,8 +622,13 @@ def _cleanup_chat():
         last = (cache_store.get_kv(_CHAT_CLEAN_KEY) or {}).get("data") or {}
         if last.get("day") == today:
             return
-        cut = timezone.now() - timezone.timedelta(days=C.CHAT_KEEP_DAYS)
-        n = GroupChat.objects.filter(sent_at__lt=cut).delete()[0]
+        now = timezone.now()
+        # แชทกลุ่ม 90 วัน · แชทลูกค้า 60 วัน (บทสนทนากับคนนอก เก็บสั้นกว่าโดยตั้งใจ)
+        n = GroupChat.objects.filter(
+            chat_type=GroupChat.GROUP,
+            sent_at__lt=now - timezone.timedelta(days=C.CHAT_KEEP_DAYS)).delete()[0]
+        n += GroupChat.objects.exclude(chat_type=GroupChat.GROUP).filter(
+            sent_at__lt=now - timezone.timedelta(days=C.CUSTOMER_CHAT_KEEP_DAYS)).delete()[0]
         cache_store.set_kv(_CHAT_CLEAN_KEY, {"day": today, "deleted": n})
     except Exception:
         pass
@@ -635,7 +641,10 @@ def store_chat(data) -> int:
     เปิด/ปิดที่ `checkout_line_config["store_chat"]` · ปิดอยู่ = ไม่เก็บอะไรเลย
     กันซ้ำด้วย `message_id` (unique) — LINE ยิง webhook ซ้ำได้
     """
-    if not line_cfg().get("store_chat"):
+    cfg = line_cfg()
+    want_group = bool(cfg.get("store_chat"))            # แชทกลุ่ม
+    want_user = bool(cfg.get("store_customer_chat"))    # แชท 1:1 กับลูกค้า
+    if not (want_group or want_user):
         return 0
     events = (data or {}).get("events") or []
     if not events:
@@ -656,8 +665,14 @@ def store_chat(data) -> int:
             continue
         src = ev.get("source") or {}
         gid = (src.get("groupId") or "").strip()
-        if not gid:
-            continue                     # แชทส่วนตัว/ห้องคุย — ไม่เก็บ (เก็บเฉพาะกลุ่ม)
+        # ★ ก.ย.69 — เดิมข้ามทุกอย่างที่ไม่มี groupId ทำให้ "ลูกค้าทักเข้า OA" หลุดหมด
+        #   ทั้งที่ข้อมูลวิ่งมาถึงเซิร์ฟเวอร์แล้ว · ตอนนี้เก็บด้วย (เปิด/ปิดแยกกัน)
+        ctype = GroupChat.GROUP if gid else (
+            GroupChat.ROOM if src.get("roomId") else GroupChat.USER)
+        if ctype == GroupChat.GROUP and not want_group:
+            continue
+        if ctype != GroupChat.GROUP and not want_user:
+            continue
         msg = ev.get("message") or {}
         mid = str(msg.get("id") or "").strip()
         if not mid or GroupChat.objects.filter(message_id=mid).exists():
@@ -665,11 +680,13 @@ def store_chat(data) -> int:
         mtype = (msg.get("type") or "").strip()
         uid = (src.get("userId") or "").strip()
         try:
-            who = people.nickname_for(user_id=uid) if uid else ""
+            # ลูกค้าไม่มีในชีตพนักงาน → ดึงชื่อที่เขาตั้งไว้ใน LINE มาแทน (cache ต่อคน)
+            who = people.display_name_for(uid) if uid else ""
         except Exception:
             who = ""
         try:
             GroupChat.objects.create(
+                chat_type=ctype,
                 group_id=gid, group_name=names.get(gid, ""), message_id=mid,
                 sender_id=uid, sender_name=("" if who == "ไม่ทราบชื่อ" else who),
                 msg_type=mtype, text=(msg.get("text") or "")[:5000],
@@ -694,12 +711,23 @@ def store_chat(data) -> int:
 def chat_stats():
     """สรุปคลังแชทสำหรับพาเนลตั้งค่า — {total, groups:[{id,name,n,last}], media}"""
     from django.db.models import Count, Max
-    rows = (GroupChat.objects.values("group_id", "group_name")
+    rows = (GroupChat.objects.filter(chat_type=GroupChat.GROUP)
+            .values("group_id", "group_name")
             .annotate(n=Count("id"), last=Max("sent_at")).order_by("-n")[:10])
+    cust = GroupChat.objects.exclude(chat_type=GroupChat.GROUP)
+    cust_rows = (cust.values("sender_id", "sender_name")
+                 .annotate(n=Count("id"), last=Max("sent_at")).order_by("-last")[:8])
     return {
         "total": GroupChat.objects.count(),
         "media": GroupChat.objects.filter(has_media=True).count(),
         "keepDays": C.CHAT_KEEP_DAYS,
+        "custKeepDays": C.CUSTOMER_CHAT_KEEP_DAYS,
+        "custTotal": cust.count(),
+        "custPeople": cust.values("sender_id").distinct().count(),
+        # ★ ไม่ส่ง sender_id ออกหน้าเว็บ — โชว์แค่ชื่อ (กติกาเดิม: ห้ามโชว์ LINE user id)
+        "customers": [{"name": r["sender_name"] or "(ไม่รู้ชื่อ)", "n": r["n"],
+                       "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else ""}
+                      for r in cust_rows],
         "groups": [{"id": r["group_id"], "name": r["group_name"] or "",
                     "n": r["n"],
                     "last": timezone.localtime(r["last"]).strftime("%d/%m %H:%M") if r["last"] else ""}
