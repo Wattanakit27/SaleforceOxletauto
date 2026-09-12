@@ -2756,8 +2756,22 @@ def _remove_line_groups(gids):
     return n
 
 
-def _store_line_groups(pairs):
-    """เก็บ [(gid, name)] ลง KVStore 'line_groups' (ดึงชื่อจาก LINE ถ้าไม่มี) · คืน list ที่เพิ่ม/อัปเดต"""
+def _chan_of(data) -> str:
+    """event ชุดนี้มาจากบัญชีไหน (จาก `destination`) — ไม่รู้ = คืนค่าว่าง ไม่เดา"""
+    try:
+        from .services.line_channels import channel_of
+        return channel_of((data or {}).get("destination") or "")
+    except Exception:
+        return ""
+
+
+def _store_line_groups(pairs, channel="", source="webhook"):
+    """เก็บ [(gid, name)] ลง KVStore 'line_groups' (ดึงชื่อจาก LINE ถ้าไม่มี) · คืน list ที่เพิ่ม/อัปเดต
+
+    ★ ก.ย.69 — จด `channel` ด้วยว่า **บัญชีไหนเป็นคนได้ยินกลุ่มนี้** (จาก webhook `destination`)
+      มี 2 บอทแล้ว กลุ่มหนึ่งอาจมีแค่ตัวใดตัวหนึ่งอยู่ → ไม่จดไว้จะไม่รู้ว่าสั่ง push เข้ากลุ่มไหนได้บ้าง
+      `source` = `webhook` (บอทได้ยินเอง) หรือ `manual` (คนเอา group id มาใส่เอง)
+    """
     from django.conf import settings as _st
     from .services import cache_store
     from .services.fetch_dashboard import bangkok_now
@@ -2781,8 +2795,13 @@ def _store_line_groups(pairs):
                     break
             except Exception:
                 pass
-        groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat()}
-        added.append({"id": gid, "name": name})
+        prev = groups.get(gid) or {}
+        seen = list(prev.get("channels") or [])
+        if channel and channel not in seen:
+            seen.append(channel)
+        groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat(),
+                       "channels": seen, "source": prev.get("source") or source}
+        added.append({"id": gid, "name": name, "channels": seen})
     if added:
         try:
             cache_store.set_kv("line_groups", groups)
@@ -2912,7 +2931,7 @@ def line_webhook(request):
     leaves = set(_extract_group_leaves(data))
     # อย่า re-add กลุ่มที่เพิ่ง leave (leave event ก็มี groupId → _extract_group_events หยิบมาด้วย)
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
-    _store_line_groups(adds)
+    _store_line_groups(adds, channel=_chan_of(data))
     _remove_line_groups(leaves)
     _n = len((data or {}).get("events") or [])
     _webhook_beat("webhook", _n)
@@ -2942,7 +2961,7 @@ def line_group_ingest(request):
         data = {}
     leaves = set(_extract_group_leaves(data))
     adds = [(g, n) for (g, n) in _extract_group_events(data) if g not in leaves]
-    added = _store_line_groups(adds)
+    added = _store_line_groups(adds, channel=_chan_of(data))
     removed = _remove_line_groups(leaves)
     # ★ ก.ย.69 — ต้องให้ระบบเบิก-คืนอ่านทางนี้ด้วย
     #   เดิม hook อยู่แค่ใน line_webhook → ถ้า LINE channel ชี้ไป n8n (ซึ่งตั้งได้ที่เดียว/channel)

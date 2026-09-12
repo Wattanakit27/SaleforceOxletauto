@@ -695,6 +695,15 @@ CRON_SECRET=xxx
   - **⚠️ `_unwrap_payload` ที่แกะ "event เดี่ยว" ทำ `destination` หาย** → `channel` เป็นค่าว่าง (ไม่เดามั่ว) ·
     ยังเก็บข้อความได้ปกติ แต่จะไม่รู้ว่ามาจากบัญชีไหน → **ถ้าอยากได้ครบ n8n ต้อง forward body ดิบทั้งก้อน**
   - `touch_profile(channel=…)` / `fetch_profile(channel=…)` ลอง token ของบัญชีที่ได้ยินก่อนเสมอ
+- **`python manage.py line_group_add [--file g.json] [--id C… --name "…"] [--dry-run] [--out ไฟล์]`**
+  ([line_group_add.py](dashboard/management/commands/line_group_add.py)) — ลงทะเบียนกลุ่มด้วยมือ ไม่ต้องรอ webhook
+  - จำเป็นเพราะ **กลุ่มจะเข้าระบบเองตอนมีข้อความจากกลุ่มนั้นวิ่งมาเท่านั้น** — กลุ่มที่มีแต่บอทตัวใหม่
+    (ซึ่งยังไม่มีโหนด n8n ส่งชื่อกลุ่มมา) จะไม่โผล่เลย → เอา group id มาใส่ตรงๆ ก่อนได้
+  - รับ JSON ที่ก๊อปจาก n8n ได้เลย รวมถึง **หลายก้อนวางต่อกัน** (`[{...}]` ตามด้วย `[{...}]`) · ไม่เก็บ `pictureUrl`
+  - **ถาม LINE ยืนยันว่าบัญชีไหนอยู่ในกลุ่มนั้นจริง แล้วจดลง `line_groups[gid].channels`** —
+    ลงทะเบียนมือไม่มี `destination` ให้ดู ถ้าไม่ยืนยันจะไม่รู้ว่าสั่ง push เข้ากลุ่มไหนได้
+- **`line_groups` KV เก็บเพิ่ม** `channels` (บัญชีไหนอยู่ในกลุ่มนี้) + `source` (`webhook`/`manual`) ·
+  `_store_line_groups(pairs, channel=…, source=…)` — ทาง webhook เติม channel จาก `destination` ให้เอง
 - **★ ทางเข้าข้อมูลมีทางเดียว: n8n** (เจ้าของกำหนด ก.ย.69) — *"คุณมีหน้าที่รับข้อมูลจาก N8N เท่านั้น"* ·
   **ห้ามเพิ่มทางรับใหม่** · บัญชีใหม่จะส่ง event เข้ามาก็ต้องผ่าน n8n → `/api/line/group_ingest` เหมือนกัน
   (โหนดเดิมใช้ได้เลย ไม่ต้องแก้ — body ดิบมี `destination` ติดมาอยู่แล้ว)
