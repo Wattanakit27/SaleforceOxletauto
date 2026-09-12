@@ -683,6 +683,15 @@ def store_chat(data) -> int:
     if not events:
         return 0
 
+    # ★ ก.ย.69 — "บัญชีไหนเป็นคนได้ยินข้อความชุดนี้" (จาก `destination` ที่ LINE ใส่มาใน body)
+    #   n8n forward ทั้ง 2 บัญชีมาที่ endpoint เดียวกัน → ไม่รู้ตรงนี้ = ดึงโปรไฟล์ด้วย token ผิดตัว
+    chan = ""
+    try:
+        from dashboard.services.line_channels import channel_of
+        chan = channel_of((data or {}).get("destination") or "")
+    except Exception:
+        chan = ""
+
     # ชื่อกลุ่มที่บอทจำไว้ (ไม่ต้องยิง LINE API ซ้ำทุกข้อความ)
     names = {}
     try:
@@ -717,12 +726,12 @@ def store_chat(data) -> int:
             #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"
             #   ไว้ที่เดียว · เดิมเรียก display_name_for() ซึ่งได้แค่ชื่อ ไม่ได้เก็บอะไรไว้เลย
             who = people.touch_profile(uid, group_id=gid, room_id=(src.get("roomId") or ""),
-                                       chat_type=ctype).get("name") if uid else ""
+                                       chat_type=ctype, channel=chan).get("name") if uid else ""
         except Exception:
             who = ""
         try:
             GroupChat.objects.create(
-                chat_type=ctype,
+                chat_type=ctype, channel=chan,
                 group_id=gid, group_name=names.get(gid, ""), message_id=mid,
                 sender_id=uid, sender_name=("" if who == "ไม่ทราบชื่อ" else who),
                 msg_type=mtype, text=(msg.get("text") or "")[:5000],
@@ -748,14 +757,21 @@ def store_chat(data) -> int:
 
 
 def _profile_counts():
-    """นับโปรไฟล์ที่เก็บไว้ — แยกลูกค้า/พนักงาน (ตอบ "มีลูกค้าทักเข้ามากี่คน")"""
+    """นับโปรไฟล์ที่เก็บไว้ — แยกลูกค้า/พนักงาน + **แยกตามบัญชีที่เจอ**
+
+    ★ ก.ย.69 — ตัวเลข `byChannel` สำคัญตอนมี 2 บัญชี: ถ้าบอทคนละ provider
+    คนเดียวกันจะได้ userId คนละตัว = นับเป็น 2 คน · ดูตรงนี้จะเห็นว่าเริ่มซ้ำหรือยัง
+    """
     try:
+        from django.db.models import Count
         from .models import LineProfile
         tot = LineProfile.objects.count()
         emp = LineProfile.objects.filter(is_employee=True).count()
-        return {"total": tot, "employees": emp, "customers": tot - emp}
+        by = {(r["channel"] or "ไม่ทราบ"): r["n"]
+              for r in LineProfile.objects.values("channel").annotate(n=Count("id"))}
+        return {"total": tot, "employees": emp, "customers": tot - emp, "byChannel": by}
     except Exception:
-        return {"total": 0, "employees": 0, "customers": 0}
+        return {"total": 0, "employees": 0, "customers": 0, "byChannel": {}}
 
 
 def _cust_row(r, prof=None):

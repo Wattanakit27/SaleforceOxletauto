@@ -169,7 +169,7 @@ def display_name_for(user_id="") -> str:
 # ---------------------------------------------------------------
 #  โปรไฟล์เต็ม → เก็บลงตาราง `LineProfile` (★ ก.ย.69 เจ้าของสั่ง)
 # ---------------------------------------------------------------
-def fetch_profile(user_id="", group_id="", room_id="") -> dict:
+def fetch_profile(user_id="", group_id="", room_id="", channel="") -> dict:
     """ดึงโปรไฟล์จาก LINE — คืน {} ถ้าดึงไม่ได้ (ไม่โยน exception)
 
     ⚠️ **ต้องเลือก endpoint ให้ถูกตามที่มา** ไม่งั้นได้ 404 ทั้งที่ข้อมูลมีอยู่:
@@ -189,8 +189,16 @@ def fetch_profile(user_id="", group_id="", room_id="") -> dict:
     # ★ ก.ย.69 — 2 บัญชี: **โปรไฟล์ผูกกับบัญชีที่เขามีความสัมพันธ์ด้วย**
     #   1:1  → บัญชี "ตัวรับ" ก่อน (คนที่ทักเข้ามาเพิ่มตัวนั้นเป็นเพื่อน) แล้วค่อยลองตัวส่ง
     #   กลุ่ม → ลองทุกบัญชี เพราะบอทคนละตัวอยู่คนละกลุ่มได้
-    grp = group_tokens()
-    one_to_one = [t for t in ([crm_token()] + grp) if t]
+    # token ของบัญชีที่ได้ยินข้อความนี้ → ลองก่อนเสมอ (ถ้ารู้)
+    first = []
+    if channel:
+        try:
+            from dashboard.services.line_channels import token_of
+            first = [t for t in [token_of(channel)] if t]
+        except Exception:
+            first = []
+    grp = first + [t for t in group_tokens() if t not in first]
+    one_to_one = [t for t in (first + [crm_token()] + grp) if t]
     seen, one_to_one = set(), [t for t in one_to_one if not (t in seen or seen.add(t))]
     if not one_to_one:
         return {}
@@ -222,7 +230,7 @@ def fetch_profile(user_id="", group_id="", room_id="") -> dict:
     return best
 
 
-def touch_profile(user_id="", group_id="", room_id="", chat_type="user") -> dict:
+def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel="") -> dict:
     """บันทึก/อัปเดตโปรไฟล์คนนี้ แล้วคืน `{"name": ชื่อที่โชว์ได้, "is_employee": bool}`
 
     รวมงาน 3 อย่างไว้ที่เดียว (เดิมกระจายอยู่หลายที่แล้วยิง LINE API ซ้ำ):
@@ -263,13 +271,20 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user") -> dict
     prof = {}
     # พนักงานมีชื่อเล่นในชีตอยู่แล้ว ไม่ต้องไปถาม LINE ว่าเขาชื่ออะไร
     if stale and not nick:
-        prof = fetch_profile(uid, group_id=group_id, room_id=room_id)
+        # ★ ถามด้วย token ของ "บัญชีที่ได้ยินข้อความนี้" ก่อน — userId ผูกกับ provider
+        #   ใช้ token ของอีกบัญชีถามอาจได้ 404 ทั้งที่คนนั้นมีตัวตนจริง
+        prof = fetch_profile(uid, group_id=group_id, room_id=room_id, channel=channel)
 
     fields = {
         "nickname": nick,
         "is_employee": bool(nick),
         "last_seen": now,
     }
+    if channel:          # จดว่าเคยเห็นคนนี้จากบัญชีไหนบ้าง (กันนับลูกค้าซ้ำตอนทำ CRM)
+        seen = list(getattr(row, "channels", None) or []) if row else []
+        if channel not in seen:
+            seen.append(channel)
+        fields["channels"] = seen
     if prof:
         fields.update({
             "display_name": (prof.get("displayName") or "")[:120],
@@ -287,7 +302,7 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user") -> dict
             row.save(update_fields=list(fields.keys()) + ["msg_count"])
         else:
             row = LineProfile.objects.create(
-                user_id=uid, msg_count=1, first_seen=now,
+                user_id=uid, msg_count=1, first_seen=now, channel=channel or "",
                 source=chat_type if chat_type in ("user", "group", "room") else "user",
                 group_id=group_id or "", **fields)
     except Exception:

@@ -49,6 +49,9 @@ class Command(BaseCommand):
                 add("   ชื่อบัญชี : %s" % r["displayName"])
                 add("   LINE id  : %s" % r.get("basicId", "-"))
                 add("   โหมดแชท  : %s" % r.get("chatMode", "-"))
+                # userId ของตัวบอท = ค่า `destination` ที่ LINE ใส่มาใน webhook
+                # → ระบบใช้ค่านี้แยกว่าข้อความชุดไหนมาจากบัญชีไหน
+                add("   destination (ใช้แยกว่า event มาจากบัญชีไหน) : %s" % r.get("userId", "-"))
             add("   ลายเซ็น webhook (%s) : %s"
                 % (r["secretEnv"], "ตั้งแล้ว" if r["hasSecret"] else "❌ ยังไม่ได้ตั้ง"))
             if r.get("dmFrom"):

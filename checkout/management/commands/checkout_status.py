@@ -153,6 +153,12 @@ class Command(BaseCommand):
             n_emp = LineProfile.objects.filter(is_employee=True).count()
             add("     โปรไฟล์ที่เก็บ   : %d คน  (ลูกค้า %d · พนักงาน %d)"
                 % (n_prof, n_prof - n_emp, n_emp))
+            # ★ ก.ย.69 — แยกตามบัญชีที่ได้ยิน · "ไม่ทราบ" = ข้อความเก่าก่อนมี 2 บัญชี
+            from django.db.models import Count
+            for r in LineProfile.objects.values("channel").annotate(n=Count("id")).order_by("-n"):
+                add("        จากบัญชี %-10s %d คน" % (r["channel"] or "(ไม่ทราบ)", r["n"]))
+            for r in GroupChat.objects.values("channel").annotate(n=Count("id")).order_by("-n"):
+                add("        ข้อความจากบัญชี %-6s %d ข้อความ" % (r["channel"] or "(ไม่ทราบ)", r["n"]))
             last = _kv("chat_store_last") or {}
             if last.get("at"):
                 txt, _h = _ago(last.get("at"))

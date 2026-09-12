@@ -140,6 +140,38 @@ def bot_info(token: str, timeout: int = 8) -> dict:
     return info
 
 
+def bot_user_id(token: str) -> str:
+    """userId ของ "ตัวบอท" เอง — ค่าเดียวกับฟิลด์ `destination` ใน webhook body"""
+    return (bot_info(token) or {}).get("userId", "") or ""
+
+
+def token_of(role: str) -> str:
+    return push_token() if role == PUSH else crm_token()
+
+
+def channel_of(destination: str) -> str:
+    """event นี้มาจากบัญชีไหน → `"crm"` / `"push"` / `""` (ไม่ทราบ)
+
+    ★ ก.ย.69 — จำเป็นตอนมี 2 บัญชีแล้ว n8n forward มาที่ endpoint เดียวกัน:
+    ถ้าไม่รู้ว่าข้อความมาจากบัญชีไหน จะ **ดึงโปรไฟล์ด้วย token ผิดตัว** (ได้ 404)
+    และแยกไม่ออกว่าคนคนนี้คุยกับบอทตัวไหน
+
+    LINE ใส่ `destination` = **userId ของบอทที่เป็นเจ้าของ event** มาให้ใน body อยู่แล้ว
+    → เทียบกับ userId ของแต่ละ token ก็รู้ทันที (ค่าพวกนี้ cache ไว้ 10 นาที)
+
+    ⚠️ `_unwrap_payload` ที่แกะ "event เดี่ยว" จะไม่มี `destination` ติดมา → คืน `""`
+       (ไม่ใช่เดามั่ว — ผู้เรียกค่อยตัดสินใจว่าจะ fallback ยังไง)
+    """
+    d = (destination or "").strip()
+    if not d:
+        return ""
+    for role in (CRM, PUSH):
+        t = token_of(role)
+        if t and bot_user_id(t) == d:
+            return role
+    return ""
+
+
 def describe(live: bool = True) -> list:
     """สรุปบัญชีที่ตั้งไว้ทั้งหมด (ไว้โชว์ในหน้าตรวจ/คำสั่ง `line_accounts`)
 

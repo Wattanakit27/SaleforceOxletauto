@@ -269,6 +269,10 @@ class GroupChat(models.Model):
     has_media = models.BooleanField("มีไฟล์แนบ", default=False, db_index=True)
     media_token = models.CharField("ไฟล์ที่โหลดเก็บแล้ว", max_length=200, blank=True)
 
+    # ★ ก.ย.69 — มี 2 บัญชีแล้ว: ต้องรู้ว่าข้อความนี้ "บอทตัวไหนเป็นคนได้ยิน"
+    #   ไม่งั้นพอบัญชีใหม่เริ่มรับด้วย จะแยกไม่ออกว่าใครคุยกับตัวไหน (มาจาก webhook `destination`)
+    channel = models.CharField("บัญชีที่รับข้อความ", max_length=8, blank=True, db_index=True)
+
     sent_at = models.DateTimeField("เวลาในกลุ่ม", null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -315,6 +319,15 @@ class LineProfile(models.Model):
     source = models.CharField("เจอครั้งแรกจาก", max_length=8, choices=SRC_CHOICES,
                               default=USER, db_index=True)
     group_id = models.CharField("กลุ่มที่เจอ", max_length=64, blank=True)
+
+    # ★ ก.ย.69 — **LINE user id ไม่ใช่ค่าสากล** มันผูกกับ "ผู้ให้บริการ (provider)" ของ channel
+    #   คนเดียวกันที่คุยกับบอท 2 ตัว:
+    #     - บอทอยู่ provider เดียวกัน → ได้ userId **ตัวเดียวกัน** → แถวนี้แถวเดียว (channels มี 2 ค่า)
+    #     - คนละ provider           → ได้ userId **คนละตัว** → กลายเป็น 2 แถว และ
+    #       **ระบบไม่มีทางรู้เองว่าเป็นคนเดียวกัน** (ต้องมีคนยืนยัน)
+    #   จึงต้องจดไว้ว่าเห็นคนนี้จากบัญชีไหนบ้าง ไม่งั้นตอนทำ CRM จะนับลูกค้าซ้ำโดยไม่รู้ตัว
+    channel = models.CharField("เจอครั้งแรกจากบัญชี", max_length=8, blank=True, db_index=True)
+    channels = models.JSONField("เคยเห็นจากบัญชีไหนบ้าง", default=list, blank=True)
 
     msg_count = models.PositiveIntegerField("จำนวนข้อความที่เคยส่ง", default=0)
     first_seen = models.DateTimeField("ทักครั้งแรก", default=timezone.now)
