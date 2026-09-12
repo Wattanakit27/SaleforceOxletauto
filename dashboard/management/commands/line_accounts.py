@@ -35,7 +35,8 @@ class Command(BaseCommand):
         rows = ch.describe(live=live)
         for r in rows:
             add("")
-            add("[%s]  %s" % (r["role"].upper(), r["roleName"]))
+            add("[%s]  %s%s" % (r["key"].upper(), r["roleName"],
+                                  "" if r.get("legacy") else "   (เพิ่มเองใน .env)"))
             if not r["configured"]:
                 add("   ❌ ยังไม่ได้ตั้ง token")
             elif r["shared"]:
@@ -64,18 +65,36 @@ class Command(BaseCommand):
         # ── สรุปว่าตอนนี้กี่บัญชี ──
         add("")
         add("-" * 66)
-        n = sum(1 for r in rows if r["configured"] and not r["shared"])
+        real = [r for r in rows if r["configured"] and not r["shared"]]
+        n = len(real)
         if n >= 2:
-            add("สรุป: แยกบัญชีแล้ว — ตัวรับเก็บ CRM · ตัวส่งโพสต์เข้ากลุ่ม")
+            add("สรุป: ใช้อยู่ %d บัญชี" % n)
         elif n == 1:
             add("สรุป: มีบัญชีเดียว ทำทั้งรับและส่ง (ยังไม่ได้เอาบัญชีใหม่มาลง)")
         else:
             add("สรุป: ยังไม่ได้ตั้ง LINE token เลย")
+        add("   เพิ่มบัญชีที่ 3 เป็นต้นไป: ใส่ LINE_OA_<คีย์>_TOKEN / _SECRET / _NAME ใน .env แล้ว restart")
 
-        if not any(r["hasSecret"] for r in rows):
-            add("")
+        # ── ★ ตั้ง secret ไม่ครบ = อันตรายกว่าไม่ตั้งเลย ──
+        has, miss = [r for r in real if r["hasSecret"]], [r for r in real if not r["hasSecret"]]
+        add("")
+        if not has:
             add("⚠️ ยังไม่ได้ตั้ง channel secret สักตัว → **ไม่มีการตรวจลายเซ็น webhook**")
             add("   = ใครก็ยิง /api/line/webhook มาได้ · ควรตั้ง LINE_CHANNEL_SECRET")
+        elif miss:
+            add("⛔ ตั้ง secret ไว้ %d บัญชี แต่ขาด %d บัญชี — **อันตรายกว่าไม่ตั้งเลย**" % (len(has), len(miss)))
+            add("   ระบบเริ่มตรวจลายเซ็นทันทีที่มี secret สักตัว → event ของบัญชีที่ยังไม่ตั้ง")
+            add("   จะโดนปฏิเสธ 403 ทั้งหมด (ถ้ายิง webhook ตรง ไม่ผ่าน n8n)")
+            for r in miss:
+                add("     ขาด: %s  (%s)" % (r["secretEnv"], r.get("displayName") or r["roleName"]))
+
+        # ── ★ provider: ตัวชี้ขาดว่าลูกค้าคนเดียวจะถูกนับซ้ำไหม ──
+        if n >= 2:
+            add("")
+            add("ℹ️ LINE ออก userId **ต่อ provider** ไม่ใช่ต่อ OA")
+            add("   OA ที่ลูกค้าทักเข้ามาหลายตัว ถ้าอยู่คนละ provider = ลูกค้าคนเดียวกลายเป็นหลายคน")
+            add("   เช็คที่ developers.line.biz/console (ดูว่าแต่ละ channel อยู่ใต้ provider ไหน)")
+            add("   · ย้าย channel ข้าม provider ไม่ได้ → เลือกให้ถูกตั้งแต่ตอนสร้าง")
 
         # ── บัญชีไหนอยู่ในกลุ่มไหน ──
         if o.get("groups"):

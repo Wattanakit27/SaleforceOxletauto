@@ -32,6 +32,61 @@ import time
 CRM, PUSH = "crm", "push"
 ROLE_NAME = {CRM: "ตัวรับ/CRM (ลูกค้าทักเข้ามา)", PUSH: "ตัวส่ง (โพสต์เข้ากลุ่มงาน)"}
 
+# ★ ก.ย.69 — เจ้าของแจ้งว่า "ต่อไปจะมี LINE OA หลายตัว" → เลิกผูกกับ 2 บัญชีตายตัว
+#   บัญชีที่ 3 เป็นต้นไปเพิ่มใน .env ได้เลย ไม่ต้องแก้โค้ด/deploy (แค่ restart):
+#       LINE_OA_SHOP2_TOKEN=...      → คีย์บัญชี = "shop2"
+#       LINE_OA_SHOP2_SECRET=...     (ไว้ตรวจลายเซ็น webhook ของบัญชีนั้น)
+#       LINE_OA_SHOP2_NAME=สาขา 2    (ชื่อที่คนอ่านออก · ไม่ใส่ก็ดึงจาก LINE เอง)
+#
+#   ⚠️ **เก็บ token ไว้ใน env ไม่เก็บลงฐานข้อมูล** — ถึงจะเพิ่มบัญชีผ่านหน้าเว็บได้สะดวกกว่า
+#      แต่ token = สิทธิ์ส่งข้อความในนามบริษัท ถ้าหลุดจาก DB/ไฟล์ export = ใครก็ปลอมเป็นเราได้
+#      (ไฟล์ export ของเราตัด token ออกอยู่แล้ว แต่ไม่เอาความเสี่ยงนี้มาแลกความสะดวก)
+_OA_PREFIX, _OA_SUFFIX = "LINE_OA_", "_TOKEN"
+
+
+def accounts() -> list:
+    """ทุกบัญชี LINE OA ที่ตั้งไว้ — `[{key, name, token, secret, secretEnv, legacy}]`
+
+    เรียง **ตัวรับ → ตัวส่ง → ที่เพิ่มมาทีหลัง** (ตัวรับเป็นบัญชีหลักของงาน CRM)
+    บัญชีที่ token ซ้ำกับตัวก่อนหน้า = ตัวเดียวกัน ตัดทิ้ง (เช่นยังไม่ได้แยกตัวส่ง)
+    """
+    import os
+    out, seen = [], set()
+
+    def add(key, name, token, secret, secret_env, legacy=False):
+        token = (token or "").strip()
+        if not token or token in seen:
+            return
+        seen.add(token)
+        out.append({"key": key, "name": name, "token": token,
+                    "secret": (secret or "").strip(), "secretEnv": secret_env, "legacy": legacy})
+
+    add(CRM, ROLE_NAME[CRM], _st("LINE_CHANNEL_ACCESS_TOKEN"),
+        _st("LINE_CHANNEL_SECRET"), "LINE_CHANNEL_SECRET", True)
+    add(PUSH, ROLE_NAME[PUSH], _st("LINE_PUSH_CHANNEL_ACCESS_TOKEN"),
+        _st("LINE_PUSH_CHANNEL_SECRET"), "LINE_PUSH_CHANNEL_SECRET", True)
+
+    # บัญชีที่เพิ่มทีหลัง — อ่านจาก os.environ ตรงๆ เพราะชื่อตัวแปรไม่ได้ประกาศไว้ใน settings.py
+    for env_name in sorted(os.environ):
+        if not (env_name.startswith(_OA_PREFIX) and env_name.endswith(_OA_SUFFIX)):
+            continue
+        raw = env_name[len(_OA_PREFIX):-len(_OA_SUFFIX)]
+        if not raw:
+            continue
+        key = raw.lower()
+        add(key, (os.environ.get("%s%s_NAME" % (_OA_PREFIX, raw), "") or "").strip() or ("OA " + key),
+            os.environ.get(env_name, ""), os.environ.get("%s%s_SECRET" % (_OA_PREFIX, raw), ""),
+            "%s%s_SECRET" % (_OA_PREFIX, raw))
+    return out
+
+
+def account_of(key: str) -> dict:
+    key = (key or "").strip().lower()
+    for a in accounts():
+        if a["key"] == key:
+            return a
+    return {}
+
 
 def _st(name, default=""):
     try:
@@ -91,20 +146,20 @@ def group_tokens() -> list:
     ผู้เรียกต้องวนลองจนกว่าจะสำเร็จ — บัญชีที่ไม่ได้อยู่ในกลุ่มนั้นจะได้ 403/404
     """
     out = []
-    for t in (push_token(), crm_token()):
+    for t in [push_token(), crm_token()] + [a["token"] for a in accounts()]:
         if t and t not in out:
             out.append(t)
     return out
 
 
 def secrets() -> list:
-    """[(role, secret)] ของทุก channel ที่ตั้งไว้ — ใช้ตรวจลายเซ็น webhook ให้ครบทั้ง 2 บัญชี"""
-    out = []
-    for role, key in ((CRM, "LINE_CHANNEL_SECRET"), (PUSH, "LINE_PUSH_CHANNEL_SECRET")):
-        s = _st(key)
-        if s:
-            out.append((role, s))
-    return out
+    """[(key, secret)] ของ **ทุกบัญชี** ที่ตั้ง secret ไว้ — ผู้เรียกต้องลองให้ครบ
+
+    ⚠️ ตั้ง secret ไว้ "บางบัญชี" อันตรายกว่าไม่ตั้งเลย: `line_webhook` จะเริ่มตรวจลายเซ็น
+    ทันทีที่มี secret สักตัว → event ของบัญชีที่ยังไม่ได้ตั้งจะโดนปฏิเสธ 403 ทั้งหมด
+    (`line_accounts` เตือนให้แล้วถ้าตั้งไม่ครบ)
+    """
+    return [(a["key"], a["secret"]) for a in accounts() if a["secret"]]
 
 
 # ───────────────────── ตรวจว่า token เป็นของบัญชีไหน ─────────────────────
@@ -145,8 +200,19 @@ def bot_user_id(token: str) -> str:
     return (bot_info(token) or {}).get("userId", "") or ""
 
 
-def token_of(role: str) -> str:
-    return push_token() if role == PUSH else crm_token()
+def token_of(key: str) -> str:
+    """token ของบัญชีตามคีย์ — `"crm"`/`"push"` หรือคีย์ของบัญชีที่เพิ่มเองใน .env
+
+    คีย์ที่ไม่รู้จัก/ว่าง → คืนบัญชีตัวรับ (พฤติกรรมเดิม ไม่ทำให้งานเก่าพัง)
+    """
+    k = (key or "").strip().lower()
+    if k == PUSH:
+        return push_token()
+    if k and k != CRM:
+        a = account_of(k)
+        if a:
+            return a["token"]
+    return crm_token()
 
 
 def channel_of(destination: str) -> str:
@@ -165,39 +231,42 @@ def channel_of(destination: str) -> str:
     d = (destination or "").strip()
     if not d:
         return ""
-    for role in (CRM, PUSH):
-        t = token_of(role)
-        if t and bot_user_id(t) == d:
-            return role
+    for a in accounts():
+        if bot_user_id(a["token"]) == d:
+            return a["key"]
     return ""
 
 
 def describe(live: bool = True) -> list:
-    """สรุปบัญชีที่ตั้งไว้ทั้งหมด (ไว้โชว์ในหน้าตรวจ/คำสั่ง `line_accounts`)
+    """สรุป **ทุกบัญชี** ที่ตั้งไว้ (ไว้โชว์ในหน้าตรวจ/คำสั่ง `line_accounts`)
 
     `live=False` = ไม่ยิง LINE (ใช้ตอนแค่อยากรู้ว่าตั้ง env ครบไหม)
     """
     rows = []
     ct, pt = crm_token(), push_token()
     dm = _st("LINE_DM_CHANNEL").lower() or CRM
-    shared = bool(ct) and ct == pt
-    for role, token, secret_key in (
-            (CRM, ct, "LINE_CHANNEL_SECRET"),
-            (PUSH, pt, "LINE_PUSH_CHANNEL_SECRET")):
+    accs = accounts()
+    # ตัวส่งยังไม่แยก = ไม่มีแถว push ในทะเบียน (token ซ้ำกับตัวรับเลยถูกตัด) → แจ้งให้รู้
+    shared = bool(ct) and ct == pt and not any(a["key"] == PUSH for a in accs)
+    if shared:
+        accs = accs + [{"key": PUSH, "name": ROLE_NAME[PUSH], "token": pt, "secret": _st("LINE_PUSH_CHANNEL_SECRET"),
+                        "secretEnv": "LINE_PUSH_CHANNEL_SECRET", "legacy": True}]
+    for a in accs:
         row = {
-            "role": role,
-            "roleName": ROLE_NAME[role],
-            "configured": bool(token),
-            # ★ ตัวส่งยังไม่แยก = ใช้บัญชีเดียวกับตัวรับอยู่ (ยังไม่ได้เอาบัญชีใหม่มาลง)
-            "shared": shared and role == PUSH,
-            "hasSecret": bool(_st(secret_key)),
-            "secretEnv": secret_key,
-            "tokenTail": ("…" + token[-6:]) if token else "",
+            "role": a["key"],          # ชื่อเดิมของฟิลด์ — ผู้เรียกเก่ายังใช้ได้
+            "key": a["key"],
+            "roleName": a["name"],
+            "configured": bool(a["token"]),
+            "shared": shared and a["key"] == PUSH,
+            "hasSecret": bool(a["secret"]),
+            "secretEnv": a["secretEnv"],
+            "legacy": a.get("legacy", False),
+            "tokenTail": ("…" + a["token"][-6:]) if a["token"] else "",
         }
-        if live and token:
-            row.update({k: v for k, v in bot_info(token).items()
+        if live and a["token"]:
+            row.update({k: v for k, v in bot_info(a["token"]).items()
                         if k in ("displayName", "basicId", "userId", "chatMode", "error")})
-        if role == PUSH:
+        if a["key"] == PUSH:
             row["dmFrom"] = PUSH if dm == PUSH else CRM   # แชท 1:1 ออกจากบัญชีไหน
         rows.append(row)
     return rows

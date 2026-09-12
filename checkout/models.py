@@ -271,7 +271,7 @@ class GroupChat(models.Model):
 
     # ★ ก.ย.69 — มี 2 บัญชีแล้ว: ต้องรู้ว่าข้อความนี้ "บอทตัวไหนเป็นคนได้ยิน"
     #   ไม่งั้นพอบัญชีใหม่เริ่มรับด้วย จะแยกไม่ออกว่าใครคุยกับตัวไหน (มาจาก webhook `destination`)
-    channel = models.CharField("บัญชีที่รับข้อความ", max_length=8, blank=True, db_index=True)
+    channel = models.CharField("บัญชีที่รับข้อความ", max_length=24, blank=True, db_index=True)
 
     sent_at = models.DateTimeField("เวลาในกลุ่ม", null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -326,7 +326,7 @@ class LineProfile(models.Model):
     #     - คนละ provider           → ได้ userId **คนละตัว** → กลายเป็น 2 แถว และ
     #       **ระบบไม่มีทางรู้เองว่าเป็นคนเดียวกัน** (ต้องมีคนยืนยัน)
     #   จึงต้องจดไว้ว่าเห็นคนนี้จากบัญชีไหนบ้าง ไม่งั้นตอนทำ CRM จะนับลูกค้าซ้ำโดยไม่รู้ตัว
-    channel = models.CharField("เจอครั้งแรกจากบัญชี", max_length=8, blank=True, db_index=True)
+    channel = models.CharField("เจอครั้งแรกจากบัญชี", max_length=24, blank=True, db_index=True)
     channels = models.JSONField("เคยเห็นจากบัญชีไหนบ้าง", default=list, blank=True)
 
     msg_count = models.PositiveIntegerField("จำนวนข้อความที่เคยส่ง", default=0)
