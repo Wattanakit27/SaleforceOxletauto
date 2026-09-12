@@ -61,6 +61,16 @@ class Command(BaseCommand):
         add("=" * 60)
         add("สถานะการดักเก็บข้อมูลจากกลุ่ม LINE   (ตอนนี้ %s)" % now.strftime("%d/%m %H:%M"))
         add("=" * 60)
+        # ★ ขึ้นก่อนทุกอย่าง — migrate ค้าง = ข้อมูลใหม่ถูกทิ้งทั้งหมด ไม่ต้องไปดูข้ออื่นให้เสียเวลา
+        try:
+            from dashboard.services.schema_check import warn_line
+            w = warn_line()
+        except Exception:
+            w = ""
+        if w:
+            add("")
+            add(w)
+            add("")
 
         # --- 1-2) webhook เข้ามาถึงไหม ---
         beat = _kv("line_webhook_last") or {}

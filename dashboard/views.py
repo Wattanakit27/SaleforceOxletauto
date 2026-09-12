@@ -2173,6 +2173,16 @@ def admin_system_health(request):
             issues.append({"level": "err", "msg": f"ข้อมูลค้าง — อุ่น cache ล่าสุด {int(age // 60)} นาทีที่แล้ว (ปกติ ~2 นาที) · cron อาจหยุด"})
     if not line_ok:
         issues.append({"level": "warn", "msg": "LINE token ไม่ได้ตั้ง — แจ้งเตือนเข้าไลน์จะไม่ทำงาน"})
+    # ★ ก.ย.69 — migrate ค้าง = ข้อมูลใหม่เขียนลงฐานข้อมูลไม่ได้เลย (เคยเงียบจนไม่มีใครรู้)
+    try:
+        from .services.schema_check import pending_migrations as _pend
+        _p = _pend()
+        if _p:
+            issues.append({"level": "err", "msg":
+                           "ยังไม่ได้รัน migrate %d ตัว (%s) — ข้อมูลใหม่จะเขียนลงฐานข้อมูลไม่ได้"
+                           % (len(_p), ", ".join(_p[:3]))})
+    except Exception:
+        pass
     if total_leads == 0:
         issues.append({"level": "err", "msg": "ไม่มีข้อมูล lead เลย — ตรวจแหล่งข้อมูล (ชีตอาจเพี้ยน/แชร์หลุด)"})
     elif today_leads == 0 and now.weekday() < 5 and now.hour >= 11:
@@ -3001,11 +3011,24 @@ def line_group_ingest(request):
             last_store = (_cs.get_kv("chat_store_last") or {}).get("data")
         except Exception:
             last_store = None
-    return JsonResponse({"ok": True, "count": len(added), "groups": added, "removed": removed,
-                         "events": len(evs), "textEvents": len(texts),
-                         "forGroup": for_group, "listening": listening,
-                         "storeChat": store_chat_on, "chatTotal": chat_total,
-                         "lastStore": last_store},
+    # ★ ก.ย.69 — ถ้า migrate ค้าง งานเก็บข้อมูลจะล้มทั้งหมด **แบบเงียบ**
+    #   (ทำใน background thread · error ไปโผล่แค่ใน KV ที่ไม่มีใครเปิดดู)
+    #   → ตอบกลับไปเลยให้เห็นใน execution ของ n8n ตอนยิงทดสอบ
+    try:
+        from .services.schema_check import pending_migrations
+        pending = pending_migrations()
+    except Exception:
+        pending = []
+    resp = {"ok": True, "count": len(added), "groups": added, "removed": removed,
+            "events": len(evs), "textEvents": len(texts),
+            "forGroup": for_group, "listening": listening,
+            "storeChat": store_chat_on, "chatTotal": chat_total,
+            "lastStore": last_store}
+    if pending:
+        resp["ok"] = False
+        resp["pendingMigrations"] = pending
+        resp["warning"] = "ยังไม่ได้รัน migrate — ข้อมูลที่ส่งมาจะเขียนลงฐานข้อมูลไม่ได้"
+    return JsonResponse(resp,
                         json_dumps_params={"ensure_ascii": False})
 
 

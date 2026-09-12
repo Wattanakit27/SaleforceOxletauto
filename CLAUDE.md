@@ -1027,6 +1027,15 @@ CRON_SECRET=xxx
       **แก้ด้วยการอ้างชื่อโหนดตรงๆ**: `{{ JSON.stringify($('Webhook').first().json.body) }}` → วางโหนดไว้ตรงไหนในสายก็ทำงาน (แก้ใน [deploy/n8n_send_chat_to_oxlet.json](deploy/n8n_send_chat_to_oxlet.json) แล้ว · **ชื่อโหนดต้องตรงของจริง** ไม่งั้น expression พัง = n8n ไม่ยิงออกมาเลย)
     - `_unwrap_payload` รองรับ **body ที่เป็นสตริง JSON** เพิ่มแล้ว ทั้งชั้นนอก (`"{...}"`) และชั้นใน (`{"body": "{...}"}`) — n8n ตั้ง Body=JSON แล้วใส่ `JSON.stringify(...)` จะโดน encode ซ้ำ · **ทดสอบครบ 11 ทรง**
   - **★ ⚠️ `chatTotal` ใน response ของ `line_group_ingest` = ยอด "ก่อน" รอบนี้** — `_checkout_ingest` ทำใน **daemon thread** (ห้ามบล็อก webhook) เลยยังเขียนไม่เสร็จตอนตอบกลับ → **ยิงรอบ 2 ถึงเห็นเลขขยับ** · เคยทำให้เข้าใจผิดว่า "ไม่เก็บ" ทั้งที่เก็บแล้ว · ตอนนี้แนบ **`lastStore`** (= `chat_store_last` ของรอบก่อน) ไปด้วย · **ยอดจริงดูที่ `manage.py checkout_config`**
+  - **★★ ก.ย.69 — เตือนเองเมื่อ `migrate` ค้าง** ([schema_check.py](dashboard/services/schema_check.py))
+    - **เหตุการณ์จริง**: deploy แล้ว `git pull` แต่**ลืม `migrate`** → โค้ดใหม่เขียนคอลัมน์ที่ยังไม่มีในตาราง
+      → ข้อความที่วิ่งเข้ามา **ถูกทิ้งทั้งหมดแบบเงียบ** (`saved: 0, skipped: 1`) เพราะงานเก็บอยู่ใน
+      background thread · ร่องรอยไปโผล่แค่ใน KV `chat_store_last` ที่ไม่มีใครเปิดดู
+    - เจ้าของสั่ง: *"ถ้าไม่เข้าฐานข้อมูล ก็ช่วยแจ้งมาด้วย"* → `pending_migrations()` (cache 60 วิ) ร้องใน **3 ที่**:
+      **response ที่ตอบ n8n** (`ok:false` + `pendingMigrations` + `warning` — เห็นทันทีใน execution) ·
+      **`checkout_status` บรรทัดแรกสุด** · **หน้าสถานะระบบของแอดมิน** (issue ระดับ `err`)
+    - **⚠️ `MigrationExecutor.migration_plan()` คืน `(Migration, ถอยหลังไหม)` ไม่ใช่ `(app, name)`** —
+      เผลอ unpack เป็น 2 ตัวแล้วต่อสตริงจะได้ชื่อห้อย `.False` (เจอตอนทดสอบ · แก้แล้ว)
   - **★ `checkout_ingest_last`** — งานใน daemon thread เดิม `except Exception: pass` เฉยๆ **พังเมื่อไหร่ก็เงียบสนิท** (คนละ thread กับ response ไม่มีใครเห็น error) → ตอนนี้จด `{at, error}` ลง KV
   - **วิธียืนยันว่าฝั่งเซิร์ฟเวอร์ปกติ โดยไม่ผ่าน n8n/LINE** (แยกให้ขาดว่าปัญหาอยู่ฝั่งไหน):
     ```bash
