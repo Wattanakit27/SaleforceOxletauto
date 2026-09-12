@@ -308,8 +308,9 @@ def send_report_to_line(target_id: str, caption: str = "", mention_all: bool = F
         return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod ที่มี /media/ เสิร์ฟผ่าน https · url={bad[0]}"
     try:
         from .line_notify import push_line_message
-        from .line_channels import push_token          # ★ ส่งออก = บัญชีตัวส่งเสมอ
-        token = push_token()
+        # ★ เลือกบัญชีตามปลายทาง: กลุ่ม(C) = ตัวส่ง · คน(U, โหมดทดสอบ) = บัญชีที่เขาเพิ่มเป็นเพื่อน
+        from .line_channels import token_for
+        token = token_for(target_id)
         if not token:
             return False, "ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"
         cap = caption or _report_caption()
@@ -436,8 +437,9 @@ def send_leadsummary_to_line(target_id: str, caption: str = "", mention_all: boo
         return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={url}"
     try:
         from .line_notify import push_line_message
-        from .line_channels import push_token          # ★ ส่งออก = บัญชีตัวส่งเสมอ
-        token = push_token()
+        # ★ เลือกบัญชีตามปลายทาง: กลุ่ม(C) = ตัวส่ง · คน(U, โหมดทดสอบ) = บัญชีที่เขาเพิ่มเป็นเพื่อน
+        from .line_channels import token_for
+        token = token_for(target_id)
         if not token:
             return False, "ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"
         cap = caption or _lead_caption()
@@ -640,8 +642,9 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={bad[0]}"
     try:
         from .line_notify import push_line_message
-        from .line_channels import push_token          # ★ ส่งออก = บัญชีตัวส่งเสมอ
-        token = push_token()
+        # ★ เลือกบัญชีตามปลายทาง: กลุ่ม(C) = ตัวส่ง · คน(U, โหมดทดสอบ) = บัญชีที่เขาเพิ่มเป็นเพื่อน
+        from .line_channels import token_for
+        token = token_for(target_id)
         if not token:
             return False, "ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"
         cap = caption or _card_caption(card_id)

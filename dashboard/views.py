@@ -27,6 +27,13 @@ def index(request):
     return HttpResponseRedirect("/dashboard/")
 
 
+def _tok(target_id) -> str:
+    """token ที่ต้องใช้กับ **ปลายทางนี้** — กลุ่ม(C/R) = บัญชีตัวส่ง · คน(U) = บัญชีที่เขาเพิ่มเป็นเพื่อน
+    (ดู `token_for` ใน [line_channels.py](services/line_channels.py))"""
+    from .services.line_channels import token_for
+    return token_for(target_id)
+
+
 def _push_token() -> str:
     """token ของ **บัญชีตัวส่ง** — ★ ก.ย.69 แยกบอทเป็น 2 ตัว (ดู [line_channels.py](services/line_channels.py))
     ยังไม่ตั้งบัญชีตัวส่ง = ตกไปใช้ตัวเดิม (พฤติกรรมเหมือนก่อนแยก)"""
@@ -1302,7 +1309,7 @@ def cron_tick(request):
                     for _at in _admin_targets:
                         if not _at:
                             continue
-                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], channel_token)
+                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], _tok(_at))
                         if _code == 200:
                             followup_sent += 1
                     continue
@@ -1311,7 +1318,7 @@ def cron_tick(request):
                 for _t in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
                     if not _t:
                         continue
-                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], channel_token)
+                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], _tok(_t))
                     if _code == 200:
                         followup_sent += 1
             try:   # snapshot ผลงานรายสัปดาห์ลง SellerWeekly (upsert สัปดาห์ปัจจุบัน) — best-effort
@@ -1459,7 +1466,7 @@ def cron_send_line(request):
             continue
         try:
             flex = build_seller_flex(p, base_url=base_url)
-            code, text = push_line_message(target, [flex], channel_token)
+            code, text = push_line_message(target, [flex], _tok(target))
             if code == 200:
                 results.append({"seller": seller, "sent": True})
             else:
@@ -1774,7 +1781,7 @@ def admin_send_followup(request):
             if not uid:
                 continue
             try:
-                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], channel_token)
+                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], _tok(uid))
                 results.append({"seller": label, "user_id": uid, "sent": code == 200,
                                 **({"error": f"LINE {code}: {text[:120]}"} if code != 200 else {})})
             except Exception as e:
@@ -1916,7 +1923,7 @@ def admin_send_line(request):
         # ส่งทีละคน เก็บผลรายคน → เห็น error ถ้าใครไม่ได้แอดบอท/ส่งไม่ไป
         for _uid, _lbl in targets:
             try:
-                code, text = push_line_message(_uid, [flex], channel_token)
+                code, text = push_line_message(_uid, [flex], _tok(_uid))
                 if code == 200:
                     results.append({"seller": _lbl, "user_id": _uid, "sent": True})
                 else:
@@ -3254,7 +3261,7 @@ def finance_check_submit(request):
     base_url = request.build_absolute_uri("/").rstrip("/")
     try:
         flex = build_finance_check_flex(data, base_url=base_url)
-        code, text = push_line_message(target, [flex], channel_token)
+        code, text = push_line_message(target, [flex], _tok(target))
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -3355,7 +3362,7 @@ def loan_submit(request):
     base_url = request.build_absolute_uri("/").rstrip("/")
     try:
         flex = build_loan_flex(data, base_url=base_url)
-        code, text = push_line_message(target, [flex], channel_token)
+        code, text = push_line_message(target, [flex], _tok(target))
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 

@@ -45,15 +45,14 @@ class Command(BaseCommand):
         if not target:
             self.stdout.write(self.style.ERROR("ต้องใส่ --to <LINE user id> หรือ --dry-run"))
             return
-        from dashboard.services.line_channels import push_token
-        token = push_token()          # ★ ส่งออก = บัญชีตัวส่ง
+        from dashboard.services.line_channels import token_for
         if not token:
             self.stdout.write(self.style.ERROR("ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"))
             return
         from dashboard.services.line_notify import push_line_message
         ok = 0
         for who, txt in parts:
-            code, resp = push_line_message(target, [{"type": "text", "text": txt}], token)
+            code, resp = push_line_message(target, [{"type": "text", "text": txt}], token_for(target))
             if code == 200:
                 ok += 1
             else:

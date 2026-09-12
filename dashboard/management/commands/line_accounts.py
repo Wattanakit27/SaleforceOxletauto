@@ -51,6 +51,12 @@ class Command(BaseCommand):
                 add("   โหมดแชท  : %s" % r.get("chatMode", "-"))
             add("   ลายเซ็น webhook (%s) : %s"
                 % (r["secretEnv"], "ตั้งแล้ว" if r["hasSecret"] else "❌ ยังไม่ได้ตั้ง"))
+            if r.get("dmFrom"):
+                add("")
+                add("   ข้อความ 1:1 หา 'คน' (ตามด่วน/Flex เซลล์) ส่งจาก : %s"
+                    % ("บัญชีตัวส่ง" if r["dmFrom"] == "push" else "บัญชีตัวรับ (ค่าเริ่มต้น)"))
+                if r["dmFrom"] != "push":
+                    add("   → ย้ายไปตัวส่งได้เมื่อทุกคนเพิ่มบัญชีใหม่เป็นเพื่อนแล้ว: LINE_DM_CHANNEL=push")
 
         # ── สรุปว่าตอนนี้กี่บัญชี ──
         add("")

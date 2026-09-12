@@ -58,6 +58,32 @@ def has_push_channel() -> bool:
     return bool(t) and t != crm_token()
 
 
+def dm_token() -> str:
+    """token สำหรับส่งหา **"คน" (แชท 1:1)** — ค่าเริ่มต้น = บัญชีตัวรับ (บัญชีเดิม)
+
+    ★ ทำไมไม่ใช้ตัวส่งเหมือน push เข้ากลุ่ม: LINE ส่งเข้าแชทส่วนตัวได้
+    **เฉพาะคนที่เพิ่มบัญชีนั้นเป็นเพื่อนแล้ว** — พนักงานเพิ่มบัญชีเดิมไว้ ไม่ได้เพิ่มบัญชีใหม่
+    → ถ้าย้ายทันที ข้อความ "ตามด่วน" จะหายเงียบทั้งทีม (ระบบยังไม่ได้ log ขาส่ง)
+
+    ย้ายเมื่อไหร่: ให้ทุกคนเพิ่มบัญชีใหม่เป็นเพื่อนก่อน แล้วตั้ง `LINE_DM_CHANNEL=push` ใน .env
+    """
+    if _st("LINE_DM_CHANNEL").lower() == PUSH:
+        return push_token()
+    return crm_token() or push_token()
+
+
+def token_for(target_id: str) -> str:
+    """เลือก token จาก **ปลายทาง** — id ของ LINE บอกชนิดอยู่แล้วที่ตัวอักษรแรก
+
+        C… = กลุ่ม · R… = ห้องคุย  → บัญชี "ตัวส่ง"
+        U… = คน (แชท 1:1)          → `dm_token()`
+
+    ใช้ตัวนี้แทนการเลือก token ไว้ล่วงหน้า เพราะรอบส่งเดียวกันมีทั้งกลุ่มและคนปนกันได้
+    """
+    t = (target_id or "").strip()
+    return push_token() if t[:1].upper() in ("C", "R") else dm_token()
+
+
 def group_tokens() -> list:
     """token ที่ควรลองสำหรับงานระดับ "กลุ่ม" (ดึงชื่อกลุ่ม · โปรไฟล์คนในกลุ่ม)
 
@@ -121,6 +147,7 @@ def describe(live: bool = True) -> list:
     """
     rows = []
     ct, pt = crm_token(), push_token()
+    dm = _st("LINE_DM_CHANNEL").lower() or CRM
     shared = bool(ct) and ct == pt
     for role, token, secret_key in (
             (CRM, ct, "LINE_CHANNEL_SECRET"),
@@ -138,5 +165,7 @@ def describe(live: bool = True) -> list:
         if live and token:
             row.update({k: v for k, v in bot_info(token).items()
                         if k in ("displayName", "basicId", "userId", "chatMode", "error")})
+        if role == PUSH:
+            row["dmFrom"] = PUSH if dm == PUSH else CRM   # แชท 1:1 ออกจากบัญชีไหน
         rows.append(row)
     return rows
