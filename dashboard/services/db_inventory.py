@@ -89,6 +89,11 @@ TABLES = {
         what="ข้อความที่วิ่งผ่านบอท (กลุ่มงาน + ลูกค้าทัก 1:1): ข้อความ · สติกเกอร์ · อิโมจิ · "
              "ธงว่ามีรูป/ไฟล์",
         pii=True, keep="กลุ่ม 90 วัน · ลูกค้า 60 วัน (ตั้งใน checkout/constants.py)"),
+    "checkout_lineprofile": dict(
+        name="โปรไฟล์คนที่คุยกับบอท LINE",
+        what="1 แถว/คน — LINE user id · ชื่อที่ตั้งใน LINE · ชื่อเล่น(ถ้าเป็นพนักงาน) · "
+             "เคยคุยกี่ข้อความ · ทักครั้งแรก/ล่าสุดเมื่อไหร่ · เจอจากบัญชีบอทไหน (ไม่เก็บรูปโปรไฟล์)",
+        pii=True, keep="โปรไฟล์ลูกค้าที่เงียบเกิน 60 วันถูกลบ · ของพนักงานเก็บไว้ (ใช้เทียบชื่อ)"),
     "checkout_checklistconfig": dict(
         name="ชุดเช็คลิสต์เบิก-คืน",
         what="แม่แบบเช็คลิสต์ (เผื่อทำหลายชุด) — ตอนนี้ใช้ชุดฝังในโค้ดอยู่",
@@ -174,9 +179,11 @@ def _kv_keys():
     try:
         import json as _json
         from dashboard.models import KVStore
-        for row in KVStore.objects.all().only("key", "value", "updated_at"):
+        # ⚠️ ฟิลด์เก็บค่าชื่อ **`data`** ไม่ใช่ `value` — เคยเขียนผิดแล้ว `.only("value")`
+        #   โยน FieldError ทั้งก้อนโดน except กลืน → ตารางนี้ **ว่างเปล่าเสมอ** ทั้งที่มี 15 คีย์
+        for row in KVStore.objects.all().only("key", "data", "updated_at"):
             try:
-                size = len(_json.dumps(row.value, ensure_ascii=False))
+                size = len(_json.dumps(row.data, ensure_ascii=False))
             except Exception:
                 size = 0
             out.append({

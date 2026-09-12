@@ -5,7 +5,7 @@ import urllib.parse
 import requests
 
 from django.conf import settings
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
@@ -116,6 +116,58 @@ def admin_db_tables(request):
     try:
         from .services.db_inventory import inventory
         return JsonResponse(inventory(), json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+
+
+def admin_db_export(request):
+    """ดาวน์โหลดข้อมูลในฐานข้อมูลออกมาเป็นไฟล์ — ★ ก.ย.69 (เจ้าของสั่ง "อยากให้ export ออกมาได้")
+
+      /api/admin/db_export?table=checkout_groupchat   → CSV ตารางเดียว
+      /api/admin/db_export?all=1                      → .zip ทุกตาราง + "อ่านก่อน.txt"
+
+    สิทธิ์เดียวกับสารบัญฐานข้อมูล (`_is_boss`) — **แอดมินสูงสุด/ผู้บริหาร เท่านั้น**
+    เพราะไฟล์นี้คือเนื้อข้อมูลจริง (ชื่อคน · ข้อความ · ประวัติ) ไม่ใช่แค่จำนวนแถว
+    ปิด LINE user id ของพนักงานให้ก่อนเขียนไฟล์ (ดู [db_export.py](services/db_export.py))
+    """
+    if not _is_boss(request):
+        return JsonResponse({"ok": False, "error": "สิทธิ์ไม่ถึง — หน้านี้เฉพาะแอดมินสูงสุด/ผู้บริหาร"},
+                            status=403, json_dumps_params={"ensure_ascii": False})
+    from .services import db_export
+    from .services.fetch_dashboard import bangkok_now
+
+    def _named(resp, filename):
+        # ใช้ตัวตั้งชื่อไฟล์ตัวเดียวกับ export ไทม์ไลน์รถ (RFC 5987 — ชื่อไทยไม่กลายเป็นขยะ)
+        try:
+            from cars.views import _attachment
+            return _attachment(resp, filename)
+        except Exception:
+            from urllib.parse import quote
+            resp["Content-Disposition"] = "attachment; filename*=UTF-8''%s" % quote(filename)
+            return resp
+
+    stamp = bangkok_now().strftime("%Y%m%d")
+    try:
+        if request.GET.get("all") in ("1", "true", "yes"):
+            data, summary = db_export.all_zip()
+            resp = HttpResponse(data, content_type="application/zip")
+            resp["X-Export-Tables"] = str(len(summary))
+            return _named(resp, "ข้อมูล-oxlet-ทั้งหมด_%s.zip" % stamp)
+
+        table = (request.GET.get("table") or "").strip()
+        if not table:
+            return JsonResponse({"ok": True, "datasets": db_export.datasets()},
+                                json_dumps_params={"ensure_ascii": False})
+        data, n, cut = db_export.table_csv(table)
+        resp = HttpResponse(data, content_type="text/csv; charset=utf-8")
+        resp["X-Export-Rows"] = str(n)
+        if cut:
+            resp["X-Export-Truncated"] = str(db_export.MAX_ROWS)
+        return _named(resp, "%s_%s.csv" % (table, stamp))
+    except ValueError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400,
+                            json_dumps_params={"ensure_ascii": False})
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500,
                             json_dumps_params={"ensure_ascii": False})

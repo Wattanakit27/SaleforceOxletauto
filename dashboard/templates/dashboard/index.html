@@ -5665,6 +5665,13 @@
           <div style="font-size:10px;color:var(--t3)">${c.l}</div>
           <div style="font-size:19px;font-weight:800;color:${c.c}">${c.v}</div></div>`).join('') + `</div>`;
 
+      // ⬇ ดาวน์โหลดข้อมูลออกไปเป็นไฟล์ (เจ้าของขอ ก.ย.69) — เนื้อข้อมูลจริง ไม่ใช่แค่จำนวนแถว
+      //   สิทธิ์ตัดสินที่เซิร์ฟเวอร์ (_is_boss) เหมือนกัน · LINE id พนักงานถูกปิดก่อนเขียนไฟล์
+      html += `<div style="border:.5px solid var(--bd2);background:var(--bg2);border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-size:11.5px;color:var(--t2)"><b>ดาวน์โหลดข้อมูลของเรา</b>
+          <div style="color:var(--t3);font-size:10.5px;margin-top:2px">CSV เปิดด้วย Excel ได้เลย (ภาษาไทยไม่เพี้ยน) · กดปุ่ม ⬇ ท้ายแถวเพื่อเอาทีละตาราง</div></div>
+        <button onclick="dbExportAll(this)" style="padding:8px 14px;border-radius:10px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
+
       // ⚠️ ข้อมูลขายไม่ได้อยู่ในนี้ — ถ้าไม่เขียนไว้ คนอ่านจะเข้าใจผิดว่า "ระบบเก็บแค่นี้"
       html += `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:12px;padding:10px 12px;font-size:11.5px;color:var(--t2);margin-bottom:12px">
         <b>ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้</b> — ลีด / เคสจอง / พนักงาน อยู่ใน <b>Google Sheets</b> (ฐานข้อมูลนี้เก็บงานติดตามรถ · เบิก-คืนรถ · ค่าตั้งค่าและสถิติ)
@@ -5686,7 +5693,8 @@
             <th style="padding:5px 6px;font-weight:600">ตาราง</th>
             <th style="padding:5px 6px;font-weight:600;text-align:right">แถว</th>
             <th style="padding:5px 6px;font-weight:600;text-align:right">คอลัมน์</th>
-            <th style="padding:5px 6px;font-weight:600">เก็บอะไร</th></tr></thead><tbody>`;
+            <th style="padding:5px 6px;font-weight:600">เก็บอะไร</th>
+            <th style="padding:5px 6px;font-weight:600;text-align:center">ไฟล์</th></tr></thead><tbody>`;
         rows.forEach(r => {
           const warn = r.missing ? `<span title="ตารางนี้ยังไม่มีในฐานข้อมูล — ยัง migrate ไม่ครบ" style="color:var(--red);font-size:10px">· ยังไม่ migrate</span>`
                      : (r.error ? `<span title="${h(r.error)}" style="color:var(--red);font-size:10px">· อ่านไม่ได้</span>` : '');
@@ -5697,7 +5705,8 @@
               <div style="color:var(--t3);font-size:10px;font-family:monospace">${h(r.table)}${r.model?' · '+h(r.model):''} ${warn}</div></td>
             <td style="padding:6px;text-align:right;vertical-align:top;font-weight:700;color:${(r.rows||0)>0?'var(--t1)':'var(--t3)'}">${nf(r.rows)}</td>
             <td style="padding:6px;text-align:right;vertical-align:top;color:var(--t3)">${nf(r.cols)}</td>
-            <td style="padding:6px;vertical-align:top;color:var(--t2)">${h(r.what||'—')}${r.keep?`<div style="color:var(--t3);font-size:10px;margin-top:2px">เก็บ: ${h(r.keep)}</div>`:''}</td></tr>`;
+            <td style="padding:6px;vertical-align:top;color:var(--t2)">${h(r.what||'—')}${r.keep?`<div style="color:var(--t3);font-size:10px;margin-top:2px">เก็บ: ${h(r.keep)}</div>`:''}</td>
+            <td style="padding:6px;text-align:center;vertical-align:top">${(r.rows||0)>0&&r.model?`<button onclick="dbExportTable('${h(r.table)}')" title="ดาวน์โหลดตารางนี้เป็น CSV" style="border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);border-radius:8px;padding:3px 8px;font-size:11px;cursor:pointer">⬇</button>`:''}</td></tr>`;
         });
         html += `</tbody></table></div>`;
       });
@@ -5721,6 +5730,17 @@
       html += `<div style="text-align:center;margin-top:16px"><button onclick="document.getElementById('db-overlay').remove()" style="padding:9px 20px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
       box.innerHTML = html;
       if (keepFocus) { const el = document.getElementById('dbq'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+    }
+
+    // ── ⬇ ดาวน์โหลดข้อมูลออกเป็นไฟล์ (endpoint เดียวกันทั้ง 2 ปุ่ม · เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์) ──
+    //  เปิดเป็น URL ตรงๆ ให้เบราว์เซอร์เซฟเอง — ไม่ fetch มาเก็บในแรมก่อน
+    //  (ไฟล์ zip ทุกตารางอาจหลายสิบ MB · blob ในแรมแล้วค่อยเซฟ = เสี่ยงแท็บค้างบนมือถือ)
+    function dbExportTable(t) { window.location.href = '/api/admin/db_export?table=' + encodeURIComponent(t); }
+    function dbExportAll(btn) {
+      // ทุกตารางต้องอ่าน+บีบอัดก่อน อาจนิ่งหลายวินาที → บอกผู้ใช้ว่ากำลังทำ ไม่งั้นจะกดซ้ำ
+      if (btn) { btn.disabled = true; const o = btn.textContent; btn.textContent = 'กำลังรวมไฟล์...';
+                 setTimeout(() => { btn.disabled = false; btn.textContent = o; }, 8000); }
+      window.location.href = '/api/admin/db_export?all=1';
     }
 
     async function openHealthPanel() {
