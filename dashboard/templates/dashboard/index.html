@@ -1297,13 +1297,12 @@
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
         'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
       };
-      html += navSecHtml('main','หน้าหลัก',true);
-      html += `<div class="nav-grp"${navSecOn('main',true)?'':' hidden'}>`;
+      html += navSecHtml('main','หน้าหลัก',true,true);
+      const _mainHid = navSecOn('main',true) ? '' : ' style="display:none"';
       [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}].forEach(t => {
         const go = t.id==='ck' ? 'gotoCheckout()' : `switchTab('${t.id}')`;
-        html += `<button class="ntab${tab===t.id?' on':''}" onclick="${go}">${ic(t.i,15)} ${t.l}</button>`;
+        html += `<button class="ntab${tab===t.id?' on':''}" data-sec="main"${_mainHid} onclick="${go}">${ic(t.i,15)} ${t.l}</button>`;
       });
-      html += `</div>`;
       // เมนูจัดการ (แอดมิน) — แบ่ง 3 หมวดต่อท้ายแท็บใน drawer เดียวกัน · กดแล้วปิด drawer ก่อนเปิด modal
       // (ไม่งั้น drawer z-index 1260 บังตัว modal ที่ 1000-1200)
       if(isAdmin) {
@@ -1311,11 +1310,10 @@
           const items = g.items.filter(it => !(it.boss && !IS_BOSS));   // เมนูเฉพาะ superuser/ผู้บริหาร
           if (!items.length) return;                                    // หมวดว่าง = ไม่โชว์หัวข้อลอยๆ
           html += navSecHtml(g.k, g.sec, false);
-          html += `<div class="nav-grp"${navSecOn(g.k,false)?'':' hidden'}>`;
+          const hid = navSecOn(g.k,false) ? '' : ' style="display:none"';
           items.forEach(it => {
-            html += `<button class="nav-act" onclick="closeNav();${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
+            html += `<button class="nav-act" data-sec="${g.k}"${hid} onclick="closeNav();${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
           });
-          html += `</div>`;
         });
       }
       html += `</div>`;
@@ -1394,18 +1392,28 @@
     let _navSec = {};
     try { _navSec = JSON.parse(localStorage.getItem('navSec') || '{}'); } catch(_) {}
     const navSecOn = (k, def) => (k in _navSec) ? !!_navSec[k] : !!def;
-    function navSecHtml(k, name, def) {
+    // ⚠️ ใช้ <div class="nav-sec"> (ไม่ใช่ <button>) และ **ไม่มี wrapper ครอบรายการ** —
+    //    ทั้ง 2 อย่างนี้คือเหตุที่เมนูพังตอน CSS ใหม่ยังไม่ถึงเบราว์เซอร์ (ก.ย.69):
+    //    <button> ที่ไม่มีสไตล์ = กล่องเทาของเบราว์เซอร์ · <div> ครอบ = .ntab ไหลเป็นแถว
+    //    ของเดิม (.nav-sec/.ntab/.nav-act เป็นลูกตรงของ #nav-slide) สไตล์ถูกอยู่แล้วทุกกรณี
+    function navSecHtml(k, name, def, first) {
       const on = navSecOn(k, def);
-      return `<button class="nav-sec${on?' open':''}" aria-expanded="${on}" onclick="toggleNavSec(this,'${k}')">`
-           + `<span>${h(name)}</span>${ic('lucide:chevron-down',13)}</button>`;
+      return `<div class="nav-sec${on?' open':''}${first?' first':''}" role="button" tabindex="0" aria-expanded="${on}"`
+           + ` onclick="toggleNavSec(this,'${k}')"`
+           + ` onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNavSec(this,'${k}')}">`
+           + `<span>${h(name)}</span>${ic('lucide:chevron-down',13)}</div>`;
     }
-    function toggleNavSec(btn, k) {
-      const grp = btn.nextElementSibling;
-      if (!grp) return;
-      const open = grp.hasAttribute('hidden');
-      if (open) grp.removeAttribute('hidden'); else grp.setAttribute('hidden','');
-      btn.classList.toggle('open', open);
-      btn.setAttribute('aria-expanded', open);
+    // พับ/กาง = สั่ง display ที่ปุ่มทีละอัน
+    // ⚠️ ห้ามใช้ attribute `hidden` — `.nav-act{display:flex}` (class) ชนะกฎ [hidden] ของเบราว์เซอร์
+    //    ต้องมีกฎ CSS เพิ่มมาช่วย ซึ่งแปลว่า "CSS ยังไม่มา = รายการที่พับไว้โผล่หมด"
+    //    inline display ทำงานได้ทุกกรณี ไม่ผูกกับเวอร์ชันของ globals.css
+    function toggleNavSec(el, k) {
+      const items = document.querySelectorAll(`#nav-slide [data-sec="${k}"]`);
+      if (!items.length) return;
+      const open = items[0].style.display === 'none';
+      items.forEach(n => { n.style.display = open ? '' : 'none'; });
+      el.classList.toggle('open', open);
+      el.setAttribute('aria-expanded', open);
       _navSec[k] = open;
       try { localStorage.setItem('navSec', JSON.stringify(_navSec)); } catch(_) {}
       positionNavInd();     // แคปซูล gradient อาจต้องย้าย/ซ่อนตามหมวดที่เพิ่งพับ

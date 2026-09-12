@@ -172,10 +172,9 @@ body.nav-open #nav-slide { transform: translateX(0); }
 .nav-sec:hover { color: var(--t1); }
 .nav-sec svg { opacity: .65; transition: transform .2s var(--ease); }
 .nav-sec.open svg { transform: rotate(180deg); }
-/* กล่องรายการใต้หัวข้อ — พับด้วย attribute hidden (ไม่ต้อง re-render ทั้งหน้า) */
-.nav-grp { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
-.nav-grp[hidden] { display: none; }
-.nav-sec:first-of-type { margin-top: 0; border-top: none; }
+/* รายการที่ถูกพับซ่อนด้วย inline display จาก JS (ดู toggleNavSec) — ไม่ต้องมีกฎที่นี่
+   ตั้งใจไม่ผูกการพับกับ CSS ไฟล์นี้ เพราะถ้า CSS ยังไม่ถึงเบราว์เซอร์ เมนูจะกางหมดทันที */
+.nav-sec.first { margin-top: 0; border-top: none; }
 /* รายการเมนูจัดการใน drawer (กดแล้วเปิด modal — ไม่ใช่แท็บ จึงไม่มีแคปซูล gradient) */
 .nav-act { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; flex-shrink: 0; padding: 9px 14px; font-size: 12.5px; border-radius: 10px; border: none; background: transparent; color: var(--t1); font-family: inherit; cursor: pointer; white-space: nowrap; position: relative; z-index: 1; transition: background .16s ease, color .16s ease; }
 .nav-act:hover { background: var(--purple-bg); color: var(--purple); }
