@@ -4,7 +4,6 @@
 ถ้าย้ายไปเว็บล้วน หัวหน้าจะไม่เห็นความเคลื่อนไหว → ระบบจะถูกเมิน
 ตั้งกลุ่มปลายทางที่ KVStore 'checkout_line_config' · ไม่ตั้ง = ไม่ส่ง (ระบบยังทำงานปกติ)
 """
-from django.conf import settings
 
 
 def _cfg():
@@ -22,7 +21,8 @@ def send_on() -> bool:
 
 
 def is_configured() -> bool:
-    return bool(_cfg().get("group_id") and getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", ""))
+    from dashboard.services.line_channels import push_token
+    return bool(_cfg().get("group_id") and push_token())
 
 
 def _msg(text, uid):
@@ -43,7 +43,8 @@ def _push(text: str, mention_user_id: str = "") -> bool:
     เทียบชื่อในชีตไม่เจอ = ส่งข้อความธรรมดาเหมือนเดิม"""
     cfg = _cfg()
     gid = (cfg.get("group_id") or "").strip()
-    token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "")
+    from dashboard.services.line_channels import push_token
+    token = push_token()          # ★ โพสต์เข้ากลุ่ม = บัญชีตัวส่ง
     if not (gid and token) or not cfg.get("send"):   # ไม่เปิดสวิตช์ = ไม่ส่ง (ค่าเริ่มต้น)
         return False
     try:

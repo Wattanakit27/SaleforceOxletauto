@@ -27,6 +27,13 @@ def index(request):
     return HttpResponseRedirect("/dashboard/")
 
 
+def _push_token() -> str:
+    """token ของ **บัญชีตัวส่ง** — ★ ก.ย.69 แยกบอทเป็น 2 ตัว (ดู [line_channels.py](services/line_channels.py))
+    ยังไม่ตั้งบัญชีตัวส่ง = ตกไปใช้ตัวเดิม (พฤติกรรมเหมือนก่อนแยก)"""
+    from .services.line_channels import push_token
+    return push_token()
+
+
 def _session_user(request):
     """ดึง user จาก signed-cookie session, คืน None ถ้าไม่ login.
 
@@ -1222,7 +1229,7 @@ def cron_tick(request):
     #   ผลคือแดชบอร์ดค้างแช่เป็นสัปดาห์ (กดรีเฟรชมือหายชั่วคราว เพราะปุ่มนั้นไม่เช็ค token)
     #   และหน้าสถานะระบบขึ้นว่า "cron ไม่ทำงาน" ทั้งที่ cron ยิงถึงจริง → ไล่ไม่เจอ
     #   ตอนนี้: ไม่มี token = ข้ามเฉพาะส่วนแจ้งเตือน LINE · งานข้อมูลยังทำครบ
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
 
     from .services.line_notify import push_line_message
     from .services.fetch_dashboard import bangkok_now
@@ -1415,9 +1422,9 @@ def cron_send_line(request):
     if submitted != secret_setting:
         return JsonResponse({"error": "Unauthorized — secret ไม่ถูกต้อง"}, status=401)
 
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
     if not channel_token:
-        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE token (ตัวส่ง) ใน .env"}, status=500)
 
     from .services.line_notify import (
         build_seller_pipelines, build_seller_flex,
@@ -1730,9 +1737,9 @@ def admin_send_followup(request):
     if test and not target:
         return JsonResponse({"error": "Test mode ต้องกรอก target user_id"}, status=400)
 
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
     if not channel_token:
-        return JsonResponse({"error": "LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้ง"}, status=500)
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE token (ตัวส่ง) ใน .env"}, status=500)
 
     from .services.fetch_dashboard import build_followup_messages
     from .services.line_notify import push_line_message, get_nickname_to_user_id
@@ -1796,7 +1803,7 @@ def admin_send_line(request):
 
     if request.method == "GET":
         # Debug info ของ token (ไม่เผยค่าจริง — แสดงแค่ length + prefix/suffix)
-        raw_token = getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or ""
+        raw_token = _push_token()          # ตัวนี้เป็นหน้า debug ของ "ขาส่ง"
         stripped = raw_token.strip()
         token_info = {
             "raw_length": len(raw_token),
@@ -1859,9 +1866,9 @@ def admin_send_line(request):
     except json.JSONDecodeError:
         body = {}
 
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
     if not channel_token:
-        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN ใน .env"}, status=500)
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE token (ตัวส่ง) ใน .env"}, status=500)
 
     test_mode = bool(body.get("test"))
     target_user_id = (body.get("target_user_id") or "").strip()
@@ -2132,7 +2139,9 @@ def admin_system_health(request):
         age = get_dashboard_cache_age()
     except Exception:
         pass
-    line_ok = bool(getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", ""))
+    from .services.line_channels import crm_token as _crm_tok, has_push_channel
+    line_ok = bool(_crm_tok() or _push_token())
+    line_accounts = 2 if has_push_channel() else (1 if line_ok else 0)
 
     counts = {
         "leadNormal": int(summary.get("leadNormal", 0)),
@@ -2215,6 +2224,7 @@ def admin_system_health(request):
         "todayLeads": today_leads,
         "supabaseOk": sb_ok,
         "lineOk": line_ok,
+        "lineAccounts": line_accounts,   # 2 = แยกบัญชีตัวรับ/ตัวส่งแล้ว
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -2597,19 +2607,25 @@ def admin_line_group_name(request):
         gid = ""
     if not gid:
         return JsonResponse({"ok": False, "error": "ใส่ group id ก่อน"}, status=400)
-    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
-    if not token:
+    # ★ ก.ย.69 — ลองทุกบัญชี: ดึงชื่อกลุ่มได้เฉพาะบัญชีที่ "อยู่ในกลุ่มนั้น"
+    #   บอทตัวส่งกับตัวรับอยู่คนละกลุ่มกันได้ → เดาตัวเดียวแล้วตอบ 403 ทั้งที่ข้อมูลมี
+    from .services.line_channels import group_tokens
+    tokens = group_tokens()
+    if not tokens:
         return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้ง LINE token"}, status=500)
-    try:
-        r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
-                    headers={"Authorization": f"Bearer {token}"}, timeout=10)
-        if r.status_code == 200:
-            j = r.json()
-            return JsonResponse({"ok": True, "name": j.get("groupName", ""), "picture": j.get("pictureUrl", "")},
-                                json_dumps_params={"ensure_ascii": False})
-        return JsonResponse({"ok": False, "error": f"LINE {r.status_code} — เช็คว่า id ถูก + บอทอยู่ในกลุ่มนี้ไหม"}, status=400)
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)[:150]}, status=500)
+    last = "ไม่มีบัญชีไหนอยู่ในกลุ่มนี้"
+    for token in tokens:
+        try:
+            r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
+                        headers={"Authorization": f"Bearer {token}"}, timeout=10)
+            if r.status_code == 200:
+                j = r.json()
+                return JsonResponse({"ok": True, "name": j.get("groupName", ""), "picture": j.get("pictureUrl", "")},
+                                    json_dumps_params={"ensure_ascii": False})
+            last = f"LINE {r.status_code} — เช็คว่า id ถูก + บอทอยู่ในกลุ่มนี้ไหม"
+        except Exception as e:
+            last = str(e)[:150]
+    return JsonResponse({"ok": False, "error": last}, status=400)
 
 
 def _unwrap_payload(data):
@@ -2742,18 +2758,20 @@ def _store_line_groups(pairs):
     if not pairs:
         return []
     groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
-    token = getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")
+    from .services.line_channels import group_tokens
+    tokens = group_tokens()          # ★ ลองทุกบัญชี — บอทคนละตัวอยู่คนละกลุ่มได้
     added = []
     for gid, name in pairs:
         if not gid:
             continue
         name = name or groups.get(gid, {}).get("name", "")
-        if not name and token:   # ดึงชื่อกลุ่มครั้งแรก (บอทต้องอยู่ในกลุ่ม)
+        for token in (tokens if not name else []):   # ดึงชื่อกลุ่มครั้งแรก (บอทต้องอยู่ในกลุ่ม)
             try:
                 r = _rq.get(f"https://api.line.me/v2/bot/group/{gid}/summary",
                             headers={"Authorization": f"Bearer {token}"}, timeout=8)
                 if r.status_code == 200:
                     name = r.json().get("groupName", "")
+                    break
             except Exception:
                 pass
         groups[gid] = {"name": name, "lastSeen": bangkok_now().isoformat()}
@@ -2866,11 +2884,18 @@ def line_webhook(request):
     if request.method != "POST":
         return HttpResponse("ok")   # LINE verify / ping
     body = request.body or b""
-    secret = getattr(_st, "LINE_CHANNEL_SECRET", "")
-    if secret:   # ตรวจ signature ถ้ามี channel secret (ปลอดภัยขึ้น · ไม่มี = ข้าม)
+    # ★ ก.ย.69 — ตรวจลายเซ็นให้ครบ "ทุกบัญชี" ที่ตั้งไว้ (ตัวรับ + ตัวส่ง)
+    #   แต่ละ channel มีลายเซ็นของตัวเอง → เช็คแค่ตัวเดียว = พอบัญชีใหม่ยิงมาจะโดน 403 ทั้งที่ถูกต้อง
+    #   ไม่ได้ตั้ง secret ไว้เลย = ข้ามการตรวจ (พฤติกรรมเดิม)
+    from .services.line_channels import secrets as _line_secrets
+    pairs = _line_secrets()
+    if pairs:
         import hmac, hashlib, base64
-        mac = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
-        if not hmac.compare_digest(mac, request.headers.get("X-Line-Signature", "")):
+        got = request.headers.get("X-Line-Signature", "")
+        ok = any(hmac.compare_digest(
+            base64.b64encode(hmac.new(sec.encode(), body, hashlib.sha256).digest()).decode(), got)
+            for _role, sec in pairs)
+        if not ok:
             _webhook_beat("webhook", 0, sig_fail=True)   # จดไว้ ไม่งั้นเงียบจนหาสาเหตุไม่เจอ
             return HttpResponse(status=403)
     try:
@@ -3206,9 +3231,9 @@ def finance_check_submit(request):
         return JsonResponse({"error": "token ไม่ถูกต้อง — เปิดจากลิงก์เซลล์แล้วลองใหม่"}, status=401)
     data.setdefault("seller", seller_name)
 
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
     if not channel_token:
-        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN ใน .env"}, status=500)
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE token (ตัวส่ง) ใน .env"}, status=500)
 
     # ปลายทาง: ส่งเข้า FINANCE_TEST_LINE_ID เท่านั้น — ไม่ fallback ไป id อื่นเด็ดขาด (กันส่งผิดคน)
     target = (getattr(settings, "FINANCE_TEST_LINE_ID", "") or "").strip()
@@ -3308,9 +3333,9 @@ def loan_submit(request):
         return JsonResponse({"error": "token ไม่ถูกต้อง — เปิดจากลิงก์เซลล์แล้วลองใหม่"}, status=401)
     data.setdefault("sales", seller_name)
 
-    channel_token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    channel_token = _push_token()          # ★ ส่งออก = บัญชีตัวส่ง (ดู line_channels.py)
     if not channel_token:
-        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN ใน .env"}, status=500)
+        return JsonResponse({"error": "ยังไม่ได้ตั้ง LINE token (ตัวส่ง) ใน .env"}, status=500)
 
     target = (getattr(settings, "FINANCE_TEST_LINE_ID", "") or "").strip()
     if not target:

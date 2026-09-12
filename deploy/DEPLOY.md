@@ -236,6 +236,39 @@ crontab -e
 
 ---
 
+## 12.5) บัญชี LINE 2 ตัว — ตัวรับ (CRM) + ตัวส่ง (โพสต์เข้ากลุ่ม) · ★ ก.ย.69
+
+ระบบแยกบทบาทของบัญชี LINE ออกเป็น 2 ตัวแล้ว **ไม่ต้องแก้โค้ดเวลาสลับบัญชี**
+
+| บทบาท | ทำอะไร | env |
+|---|---|---|
+| **ตัวรับ / CRM** | ลูกค้าทักเข้ามา · เก็บแชท · เก็บโปรไฟล์ · รับ webhook | `LINE_CHANNEL_ACCESS_TOKEN` + `LINE_CHANNEL_SECRET` |
+| **ตัวส่ง** | โพสต์เข้ากลุ่มงาน: รายงานรายวัน · ตามด่วน · สรุปเบิก-คืน · Flex | `LINE_PUSH_CHANNEL_ACCESS_TOKEN` + `LINE_PUSH_CHANNEL_SECRET` |
+
+**ยังไม่ตั้งตัวส่ง = ใช้ token ตัวรับทำทุกอย่างเหมือนเดิม** (ไม่มีอะไรพัง)
+
+### เอาบัญชีใหม่มาลง
+1. LINE Developers Console → Messaging API channel ของบัญชีใหม่ → คัดลอก **Channel access token (long-lived)** + **Channel secret**
+2. บนเซิร์ฟเวอร์ เติมใน `/opt/oxlet/.env`:
+   ```
+   LINE_PUSH_CHANNEL_ACCESS_TOKEN=<token ของบัญชีตัวส่ง>
+   LINE_PUSH_CHANNEL_SECRET=<secret ของบัญชีตัวส่ง>
+   ```
+3. `systemctl restart oxlet`
+4. **ยืนยันว่าวางถูกช่อง** (ถาม LINE ตรงๆ ว่า token เป็นของบัญชีชื่ออะไร — ไม่ต้องส่งข้อความจริง):
+   ```bash
+   cd /opt/oxlet && .venv/bin/python manage.py line_accounts --groups --out /tmp/acc.txt && cat /tmp/acc.txt
+   ```
+5. **เพิ่มบัญชีตัวส่งเข้ากลุ่มงานทุกกลุ่มที่ต้องรับรายงาน** — ไม่อยู่ในกลุ่ม = push ไม่เข้า
+   (คำสั่งข้อ 4 พร้อม `--groups` บอกให้ว่าบัญชีไหนอยู่ในกลุ่มไหนแล้ว)
+
+### ⚠️ ข้อควรระวัง
+- **token ผูกกับ "ความสัมพันธ์" ไม่ใช่แค่สิทธิ์** — ดึงโปรไฟล์ได้เฉพาะคนที่เพิ่ม*บัญชีนั้น*เป็นเพื่อน ·
+  push/ดึงชื่อกลุ่มได้เฉพาะกลุ่มที่*บัญชีนั้น*เป็นสมาชิก → งานระดับกลุ่มโค้ดจะ **ลองทีละบัญชี** ให้เอง
+- **Webhook URL ตั้งได้ 1 ที่ต่อ channel** — ถ้าอยากให้ตัวส่งยิง webhook มาด้วย ต้องตั้ง URL ในบัญชีนั้นด้วย
+  (ระบบตรวจลายเซ็นรองรับทั้ง 2 บัญชีแล้ว) · ไม่ตั้งก็ได้ ถ้าตัวส่งมีหน้าที่ส่งอย่างเดียว
+- **LINE Login เป็นคนละ channel** (`LINE_LOGIN_CHANNEL_ID/SECRET`) ไม่เกี่ยวกับ 2 ตัวนี้ — อย่าเอา token มาสลับกัน
+
 ## 13) อัปเดต LINE Login channel (สำคัญ — ไม่งั้น login ไม่ได้)
 
 ที่ LINE Developers Console → LINE Login channel → ตั้ง **Callback URL**:
@@ -284,6 +317,7 @@ https://srv1793506.hstgr.cloud/auth/line/callback
 - [ ] `/track/` เข้าได้ (ระบบติดตามรถ — ต่อ Postgres แล้ว)
 - [ ] รอ ~2 นาที เช็ค followup cron ทำงาน: `grep cron /var/log/syslog | tail`
 - [ ] ส่ง LINE Flex ทดสอบจากเมนูแอดมิน
+- [ ] `manage.py line_accounts` โชว์ครบ 2 บัญชี + ชื่อบัญชีตรงกับที่ตั้งใจ
 
 ---
 

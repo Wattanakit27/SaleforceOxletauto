@@ -487,6 +487,8 @@ def api_line_config(request):
         pass
 
     from django.conf import settings as _st
+
+    from dashboard.services import line_channels as _ch
     n_line = CarMovement.objects.filter(source=CarMovement.SRC_LINE).count()
     return JsonResponse({
         "ok": True,
@@ -497,7 +499,11 @@ def api_line_config(request):
                    "storeCustomerChat": bool(cfg.get("store_customer_chat"))},
         "chat": chat_stats(),
         "groups": groups,
-        "lineToken": bool(getattr(_st, "LINE_CHANNEL_ACCESS_TOKEN", "")),
+        # ★ ก.ย.69 — แยกบัญชี "ตัวรับ" (เก็บแชท) กับ "ตัวส่ง" (โพสต์เข้ากลุ่ม)
+        #   พาเนลต้องบอกให้ชัดว่าอันไหนพร้อม ไม่งั้นติ๊ก "ให้บอทโพสต์" แล้วเงียบโดยไม่รู้สาเหตุ
+        "lineToken": bool(_ch.crm_token()),
+        "pushToken": bool(_ch.push_token()),
+        "splitAccounts": _ch.has_push_channel(),
         "webhookUrl": (getattr(_st, "SITE_URL", "") or "").rstrip("/") + "/api/line/webhook",
         "fromLine": n_line,
     }, json_dumps_params={"ensure_ascii": False})

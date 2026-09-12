@@ -649,13 +649,33 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 
 ## LINE Integration
 
-### Channel Access Token
-ใส่ใน `.env`:
+### Channel Access Token — ★ ก.ย.69 แยกเป็น **2 บัญชี** (เจ้าของสั่ง)
 ```
-LINE_CHANNEL_ACCESS_TOKEN=xxx...
-CRON_SECRET=xxx...
+LINE_CHANNEL_ACCESS_TOKEN=xxx        # ตัวรับ/CRM — ลูกค้าทักเข้ามา · เก็บแชท/โปรไฟล์ · รับ webhook
+LINE_CHANNEL_SECRET=xxx              # ลายเซ็น webhook ของตัวรับ
+LINE_PUSH_CHANNEL_ACCESS_TOKEN=xxx   # ตัวส่ง — โพสต์เข้ากลุ่มงาน (รายงาน/ตามด่วน/สรุปเบิก-คืน)
+LINE_PUSH_CHANNEL_SECRET=xxx         # ลายเซ็น webhook ของตัวส่ง (ตั้งเมื่อให้ตัวส่งยิง webhook มาด้วย)
+CRON_SECRET=xxx
 ```
-ทั้ง 2 ตัวต้องตั้งบน Vercel environment variables ด้วย (`.env` ไม่ถูก push deploy)
+- **ทุกจุดในโค้ดต้องเรียกผ่าน [line_channels.py](dashboard/services/line_channels.py) เท่านั้น** —
+  `push_token()` (ส่ง) · `crm_token()` (รับ/โปรไฟล์ลูกค้า) · `group_tokens()` (งานระดับกลุ่ม) · `secrets()` (ลายเซ็น)
+  · **ห้ามอ่าน `settings.LINE_CHANNEL_ACCESS_TOKEN` ตรงๆ** ไม่งั้นพอสลับบัญชีจะมีจุดตกค้างแล้วหาไม่เจอ
+- **ยังไม่ตั้งตัวส่ง = ตกไปใช้ token ตัวรับทุกอย่าง** → เอาโค้ดขึ้นก่อน ค่อยเอาบัญชีใหม่มาลงทีหลังได้
+- **⚠️ token ผูกกับ "ความสัมพันธ์" ไม่ใช่แค่สิทธิ์**: ดึงโปรไฟล์ได้เฉพาะคนที่เพิ่ม*บัญชีนั้น*เป็นเพื่อน ·
+  push / ดึงชื่อกลุ่มได้เฉพาะกลุ่มที่*บัญชีนั้น*เป็นสมาชิก → งานระดับกลุ่ม (`_store_line_groups`,
+  `admin_line_group_name`, `people.fetch_profile`) **ลองทีละ token** ไม่เดาตัวเดียว ไม่งั้นได้ 403/404 แบบงงๆ
+- **ตรวจลายเซ็น webhook รับได้ทั้ง 2 บัญชี** (`line_webhook` วน `secrets()`) — เช็คตัวเดียว = บัญชีใหม่ยิงมาแล้วโดน 403
+- **⚠️★ บั๊กที่แก้ไปพร้อมกัน: `LINE_CHANNEL_SECRET` ไม่เคยถูกประกาศใน settings.py** ทั้งที่ `line_webhook`
+  อ่านผ่าน `getattr` → คืน `""` เสมอ = **ข้ามการตรวจลายเซ็นมาตลอด** (ใครก็ยิง `/api/line/webhook` ได้) ·
+  ประกาศแล้ว → ตั้งค่าใน .env เมื่อไหร่การตรวจเริ่มทำงานทันที
+- **`manage.py line_accounts [--offline] [--groups] [--out ไฟล์]`** — ถาม LINE ว่า token แต่ละช่องเป็นของ
+  **บัญชีชื่ออะไร** (`/v2/bot/info`) + `--groups` บอกว่าบัญชีไหนอยู่ในกลุ่มไหน · ใช้ยืนยันว่า "วางคีย์ถูกช่อง"
+  โดยไม่ต้องส่งข้อความจริงเข้ากลุ่ม · เตือนด้วยถ้ายังไม่ได้ตั้ง secret เลย
+- **LINE Login เป็นคนละ channel** (`LINE_LOGIN_CHANNEL_ID/SECRET`) — ไม่เกี่ยวกับ 2 บัญชีนี้
+- **`LINE_CHANNEL_TOKEN`/`LINE_GROUP_ID`** ([cars/line.py](cars/line.py) · push สเตปรถ) ยังเป็นช่องแยกของเดิม
+  **ตั้งใจไม่ผูกเข้า resolver** — ไม่ตั้ง = no-op เงียบอยู่แล้ว ถ้าผูกจะกลายเป็นเปิดการส่งที่ไม่มีใครสั่งเปิด
+- พาเนล "⚙️ กลุ่ม LINE" เตือนเมื่อติ๊ก "ให้บอทโพสต์" แต่ยังไม่มี token ตัวส่ง / ยังไม่ได้แยกบัญชี ·
+  `admin_system_health` คืน `lineAccounts` (2 = แยกแล้ว)
 
 ### Flex Messages
 [line_notify.py](dashboard/services/line_notify.py):

@@ -88,8 +88,21 @@ OXLET_ADMIN_PASSWORD = os.getenv("OXLET_ADMIN_PASSWORD", "1234")
 # เหลือ login ผ่าน LINE Login (OAuth) อย่างเดียว · ตัวแปรนี้ไม่ถูกอ้างถึงในโค้ดแล้ว (เก็บไว้กัน import พัง/อ้างอิงเก่า)
 OXLET_SELLER_PASSWORD = os.getenv("OXLET_SELLER_PASSWORD", "")
 
-# LINE Messaging API — Channel Access Token (ตั้งใน .env เท่านั้น ไม่ commit)
+# ─────────────────────────────────────────────────────────────
+#  LINE Messaging API — ★ ก.ย.69 แยกเป็น 2 บัญชี (เจ้าของสั่ง)
+#    ตัวรับ/CRM = บัญชีที่ลูกค้าทักเข้ามา (เก็บแชท/โปรไฟล์)
+#    ตัวส่ง     = บอทที่โพสต์เข้ากลุ่มงาน (รายงาน/ตามด่วน/สรุปเบิก-คืน)
+#  **โค้ดห้ามอ่านตัวแปรพวกนี้ตรงๆ** — เรียกผ่าน [line_channels.py](dashboard/services/line_channels.py)
+#  ยังไม่ตั้งตัวส่ง = ทุกอย่างใช้ token ตัวรับเหมือนเดิม (ไม่มีอะไรพัง)
+# ─────────────────────────────────────────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+# ⚠️ เดิม "ประกาศตกไป" ทั้งที่ `line_webhook` อ่านตัวนี้อยู่ → getattr คืน "" เสมอ
+#    = **ข้ามการตรวจลายเซ็น webhook มาตลอด** (ใครก็ยิง /api/line/webhook ได้)
+#    ตั้งค่าใน .env เมื่อไหร่ การตรวจจะเริ่มทำงานทันที
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
+# บัญชีตัวส่ง (ใหม่) — ว่าง = ใช้บัญชีเดียวกับตัวรับ
+LINE_PUSH_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_PUSH_CHANNEL_ACCESS_TOKEN", "")
+LINE_PUSH_CHANNEL_SECRET = os.getenv("LINE_PUSH_CHANNEL_SECRET", "")
 
 # LINE Login (OAuth) — ให้เซลล์เข้าด้วยบัญชี LINE (ยืนยันตัวตน · PDPA). ตั้งจาก LINE Login channel
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")

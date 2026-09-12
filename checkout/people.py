@@ -130,7 +130,11 @@ def line_display_name(user_id="") -> str:
     if isinstance(hit, dict) and hit.get("name"):
         return hit["name"]
 
-    token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
+    try:
+        from dashboard.services.line_channels import crm_token
+        token = crm_token()      # ★ คนที่ทักเข้ามา = เพื่อนของบัญชี "ตัวรับ"
+    except Exception:
+        token = ""
     if not token:
         return ""
     try:
@@ -177,23 +181,30 @@ def fetch_profile(user_id="", group_id="", room_id="") -> dict:
     if not uid:
         return {}
     try:
-        from django.conf import settings
         import requests
+        from dashboard.services.line_channels import crm_token, group_tokens
     except Exception:
         return {}
-    token = (getattr(settings, "LINE_CHANNEL_ACCESS_TOKEN", "") or "").strip()
-    if not token:
+
+    # ★ ก.ย.69 — 2 บัญชี: **โปรไฟล์ผูกกับบัญชีที่เขามีความสัมพันธ์ด้วย**
+    #   1:1  → บัญชี "ตัวรับ" ก่อน (คนที่ทักเข้ามาเพิ่มตัวนั้นเป็นเพื่อน) แล้วค่อยลองตัวส่ง
+    #   กลุ่ม → ลองทุกบัญชี เพราะบอทคนละตัวอยู่คนละกลุ่มได้
+    grp = group_tokens()
+    one_to_one = [t for t in ([crm_token()] + grp) if t]
+    seen, one_to_one = set(), [t for t in one_to_one if not (t in seen or seen.add(t))]
+    if not one_to_one:
         return {}
 
-    urls = []
+    tries = []
     if group_id:
-        urls.append("https://api.line.me/v2/bot/group/%s/member/%s" % (group_id, uid))
+        tries += [("https://api.line.me/v2/bot/group/%s/member/%s" % (group_id, uid), t) for t in grp]
     if room_id:
-        urls.append("https://api.line.me/v2/bot/room/%s/member/%s" % (room_id, uid))
-    urls.append("https://api.line.me/v2/bot/profile/%s" % uid)   # เผื่อเขาเพิ่มเพื่อนไว้ (ได้ข้อมูลครบกว่า)
+        tries += [("https://api.line.me/v2/bot/room/%s/member/%s" % (room_id, uid), t) for t in grp]
+    # เผื่อเขาเพิ่มบอทเป็นเพื่อนไว้ — ทางนี้ได้ข้อมูลครบกว่า (statusMessage/language)
+    tries += [("https://api.line.me/v2/bot/profile/%s" % uid, t) for t in one_to_one]
 
     best = {}
-    for u in urls:
+    for u, token in tries:
         try:
             r = requests.get(u, headers={"Authorization": "Bearer %s" % token}, timeout=8)
             if r.status_code != 200:

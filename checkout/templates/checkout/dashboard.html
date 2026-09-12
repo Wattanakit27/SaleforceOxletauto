@@ -353,7 +353,10 @@ async function loadLine(){
     sel.appendChild(o);
   });
   const w = [];
-  if(!d.lineToken) w.push('ยังไม่ได้ตั้ง LINE token บนเซิร์ฟเวอร์ — บอทเข้ากลุ่มไม่ได้');
+  if(!d.lineToken) w.push('ยังไม่ได้ตั้ง LINE token ของบัญชี "ตัวรับ" — เก็บแชท/โปรไฟล์ไม่ได้');
+  // ★ ก.ย.69 — 2 บัญชี: ติ๊ก "ให้บอทโพสต์" แล้วต้องมั่นใจว่า **บัญชีตัวส่ง** พร้อมจริง
+  if(c.send && !d.pushToken) w.push('ติ๊กให้บอทโพสต์ไว้ แต่ยังไม่ได้ตั้ง token ของบัญชี "ตัวส่ง" — จะไม่มีอะไรออกไป');
+  else if(c.send && !d.splitAccounts) w.push('ตอนนี้โพสต์ด้วยบัญชีเดียวกับตัวรับ (ยังไม่ได้แยกบัญชีตัวส่ง)');
   if(!c.groupId)   w.push('ยังไม่ได้เลือกกลุ่ม — ระบบจะไม่เก็บอะไรเลย');
   else if(!c.listen) w.push('เลือกกลุ่มแล้วแต่ยังไม่ติ๊ก "เก็บข้อมูลจากกลุ่มนี้"');
   $('lineWarn').innerHTML = w.length ? '<div class="warn">'+w.join('<br>')+'</div>' : '';
