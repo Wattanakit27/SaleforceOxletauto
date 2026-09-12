@@ -405,6 +405,11 @@ async function doReturn(id){
 $('q').addEventListener('input', render);
 $('q').addEventListener('keydown', e => { if(e.key==='Escape') clearQ(); });
 load();
+
+// ★ ก.ย.69 — เปิดพาเนล "กลุ่ม LINE / แชทลูกค้า" ให้เลยเมื่อถูกเรียกจากเมนูสามขีดของแดชบอร์ด
+//   (หน้านี้ถูกฝังเป็น iframe → สั่งจากข้างนอกตรงๆ ไม่ได้ ส่งผ่าน query แทน)
+if (new URLSearchParams(location.search).get('line')) toggleLine();
+
 </script>
 {% endif %}
 </body>
