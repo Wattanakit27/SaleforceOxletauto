@@ -788,6 +788,107 @@ def _cust_row(r, prof=None):
     }
 
 
+# ─────────────────────────────────────────────────────────────
+#  แชทลูกค้า (CRM) — ★ ก.ย.69
+#  เจ้าของกดเมนู "ลูกค้า & แชท" แล้วเด้งไปโผล่หน้าเบิก-คืนรถ เพราะตอนแรกผมเอาข้อมูล
+#  ลูกค้าไปฝังไว้ใน "พาเนลตั้งค่า" ของหน้านั้น → แยกออกมาเป็น endpoint ของตัวเอง
+#  ให้แดชบอร์ดหลักเปิดเป็นพาเนลได้ตรงๆ ไม่ต้องข้ามหน้า
+# ─────────────────────────────────────────────────────────────
+CUST_LIST_MAX = 200      # รายชื่อลูกค้าต่อครั้ง
+CUST_MSG_MAX = 100       # ข้อความย้อนหลังต่อคน
+
+
+def _msg_preview(g) -> str:
+    """ข้อความ 1 บรรทัดสำหรับโชว์ — ชนิดที่ไม่ใช่ตัวอักษรบอกเป็นคำอ่านออก"""
+    if (g.text or "").strip():
+        return g.text
+    if g.msg_type == "sticker":
+        return "[สติกเกอร์]"
+    if g.has_media:
+        return "[รูป/ไฟล์ — ตัวไฟล์อยู่ใน LINE ระบบยังไม่ได้โหลดมาเก็บ]"
+    return "[%s]" % (g.msg_type or "ไม่ทราบชนิด")
+
+
+def api_customers(request):
+    """ลูกค้าที่ทักเข้า LINE OA — `?q=` ค้นหา · `?user_id=` ดูบทสนทนาของคนนั้น
+
+    **ไม่ใช่หน้าตั้งค่า** — อ่านอย่างเดียว ไว้ดูว่าใครทักมา ทักว่าอะไร และคัดลอก id ไปทักกลับ
+
+    ★ กติกา LINE user id: **ลูกค้าโชว์ได้** (เจ้าของขอไว้ทักกลับ · push ต้องใช้ id) แต่
+      **พนักงานที่ทักเข้า OA ต้องไม่โชว์ id** — เช็คจาก `LineProfile.is_employee`
+    """
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin/ผู้บริหาร"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from django.db.models import Count, Max
+    from .models import LineProfile
+
+    uid = (request.GET.get("user_id") or "").strip()
+    base = GroupChat.objects.exclude(chat_type=GroupChat.GROUP)   # 1:1 + ห้องคุย = ไม่ใช่กลุ่มงาน
+
+    # ── บทสนทนาของคนเดียว ──
+    if uid:
+        prof = LineProfile.objects.filter(user_id=uid).first()
+        rows = list(base.filter(sender_id=uid).order_by("-sent_at", "-id")[:CUST_MSG_MAX])
+        rows.reverse()                                            # เก่า → ใหม่ (อ่านเป็นบทสนทนา)
+        emp = bool(prof and prof.is_employee)
+        return JsonResponse({
+            "ok": True,
+            "person": {
+                "name": (prof.show_name if prof else "") or (rows[-1].sender_name if rows else "") or "(ไม่รู้ชื่อ)",
+                "userId": "" if emp else uid,                     # พนักงาน = ไม่ส่ง id ออก
+                "isEmployee": emp,
+                "status": (prof.status_message if prof else "") or "",
+                "msgCount": prof.msg_count if prof else len(rows),
+                "first": (timezone.localtime(prof.first_seen).strftime("%d/%m/%y %H:%M")
+                          if prof and prof.first_seen else ""),
+                "channel": (prof.channel if prof else "") or "",
+                "channels": list(prof.channels or []) if prof else [],
+            },
+            "messages": [{
+                "at": timezone.localtime(g.sent_at).strftime("%d/%m %H:%M") if g.sent_at else "",
+                "text": _msg_preview(g),
+                "type": g.msg_type or "",
+                "media": bool(g.has_media),
+                "channel": g.channel or "",
+            } for g in rows],
+            "limit": CUST_MSG_MAX,
+        }, json_dumps_params={"ensure_ascii": False})
+
+    # ── รายชื่อลูกค้า ──
+    q = (request.GET.get("q") or "").strip()
+    agg = (base.values("sender_id", "sender_name")
+           .annotate(n=Count("id"), last=Max("sent_at")).order_by("-last"))
+    if q:
+        agg = agg.filter(sender_name__icontains=q)
+    rows = list(agg[:CUST_LIST_MAX])
+    profs = {p.user_id: p for p in LineProfile.objects.filter(
+        user_id__in=[r["sender_id"] for r in rows if r["sender_id"]])}
+    out = []
+    for r in rows:
+        pr = profs.get(r["sender_id"])
+        emp = bool(pr and pr.is_employee)
+        d = _cust_row(r, pr)
+        if emp:                       # พนักงานทักเข้า OA — เก็บไว้ดูได้ แต่ห้ามโชว์ id
+            d["userId"] = ""
+        d["isEmployee"] = emp
+        d["channel"] = (pr.channel if pr else "") or ""
+        out.append(d)
+
+    totals = {
+        "people": base.values("sender_id").distinct().count(),
+        "messages": base.count(),
+        "keepDays": C.CUSTOMER_CHAT_KEEP_DAYS,
+        "storeOn": bool(line_cfg().get("store_customer_chat")),
+    }
+    # แยกตามบัญชี OA ที่ได้ยิน — เห็นทันทีว่าลูกค้าเข้ามาทางตัวไหนบ้าง (รองรับหลาย OA)
+    by_channel = {(r["channel"] or "(ไม่ทราบ)"): r["n"] for r in
+                  base.values("channel").annotate(n=Count("id")).order_by("-n")}
+    return JsonResponse({"ok": True, "totals": totals, "byChannel": by_channel,
+                         "customers": out, "shown": len(out), "max": CUST_LIST_MAX},
+                        json_dumps_params={"ensure_ascii": False})
+
+
 def chat_stats():
     """สรุปคลังแชทสำหรับพาเนลตั้งค่า — {total, groups:[{id,name,n,last}], media}"""
     from django.db.models import Count, Max

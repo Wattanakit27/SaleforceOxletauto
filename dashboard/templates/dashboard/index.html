@@ -1358,8 +1358,8 @@
       // ★ ก.ย.69 — เจ้าของแจ้ง "เมนูยาวเกิน หาไม่เจอ" → จัดหมวดใหม่ + ทุกหมวดพับได้
       //   `k` = คีย์จำสถานะเปิด/ปิดใน localStorage (คงที่ แม้เปลี่ยนชื่อหมวดทีหลัง)
       { k:'crm', sec: 'ลูกค้า & ข้อมูล', items: [
-        { i:'lucide:message-circle', l:'แชทลูกค้า / กลุ่ม LINE', fn:"gotoCheckout('line')",
-          tip:'ลูกค้าที่ทักเข้า LINE OA — ชื่อ + LINE id (กดคัดลอกไว้ทักกลับ) + จำนวนข้อความ · และเลือกกลุ่มที่ให้บอทอ่าน (เปิดพาเนลให้เลย)' },
+        { i:'lucide:message-circle', l:'แชทลูกค้า (LINE OA)', fn:'openCustomerChat()',
+          tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
         { i:'lucide:database',    l:'ฐานข้อมูล & ดาวน์โหลด',   fn:'openDbPanel()',           boss:true,
           tip:'ระบบเก็บอะไรไว้บ้าง (ทุกตาราง/จำนวนแถว/ป้าย PDPA) + ปุ่มดาวน์โหลด CSV รายตาราง หรือ .zip ทั้งหมด (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
         { i:'lucide:car-front',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
@@ -1379,6 +1379,8 @@
         { i:'lucide:package',     l:'ตั้งค่าหมวดวิธีได้รถ',    fn:'openMethodMap()',         tip:'จับคู่ค่าวิธีได้รถ (คอลัมน์ AT) → หาเอง/online/รถเทิร์น/ขายหน้าร้าน' },
         { i:'lucide:bell',        l:'แจ้งเตือนตามด่วน',        fn:'openCronPanel()',         tip:'ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)' },
         { i:'lucide:send',        l:'รายงานเข้าไลน์',          fn:'openReportLine()',        tip:'แคปตารางรายงานส่งเข้ากลุ่ม LINE อัตโนมัติรายวัน' },
+        { i:'lucide:repeat',      l:'ตั้งค่ากลุ่ม LINE ที่ดักเก็บ', fn:"gotoCheckout('line')",
+          tip:'เลือกกลุ่มที่ให้บอทอ่านเพื่อสร้างเคสเบิก-คืนรถ + สวิตช์เก็บแชทกลุ่ม/แชทลูกค้า (อยู่ในหน้าเบิก-คืนรถ)' },
       ]},
       { k:'log', sec: 'ตรวจสอบ & Log', items: [
         { i:'lucide:circle-check',l:'สถานะระบบ',               fn:'openHealthPanel()',       tip:'เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้' },
@@ -5791,6 +5793,143 @@
       if (btn) { btn.disabled = true; const o = btn.textContent; btn.textContent = 'กำลังรวมไฟล์...';
                  setTimeout(() => { btn.disabled = false; btn.textContent = o; }, 8000); }
       window.location.href = '/api/admin/db_export?all=1';
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    //  แชทลูกค้า (LINE OA) — ★ ก.ย.69
+    //  เดิมข้อมูลนี้ฝังอยู่ใน "พาเนลตั้งค่า" ของหน้าเบิก-คืนรถ → กดเมนูแล้วเด้งข้ามหน้า
+    //  (เจ้าของแจ้งว่า "กดลูกค้าและแชท แต่เด้งไปหน้าเบิกรถ") · แยกมาเป็นพาเนลของตัวเอง
+    //  อ่านอย่างเดียว — ยังตอบกลับจากหน้านี้ไม่ได้ (ขั้นถัดไป)
+    // ───────────────────────────────────────────────────────────────
+    let _custQ = '';
+    async function openCustomerChat() {
+      const old = document.getElementById('cust-overlay'); if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'cust-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div id="cust-box" style="background:var(--bg);border-radius:16px;max-width:820px;width:100%;padding:22px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลดแชทลูกค้า...</div></div>`;
+      document.body.appendChild(ov);
+      _custQ = '';
+      await loadCustomerList();
+    }
+
+    async function loadCustomerList(q) {
+      if (q !== undefined) _custQ = q;
+      const box = document.getElementById('cust-box'); if (!box) return;
+      let d;
+      try {
+        const r = await fetch('/checkout/api/customers?q=' + encodeURIComponent(_custQ || ''), {credentials:'same-origin'});
+        d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
+          + `<div style="text-align:center"><button onclick="document.getElementById('cust-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      const t = d.totals || {};
+      let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div><div style="font-size:17px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:7px">${ic('lucide:message-circle',18)} แชทลูกค้า (LINE OA)</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:3px">ลูกค้าที่ทักเข้ามาหาบอท · เก็บไว้ ${t.keepDays||60} วันแล้วลบอัตโนมัติ</div></div>
+        <button onclick="document.getElementById('cust-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
+
+      if (!t.storeOn) html += `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:12px;padding:9px 12px;font-size:11.5px;color:var(--t2);margin-top:10px">
+        <b>สวิตช์ "เก็บแชทลูกค้า" ปิดอยู่</b> — ข้อความใหม่จะไม่ถูกเก็บ · เปิดได้ที่ เมนู → ตั้งค่าระบบ → ตั้งค่ากลุ่ม LINE ที่ดักเก็บ</div>`;
+
+      const cards = [
+        {l:'ลูกค้าที่ทักมา', v:(t.people||0).toLocaleString('en-US') + ' คน', c:'var(--blue)'},
+        {l:'ข้อความรวม',    v:(t.messages||0).toLocaleString('en-US'), c:'var(--green)'},
+      ];
+      html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0">` +
+        cards.map(c => `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:10px 12px;background:var(--bg2)">
+          <div style="font-size:10px;color:var(--t3)">${c.l}</div>
+          <div style="font-size:19px;font-weight:800;color:${c.c}">${c.v}</div></div>`).join('') + `</div>`;
+
+      // เข้ามาทาง OA ตัวไหนบ้าง — สำคัญตอนมีหลาย OA
+      const bc = d.byChannel || {};
+      const bck = Object.keys(bc);
+      if (bck.length) html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px">เข้ามาทางบัญชี: `
+        + bck.map(k => `<b style="color:var(--t2)">${h(k)}</b> ${bc[k]}`).join(' · ') + `</div>`;
+
+      html += `<input id="custq" value="${h(_custQ)}" oninput="_custSearch(this.value)" placeholder="ค้นหาชื่อลูกค้า..." style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:12.5px;margin-bottom:10px">`;
+
+      const cs = d.customers || [];
+      if (!cs.length) {
+        html += `<div style="text-align:center;color:var(--t3);padding:26px">${_custQ ? 'ไม่เจอลูกค้าชื่อนี้' : 'ยังไม่มีลูกค้าทักเข้ามา'}</div>`;
+      } else {
+        html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="color:var(--t3);text-align:left">
+            <th style="padding:5px 6px;font-weight:600">ลูกค้า</th>
+            <th style="padding:5px 6px;font-weight:600;text-align:right">ข้อความ</th>
+            <th style="padding:5px 6px;font-weight:600">ทักครั้งแรก</th>
+            <th style="padding:5px 6px;font-weight:600">ล่าสุด</th></tr></thead><tbody>`;
+        cs.forEach(u => {
+          const idLine = u.isEmployee
+            ? `<span style="font-size:10px;color:var(--t3)">พนักงาน — ไม่แสดง LINE id</span>`
+            : (u.userId ? `<code onclick="event.stopPropagation();ckCopyId(this)" title="กดเพื่อคัดลอก LINE id (ไว้ทักกลับ)" style="font-size:10px;cursor:pointer;opacity:.65">${h(u.userId)}</code>` : '');
+          html += `<tr onclick="openCustomerChatOne('${h(u.userId || '')}','${h(u.name)}')" style="border-top:.5px solid var(--bd);cursor:${u.userId?'pointer':'default'}">
+            <td style="padding:7px 6px"><b style="color:var(--t1)">${h(u.name)}</b>${u.channel?` <span style="font-size:9px;padding:1px 5px;border-radius:6px;background:var(--bg3);color:var(--t3)">${h(u.channel)}</span>`:''}<div>${idLine}</div></td>
+            <td style="padding:7px 6px;text-align:right;font-weight:700;color:var(--t1)">${u.n}</td>
+            <td style="padding:7px 6px;color:var(--t3);white-space:nowrap">${h(u.first||'–')}</td>
+            <td style="padding:7px 6px;color:var(--t3);white-space:nowrap">${h(u.last||'')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+        if (d.shown >= d.max) html += `<div style="font-size:10.5px;color:var(--t3);margin-top:6px">แสดง ${d.shown} คนล่าสุด (มีมากกว่านี้ — ใช้ช่องค้นหา)</div>`;
+        html += `<div style="font-size:10.5px;color:var(--t3);margin-top:8px">กดที่แถวเพื่อดูบทสนทนา · ยังตอบกลับจากหน้านี้ไม่ได้ (อยู่ในแผนขั้นถัดไป)</div>`;
+      }
+      html += `<div style="text-align:center;margin-top:16px"><button onclick="document.getElementById('cust-overlay').remove()" style="padding:9px 20px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+      box.innerHTML = html;
+      if (_custQ) { const el = document.getElementById('custq'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+    }
+
+    let _custTimer = null;
+    function _custSearch(v) {           // หน่วงไว้หน่อย ไม่ยิง API ทุกตัวอักษร
+      clearTimeout(_custTimer);
+      _custTimer = setTimeout(() => loadCustomerList(v), 250);
+    }
+
+    function ckCopyId(el) {
+      const s = el.textContent.trim();
+      (navigator.clipboard?.writeText(s) || Promise.reject()).then(() => {
+        const o = el.style.opacity; el.style.opacity = '1'; el.title = 'คัดลอกแล้ว';
+        setTimeout(() => { el.style.opacity = o; }, 900);
+      }).catch(() => {});
+    }
+
+    async function openCustomerChatOne(uid, name) {
+      if (!uid) return;
+      const box = document.getElementById('cust-box'); if (!box) return;
+      box.innerHTML = `<div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลดบทสนทนา...</div>`;
+      let d;
+      try {
+        const r = await fetch('/checkout/api/customers?user_id=' + encodeURIComponent(uid), {credentials:'same-origin'});
+        d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">โหลดไม่ได้: ${h(String(e.message||e))}</div>`;
+        return;
+      }
+      const p = d.person || {};
+      let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div><button onclick="loadCustomerList()" style="border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);border-radius:9px;padding:4px 10px;font-size:11px;cursor:pointer;margin-bottom:7px">← กลับรายชื่อ</button>
+        <div style="font-size:16px;font-weight:800;color:var(--t1)">${h(p.name||name||'')}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:3px">${p.msgCount||0} ข้อความ${p.first?' · ทักครั้งแรก '+h(p.first):''}${p.channel?' · เข้ามาทางบัญชี '+h(p.channel):''}</div>
+        ${p.userId?`<code onclick="ckCopyId(this)" title="กดเพื่อคัดลอก" style="font-size:10.5px;cursor:pointer;opacity:.7">${h(p.userId)}</code>`:''}</div>
+        <button onclick="document.getElementById('cust-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
+      if (p.status) html += `<div style="font-size:11.5px;color:var(--t3);margin-top:6px">สเตตัส: ${h(p.status)}</div>`;
+
+      const ms = d.messages || [];
+      html += `<div style="margin-top:12px;border:.5px solid var(--bd2);border-radius:12px;padding:10px;background:var(--bg2);max-height:52vh;overflow-y:auto">`;
+      if (!ms.length) html += `<div style="text-align:center;color:var(--t3);padding:20px">ไม่มีข้อความที่เก็บไว้</div>`;
+      ms.forEach(m => {
+        html += `<div style="display:flex;gap:8px;padding:5px 2px;border-top:.5px solid var(--bd)">
+          <span style="color:var(--t3);font-size:10.5px;white-space:nowrap;min-width:74px">${h(m.at)}</span>
+          <span style="color:var(--t1);font-size:12px;white-space:pre-wrap;word-break:break-word">${h(m.text)}</span></div>`;
+      });
+      html += `</div>`;
+      html += `<div style="font-size:10.5px;color:var(--t3);margin-top:8px">แสดงย้อนหลังสูงสุด ${d.limit} ข้อความ · เก็บเฉพาะข้อความที่ลูกค้าส่งเข้ามา — <b>ข้อความที่แอดมินตอบกลับไม่ได้ผ่านระบบนี้</b> (LINE ไม่ส่งขาตอบกลับมา)</div>`;
+      html += `<div style="text-align:center;margin-top:14px"><button onclick="document.getElementById('cust-overlay').remove()" style="padding:9px 20px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+      box.innerHTML = html;
     }
 
     async function openHealthPanel() {
