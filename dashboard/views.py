@@ -189,8 +189,8 @@ def _trends_payload():
             w["week_start"] = w["week_start"].isoformat()
         try:
             from .services import cache_store
-            _r = cache_store.get_kv("followup_rounds") or {}   # get_kv ห่อด้วย {data, updated_at}
-            rounds = _r.get("data") or {}   # {date_iso: จำนวนรอบส่งวันนั้น} — ตัวหาร
+            from .services.fetch_dashboard import _flat_rounds
+            rounds = _flat_rounds(cache_store.get_kv("followup_rounds"))   # {date_iso: จำนวนรอบ} — ตัวหาร
         except Exception:
             rounds = {}
         return {"daily": daily, "weekly": weekly, "rounds": rounds}

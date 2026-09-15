@@ -63,7 +63,17 @@ class Command(BaseCommand):
                         return (r.json() or {}).get("groupName", "")
                 except Exception:
                     pass
-            return (reg.get(gid) or {}).get("name", "")
+            name = (reg.get(gid) or {}).get("name", "")
+            if name:
+                return name
+            # ★ ทะเบียนเคยทำกลุ่มหาย + บอทเดิมอาจออกจากกลุ่มแล้ว (ถาม LINE ไม่ได้)
+            #   → ชื่อกลุ่มที่จดไว้ในคลังแชทเป็นแหล่งสุดท้าย (เจอจริงบนเซิร์ฟเวอร์ 16/09)
+            try:
+                from checkout.models import GroupChat
+                return (GroupChat.objects.filter(group_id=gid).exclude(group_name="")
+                        .order_by("-sent_at").values_list("group_name", flat=True).first()) or ""
+            except Exception:
+                return ""
 
         cache = {}
 

@@ -2655,6 +2655,25 @@ _FU_NOANS_CAP = 5
 _FU_TH_MON = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
 
 
+def _flat_rounds(kv):
+    """อ่าน kv `followup_rounds` → `{date_iso: จำนวนรอบ}` — ★ ก.ย.69 แก้บั๊กซ้อนชั้น
+
+    `get_kv` คืน `{data, updated_at}` แต่ตัวเขียนเดิมไม่แกะ แล้วเขียนทั้งห่อกลับ →
+    ทุกรอบส่งซ้อน `{"data": {"data": …}}` ลึกขึ้นอีกชั้น และตัวอ่าน (`_trends_payload`) เห็นแค่ชั้นนอกสุด
+    = ตัวหาร % "โดนทวง" ผิด · ตัวนี้ไล่เก็บวันที่จากทุกชั้น (ชั้นนอก = ใหม่กว่า ชนะ)
+    """
+    out, cur, depth = {}, kv, 0
+    while isinstance(cur, dict) and depth < 5000:
+        for k, v in cur.items():
+            if len(k) == 10 and k[4] == "-" and k not in out:
+                try:
+                    out[k] = int(v)
+                except Exception:
+                    pass
+        cur, depth = cur.get("data"), depth + 1
+    return out
+
+
 def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: bool = False) -> list[dict]:
     """ข้อความ "ตามด่วน" รายเซลล์ (ข้อความธรรมดา) — สมองเดียวกับ seller.html (followUrgency + cadence + ดีลค้าง)
     คืน [{"seller", "user_id", "text"}] เฉพาะเซลล์ที่มีเคส + มี user_id · กรองเฉพาะลีดย้อนหลัง 14 วัน (rolling)
@@ -2897,7 +2916,7 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: b
                             nag_status=F("nag_status") + _dx, nag_deal=F("nag_deal") + _dd, team=_team)
                 # นับ "จำนวนรอบส่งทั้งหมด" ต่อวัน (ตัวหารของสัดส่วนโดนทวง) — เก็บใน kv
                 from . import cache_store
-                _rk = cache_store.get_kv("followup_rounds") or {}
+                _rk = _flat_rounds(cache_store.get_kv("followup_rounds"))
                 _rk[str(today)] = int(_rk.get(str(today), 0)) + 1
                 cache_store.set_kv("followup_rounds", _rk)
             except Exception:

@@ -293,6 +293,7 @@ cron ตอนส่ง followup (`build_followup_messages(log_daily=True)` ใ�
   - state ค่าล่าสุดของวัน: `not_called`/`no_status`/`stuck_deals`/`follow_total`
   - **นับ "โดนทวง" (จำนวนครั้ง = รอบส่ง ไม่ใช่จำนวนเคส)**: `nags`=รอบที่ติดรายการ (มีงานค้างอย่างน้อย 1 เรื่อง) · **`nag_call`/`nag_status`/`nag_deal`**=รอบที่ยังค้างเรื่อง โทร/สถานะ/ดีล (+1 ต่อรอบส่งถ้าเรื่องนั้น>0). เขียนด้วย `get_or_create`+`F()`+1 (ส่งซ้ำในวัน=นับเพิ่ม · state=ค่าล่าสุด)
   - **`followup_rounds` kv** ([cache_store](dashboard/services/cache_store.py) · `{date_iso: จำนวนรอบส่งวันนั้น}`) = ตัวหารของ % (⚠️ `get_kv` ห่อค่าใน `{data,updated_at}` — ต้อง unwrap `["data"]`)
+    - **★ บั๊กที่แก้ 16 ก.ย.69**: ตัวเขียนไม่ได้แกะห่อ → ทุกรอบส่งซ้อน `{"data":{"data":…}}` ลึกขึ้นเรื่อยๆ (บนเซิร์ฟเวอร์ ~9 KB) และตัวอ่านเห็นแค่ชั้นนอก = % โดนทวงผิด · ตอนนี้ทั้งอ่านและเขียนผ่าน **`_flat_rounds()`** ([fetch_dashboard.py](dashboard/services/fetch_dashboard.py)) ที่ไล่เก็บวันที่จากทุกชั้น (ซ่อมข้อมูลเก่าเองตอนเขียนรอบถัดไป)
 - **`SellerWeekly`** (`dash_seller_weekly` · unique week_start+seller) — ผลงานราย "สัปดาห์" (จันทร์→อาทิตย์ ไม่นับอนาคต) จาก `dailyBySeller`: lead/rj/booking/done/deal_value/live/clip. `snapshot_seller_week()` **กรองเฉพาะ roster ปัจจุบัน** (`ALL_SELLERS`∪`ADMIN` · บังคับ `refresh_from_sheet()` ก่อนสร้าง roster กันตกไป hardcode → กัน orphan/เซลล์เก่า/สะกดผิดโผล่)
 - **ตารางเทรนด์ล่างสุด "แท็บภาพรวม"** ([index.html](dashboard/templates/dashboard/index.html) ท้าย `renderOverview`): **"โดนทวงเรื่องอะไรบ่อย รายเซลล์"** — 3 คอลัมน์ โทร/สถานะ/ดีล (โดนทวงกี่ครั้ง + % ของรอบส่ง · สีตามความเรื้อรัง แดง≥70%). **กรองด้วยช่วงวันที่หน้า** แต่เทียบ ISO ตรงๆ `r.date>=dfFrom && r.date<=dfTo` (**ไม่ผ่าน `ir`/`_parseDmy` ที่คาด d/m/y — r.date เป็น ISO "YYYY-MM-DD"**). ข้อมูล inline ผ่าน `trends_json` (context) = `_trends_payload()` [views.py] · endpoint สำรอง `/api/admin/trends` (`admin_trends`)
 - **⚠️ บทเรียน: nag ก้อนเดียว ตัน ~100% เกือบทุกคน** (ทุกเซลล์มีลีดค้างตลอด → ติดรายการทุกรอบ) → **ต้องแยก 3 เรื่อง (โทร/สถานะ/ดีล) ถึงเห็นความต่าง** (ใครไม่โทร/ใครไม่ใส่สถานะ/ใครไม่ดันดีล). แก้สูตร nag ต้อง sync: write ใน `build_followup_messages` + `_trends_payload` values + ตาราง index.html
@@ -799,6 +800,7 @@ CRON_SECRET=xxx
     ([line_push_switch.py](dashboard/management/commands/line_push_switch.py)) — ไล่ทุกปลายทางกลุ่ม
     (การ์ดทุกใบ · รายงานรายวัน · กลุ่มเบิก-คืนรถ) → บอทใหม่อยู่แล้ว = ไม่แตะ · ไม่อยู่ = หาชื่อกลุ่มจากบอทเดิม
     แล้วหา id ฝั่งบอทใหม่ที่ชื่อตรง **และถาม LINE ยืนยันซ้ำ** · หาไม่เจอ/ชื่อซ้ำ = ไม่แตะ บอกว่าต้องเชิญบอทเข้ากลุ่มไหน
+    · หาชื่อกลุ่มจาก LINE → ทะเบียน → **คลังแชท `GroupChat.group_name`** (บอทเดิมออกจากกลุ่มแล้ว + ทะเบียนเคยทำกลุ่มหาย)
     · **ไม่ใส่ `--apply` = ดูเฉยๆ** · ไม่แตะ test id (U…) · รายงาน `.env LINE_GROUP_ID` ของระบบรถให้ด้วย (แก้เองเท่านั้น)
   - **กันกลับมาอีก 2 ชั้น** ([line_channels.py](dashboard/services/line_channels.py)):
     `push_group_error()` — ตอน **เปลี่ยน** group id ในหน้าตั้งค่า (การ์ด/รายงาน/เบิก-คืน) ถาม LINE ว่าบอทตัวส่งอยู่ในกลุ่มไหม
