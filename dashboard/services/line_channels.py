@@ -270,3 +270,69 @@ def describe(live: bool = True) -> list:
             row["dmFrom"] = PUSH if dm == PUSH else CRM   # แชท 1:1 ออกจากบัญชีไหน
         rows.append(row)
     return rows
+
+
+# ───────────────────── กลุ่มที่บอทตัวส่งเข้าถึงได้ ─────────────────────
+def push_group_check(group_id: str, timeout: int = 8) -> dict:
+    """ถาม LINE ว่า **บอทตัวส่งอยู่ในกลุ่มนี้ไหม** → `{ok, name, status, error}`
+
+    ★ ก.ย.69 (ย้าย push ทั้งระบบไป OxletautoGiveLead): **group id ออกต่อ provider เหมือน user id**
+      กลุ่มเดียวกันมี id คนละตัวในสายตาบอทแต่ละตัว → เอา id ที่บอทเดิมจดไว้มาให้บอทใหม่ส่ง
+      = LINE ตอบ 400 "Failed to send messages" ทุกรอบ (เกิดจริงกับการ์ดตั้งเวลาทุกใบ 15/09)
+
+    `ok` = True อยู่ในกลุ่ม · False = LINE ยืนยันว่าไม่อยู่ (403/404) · None = ถามไม่ได้ (เน็ต/ไม่มี token)
+    """
+    gid = (group_id or "").strip()
+    token = push_token()
+    if not gid or not token:
+        return {"ok": None, "name": "", "status": 0, "error": "ไม่มี group id หรือ token ตัวส่ง"}
+    if gid[:1].upper() not in ("C", "R"):
+        return {"ok": False, "name": "", "status": 0, "error": "ไม่ใช่ group id (ต้องขึ้นต้นด้วย C)"}
+    kind = "room" if gid[:1].upper() == "R" else "group"
+    try:
+        import requests
+        url = "https://api.line.me/v2/bot/%s/%s/summary" % (kind, gid)
+        if kind == "room":          # ห้องคุยไม่มี summary — ใช้จำนวนสมาชิกยืนยันแทน
+            url = "https://api.line.me/v2/bot/room/%s/members/count" % gid
+        r = requests.get(url, headers={"Authorization": "Bearer %s" % token}, timeout=timeout)
+        if r.status_code == 200:
+            return {"ok": True, "name": (r.json() or {}).get("groupName", ""), "status": 200, "error": ""}
+        if r.status_code in (400, 403, 404):
+            return {"ok": False, "name": "", "status": r.status_code,
+                    "error": "บอทตัวส่งไม่ได้อยู่ในกลุ่มนี้ (LINE %s)" % r.status_code}
+        return {"ok": None, "name": "", "status": r.status_code, "error": "LINE ตอบ %s" % r.status_code}
+    except Exception as e:
+        return {"ok": None, "name": "", "status": 0, "error": str(e)[:120]}
+
+
+def push_group_error(group_id: str) -> str:
+    """ใช้ตอน "บันทึก" ปลายทางกลุ่ม — คืนข้อความ error ถ้า **ยืนยันได้** ว่าบอทตัวส่งไม่อยู่ในกลุ่ม
+
+    ถามไม่ได้ (เน็ตล่ม ฯลฯ) = ปล่อยผ่าน ไม่บล็อกการบันทึก · ว่าง = ปล่อยผ่าน (ปิดการส่งกลุ่ม)
+    """
+    gid = (group_id or "").strip()
+    if not gid:
+        return ""
+    res = push_group_check(gid)
+    if res.get("ok") is False:
+        name = ""
+        try:
+            name = (bot_info(push_token()) or {}).get("displayName", "")
+        except Exception:
+            pass
+        return ("บอท %s ไม่ได้อยู่ในกลุ่มนี้ — group id นี้น่าจะเป็นของบอทตัวเดิม "
+                "(กลุ่มเดียวกันมี id ต่างกันในแต่ละบอท) · เชิญบอทเข้ากลุ่มแล้วเลือกกลุ่มใหม่จากรายการ"
+                % (name or "ตัวส่ง"))
+    return ""
+
+
+def group_visible_to_push(entry: dict) -> bool:
+    """แถวใน KV `line_groups` นี้ควรโชว์ใน dropdown "ส่งเข้ากลุ่ม" ไหม
+
+    มีบันทึกว่าบัญชีไหนได้ยิน (`channels`) แต่ไม่มีตัวส่ง = id ของบอทอื่น → ซ่อน (เลือกไปก็ส่งไม่ได้)
+    ไม่มีบันทึก (ข้อมูลเก่าก่อนแยกบัญชี) = ยังโชว์ ให้คนตรวจชื่อเอง · ยังไม่ได้แยกบัญชี = โชว์หมด
+    """
+    if not has_push_channel():
+        return True
+    chans = (entry or {}).get("channels") or []
+    return (not chans) or (PUSH in chans)

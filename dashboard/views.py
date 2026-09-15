@@ -2333,6 +2333,9 @@ def admin_report_config(request):
         except Exception:
             body = {}
         cfg = get_report_config()
+        err = _push_group_guard(body, cfg)
+        if err:
+            return JsonResponse({"ok": False, "error": err}, status=400, json_dumps_params={"ensure_ascii": False})
         for k in ("enabled", "time", "mode", "test_id", "group_id"):
             if k in body:
                 cfg[k] = body[k]
@@ -2618,6 +2621,9 @@ def admin_card_line_config(request):
         if card not in _LINE_CARDS:
             return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
         cfg = get_card_config(card)
+        err = _push_group_guard(body, cfg)
+        if err:
+            return JsonResponse({"ok": False, "error": err}, status=400, json_dumps_params={"ensure_ascii": False})
         for k in ("enabled", "time", "mode", "test_id", "group_id", "date_mode", "date_from", "date_to"):
             if k in body:
                 cfg[k] = body[k]
@@ -2866,10 +2872,31 @@ def _store_line_groups(pairs, channel="", source="webhook"):
         added.append({"id": gid, "name": name, "channels": seen})
     if added:
         try:
-            cache_store.set_kv("line_groups", groups)
+            # ★ ก.ย.69 — อ่านใหม่ก่อนเขียน แล้วทับเฉพาะกลุ่มที่เพิ่งอัปเดต
+            #   เดิมเขียนทั้งก้อนที่อ่านไว้ตั้งแต่ต้นฟังก์ชัน (ระหว่างนั้นอาจรอ LINE หลายวินาที)
+            #   → request อื่นที่เขียนระหว่างนั้นโดนทับหาย (เจอจริง: กลุ่มหายจากทะเบียน 16/09)
+            fresh = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+            for a in added:
+                fresh[a["id"]] = groups[a["id"]]
+            cache_store.set_kv("line_groups", fresh)
         except Exception:
             pass
     return added
+
+
+def _push_group_guard(body, cfg):
+    """★ ก.ย.69 — กันบันทึก group id ที่บอทตัวส่ง (OxletautoGiveLead) ส่งไม่ได้
+
+    ตรวจเฉพาะตอน **เปลี่ยน** group id (ค่าเดิมไม่แตะ — แก้ด้วย `manage.py line_push_switch`)
+    ถาม LINE ไม่ได้ = ปล่อยผ่าน (ไม่ให้เน็ตสะดุดแล้วบันทึกอะไรไม่ได้เลย)
+    """
+    if "group_id" not in (body or {}):
+        return ""
+    new = str(body.get("group_id") or "").strip()
+    if not new or new == str((cfg or {}).get("group_id") or "").strip():
+        return ""
+    from .services.line_channels import push_group_error
+    return push_group_error(new)
 
 
 def _webhook_beat(path, events=0, sig_fail=False):
@@ -3106,7 +3133,12 @@ def admin_line_groups(request):
             return JsonResponse({"ok": True, "removed": existed}, json_dumps_params={"ensure_ascii": False})
         return JsonResponse({"ok": False, "error": "action ไม่ถูกต้อง"}, status=400)
     groups = (cache_store.get_kv("line_groups") or {}).get("data") or {}
-    rows = [{"id": gid, "name": g.get("name", "")} for gid, g in groups.items()]
+    # ★ ก.ย.69 — dropdown นี้ใช้เลือก "กลุ่มที่จะส่งเข้า" → ซ่อน id ของบอทตัวรับ (บอทตัวส่งใช้ไม่ได้)
+    #   group id ออกต่อ provider · กลุ่มชื่อเดียวกันมี 2 id · เลือกผิดตัว = LINE 400 ทุกรอบ · `?all=1` = ดูทั้งหมด
+    from .services.line_channels import group_visible_to_push
+    show_all = request.GET.get("all") == "1"
+    rows = [{"id": gid, "name": g.get("name", ""), "channels": g.get("channels") or []}
+            for gid, g in groups.items() if show_all or group_visible_to_push(g)]
     rows.sort(key=lambda x: (x["name"] or x["id"]))
     return JsonResponse({"ok": True, "groups": rows}, json_dumps_params={"ensure_ascii": False})
 

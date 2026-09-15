@@ -50,6 +50,10 @@ def _push(text: str, mention_user_id: str = "") -> bool:
     try:
         from dashboard.services.line_notify import push_line_message
         code, _ = push_line_message(gid, [_msg(text, mention_user_id)], token)
+        if code != 200 and mention_user_id:
+            # ★ ก.ย.69 — user id ก็ออกต่อ provider: id ที่เก็บจากบอทตัวรับ/LINE Login
+            #   แท็กผ่านบอทตัวส่งไม่ได้ (LINE 400) → ส่งซ้ำแบบไม่แท็ก ดีกว่าสรุปหายทั้งข้อความ
+            code, _ = push_line_message(gid, [_msg(text, "")], token)
         return code == 200
     except Exception:
         return False

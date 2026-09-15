@@ -471,7 +471,15 @@ def api_line_config(request):
         except Exception:
             b = {}
         if "group_id" in b:
-            cfg["group_id"] = (b.get("group_id") or "").strip()
+            new_gid = (b.get("group_id") or "").strip()
+            if new_gid and new_gid != (cfg.get("group_id") or "").strip():
+                # ★ ก.ย.69 — กลุ่มนี้ใช้ทั้ง "ดักเก็บ" และ "โพสต์สรุป" → ต้องเป็น id ที่บอทตัวส่งเห็น
+                from dashboard.services.line_channels import push_group_error
+                err = push_group_error(new_gid)
+                if err:
+                    return JsonResponse({"ok": False, "error": err}, status=400,
+                                        json_dumps_params={"ensure_ascii": False})
+            cfg["group_id"] = new_gid
         for k in ("listen", "send", "store_chat", "store_customer_chat"):
             if k in b:
                 cfg[k] = bool(b[k])
@@ -480,8 +488,10 @@ def api_line_config(request):
     groups = []
     try:
         from dashboard.services import cache_store
+        from dashboard.services.line_channels import group_visible_to_push
         for gid, v in ((cache_store.get_kv("line_groups") or {}).get("data") or {}).items():
-            groups.append({"id": gid, "name": (v or {}).get("name", "")})
+            if group_visible_to_push(v or {}):      # ซ่อน id ของบอทตัวรับ (ตัวส่งใช้ไม่ได้)
+                groups.append({"id": gid, "name": (v or {}).get("name", "")})
         groups.sort(key=lambda x: (x["name"] or x["id"]))
     except Exception:
         pass
