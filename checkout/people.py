@@ -199,7 +199,10 @@ def fetch_profile(user_id="", group_id="", room_id="", channel="") -> dict:
             first = []
     grp = first + [t for t in group_tokens() if t not in first]
     one_to_one = [t for t in (first + [crm_token()] + grp) if t]
-    seen, one_to_one = set(), [t for t in one_to_one if not (t in seen or seen.add(t))]
+    # ⚠️ ห้ามเขียนแบบ `seen, x = set(), [... seen ...]` — ฝั่งขวาถูกประเมินก่อน `seen` มีค่า
+    #   → UnboundLocalError ทุกครั้ง (บั๊กจริง 12-16 ก.ย.69: โปรไฟล์ลูกค้าใหม่ไม่ถูกบันทึกเลย 3 วัน
+    #   เพราะทุกเทสต์ปลอม fetch_profile ทั้งฟังก์ชัน เลยไม่มีเทสต์ไหนรันบรรทัดนี้จริง)
+    one_to_one = list(dict.fromkeys(one_to_one))   # ตัดตัวซ้ำ คงลำดับเดิม
     if not one_to_one:
         return {}
 
@@ -273,7 +276,19 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
     if stale and not nick:
         # ★ ถามด้วย token ของ "บัญชีที่ได้ยินข้อความนี้" ก่อน — userId ผูกกับ provider
         #   ใช้ token ของอีกบัญชีถามอาจได้ 404 ทั้งที่คนนั้นมีตัวตนจริง
-        prof = fetch_profile(uid, group_id=group_id, room_id=room_id, channel=channel)
+        # ★ ห่อไว้ — ดึงโปรไฟล์พลาดต้อง "ไม่มีชื่อ" ไม่ใช่ "ไม่มีแถว"
+        #   เดิมไม่ได้ห่อ: exception ทะลุออกไปให้ store_chat กลืน → ข้อความเก็บได้ แต่ข้ามการสร้าง
+        #   LineProfile ทั้งแถว (ลูกค้า 79 คนหายจากตารางโปรไฟล์โดยไม่มี error ให้เห็นที่ไหนเลย)
+        try:
+            prof = fetch_profile(uid, group_id=group_id, room_id=room_id, channel=channel)
+        except Exception as e:
+            prof = {}
+            try:
+                from dashboard.services import cache_store
+                cache_store.set_kv("profile_fetch_last", {
+                    "at": now.isoformat(), "error": ("%s: %s" % (type(e).__name__, e))[:200]})
+            except Exception:
+                pass
 
     fields = {
         "nickname": nick,
