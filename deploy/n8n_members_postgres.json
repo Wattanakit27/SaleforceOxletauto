@@ -3,10 +3,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- หาชื่อเล่นจาก \"LINE user id\" ตรงๆ — แทนการเทียบด้วยชื่อที่ตั้งใน LINE\n--\n-- ★ ทำไมต้องเทียบด้วย userId: ชื่อที่ตั้งใน LINE **เจ้าตัวเปลี่ยนเองได้ทุกเมื่อ**\n--   มีอิโมจิ/ช่องว่างท้าย/ตัวอักษรแฟนซี และบอทคนละตัวอาจเห็นคนละชื่อ\n--   → เทียบชื่อเมื่อไหร่ก็มีวันหลุด · userId ไม่เปลี่ยน เทียบแล้วจบ\n--\n-- ★ ใช้ max() เพื่อให้ **คืน 1 แถวเสมอ** แม้หา userId ไม่เจอ\n--   (ถ้าคืน 0 แถว n8n จะไม่มี item ส่งต่อ = เคสนั้นหายทั้งเคส)\n--\n-- ★ ตั้งใจไม่คืนคีย์ชื่อ displayName / userId / row_number\n--   เพราะ Resolve Roles เอาคีย์พวกนั้นไปใช้อย่างอื่น ถ้าคืนมาจะไปทับของจริง\nSELECT coalesce(max(l.\"ชื่อเล่น\"), '')   AS \"nickByUserId\",\n       coalesce(max(l.display_name), '') AS \"displayNameDb\",\n       $1::text                          AS \"lookupUserId\"\nFROM v_employee_line l\nWHERE l.user_id = $1::text;",
-        "options": {
-          "queryReplacement": "={{ $json.body?.events?.[0]?.source?.userId || $json.userId || $json.source?.userId || '' }}"
-        }
+        "query": "=SELECT coalesce(max(l.\"ชื่อเล่น\"), '')   AS \"nickByUserId\",\n       coalesce(max(l.display_name), '') AS \"displayNameDb\",\n       '{{ ($json.source?.userId || $json.body?.events?.[0]?.source?.userId || $json.userId || '').replace(/[^A-Za-z0-9]/g, '') }}' AS \"lookupUserId\"\nFROM v_employee_line l\nWHERE l.user_id = '{{ ($json.source?.userId || $json.body?.events?.[0]?.source?.userId || $json.userId || '').replace(/[^A-Za-z0-9]/g, '') }}';",
+        "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -17,7 +15,7 @@
       "id": "mb01aaaa-bbbb-4ccc-8ddd-eeeeffff0001",
       "name": "หาชื่อเล่นจาก userId (Postgres)",
       "retryOnFail": true,
-      "notes": "แทนโหนดชีต Get Members (Master) · ต่อสายเข้า Merge All (with master) ที่เดิม\n\nคู่กับแพตช์ 3 จุดใน Resolve Roles (ดู deploy/n8n_members_postgres.md)\nชื่อเล่นที่ได้จาก userId จะชนะทุกวิธีเดา — MANUAL_MAPPING ไม่ต้องใช้อีก\n\n⚠️ อย่าเปิด Continue On Fail — โหนดนี้ล้มแล้วปล่อยผ่าน จะได้ผลที่ 'ดูเหมือนทำงาน'\nแต่ชื่อเล่นว่างทุกเคส (ก้อน error ไหลเข้า Merge แล้วถูกอ่านเป็นรายชื่อ)"
+      "notes": "แทนโหนดชีต Get Members (Master) · ต่อสายเข้า Merge All (with master) ที่เดิม\n\nช่อง Query เป็น \"Expression\" (ขึ้นต้นด้วย =) → ไม่ต้องตั้ง Query Parameters ใน Options\n.replace(/[^A-Za-z0-9]/g,'') ตัดทุกอย่างที่ไม่ใช่ตัวอักษร/ตัวเลขทิ้ง\nLINE user id เป็น U + เลขฐาน 16 อยู่แล้ว จึงไม่กระทบ และ SQL injection ทำไม่ได้\n\nคู่กับแพตช์ 3 จุดใน Resolve Roles (ดู deploy/n8n_members_postgres.md)\n⚠️ อย่าเปิด Continue On Fail — ล้มแล้วปล่อยผ่าน จะได้ผลที่ 'ดูเหมือนทำงาน' แต่ชื่อเล่นว่างทุกเคส"
     }
   ],
   "connections": {},

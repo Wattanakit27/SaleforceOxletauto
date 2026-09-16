@@ -12,24 +12,27 @@
 
 ## 1. โหนด Postgres
 
-ก๊อป [n8n_members_postgres.json](n8n_members_postgres.json) วางบน canvas — หรือวาง SQL นี้ทับในโหนดเดิม
+ที่ช่อง **Query** เอาเมาส์ไปวางแล้วกดสลับเป็น **Expression** (ไม่ใช่ Fixed) แล้ววางอันนี้
 
-```sql
+```
 SELECT coalesce(max(l."ชื่อเล่น"), '')   AS "nickByUserId",
-       coalesce(max(l.display_name), '') AS "displayNameDb",
-       $1::text                          AS "lookupUserId"
+       coalesce(max(l.display_name), '') AS "displayNameDb"
 FROM v_employee_line l
-WHERE l.user_id = $1::text;
+WHERE l.user_id = '{{ ($json.source?.userId || $json.body?.events?.[0]?.source?.userId || $json.userId || '').replace(/[^A-Za-z0-9]/g, '') }}';
 ```
 
-**Options → Query Parameters**
-```
-{{ $json.body?.events?.[0]?.source?.userId || $json.userId || $json.source?.userId || '' }}
-```
+**ไม่ต้องตั้งอะไรใน Options เลย** — เวอร์ชันก่อนใช้ `$1` แล้วต้องไปเพิ่ม *Query Parameters* เอง
+ลืมเมื่อไหร่ได้ `there is no parameter $1` ทันที · แบบนี้ใส่ค่าลงไปในคำสั่งตรงๆ จบในช่องเดียว
 
+- **`.replace(/[^A-Za-z0-9]/g, '')` = กัน SQL injection** — ตัดทุกอย่างที่ไม่ใช่ตัวอักษร/ตัวเลขทิ้ง
+  · LINE user id เป็น `U` + เลขฐาน 16 อยู่แล้ว จึงไม่กระทบค่าจริงเลย
 - `max()` ทำให้ **คืน 1 แถวเสมอ** แม้หา userId ไม่เจอ — ถ้าคืน 0 แถว n8n จะไม่มี item ส่งต่อ **เคสนั้นหายทั้งเคส**
 - **ห้ามเปิด Continue On Fail** — โหนดล้มแล้วปล่อยผ่าน ก้อน error จะไหลเข้า `Merge All (with master)`
   แล้ว `Resolve Roles` อ่านมันเป็นรายชื่อ → ชื่อเล่นว่างทุกเคสโดยไม่มีอะไรแดง (เจอมาแล้ว)
+
+**userId มาจากไหน** — ดู INPUT ของโหนด จะเห็น `source.userId` อยู่ในนั้นตรงๆ
+สูตรข้างบนไล่หา 3 ที่ตามลำดับ (`$json.source.userId` → `body.events[0].source.userId` → `$json.userId`)
+จึงใช้ได้ไม่ว่าจะต่อโหนดนี้ไว้ตรงไหนของสาย
 
 ---
 
