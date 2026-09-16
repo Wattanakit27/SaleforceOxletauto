@@ -107,3 +107,27 @@ GRANT USAGE, SELECT ON SEQUENCE checkout_checkin_id_seq TO n8n;
 --            coalesce(j->'raw','{}'::jsonb), now(), now()
 --     FROM d
 --     ON CONFLICT (user_id, date_iso) DO UPDATE SET ... ;
+
+-- 6) เคสรับซื้อ/เทิร์นรถ (ย้ายมาจากชีต "ซื้อขายเทิร์นรถ" · ★ 17 ก.ย.69)
+--    workflow เดิมเขียนลง Google Sheets → ย้ายมาเขียนตารางนี้แทน
+--    ⚠️ ต้อง `manage.py migrate` (dashboard 0006) ให้ตารางเกิดก่อน
+GRANT SELECT, INSERT, UPDATE ON dash_purchase_case TO n8n;
+GRANT USAGE, SELECT ON SEQUENCE dash_purchase_case_id_seq TO n8n;
+
+-- ❗ ไม่ให้ DELETE — เคสที่บันทึกแล้วต้องไม่หายจากการยิงผิดพลาดของ workflow
+--    (จะลบต้องเข้ามาลบเองด้วย user oxlet)
+--
+-- คำสั่งจริงที่ n8n ใช้อยู่ในไฟล์ deploy/n8n_tradein_postgres.json (2 โหนด):
+--   1. บันทึกเคส   — INSERT ... ON CONFLICT (code) DO UPDATE
+--      ★ ไม่ทับช่องที่คนกรอกเอง: seq (คันที่) · car_category (ประเภทรถ) · comment · reason
+--      ★ ค่าที่ parse ไม่ได้ (ว่าง) ก็ไม่ทับของเดิม — coalesce(nullif(EXCLUDED.x,''), t.x)
+--   2. เติมคอมเมนท์ — UPDATE ต่อท้าย comment ด้วย " / " ในคำสั่งเดียว
+--      (ของเดิมต้อง Get row → Merge Comments → update 3 โหนด ซึ่งมีจังหวะแข่งกันเขียน)
+--
+-- ตรวจของที่เข้ามาแล้ว:
+--   SELECT code, received_at, car_model, purchaser, decision, comment
+--   FROM dash_purchase_case ORDER BY received_at DESC LIMIT 20;
+--
+-- งานค้างของจัดซื้อ (ตัวเดียวกับที่ purchase_followup ใช้):
+--   SELECT purchaser, count(*) FROM dash_purchase_case
+--   WHERE decision = '' AND received_at >= now() - interval '18 days' GROUP BY 1;

@@ -1,0 +1,51 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH d AS (SELECT $1::jsonb AS j)\nINSERT INTO dash_purchase_case\n  (code, received_at, date_th, seq, car_model, car_dropdown, car_category, plate,\n   phone, seller_name, profile, ads, channel, sell_type, online_offline, case_type,\n   purchaser, sender, decision, comment, reason,\n   group_id, group_name, message_id, raw_text, created_at, updated_at)\nSELECT upper(trim(j->>'code')), now(),\n       coalesce(j->>'date_th',''), '',\n       coalesce(j->>'car_model',''), coalesce(j->>'car_dropdown',''), '',\n       coalesce(j->>'plate',''),\n       coalesce(j->>'phone',''), coalesce(j->>'seller_name',''), coalesce(j->>'profile',''),\n       coalesce(j->>'ads',''), coalesce(j->>'channel',''), coalesce(j->>'sell_type',''),\n       coalesce(j->>'online_offline',''), coalesce(j->>'case_type',''),\n       coalesce(j->>'purchaser',''), coalesce(j->>'sender',''),\n       coalesce(j->>'decision',''), '', '',\n       coalesce(j->>'group_id',''), coalesce(j->>'group_name',''),\n       coalesce(j->>'message_id',''), coalesce(j->>'raw_text',''),\n       now(), now()\nFROM d\nWHERE nullif(trim(j->>'code'),'') IS NOT NULL\nON CONFLICT (code) DO UPDATE SET\n  car_model      = coalesce(nullif(EXCLUDED.car_model,''),      dash_purchase_case.car_model),\n  car_dropdown   = coalesce(nullif(EXCLUDED.car_dropdown,''),   dash_purchase_case.car_dropdown),\n  plate          = coalesce(nullif(EXCLUDED.plate,''),          dash_purchase_case.plate),\n  phone          = coalesce(nullif(EXCLUDED.phone,''),          dash_purchase_case.phone),\n  seller_name    = coalesce(nullif(EXCLUDED.seller_name,''),    dash_purchase_case.seller_name),\n  profile        = coalesce(nullif(EXCLUDED.profile,''),        dash_purchase_case.profile),\n  ads            = coalesce(nullif(EXCLUDED.ads,''),            dash_purchase_case.ads),\n  channel        = coalesce(nullif(EXCLUDED.channel,''),        dash_purchase_case.channel),\n  sell_type      = coalesce(nullif(EXCLUDED.sell_type,''),      dash_purchase_case.sell_type),\n  online_offline = coalesce(nullif(EXCLUDED.online_offline,''), dash_purchase_case.online_offline),\n  case_type      = coalesce(nullif(EXCLUDED.case_type,''),      dash_purchase_case.case_type),\n  purchaser      = coalesce(nullif(EXCLUDED.purchaser,''),      dash_purchase_case.purchaser),\n  sender         = coalesce(nullif(EXCLUDED.sender,''),         dash_purchase_case.sender),\n  decision       = coalesce(nullif(EXCLUDED.decision,''),       dash_purchase_case.decision),\n  raw_text       = coalesce(nullif(EXCLUDED.raw_text,''),       dash_purchase_case.raw_text),\n  updated_at     = now()\nRETURNING id, code, case_type, purchaser, decision;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -4704,
+        -1760
+      ],
+      "id": "tr01aaaa-bbbb-4ccc-8ddd-eeeeffff0001",
+      "name": "บันทึกเคสรับซื้อ (Postgres)",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "notes": "แทนโหนดชีต Append (ซื้อขายเทิร์นรถ) · รับ output ของ Build Sheet Row (Trade-in) v20 ตรงๆ\nคีย์คือ code → ส่งซ้ำ = ทับแถวเดิม ไม่เกิดแถวซ้ำ\n★ ไม่ทับช่องที่คนกรอกเอง: คันที่ / ประเภทรถ / คอมเมนท์จัดซื้อ / เหตุผล\n★ ค่าที่ parse ไม่ได้ (ว่าง) ก็ไม่ทับของเดิม (coalesce+nullif)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- เติม \"คอมเมนท์จัดซื้อ\" ต่อท้ายของเดิม คั่นด้วย \" / \" · ไม่เติมซ้ำถ้ามีข้อความนั้นอยู่แล้ว\n-- แทนชุด Get row → Merge Comments → update ทั้งชุด (ทำในคำสั่งเดียว ไม่มีจังหวะแข่งกันเขียน)\nWITH d AS (SELECT $1::jsonb AS j)\nUPDATE dash_purchase_case t SET\n  comment = CASE\n    WHEN nullif(trim(d.j->>'comment'),'') IS NULL THEN t.comment\n    WHEN coalesce(t.comment,'') = '' THEN trim(d.j->>'comment')\n    WHEN position(trim(d.j->>'comment') in t.comment) > 0 THEN t.comment\n    ELSE t.comment || ' / ' || trim(d.j->>'comment')\n  END,\n  purchaser = coalesce(nullif(d.j->>'purchaserNickname',''), t.purchaser),\n  updated_at = now()\nFROM d\nWHERE t.code = upper(trim(d.j->>'code'))\nRETURNING t.id, t.code, t.purchaser, t.comment;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -4704,
+        -1536
+      ],
+      "id": "tr01aaaa-bbbb-4ccc-8ddd-eeeeffff0002",
+      "name": "เติมคอมเมนท์จัดซื้อ (Postgres)",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "notes": "แทนโหนด update (ชีต TestBot) + ยุบ Get row / Merge Comments ทิ้งได้\nรับ output ฝั่ง purchase_comment ของ Build Sheet Row (Trade-in)\nยังไม่มีเคสรหัสนั้นในตาราง = ไม่เขียนอะไร (คืน 0 แถว) ไม่ error"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "meta": {
+    "instanceId": "oxlet-deploy-snippet",
+    "templateCredsSetupCompleted": false
+  }
+}

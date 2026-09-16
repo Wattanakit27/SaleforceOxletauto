@@ -593,6 +593,30 @@ return [{
     _code: code,
     _sender: senderNickname,
     _purchaser: purchaserFinal,
-    _group: GROUP_HOT[groupId] || ""
+    _group: GROUP_HOT[groupId] || "",
+
+    // ★ v20 — ชื่อฟิลด์สำหรับเขียนลง Postgres (ตาราง dash_purchase_case)
+    //   โหนด "บันทึกเคสรับซื้อ (Postgres)" อ่านจากตรงนี้ · `values` ข้างบนเก็บไว้
+    //   เผื่อยังต่อโหนดชีตคู่ขนานช่วงเปลี่ยนผ่าน — เลิกใช้ชีตแล้วลบ `values` ทิ้งได้
+    code,
+    date_th: dateTH,
+    car_model: carModel,
+    car_dropdown: carDropdownValue,
+    plate,
+    phone,
+    seller_name: customerName,
+    ads,
+    channel: channelMapped,
+    sell_type: sellType,
+    decision: buyStatus,
+    online_offline: onlineOffline,
+    purchaser: purchaserFinal,
+    sender: senderNickname,
+    case_type: caseType,
+    profile: finalProfile,
+    group_id: groupId,
+    group_name: GROUP_HOT[groupId] || "",
+    message_id: item.messageId || item.message_id || "",
+    raw_text: text
   }
 }];
