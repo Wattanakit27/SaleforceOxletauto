@@ -18,4 +18,5 @@ urlpatterns = [
     path("api/employees", views.api_employees, name="checkout_employees"),
     # เช็คชื่อเข้างานรายวัน (n8n เขียนเข้ามา · หน้านี้อ่านอย่างเดียว)
     path("api/checkins", views.api_checkins, name="checkout_checkins"),
+    path("api/checkin_config", views.api_checkin_config, name="checkout_checkin_config"),
 ]

@@ -4,6 +4,7 @@
 - ยังไม่แตะ LINE (ก้อน 3) — เพิ่มเคสมือได้เพื่อทดสอบ flow ก่อน
 """
 import json
+import re
 
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -1003,6 +1004,107 @@ def api_checkins(request):
                          "rows": rows, "missing": missing, "dayoff": dayoff,
                          "employees": Employee.objects.filter(active=True, track_checkin=True).count()},
                         json_dumps_params={"ensure_ascii": False})
+
+
+def api_checkin_config(request):
+    """ตั้งค่าส่งตารางเช็คชื่อเข้าไลน์ — ★ 17 ก.ย.69 (เจ้าของขอ "ขอหน้า URL ตั้งค่า ดิฉันตั้งเอง")
+
+      GET  → ค่าปัจจุบัน + กลุ่มที่บอทตัวส่งอยู่ + ใครจะถูกแท็ก + แท็กได้กี่คน
+      POST → บันทึก `{enabled, tableTime, escalateTime, mode, groupId, testId, maxTag, holidays}`
+      POST `{action:"test", round:"table"|"escalate"}` → ส่งทดสอบเดี๋ยวนี้
+
+    **ส่งด้วยบอทตัวส่ง (OxletautoGiveLead) เสมอ** — ดู `checkin_report.bot()`
+    """
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin/ผู้บริหาร"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from . import checkin_report as R
+
+    if request.method == "POST":
+        try:
+            b = json.loads(request.body or "{}")
+        except Exception:
+            b = {}
+
+        if b.get("action") == "test":
+            cfg = R.config()
+            target = cfg["test_id"] if cfg.get("mode") == "test" else cfg["group_id"]
+            if not target:
+                return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง"}, status=400,
+                                    json_dumps_params={"ensure_ascii": False})
+            try:
+                if b.get("round") == "escalate":
+                    ok, msg = R.send_escalation(target)
+                else:
+                    ok, msg = R.send(target)
+            except Exception as e:
+                ok, msg = False, str(e)[:300]
+            return JsonResponse({"ok": ok, "message": msg},
+                                json_dumps_params={"ensure_ascii": False})
+
+        def _hhmm(v):
+            v = (v or "").strip()
+            if not v:
+                return ""
+            m = re.match(r"^(\d{1,2}):(\d{2})$", v)
+            return "%02d:%s" % (int(m.group(1)), m.group(2)) if m else ""
+
+        try:
+            cap = max(0, int(b.get("maxTag") or 0))
+        except (TypeError, ValueError):
+            cap = 20
+        hol = []
+        for d in (b.get("holidays") or []):
+            d = str(d or "").strip()
+            try:
+                from datetime import date as _d
+                hol.append(_d.fromisoformat(d).isoformat())
+            except ValueError:
+                continue
+        R.save_config({
+            "enabled": bool(b.get("enabled")),
+            "table_time": _hhmm(b.get("tableTime")),
+            "escalate_time": _hhmm(b.get("escalateTime")),
+            "mode": "group" if b.get("mode") == "group" else "test",
+            "group_id": (b.get("groupId") or "").strip()[:64],
+            "test_id": (b.get("testId") or "").strip()[:64],
+            "max_tag": cap,
+            "holidays": sorted(set(hol)),
+        })
+
+    cfg = R.config()
+    bot = R.bot()
+    data = R.collect()
+    ok_n, all_n, no_tag = R.tag_coverage(data["missing"], bot["key"])
+    mgrs = R.managers(bot["key"])
+
+    # กลุ่มที่ "บอทตัวส่ง" อยู่จริงเท่านั้น — กันเลือกกลุ่มของบอทเก่าแล้วส่งไม่ออก
+    groups = []
+    try:
+        from dashboard.services import cache_store
+        from dashboard.services.line_channels import group_visible_to_push
+        reg = (cache_store.get_kv("line_groups") or {}).get("data") or {}
+        for gid, v in reg.items():
+            v = v or {}
+            if group_visible_to_push(v):
+                groups.append({"id": gid, "name": v.get("name") or gid})
+        groups.sort(key=lambda g: g["name"])
+    except Exception:
+        groups = []
+
+    return JsonResponse({
+        "ok": True,
+        "config": {"enabled": cfg["enabled"], "tableTime": cfg["table_time"],
+                   "escalateTime": cfg["escalate_time"], "mode": cfg["mode"],
+                   "groupId": cfg["group_id"], "testId": cfg["test_id"],
+                   "maxTag": cfg.get("max_tag", 20), "holidays": cfg.get("holidays") or []},
+        "bot": {"name": bot["name"], "separate": bot["ok"]},
+        "groups": groups,
+        "today": {"date": data["date"].isoformat(), "dayName": data["dayName"],
+                  "total": data["counts"]["total"], "missing": data["counts"]["missing"]},
+        "tag": {"can": ok_n, "all": all_n, "cannot": no_tag[:20]},
+        "managers": [{"name": m["name"], "canTag": bool(m["userId"])} for m in mgrs],
+    }, json_dumps_params={"ensure_ascii": False})
 
 
 def api_customers(request):

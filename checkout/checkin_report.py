@@ -312,6 +312,38 @@ def push_channel() -> str:
         return ""
 
 
+def bot() -> dict:
+    """บัญชีที่ใช้ส่งงานเช็คชื่อ — **บังคับเป็นตัวส่ง (OxletautoGiveLead)** ทุกกรณี
+
+    ★ 17 ก.ย.69 เจ้าของสั่ง: *"Bot ที่ต้องใช้ในการส่งคือ OxletautoGiveLead"*
+      เดิมใช้ `token_for(ปลายทาง)` ซึ่งเลือกตามชนิดปลายทาง — **แชทส่วนตัวจะตกไปใช้บอทเดิม**
+      (เพราะ LINE ส่ง 1:1 ได้เฉพาะคนที่แอดบอทนั้นไว้) ทำให้ตอนทดสอบส่งเข้าตัวเอง
+      จะออกจากคนละบอทกับตอนใช้จริง → ทดสอบแล้วไม่ตรงกับของจริง
+      ตอนนี้ล็อกเป็นบัญชีตัวส่งอย่างเดียว · **ผลข้างเคียง: คนที่จะรับแชทส่วนตัวต้องแอด
+      OxletautoGiveLead เป็นเพื่อนก่อน** ไม่งั้น LINE จะไม่ส่งให้
+
+    คืน `{key, name, token, ok}` — `ok=False` = ยังไม่ได้ตั้ง token ตัวส่งแยก
+    """
+    try:
+        from dashboard.services.line_channels import account_of, has_push_channel, push_token
+        key = _channel_of_token(push_token())
+        acc = account_of(key) if key else {}
+        name = acc.get("name") or ""
+        # ★ ถาม LINE ว่าบัญชีนี้ชื่ออะไรจริงๆ — หน้าตั้งค่าจะได้ยืนยันได้ว่าเป็น OxletautoGiveLead
+        #   ไม่ใช่แค่ป้าย "ตัวส่ง" ที่เราตั้งเอง · ถามไม่ได้ก็ใช้ป้ายเดิม (ไม่ทำให้หน้าพัง)
+        try:
+            from dashboard.services.line_channels import bot_info
+            real = (bot_info(push_token()) or {}).get("displayName") or ""
+            if real:
+                name = real
+        except Exception:
+            pass
+        return {"key": key, "name": name or "(ไม่ทราบชื่อ)",
+                "token": push_token(), "ok": has_push_channel()}
+    except Exception:
+        return {"key": "", "name": "", "token": "", "ok": False}
+
+
 def too_many(n: int) -> int:
     """ขาดเกินเพดานไหม — คืนเพดานที่ตั้งไว้ (0 = ไม่กัน / ไม่เกิน)"""
     try:
@@ -373,7 +405,6 @@ def send(target_id: str, day=None, tag=True) -> tuple:
     (บนเครื่อง dev จะสร้างรูปได้ แต่ส่งไม่ออก — เหมือนรายงานรายวัน)
     """
     from django.conf import settings
-    from dashboard.services.line_channels import token_for
     from dashboard.services.line_notify import push_line_message
     from dashboard.services.report_shot import _public_url
 
@@ -391,11 +422,12 @@ def send(target_id: str, day=None, tag=True) -> tuple:
                        "(SITE_URL=%s) → ต้องรันบนเซิร์ฟเวอร์จริง"
                        % (path, getattr(settings, "SITE_URL", "")))
 
-    token = token_for(target_id)
+    b = bot()
+    token = b["token"]
     if not token:
-        return False, "ยังไม่ได้ตั้ง LINE token"
+        return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง"
     # แชทส่วนตัว (U…) แท็กไม่ได้ → ส่งเป็นรายชื่อแทน (ดู build_messages)
-    msgs = build_messages(data, url, _channel_of_token(token), tag,
+    msgs = build_messages(data, url, b["key"], tag,
                           mention=not target_id.startswith("U"))
     sc, resp = push_line_message(target_id, msgs, token, what="ตารางเช็คชื่อเข้างาน")
     return (sc == 200), (url if sc == 200 else "LINE %s: %s" % (sc, (resp or "")[:250]))
@@ -462,19 +494,19 @@ def escalation_messages(data: dict, channel="", mention=True, round_name="10:00 
 
 def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
     """ส่งข้อความรอบสายเข้าปลายทาง · คืน `(ok, ข้อความสถานะ)`"""
-    from dashboard.services.line_channels import token_for
     from dashboard.services.line_notify import push_line_message
 
     if not target_id:
         return False, "ไม่ได้บอกว่าจะส่งให้ใคร"
     data = collect(day)
-    msgs = escalation_messages(data, _channel_of_token(token_for(target_id)),
+    b = bot()
+    msgs = escalation_messages(data, b["key"],
                                mention=not target_id.startswith("U"), round_name=round_name)
     if not msgs:
         return True, "ทุกคนเช็คชื่อครบแล้ว — ไม่ต้องส่ง"
-    token = token_for(target_id)
+    token = b["token"]
     if not token:
-        return False, "ยังไม่ได้ตั้ง LINE token"
+        return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง"
     sc, resp = push_line_message(target_id, msgs, token, what="ตามคนยังไม่เช็คชื่อ (รอบสาย)")
     return (sc == 200), ("ส่งแล้ว %d คน" % len(data["missing"]) if sc == 200
                          else "LINE %s: %s" % (sc, (resp or "")[:250]))

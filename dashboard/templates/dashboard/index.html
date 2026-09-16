@@ -1360,6 +1360,8 @@
       { k:'crm', sec: 'ลูกค้า & ข้อมูล', items: [
         { i:'lucide:message-circle', l:'แชทลูกค้า (LINE OA)', fn:'openCustomerChat()',
           tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
+        { i:'lucide:bell',        l:'ตั้งค่าส่งเช็คชื่อเข้าไลน์', fn:'openCheckinConfig()',
+          tip:'เวลาส่งรูปตาราง/เวลาตามคนที่ยังไม่เช็ค · กลุ่มปลายทาง · เพดานกันแท็กหมู่ · วันหยุดบริษัท' },
         { i:'lucide:database',    l:'ฐานข้อมูล (SQL)',         fn:'openSqlPanel()',          boss:true,
           tip:'ดูข้อมูลดิบทุกตาราง · ยิงคำสั่ง SELECT เอง · ดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV หรือทั้งฐานข้อมูลเป็น .zip · อ่านอย่างเดียว เขียน/ลบไม่ได้ (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
         { i:'lucide:car-front',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
@@ -6116,6 +6118,173 @@
       box.innerHTML = html;
     }
 
+    // ═══ ตั้งค่าส่งตารางเช็คชื่อเข้าไลน์ — ★ 17 ก.ย.69 (เจ้าของขอหน้าตั้งค่าเอง) ═══
+    //   ส่งด้วยบอทตัวส่ง (OxletautoGiveLead) เสมอ · dropdown โชว์เฉพาะกลุ่มที่บอทตัวนั้นอยู่จริง
+    let _ckc = null;
+
+    async function openCheckinConfig() {
+      const old = document.getElementById('ckc-overlay'); if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'ckc-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div id="ckc-box" style="background:var(--bg);border-radius:16px;max-width:620px;width:100%;padding:22px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลด...</div></div>`;
+      document.body.appendChild(ov);
+      await loadCheckinConfig();
+    }
+
+    async function loadCheckinConfig() {
+      const box = document.getElementById('ckc-box'); if (!box) return;
+      try {
+        const r = await fetch('/checkout/api/checkin_config', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _ckc = d;
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
+          + `<div style="text-align:center"><button onclick="document.getElementById('ckc-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      renderCheckinConfig();
+    }
+
+    function _ckcTimes() {
+      const out = ['<option value="">ไม่ส่ง</option>'];
+      for (let h0 = 5; h0 <= 20; h0++) for (const m of ['00','15','30','45'])
+        out.push(`<option value="${String(h0).padStart(2,'0')}:${m}">${String(h0).padStart(2,'0')}:${m}</option>`);
+      return out.join('');
+    }
+
+    function renderCheckinConfig() {
+      const box = document.getElementById('ckc-box'); if (!box || !_ckc) return;
+      const c = _ckc.config, t = _ckc.today, tg = _ckc.tag;
+      // h() รับเฉพาะสตริง — maxTag เป็นตัวเลข ถ้าไม่แปลงก่อนจะพังทั้งพาเนล
+      const sel = (v) => `value="${h(String(v == null ? '' : v))}"`;
+
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
+        <div style="font-size:16px;font-weight:800;color:var(--t1)">ตั้งค่าส่งเช็คชื่อเข้าไลน์</div>
+        <button onclick="document.getElementById('ckc-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
+
+      html += `<div style="font-size:11.5px;color:var(--t3);margin-bottom:12px;line-height:1.7">
+        ส่งด้วยบอท <b style="color:var(--t1)">${h(_ckc.bot.name)}</b>${_ckc.bot.separate?'':' <span style="color:var(--amber)">(ยังไม่ได้แยกบัญชีตัวส่ง — จะออกจากบอทเดิม)</span>'}
+        <br>วัน${h(t.dayName)} ${h(t.date)} · ต้องมา ${t.total} คน · ยังไม่เช็คชื่อ ${t.missing} คน · <b>แท็กได้ ${tg.can}/${tg.all} คน</b></div>`;
+
+      if (tg.cannot.length) {
+        html += `<div style="font-size:11px;color:var(--amber);background:var(--bg2);border:.5px solid var(--bd2);border-radius:9px;padding:7px 10px;margin-bottom:12px">
+          แท็กไม่ได้ (จะพิมพ์ชื่อแทน): ${tg.cannot.map(h).join(' · ')}<br>
+          <span style="color:var(--t3)">คนกลุ่มนี้ยังไม่เคยพิมพ์ในกลุ่มผ่านบอทตัวส่ง</span></div>`;
+      }
+
+      const row = (label, inner, hint) => `<div style="margin-bottom:11px">
+        <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px">${label}</div>${inner}
+        ${hint?`<div style="font-size:10.5px;color:var(--t3);margin-top:3px">${hint}</div>`:''}</div>`;
+      const inp = 'width:100%;font-size:12.5px;padding:7px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)';
+
+      html += `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:13px;background:var(--bg2);margin-bottom:12px">`;
+
+      html += row('เปิดส่งอัตโนมัติ',
+        `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;color:var(--t1)">
+          <input type="checkbox" id="ckc_on" ${c.enabled?'checked':''} style="width:17px;height:17px;cursor:pointer">
+          ส่งเองทุกวันตามเวลาที่ตั้งไว้</label>`);
+
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${row('เวลาส่งรูปตาราง', `<select id="ckc_t1" style="${inp}">${_ckcTimes()}</select>`)}
+        ${row('เวลาตามคนที่ยังไม่เช็ค', `<select id="ckc_t2" style="${inp}">${_ckcTimes()}</select>`, 'รอบนี้จะแท็กผู้บริหารด้วย')}
+      </div>`;
+
+      html += row('ส่งเข้าที่ไหน',
+        `<select id="ckc_mode" onchange="renderCheckinConfigTarget()" style="${inp}">
+          <option value="test" ${c.mode==='test'?'selected':''}>แชททดสอบ (ส่งเข้าคนเดียว · แท็กไม่ได้)</option>
+          <option value="group" ${c.mode==='group'?'selected':''}>กลุ่ม LINE (ใช้จริง · แท็กได้)</option>
+        </select>`);
+
+      html += `<div id="ckc_target"></div>`;
+
+      html += row('ไม่แท็กรายคนเมื่อขาดเกิน',
+        `<input id="ckc_cap" type="number" min="0" max="200" ${sel(c.maxTag)} style="${inp}">`,
+        'กันวันหยุดยาว/ระบบมีปัญหาแล้วแท็กทั้งบริษัท · ใส่ 0 = แท็กเสมอ · ยังแท็กผู้บริหารตามปกติ');
+
+      html += row('วันหยุดบริษัท (ไม่ส่งทั้ง 2 รอบ)',
+        `<textarea id="ckc_hol" rows="2" placeholder="2026-12-31, 2027-01-01" style="${inp};resize:vertical">${h((c.holidays||[]).join(', '))}</textarea>`,
+        'ใส่วันที่แบบ YYYY-MM-DD คั่นด้วยจุลภาค');
+
+      html += `</div>`;
+
+      const mg = _ckc.managers || [];
+      html += `<div style="font-size:11.5px;color:var(--t2);margin-bottom:12px">
+        <b>คนที่จะถูกแท็กตอนมีคนไม่เช็คชื่อ:</b> ${mg.length ? mg.map(m => h(m.name) + (m.canTag?'':' <span style="color:var(--amber)">(แท็กไม่ได้)</span>')).join(' · ') : '<span style="color:var(--amber)">ยังไม่ได้ติ๊กใคร</span>'}
+        <div style="color:var(--t3);margin-top:3px">ติ๊กได้ที่ <a href="#" onclick="document.getElementById('ckc-overlay').remove();openEmployees();return false" style="color:var(--blue)">เมนูพนักงาน</a> → ช่อง "แจ้งเตือน"</div></div>`;
+
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button onclick="saveCheckinConfig()" style="font-size:12.5px;font-weight:700;padding:8px 18px;border-radius:9px;border:none;background:var(--green);color:#fff;cursor:pointer">บันทึก</button>
+        <button onclick="testCheckinConfig('table')" style="font-size:12px;padding:8px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ส่งรูปทดสอบ</button>
+        <button onclick="testCheckinConfig('escalate')" style="font-size:12px;padding:8px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ส่งข้อความตามทดสอบ</button>
+        <span id="ckc_msg" style="font-size:12px;color:var(--t3)"></span></div>`;
+
+      box.innerHTML = html;
+      document.getElementById('ckc_t1').value = c.tableTime || '';
+      document.getElementById('ckc_t2').value = c.escalateTime || '';
+      renderCheckinConfigTarget();
+    }
+
+    function renderCheckinConfigTarget() {
+      const el = document.getElementById('ckc_target'); if (!el || !_ckc) return;
+      const c = _ckc.config;
+      const mode = (document.getElementById('ckc_mode') || {}).value || c.mode;
+      const inp = 'width:100%;font-size:12.5px;padding:7px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)';
+      if (mode === 'group') {
+        const gs = _ckc.groups || [];
+        el.innerHTML = `<div style="margin-bottom:11px">
+          <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px">กลุ่มปลายทาง</div>
+          ${gs.length ? `<select id="ckc_gid" style="${inp}">${gs.map(g => `<option value="${h(g.id)}" ${g.id===c.groupId?'selected':''}>${h(g.name)}</option>`).join('')}</select>`
+                      : `<input id="ckc_gid" value="${h(c.groupId)}" placeholder="Cxxxxxxxx" style="${inp}">`}
+          <div style="font-size:10.5px;color:var(--t3);margin-top:3px">${gs.length ? 'โชว์เฉพาะกลุ่มที่บอทตัวส่งอยู่จริง — กลุ่มของบอทเก่าใช้ไม่ได้' : 'ยังไม่มีกลุ่มในทะเบียน ให้วาง group id เอง'}</div></div>`;
+      } else {
+        el.innerHTML = `<div style="margin-bottom:11px">
+          <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px">LINE id ที่จะส่งทดสอบ</div>
+          <input id="ckc_tid" value="${h(c.testId)}" placeholder="Uxxxxxxxx" style="${inp}">
+          <div style="font-size:10.5px;color:var(--t3);margin-top:3px">คนนั้นต้องแอดบอทตัวส่งเป็นเพื่อนก่อน ไม่งั้น LINE ไม่ส่งให้ · โหมดนี้แท็กไม่ได้ จะพิมพ์ชื่อแทน</div></div>`;
+      }
+    }
+
+    function _ckcBody() {
+      const g = document.getElementById('ckc_gid'), t = document.getElementById('ckc_tid');
+      return {
+        enabled: (document.getElementById('ckc_on') || {}).checked || false,
+        tableTime: (document.getElementById('ckc_t1') || {}).value || '',
+        escalateTime: (document.getElementById('ckc_t2') || {}).value || '',
+        mode: (document.getElementById('ckc_mode') || {}).value || 'test',
+        groupId: g ? g.value : (_ckc.config.groupId || ''),
+        testId: t ? t.value : (_ckc.config.testId || ''),
+        maxTag: Number((document.getElementById('ckc_cap') || {}).value || 0),
+        holidays: ((document.getElementById('ckc_hol') || {}).value || '').split(',').map(s => s.trim()).filter(Boolean),
+      };
+    }
+
+    function _ckcMsg(txt, col) {
+      const el = document.getElementById('ckc_msg');
+      if (el) { el.textContent = txt; el.style.color = col || 'var(--t3)'; }
+    }
+
+    async function saveCheckinConfig() {
+      _ckcMsg('กำลังบันทึก…');
+      try {
+        const r = await fetch('/checkout/api/checkin_config', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_ckcBody())});
+        const d = await r.json();
+        if (!d.ok) { _ckcMsg(d.error || 'ไม่สำเร็จ', 'var(--red)'); return; }
+        _ckc = d; renderCheckinConfig(); _ckcMsg('✓ บันทึกแล้ว', 'var(--green)');
+      } catch (e) { _ckcMsg('ผิดพลาด: ' + (e.message||e), 'var(--red)'); }
+    }
+
+    async function testCheckinConfig(round) {
+      _ckcMsg('กำลังส่ง… (สร้างรูปอาจใช้เวลาสักครู่)');
+      try {
+        const r = await fetch('/checkout/api/checkin_config', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify({action:'test', round})});
+        const d = await r.json();
+        _ckcMsg((d.ok ? '✓ ' : '✗ ') + (d.message || d.error || ''), d.ok ? 'var(--green)' : 'var(--red)');
+      } catch (e) { _ckcMsg('ผิดพลาด: ' + (e.message||e), 'var(--red)'); }
+    }
+
     async function openEmployees() {
       const old = document.getElementById('emp-overlay'); if (old) old.remove();
       const ov = document.createElement('div');
@@ -7892,7 +8061,8 @@
     //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
     //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
     // db: ชี้มาหน้าใหม่ — ลิงก์เก่าที่เคยแจกไว้จะได้ไม่ตาย (พาเนลสารบัญเดิมถูกยุบรวมแล้ว 16 ก.ย.69)
-    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel' };
+    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', checkinset:'openCheckinConfig',
+                         customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel' };
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];
