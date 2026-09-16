@@ -5823,6 +5823,16 @@
       await loadCheckins(d || '');
     }
 
+    // แปลง "8:30" → นาที · ใช้คิด "สายกี่นาที" และ "เลยเวลาเข้างานหรือยัง"
+    function _ckiMin(t) {
+      const m = String(t || '').match(/^(\d{1,2})[:.](\d{2})$/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    }
+    function _ckiLate(timeHm, workStart) {
+      const a = _ckiMin(timeHm), b = _ckiMin(workStart);
+      return (a != null && b != null && a > b) ? (a - b) : 0;
+    }
+
     async function loadCheckins(d) {
       if (d !== undefined) _ckiDate = d;
       const box = document.getElementById('cki-box'); if (!box) return;
@@ -5837,59 +5847,98 @@
         return;
       }
       _ckiDate = j.date;
+      const rows = j.rows || [], miss = j.missing || [], off = j.dayoff || [];
+      const expect = rows.length + miss.length;              // คนที่ต้องมาวันนี้ (ไม่นับคนวันหยุด)
       const c = j.counts || {};
-      const kpi = (lbl, v, col) => `<div style="flex:1;min-width:96px;background:var(--bg2);border-radius:11px;padding:10px 12px;text-align:center">
-        <div style="font-size:21px;font-weight:800;color:${v ? col : 'var(--t3)'}">${v}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">${lbl}</div></div>`;
+      const shift = (n) => { const dt = new Date(j.date + 'T00:00:00'); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0,10); };
+      const now = new Date();
+      const nowMin = j.isToday ? now.getHours() * 60 + now.getMinutes() : null;
 
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
-        <div style="font-size:16px;font-weight:800;color:var(--t1)">เช็คชื่อเข้างาน ${j.isToday ? '(วันนี้)' : ''}</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="date" value="${h(j.date)}" onchange="loadCheckins(this.value)" style="font-size:12px;padding:5px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+      // ── หัว: ชื่อ + เลื่อนวัน ──
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-size:17px;font-weight:800;color:var(--t1)">เช็คชื่อเข้างาน</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="loadCheckins('${shift(-1)}')" title="วันก่อนหน้า" style="font-size:13px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">‹</button>
+          <input type="date" value="${h(j.date)}" onchange="loadCheckins(this.value)" style="font-size:12px;padding:5px 8px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <button onclick="loadCheckins('${shift(1)}')" title="วันถัดไป" style="font-size:13px;padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">›</button>
+          ${j.isToday ? '' : `<button onclick="loadCheckins('')" style="font-size:11px;padding:5px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">วันนี้</button>`}
+          <button onclick="loadCheckinRange()" style="font-size:11px;padding:5px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">สรุปเดือน</button>
           <button onclick="document.getElementById('cki-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button>
         </div></div>`;
-      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px">วัน${h(j.dayName)} · พนักงานที่ใช้งานอยู่ ${j.employees} คน · สาย/ตรงเวลาตัดสินจากเวลาเข้างานของแต่ละคน</div>`;
-      html += `<div style="margin-bottom:12px"><button onclick="loadCheckinRange()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">📊 สรุปทั้งเดือน (ใครสายบ่อย)</button></div>`;
-      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        ${kpi('ตรงเวลา', c.ontime||0, 'var(--green)')}${kpi('สาย', c.late||0, 'var(--red)')}
-        ${kpi('อ่านเวลาไม่ออก', c.abnormal||0, 'var(--amber)')}${kpi('ยังไม่เช็คชื่อ', (j.missing||[]).length, 'var(--amber)')}
-        ${kpi('วันหยุด', (j.dayoff||[]).length, 'var(--t2)')}</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:14px">วัน${h(j.dayName)} ${j.isToday ? '(วันนี้)' : ''} · ต้องมา ${expect} คน · วันหยุด ${off.length} คน · สาย/ตรงเวลาเทียบเวลาเข้างานของแต่ละคน</div>`;
 
-      const rows = j.rows || [];
-      html += `<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">มาแล้ว ${rows.length} คน</div>`;
-      if (!rows.length) {
-        html += `<div style="padding:16px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:10px;margin-bottom:14px">ยังไม่มีใครเช็คชื่อวันนี้</div>`;
-      } else {
-        html += `<div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      // ── แถบความคืบหน้า: เห็นภาพรวมในบรรทัดเดียว ──
+      const pc = (n) => expect ? Math.round(n * 100 / expect) : 0;
+      html += `<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--bg2);margin-bottom:8px">
+        <div style="width:${pc(c.ontime||0)}%;background:var(--green)"></div>
+        <div style="width:${pc(c.late||0)}%;background:var(--red)"></div>
+        <div style="width:${pc(c.abnormal||0)}%;background:var(--amber)"></div></div>`;
+      const legend = (col, lbl, n) => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--t2)">
+        <span style="width:9px;height:9px;border-radius:3px;background:${col};display:inline-block"></span>${lbl} <b style="color:var(--t1)">${n}</b></span>`;
+      html += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+        ${legend('var(--green)','ตรงเวลา', c.ontime||0)}${legend('var(--red)','สาย', c.late||0)}
+        ${c.abnormal ? legend('var(--amber)','อ่านเวลาไม่ออก', c.abnormal) : ''}
+        ${legend('var(--bd2)','ยังไม่เช็คชื่อ', miss.length)}</div>`;
+
+      // ── ตารางคนที่มาแล้ว (เรียงเวลา) ──
+      if (rows.length) {
+        html += `<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
           <thead><tr style="color:var(--t3);font-size:11px;text-align:left">
             <th style="padding:6px 5px">ชื่อ</th><th style="padding:6px 5px">ตำแหน่ง</th>
-            <th style="padding:6px 5px">เวลา</th><th style="padding:6px 5px">เข้างาน</th>
-            <th style="padding:6px 5px">สถานะ</th><th style="padding:6px 5px">ที่มา</th>
-            <th style="padding:6px 5px">สถานที่</th></tr></thead><tbody>`;
+            <th style="padding:6px 5px;text-align:center">เข้างาน</th><th style="padding:6px 5px;text-align:center">เช็คชื่อ</th>
+            <th style="padding:6px 5px">สถานะ</th><th style="padding:6px 5px">สถานที่</th></tr></thead><tbody>`;
         rows.forEach(r => {
+          const lateMin = _ckiLate(r.timeHm, r.workStart);
           const st = r.status === 'ontime' ? ['ตรงเวลา','var(--green)']
-                   : r.status === 'late' ? ['สาย','var(--red)'] : ['อ่านไม่ออก','var(--amber)'];
+                   : r.status === 'late' ? [lateMin ? `สาย ${lateMin} นาที` : 'สาย','var(--red)']
+                   : ['อ่านเวลาไม่ออก','var(--amber)'];
           html += `<tr style="border-top:.5px solid var(--bd2)">
-            <td style="padding:5px;font-weight:600;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:10px;color:var(--amber)">(ยังไม่ผูกทะเบียน)</span>'}</td>
-            <td style="padding:5px;color:var(--t2)">${h(r.position||'-')}</td>
-            <td style="padding:5px;font-weight:700;color:var(--t1)">${h(r.timeHm||'-')}</td>
-            <td style="padding:5px;color:var(--t3)">${h(r.workStart||'-')}</td>
-            <td style="padding:5px"><span style="color:${st[1]};font-weight:700">${st[0]}</span>
-              <div style="font-size:10px;color:var(--t3)">${h(r.reason||'')}</div></td>
-            <td style="padding:5px;color:var(--t3);font-size:11px">${r.timeSource==='image'?'รูป':'เวลาส่ง'}</td>
-            <td style="padding:5px;color:var(--t3);font-size:11px;max-width:200px">${h((r.address||'').slice(0,60))}</td></tr>`;
+            <td style="padding:7px 5px;font-weight:700;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:10px;color:var(--amber)" title="บอทจับคู่กับทะเบียนพนักงานไม่ได้">(ยังไม่ผูก)</span>'}</td>
+            <td style="padding:7px 5px;color:var(--t2)">${h(r.position||'-')}</td>
+            <td style="padding:7px 5px;text-align:center;color:var(--t3)">${h(r.workStart||'-')}</td>
+            <td style="padding:7px 5px;text-align:center;font-size:14px;font-weight:800;color:${st[1]}">${h(r.timeHm||'-')}</td>
+            <td style="padding:7px 5px"><span style="font-size:11px;font-weight:700;color:${st[1]};background:var(--bg2);padding:3px 9px;border-radius:12px;white-space:nowrap">${st[0]}</span>
+              ${r.timeSource==='message'?'<div style="font-size:10px;color:var(--t3);margin-top:2px">อ่านจากรูปไม่ได้ ใช้เวลาที่ส่ง</div>':''}</td>
+            <td style="padding:7px 5px;color:var(--t3);font-size:11px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(r.address||'')}">${h(r.address||'-')}</td></tr>`;
         });
         html += `</tbody></table></div>`;
+      } else {
+        html += `<div style="padding:18px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;margin-bottom:18px">ยังไม่มีใครเช็คชื่อ</div>`;
       }
 
-      const mk = (title, list, col) => {
-        if (!list.length) return '';
-        return `<div style="font-size:13px;font-weight:700;color:${col};margin-bottom:6px">${title} ${list.length} คน</div>`
-          + `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">` + list.map(m =>
-            `<span style="font-size:12px;padding:4px 10px;border-radius:14px;background:var(--bg2);border:.5px solid var(--bd2);color:var(--t2)">${h(m.name)}${m.workStart?` <span style="color:var(--t3)">${h(m.workStart)}</span>`:''}${m.note?` <span style="color:var(--amber)" title="หมายเหตุจากกลุ่ม LINE">· ${h(m.note.slice(0,28))}</span>`:''}</span>`).join('') + `</div>`;
+      // ── ยังไม่เช็คชื่อ: แยกคนที่ "เลยเวลาแล้ว" ออกจาก "ยังไม่ถึงเวลา" + จัดกลุ่มตามตำแหน่ง ──
+      const noCfg = miss.filter(m => !m.workStart);
+      const withCfg = miss.filter(m => m.workStart);
+      const overdue = nowMin == null ? withCfg : withCfg.filter(m => _ckiMin(m.workStart) < nowMin);
+      const waiting = nowMin == null ? [] : withCfg.filter(m => _ckiMin(m.workStart) >= nowMin);
+
+      const chip = (m, col) => `<span style="font-size:12px;padding:4px 10px;border-radius:14px;background:var(--bg2);border:.5px solid ${col||'var(--bd2)'};color:var(--t1);white-space:nowrap">${h(m.name)}<span style="color:var(--t3)"> ${h(m.workStart||'')}</span>${m.note?`<span style="color:var(--amber)" title="หมายเหตุจากกลุ่ม LINE"> · ${h(m.note.slice(0,24))}</span>`:''}</span>`;
+
+      const groupByPos = (list, col) => {
+        const g = {};
+        list.forEach(m => { (g[m.position || 'ไม่ระบุตำแหน่ง'] = g[m.position || 'ไม่ระบุตำแหน่ง'] || []).push(m); });
+        return Object.keys(g).sort().map(pos =>
+          `<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--t3);margin-bottom:4px">${h(pos)} · ${g[pos].length} คน</div>
+           <div style="display:flex;flex-wrap:wrap;gap:6px">${g[pos].map(m => chip(m, col)).join('')}</div></div>`).join('');
       };
-      html += mk('ยังไม่เช็คชื่อ', j.missing || [], 'var(--amber)');
-      html += mk('วันหยุดวันนี้', j.dayoff || [], 'var(--t2)');
+
+      if (overdue.length) {
+        html += `<div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:8px">เลยเวลาเข้างานแล้ว ยังไม่เช็คชื่อ ${overdue.length} คน</div>`
+             + groupByPos(overdue, 'var(--red-mid,#e5b3b3)');
+      }
+      if (waiting.length) {
+        html += `<div style="font-size:13px;font-weight:700;color:var(--t2);margin:12px 0 8px">ยังไม่ถึงเวลาเข้างาน ${waiting.length} คน</div>`
+             + groupByPos(waiting, '');
+      }
+      if (off.length) {
+        html += `<div style="font-size:13px;font-weight:700;color:var(--t2);margin:12px 0 6px">วันหยุดวันนี้ ${off.length} คน</div>`
+             + `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${off.map(m => chip(m, '')).join('')}</div>`;
+      }
+      if (noCfg.length) {
+        html += `<div style="font-size:12px;font-weight:700;color:var(--amber);margin:12px 0 6px">ยังไม่ได้ตั้งเวลาเข้างาน ${noCfg.length} คน
+          <span style="font-weight:400;color:var(--t3)">— ตั้งได้ที่เมนู "พนักงาน" (ถ้าไม่ใช่คนจริงลบทิ้งได้)</span></div>`
+          + `<div style="display:flex;flex-wrap:wrap;gap:6px">${noCfg.map(m => chip(m, '')).join('')}</div>`;
+      }
       box.innerHTML = html;
     }
 
