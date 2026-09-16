@@ -258,22 +258,55 @@ def _channel_of_token(token: str) -> str:
     return ""
 
 
-def _mention_ids(missing, channel):
-    """LINE user id ของคนที่ต้องแท็ก **เฉพาะไอดีฝั่งบัญชีที่กำลังส่ง**
+def _pick_id(profiles, channel):
+    """เลือก LINE id ให้ตรงบัญชีที่กำลังส่ง — ไม่ตรง = คืนค่าว่าง (ไม่เดา)
 
-    ⚠️ id ออกต่อ provider — เอา id ของบอทเดิมไปแท็กผ่านบอทใหม่ LINE จะปฏิเสธทั้งข้อความ
+    ⚠️★ 17 ก.ย.69 — **ยอมไม่แท็ก ดีกว่าแท็กด้วยไอดีที่ไม่แน่ใจ**
+      id ออกต่อ provider · ถ้าใส่ id ของบอทอื่นลงไปแม้แค่คนเดียว
+      **LINE ปฏิเสธทั้งข้อความ** (คนอื่นก็ไม่ได้รับ) — พลาดคนเดียวเสียทั้งรอบ
+      วัดจริงบนเซิร์ฟเวอร์: พนักงาน 43 คนมีไอดีที่ **ไม่รู้ว่ามาจากบอทไหน** (`channel=''`)
+      ถึง 41 คน (ของเก่าที่นำเข้าจากชีต = ไอดีบอทเดิม) ถ้าปล่อยให้หยิบมาใช้
+      ข้อความรอบสายจะถูกตีกลับทุกวันโดยไม่มีใครรู้
     """
+    if not channel:                       # ไม่รู้ว่าส่งจากบัญชีไหน = เอาอันแรกเท่าที่มี
+        return profiles[0].user_id if profiles else ""
+    for p in profiles:
+        if p.channel == channel:
+            return p.user_id
+    return ""
+
+
+def _mention_ids(missing, channel):
+    """LINE user id ของคนที่ต้องแท็ก **เฉพาะไอดีฝั่งบัญชีที่กำลังส่ง**"""
     from .models import LineProfile
 
-    out = {}
     if not missing:
-        return out
-    qs = LineProfile.objects.filter(employee_id__in=[m["id"] for m in missing])
-    for p in qs:
-        if channel and p.channel and p.channel != channel:
-            continue
-        out.setdefault(p.employee_id, p.user_id)
+        return {}
+    by_emp = {}
+    for p in LineProfile.objects.filter(employee_id__in=[m["id"] for m in missing]):
+        by_emp.setdefault(p.employee_id, []).append(p)
+    out = {}
+    for m in missing:
+        uid = _pick_id(by_emp.get(m["id"], []), channel)
+        if uid:
+            out[m["id"]] = uid
     return out
+
+
+def tag_coverage(missing, channel="") -> tuple:
+    """แท็กได้กี่คนจากทั้งหมด — ไว้เช็คก่อนเปิดใช้จริง · คืน `(แท็กได้, ทั้งหมด, [ชื่อที่แท็กไม่ได้])`"""
+    ids = _mention_ids(missing, channel)
+    no = [m["name"] for m in missing if not ids.get(m["id"])]
+    return len(missing) - len(no), len(missing), no
+
+
+def push_channel() -> str:
+    """คีย์บัญชีที่ใช้ส่งเข้ากลุ่ม — ใช้ตอนเช็คว่าจะแท็กใครได้บ้าง"""
+    try:
+        from dashboard.services.line_channels import push_token
+        return _channel_of_token(push_token())
+    except Exception:
+        return ""
 
 
 def build_messages(data: dict, image_url="", channel="", tag=True, mention=True) -> list:
@@ -360,12 +393,8 @@ def managers(channel="") -> list:
 
     out = []
     for e in Employee.objects.filter(notify_missing=True).order_by("nickname"):
-        uid = ""
-        for p in LineProfile.objects.filter(employee_id=e.id):
-            if channel and p.channel and p.channel != channel:
-                continue
-            uid = p.user_id
-            break
+        # ใช้กติกาเดียวกับการแท็กพนักงาน — ไอดีไม่ตรงบัญชีที่ส่ง = ไม่แท็ก (ดู `_pick_id`)
+        uid = _pick_id(list(LineProfile.objects.filter(employee_id=e.id)), channel)
         out.append({"name": e.nickname, "userId": uid})
     return out
 

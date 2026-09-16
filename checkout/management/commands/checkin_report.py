@@ -86,14 +86,23 @@ class Command(BaseCommand):
             self.stdout.write("  ต้องแท็ก: " + ", ".join(m["name"] for m in data["missing"]))
 
         if o["escalate"]:
-            mgr = R.managers()
+            ch = R.push_channel()
+            mgr = R.managers(ch)
+            named = ", ".join("%s%s" % (m["name"], "" if m["userId"] else " (แท็กไม่ได้)")
+                              for m in mgr)
             self.stdout.write("  จะแท็กผู้บริหาร: %s"
-                              % (", ".join(m["name"] for m in mgr) or "(ยังไม่ได้ติ๊กใครในหน้าพนักงาน)"))
+                              % (named or "(ยังไม่ได้ติ๊กใครในหน้าพนักงาน)"))
+            # ★ บอกล่วงหน้าว่าถ้าส่งเข้ากลุ่มจริงจะแท็กได้กี่คน — ไม่งั้นไปรู้เอาตอนส่งจริง
+            ok_n, all_n, no_tag = R.tag_coverage(data["missing"], ch)
+            self.stdout.write("  ถ้าส่งเข้ากลุ่ม (บัญชี '%s') จะแท็กได้ %d/%d คน"
+                              % (ch or "?", ok_n, all_n))
+            if no_tag:
+                self.stdout.write("    แท็กไม่ได้ (จะพิมพ์ชื่อแทน): " + ", ".join(no_tag))
 
         if o["dry_run"]:
             if o["escalate"]:
                 for m in R.escalation_messages(data, "", mention=False):
-                    self.stdout.write("\n--- ข้อความที่จะส่ง ---\n" + m["text"])
+                    self.stdout.write("\n--- ข้อความที่จะส่ง (โหมดอ่านง่าย ไม่ใส่แท็ก) ---\n" + m["text"])
             self.stdout.write("\n(--dry-run: ไม่ส่ง)")
             return
 
