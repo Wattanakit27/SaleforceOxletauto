@@ -36,31 +36,25 @@ WHERE l.user_id = '{{ ($json.source?.userId || $json.body?.events?.[0]?.source?.
 
 ---
 
-## 2. แพตช์ `Resolve Roles` — 3 จุด
+## 2. โหนด `Resolve Roles`
 
-### จุดที่ 1 — ประกาศตัวแปร (ต่อจาก `let adminMasterData = [];`)
+ก๊อป [n8n_tradein_resolve_roles.js](n8n_tradein_resolve_roles.js) **ทั้งไฟล์** วางทับในช่อง Code ของโหนดนั้น
 
-```js
-let nickById = "";          // ★ ชื่อเล่นที่ได้จาก userId ตรงๆ (แม่นสุด)
-```
+ลำดับการหาชื่อเล่น (V11):
 
-### จุดที่ 2 — ในลูปกวาดข้อมูล (ต่อจาก `if (j.displayName) profileDisplayName = j.displayName;`)
+| ลำดับ | ที่มา | เมื่อไหร่ |
+|---|---|---|
+| 1 | **`nickByUserId`** จากฐานข้อมูล | ทะเบียนกรอกชื่อเล่นจริงไว้แล้ว ← **ปกติใช้อันนี้** |
+| 2 | `MANUAL_MAPPING` | ทะเบียนยังไม่กรอกชื่อเล่น (ค่าเท่ากับชื่อ LINE) |
+| 3 | เทียบชื่อจากรายชื่อ (ของเดิม) | ยังมีโหนดส่งรายชื่อแบบเก่าอยู่ |
+| 4 | ชื่อที่ตั้งใน LINE | คนนอก/ยังไม่ผูกบัญชี — ไม่คืนค่าว่าง |
 
-```js
-  // ★ มาจากโหนด "หาชื่อเล่นจาก userId (Postgres)"
-  if (j.nickByUserId) nickById = j.nickByUserId;
-```
+**ข้อ 2-4 ไม่ได้ลบทิ้ง** เป็นทางสำรองล้วนๆ · พอกรอกชื่อเล่นครบทุกคนแล้ว ลบ `MANUAL_MAPPING` ได้เลย
 
-### จุดที่ 3 — ต่อจากบล็อก `MANUAL_MAPPING` (ก่อน `if (!senderNickname) senderNickname = profileDisplayName;`)
+ช่อง `nickSource` ใน output บอกว่ารอบนั้นได้ชื่อมาจากทางไหน (`userId` / `เดาจากชื่อ` / `ชื่อไลน์`)
 
-```js
-// ★ userId ชนะทุกวิธีเดา — ไม่ต้องพึ่ง MANUAL_MAPPING / partial match อีก
-if (nickById) senderNickname = nickById;
-```
-
-ทำแค่นี้ · **ไม่ต้องลบโค้ดเดิม** — ของเดิมกลายเป็นทางสำรองเวลาหา userId ไม่เจอ (เช่นคนนอกที่ไม่ได้อยู่ในทะเบียน)
-
----
+**ทดสอบแล้ว 6 เคส**: ชื่อ LINE มีอิโมจิ/เปลี่ยนชื่อทั้งดุ้น → ชื่อเล่นไม่เปลี่ยน ·
+คนนอกไม่ได้ค่าว่าง · `groupId`/`code`/`userId`/`_mode` ไม่หาย
 
 ## 3. ⚠️ ที่ยังต้องแก้ด้วยมือ — 6 คนยังไม่มี "ชื่อเล่น" จริง
 
