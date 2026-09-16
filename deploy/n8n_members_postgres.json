@@ -3,8 +3,10 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- แทนโหนดชีต \"Get Members (Master)\" (ไฟล์ ซื้อขายเทิร์นรถ · แท็บ รายชื่อสมาชิกกลุ่ม)\n-- คืนรูปร่างเดียวกับที่โหนด Resolve Roles คาดไว้เป๊ะ → ไม่ต้องแก้โค้ด Resolve Roles เลย\n--   ★ ต้องมี row_number ด้วย เพราะ Resolve Roles ใช้ `if (j.row_number)` แยกว่า\n--     แถวไหนคือ \"รายชื่อ\" แถวไหนคือ \"ข้อความที่เพิ่งเข้ามา\"\n--\n-- ★ อ่านจาก view เท่านั้น (v_employee_line / v_employees) — **ไม่ต้อง GRANT อะไรเพิ่ม**\n--   และ view JOIN กับทะเบียนพนักงานอยู่แล้ว → **โปรไฟล์ลูกค้าไม่หลุดออกมา**\nWITH m AS (\n  -- 1) ชื่อที่ \"ตั้งใน LINE\" ของแต่ละบัญชี — ครอบทั้งบอทเดิมและบอทใหม่ (จุดที่ชีตทำไม่ได้)\n  SELECT coalesce(l.display_name,'') AS \"displayName\",\n         coalesce(l.\"ชื่อเล่น\",'')    AS \"ชื่อเล่น\"\n  FROM v_employee_line l\n  WHERE l.active\n    AND coalesce(l.display_name,'') <> ''\n    AND coalesce(l.\"ชื่อเล่น\",'')    <> ''\n  UNION\n  -- 2) ชื่อที่บันทึกไว้ในทะเบียนพนักงาน — คนที่ยังไม่เคยพิมพ์ผ่านบอทก็ยังจับคู่ได้\n  SELECT coalesce(e.display_name,''), coalesce(e.\"ชื่อเล่น\",'')\n  FROM v_employees e\n  WHERE e.active\n    AND coalesce(e.display_name,'') <> ''\n    AND coalesce(e.\"ชื่อเล่น\",'')    <> ''\n)\nSELECT row_number() OVER (ORDER BY \"ชื่อเล่น\", \"displayName\") AS row_number, *\nFROM m;",
-        "options": {}
+        "query": "-- หาชื่อเล่นจาก \"LINE user id\" ตรงๆ — แทนการเทียบด้วยชื่อที่ตั้งใน LINE\n--\n-- ★ ทำไมต้องเทียบด้วย userId: ชื่อที่ตั้งใน LINE **เจ้าตัวเปลี่ยนเองได้ทุกเมื่อ**\n--   มีอิโมจิ/ช่องว่างท้าย/ตัวอักษรแฟนซี และบอทคนละตัวอาจเห็นคนละชื่อ\n--   → เทียบชื่อเมื่อไหร่ก็มีวันหลุด · userId ไม่เปลี่ยน เทียบแล้วจบ\n--\n-- ★ ใช้ max() เพื่อให้ **คืน 1 แถวเสมอ** แม้หา userId ไม่เจอ\n--   (ถ้าคืน 0 แถว n8n จะไม่มี item ส่งต่อ = เคสนั้นหายทั้งเคส)\n--\n-- ★ ตั้งใจไม่คืนคีย์ชื่อ displayName / userId / row_number\n--   เพราะ Resolve Roles เอาคีย์พวกนั้นไปใช้อย่างอื่น ถ้าคืนมาจะไปทับของจริง\nSELECT coalesce(max(l.\"ชื่อเล่น\"), '')   AS \"nickByUserId\",\n       coalesce(max(l.display_name), '') AS \"displayNameDb\",\n       $1::text                          AS \"lookupUserId\"\nFROM v_employee_line l\nWHERE l.user_id = $1::text;",
+        "options": {
+          "queryReplacement": "={{ $json.body?.events?.[0]?.source?.userId || $json.userId || $json.source?.userId || '' }}"
+        }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -13,9 +15,9 @@
         -1968
       ],
       "id": "mb01aaaa-bbbb-4ccc-8ddd-eeeeffff0001",
-      "name": "ดึงชื่อเล่นพนักงาน (Postgres)",
+      "name": "หาชื่อเล่นจาก userId (Postgres)",
       "retryOnFail": true,
-      "notes": "แทนโหนดชีต Get Members (Master) · ต่อสายเข้า Merge All (with master) ที่เดิม\nResolve Roles ไม่ต้องแก้อะไร\n\n⚠️ ตั้งใจ *ไม่* ใส่ onError: continueRegularOutput — โหนดนี้คือคนจ่ายรายชื่อทั้งหมด\nถ้าล้มแล้วปล่อยผ่าน จะได้ผลที่ 'ดูเหมือนทำงาน' แต่ชื่อเล่นว่างทุกเคส หาสาเหตุยากมาก\n(เคยเจอมาแล้ว: ก้อน error ไหลเข้า Merge แล้ว Resolve Roles อ่านเป็นรายชื่อ)\nให้มันแดงไปเลย จะรู้ทันทีว่าติดสิทธิ์ / ต่อ DB ไม่ได้"
+      "notes": "แทนโหนดชีต Get Members (Master) · ต่อสายเข้า Merge All (with master) ที่เดิม\n\nคู่กับแพตช์ 3 จุดใน Resolve Roles (ดู deploy/n8n_members_postgres.md)\nชื่อเล่นที่ได้จาก userId จะชนะทุกวิธีเดา — MANUAL_MAPPING ไม่ต้องใช้อีก\n\n⚠️ อย่าเปิด Continue On Fail — โหนดนี้ล้มแล้วปล่อยผ่าน จะได้ผลที่ 'ดูเหมือนทำงาน'\nแต่ชื่อเล่นว่างทุกเคส (ก้อน error ไหลเข้า Merge แล้วถูกอ่านเป็นรายชื่อ)"
     }
   ],
   "connections": {},
