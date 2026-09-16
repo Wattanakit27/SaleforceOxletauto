@@ -6317,16 +6317,20 @@
     //   ⚠️ ค่าที่ไม่ตรง 7 วัน (เช่น "ศุกร์ เสาร์ อาทิตย์" ของคนที่หยุดหลายวัน) **ต้องไม่ถูกลบทิ้ง**
     //      → ใส่กลับเป็นตัวเลือกแรกให้เลือกค้างไว้ได้
     const _DAYS = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์','อาทิตย์'];
-    function _empDay(id, val, w) {
+    function _empDay(id, val, w, rowId) {
+      const auto = rowId ? ` onchange="empSave(${rowId})"` : '';
       const v = (val || '').trim();
       const extra = (v && _DAYS.indexOf(v) < 0) ? `<option value="${h(v)}" selected>${h(v)}</option>` : '';
       const opts = _DAYS.map(d => `<option value="${d}" ${v === d ? 'selected' : ''}>${d}</option>`).join('');
-      return `<select id="${id}" style="width:${w||'100%'};font-size:12px;padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`
+      return `<select id="${id}"${auto} style="width:${w||'100%'};font-size:12px;padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`
         + `<option value="" ${v ? '' : 'selected'}>ไม่มี</option>${extra}${opts}</select>`;
     }
 
-    function _empInput(id, val, ph, w) {
-      return `<input id="${id}" value="${h(val||'')}" placeholder="${h(ph||'')}" style="width:${w||'100%'};font-size:12px;padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`;
+    function _empInput(id, val, ph, w, rowId) {
+      // rowId = แถวของคนที่มีอยู่แล้ว → แก้เสร็จแล้วบันทึกให้เลย ไม่ต้องกดปุ่ม
+      // (onchange ยิงตอน "ค่าเปลี่ยนจริง + ออกจากช่อง" เท่านั้น ไม่ใช่ทุกตัวอักษร)
+      const auto = rowId ? ` onchange="empSave(${rowId})"` : '';
+      return `<input id="${id}" value="${h(val||'')}" placeholder="${h(ph||'')}"${auto} style="width:${w||'100%'};font-size:12px;padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`;
     }
 
     function renderEmployees() {
@@ -6337,7 +6341,7 @@
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
         <div style="font-size:16px;font-weight:800;color:var(--t1)">พนักงาน ${_empRows.length} คน</div>
         <button onclick="document.getElementById('emp-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
-      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.7">ทะเบียนนี้อยู่ในระบบเรา ไม่ต้องไปแก้ในชีต · ผูกกับ LINE แล้ว ${linked} คน (คนเดียวผูกได้หลายบัญชี เพราะบอทแต่ละตัวให้ไอดีคนละชุด)<br>คนใหม่ที่ยังไม่ผูก LINE ระบบจะผูกให้เองเมื่อเขาพิมพ์ในกลุ่ม ถ้า "ชื่อที่ตั้งใน LINE" ตรงกับที่กรอกไว้<br><b>คนใหม่เข้ากลุ่มแล้วพิมพ์ = ระบบเพิ่มชื่อให้เอง</b> เหลือแค่มาเติม ชื่อเล่น / ตำแหน่ง / เวลาเข้างาน / วันหยุด<br><b>ผู้บริหารที่ไม่ต้องเช็คชื่อ</b> — ติ๊กช่อง "เช็คชื่อ" ออก แล้วกดบันทึก จะไม่ขึ้นในหน้าเช็คชื่อเข้างานอีก<br><b>ช่อง "แจ้งเตือน"</b> — ติ๊กให้หัวหน้า/ผู้บริหาร จะถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.7">ทะเบียนนี้อยู่ในระบบเรา ไม่ต้องไปแก้ในชีต · ผูกกับ LINE แล้ว ${linked} คน (คนเดียวผูกได้หลายบัญชี เพราะบอทแต่ละตัวให้ไอดีคนละชุด)<br>คนใหม่ที่ยังไม่ผูก LINE ระบบจะผูกให้เองเมื่อเขาพิมพ์ในกลุ่ม ถ้า "ชื่อที่ตั้งใน LINE" ตรงกับที่กรอกไว้<br><b>คนใหม่เข้ากลุ่มแล้วพิมพ์ = ระบบเพิ่มชื่อให้เอง</b> เหลือแค่มาเติม ชื่อเล่น / ตำแหน่ง / เวลาเข้างาน / วันหยุด<br><b>ผู้บริหารที่ไม่ต้องเช็คชื่อ</b> — ติ๊กช่อง "เช็คชื่อ" ออก แล้วกดบันทึก จะไม่ขึ้นในหน้าเช็คชื่อเข้างานอีก<br><b>ช่อง "แจ้งเตือน"</b> — ติ๊กให้หัวหน้า/ผู้บริหาร จะถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ<br><b style="color:var(--green)">แก้ช่องไหนแล้วกดออกจากช่อง = บันทึกให้เองทันที</b> (จะขึ้น ✓ ท้ายแถวนั้น) · ปุ่ม "บันทึก" ยังกดได้เหมือนเดิม</div>`;
       const needs = _empRows.filter(e => e.needsInfo);
       if (needs.length) html += `<div style="font-size:12px;font-weight:700;color:var(--amber);background:var(--bg2);border:.5px solid var(--bd2);border-radius:10px;padding:8px 11px;margin-bottom:10px">ระบบเพิ่มให้ ${needs.length} คน — รอกรอกตำแหน่ง/เวลาเข้างาน: ${needs.map(e => h(e.nickname)).join(' · ')}</div>`;
       html += `<input value="${h(_empQ)}" oninput="_empQ=this.value;renderEmployees()" placeholder="ค้นหา ชื่อเล่น / ชื่อ LINE / ตำแหน่ง" style="width:100%;font-size:13px;padding:8px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);margin-bottom:12px">`;
@@ -6362,17 +6366,18 @@
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
-          <td style="padding:5px;white-space:nowrap">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px')}${e.needsInfo?' <span title="ระบบเพิ่มให้เองตอนเจอในกลุ่ม — ยังไม่มีใครกรอกตำแหน่ง/เวลาเข้างาน" style="font-size:10px;font-weight:700;color:var(--amber)">ใหม่</span>':''}</td>
-          <td style="padding:5px">${_empInput('emp_dn_'+e.id, e.displayName, '', '150px')}</td>
-          <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px')}</td>
-          <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px')}</td>
-          <td style="padding:5px">${_empDay('emp_off_'+e.id, e.dayOff, '92px')}</td>
-          <td style="padding:5px">${_empInput('emp_note_'+e.id, e.note, '', '150px')}</td>
+          <td style="padding:5px;white-space:nowrap">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px', e.id)}${e.needsInfo?' <span title="ระบบเพิ่มให้เองตอนเจอในกลุ่ม — ยังไม่มีใครกรอกตำแหน่ง/เวลาเข้างาน" style="font-size:10px;font-weight:700;color:var(--amber)">ใหม่</span>':''}</td>
+          <td style="padding:5px">${_empInput('emp_dn_'+e.id, e.displayName, '', '150px', e.id)}</td>
+          <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px', e.id)}</td>
+          <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px', e.id)}</td>
+          <td style="padding:5px">${_empDay('emp_off_'+e.id, e.dayOff, '92px', e.id)}</td>
+          <td style="padding:5px">${_empInput('emp_note_'+e.id, e.note, '', '150px', e.id)}</td>
           <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
-          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_trk_${e.id}" ${e.trackCheckin===false?'':'checked'} title="ติ๊กออก = ผู้บริหาร ไม่ต้องเช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
-          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_ntf_${e.id}" ${e.notifyMissing?'checked':''} title="ติ๊ก = ถูกแท็กตอนมีคนยังไม่เช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
-          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_trk_${e.id}" ${e.trackCheckin===false?'':'checked'} onchange="empSave(${e.id})" title="ติ๊กออก = ผู้บริหาร ไม่ต้องเช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_ntf_${e.id}" ${e.notifyMissing?'checked':''} onchange="empSave(${e.id})" title="ติ๊ก = ถูกแท็กตอนมีคนยังไม่เช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} onchange="empSave(${e.id})" style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;white-space:nowrap">
+            <span id="emp_ok_${e.id}" style="font-size:11px;font-weight:700;color:var(--green);margin-right:6px"></span>
             <button onclick="empSave(${e.id})" style="font-size:11px;padding:5px 9px;border-radius:8px;border:none;background:var(--blue);color:#fff;cursor:pointer">บันทึก</button>
             <button onclick="empDel(${e.id},'${h(e.nickname)}')" style="font-size:11px;padding:5px 8px;border-radius:8px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">ลบ</button>
           </td></tr>`;
@@ -6384,17 +6389,42 @@
     function _empV(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
     function _empMsg(id, txt, col) { const el = document.getElementById(id); if (el) { el.textContent = txt; el.style.color = col || 'var(--t3)'; } }
 
-    async function _empPost(body, msgId) {
-      _empMsg(msgId, 'กำลังบันทึก…');
+    // บอกผลตรงแถวนั้น — ★ 17 ก.ย.69 (เจ้าของแจ้ง "ไม่มีส่วนให้บันทึก แล้วจะบันทึกยังไง")
+    //   เดิมกดบันทึกแล้ว **วาดตารางใหม่ทั้งอัน → หน้าเด้งกลับบนสุด** และข้อความ "บันทึกแล้ว"
+    //   ไปอยู่ใต้ตาราง 48 แถวซึ่งมองไม่เห็น → คนใช้เลยไม่รู้ว่ากดติดหรือเปล่า
+    function _empRowMsg(id, txt, col) {
+      const el = document.getElementById('emp_ok_' + id);
+      if (!el) return;
+      el.textContent = txt;
+      el.style.color = col || 'var(--green)';
+      if (col !== 'var(--red)') setTimeout(() => { if (el.textContent === txt) el.textContent = ''; }, 2500);
+    }
+
+    async function _empPost(body, msgId, rowId) {
+      if (rowId) _empRowMsg(rowId, 'กำลังบันทึก…', 'var(--t3)');
+      else _empMsg(msgId, 'กำลังบันทึก…');
       try {
         const r = await fetch('/checkout/api/employees', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(body)});
         const d = await r.json();
-        if (!d.ok) { _empMsg(msgId, d.error || 'ไม่สำเร็จ', 'var(--red)'); return false; }
+        if (!d.ok) {
+          if (rowId) _empRowMsg(rowId, d.error || 'ไม่สำเร็จ', 'var(--red)');
+          else _empMsg(msgId, d.error || 'ไม่สำเร็จ', 'var(--red)');
+          return false;
+        }
         _empRows = d.employees || _empRows;
-        renderEmployees();
-        _empMsg(msgId, '✓ บันทึกแล้ว', 'var(--green)');
+        if (rowId) {
+          // ★ ไม่วาดตารางใหม่ — คนกำลังแก้อยู่กลางตาราง ถ้าวาดใหม่จะเด้งกลับบนสุดทุกครั้ง
+          _empRowMsg(rowId, '✓ บันทึกแล้ว');
+        } else {
+          renderEmployees();
+          _empMsg(msgId, '✓ บันทึกแล้ว', 'var(--green)');
+        }
         return true;
-      } catch (e) { _empMsg(msgId, 'ผิดพลาด: ' + (e.message||e), 'var(--red)'); return false; }
+      } catch (e) {
+        if (rowId) _empRowMsg(rowId, 'ผิดพลาด: ' + (e.message||e), 'var(--red)');
+        else _empMsg(msgId, 'ผิดพลาด: ' + (e.message||e), 'var(--red)');
+        return false;
+      }
     }
 
     function empAdd() {
@@ -6411,7 +6441,8 @@
                 position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
                 note:_empV('emp_note_'+id), active: act ? act.checked : true,
                 trackCheckin: trk ? trk.checked : true,
-                notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false}, 'emp_msg');
+                notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false},
+               'emp_msg', id);
     }
 
     function empDel(id, name) {
