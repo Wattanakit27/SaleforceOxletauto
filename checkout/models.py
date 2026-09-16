@@ -366,8 +366,9 @@ class Employee(models.Model):
 
     ⚠️ **ห้ามโชว์ LINE id ของพนักงานบนหน้าเว็บ** (กติกาเดิม) — หน้าจัดการโชว์แค่ว่าผูกไว้กี่บัญชี
     """
-    SHEET, MANUAL = "sheet", "manual"
-    SRC_CHOICES = [(SHEET, "นำเข้าจากชีต"), (MANUAL, "เพิ่มในระบบ")]
+    SHEET, MANUAL, AUTO = "sheet", "manual", "auto"
+    SRC_CHOICES = [(SHEET, "นำเข้าจากชีต"), (MANUAL, "เพิ่มในระบบ"),
+                   (AUTO, "ระบบเพิ่มให้ตอนเจอในกลุ่ม")]
 
     nickname = models.CharField("ชื่อเล่น", max_length=80, unique=True)
     display_name = models.CharField("ชื่อที่ตั้งใน LINE", max_length=120, blank=True, db_index=True)

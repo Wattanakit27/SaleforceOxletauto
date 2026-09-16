@@ -275,13 +275,51 @@ def fetch_profile(user_id="", group_id="", room_id="", channel="") -> dict:
     return best
 
 
-def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel="") -> dict:
+def _employee_for(nick="", display_name="", chat_type="user", group_id="", auto=False):
+    """หา "ตัวคน" ในทะเบียนพนักงานให้โปรไฟล์นี้ — คืน `Employee` หรือ `None`
+
+    ★ 16 ก.ย.69 (เจ้าของขอ) — **คนใหม่ที่เข้ากลุ่มงานแล้วพิมพ์ ระบบเพิ่มชื่อเข้าทะเบียนให้เอง**
+      *"เมื่อมีคนใหม่เข้ากลุ่ม มันจะได้เพิ่มรายชื่อเอง คนแค่ต้องมาตามใส่ชื่อเล่นกับเวลาเข้างานแล้วก็วันหยุด"*
+      แถวที่สร้างให้มีแค่ชื่อจาก LINE → ไปโผล่ในกลุ่ม **"ยังไม่ได้ตั้งเวลาเข้างาน"** ของพาเนลเช็คชื่อ
+      = กลายเป็นรายการงานให้คนมาเติมเอง แทนที่จะต้องคอยสังเกตเองว่ามีใครเข้ามาใหม่
+
+    **เฉพาะข้อความจากกลุ่มเท่านั้น** — แชท 1:1 คือลูกค้าทักเข้า OA ถ้าเอามาสร้างด้วย
+    ทะเบียนพนักงานจะเต็มไปด้วยลูกค้าภายในไม่กี่วัน
+    """
+    from .models import Employee
+
+    nick = (nick or "").strip()
+    if nick:
+        # เทียบชื่อเล่นได้อยู่แล้ว (จากชีต/ทะเบียน) → ผูกเข้าแถวเดิม ไม่สร้างใหม่
+        return Employee.objects.filter(nickname=nick).first()
+
+    name = (display_name or "").strip()
+    if not (auto and chat_type == "group" and name):
+        return None
+
+    # ชื่อนี้มีในทะเบียนแล้ว = คนเดิม (แค่ยังไม่ได้ผูกบัญชี) — ห้ามสร้างซ้ำ
+    row = (Employee.objects.filter(nickname=name).first()
+           or Employee.objects.filter(display_name=name).first())
+    if row:
+        return row
+    try:
+        return Employee.objects.create(nickname=name[:80], display_name=name[:120],
+                                       group_id=(group_id or "")[:64], source=Employee.AUTO)
+    except Exception:
+        # ชื่อชนกันพอดี (unique) = อีก request สร้างไปแล้ว → ใช้แถวนั้น
+        return Employee.objects.filter(nickname=name[:80]).first()
+
+
+def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel="",
+                  auto_employee=False) -> dict:
     """บันทึก/อัปเดตโปรไฟล์คนนี้ แล้วคืน `{"name": ชื่อที่โชว์ได้, "is_employee": bool}`
 
     รวมงาน 3 อย่างไว้ที่เดียว (เดิมกระจายอยู่หลายที่แล้วยิง LINE API ซ้ำ):
       1. เทียบชีตพนักงาน → ได้ชื่อเล่น (คนใน)
       2. ไม่ใช่พนักงาน → ดึงโปรไฟล์จาก LINE (ลูกค้า)
       3. upsert ลง `LineProfile` + นับจำนวนข้อความ + ปั๊มเวลาล่าสุด
+      4. ผูกเข้า "ตัวคน" ในทะเบียนพนักงาน · `auto_employee=True` + ข้อความจากกลุ่ม
+         = **คนใหม่ที่ยังไม่มีในทะเบียน ระบบเพิ่มชื่อให้เลย** (ดู `_employee_for`)
 
     **ดึงโปรไฟล์ซ้ำเฉพาะตอนของเก่าเกิน `PROFILE_REFRESH_DAYS`** — ไม่ใช่ทุกข้อความ
     best-effort ทั้งหมด: ตารางยังไม่ migrate / LINE ล่ม = คืนชื่อเท่าที่รู้ ไม่ทำให้การเก็บแชทพัง
@@ -339,13 +377,28 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
         except Exception:
             nick = ""
 
+    # ── ผูกเข้าทะเบียนพนักงาน (คนใหม่ในกลุ่ม = เพิ่มให้เลย) ──
+    #    ใช้ชื่อจากรอบนี้ถ้าเพิ่งดึงมา ไม่งั้นใช้ชื่อที่เคยเก็บไว้ —
+    #    ไม่งั้นคนที่มีโปรไฟล์อยู่แล้วแต่ยังไม่ได้ผูก ต้องรอโปรไฟล์หมดอายุ 30 วันก่อนถึงจะเข้าทะเบียน
+    emp = getattr(row, "employee", None) if row else None
+    if emp is None:
+        seen_name = prof.get("displayName") or (getattr(row, "display_name", "") if row else "")
+        try:
+            emp = _employee_for(nick, seen_name, chat_type, group_id, auto_employee)
+        except Exception:
+            emp = None
+        if emp is not None and not nick:
+            nick = emp.nickname
+
     fields = {
         # ★ ห้ามล้างชื่อเล่นที่เคยจับคู่ไว้แล้ว — รอบถัดไป `nickname_for(uid)` จะหาไม่เจอ
         #   (id ของบอทใหม่ไม่มีในชีต) แล้วเขียนทับเป็นค่าว่าง = คนนั้นกลับไปเป็น "ลูกค้า" ทุกข้อความ
         "nickname": nick or (getattr(row, "nickname", "") if row else ""),
-        "is_employee": bool(nick) or bool(row and row.is_employee),
+        "is_employee": bool(nick) or bool(emp) or bool(row and row.is_employee),
         "last_seen": now,
     }
+    if emp is not None:
+        fields["employee"] = emp
     if channel:          # จดว่าเคยเห็นคนนี้จากบัญชีไหนบ้าง (กันนับลูกค้าซ้ำตอนทำ CRM)
         seen = list(getattr(row, "channels", None) or []) if row else []
         if channel not in seen:

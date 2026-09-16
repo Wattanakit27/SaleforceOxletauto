@@ -687,6 +687,10 @@ def store_chat(data) -> int:
     cfg = line_cfg()
     want_group = bool(cfg.get("store_chat"))            # แชทกลุ่ม
     want_user = bool(cfg.get("store_customer_chat"))    # แชท 1:1 กับลูกค้า
+    # ★ 16 ก.ย.69 — คนใหม่ที่พิมพ์ในกลุ่มงาน = เพิ่มเข้าทะเบียนพนักงานให้เลย (เจ้าของขอ)
+    #   **เปิดโดยปริยาย** · ปิดได้ที่ `checkout_line_config["auto_employee"]`
+    #   (ถ้าวันหนึ่งมีกลุ่มที่มีลูกค้าปนอยู่ จะได้ไม่ดูดเข้าทะเบียน)
+    auto_emp = bool(cfg.get("auto_employee", True))
     if not (want_group or want_user):
         return 0
     events = (data or {}).get("events") or []
@@ -736,7 +740,8 @@ def store_chat(data) -> int:
             #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"
             #   ไว้ที่เดียว · เดิมเรียก display_name_for() ซึ่งได้แค่ชื่อ ไม่ได้เก็บอะไรไว้เลย
             who = people.touch_profile(uid, group_id=gid, room_id=(src.get("roomId") or ""),
-                                       chat_type=ctype, channel=chan).get("name") if uid else ""
+                                       chat_type=ctype, channel=chan,
+                                       auto_employee=auto_emp).get("name") if uid else ""
         except Exception:
             who = ""
         try:
@@ -880,6 +885,8 @@ def api_employees(request):
             "groupId": e.group_id, "note": e.note, "active": e.active,
             "trackCheckin": e.track_checkin,
             "fromSheet": e.source == Employee.SHEET,
+            # ระบบเพิ่มให้เองตอนเจอในกลุ่ม + ยังไม่มีใครมากรอกตำแหน่ง/เวลา = ต้องมีคนตามเติม
+            "needsInfo": e.source == Employee.AUTO and not (e.position and e.work_start),
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
         })
