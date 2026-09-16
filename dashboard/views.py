@@ -1392,6 +1392,17 @@ def cron_tick(request):
     except Exception as e:
         refresh_error = str(e)[:200]
 
+    # ★ 16 ก.ย.69 — งานอุ่นข้อมูลล้ม = จดลงตารางล็อกด้วย (KV เก็บได้แค่ครั้งล่าสุด)
+    #   อาการ "แดชบอร์ดค้างเป็นสัปดาห์" เคยเกิดแล้ว และตอนนั้นไม่มีประวัติให้ดูว่าเริ่มพังวันไหน
+    if refresh_error:
+        try:
+            from .services.eventlog import log as _evlog, CRON
+            _evlog(CRON, name="อุ่นข้อมูลแดชบอร์ดไม่สำเร็จ", ok=False, error=refresh_error)
+        except Exception:
+            pass
+    # กวาดล็อกเก่า (ตัวมันเองกันรันซ้ำ = ลบจริงวันละครั้ง) — เกาะ cron ที่ยิงอยู่แล้วทุกนาที
+    _trim_event_log()
+
     # heartbeat — ★ บันทึก "ผลจริง" ไม่ใช่แค่ ok:True
     #   ของเดิมเขียน ok:True เสมอ → หน้าสถานะระบบเขียวทั้งที่ข้อมูลไม่ได้อัปเดต
     try:
@@ -1438,7 +1449,8 @@ def cron_tick(request):
                     for _at in _admin_targets:
                         if not _at:
                             continue
-                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], _tok(_at))
+                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], _tok(_at),
+                                                     what="ตามด่วน (สรุปทีมให้แอดมิน)")
                         if _code == 200:
                             followup_sent += 1
                     continue
@@ -1447,7 +1459,8 @@ def cron_tick(request):
                 for _t in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
                     if not _t:
                         continue
-                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], _tok(_t))
+                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], _tok(_t),
+                                                 what="ตามด่วน (cron ตามตารางส่ง)")
                     if _code == 200:
                         followup_sent += 1
             try:   # snapshot ผลงานรายสัปดาห์ลง SellerWeekly (upsert สัปดาห์ปัจจุบัน) — best-effort
@@ -1595,7 +1608,8 @@ def cron_send_line(request):
             continue
         try:
             flex = build_seller_flex(p, base_url=base_url)
-            code, text = push_line_message(target, [flex], _tok(target))
+            code, text = push_line_message(target, [flex], _tok(target),
+                                           what="Flex รายเซลล์ (ส่งมือ)")
             if code == 200:
                 results.append({"seller": seller, "sent": True})
             else:
@@ -1910,7 +1924,8 @@ def admin_send_followup(request):
             if not uid:
                 continue
             try:
-                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], _tok(uid))
+                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], _tok(uid),
+                                              what="ตามด่วน (ปุ่มส่งทันที)")
                 results.append({"seller": label, "user_id": uid, "sent": code == 200,
                                 **({"error": f"LINE {code}: {text[:120]}"} if code != 200 else {})})
             except Exception as e:
@@ -2052,7 +2067,8 @@ def admin_send_line(request):
         # ส่งทีละคน เก็บผลรายคน → เห็น error ถ้าใครไม่ได้แอดบอท/ส่งไม่ไป
         for _uid, _lbl in targets:
             try:
-                code, text = push_line_message(_uid, [flex], _tok(_uid))
+                code, text = push_line_message(_uid, [flex], _tok(_uid),
+                                               what="Flex ภาพรวม")
                 if code == 200:
                     results.append({"seller": _lbl, "user_id": _uid, "sent": True})
                 else:
@@ -2976,6 +2992,15 @@ def _push_group_guard(body, cfg):
     return push_group_error(new)
 
 
+def _trim_event_log():
+    """ลบล็อกที่เก่าเกินกำหนด — เรียกจาก `cron_tick` (ตัวมันเองกันรันซ้ำวันละครั้ง)"""
+    try:
+        from .services.eventlog import trim_daily
+        return trim_daily()
+    except Exception:
+        return 0
+
+
 def _webhook_beat(path, events=0, sig_fail=False):
     """จดว่า webhook เข้ามาเมื่อไหร่/กี่ event — ★ ก.ย.69
 
@@ -2995,6 +3020,13 @@ def _webhook_beat(path, events=0, sig_fail=False):
             cur["sigFail"] = int(cur.get("sigFail") or 0) + 1
             cur["lastSigFailAt"] = cur["at"]
         cache_store.set_kv("line_webhook_last", cur)
+        # ★ 16 ก.ย.69 — KV เก็บได้แค่ "ครั้งล่าสุด" (ทับทุกครั้ง) → ย้อนดูไม่ได้ว่าเริ่มพังเมื่อไหร่
+        #   จดลงตารางล็อก **เฉพาะตอนผิดปกติ** (ลายเซ็นไม่ผ่าน / ยิงมาแต่ไม่มี event)
+        #   ถ้าจดทุกครั้งที่ webhook เข้า ตารางจะบวมด้วยแถวที่ไม่มีใครเปิดดู
+        if sig_fail or not int(events or 0):
+            from .services.eventlog import log, WEBHOOK
+            log(WEBHOOK, name=("ลายเซ็นไม่ผ่าน" if sig_fail else "ไม่มี event ในคำขอ"),
+                target=path, ok=False, events=int(events or 0))
     except Exception:
         pass
 
@@ -3464,7 +3496,8 @@ def finance_check_submit(request):
     base_url = request.build_absolute_uri("/").rstrip("/")
     try:
         flex = build_finance_check_flex(data, base_url=base_url)
-        code, text = push_line_message(target, [flex], _tok(target))
+        code, text = push_line_message(target, [flex], _tok(target),
+                                       what="ฟอร์มเช็คไฟแนนซ์")
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -3565,7 +3598,8 @@ def loan_submit(request):
     base_url = request.build_absolute_uri("/").rstrip("/")
     try:
         flex = build_loan_flex(data, base_url=base_url)
-        code, text = push_line_message(target, [flex], _tok(target))
+        code, text = push_line_message(target, [flex], _tok(target),
+                                       what="ฟอร์มขอสินเชื่อ")
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 

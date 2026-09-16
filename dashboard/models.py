@@ -91,3 +91,40 @@ class SellerWeekly(models.Model):
 
     def __str__(self):
         return f"{self.week_start} {self.seller}"
+
+
+class EventLog(models.Model):
+    """ล็อกเหตุการณ์ของระบบ — ★ 16 ก.ย.69 (เจ้าของสั่ง "ล็อกอะไรต่างๆ ก็ควรเก็บไว้ในนี้")
+
+    **ทำไมต้องมี**: ที่ผ่านมาร่องรอยการทำงานถูกเก็บใน `dash_kv` แบบ **"ค่าล่าสุดค่าเดียว"**
+    (`line_webhook_last`, `chat_store_last`, `precompute_last`, `cardline_last_*`) —
+    ทับทุกครั้งที่ทำงาน จึง **ย้อนดูไม่ได้เลยว่าเมื่อวานเป็นยังไง**
+    และ **ขาส่งออก LINE ไม่มีล็อกเลย** (`push_line_message` ยิงแล้วจบ)
+    → เคยทำให้ **รายงานรายวันหยุดส่งเงียบ 2-3 วัน** และ **การ์ดตั้งเวลาส่งไม่ออกทุกใบ**
+      โดยไม่มีใครเห็น กว่าจะรู้ก็ต่อเมื่อมีคนทักว่า "ทำไมไม่มีรายงาน"
+
+    ตารางนี้เก็บเป็น **แถวต่อเหตุการณ์** → เปิดหน้า "ดูข้อมูลดิบ (SQL)" แล้วถามย้อนหลังได้ว่า
+    *ส่งออกจริงไหม · ล้มเหลวตั้งแต่เมื่อไหร่ · ล้มเพราะอะไร*
+
+    **ไม่ใช่ที่เก็บทุกอย่าง** — จดเฉพาะเหตุการณ์ที่ต้องตรวจย้อนหลังได้ (ส่งออก · ขาเข้าที่ผิดปกติ ·
+    งานอัตโนมัติที่ล้ม) ไม่งั้นตารางจะโตเร็วโดยไม่มีใครใช้ · เก็บ `KEEP_DAYS` วันแล้วลบเอง
+    """
+    KEEP_DAYS = 90
+
+    at = models.DateTimeField("เวลา", auto_now_add=True, db_index=True)
+    kind = models.CharField("ประเภท", max_length=24, db_index=True)   # line_send / webhook / cron …
+    name = models.CharField("เรื่อง", max_length=120, blank=True)
+    target = models.CharField("ปลายทาง", max_length=64, blank=True)   # group id / user id
+    ok = models.BooleanField("สำเร็จ", default=True, db_index=True)
+    ms = models.IntegerField("ใช้เวลา (มิลลิวินาที)", default=0)
+    detail = models.JSONField("รายละเอียด", default=dict, blank=True)
+
+    class Meta:
+        db_table = "dash_event_log"
+        verbose_name = "ล็อกเหตุการณ์ระบบ"
+        verbose_name_plural = "ล็อกเหตุการณ์ระบบ"
+        ordering = ["-at"]
+        indexes = [models.Index(fields=["kind", "-at"])]
+
+    def __str__(self):
+        return "%s %s %s" % (self.at, self.kind, "ok" if self.ok else "FAIL")

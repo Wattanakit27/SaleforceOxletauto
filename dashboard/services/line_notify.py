@@ -249,18 +249,46 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
     }
 
 
-def push_line_message(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10) -> tuple[int, str]:
-    """ยิง message ไป LINE push endpoint. คืน (status_code, response_text)."""
-    res = requests.post(
-        LINE_PUSH_URL,
-        headers={
-            "Authorization": f"Bearer {channel_token}",
-            "Content-Type": "application/json",
-        },
-        json={"to": user_id, "messages": messages},
-        timeout=timeout,
-    )
-    return res.status_code, res.text
+def push_line_message(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10,
+                      what: str = "") -> tuple[int, str]:
+    """ยิง message ไป LINE push endpoint. คืน (status_code, response_text).
+
+    ★ 16 ก.ย.69 — **จดผลส่งทุกครั้งลง `dash_event_log`** (เจ้าของสั่งให้เก็บล็อกไว้ในฐานข้อมูล)
+      เดิมฟังก์ชันนี้ "ยิงแล้วจบ" ไม่บันทึกอะไรเลย → ตรวจย้อนหลังไม่ได้ว่าส่งออกจริงไหม
+      ซึ่งเป็นต้นเหตุจริงที่ **รายงานรายวันหยุดส่งเงียบ 2-3 วัน** และ
+      **การ์ดตั้งเวลาส่งไม่ออกทุกใบตั้งแต่ 15/09** โดยไม่มีใครเห็น
+      · `what` = ชื่อเรื่องที่ส่ง (รายงานรายวัน/การ์ด xxx/ตามด่วน) — ใส่มาด้วยจะตามง่ายขึ้นมาก
+      · **การจดล็อกห้ามทำให้การส่งพัง** → ทุกอย่างห่อ try/except อยู่แล้วใน `eventlog.log`
+    """
+    import time as _t
+    t0 = _t.time()
+    code, text, err = 0, "", ""
+    try:
+        res = requests.post(
+            LINE_PUSH_URL,
+            headers={
+                "Authorization": f"Bearer {channel_token}",
+                "Content-Type": "application/json",
+            },
+            json={"to": user_id, "messages": messages},
+            timeout=timeout,
+        )
+        code, text = res.status_code, res.text
+        return code, text
+    except Exception as e:                      # เน็ตล่ม/timeout ก็ต้องมีร่องรอย ไม่ใช่เงียบหาย
+        err = "%s: %s" % (type(e).__name__, e)
+        raise
+    finally:
+        try:
+            from .eventlog import log, SEND
+            log(SEND, name=what, target=user_id, ok=(code == 200),
+                ms=int((_t.time() - t0) * 1000),
+                status=code or None,
+                msgs=len(messages or []),
+                # เก็บเฉพาะคำตอบตอนพลาด — ตอนสำเร็จ LINE ตอบ "{}" ไม่มีอะไรให้ดู
+                error=(err or (text[:300] if code != 200 else "")) or None)
+        except Exception:
+            pass
 
 
 def get_nickname_to_user_id() -> dict[str, str]:

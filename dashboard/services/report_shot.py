@@ -329,7 +329,7 @@ def send_report_to_line(target_id: str, caption: str = "", mention_all: bool = F
         msgs = [_caption_message(cap, mention_all)]
         for u in urls:
             msgs.append({"type": "image", "originalContentUrl": u, "previewImageUrl": u})
-        sc, resp = push_line_message(target_id, msgs, token)
+        sc, resp = push_line_message(target_id, msgs, token, what="รายงานรายวัน (รูปตาราง)")
         _cleanup_old()
         return (sc == 200), ("  ".join(urls) if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
     except Exception as e:
@@ -456,7 +456,7 @@ def send_leadsummary_to_line(target_id: str, caption: str = "", mention_all: boo
             return False, "ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"
         cap = caption or _lead_caption()
         msgs = [_caption_message(cap, mention_all), {"type": "image", "originalContentUrl": url, "previewImageUrl": url}]
-        sc, resp = push_line_message(target_id, msgs, token)
+        sc, resp = push_line_message(target_id, msgs, token, what="การ์ดส่งเข้าไลน์")
         _cleanup_old()
         return (sc == 200), (url if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
     except Exception as e:
@@ -663,7 +663,7 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
         msgs = [_caption_message(cap, mention_all)]
         for u in urls:
             msgs.append({"type": "image", "originalContentUrl": u, "previewImageUrl": u})
-        sc, resp = push_line_message(target_id, msgs, token)
+        sc, resp = push_line_message(target_id, msgs, token, what="สรุปลีดเข้าไลน์")
         _cleanup_old()
         return (sc == 200), ("  ".join(urls) if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
     except Exception as e:

@@ -52,7 +52,8 @@ class Command(BaseCommand):
         from dashboard.services.line_notify import push_line_message
         ok = 0
         for who, txt in parts:
-            code, resp = push_line_message(target, [{"type": "text", "text": txt}], token_for(target))
+            code, resp = push_line_message(target, [{"type": "text", "text": txt}], token_for(target),
+                                          what="ตามงานจัดซื้อ")
             if code == 200:
                 ok += 1
             else:
