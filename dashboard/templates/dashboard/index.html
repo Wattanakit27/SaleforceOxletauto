@@ -1362,6 +1362,8 @@
           tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
         { i:'lucide:database',    l:'ฐานข้อมูล & ดาวน์โหลด',   fn:'openDbPanel()',           boss:true,
           tip:'ระบบเก็บอะไรไว้บ้าง (ทุกตาราง/จำนวนแถว/ป้าย PDPA) + ปุ่มดาวน์โหลด CSV รายตาราง หรือ .zip ทั้งหมด (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
+        { i:'lucide:database',    l:'ดูข้อมูลดิบ (SQL)',       fn:'openSqlPanel()',          boss:true,
+          tip:'ยิงคำสั่ง SELECT ดูข้อมูลจริงในฐานข้อมูล แล้วดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV · อ่านอย่างเดียว เขียน/ลบไม่ได้' },
         { i:'lucide:car-front',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
           tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
         { i:'lucide:save',        l:'ส่งคะแนนเข้าชีต',         fn:'exportLeadScore()',       tip:"เขียนคะแนนเซลล์ของเดือนนี้ลง Sheet 'leadscore'" },
@@ -5674,6 +5676,217 @@
     //  โชว์แค่ชื่อตาราง + จำนวนแถว + คำอธิบาย · ไม่ดึงเนื้อข้อมูลของใครออกมา
     //  สิทธิ์ตัดสินที่เซิร์ฟเวอร์ (_is_boss ใน views.py) — ที่นี่แค่ซ่อนเมนู
     // ───────────────────────────────────────────────────────────────
+    // ═══ ดูข้อมูลดิบด้วย SQL (แบบ DbVisualizer) — ★ 16 ก.ย.69 เจ้าของขอ ═══
+    //   "ให้มันแสดง query แบบเป็น raw data · query จาก postgres จริงๆ · export ตาม filter ได้"
+    //   ตัวบังคับ "อ่านอย่างเดียว" อยู่ฝั่งเซิร์ฟเวอร์ (READ ONLY transaction) — ที่นี่แค่หน้าจอ
+    let _sqlSchema = null, _sqlTblQ = '', _sqlOpen = '', _sqlBusy = false;
+
+    async function openSqlPanel() {
+      const old = document.getElementById('sql-overlay'); if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'sql-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:16px 10px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div id="sql-box" style="background:var(--bg);border-radius:16px;max-width:1500px;width:100%;padding:18px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังอ่านรายชื่อตาราง...</div></div>`;
+      document.body.appendChild(ov);
+      try {
+        const r = await fetch('/api/admin/db_query', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _sqlSchema = d; _sqlTblQ = '';
+      } catch (e) {
+        const bx = document.getElementById('sql-box');
+        if (bx) bx.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
+          + `<div style="text-align:center"><button onclick="document.getElementById('sql-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      renderSqlPanel();
+    }
+
+    function _sqlDefaultDates() {
+      const to = new Date(), fm = new Date();
+      fm.setDate(fm.getDate() - 30);
+      const iso = (d) => d.toISOString().slice(0, 10);
+      return [iso(fm), iso(to)];
+    }
+
+    function renderSqlPanel() {
+      const box = document.getElementById('sql-box'); if (!box || !_sqlSchema) return;
+      const [df, dt] = _sqlDefaultDates();
+      const q = (_sqlTblQ || '').trim().toLowerCase();
+      const tabs = (_sqlSchema.tables || []).filter(t => !q ||
+        (t.table + ' ' + (t.label || '') + ' ' + t.columns.map(c => c.name).join(' ')).toLowerCase().includes(q));
+
+      let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+        <div><div style="font-size:17px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:7px">${ic('lucide:database',18)} ดูข้อมูลดิบ (SQL)</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:3px">อ่านจาก ${h(_sqlSchema.vendor||'')} ของจริง · <b>อ่านอย่างเดียว</b> เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ</div></div>
+        <button onclick="document.getElementById('sql-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
+
+      html += `<div style="display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:12px;align-items:start">`;
+
+      // ── ซ้าย: รายชื่อตาราง ──
+      html += `<div style="border:.5px solid var(--bd2);border-radius:12px;background:var(--bg2);padding:9px;max-height:620px;overflow:auto">
+        <input value="${h(_sqlTblQ)}" oninput="_sqlTblQ=this.value;renderSqlPanel()" placeholder="ค้นหาตาราง/คอลัมน์"
+          style="width:100%;font-size:11.5px;padding:6px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);margin-bottom:7px">
+        <div style="font-size:10px;color:var(--t3);margin-bottom:5px">${tabs.length} ตาราง — กดชื่อเพื่อดูข้อมูล</div>`;
+      tabs.forEach(t => {
+        const open = _sqlOpen === t.table;
+        html += `<div style="margin-bottom:2px">
+          <div style="display:flex;align-items:center;gap:5px">
+            <span onclick="_sqlOpen='${open?'':h(t.table)}';renderSqlPanel()" title="ดูคอลัมน์" style="cursor:pointer;color:var(--t3);font-size:10px;width:11px;flex-shrink:0">${open?'▾':'▸'}</span>
+            <span onclick="sqlPickTable('${h(t.table)}')" title="${h(t.label||t.table)}" style="cursor:pointer;font-size:11.5px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.table)}${t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
+          </div>`;
+        if (open) {
+          html += `<div style="margin:3px 0 6px 16px">` + t.columns.map(c =>
+            `<div onclick="sqlInsert('${h(c.name)}')" title="${h(c.type)} — กดเพื่อแทรกชื่อคอลัมน์" style="cursor:pointer;font-size:10.5px;color:var(--t3);padding:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name)} <span style="opacity:.6">${h(c.type)}</span></div>`).join('') + `</div>`;
+        }
+        html += `</div>`;
+      });
+      html += `</div>`;
+
+      // ── ขวา: ช่องพิมพ์ + ปุ่ม + ผลลัพธ์ ──
+      html += `<div style="min-width:0">
+        <textarea id="sql-text" spellcheck="false" placeholder="SELECT * FROM checkout_checkin ORDER BY date_iso DESC"
+          style="width:100%;height:132px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;padding:10px 12px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);resize:vertical"></textarea>
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:9px 0 4px">
+          <button onclick="sqlRun()" style="font-size:12.5px;font-weight:700;padding:7px 18px;border-radius:9px;border:none;background:var(--green);color:#fff;cursor:pointer">▶ รัน</button>
+          <span style="font-size:11px;color:var(--t3);margin-left:4px">ช่วงวันที่</span>
+          <input type="date" id="sql-from" value="${df}" style="font-size:11.5px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <span style="font-size:11px;color:var(--t3)">ถึง</span>
+          <input type="date" id="sql-to" value="${dt}" style="font-size:11.5px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <span style="font-size:11px;color:var(--t3);margin-left:6px">โชว์</span>
+          <input type="number" id="sql-limit" value="200" min="1" max="2000" style="width:66px;font-size:11.5px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <button onclick="sqlExport()" style="font-size:12px;padding:7px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;margin-left:auto">⬇ ดาวน์โหลด CSV (ทุกแถวตามเงื่อนไข)</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--t3);margin-bottom:9px;line-height:1.7">
+          ใส่ <b>:from</b> / <b>:to</b> ในคำสั่งเพื่อใช้ช่วงวันที่ด้านบน เช่น <code style="background:var(--bg2);padding:1px 5px;border-radius:5px">WHERE sent_at &gt;= :from AND sent_at &lt; :to</code>
+          — <b>:to</b> เผื่อถึงสิ้นวันสุดท้ายให้แล้ว จึงใช้เครื่องหมาย <b>&lt;</b> · กด Ctrl+Enter เพื่อรัน
+        </div>
+        <div id="sql-res"><div style="padding:26px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12px">กดชื่อตารางทางซ้าย หรือพิมพ์คำสั่งแล้วกด "รัน"</div></div>
+      </div></div>`;
+
+      box.innerHTML = html;
+      const ta = document.getElementById('sql-text');
+      if (ta) {
+        ta.value = _sqlText || '';
+        ta.onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sqlRun(); } };
+        ta.oninput = () => { _sqlText = ta.value; };
+      }
+      if (_sqlResHtml) document.getElementById('sql-res').innerHTML = _sqlResHtml;
+    }
+
+    let _sqlText = '', _sqlResHtml = '';
+
+    async function sqlPickTable(table) {
+      const t = (_sqlSchema.tables || []).find(x => x.table === table) || {};
+      const col = (t.dateColumns || [])[0] || '';
+      try {
+        const r = await fetch('/api/admin/db_query?table=' + encodeURIComponent(table) + '&date_col=' + encodeURIComponent(col), {credentials:'same-origin'});
+        const d = await r.json();
+        _sqlText = d.sql || ('SELECT * FROM ' + table);
+      } catch (e) { _sqlText = 'SELECT * FROM ' + table; }
+      const ta = document.getElementById('sql-text');
+      if (ta) ta.value = _sqlText;
+      sqlRun();
+    }
+
+    function sqlInsert(txt) {
+      const ta = document.getElementById('sql-text'); if (!ta) return;
+      const p = ta.selectionStart || ta.value.length;
+      ta.value = ta.value.slice(0, p) + txt + ta.value.slice(ta.selectionEnd || p);
+      _sqlText = ta.value;
+      ta.focus(); ta.selectionStart = ta.selectionEnd = p + txt.length;
+    }
+
+    function _sqlBody(extra) {
+      return Object.assign({
+        sql: (document.getElementById('sql-text') || {}).value || '',
+        from: (document.getElementById('sql-from') || {}).value || '',
+        to: (document.getElementById('sql-to') || {}).value || '',
+        limit: Number((document.getElementById('sql-limit') || {}).value || 200),
+      }, extra || {});
+    }
+
+    function _sqlSetRes(html) {
+      _sqlResHtml = html;
+      const el = document.getElementById('sql-res'); if (el) el.innerHTML = html;
+    }
+
+    async function sqlRun() {
+      if (_sqlBusy) return;
+      _sqlBusy = true;
+      _sqlSetRes(`<div style="padding:22px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px"><div class="spin" style="margin:0 auto 10px"></div>กำลังอ่านข้อมูล...</div>`);
+      let d;
+      try {
+        const r = await fetch('/api/admin/db_query', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_sqlBody())});
+        d = await r.json();
+      } catch (e) {
+        _sqlBusy = false;
+        _sqlSetRes(`<div style="padding:14px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:12.5px">ผิดพลาด: ${h(String(e.message||e))}</div>`);
+        return;
+      }
+      _sqlBusy = false;
+      if (!d.ok) {
+        _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:12.5px;line-height:1.7"><b>รันไม่ได้</b><br>${h(d.error || 'ไม่ทราบสาเหตุ')}</div>`);
+        return;
+      }
+      _sqlSetRes(_sqlGrid(d));
+    }
+
+    function _sqlGrid(d) {
+      const cols = d.columns || [], rows = d.rows || [];
+      if (!cols.length) return `<div style="padding:20px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12px">คำสั่งนี้ไม่มีข้อมูลให้แสดง</div>`;
+      let s = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;font-size:11.5px;color:var(--t3)">
+        <div><b style="color:var(--t1)">${rows.length.toLocaleString('en-US')}</b> แถว · ${cols.length} คอลัมน์ · ใช้เวลา ${d.ms} มิลลิวินาที</div>
+        ${d.truncated ? `<div style="color:var(--amber)">แสดงแค่ ${d.limit} แถวแรก — กด "ดาวน์โหลด CSV" เพื่อเอาทั้งหมด</div>` : ''}</div>`;
+      s += `<div style="overflow:auto;max-height:430px;border:.5px solid var(--bd2);border-radius:11px">
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap">
+        <thead><tr style="position:sticky;top:0;background:var(--bg2);z-index:1">
+          <th style="padding:6px 8px;text-align:right;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd2)">#</th>` +
+        cols.map(c => `<th style="padding:6px 10px;text-align:left;color:var(--t2);font-weight:700;border-bottom:.5px solid var(--bd2)">${h(c)}</th>`).join('') +
+        `</tr></thead><tbody>`;
+      rows.forEach((r, i) => {
+        s += `<tr style="border-top:.5px solid var(--bd2)"><td style="padding:4px 8px;text-align:right;color:var(--t3)">${i + 1}</td>` +
+          r.map(v => {
+            if (v === null || v === undefined) return `<td style="padding:4px 10px;color:var(--t3);opacity:.55">NULL</td>`;
+            const txt = String(v);
+            const num = (typeof v === 'number');
+            return `<td style="padding:4px 10px;color:var(--t1);${num?'text-align:right':''}max-width:420px;overflow:hidden;text-overflow:ellipsis" title="${h(txt.slice(0,600))}">${h(txt.length > 160 ? txt.slice(0,160) + '…' : txt)}</td>`;
+          }).join('') + `</tr>`;
+      });
+      s += `</tbody></table></div>`;
+      return s;
+    }
+
+    async function sqlExport() {
+      const btnMsg = (t, col) => _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--bg2);color:${col||'var(--t2)'};font-size:12.5px">${t}</div>`);
+      const keep = _sqlResHtml;
+      btnMsg('<div class="spin" style="display:inline-block;vertical-align:-3px;margin-right:8px"></div>กำลังเตรียมไฟล์... (ข้อมูลเยอะอาจใช้เวลาสักครู่)');
+      try {
+        const r = await fetch('/api/admin/db_query', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_sqlBody({export:1}))});
+        if (!r.ok) {
+          let msg = 'HTTP ' + r.status;
+          try { msg = (await r.json()).error || msg; } catch (e) {}
+          _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:12.5px">ดาวน์โหลดไม่ได้: ${h(msg)}</div>`);
+          return;
+        }
+        const n = r.headers.get('X-Row-Count') || '?';
+        const blob = await r.blob();
+        const dis = r.headers.get('Content-Disposition') || '';
+        const m = /filename\*=UTF-8''([^;]+)/.exec(dis);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = m ? decodeURIComponent(m[1]) : 'ข้อมูล.csv';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        _sqlResHtml = keep;
+        const el = document.getElementById('sql-res');
+        if (el) el.innerHTML = `<div style="padding:9px 13px;border-radius:10px;background:var(--bg2);color:var(--green);font-size:12px;font-weight:700;margin-bottom:8px">✓ ดาวน์โหลดแล้ว ${Number(n).toLocaleString('en-US')} แถว</div>` + keep;
+      } catch (e) {
+        _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:12.5px">ดาวน์โหลดไม่ได้: ${h(String(e.message||e))}</div>`);
+      }
+    }
+
     let _dbData = null, _dbQ = '';
     async function openDbPanel() {
       const old = document.getElementById('db-overlay'); if (old) old.remove();
@@ -7766,7 +7979,7 @@
     // ★ 16 ก.ย.69 — ลิงก์ตรงเข้าพาเนล (`?panel=employees`) เพราะพาเนลเป็น modal ไม่มี URL ของตัวเอง
     //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
     //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
-    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openDbPanel' };
+    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openDbPanel', sql:'openSqlPanel' };
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];

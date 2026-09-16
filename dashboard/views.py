@@ -121,6 +121,83 @@ def admin_db_tables(request):
                             json_dumps_params={"ensure_ascii": False})
 
 
+def admin_db_query(request):
+    """ยิง SQL ดูข้อมูลดิบ + ดาวน์โหลดผลลัพธ์ — ★ 16 ก.ย.69 (เจ้าของขอ)
+
+      GET  ?schema=1                    → รายชื่อตาราง+คอลัมน์ (แถบซ้าย)
+      POST {sql, from, to, limit}       → ผลลัพธ์ JSON ขึ้นตาราง
+      POST {sql, from, to, export:1}    → CSV ของผลลัพธ์ทั้งหมด (ไม่ตัดที่ limit)
+
+    สิทธิ์ `_is_boss` เท่ากับสารบัญ/ดาวน์โหลด — **แอดมินสูงสุด + ผู้บริหารเท่านั้น**
+    ตัวบังคับ "อ่านอย่างเดียว" อยู่ใน [db_query.py](services/db_query.py) (READ ONLY
+    transaction ฝั่ง Postgres + rollback เสมอ ไม่ใช่แค่กรองคำ)
+    """
+    if not _is_boss(request):
+        return JsonResponse({"ok": False, "error": "สิทธิ์ไม่ถึง — หน้านี้เฉพาะแอดมินสูงสุด/ผู้บริหาร"},
+                            status=403, json_dumps_params={"ensure_ascii": False})
+    from .services import db_query as Q
+
+    if request.method != "POST":
+        try:
+            if request.GET.get("table"):
+                return JsonResponse({"ok": True, "sql": Q.starter_sql(
+                    request.GET.get("table"), request.GET.get("date_col") or "")},
+                    json_dumps_params={"ensure_ascii": False})
+            return JsonResponse(Q.schema(), json_dumps_params={"ensure_ascii": False})
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": str(e)}, status=500,
+                                json_dumps_params={"ensure_ascii": False})
+
+    try:
+        b = json.loads(request.body or "{}")
+    except Exception:
+        b = {}
+    sql = b.get("sql") or ""
+    d_from, d_to = (b.get("from") or ""), (b.get("to") or "")
+
+    # ── ดาวน์โหลดผลลัพธ์เป็น CSV (ตามเงื่อนไข/ช่วงวันที่ที่กรองไว้) ──
+    if b.get("export"):
+        import csv
+        import io as _io
+        from .services.fetch_dashboard import bangkok_now
+        try:
+            cols, rows = Q.export_rows(sql, d_from, d_to)
+        except Q.QueryError as e:
+            return JsonResponse({"ok": False, "error": str(e)}, status=400,
+                                json_dumps_params={"ensure_ascii": False})
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": str(e)}, status=500,
+                                json_dumps_params={"ensure_ascii": False})
+        buf = _io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(cols)
+        for r in rows:
+            w.writerow(["" if v is None else v for v in r])
+        # BOM — เปิดใน Excel ไทยแล้วไม่เพี้ยน (กติกาเดิมของโปรเจกต์)
+        data = ("﻿" + buf.getvalue()).encode("utf-8")
+        span = ("_%s_ถึง_%s" % (d_from, d_to)) if (d_from or d_to) else ""
+        name = "ข้อมูล%s_%s.csv" % (span, bangkok_now().strftime("%Y%m%d"))
+        resp = HttpResponse(data, content_type="text/csv; charset=utf-8")
+        resp["X-Row-Count"] = str(len(rows))
+        try:
+            from cars.views import _attachment
+            return _attachment(resp, name)
+        except Exception:
+            from urllib.parse import quote
+            resp["Content-Disposition"] = "attachment; filename*=UTF-8''%s" % quote(name)
+            return resp
+
+    try:
+        return JsonResponse(Q.run(sql, d_from, d_to, b.get("limit")),
+                            json_dumps_params={"ensure_ascii": False})
+    except Q.QueryError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400,
+                            json_dumps_params={"ensure_ascii": False})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+
+
 def admin_db_export(request):
     """ดาวน์โหลดข้อมูลในฐานข้อมูลออกมาเป็นไฟล์ — ★ ก.ย.69 (เจ้าของสั่ง "อยากให้ export ออกมาได้")
 
