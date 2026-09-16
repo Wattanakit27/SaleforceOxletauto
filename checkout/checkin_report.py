@@ -36,6 +36,9 @@ TEAM_ORDER = ["ฝ่ายขาย", "ทีม A", "ทีม B", "ทีม 
 _JUNK_NOTE = ("ไม่พบข้อมูลรูป", "no overlay text", "ไม่พบข้อมูลที่", "ไม่มีข้อมูล",
               "ไม่พบข้อมูล", "ไม่พบตัวหนังสื", "overlay text")
 
+# ร่องรอยของข้อความที่ n8n สร้างเอง — ทุกอันมีวงเล็บบอกที่มาของเวลาต่อท้าย
+_AUTO_NOTE = ("(จากรูป", "(จากเวลาส่ง")
+
 
 def _mins(t):
     """"8:30" → 510 นาที · อ่านไม่ออกคืน None"""
@@ -48,16 +51,23 @@ def _hhmm(t):
     return "%d:%02d" % (int(m.group(1)), int(m.group(2))) if m else ""
 
 
-def _late_text(n):
-    if n >= 60:
-        h, mm = divmod(n, 60)
-        return "สาย %d ชม." % h if not mm else "สาย %d ชม. %d นาที" % (h, mm)
-    return "สาย %d นาที" % n
-
-
 def _clean_note(s):
     s = str(s or "").strip()
     return "" if any(k in s.lower() for k in _JUNK_NOTE) else s
+
+
+def _human_note(s):
+    """เอาเฉพาะ "หมายเหตุที่คนพิมพ์" — ★ 17 ก.ย.69 (เจ้าของแจ้งว่าช่องหมายเหตุรกไป)
+
+    n8n เขียน `reason` ให้ **ทุกแถว** เป็นข้อความอธิบายสถานะ เช่น
+    `ตรงเวลา (จากรูป · เข้างาน 8:30)` / `สาย (จากรูป · เข้างาน 9:00)` ซึ่ง
+    **ซ้ำกับคอลัมน์ ✓ ที่อยู่ข้างๆ อยู่แล้ว** → เอาขึ้นตารางครบ 43 แถว = อ่านไม่ออกว่า
+    ของจริง (ลา/หยุด) อยู่ตรงไหน · ตัดทิ้งให้เหลือแต่ของที่คนพิมพ์เอง
+    """
+    s = _clean_note(s)
+    if not s or any(k in s for k in _AUTO_NOTE):
+        return ""
+    return "" if s in ("ตรงเวลา", "สาย", "มาสาย") else s
 
 
 def collect(day=None) -> dict:
@@ -85,7 +95,7 @@ def collect(day=None) -> dict:
         t_in = _hhmm(c.time_hm) if c else ""
         # ★ หมายเหตุมาจาก 2 ที่: ของวันนี้ (จากรูปเช็คชื่อ) ก่อน แล้วค่อยของถาวรในทะเบียน
         #   ของถาวร (เช่น "ลาคลอด") **อยู่จนกว่าจะลบเอง** — ตามของเดิมที่หมายเหตุในชีตพนักงานไม่หาย
-        note = _clean_note((c.reason if c else "") or e.note)
+        note = _human_note(c.reason if c else "") or _clean_note(e.note)
         off_today = bool(e.day_off) and day_name in e.day_off
 
         late = 0
@@ -98,23 +108,13 @@ def collect(day=None) -> dict:
                "late": late, "off": off_today, "note": note,
                "unreadable": bool(c and c.status == "abnormal" and not t_in)}
 
-        # ข้อความในช่องหมายเหตุ — เรียงตามความสำคัญ: สาย > วันหยุด > หมายเหตุ > ยังไม่มา
-        if t_in:
-            row["note_show"] = _late_text(late) if late else ""
-            if off_today:                      # วันหยุดแต่มาทำงาน — ต้องเห็น
-                row["note_show"] = (row["note_show"] + " | " if row["note_show"] else "") + day_name
-            elif note:
-                row["note_show"] = (row["note_show"] + " | " if row["note_show"] else "") + note
-        elif off_today:
-            row["note_show"] = note or day_name
-        elif note:
-            # ★ 17 ก.ย.69 — **มีหมายเหตุอะไรก็ตาม = ไม่ตามตัว** (กติกาเดียวกับ workflow เดิม
-            #   ที่เช็ค `hasAnyNote`) · เดิมผมยกเว้นเฉพาะคำว่า ลา/หยุด/สลับ ทำให้คนที่พิมพ์
-            #   "ไปธุระก่อนเข้า" หรือ "ทดเวลา" ยังโดนแท็ก ซึ่งไม่ตรงของเดิมและกวนคน
-            #   **นี่คือวิธี "พิมพ์แล้วไม่โดนแท็ก" ที่ผู้ใช้ถามถึง**
-            row["note_show"] = note
-        else:
-            row["note_show"] = ("ยังไม่เช็คชื่อ" + (" | " + note if note else ""))
+        # ★ 17 ก.ย.69 — ช่องหมายเหตุขึ้น **เฉพาะคนที่หยุดวันนี้ กับคนที่พิมพ์หมายเหตุไว้เอง**
+        #   (เจ้าของสั่ง "มันรกไป") · ที่ตัดออกคือของที่คอลัมน์ ✓ บอกอยู่แล้ว —
+        #   "ตรงเวลา/สาย (จากรูป …)" ของ n8n และ "ยังไม่เช็คชื่อ" (ดูที่เครื่องหมาย ✗ แทน)
+        #   **หมายเหตุยังเป็นตัวบอกว่า "ไม่ต้องตามตัว" เหมือนเดิม** (กติกา `hasAnyNote` ของ workflow เดิม)
+        row["note_show"] = note or (("วันหยุด (%s)" % day_name) if off_today else "")
+        row["missing"] = not t_in and not off_today and not note
+        if row["missing"]:
             missing.append({"id": e.id, "name": e.nickname, "position": e.position,
                             "workStart": _hhmm(e.work_start)})
 
@@ -123,7 +123,7 @@ def collect(day=None) -> dict:
     if orphan:
         groups["เช็คชื่อเข้ามาแต่ยังไม่มีในทะเบียน"] = [
             {"name": c.display_name or "ไม่ทราบชื่อ", "workStart": "", "timeHm": _hhmm(c.time_hm),
-             "late": 0, "off": False, "note": "", "unreadable": False,
+             "late": 0, "off": False, "note": "", "unreadable": False, "missing": False,
              "note_show": "ยังไม่ผูกกับทะเบียนพนักงาน"} for c in orphan]
 
     order = [t for t in TEAM_ORDER if t in groups] + sorted(t for t in groups if t not in TEAM_ORDER)
@@ -143,6 +143,13 @@ def collect(day=None) -> dict:
 
 _TICK = ('<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">'
          '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>')
+
+# ★ ยังไม่เช็คชื่อ = กากบาท ไม่ใช่ติ๊กแดง — เดิมใช้ติ๊กแดงอันเดียวกับ "มาสาย"
+#   แล้วอาศัยคำว่า "ยังไม่เช็คชื่อ" ในช่องหมายเหตุเป็นตัวแยก · พอเอาหมายเหตุออก
+#   **"มาสาย" กับ "ไม่มา" จะหน้าตาเหมือนกันเป๊ะ** ซึ่งเป็นเรื่องที่ตารางนี้ต้องบอกให้ได้
+_CROSS = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">'
+          '<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 '
+          '12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>')
 
 
 def _esc(s):
@@ -168,10 +175,10 @@ def build_html(data: dict) -> str:
                 ok_cell = '<span class="ok">%s</span>' % _TICK
             elif r["late"]:
                 late_cell = '<span class="bad">%s</span>' % _TICK
-            elif r["off"] or not r["note_show"].startswith("ยังไม่"):
-                cls_note = "off"                       # วันหยุด/ลา = ตัวอักษรน้ำเงิน
+            elif r.get("missing"):
+                late_cell = '<span class="bad">%s</span>' % _CROSS
             else:
-                late_cell = '<span class="bad">%s</span>' % _TICK
+                cls_note = "off"                       # วันหยุด/ลา = ตัวอักษรน้ำเงิน
             body += (
                 '<tr><td class="nm">%s</td><td class="ws">%s</td><td class="c">%s</td>'
                 '<td class="c">%s</td><td class="nt %s">%s</td></tr>'
@@ -180,6 +187,7 @@ def build_html(data: dict) -> str:
 
     c = data["counts"]
     foot = ("มา %d คน (ตรงเวลา %d · สาย %d) · ยังไม่เช็คชื่อ %d · วันหยุด %d"
+            " · ✗ = ยังไม่เช็คชื่อ"
             % (c["ontime"] + c["late"], c["ontime"], c["late"], c["missing"], c["off"]))
 
     return """<!DOCTYPE html><html><head><meta charset="utf-8"><style>
