@@ -21,14 +21,19 @@ mkdir -p /home/n8ntunnel/.ssh && chmod 700 /home/n8ntunnel/.ssh
 ssh-keygen -t ed25519 -f /root/n8n_tunnel_key -N "" -C "n8n-tunnel"
 
 # public key -> authorized_keys (ล็อกให้ทำได้แค่ forward พอร์ต 5432 เปิด shell ไม่ได้)
-printf 'no-agent-forwarding,no-X11-forwarding,no-pty,permitopen="127.0.0.1:5432" %s\n' \
-  "$(cat /root/n8n_tunnel_key.pub)" > /home/n8ntunnel/.ssh/authorized_keys
+# ⚠️ บรรทัดเดียวจบ ห้ามตัดบรรทัด — ถ้ามีช่องว่างตามหลัง \ เวลาก๊อปวาง bash จะตัดคำสั่ง
+#    แล้วไฟล์ authorized_keys จะกลายเป็นไฟล์ว่าง (เจอจริง 16/09)
+echo "no-agent-forwarding,no-X11-forwarding,no-pty,permitopen=\"127.0.0.1:5432\" $(cat /root/n8n_tunnel_key.pub)" > /home/n8ntunnel/.ssh/authorized_keys
 chown -R n8ntunnel:n8ntunnel /home/n8ntunnel/.ssh && chmod 600 /home/n8ntunnel/.ssh/authorized_keys
 
 # สิทธิ์ในฐานข้อมูล — ส่งรหัสผ่านทาง -v (ห้ามเขียนลงไฟล์ ไฟล์อยู่ใน git)
 cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'<รหัสจริงที่ตั้งเอง>'" -f deploy/n8n_postgres_access.sql
 
+# ตรวจว่าเขียนสำเร็จจริง (ต้องได้ 1 บรรทัด และขึ้นต้นด้วย no-agent-forwarding)
+wc -l /home/n8ntunnel/.ssh/authorized_keys; head -c 60 /home/n8ntunnel/.ssh/authorized_keys; echo
+
 cat /root/n8n_tunnel_key     # <- ก๊อปทั้งก้อนไปวางในช่อง Private Key ของ n8n แล้วค่อย rm ทิ้ง
+# ⚠️ private key = กุญแจเข้าเซิร์ฟเวอร์ ห้ามส่งต่อ/แปะในแชท · หลุดเมื่อไหร่ให้สร้างใหม่ทับ
 ```
 
 ตั้งใน n8n (Credential → Postgres):
