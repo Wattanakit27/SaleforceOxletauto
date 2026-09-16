@@ -10,22 +10,32 @@ n8n อยู่คนละเครื่องกับฐานข้อม�
 ## ทาง A — SSH tunnel (แนะนำ)
 โหนด Postgres ของ n8n มีช่อง **SSH Tunnel** ในหน้า credential อยู่แล้ว
 
+⚠️ **n8n ไม่ได้สร้างคีย์ให้** — ต้องสร้างคู่กุญแจเอง แล้วเอา **private key** ไปวางใน n8n
+
 ```bash
-# บนเซิร์ฟเวอร์ (root) — บัญชีสำหรับ tunnel เท่านั้น ไม่มี shell ใช้งานจริง
+# บนเซิร์ฟเวอร์ (root) — บัญชีสำหรับ tunnel เท่านั้น
 adduser --disabled-password --gecos "" n8ntunnel
 mkdir -p /home/n8ntunnel/.ssh && chmod 700 /home/n8ntunnel/.ssh
-# เอา public key ที่ n8n สร้างให้มาวางในไฟล์นี้ (จำกัดให้ทำได้แค่ forward พอร์ต)
-printf 'no-agent-forwarding,no-X11-forwarding,no-pty,permitopen="127.0.0.1:5432" %s\n' "<PUBLIC KEY ของ n8n>" \
-  > /home/n8ntunnel/.ssh/authorized_keys
+
+# สร้างคู่กุญแจ (ไม่ตั้ง passphrase — n8n ใส่ passphrase ไม่ได้)
+ssh-keygen -t ed25519 -f /root/n8n_tunnel_key -N "" -C "n8n-tunnel"
+
+# public key -> authorized_keys (ล็อกให้ทำได้แค่ forward พอร์ต 5432 เปิด shell ไม่ได้)
+printf 'no-agent-forwarding,no-X11-forwarding,no-pty,permitopen="127.0.0.1:5432" %s\n' \
+  "$(cat /root/n8n_tunnel_key.pub)" > /home/n8ntunnel/.ssh/authorized_keys
 chown -R n8ntunnel:n8ntunnel /home/n8ntunnel/.ssh && chmod 600 /home/n8ntunnel/.ssh/authorized_keys
 
 # สิทธิ์ในฐานข้อมูล — ส่งรหัสผ่านทาง -v (ห้ามเขียนลงไฟล์ ไฟล์อยู่ใน git)
-cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
+cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'<รหัสจริงที่ตั้งเอง>'" -f deploy/n8n_postgres_access.sql
+
+cat /root/n8n_tunnel_key     # <- ก๊อปทั้งก้อนไปวางในช่อง Private Key ของ n8n แล้วค่อย rm ทิ้ง
 ```
 
 ตั้งใน n8n (Credential → Postgres):
 - Host `127.0.0.1` · Port `5432` · Database `oxlet` · User `n8n` · Password ที่ตั้งไว้
-- SSH Tunnel = เปิด · SSH Host `76.13.214.140` · SSH User `n8ntunnel` · Private Key ของ n8n
+- SSH Tunnel = เปิด · SSH Host `76.13.214.140` · SSH Port `22` · SSH User `n8ntunnel`
+  · Private Key = เนื้อไฟล์ `/root/n8n_tunnel_key` ทั้งก้อน (รวมบรรทัด BEGIN/END)
+- วางใน n8n เสร็จแล้วลบคีย์ออกจากเซิร์ฟเวอร์: `rm /root/n8n_tunnel_key`
 
 **ไม่ต้องแก้ `listen_addresses` · ไม่ต้องเปิดพอร์ต 5432 ออกเน็ต**
 
@@ -43,6 +53,7 @@ ufw allow from <IP ของ n8n> to any port 5432 proto tcp
 # 4) สิทธิ์
 cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
 ```
+⚠️ **รหัสผ่าน role `n8n` ต้องเป็นรหัสจริง** — อย่าใช้ข้อความตัวอย่างในคู่มือนี้ (มันอยู่ใน git)
 ⚠️ **ยืนยันไอพีขาออกจริงของ n8n ก่อน** (บนเครื่อง n8n: `curl -s ifconfig.me`) — ใส่ผิดคือเปิดให้คนอื่น
 ⚠️ ฐานข้อมูลนี้มีแชทลูกค้าและ LINE id พนักงาน — **อย่าใช้ user `oxlet`/`postgres` ใน n8n เด็ดขาด**
 ใช้ role `n8n` จากไฟล์ SQL ซึ่งเห็นแค่ 2 view และเขียนได้ช่องเดียว
