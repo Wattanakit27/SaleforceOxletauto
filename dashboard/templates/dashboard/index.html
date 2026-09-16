@@ -1372,6 +1372,7 @@
         { i:'lucide:phone',       l:'จัดการเทเลเซลล์',         fn:'openTeleConfigPanel()',   tip:'ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน' },
         // ชื่อต้องตรงกับปุ่มในหัวบอร์ด /track/ (templates/dashboard.html) — หน้าเดียวกัน คนละทางเข้า
         { i:'lucide:car-front',   l:'ผู้ใช้/บทบาท (ระบบรถ)',   fn:'openTrkUsers()',          tip:'จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin) — หน้าเดียวกับปุ่ม "ผู้ใช้/บทบาท" ใน /track/' },
+        { i:'lucide:user',        l:'พนักงาน (ตำแหน่ง/เวลาเข้างาน)', fn:'openEmployees()',     tip:'ทะเบียนพนักงานในระบบเรา — เพิ่ม/แก้ได้เลย ไม่ต้องไปแก้ชีต' },
         { i:'lucide:inbox',       l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',       tip:'ดูรายชื่อพนักงานและ LINE user_id' },
       ]},
       { k:'sys', sec: 'ตั้งค่าระบบ', items: [
@@ -5802,6 +5803,122 @@
     //  อ่านอย่างเดียว — ยังตอบกลับจากหน้านี้ไม่ได้ (ขั้นถัดไป)
     // ───────────────────────────────────────────────────────────────
     let _custQ = '';
+    // 👤 ทะเบียนพนักงาน — ★ 16 ก.ย.69 (เจ้าของสั่งย้ายมาจากชีต: "ให้เขาแก้ในระบบ SaleForce ของเรา")
+    //    เก็บ ชื่อเล่น · ชื่อที่ตั้งใน LINE · ตำแหน่ง · เวลาเข้างาน · วันหยุด
+    //    ★ ไม่โชว์ LINE user id ของพนักงาน (กติกาเดิม) — บอกแค่ว่าผูกไว้กี่บัญชี
+    //      คนเดียวมีได้หลายบัญชีเพราะ id ออกต่อ provider ของบอทแต่ละตัว
+    let _empRows = [], _empQ = '';
+    async function openEmployees() {
+      const old = document.getElementById('emp-overlay'); if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'emp-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div id="emp-box" style="background:var(--bg);border-radius:16px;max-width:1040px;width:100%;padding:22px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลดทะเบียนพนักงาน...</div></div>`;
+      document.body.appendChild(ov);
+      _empQ = '';
+      await loadEmployees();
+    }
+
+    async function loadEmployees() {
+      const box = document.getElementById('emp-box'); if (!box) return;
+      try {
+        const r = await fetch('/checkout/api/employees', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _empRows = d.employees || [];
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
+          + `<div style="text-align:center"><button onclick="document.getElementById('emp-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      renderEmployees();
+    }
+
+    function _empInput(id, val, ph, w) {
+      return `<input id="${id}" value="${h(val||'')}" placeholder="${h(ph||'')}" style="width:${w||'100%'};font-size:12px;padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`;
+    }
+
+    function renderEmployees() {
+      const box = document.getElementById('emp-box'); if (!box) return;
+      const q = (_empQ || '').trim().toLowerCase();
+      const rows = _empRows.filter(e => !q || [e.nickname, e.displayName, e.position].join(' ').toLowerCase().includes(q));
+      const linked = _empRows.filter(e => (e.lineAccounts || 0) > 0).length;
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-size:16px;font-weight:800;color:var(--t1)">พนักงาน ${_empRows.length} คน</div>
+        <button onclick="document.getElementById('emp-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.7">ทะเบียนนี้อยู่ในระบบเรา ไม่ต้องไปแก้ในชีต · ผูกกับ LINE แล้ว ${linked} คน (คนเดียวผูกได้หลายบัญชี เพราะบอทแต่ละตัวให้ไอดีคนละชุด)<br>คนใหม่ที่ยังไม่ผูก LINE ระบบจะผูกให้เองเมื่อเขาพิมพ์ในกลุ่ม ถ้า "ชื่อที่ตั้งใน LINE" ตรงกับที่กรอกไว้</div>`;
+      html += `<input value="${h(_empQ)}" oninput="_empQ=this.value;renderEmployees()" placeholder="ค้นหา ชื่อเล่น / ชื่อ LINE / ตำแหน่ง" style="width:100%;font-size:13px;padding:8px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);margin-bottom:12px">`;
+
+      html += `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:10px;margin-bottom:14px;background:var(--bg2)">
+        <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:7px">➕ เพิ่มพนักงานใหม่</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;align-items:center">
+          ${_empInput('emp_n_nick','','ชื่อเล่น *')}${_empInput('emp_n_dn','','ชื่อที่ตั้งใน LINE')}${_empInput('emp_n_pos','','ตำแหน่ง/ทีม')}${_empInput('emp_n_ws','','เวลาเข้างาน 8:00')}${_empInput('emp_n_off','','วันหยุด')}
+          <button onclick="empAdd()" style="font-size:12px;padding:7px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;cursor:pointer">เพิ่ม</button>
+        </div>
+        <div id="emp_n_msg" style="font-size:11px;color:var(--t3);margin-top:6px"></div></div>`;
+
+      html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:var(--t3);font-size:11px;text-align:left">
+          <th style="padding:6px 5px">ชื่อเล่น</th><th style="padding:6px 5px">ชื่อที่ตั้งใน LINE</th>
+          <th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
+          <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px">LINE</th>
+          <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
+      if (!rows.length) html += `<tr><td colspan="8" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
+      rows.forEach(e => {
+        const acc = e.lineAccounts || 0;
+        html += `<tr style="border-top:.5px solid var(--bd2)">
+          <td style="padding:5px">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px')}</td>
+          <td style="padding:5px">${_empInput('emp_dn_'+e.id, e.displayName, '', '150px')}</td>
+          <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px')}</td>
+          <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px')}</td>
+          <td style="padding:5px">${_empInput('emp_off_'+e.id, e.dayOff, '', '80px')}</td>
+          <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;white-space:nowrap">
+            <button onclick="empSave(${e.id})" style="font-size:11px;padding:5px 9px;border-radius:8px;border:none;background:var(--blue);color:#fff;cursor:pointer">บันทึก</button>
+            <button onclick="empDel(${e.id},'${h(e.nickname)}')" style="font-size:11px;padding:5px 8px;border-radius:8px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">ลบ</button>
+          </td></tr>`;
+      });
+      html += `</tbody></table></div><div id="emp_msg" style="font-size:12px;color:var(--t3);margin-top:10px"></div>`;
+      box.innerHTML = html;
+    }
+
+    function _empV(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+    function _empMsg(id, txt, col) { const el = document.getElementById(id); if (el) { el.textContent = txt; el.style.color = col || 'var(--t3)'; } }
+
+    async function _empPost(body, msgId) {
+      _empMsg(msgId, 'กำลังบันทึก…');
+      try {
+        const r = await fetch('/checkout/api/employees', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(body)});
+        const d = await r.json();
+        if (!d.ok) { _empMsg(msgId, d.error || 'ไม่สำเร็จ', 'var(--red)'); return false; }
+        _empRows = d.employees || _empRows;
+        renderEmployees();
+        _empMsg(msgId, '✓ บันทึกแล้ว', 'var(--green)');
+        return true;
+      } catch (e) { _empMsg(msgId, 'ผิดพลาด: ' + (e.message||e), 'var(--red)'); return false; }
+    }
+
+    function empAdd() {
+      const nick = _empV('emp_n_nick');
+      if (!nick) { _empMsg('emp_n_msg', 'ใส่ชื่อเล่นก่อน', 'var(--red)'); return; }
+      _empPost({action:'save', nickname:nick, displayName:_empV('emp_n_dn'), position:_empV('emp_n_pos'),
+                workStart:_empV('emp_n_ws'), dayOff:_empV('emp_n_off'), active:true}, 'emp_n_msg');
+    }
+
+    function empSave(id) {
+      const act = document.getElementById('emp_act_' + id);
+      _empPost({action:'save', id:id, nickname:_empV('emp_nick_'+id), displayName:_empV('emp_dn_'+id),
+                position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
+                active: act ? act.checked : true}, 'emp_msg');
+    }
+
+    function empDel(id, name) {
+      if (!confirm('ลบ "' + name + '" ออกจากทะเบียน?\n(ประวัติแชทไม่หาย แค่ไม่มีชื่อในทะเบียนพนักงาน)')) return;
+      _empPost({action:'delete', id:id}, 'emp_msg');
+    }
+
     async function openCustomerChat() {
       const old = document.getElementById('cust-overlay'); if (old) old.remove();
       const ov = document.createElement('div');

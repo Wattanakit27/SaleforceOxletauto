@@ -31,28 +31,48 @@ def _norm(s) -> str:
 
 
 def _load(force=False):
-    """โหลดชีตพนักงานเข้าแคช — เงียบเสมอถ้าอ่านไม่ได้"""
+    """โหลดทะเบียนพนักงานเข้าแคช — **ฐานข้อมูลเราก่อน แล้วค่อยเติมจากชีต** · เงียบเสมอถ้าอ่านไม่ได้
+
+    ★ 16 ก.ย.69 (เจ้าของสั่งย้ายทะเบียนพนักงานมาเป็นของระบบเรา): ตาราง `Employee` เป็นตัวหลัก
+      เพราะชีตผูกคนไว้กับ **LINE id ของบอทเดิม** ซึ่งใช้กับบอทใหม่ไม่ได้ (id ออกต่อ provider)
+      ส่วนฐานข้อมูลเราผูก **id กี่ตัวก็ได้** เข้ากับคนคนเดียว (`LineProfile.employee`)
+    ชีตยังอ่านอยู่เพื่อ **เติมคนที่ยังไม่ได้ย้ายเข้าระบบ** (ช่วงเปลี่ยนผ่าน · DB ชนะเสมอ)
+    """
     now = time.time()
     if not force and _CACHE["at"] and (now - _CACHE["at"]) < _TTL:
         return
+
+    by_uid, by_name, uid_of = {}, {}, {}
+    try:                                  # ── ฐานข้อมูลเรา (ตัวหลัก) ──
+        from .models import Employee, LineProfile
+        for e in Employee.objects.filter(active=True).only("nickname", "display_name"):
+            for key in (_norm(e.display_name), _norm(e.nickname)):
+                if key:
+                    by_name.setdefault(key, e.nickname)
+        for uid, nick in (LineProfile.objects.filter(is_employee=True).exclude(nickname="")
+                          .values_list("user_id", "nickname")):
+            by_uid.setdefault(uid, nick)
+    except Exception:
+        pass                              # ยังไม่ migrate / DB ล่ม = ใช้ชีตอย่างเดียว
+
     try:
         from dashboard.services.google_sheets import fetch_sheet, EMPLOYEE_COL as EM
         rows = fetch_sheet("employees")
     except Exception:
-        _CACHE["at"] = now      # กันยิงรัวตอนชีตล่ม
+        # ชีตอ่านไม่ได้ = ใช้เท่าที่ได้จากฐานข้อมูลเรา (อย่าทิ้งของที่โหลดมาแล้ว)
+        _CACHE.update({"at": now, "by_uid": by_uid, "by_name": by_name, "uid_of_name": uid_of})
         return
 
     def cell(r, i):
         return (str(r[i]).strip() if i < len(r) and r[i] else "")
 
-    by_uid, by_name, uid_of = {}, {}, {}
     for r in rows:
         uid, dn = cell(r, EM.user_id), cell(r, EM.display_name)
         nick = cell(r, EM.nickname) or dn
         if not (uid or dn):
             continue
         if uid:
-            by_uid[uid] = nick
+            by_uid.setdefault(uid, nick)     # DB ชนะ — ชีตแค่เติมคนที่ยังไม่มีในระบบ
         for key in (_norm(dn), _norm(nick)):
             if key:
                 by_name.setdefault(key, nick)

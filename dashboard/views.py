@@ -3755,23 +3755,60 @@ def api_v1_index(request):
 def api_v1_employees(request):
     """รายชื่อพนักงานสำหรับระบบภายนอก — GET /api/v1/employees
 
-    คืน: userId (LINE) · displayName (ชื่อที่ตั้งใน LINE) · nickname (ชื่อเล่นที่ใช้ในระบบ)
-         · position (ตำแหน่ง/ทีม) · groupId (กลุ่ม LINE ที่ผูกกับพนักงานคนนั้นในชีต)
-    ไม่คืน: รูปโปรไฟล์ · reply token · เวลาเข้างาน/วันหยุด — ไม่ได้ขอ และเป็นข้อมูลส่วนตัวเกินจำเป็น
+    คืน: userId + **userIds (ทุกบัญชีของคนนั้น)** · displayName · nickname · position
+         · **workStart (เวลาเข้างาน)** · dayOff (วันหยุด) · groupId
+    `source` บอกว่าตอบจากไหน: `db` = ทะเบียนในระบบเรา (ค่าปกติ) · `sheet` = ชีต (ยังไม่ได้ย้าย/บังคับด้วย `?source=sheet`)
+    ไม่คืน: รูปโปรไฟล์ · reply token
     """
     ok, resp = _api_key_ok(request)
     if not ok:
         return resp
-    from .services.google_sheets import fetch_sheet, EMPLOYEE_COL as EM
-    try:
-        rows = fetch_sheet("employees")
-    except Exception as e:
-        return _api_json({"ok": False, "error": f"อ่านข้อมูลพนักงานไม่ได้: {e}"}, status=502)
 
     f_nick = (request.GET.get("nickname") or "").strip().lower()
     f_uid = (request.GET.get("user_id") or "").strip()
     f_pos = (request.GET.get("position") or "").strip().lower()
     f_q = (request.GET.get("q") or "").strip().lower()
+
+    # ★ 16 ก.ย.69 — ทะเบียนพนักงานย้ายมาอยู่ในฐานข้อมูลเราแล้ว (เจ้าของสั่ง) → ตอบจาก DB ก่อน
+    #   ดีกว่าชีตตรงที่ **1 คนมี LINE id ได้หลายตัว** (id ออกต่อ provider ของบอท — บอทใหม่คนละชุด)
+    #   ยังไม่ได้ย้าย (ตารางว่าง) หรือขอ `?source=sheet` → ตกไปอ่านชีตแบบเดิม
+    if (request.GET.get("source") or "").strip().lower() != "sheet":
+        try:
+            from checkout.models import Employee
+            emps = list(Employee.objects.filter(active=True).prefetch_related("line_accounts"))
+        except Exception:
+            emps = []
+        if emps:
+            data = []
+            for e in emps:
+                ids = [a.user_id for a in e.line_accounts.all()]
+                item = {
+                    "userId": ids[0] if ids else "",     # เข้ากันได้กับของเดิม
+                    "userIds": ids,                      # ครบทุกบัญชี (บอทเดิม/บอทใหม่)
+                    "displayName": e.display_name,
+                    "nickname": e.nickname,
+                    "position": e.position,
+                    "workStart": e.work_start,
+                    "dayOff": e.day_off,
+                    "groupId": e.group_id,
+                }
+                if f_uid and f_uid not in ids:
+                    continue
+                if f_nick and item["nickname"].lower() != f_nick:
+                    continue
+                if f_pos and f_pos not in item["position"].lower():
+                    continue
+                if f_q and f_q not in " ".join(
+                        [item["nickname"], item["displayName"], item["position"]]).lower():
+                    continue
+                data.append(item)
+            return _api_json({"ok": True, "count": len(data), "source": "db", "data": data})
+
+    from .services.google_sheets import fetch_sheet, EMPLOYEE_COL as EM
+    try:
+        rows = fetch_sheet("employees")
+    except Exception as e:
+        return _api_json({"ok": False, "error": f"อ่านข้อมูลพนักงานไม่ได้: {e}"}, status=502)
 
     data = []
     for r in rows:
@@ -3795,7 +3832,7 @@ def api_v1_employees(request):
                 [item["nickname"], item["displayName"], item["position"]]).lower():
             continue
         data.append(item)
-    return _api_json({"ok": True, "count": len(data), "data": data})
+    return _api_json({"ok": True, "count": len(data), "source": "sheet", "data": data})
 
 
 @require_GET

@@ -329,6 +329,10 @@ class LineProfile(models.Model):
     channel = models.CharField("เจอครั้งแรกจากบัญชี", max_length=24, blank=True, db_index=True)
     channels = models.JSONField("เคยเห็นจากบัญชีไหนบ้าง", default=list, blank=True)
 
+    # ★ ก.ย.69 — ผูกกับ "ตัวคน" (Employee) · คนเดียวมี LINE id ได้หลายตัว (บอทละ provider)
+    employee = models.ForeignKey("Employee", verbose_name="เป็นพนักงานคนนี้", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="line_accounts")
+
     msg_count = models.PositiveIntegerField("จำนวนข้อความที่เคยส่ง", default=0)
     first_seen = models.DateTimeField("ทักครั้งแรก", default=timezone.now)
     last_seen = models.DateTimeField("ล่าสุด", default=timezone.now, db_index=True)
@@ -347,3 +351,40 @@ class LineProfile(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.show_name, "พนักงาน" if self.is_employee else "ลูกค้า")
+
+
+class Employee(models.Model):
+    """ทะเบียนพนักงาน — **ย้ายมาเป็นของระบบเรา** (เจ้าของสั่ง 16 ก.ย.69)
+
+    เดิมรายชื่อพนักงานอยู่ในชีตอย่างเดียว แล้วทุกอย่างจับคู่คนด้วย **LINE user id** ของชีต
+    → พอเปลี่ยนมาใช้บอทใหม่ (คนละ provider) id ที่วิ่งเข้ามาเป็นคนละชุด **จับคู่ไม่ได้เลยสักคน**
+    (วัดจริง 16/09: บอทใหม่ได้ยิน 45 คน จับคู่ชีตได้ 0)
+
+    ตารางนี้จึงเก็บ "ตัวคน" ไว้ที่เดียว แล้วให้ **LINE id กี่ตัวก็ได้ผูกเข้ามา**
+    (`LineProfile.employee`) — บอทเดิม 1 ตัว บอทใหม่ 1 ตัว ก็ยังเป็นคนเดียวกัน
+    เพิ่ม/แก้คนได้ในระบบเราเอง ไม่ต้องไปแก้ชีต (`import_employees` ใช้ครั้งแรกตอนย้ายข้อมูลเข้า)
+
+    ⚠️ **ห้ามโชว์ LINE id ของพนักงานบนหน้าเว็บ** (กติกาเดิม) — หน้าจัดการโชว์แค่ว่าผูกไว้กี่บัญชี
+    """
+    SHEET, MANUAL = "sheet", "manual"
+    SRC_CHOICES = [(SHEET, "นำเข้าจากชีต"), (MANUAL, "เพิ่มในระบบ")]
+
+    nickname = models.CharField("ชื่อเล่น", max_length=80, unique=True)
+    display_name = models.CharField("ชื่อที่ตั้งใน LINE", max_length=120, blank=True, db_index=True)
+    position = models.CharField("ตำแหน่ง/ทีม", max_length=80, blank=True)
+    work_start = models.CharField("เวลาเข้างาน", max_length=16, blank=True)
+    day_off = models.CharField("วันหยุด", max_length=40, blank=True)
+    group_id = models.CharField("กลุ่ม LINE ที่ผูกไว้", max_length=64, blank=True)
+    active = models.BooleanField("ยังทำงานอยู่", default=True, db_index=True)
+    note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+    source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=MANUAL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "พนักงาน"
+        verbose_name_plural = "พนักงาน"
+        ordering = ["position", "nickname"]
+
+    def __str__(self):
+        return "%s (%s)" % (self.nickname, self.position or "-")

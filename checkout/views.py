@@ -819,6 +819,71 @@ def _msg_preview(g) -> str:
     return "[%s]" % (g.msg_type or "ไม่ทราบชนิด")
 
 
+@csrf_exempt
+def api_employees(request):
+    """ทะเบียนพนักงานในระบบเรา — GET ลิสต์ · POST `{action:"save"|"delete", …}` — ★ 16 ก.ย.69
+
+    เจ้าของสั่งย้ายทะเบียนออกจากชีตมาไว้ที่ระบบ: *"เราจะให้เขาแก้ในระบบ SaleForce ของเรา"*
+    เก็บ ชื่อเล่น · ชื่อที่ตั้งใน LINE · ตำแหน่ง · เวลาเข้างาน · วันหยุด · group id
+
+    ★ **ไม่ส่ง LINE user id ของพนักงานออกมา** (กติกาเดิม · ใครถือ id ก็ทักหาพนักงานได้ตรง)
+      บอกแค่ว่าผูกไว้กี่บัญชี — คนเดียวมีได้หลายบัญชีเพราะ id ออกต่อ provider ของบอท
+    """
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    from .models import Employee
+
+    if request.method == "POST":
+        try:
+            b = json.loads(request.body or "{}")
+        except Exception:
+            b = {}
+        act = (b.get("action") or "save").strip()
+        if act == "delete":
+            n, _ = Employee.objects.filter(pk=b.get("id") or 0).delete()
+            return JsonResponse({"ok": bool(n)}, json_dumps_params={"ensure_ascii": False})
+        nick = (b.get("nickname") or "").strip()[:80]
+        if not nick:
+            return JsonResponse({"ok": False, "error": "ต้องมีชื่อเล่น"}, status=400,
+                                json_dumps_params={"ensure_ascii": False})
+        fields = {
+            "display_name": (b.get("displayName") or "").strip()[:120],
+            "position": (b.get("position") or "").strip()[:80],
+            "work_start": (b.get("workStart") or "").strip()[:16],
+            "day_off": (b.get("dayOff") or "").strip()[:40],
+            "group_id": (b.get("groupId") or "").strip()[:64],
+            "note": (b.get("note") or "").strip()[:200],
+            "active": bool(b.get("active", True)),
+        }
+        row = Employee.objects.filter(pk=b.get("id") or 0).first()
+        if row:
+            if nick != row.nickname and Employee.objects.filter(nickname=nick).exists():
+                return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
+                                    json_dumps_params={"ensure_ascii": False})
+            row.nickname = nick
+            for k, v in fields.items():
+                setattr(row, k, v)
+            row.save()
+        else:
+            if Employee.objects.filter(nickname=nick).exists():
+                return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
+                                    json_dumps_params={"ensure_ascii": False})
+            Employee.objects.create(nickname=nick, source=Employee.MANUAL, **fields)
+
+    rows = []
+    for e in Employee.objects.all().prefetch_related("line_accounts"):
+        rows.append({
+            "id": e.pk, "nickname": e.nickname, "displayName": e.display_name,
+            "position": e.position, "workStart": e.work_start, "dayOff": e.day_off,
+            "groupId": e.group_id, "note": e.note, "active": e.active,
+            "fromSheet": e.source == Employee.SHEET,
+            # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
+            "lineAccounts": len(list(e.line_accounts.all())),
+        })
+    return JsonResponse({"ok": True, "count": len(rows), "employees": rows},
+                        json_dumps_params={"ensure_ascii": False})
+
+
 def api_customers(request):
     """ลูกค้าที่ทักเข้า LINE OA — `?q=` ค้นหา · `?user_id=` ดูบทสนทนาของคนนั้น
 
