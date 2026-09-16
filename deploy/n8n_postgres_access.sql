@@ -1,7 +1,10 @@
 -- ============================================================
 -- เปิดให้ n8n อ่าน "ทะเบียนพนักงาน" จาก Postgres ของเราโดยตรง (แทนโหนด Google Sheets)
 -- รันบนเซิร์ฟเวอร์:
---   sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
+--   ครั้งแรก (ตั้งรหัส):  read -rs -p "รหัส n8n: " PW; echo
+--                         sudo -u postgres psql -d oxlet -v pw="'$PW'" -f deploy/n8n_postgres_access.sql
+--   รันซ้ำ (ซ่อมสิทธิ์):  sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sql
+--                         ← ไม่ส่ง pw = ไม่แตะรหัสเดิม (credential ใน n8n ไม่หลุด)
 -- ⚠️ **ห้ามเขียนรหัสผ่านลงไฟล์นี้** (ไฟล์อยู่ใน git = ใครอ่าน repo ก็เห็น) — ส่งผ่าน -v pw=... เท่านั้น
 -- ★ 16 ก.ย.69
 --
@@ -11,16 +14,25 @@
 --   - ห้ามลบ/แก้อย่างอื่น · ห้ามสร้างตาราง
 -- ============================================================
 
--- 1) ผู้ใช้สำหรับ n8n — รหัสผ่านมาจาก -v pw=... (ไม่รับค่า = หยุด ไม่สร้างรหัสเดาง่ายทิ้งไว้)
+-- 1) ผู้ใช้สำหรับ n8n
+--    ★ รันซ้ำได้ปลอดภัย: **ไม่ส่ง -v pw= มา = ไม่แตะรหัสผ่านเดิม** (มีแต่เพิ่ม/ซ่อมสิทธิ์)
+--    ⚠️★ 16 ก.ย.69 — เวอร์ชันแรกสั่ง ALTER ROLE ... PASSWORD ทุกครั้งที่รัน
+--       → พอรันไฟล์ซ้ำตอน deploy (วาง placeholder ไปทั้งบรรทัด) รหัสถูกเปลี่ยนโดยไม่ตั้งใจ
+--       n8n ที่ตั้งค่าไว้แล้วล็อกอินไม่ได้ทันที และดูเหมือน "อยู่ดีๆ ก็พัง" หาสาเหตุยาก
+--    เปลี่ยนรหัสเมื่อไหร่ค่อยส่ง:  -v pw="'รหัสใหม่'"
 \if :{?pw}
 \else
-\echo '*** ต้องส่งรหัสผ่านมาด้วย: psql -d oxlet -v pw="''รหัสที่ตั้งเอง''" -f deploy/n8n_postgres_access.sql'
-\quit
+\set pw ''
 \endif
 
-SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n')
-            THEN 'ALTER ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
-            ELSE 'CREATE ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
+SELECT CASE
+         WHEN :'pw' <> '' AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n')
+              THEN 'ALTER ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
+         WHEN :'pw' <> ''
+              THEN 'CREATE ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
+         WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n')
+              THEN 'SELECT ''มี role n8n อยู่แล้ว · ไม่ได้ส่ง -v pw= มา จึงคงรหัสเดิมไว้'' AS note'
+         ELSE 'DO $$ BEGIN RAISE EXCEPTION ''ยังไม่มี role n8n — ครั้งแรกต้องส่งรหัสมาด้วย (-v pw=...)''; END $$'
        END AS stmt \gset
 :stmt ;
 

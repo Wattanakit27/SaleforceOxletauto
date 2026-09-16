@@ -27,7 +27,8 @@ echo "no-agent-forwarding,no-X11-forwarding,no-pty,permitopen=\"127.0.0.1:5432\"
 chown -R n8ntunnel:n8ntunnel /home/n8ntunnel/.ssh && chmod 600 /home/n8ntunnel/.ssh/authorized_keys
 
 # สิทธิ์ในฐานข้อมูล — ส่งรหัสผ่านทาง -v (ห้ามเขียนลงไฟล์ ไฟล์อยู่ใน git)
-cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'<รหัสจริงที่ตั้งเอง>'" -f deploy/n8n_postgres_access.sql
+read -rs -p "ตั้งรหัส n8n: " PW; echo
+cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'$PW'" -f deploy/n8n_postgres_access.sql
 
 # ตรวจว่าเขียนสำเร็จจริง (ต้องได้ 1 บรรทัด และขึ้นต้นด้วย no-agent-forwarding)
 wc -l /home/n8ntunnel/.ssh/authorized_keys; head -c 60 /home/n8ntunnel/.ssh/authorized_keys; echo
@@ -56,7 +57,8 @@ systemctl restart postgresql
 # 3) ไฟร์วอลล์
 ufw allow from <IP ของ n8n> to any port 5432 proto tcp
 # 4) สิทธิ์
-cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
+read -rs -p "ตั้งรหัส n8n: " PW; echo
+cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'$PW'" -f deploy/n8n_postgres_access.sql
 ```
 ⚠️ **รหัสผ่าน role `n8n` ต้องเป็นรหัสจริง** — อย่าใช้ข้อความตัวอย่างในคู่มือนี้ (มันอยู่ใน git)
 ⚠️ **ยืนยันไอพีขาออกจริงของ n8n ก่อน** (บนเครื่อง n8n: `curl -s ifconfig.me`) — ใส่ผิดคือเปิดให้คนอื่น
@@ -85,6 +87,13 @@ cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ต
 (ต่างจากชีตที่มีชุดเดียว)
 
 ---
+
+## ⚠️ รันไฟล์ SQL ซ้ำ = ปลอดภัยแล้ว (แก้ 16 ก.ย.69)
+เวอร์ชันแรกสั่ง `ALTER ROLE ... PASSWORD` ทุกครั้งที่รัน → รันซ้ำตอน deploy แล้ว **รหัสถูกเปลี่ยนโดยไม่ตั้งใจ**
+n8n ที่ตั้งไว้แล้วล็อกอินไม่ได้ทันที · ตอนนี้ **ไม่ส่ง `-v pw=` = ไม่แตะรหัสเดิม** รันซ้ำเพื่อซ่อมสิทธิ์ได้เลย
+```bash
+sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sql
+```
 
 ## เปลี่ยนรหัสผ่าน role `n8n` ทีหลัง
 ```bash
