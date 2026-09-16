@@ -628,6 +628,8 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
   เทียบกับชีตไม่ได้เลย · NFKC แปลงกลับเป็นตัวอักษรปกติก่อน
 - **⚠️ กติกาเดิมยังอยู่: ห้ามส่ง LINE user id ของพนักงานออกหน้าเว็บ** — พาเนลโชว์แค่ "ผูกไว้กี่บัญชี" ·
   `/api/v1/employees` ส่ง id ได้ (ป้องกันด้วยคีย์ + เป็น server-to-server)
+- **📄 [deploy/n8n_postgres_access.md](deploy/n8n_postgres_access.md) + [.sql](deploy/n8n_postgres_access.sql)** — ถ้าจะให้ n8n ใช้ **โหนด Postgres** แทนโหนดชีต: SSH tunnel (แนะนำ) / เปิดพอร์ตเฉพาะ IP / หรือใช้ HTTP API ·
+  ไฟล์ SQL สร้าง role `n8n` + view **`v_employees`** (1 แถว/คน · มี `line_user_ids` ครบทุกบอท) และ **`v_employee_line`** (1 แถว/บัญชี LINE) · เขียนได้ช่องเดียวคือ `note` (หมายเหตุ ลา/สาย) — **ห้ามให้ n8n ใช้ user `oxlet`/`postgres`** (ฐานข้อมูลนี้มีแชทลูกค้า)
 - **⚠️ ต่อ Postgres ตรงจาก n8n ยังทำไม่ได้** — ฐานข้อมูลตั้ง `listen_addresses = localhost`
   (n8n อยู่คนละเครื่อง) · ถ้าจะทำต้องเปิดพอร์ต/ทำ SSH tunnel + สร้าง role อ่านอย่างเดียว →
   **ใช้ API ง่ายกว่าและไม่ต้องเปิดฐานข้อมูลออกเน็ต**
