@@ -629,6 +629,8 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
   เทียบกับชีตไม่ได้เลย · NFKC แปลงกลับเป็นตัวอักษรปกติก่อน
 - **⚠️ กติกาเดิมยังอยู่: ห้ามส่ง LINE user id ของพนักงานออกหน้าเว็บ** — พาเนลโชว์แค่ "ผูกไว้กี่บัญชี" ·
   `/api/v1/employees` ส่ง id ได้ (ป้องกันด้วยคีย์ + เป็น server-to-server)
+- **📄 [deploy/n8n_checkin_v2.json](deploy/n8n_checkin_v2.json)** — **workflow เช็คชื่อฉบับใหม่ทั้งอัน** (import ใน n8n) · กลุ่มเป็นไอดีฝั่งบอทใหม่ · token เป็น placeholder ให้ใส่เอง · รายชื่อ/หมายเหตุอ่าน-เขียนผ่าน Postgres · **ตัดสินสายด้วยเวลาเข้างานรายคน** (เดิมฟิกซ์ 09:00) · ยังเขียนชีต "เช็คชื่อ" เหมือนเดิม (ระบบยังไม่มีตารางเก็บประวัติเช็คชื่อ)
+  - **⚠️ 16/09 workflow เดิมหยุดทำงานทั้งวัน** — `If2` กรอง groupId ของบอทเดิม แต่กลุ่มย้ายไปบอทใหม่แล้ว (วัดจริง: รูปเช็คชื่อ 48 รูป/36 คน เข้ากลุ่มตามปกติ แต่ไม่ถูกบันทึกสักรายการ)
 - **📄 [deploy/n8n_employees_postgres.json](deploy/n8n_employees_postgres.json)** — โหนด Postgres 3 ตัวสำเร็จรูป (ดึงรายชื่อ · หา userId นี้คือใคร · บันทึกหมายเหตุ) ก๊อปวางบน canvas ของ n8n ได้เลย เหลือแค่เลือก credential
 - **📄 [deploy/n8n_postgres_access.md](deploy/n8n_postgres_access.md) + [.sql](deploy/n8n_postgres_access.sql)** — ถ้าจะให้ n8n ใช้ **โหนด Postgres** แทนโหนดชีต: SSH tunnel (แนะนำ) / เปิดพอร์ตเฉพาะ IP / หรือใช้ HTTP API ·
   ไฟล์ SQL สร้าง role `n8n` + view **`v_employees`** (1 แถว/คน · มี `line_user_ids` ครบทุกบอท) และ **`v_employee_line`** (1 แถว/บัญชี LINE) · เขียนได้ช่องเดียวคือ `note` (หมายเหตุ ลา/สาย) — **ห้ามให้ n8n ใช้ user `oxlet`/`postgres`** (ฐานข้อมูลนี้มีแชทลูกค้า)

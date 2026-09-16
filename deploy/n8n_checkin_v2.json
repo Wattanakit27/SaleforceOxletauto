@@ -1,0 +1,769 @@
+{
+  "name": "เช็คชื่อ v2 (พนักงานจาก Postgres)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ✅ เช็คชื่อ v2 — รายชื่อพนักงานมาจาก Postgres (ไม่ใช้ชีตแล้ว)\n\n**สิ่งที่เปลี่ยนจากตัวเดิม**\n1. กลุ่มเปลี่ยนเป็นไอดีฝั่ง **บอทใหม่** `C25aa0d0…` (ตัวเดิม `Ca941ed6…` เป็นของบอทเก่า — 16/09 รูปเช็คชื่อ 48 รูปตกหล่นเพราะข้อนี้)\n2. `Download Image` / `Get User Profile` ต้องใช้ **token ของบอทใหม่** (ใส่แทน `<<...>>`)\n3. รายชื่อพนักงาน + หมายเหตุลา/สาย → โหนด **Postgres** (`v_employees`, `v_employee_line`)\n4. ตัดโหนด `Save User Profile → ชีต` ทิ้ง (ระบบเก็บโปรไฟล์เองอยู่แล้ว)\n5. **ตัดสินสายด้วย \"เวลาเข้างานรายคน\"** จากทะเบียน (เดิมฟิกซ์ 09:00 ทุกคน)\n\n**ยังใช้ชีตอยู่ 2 โหนด** = อ่าน/เขียนชีต \"เช็คชื่อ\" (ระบบเรายังไม่มีตารางเก็บประวัติเช็คชื่อ)\n\n**ก่อนเปิดใช้:** ปิด workflow ตัวเก่าก่อน (path `/webhook/checkin` ใช้ซ้ำกันไม่ได้)",
+        "height": 560,
+        "width": 520,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1360,
+        1640
+      ],
+      "id": "cv2-0000-0000-0000-000000000001",
+      "name": "อ่านก่อนใช้ (v2)"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "checkin",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1056,
+        2032
+      ],
+      "id": "cv2-0000-0000-0000-000000000002",
+      "name": "Webhook",
+      "webhookId": "d63d5039-27c2-44b1-b7a7-f335efdad6d4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cv2-cond-group",
+              "leftValue": "={{ $json.body.events[0].source.groupId }}",
+              "rightValue": "C25aa0d01c8cfa8e0f58846335d7c5d5a",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -816,
+        1904
+      ],
+      "id": "cv2-0000-0000-0000-000000000003",
+      "name": "If2 (กลุ่มเช็คชื่อ — บอทใหม่)",
+      "notes": "ไอดีกลุ่ม 'อ๊อกเล็ตธ์ ออโต้' ฝั่งบอทใหม่ (GiveLead)"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -592,
+        1904
+      ],
+      "id": "cv2-0000-0000-0000-000000000004",
+      "name": "Wait1",
+      "webhookId": "184d629f-1543-41c4-9a15-fa2eba86e7f5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ================================\n// อ่าน webhook ของ LINE + ดูว่าอยู่ในช่วงเวลาเช็คชื่อไหม\n// ⚠️ EXCLUDED_USERS เป็น userId \"ฝั่งบอทเดิม\" — ถ้ายังต้องยกเว้นคนเดิม\n//    ต้องเพิ่ม userId ฝั่งบอทใหม่ของคนนั้นด้วย (id ออกต่อ provider ของบอท)\n// ================================\nconst EXCLUDED_USERS = [\n  'Uef6d2bc60d52eb27b2ca4537f12dab8d',\n  'U7cb0290647f850dcc4be7203e754f66e',\n  'U1cb2b916b062d2ef42c6800d21165083',\n  'U888dafebfcbaa734344faef930e57799'\n];\n\nconst body = $json.body || $json;\nconst evt = body.events?.[0] || {};\nconst message = evt.message || {};\nconst timestamp = evt.timestamp ? new Date(evt.timestamp).toISOString() : new Date().toISOString();\nconst userId = evt.source?.userId || null;\nif (EXCLUDED_USERS.includes(userId)) return [];\n\nconst thaiTime = new Date(new Date(timestamp).toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));\nconst thaiHours = thaiTime.getHours();\nconst thaiMinutes = thaiTime.getMinutes();\nconst currentTimeInMinutes = thaiHours * 60 + thaiMinutes;\n\nconst startTime = 6 * 60;\nconst endTime = 10 * 60;\nconst isWithinWorkingHours = currentTimeInMinutes >= startTime && currentTimeInMinutes <= endTime;\n\nconst y = thaiTime.getFullYear();\nconst m = String(thaiTime.getMonth() + 1).padStart(2, '0');\nconst d = String(thaiTime.getDate()).padStart(2, '0');\nconst todayDateKey = `${y}-${m}-${d}`;\n\nconst isImage = message.type === 'image';\nconst isText = message.type === 'text';\nconst textContent = isText ? (message.text || '') : null;\n\nreturn [{ json: {\n  raw: body,\n  userId,\n  groupId: evt.source?.groupId || null,\n  replyToken: evt.replyToken || null,\n  messageId: message.id || null,\n  messageType: message.type || null,\n  isImage, isText, textContent,\n  timestamp,\n  isWithinWorkingHours,\n  currentTime: `${String(thaiHours).padStart(2,'0')}:${String(thaiMinutes).padStart(2,'0')}`,\n  todayDateKey\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        1904
+      ],
+      "id": "cv2-0000-0000-0000-000000000005",
+      "name": "Parse Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cv2-cond-hours",
+              "leftValue": "={{ $json.isWithinWorkingHours }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -144,
+        1904
+      ],
+      "id": "cv2-0000-0000-0000-000000000006",
+      "name": "If3 (ในช่วงเวลาเช็คชื่อ)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cv2-cond-img",
+              "leftValue": "={{ $json.isImage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        144,
+        1904
+      ],
+      "id": "cv2-0000-0000-0000-000000000007",
+      "name": "IF isImage?"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+          "mode": "list",
+          "cachedResultName": "chatbot"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1429044589,
+          "mode": "list",
+          "cachedResultName": "เช็คชื่อ"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "userId",
+              "lookupValue": "={{ $json.userId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        432,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-000000000008",
+      "name": "Check Existing Records",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleApi": {
+          "id": "PuEOXDLjUMreFHig",
+          "name": "Google Service Account account 2"
+        }
+      },
+      "notes": "ยังใช้ชีตอยู่ — ระบบเรายังไม่มีตารางเก็บประวัติเช็คชื่อ"
+    },
+    {
+      "parameters": {
+        "jsCode": "// เช็คว่าวันนี้คนนี้เช็คชื่อไปแล้วหรือยัง (อ่านจากชีต \"เช็คชื่อ\" เหมือนเดิม)\nconst items = $input.all();\nconst w = $('Parse Webhook').item.json;\nlet found = false;\nfor (const it of items) {\n  if (it.json.userId === w.userId && it.json.date_iso === w.todayDateKey) { found = true; break; }\n}\nreturn [{ json: {\n  userId: w.userId,\n  groupId: w.groupId,\n  replyToken: w.replyToken,\n  messageId: w.messageId,\n  timestamp: w.timestamp,\n  todayDateKey: w.todayDateKey,\n  alreadyCheckedInToday: found,\n  shouldContinue: !found\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-000000000009",
+      "name": "Check If Already Checked In Today"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cv2-cond-dup",
+              "leftValue": "={{ $json.alreadyCheckedInToday }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-00000000000a",
+      "name": "IF (Not Checked Today?)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT user_id, \"ชื่อเล่น\", \"ตำแหน่งงาน\", \"เวลาเข้างาน\", \"วันหยุด\"\nFROM v_employee_line\nWHERE user_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.userId }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1104,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-00000000000b",
+      "name": "พนักงาน: userId นี้คือใคร",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "<<เลือก credential Postgres ที่สร้างไว้>>",
+          "name": "Oxlet Postgres (n8n)"
+        }
+      },
+      "notes": "ได้ 'เวลาเข้างาน' รายคน → เอาไปตัดสินสาย/ตรงเวลาแทนการฟิกซ์ 09:00"
+    },
+    {
+      "parameters": {
+        "url": "=https://api-data.line.me/v2/bot/message/{{ $('Parse Webhook').first().json.messageId }}/content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <<ใส่ Channel Access Token ของบอทใหม่ OxletautoGiveLead>>"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1328,
+        1664
+      ],
+      "id": "cv2-0000-0000-0000-00000000000c",
+      "name": "Download Image",
+      "retryOnFail": true,
+      "notes": "ต้องใช้ token ของบอทที่เป็นเจ้าของข้อความ = บอทใหม่"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "คุณคือระบบ OCR สำหรับ \"รูปเช็คอินงาน\" อ่านตัวหนังสือที่แปะบนรูป แล้วตอบเป็น JSON object เท่านั้น ห้ามมี markdown ถ้าไม่พบข้อมูลใส่ null\n\n⚠️ การอ่านเวลา: \"X นาฬิกา Y นาที Z วินาที\" = HH:MM:SS (เติม 0 หน้าเลขหลักเดียว)\n\n{\n  \"found_overlay_text\": true/false,\n  \"overlay_text_raw\": \"ข้อความบนรูป\",\n  \"datetime_in_image\": {\"thai_raw\": null, \"date_th\": null, \"time_hms\": null, \"time_hm\": null, \"year_be\": null, \"year_ad\": null},\n  \"location_in_image\": {\"house_no\": null, \"road_or_route\": null, \"subdistrict\": null, \"district\": null, \"province\": null, \"postal_code\": null, \"country\": null, \"full_address\": null},\n  \"quality\": {\"datetime_confidence\": 0, \"location_confidence\": 0, \"notes\": \"\"}\n}",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        1664
+      ],
+      "id": "cv2-0000-0000-0000-00000000000d",
+      "name": "Analyze Check-in Image",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "EoiijV0fYGVhQUck",
+          "name": "API Keys"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.line.me/v2/bot/group/' + $('Parse Webhook').first().json.groupId + '/member/' + $('Parse Webhook').first().json.userId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <<ใส่ Channel Access Token ของบอทใหม่ OxletautoGiveLead>>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1328,
+        1952
+      ],
+      "id": "cv2-0000-0000-0000-00000000000e",
+      "name": "Get User Profile",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "notes": "token บอทใหม่ (ดึงสมาชิกได้เฉพาะกลุ่มที่บอทนั้นอยู่)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-00000000000f",
+      "name": "Merge Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ================================\n// สร้างแถวเช็คชื่อ — ★ ใช้ \"เวลาเข้างานรายคน\" จากฐานข้อมูล (เดิมฟิกซ์ 09:00 ทุกคน)\n// ================================\nfunction extractJsonFromGeminiText(text) {\n  if (!text) return null;\n  const s = String(text).trim();\n  const fenced = s.match(/```json\\s*([\\s\\S]*?)\\s*```/i);\n  const payload = fenced ? fenced[1].trim() : s;\n  try { return JSON.parse(payload); } catch (e) {\n    const obj = payload.match(/\\{[\\s\\S]*\\}/);\n    if (!obj) return null;\n    try { return JSON.parse(obj[0]); } catch (e2) { return null; }\n  }\n}\nfunction beToAd(y) { const n = Number(y); return Number.isFinite(n) ? (n < 2400 ? n : n - 543) : null; }\nfunction parseThaiDateToISO(dateTh, yearBE) {\n  if (!dateTh) return null;\n  const months = {'ม.ค.':1,'ก.พ.':2,'มี.ค.':3,'เม.ย.':4,'พ.ค.':5,'มิ.ย.':6,'ก.ค.':7,'ส.ค.':8,'ก.ย.':9,'ต.ค.':10,'พ.ย.':11,'ธ.ค.':12};\n  const m = String(dateTh).trim().match(/(\\d{1,2})\\s+([^\\s]+)\\s+(\\d{4})?/);\n  if (!m) return null;\n  const dd = Number(m[1]), mm = months[m[2]] || null;\n  const yyRaw = m[3] ? Number(m[3]) : Number(yearBE);\n  if (!dd || !mm || !yyRaw) return null;\n  const yyAD = yyRaw >= 2400 ? yyRaw - 543 : yyRaw;\n  if (yyAD < 2000 || yyAD > 2100) return null;\n  return `${yyAD}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;\n}\n\nconst items = $input.all().map(i => i.json);\nconst profileItem = items.find(x => x.displayName) || {};\nconst gemItem = items.find(x => x?.content?.parts?.[0]?.text) || $('Analyze Check-in Image').first().json;\nconst webhookData = $('Check If Already Checked In Today').first().json;\n\n// ★ ข้อมูลพนักงานจากฐานข้อมูลเรา (ชื่อเล่น + เวลาเข้างานรายคน)\nlet emp = {};\ntry { emp = $('พนักงาน: userId นี้คือใคร').first().json || {}; } catch (e) { emp = {}; }\nconst empNick = emp['ชื่อเล่น'] || '';\nconst workStartRaw = (emp['เวลาเข้างาน'] || '').trim();   // \"8:00\" / \"8:30\" / \"9:00\"\n\nlet gemText = '';\nif (gemItem?.content?.parts?.length) gemText = gemItem.content.parts.map(p => p.text || '').join('\\n');\nconst extracted = extractJsonFromGeminiText(gemText) || {};\nconst dt = extracted.datetime_in_image || {};\nconst loc = extracted.location_in_image || {};\nconst q = extracted.quality || {};\nconst foundOverlay = extracted.found_overlay_text === true;\n\nlet fallbackDate = null, fallbackTime = null, fallbackTimeHMS = null, fallbackYearBE = null, fallbackYearAD = null;\nif (webhookData.timestamp) {\n  const d0 = new Date(webhookData.timestamp);\n  if (!isNaN(d0.getTime())) {\n    const t = new Date(d0.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));\n    fallbackYearAD = t.getFullYear();\n    fallbackYearBE = fallbackYearAD + 543;\n    fallbackDate = `${fallbackYearAD}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;\n    const hh = String(t.getHours()).padStart(2,'0'), mm = String(t.getMinutes()).padStart(2,'0'), ss = String(t.getSeconds()).padStart(2,'0');\n    fallbackTimeHMS = `${hh}:${mm}:${ss}`;\n    fallbackTime = `${hh}:${mm}`;\n  }\n}\n\nconst timeHM = dt.time_hm || (dt.time_hms ? String(dt.time_hms).slice(0,5) : null) || fallbackTime;\nconst timeHMS = dt.time_hms || fallbackTimeHMS;\nconst yearBE = dt.year_be ?? fallbackYearBE;\nconst yearAD = dt.year_ad ? beToAd(dt.year_ad) : (yearBE ? beToAd(yearBE) : fallbackYearAD);\nconst safeYearAD = (yearAD && yearAD >= 2000 && yearAD <= 2100) ? yearAD : fallbackYearAD;\nconst dateISO = parseThaiDateToISO(dt.date_th || null, yearBE) || (safeYearAD ? fallbackDate : null);\nconst checkinISO = (dateISO && timeHMS) ? `${dateISO}T${timeHMS}+07:00` : null;\nconst fullAddress = loc.full_address || [loc.house_no, loc.road_or_route, loc.district ? `อ.${loc.district}` : null,\n  loc.province ? `จ.${loc.province}` : null, loc.postal_code, loc.country].filter(Boolean).join(' ').trim() || null;\n\n// ── ตัดสินสาย/ตรงเวลา เทียบ \"เวลาเข้างานของคนนั้น\" ──\nconst ws = workStartRaw.match(/^(\\d{1,2})[:.](\\d{2})$/);\nconst limitMin = ws ? Number(ws[1]) * 60 + Number(ws[2]) : 9 * 60;   // ไม่มีข้อมูล = 09:00 แบบเดิม\nlet status = 'abnormal', reason = '';\nif (!timeHM) {\n  reason = foundOverlay ? 'อ่านเวลาจากรูปไม่ออก' : 'ไม่พบข้อความบนรูป และดึงเวลาจาก webhook ไม่ได้';\n} else {\n  const [hh, mm] = timeHM.split(':').map(Number);\n  if (Number.isFinite(hh) && Number.isFinite(mm)) {\n    const late = (hh * 60 + mm) > limitMin;\n    const src = (foundOverlay && dt.time_hm) ? 'จากรูป' : 'จากเวลาส่ง';\n    const limitTxt = ws ? workStartRaw : '9:00 (ไม่มีเวลาเข้างานในทะเบียน)';\n    status = late ? 'late' : 'ontime';\n    reason = `${late ? 'สาย' : 'ตรงเวลา'} (${src} · เข้างาน ${limitTxt})`;\n  } else {\n    reason = 'เวลาอ่านไม่ออก';\n  }\n}\n\nreturn [{ json: {\n  createdAt: new Date().toISOString(),\n  userId: webhookData.userId || '',\n  displayName: empNick || profileItem.displayName || '',   // ★ ใช้ชื่อเล่นจากทะเบียนก่อน\n  pictureUrl: profileItem.pictureUrl || '',\n  language: profileItem.language || '',\n  found_overlay_text: foundOverlay,\n  overlay_text_raw: extracted.overlay_text_raw || '',\n  thai_raw: dt.thai_raw || '',\n  date_th: dt.date_th || '',\n  date_iso: fallbackDate || dateISO || '',\n  time_hm: timeHM || '',\n  time_hms: timeHMS || '',\n  year_be: yearBE ?? '',\n  year_ad: safeYearAD ?? '',\n  checkin_iso: checkinISO || '',\n  house_no: loc.house_no || '', road_or_route: loc.road_or_route || '', subdistrict: loc.subdistrict || '',\n  district: loc.district || '', province: loc.province || '', postal_code: loc.postal_code || '',\n  country: loc.country || '', full_address: fullAddress || '',\n  datetime_confidence: q.datetime_confidence ?? '', location_confidence: q.location_confidence ?? '',\n  notes: q.notes || '', status, reason\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-000000000010",
+      "name": "Prepare Row"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOhrPSIFTxfOpc4UWvKb-LfMuXGYW2vYkR5vbGzPd_A",
+          "mode": "list",
+          "cachedResultName": "chatbot"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1429044589,
+          "mode": "list",
+          "cachedResultName": "เช็คชื่อ"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "userId"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2224,
+        1808
+      ],
+      "id": "cv2-0000-0000-0000-000000000011",
+      "name": "Save Check-in Data",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleApi": {
+          "id": "PuEOXDLjUMreFHig",
+          "name": "Google Service Account account 2"
+        }
+      },
+      "notes": "ยังเขียนลงชีต 'เช็คชื่อ' เหมือนเดิม"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \"ชื่อเล่น\", \"ตำแหน่งงาน\", \"เวลาเข้างาน\", \"วันหยุด\", line_user_ids\nFROM v_employees\nWHERE active;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        432,
+        2096
+      ],
+      "id": "cv2-0000-0000-0000-000000000012",
+      "name": "พนักงาน: ดึงรายชื่อทั้งหมด",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "<<เลือก credential Postgres ที่สร้างไว้>>",
+          "name": "Oxlet Postgres (n8n)"
+        }
+      },
+      "notes": "แทนโหนดชีต 'ดึงรายชื่อพนักงาน' · line_user_ids มีไอดีครบทุกบอท"
+    },
+    {
+      "parameters": {
+        "jsCode": "// จับคู่ \"ใครลา/สาย\" จากข้อความในกลุ่ม — รายชื่อมาจากฐานข้อมูลเรา (ไม่ใช่ชีตแล้ว)\nconst w = $('Parse Webhook').first().json;\nconst rawText = (w.textContent || '').trim();\nconst senderUserId = w.userId;\n\nconst reportKeywords = ['ลา','หยุด','สาย','เลท','เข้าสาย','ทดเวลา','สลับ','ชดเชย','เปลี่ยนวันหยุด',\n  'ติดธุระ','รถเสีย','ป่วย','ท้องเสีย','ไม่สบาย','หยุดยาว','หยุดเทศกาล','หยุดบริษัท','ลาพักร้อน',\n  'หยุดนักขัตฤกษ์','วันหยุดราชการ'];\nif (!reportKeywords.some(k => rawText.includes(k))) return [];\n\n// แถวจาก v_employees: ชื่อเล่น · ตำแหน่งงาน · เวลาเข้างาน · วันหยุด · line_user_ids (ไอดีครบทุกบอท)\nconst employeeList = $input.all().map(i => i.json).filter(e => e['ชื่อเล่น']);\nconst employeeNames = employeeList.map(e => e['ชื่อเล่น']).join(', ');\n\nconst prompt = `คุณคือระบบจับคู่ชื่อพนักงานที่แจ้งลา/หยุด/สาย\n\nรายชื่อพนักงานทั้งหมด: ${employeeNames}\n\nข้อความจากกลุ่ม LINE:\n\"${rawText}\"\n\nกฎสำคัญ:\n1. @mention ในข้อความคือการแท็กหัวหน้า ไม่ใช่คนที่ลา → ละเว้น @mention ทั้งหมด\n2. หาชื่อพนักงานที่ลา/หยุด/สายจากข้อความที่เหลือ (พิมพ์ผิด/ชื่อสั้น/bullet list ก็จับให้ได้)\n3. ถ้าไม่พบชื่อพนักงานในข้อความ (นอกจาก @mention) → is_sender_self = true\n4. ถ้าชื่อไม่มีในรายชื่อพนักงาน ให้ข้ามไป ห้ามเดา\n\nตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามมี markdown:\n{\n  \"is_sender_self\": false,\n  \"matched\": [ { \"nickname\": \"ชื่อเล่นจากรายชื่อตรงๆ\", \"confidence\": \"high|medium|low\", \"reason\": \"สั้นๆ\" } ]\n}`;\n\nreturn [{ json: { prompt, rawText, senderUserId, employeeList } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        2096
+      ],
+      "id": "cv2-0000-0000-0000-000000000013",
+      "name": "Prepare Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=<<ใส่ GEMINI API KEY เดิมของคุณ>>",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.prompt }] }], generationConfig: { temperature: 0, maxOutputTokens: 1024 } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        2096
+      ],
+      "id": "cv2-0000-0000-0000-000000000014",
+      "name": "Gemini API",
+      "notes": "ใส่ API key เดิมของคุณแทน <<...>>"
+    },
+    {
+      "parameters": {
+        "jsCode": "// แปลงคำตอบ Gemini → แถวที่จะบันทึกหมายเหตุ (userId + note)\nconst aiText = $input.first().json?.candidates?.[0]?.content?.parts?.[0]?.text || '';\nconst prep = $('Prepare Prompt').first().json;\nconst employeeList = prep.employeeList || [];\nconst senderUserId = prep.senderUserId;\nconst rawText = prep.rawText;\n\nlet aiResult = null;\ntry { aiResult = JSON.parse(aiText.replace(/```json|```/g, '').trim()); }\ncatch (e) { console.log('parse ไม่ได้:', aiText); return []; }\n\nconst out = [];\nconst pushRow = (emp) => {\n  // ★ คนเดียวมี LINE id ได้หลายตัว (บอทละ provider) — ส่งตัวที่ \"ตรงกับคนส่ง\" ถ้ามี ไม่งั้นเอาตัวแรก\n  const ids = emp.line_user_ids || [];\n  const uid = ids.includes(senderUserId) ? senderUserId : (ids[0] || '');\n  if (!uid) { console.log('ยังไม่ผูก LINE:', emp['ชื่อเล่น']); return; }\n  out.push({ json: { userId: uid, note: rawText, nickname: emp['ชื่อเล่น'], position: emp['ตำแหน่งงาน'] || '' } });\n};\n\nif (aiResult.is_sender_self) {\n  const me = employeeList.find(e => (e.line_user_ids || []).includes(senderUserId));\n  if (me) pushRow(me);\n  return out;\n}\nfor (const m of (aiResult.matched || [])) {\n  const emp = employeeList.find(e => e['ชื่อเล่น'] === m.nickname);\n  if (!emp) { console.log('ไม่มีในทะเบียน:', m.nickname); continue; }\n  pushRow(emp);\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        2096
+      ],
+      "id": "cv2-0000-0000-0000-000000000015",
+      "name": "Parse Gemini Result"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE checkout_employee\nSET note = $2\nWHERE id = (SELECT employee_id FROM v_employee_line WHERE user_id = $1)\nRETURNING id, nickname, note;",
+        "options": {
+          "queryReplacement": "={{ $json.userId }},{{ $json.note }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        2096
+      ],
+      "id": "cv2-0000-0000-0000-000000000016",
+      "name": "พนักงาน: บันทึกหมายเหตุ (ลา/สาย)",
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "<<เลือก credential Postgres ที่สร้างไว้>>",
+          "name": "Oxlet Postgres (n8n)"
+        }
+      },
+      "notes": "แทนโหนดชีต 'Save หมายเหตุ' · เขียนได้เฉพาะช่อง note (สิทธิ์จำกัดไว้)"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If2 (กลุ่มเช็คชื่อ — บอทใหม่)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2 (กลุ่มเช็คชื่อ — บอทใหม่)": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook": {
+      "main": [
+        [
+          {
+            "node": "If3 (ในช่วงเวลาเช็คชื่อ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3 (ในช่วงเวลาเช็คชื่อ)": {
+      "main": [
+        [
+          {
+            "node": "IF isImage?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF isImage?": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "พนักงาน: ดึงรายชื่อทั้งหมด",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Records": {
+      "main": [
+        [
+          {
+            "node": "Check If Already Checked In Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Already Checked In Today": {
+      "main": [
+        [
+          {
+            "node": "IF (Not Checked Today?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF (Not Checked Today?)": {
+      "main": [
+        [
+          {
+            "node": "พนักงาน: userId นี้คือใคร",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "พนักงาน: userId นี้คือใคร": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get User Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Analyze Check-in Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Check-in Image": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Profile": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Row": {
+      "main": [
+        [
+          {
+            "node": "Save Check-in Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "พนักงาน: ดึงรายชื่อทั้งหมด": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini API": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini Result": {
+      "main": [
+        [
+          {
+            "node": "พนักงาน: บันทึกหมายเหตุ (ลา/สาย)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "oxlet-checkin-v2"
+  }
+}
