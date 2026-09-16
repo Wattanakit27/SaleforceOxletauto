@@ -388,3 +388,53 @@ class Employee(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.nickname, self.position or "-")
+
+
+class CheckIn(models.Model):
+    """เช็คชื่อเข้างาน — 1 แถวต่อ "คน 1 วัน" (ย้ายมาจากชีต "เช็คชื่อ" · เจ้าของสั่ง 16 ก.ย.69)
+
+    ทำไมย้ายมา: ชีตต้องคอยลบแถวเก่าเอง · จับคู่คนด้วย LINE id ชุดเดียว (พอเปลี่ยนบอทก็เพี้ยน) ·
+    เอาไปทำสถิติไม่ได้ · ตารางนี้ผูกกับ `Employee` ตรงๆ → รู้ทันทีว่าใครยังไม่เช็คชื่อวันนี้
+
+    **สาย/ตรงเวลา ตัดสินจาก "เวลาเข้างานของคนนั้น"** (`work_start` เก็บสำเนาไว้ในแถวด้วย —
+    ถ้าวันหลังเปลี่ยนเวลาเข้างาน ประวัติเก่าต้องไม่เปลี่ยนตาม)
+
+    ⚠️ ที่มาของเวลาคือ **ตัวหนังสือบนรูป** (คนงานถ่ายรูปเช็คอินที่มีเวลาแปะอยู่) อ่านด้วย AI
+      อ่านไม่ออกค่อยตกไปใช้เวลาที่ข้อความวิ่งเข้า LINE — `time_source` บอกว่าได้จากทางไหน
+    """
+    ONTIME, LATE, ABNORMAL = "ontime", "late", "abnormal"
+    STATUS_CHOICES = [(ONTIME, "ตรงเวลา"), (LATE, "สาย"), (ABNORMAL, "ผิดปกติ/อ่านไม่ออก")]
+
+    employee = models.ForeignKey("Employee", verbose_name="พนักงาน", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="checkins")
+    user_id = models.CharField("LINE user id ที่ส่งมา", max_length=64, db_index=True)
+    display_name = models.CharField("ชื่อที่โชว์", max_length=120, blank=True)
+
+    date_iso = models.DateField("วันที่ (โซนไทย)", db_index=True)
+    checkin_at = models.DateTimeField("เวลาเช็คชื่อ", null=True, blank=True)
+    time_hm = models.CharField("เวลาที่อ่านได้", max_length=8, blank=True)
+    work_start = models.CharField("เวลาเข้างานที่ใช้ตัดสิน", max_length=16, blank=True)
+
+    status = models.CharField("สถานะ", max_length=10, choices=STATUS_CHOICES, default=ABNORMAL, db_index=True)
+    reason = models.CharField("เหตุผล", max_length=200, blank=True)
+    time_source = models.CharField("เวลามาจาก", max_length=16, blank=True)   # image | message
+
+    full_address = models.CharField("สถานที่", max_length=300, blank=True)
+    province = models.CharField("จังหวัด", max_length=80, blank=True)
+    note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+    raw = models.JSONField("ข้อมูลดิบที่ AI อ่านได้", default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "เช็คชื่อเข้างาน"
+        verbose_name_plural = "เช็คชื่อเข้างาน"
+        # คนหนึ่งเช็คชื่อได้วันละครั้ง — n8n ใช้คู่นี้ทำ upsert (ON CONFLICT) กันบันทึกซ้ำ
+        constraints = [models.UniqueConstraint(fields=["user_id", "date_iso"], name="uniq_checkin_user_day")]
+        indexes = [models.Index(fields=["-date_iso", "status"])]
+        ordering = ["-date_iso", "time_hm"]
+
+    def __str__(self):
+        who = self.employee.nickname if self.employee_id and self.employee else (self.display_name or self.user_id[:8])
+        return "%s %s %s" % (self.date_iso, who, self.get_status_display())

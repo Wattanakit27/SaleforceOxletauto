@@ -1373,6 +1373,7 @@
         // ชื่อต้องตรงกับปุ่มในหัวบอร์ด /track/ (templates/dashboard.html) — หน้าเดียวกัน คนละทางเข้า
         { i:'lucide:car-front',   l:'ผู้ใช้/บทบาท (ระบบรถ)',   fn:'openTrkUsers()',          tip:'จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin) — หน้าเดียวกับปุ่ม "ผู้ใช้/บทบาท" ใน /track/' },
         { i:'lucide:user',        l:'พนักงาน (ตำแหน่ง/เวลาเข้างาน)', fn:'openEmployees()',     tip:'ทะเบียนพนักงานในระบบเรา — เพิ่ม/แก้ได้เลย ไม่ต้องไปแก้ชีต' },
+        { i:'lucide:calendar-days', l:'เช็คชื่อเข้างาน',        fn:'openCheckins()',          tip:'ใครมา/สาย/ยังไม่เช็คชื่อ รายวัน (บอทบันทึกจากรูปเช็คอินในกลุ่ม LINE)' },
         { i:'lucide:inbox',       l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',       tip:'ดูรายชื่อพนักงานและ LINE user_id' },
       ]},
       { k:'sys', sec: 'ตั้งค่าระบบ', items: [
@@ -5808,6 +5809,89 @@
     //    ★ ไม่โชว์ LINE user id ของพนักงาน (กติกาเดิม) — บอกแค่ว่าผูกไว้กี่บัญชี
     //      คนเดียวมีได้หลายบัญชีเพราะ id ออกต่อ provider ของบอทแต่ละตัว
     let _empRows = [], _empQ = '';
+    // 🕘 เช็คชื่อเข้างานรายวัน — ★ 16 ก.ย.69 (ย้ายจากชีต "เช็คชื่อ" มาเก็บใน Postgres)
+    //    n8n อ่านรูปเช็คอินในกลุ่ม → บันทึกลงตาราง · หน้านี้อ่านอย่างเดียว
+    let _ckiDate = '';
+    async function openCheckins(d) {
+      const old = document.getElementById('cki-overlay'); if (old) old.remove();
+      const ov = document.createElement('div');
+      ov.id = 'cki-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div id="cki-box" style="background:var(--bg);border-radius:16px;max-width:900px;width:100%;padding:22px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังโหลดเช็คชื่อ...</div></div>`;
+      document.body.appendChild(ov);
+      await loadCheckins(d || '');
+    }
+
+    async function loadCheckins(d) {
+      if (d !== undefined) _ckiDate = d;
+      const box = document.getElementById('cki-box'); if (!box) return;
+      let j;
+      try {
+        const r = await fetch('/checkout/api/checkins' + (_ckiDate ? ('?date=' + encodeURIComponent(_ckiDate)) : ''), {credentials:'same-origin'});
+        j = await r.json();
+        if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
+          + `<div style="text-align:center"><button onclick="document.getElementById('cki-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
+        return;
+      }
+      _ckiDate = j.date;
+      const c = j.counts || {};
+      const kpi = (lbl, v, col) => `<div style="flex:1;min-width:96px;background:var(--bg2);border-radius:11px;padding:10px 12px;text-align:center">
+        <div style="font-size:21px;font-weight:800;color:${v ? col : 'var(--t3)'}">${v}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${lbl}</div></div>`;
+
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:16px;font-weight:800;color:var(--t1)">เช็คชื่อเข้างาน ${j.isToday ? '(วันนี้)' : ''}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" value="${h(j.date)}" onchange="loadCheckins(this.value)" style="font-size:12px;padding:5px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <button onclick="document.getElementById('cki-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button>
+        </div></div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px">วัน${h(j.dayName)} · พนักงานที่ใช้งานอยู่ ${j.employees} คน · สาย/ตรงเวลาตัดสินจากเวลาเข้างานของแต่ละคน</div>`;
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        ${kpi('ตรงเวลา', c.ontime||0, 'var(--green)')}${kpi('สาย', c.late||0, 'var(--red)')}
+        ${kpi('อ่านเวลาไม่ออก', c.abnormal||0, 'var(--amber)')}${kpi('ยังไม่เช็คชื่อ', (j.missing||[]).length, 'var(--amber)')}
+        ${kpi('วันหยุด', (j.dayoff||[]).length, 'var(--t2)')}</div>`;
+
+      const rows = j.rows || [];
+      html += `<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:6px">มาแล้ว ${rows.length} คน</div>`;
+      if (!rows.length) {
+        html += `<div style="padding:16px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:10px;margin-bottom:14px">ยังไม่มีใครเช็คชื่อวันนี้</div>`;
+      } else {
+        html += `<div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="color:var(--t3);font-size:11px;text-align:left">
+            <th style="padding:6px 5px">ชื่อ</th><th style="padding:6px 5px">ตำแหน่ง</th>
+            <th style="padding:6px 5px">เวลา</th><th style="padding:6px 5px">เข้างาน</th>
+            <th style="padding:6px 5px">สถานะ</th><th style="padding:6px 5px">ที่มา</th>
+            <th style="padding:6px 5px">สถานที่</th></tr></thead><tbody>`;
+        rows.forEach(r => {
+          const st = r.status === 'ontime' ? ['ตรงเวลา','var(--green)']
+                   : r.status === 'late' ? ['สาย','var(--red)'] : ['อ่านไม่ออก','var(--amber)'];
+          html += `<tr style="border-top:.5px solid var(--bd2)">
+            <td style="padding:5px;font-weight:600;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:10px;color:var(--amber)">(ยังไม่ผูกทะเบียน)</span>'}</td>
+            <td style="padding:5px;color:var(--t2)">${h(r.position||'-')}</td>
+            <td style="padding:5px;font-weight:700;color:var(--t1)">${h(r.timeHm||'-')}</td>
+            <td style="padding:5px;color:var(--t3)">${h(r.workStart||'-')}</td>
+            <td style="padding:5px"><span style="color:${st[1]};font-weight:700">${st[0]}</span>
+              <div style="font-size:10px;color:var(--t3)">${h(r.reason||'')}</div></td>
+            <td style="padding:5px;color:var(--t3);font-size:11px">${r.timeSource==='image'?'รูป':'เวลาส่ง'}</td>
+            <td style="padding:5px;color:var(--t3);font-size:11px;max-width:200px">${h((r.address||'').slice(0,60))}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+      }
+
+      const mk = (title, list, col) => {
+        if (!list.length) return '';
+        return `<div style="font-size:13px;font-weight:700;color:${col};margin-bottom:6px">${title} ${list.length} คน</div>`
+          + `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">` + list.map(m =>
+            `<span style="font-size:12px;padding:4px 10px;border-radius:14px;background:var(--bg2);border:.5px solid var(--bd2);color:var(--t2)">${h(m.name)}${m.workStart?` <span style="color:var(--t3)">${h(m.workStart)}</span>`:''}${m.note?` <span style="color:var(--amber)" title="หมายเหตุจากกลุ่ม LINE">· ${h(m.note.slice(0,28))}</span>`:''}</span>`).join('') + `</div>`;
+      };
+      html += mk('ยังไม่เช็คชื่อ', j.missing || [], 'var(--amber)');
+      html += mk('วันหยุดวันนี้', j.dayoff || [], 'var(--t2)');
+      box.innerHTML = html;
+    }
+
     async function openEmployees() {
       const old = document.getElementById('emp-overlay'); if (old) old.remove();
       const ov = document.createElement('div');
@@ -7574,7 +7658,7 @@
     // ★ 16 ก.ย.69 — ลิงก์ตรงเข้าพาเนล (`?panel=employees`) เพราะพาเนลเป็น modal ไม่มี URL ของตัวเอง
     //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
     //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
-    const _PANEL_URL = { employees:'openEmployees', customers:'openCustomerChat', db:'openDbPanel' };
+    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openDbPanel' };
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];

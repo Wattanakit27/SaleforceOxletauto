@@ -16,4 +16,6 @@ urlpatterns = [
     path("api/customers", views.api_customers, name="checkout_customers"),
     # ทะเบียนพนักงาน (ย้ายมาจากชีต · แก้ในระบบเราได้เลย)
     path("api/employees", views.api_employees, name="checkout_employees"),
+    # เช็คชื่อเข้างานรายวัน (n8n เขียนเข้ามา · หน้านี้อ่านอย่างเดียว)
+    path("api/checkins", views.api_checkins, name="checkout_checkins"),
 ]

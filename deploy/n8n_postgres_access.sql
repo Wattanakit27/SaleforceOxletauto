@@ -67,3 +67,29 @@ GRANT SELECT (id, nickname, note), UPDATE (note) ON checkout_employee TO n8n;
 --   หาว่าใครส่งมา:    SELECT * FROM v_employee_line WHERE user_id = $1;
 --   บันทึกหมายเหตุ:   UPDATE checkout_employee SET note = $2
 --                     WHERE id = (SELECT employee_id FROM v_employee_line WHERE user_id = $1);
+
+-- 5) เช็คชื่อเข้างาน (ย้ายมาจากชีต "เช็คชื่อ" · ★ 16 ก.ย.69)
+--    n8n ต้อง "อ่าน + เขียน" ตารางนี้ (ต่างจากทะเบียนพนักงานที่เขียนได้ช่องเดียว)
+--    ⚠️ ต้อง `manage.py migrate` ให้ตารางเกิดก่อน ไม่งั้นบรรทัดนี้จะ error
+GRANT SELECT, INSERT, UPDATE ON checkout_checkin TO n8n;
+GRANT USAGE, SELECT ON SEQUENCE checkout_checkin_id_seq TO n8n;
+
+-- ตัวอย่างที่ n8n ใช้ (ดูของจริงในไฟล์ deploy/n8n_checkin_v2.json):
+--   เช็คว่าวันนี้เช็คไปหรือยัง:
+--     SELECT count(*)::int AS already FROM checkout_checkin
+--     WHERE user_id = $1 AND date_iso = $2::date;
+--
+--   บันทึก (ส่ง JSON ก้อนเดียว → พารามิเตอร์ตัวเดียว อ่านง่ายกว่าไล่ 12 ช่อง):
+--     WITH d AS (SELECT $1::jsonb AS j)
+--     INSERT INTO checkout_checkin (user_id, employee_id, display_name, date_iso, checkin_at,
+--            time_hm, work_start, status, reason, time_source, full_address, province, note, raw,
+--            created_at, updated_at)
+--     SELECT j->>'userId', (SELECT employee_id FROM v_employee_line WHERE user_id = j->>'userId'),
+--            coalesce(j->>'displayName',''), (j->>'dateIso')::date,
+--            nullif(j->>'checkinAt','')::timestamptz, coalesce(j->>'timeHm',''),
+--            coalesce(j->>'workStart',''), coalesce(j->>'status','abnormal'),
+--            coalesce(j->>'reason',''), coalesce(j->>'timeSource',''),
+--            coalesce(j->>'fullAddress',''), coalesce(j->>'province',''), '',
+--            coalesce(j->'raw','{}'::jsonb), now(), now()
+--     FROM d
+--     ON CONFLICT (user_id, date_iso) DO UPDATE SET ... ;

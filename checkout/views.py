@@ -884,6 +884,63 @@ def api_employees(request):
                         json_dumps_params={"ensure_ascii": False})
 
 
+def api_checkins(request):
+    """เช็คชื่อเข้างานรายวัน — GET `?date=YYYY-MM-DD` (ไม่ใส่ = วันนี้ โซนไทย) — ★ 16 ก.ย.69
+
+    เจ้าของสั่งย้ายจากชีต "เช็คชื่อ" มาเก็บใน Postgres: *"มันเป็นการเก็บทุกๆ วันอยู่แล้ว
+    ไม่ต้องมานั่งลบข้อมูลแบบเดิม"* → n8n เขียนลง `checkout_checkin` หน้านี้อ่านมาโชว์
+
+    คืน 3 ก้อน: **มาแล้ว** (ตรงเวลา/สาย) · **ยังไม่เช็คชื่อ** · **วันหยุดของคนนั้น**
+    — "ยังไม่เช็คชื่อ" ตัดคนที่วันนี้ตรงกับวันหยุดในทะเบียนออก ไม่งั้นจะขึ้นแดงทั้งที่เขาหยุดจริง
+    """
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
+    from datetime import date as _date
+    from .models import CheckIn, Employee
+
+    today = timezone.localdate()
+    raw = (request.GET.get("date") or "").strip()
+    try:
+        day = _date.fromisoformat(raw) if raw else today
+    except ValueError:
+        day = today
+
+    # ชื่อวันภาษาไทย — ใช้เทียบกับช่อง "วันหยุด" ในทะเบียน (เก็บเป็นคำ เช่น "อาทิตย์")
+    THAI_DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+    day_name = THAI_DAYS[day.weekday()]
+
+    rows, seen_emp = [], set()
+    for c in (CheckIn.objects.filter(date_iso=day).select_related("employee")
+              .order_by("time_hm", "id")):
+        if c.employee_id:
+            seen_emp.add(c.employee_id)
+        rows.append({
+            "name": (c.employee.nickname if c.employee_id and c.employee else "") or c.display_name or "ไม่ทราบชื่อ",
+            "position": (c.employee.position if c.employee_id and c.employee else ""),
+            "timeHm": c.time_hm, "workStart": c.work_start,
+            "status": c.status, "reason": c.reason,
+            "timeSource": c.time_source, "address": c.full_address,
+            "linked": bool(c.employee_id),   # ยังจับคู่กับทะเบียนไม่ได้ = ต้องไปผูกชื่อ
+        })
+
+    missing, dayoff = [], []
+    for e in Employee.objects.filter(active=True).order_by("position", "nickname"):
+        if e.id in seen_emp:
+            continue
+        item = {"name": e.nickname, "position": e.position, "workStart": e.work_start,
+                "dayOff": e.day_off, "note": e.note}
+        (dayoff if (e.day_off and day_name in e.day_off) else missing).append(item)
+
+    n = {"ontime": sum(1 for r in rows if r["status"] == "ontime"),
+         "late": sum(1 for r in rows if r["status"] == "late"),
+         "abnormal": sum(1 for r in rows if r["status"] == "abnormal")}
+    return JsonResponse({"ok": True, "date": day.isoformat(), "dayName": day_name,
+                         "isToday": day == today, "counts": n,
+                         "rows": rows, "missing": missing, "dayoff": dayoff,
+                         "employees": Employee.objects.filter(active=True).count()},
+                        json_dumps_params={"ensure_ascii": False})
+
+
 def api_customers(request):
     """ลูกค้าที่ทักเข้า LINE OA — `?q=` ค้นหา · `?user_id=` ดูบทสนทนาของคนนั้น
 
