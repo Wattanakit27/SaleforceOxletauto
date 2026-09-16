@@ -41,7 +41,15 @@ GRANT USAGE ON SCHEMA public TO n8n;
 
 -- 2) view: 1 แถวต่อ "คน" — เอาไปแทนโหนดอ่านชีตรายชื่อพนักงาน
 --    line_user_ids = ไอดีครบทุกบอท (บอทเดิม/บอทใหม่) — จุดที่ชีตทำไม่ได้
-CREATE OR REPLACE VIEW v_employees AS
+--
+-- ⚠️★ 17 ก.ย.69 — ต้อง DROP ก่อน CREATE (เจอตอนรันจริงบนเซิร์ฟเวอร์)
+--    `CREATE OR REPLACE VIEW` ของ Postgres **ต่อคอลัมน์ท้ายได้อย่างเดียว
+--    แทรกกลาง/เปลี่ยนชื่อคอลัมน์ไม่ได้** → ตอนเพิ่ม "ต้องเช็คชื่อ" ไว้กลางลิสต์
+--    จะได้ `ERROR: cannot change name of view column "line_user_ids" to "ต้องเช็คชื่อ"`
+--    แล้ว **view ค้างเป็นของเก่าเงียบๆ** (GRANT ผ่าน แต่คอลัมน์ใหม่ไม่มี)
+--    สิทธิ์ที่ DROP ไปจะถูก GRANT คืนด้านล่างในสคริปต์เดียวกัน
+DROP VIEW IF EXISTS v_employees;
+CREATE VIEW v_employees AS
 SELECT e.id                AS employee_id,
        e.nickname          AS "ชื่อเล่น",
        e.display_name      AS display_name,
@@ -58,7 +66,8 @@ LEFT JOIN checkout_lineprofile p ON p.employee_id = e.id
 GROUP BY e.id;
 
 -- 3) view: 1 แถวต่อ "บัญชี LINE" — ใช้ตอนรู้ userId แล้วอยากรู้ว่าใคร (เช็คชื่อ/แจ้งลา)
-CREATE OR REPLACE VIEW v_employee_line AS
+DROP VIEW IF EXISTS v_employee_line;
+CREATE VIEW v_employee_line AS
 SELECT p.user_id,
        p.channel           AS line_account,   -- crm = บอทเดิม · push = บอทใหม่
        e.id                AS employee_id,
