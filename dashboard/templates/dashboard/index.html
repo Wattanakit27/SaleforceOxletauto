@@ -5853,7 +5853,7 @@
       html += `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:10px;margin-bottom:14px;background:var(--bg2)">
         <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:7px">➕ เพิ่มพนักงานใหม่</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;align-items:center">
-          ${_empInput('emp_n_nick','','ชื่อเล่น *')}${_empInput('emp_n_dn','','ชื่อที่ตั้งใน LINE')}${_empInput('emp_n_pos','','ตำแหน่ง/ทีม')}${_empInput('emp_n_ws','','เวลาเข้างาน 8:00')}${_empInput('emp_n_off','','วันหยุด')}
+          ${_empInput('emp_n_nick','','ชื่อเล่น *')}${_empInput('emp_n_dn','','ชื่อที่ตั้งใน LINE')}${_empInput('emp_n_pos','','ตำแหน่ง/ทีม')}${_empInput('emp_n_ws','','เวลาเข้างาน 8:00')}${_empInput('emp_n_off','','วันหยุด')}${_empInput('emp_n_note','','หมายเหตุ (ลา/สาย)')}
           <button onclick="empAdd()" style="font-size:12px;padding:7px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;cursor:pointer">เพิ่ม</button>
         </div>
         <div id="emp_n_msg" style="font-size:11px;color:var(--t3);margin-top:6px"></div></div>`;
@@ -5862,9 +5862,9 @@
         <thead><tr style="color:var(--t3);font-size:11px;text-align:left">
           <th style="padding:6px 5px">ชื่อเล่น</th><th style="padding:6px 5px">ชื่อที่ตั้งใน LINE</th>
           <th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
-          <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px">LINE</th>
+          <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
           <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
-      if (!rows.length) html += `<tr><td colspan="8" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
+      if (!rows.length) html += `<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
@@ -5873,6 +5873,7 @@
           <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px')}</td>
           <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px')}</td>
           <td style="padding:5px">${_empInput('emp_off_'+e.id, e.dayOff, '', '80px')}</td>
+          <td style="padding:5px">${_empInput('emp_note_'+e.id, e.note, '', '150px')}</td>
           <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;white-space:nowrap">
@@ -5904,14 +5905,14 @@
       const nick = _empV('emp_n_nick');
       if (!nick) { _empMsg('emp_n_msg', 'ใส่ชื่อเล่นก่อน', 'var(--red)'); return; }
       _empPost({action:'save', nickname:nick, displayName:_empV('emp_n_dn'), position:_empV('emp_n_pos'),
-                workStart:_empV('emp_n_ws'), dayOff:_empV('emp_n_off'), active:true}, 'emp_n_msg');
+                workStart:_empV('emp_n_ws'), dayOff:_empV('emp_n_off'), note:_empV('emp_n_note'), active:true}, 'emp_n_msg');
     }
 
     function empSave(id) {
       const act = document.getElementById('emp_act_' + id);
       _empPost({action:'save', id:id, nickname:_empV('emp_nick_'+id), displayName:_empV('emp_dn_'+id),
                 position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
-                active: act ? act.checked : true}, 'emp_msg');
+                note:_empV('emp_note_'+id), active: act ? act.checked : true}, 'emp_msg');
     }
 
     function empDel(id, name) {
