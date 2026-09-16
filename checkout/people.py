@@ -79,6 +79,22 @@ def nickname_for(user_id="", display_name="") -> str:
     return "ไม่ทราบชื่อ"
 
 
+def employee_nick_by_name(display_name="") -> str:
+    """ชื่อเล่นของพนักงาน จาก **ชื่อที่ตั้งใน LINE** — ไม่เจอในชีต = คืนค่าว่าง (ไม่เดา)
+
+    ★ ก.ย.69 (บอทใหม่): **userId ออกต่อ provider** → ชีตเก็บ id ของบอทเดิม เทียบกับ id
+      ที่มาจากบอทใหม่ไม่เจอเลยสักคน (วัดจริง 16/09: บอทใหม่ได้ยิน 45 คน จับคู่ได้ 0)
+      แต่ **ชื่อโปรไฟล์ LINE เป็นของคนนั้น ไม่เปลี่ยนตามบอท** → ใช้เป็นสะพานจับคู่ได้
+    ต่างจาก `nickname_for` ตรงที่ตัวนั้น "ไม่เจอก็คืนชื่อที่ล้างแล้ว" ซึ่งเอามาตัดสินว่า
+    เป็นพนักงานไม่ได้ · ตัวนี้ตอบเฉพาะที่ตรงกับชีตจริงเท่านั้น
+    """
+    dn = (display_name or "").strip()
+    if not dn:
+        return ""
+    _load()
+    return _CACHE["by_name"].get(_norm(dn), "")
+
+
 def line_id_for(display_name="") -> str:
     """userId ของคนนั้น — **ใช้แท็กในกลุ่ม LINE เท่านั้น ห้ามส่งออกหน้าเว็บ**"""
     dn = (display_name or "").strip()
@@ -290,9 +306,18 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
             except Exception:
                 pass
 
+    if not nick and prof.get("displayName"):
+        # id เทียบไม่ได้ (คนละ provider) แต่ชื่อโปรไฟล์เทียบได้ → พนักงานที่มาทางบอทใหม่
+        try:
+            nick = employee_nick_by_name(prof["displayName"])
+        except Exception:
+            nick = ""
+
     fields = {
-        "nickname": nick,
-        "is_employee": bool(nick),
+        # ★ ห้ามล้างชื่อเล่นที่เคยจับคู่ไว้แล้ว — รอบถัดไป `nickname_for(uid)` จะหาไม่เจอ
+        #   (id ของบอทใหม่ไม่มีในชีต) แล้วเขียนทับเป็นค่าว่าง = คนนั้นกลับไปเป็น "ลูกค้า" ทุกข้อความ
+        "nickname": nick or (getattr(row, "nickname", "") if row else ""),
+        "is_employee": bool(nick) or bool(row and row.is_employee),
         "last_seen": now,
     }
     if channel:          # จดว่าเคยเห็นคนนี้จากบัญชีไหนบ้าง (กันนับลูกค้าซ้ำตอนทำ CRM)
@@ -324,4 +349,4 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
         return {"name": nick or (prof.get("displayName") or ""), "is_employee": bool(nick)}
 
     return {"name": row.show_name if row.show_name != "ไม่ทราบชื่อ" else "",
-            "is_employee": bool(nick)}
+            "is_employee": bool(row.is_employee)}
