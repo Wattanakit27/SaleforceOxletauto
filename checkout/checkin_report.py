@@ -35,8 +35,6 @@ TEAM_ORDER = ["ฝ่ายขาย", "ทีม A", "ทีม B", "ทีม 
 # หมายเหตุที่เป็น "ข้อความของระบบ" ไม่ใช่เรื่องของคน → ไม่เอาขึ้นตาราง (ตามกติกาเดิม)
 _JUNK_NOTE = ("ไม่พบข้อมูลรูป", "no overlay text", "ไม่พบข้อมูลที่", "ไม่มีข้อมูล",
               "ไม่พบข้อมูล", "ไม่พบตัวหนังสื", "overlay text")
-# หมายเหตุที่ "ลา/หยุด" = ไม่ต้องตามตัว
-_LEAVE_NOTE = ("ลา", "หยุด", "สลับ")
 
 
 def _mins(t):
@@ -85,9 +83,10 @@ def collect(day=None) -> dict:
     for e in Employee.objects.filter(active=True, track_checkin=True).order_by("nickname"):
         c = checks.get(e.id)
         t_in = _hhmm(c.time_hm) if c else ""
+        # ★ หมายเหตุมาจาก 2 ที่: ของวันนี้ (จากรูปเช็คชื่อ) ก่อน แล้วค่อยของถาวรในทะเบียน
+        #   ของถาวร (เช่น "ลาคลอด") **อยู่จนกว่าจะลบเอง** — ตามของเดิมที่หมายเหตุในชีตพนักงานไม่หาย
         note = _clean_note((c.reason if c else "") or e.note)
         off_today = bool(e.day_off) and day_name in e.day_off
-        on_leave = any(k in note for k in _LEAVE_NOTE)
 
         late = 0
         if t_in:
@@ -99,16 +98,20 @@ def collect(day=None) -> dict:
                "late": late, "off": off_today, "note": note,
                "unreadable": bool(c and c.status == "abnormal" and not t_in)}
 
-        # ข้อความในช่องหมายเหตุ — เรียงตามความสำคัญ: สาย > ยังไม่มา > วันหยุด/ลา
+        # ข้อความในช่องหมายเหตุ — เรียงตามความสำคัญ: สาย > วันหยุด > หมายเหตุ > ยังไม่มา
         if t_in:
             row["note_show"] = _late_text(late) if late else ""
             if off_today:                      # วันหยุดแต่มาทำงาน — ต้องเห็น
                 row["note_show"] = (row["note_show"] + " | " if row["note_show"] else "") + day_name
-            elif note and (on_leave or late):
+            elif note:
                 row["note_show"] = (row["note_show"] + " | " if row["note_show"] else "") + note
         elif off_today:
             row["note_show"] = note or day_name
-        elif on_leave:
+        elif note:
+            # ★ 17 ก.ย.69 — **มีหมายเหตุอะไรก็ตาม = ไม่ตามตัว** (กติกาเดียวกับ workflow เดิม
+            #   ที่เช็ค `hasAnyNote`) · เดิมผมยกเว้นเฉพาะคำว่า ลา/หยุด/สลับ ทำให้คนที่พิมพ์
+            #   "ไปธุระก่อนเข้า" หรือ "ทดเวลา" ยังโดนแท็ก ซึ่งไม่ตรงของเดิมและกวนคน
+            #   **นี่คือวิธี "พิมพ์แล้วไม่โดนแท็ก" ที่ผู้ใช้ถามถึง**
             row["note_show"] = note
         else:
             row["note_show"] = ("ยังไม่เช็คชื่อ" + (" | " + note if note else ""))
@@ -309,6 +312,15 @@ def push_channel() -> str:
         return ""
 
 
+def too_many(n: int) -> int:
+    """ขาดเกินเพดานไหม — คืนเพดานที่ตั้งไว้ (0 = ไม่กัน / ไม่เกิน)"""
+    try:
+        cap = int(config().get("max_tag") or 0)
+    except (TypeError, ValueError):
+        cap = 0
+    return cap if (cap and n > cap) else 0
+
+
 def build_messages(data: dict, image_url="", channel="", tag=True, mention=True) -> list:
     """ข้อความที่จะส่ง: รูปตาราง + (ถ้ามีคนยังไม่มา) ข้อความตามตัว
 
@@ -323,6 +335,14 @@ def build_messages(data: dict, image_url="", channel="", tag=True, mention=True)
 
     miss = data["missing"]
     if not (tag and miss):
+        return msgs
+
+    cap = too_many(len(miss))
+    if cap:
+        # ขาดกันทั้งบริษัท = ไม่ใช่เรื่องรายคน → บอกจำนวนพอ ไม่แท็กใคร
+        msgs.append({"type": "text",
+                     "text": "ยังไม่เช็คชื่อ %d คน (เกิน %d คน จึงไม่แท็กรายคน)\nดูรายชื่อในรูปตารางด้านบนได้เลยครับ"
+                             % (len(miss), cap)})
         return msgs
 
     ids = _mention_ids(miss, channel) if mention else {}
@@ -408,6 +428,12 @@ def escalation_messages(data: dict, channel="", mention=True, round_name="10:00 
     ids = _mention_ids(miss, channel) if mention else {}
     text = "⚠️ แจ้งเตือนรอบ %s\nพนักงาน %d คน ยังไม่เช็คชื่อ:\n\n" % (round_name, len(miss))
     sub = {}
+    cap = too_many(len(miss))
+    if cap:
+        # ขาดทั้งบริษัท (วันหยุด/ระบบเช็คชื่อมีปัญหา) → ไม่แท็กพนักงานรายคน
+        # แต่ **ยังแท็กผู้บริหาร** เพราะนี่คือเรื่องที่หัวหน้าต้องรู้ยิ่งกว่าเดิม
+        text += "(เกิน %d คน จึงไม่แท็กรายคน — ดูรายชื่อในรูปตาราง)\n" % cap
+        miss = []
     for i, m in enumerate(miss):
         uid = ids.get(m["id"])
         pos = " (%s)" % m["position"] if m["position"] else ""
@@ -458,7 +484,12 @@ def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
 CFG_KEY = "checkin_notify_config"
 _LAST_KEY = "checkin_notify_last"
 DEFAULT_CFG = {"enabled": False, "table_time": "09:30", "escalate_time": "10:00",
-               "mode": "test", "group_id": "", "test_id": ""}
+               "mode": "test", "group_id": "", "test_id": "",
+               # ★ กันแท็กหมู่: ขาดเกินกี่คนถึงจะ "ไม่แท็กรายคน" (0 = ไม่กัน)
+               #   วันหยุดยาว/ระบบเช็คชื่อล่ม = ขาดทั้งบริษัท ถ้าแท็กหมดจะเป็นการสแปม
+               #   แล้วคนจะเริ่มปิดแจ้งเตือนกลุ่ม ซึ่งแก้ยากกว่าตอนที่ยังไม่พัง
+               "max_tag": 20,
+               "holidays": []}          # วันหยุดบริษัท (YYYY-MM-DD) = ไม่ส่งอะไรเลย
 
 
 def config() -> dict:
@@ -488,6 +519,10 @@ def maybe_send(now_hhmm: str, today_iso: str) -> str:
     cfg = config()
     if not cfg.get("enabled"):
         return ""
+    # ★ วันหยุดบริษัท (ปีใหม่/สงกรานต์) = ไม่ส่งทั้งรูปและข้อความตาม
+    #   ไม่งั้นวันหยุดยาวจะได้ตารางที่ทุกคนขาด + โดนตามทุกเช้า
+    if today_iso in (cfg.get("holidays") or []):
+        return "วันหยุดบริษัท — ไม่ส่ง"
     target = cfg["test_id"] if cfg.get("mode") == "test" else cfg["group_id"]
     if not target:
         return ""

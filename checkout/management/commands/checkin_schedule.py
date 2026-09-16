@@ -29,6 +29,10 @@ class Command(BaseCommand):
         p.add_argument("--group", default="", help="LINE group id ปลายทางจริง")
         p.add_argument("--test-id", default="", help="LINE user id สำหรับทดสอบ")
         p.add_argument("--mode", choices=["test", "group"], help="ส่งเข้าที่ไหน")
+        p.add_argument("--max-tag", type=int, default=None,
+                       help="ขาดเกินกี่คนถึงจะไม่แท็กรายคน (0 = แท็กเสมอ · แนะนำ 20)")
+        p.add_argument("--holiday", default="",
+                       help="วันหยุดบริษัท คั่นด้วย , (เช่น 2026-12-31,2027-01-01) · 'none' = ล้าง")
 
     def handle(self, *a, **o):
         from checkout import checkin_report as R
@@ -61,6 +65,28 @@ class Command(BaseCommand):
         if o["mode"]:
             cfg["mode"] = o["mode"]
             changed.append("ส่งเข้า = " + ("กลุ่ม" if o["mode"] == "group" else "แชททดสอบ"))
+        if o["max_tag"] is not None:
+            cfg["max_tag"] = max(0, int(o["max_tag"]))
+            changed.append("ไม่แท็กรายคนเมื่อขาดเกิน = %s"
+                           % (cfg["max_tag"] or "(ไม่กัน)"))
+        if o["holiday"]:
+            if o["holiday"].strip().lower() in ("none", "-", "clear"):
+                cfg["holidays"] = []
+                changed.append("ล้างวันหยุดบริษัท")
+            else:
+                import datetime
+                days = []
+                for d in o["holiday"].split(","):
+                    d = d.strip()
+                    if not d:
+                        continue
+                    try:
+                        days.append(datetime.date.fromisoformat(d).isoformat())
+                    except ValueError:
+                        self.stderr.write("วันที่ '%s' ผิดรูปแบบ ต้องเป็น YYYY-MM-DD" % d)
+                        return
+                cfg["holidays"] = sorted(set((cfg.get("holidays") or []) + days))
+                changed.append("วันหยุดบริษัท += " + ", ".join(days))
         if o["on"]:
             cfg["enabled"] = True
             changed.append("เปิดส่งอัตโนมัติ")
@@ -84,6 +110,11 @@ class Command(BaseCommand):
         self.stdout.write("  เวลาตามคนยังไม่เช็ค : %s" % (cfg["escalate_time"] or "(ไม่ส่ง)"))
         self.stdout.write("  ส่งเข้า              : %s" % ("กลุ่ม" if cfg["mode"] == "group" else "แชททดสอบ"))
         self.stdout.write("  ปลายทางที่จะใช้จริง  : %s" % (target or "(ยังไม่ได้ตั้ง)"))
+        self.stdout.write("  ไม่แท็กรายคนเมื่อขาดเกิน: %s คน"
+                          % (cfg.get("max_tag") or "(ไม่กัน)"))
+        hol = cfg.get("holidays") or []
+        self.stdout.write("  วันหยุดบริษัท        : %s"
+                          % (", ".join(hol) if hol else "(ยังไม่ได้ตั้ง)"))
 
         mgr = R.managers()
         self.stdout.write("  คนที่จะถูกแท็กตอนมีคนไม่เช็คชื่อ: %s"
