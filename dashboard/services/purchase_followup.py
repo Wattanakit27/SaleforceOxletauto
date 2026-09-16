@@ -35,74 +35,8 @@ def _months_to_read(now):
     return out
 
 
-def _from_db(days):
-    """อ่านจากตาราง `dash_purchase_case` — ★ 17 ก.ย.69 (ย้ายจากชีตมา Postgres)
-
-    คืน `None` = **ยังไม่มีข้อมูลในตารางเลย** (n8n ยังไม่ได้สลับมาเขียน) → ให้ผู้เรียก
-    ตกไปอ่านชีตแบบเดิม · คืน `[]` = มีข้อมูลแล้วแต่ไม่มีงานค้าง (ต่างกัน — อย่ารวมเป็นค่าเดียว)
-    """
-    from django.utils import timezone
-    from ..models import PurchaseCase
-
-    try:
-        if not PurchaseCase.objects.exists():
-            return None
-        today = timezone.localdate()
-        since = today - __import__("datetime").timedelta(days=days)
-        rows = (PurchaseCase.objects
-                .filter(decision="", received_at__date__gte=since)
-                .only("purchaser", "seller_name", "car_model", "phone", "code",
-                      "received_at", "comment"))
-        out = []
-        for r in rows:
-            age = (today - timezone.localtime(r.received_at).date()).days
-            if not (0 <= age <= days):
-                continue
-            out.append({
-                "owner": r.purchaser or "(ไม่ระบุ)",
-                "name": r.seller_name, "car": r.car_model, "phone": r.phone,
-                "code": r.code, "age": age, "talked": bool(r.comment),
-            })
-        return out
-    except Exception:
-        return None          # ยังไม่ migrate / DB ล่ม → ใช้ชีตต่อ ไม่ทำให้การเตือนหยุด
-
-
 def fetch_open_cases(days=LOOKBACK_DAYS):
-    """เคสที่ "ยังไม่ตัดสินรับซื้อ" และอายุไม่เกิน N วัน — best-effort (พัง = ลิสต์ว่าง)
-
-    อ่าน **Postgres ก่อน** (ตาราง `dash_purchase_case` ที่ n8n เขียนเข้ามา) ·
-    ตารางยังว่าง = ตกไปอ่านชีตแบบเดิม → สลับ n8n มาเขียน DB ได้โดยไม่ต้องแก้โค้ดตรงนี้อีก
-    """
-    if source() == "db":
-        db = _from_db(days)
-        if db is not None:
-            return db
-    return _from_sheet(days)
-
-
-# ที่อ่านข้อมูล: "sheet" (เดิม) หรือ "db" (Postgres) — เก็บใน KVStore
-SRC_KEY = "purchase_source"
-
-
-def source():
-    """อ่านจากไหน — **ค่าเริ่มต้นยังเป็นชีต** (ต้องสั่งสลับเอง)
-
-    ⚠️ **ห้ามสลับอัตโนมัติตอนเห็นว่าตารางมีข้อมูล** — ช่อง "รับซื้อ/ไม่รับซื้อ" คือ
-    ตัวปิดงาน และตอนนี้ทีม **ยังกรอกในชีต** · ถ้าสลับมาอ่าน DB ตอนที่ยังไม่มีที่ให้กรอก
-    → `decision` ใน DB จะว่างตลอดกาล = **ทุกคนโดนทวงคันเดิมทุกวันไม่มีวันจบ**
-    สลับได้ก็ต่อเมื่อมีที่กรอกผลในระบบแล้วเท่านั้น
-    """
-    try:
-        from . import cache_store
-        v = (cache_store.get_kv(SRC_KEY) or {}).get("data") or {}
-        return "db" if str(v.get("source", "")).lower() == "db" else "sheet"
-    except Exception:
-        return "sheet"
-
-
-def _from_sheet(days=LOOKBACK_DAYS):
-    """ทางเดิม — อ่านชีตจัดซื้อ (เก็บไว้เป็นทางสำรองช่วงเปลี่ยนผ่าน)"""
+    """เคสที่ "ยังไม่ตัดสินรับซื้อ" และอายุไม่เกิน N วัน — best-effort (พัง = ลิสต์ว่าง)"""
     from .fetch_dashboard import PURCHASE_SID, bangkok_now, parse_date
     from .google_sheets import _get_credentials, SHEETS_API
     from google.auth.transport.requests import Request as AuthRequest

@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- แทนโหนดชีต \"Get Members (Master)\" (ไฟล์ ซื้อขายเทิร์นรถ · แท็บ รายชื่อสมาชิกกลุ่ม)\n-- คืนรูปร่างเดียวกับที่โหนด Resolve Roles คาดไว้เป๊ะ → **ไม่ต้องแก้โค้ด Resolve Roles เลย**\n--   ★ ต้องมี row_number ด้วย เพราะ Resolve Roles ใช้ `if (j.row_number)` แยกว่า\n--     แถวไหนคือ \"รายชื่อ\" แถวไหนคือ \"ข้อความที่เพิ่งเข้ามา\"\nWITH m AS (\n  -- ★ ไม่ต้องคืน userId — Resolve Roles ใช้แค่ displayName -> ชื่อเล่น\n  --   และถ้าใส่มา คนที่มี 2 บอทจะกลายเป็น 2 แถวซ้ำโดยเปล่าประโยชน์\n  -- 1) ชื่อที่ตั้งใน LINE ของแต่ละบัญชี — ครอบทั้งบอทเดิมและบอทใหม่ (จุดที่ชีตทำไม่ได้)\n  SELECT coalesce(p.display_name,'')                    AS \"displayName\",\n         coalesce(nullif(p.nickname,''), e.nickname, '') AS \"ชื่อเล่น\"\n  FROM checkout_lineprofile p\n  LEFT JOIN checkout_employee e ON e.id = p.employee_id\n  WHERE coalesce(p.display_name,'') <> ''\n    AND coalesce(nullif(p.nickname,''), e.nickname, '') <> ''\n  UNION\n  -- 2) ชื่อที่บันทึกไว้ในทะเบียนพนักงาน — คนที่ยังไม่เคยพิมพ์ผ่านบอทก็ยังจับคู่ได้\n  SELECT e.display_name, e.nickname\n  FROM checkout_employee e\n  WHERE e.active AND e.display_name <> '' AND e.nickname <> ''\n)\nSELECT row_number() OVER (ORDER BY \"ชื่อเล่น\", \"displayName\") AS row_number, *\nFROM m;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -6720,
+        -1968
+      ],
+      "id": "mb01aaaa-bbbb-4ccc-8ddd-eeeeffff0001",
+      "name": "ดึงชื่อเล่นพนักงาน (Postgres)",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "แทนโหนดชีต Get Members (Master)\nต่อสายเข้า Merge All (with master) ที่เดิม — Resolve Roles ไม่ต้องแก้อะไร\nได้ชื่อเล่นครบกว่าชีต เพราะรวมชื่อ LINE ของทั้ง 2 บอท"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- แทนโหนดชีต \"Upsert Member (Master)\"\n-- ★ เขียนเฉพาะ \"ชื่อที่ตั้งใน LINE\" เท่านั้น — **ห้ามแตะ nickname / is_employee / employee_id**\n--   เพราะ 3 ช่องนั้นเป็นของระบบเรา (จับคู่กับทะเบียนพนักงานเอง)\n--   ถ้า n8n เขียนทับด้วยค่าว่าง คนที่จับคู่ไว้แล้วจะถูกรีเซ็ตกลับเป็น \"ลูกค้า\" ทุกครั้งที่พิมพ์\n-- ★ ไม่เก็บรูปโปรไฟล์ (เจ้าของสั่ง · เก็บน้อยที่สุดเท่าที่ใช้จริง — PDPA)\nWITH d AS (SELECT $1::jsonb AS j)\nINSERT INTO checkout_lineprofile\n  (user_id, display_name, status_message, language, nickname, is_employee,\n   source, group_id, channel, channels, msg_count, first_seen, last_seen, raw)\nSELECT trim(j->>'userId'),\n       coalesce(j->>'displayName',''),\n       '', '', '', false,\n       CASE WHEN coalesce(j->>'groupId','') <> '' THEN 'group' ELSE 'user' END,\n       coalesce(j->>'groupId',''),\n       'push', '[\"push\"]'::jsonb,\n       0, now(), now(), '{}'::jsonb\nFROM d\nWHERE nullif(trim(j->>'userId'),'') IS NOT NULL\nON CONFLICT (user_id) DO UPDATE SET\n  display_name = coalesce(nullif(EXCLUDED.display_name,''), checkout_lineprofile.display_name),\n  group_id     = coalesce(nullif(EXCLUDED.group_id,''),     checkout_lineprofile.group_id),\n  last_seen    = now()\nRETURNING user_id, display_name, nickname, is_employee;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -6496,
+        -2160
+      ],
+      "id": "mb01aaaa-bbbb-4ccc-8ddd-eeeeffff0002",
+      "name": "บันทึกโปรไฟล์คน LINE (Postgres)",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "notes": "แทนโหนดชีต Upsert Member (Master) · รับ output ของ Merge Profile + Event1 ที่เดิม\nโหนดนี้เป็น \"ของเสริม\" — ระบบเก็บโปรไฟล์เองอยู่แล้วจาก webhook\nถ้าไม่ต่อโหนดนี้ ก็ไม่มีอะไรพัง (แค่คนที่ยังไม่เคยพิมพ์ผ่านบอทจะยังไม่มีแถว)"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "meta": {
+    "instanceId": "oxlet-deploy-snippet",
+    "templateCredsSetupCompleted": false
+  }
+}
