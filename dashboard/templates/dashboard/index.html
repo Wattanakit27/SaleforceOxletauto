@@ -7570,6 +7570,16 @@
     render();
     // แอดมิน: โหลดข้อมูลรถล่วงหน้า → กระดิ่งโชว์ "รถค้างนาน" โดยไม่ต้องเปิดแท็บสถานะรถ
     if (typeof canViewAll !== 'undefined' && canViewAll) ensureTrackingForAlerts();
+
+    // ★ 16 ก.ย.69 — ลิงก์ตรงเข้าพาเนล (`?panel=employees`) เพราะพาเนลเป็น modal ไม่มี URL ของตัวเอง
+    //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
+    //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
+    const _PANEL_URL = { employees:'openEmployees', customers:'openCustomerChat', db:'openDbPanel' };
+    const _wantPanel = new URLSearchParams(location.search).get('panel');
+    if (_wantPanel && _PANEL_URL[_wantPanel]) {
+      const _fn = window[_PANEL_URL[_wantPanel]];
+      if (typeof _fn === 'function') setTimeout(_fn, 60);   // รอ render วาดเสร็จก่อน
+    }
   </script>
   {% endif %}
 {% if APP_VERSION %}<div style="position:fixed;bottom:6px;right:10px;font-size:10.5px;color:#94a3b8;opacity:.75;z-index:9999;pointer-events:none">{{ APP_VERSION }}</div>{% endif %}

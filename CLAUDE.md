@@ -617,6 +617,7 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
 - **`people._load()` อ่านฐานข้อมูลก่อน แล้วค่อยเติมจากชีต** (DB ชนะ) → **แก้/เพิ่มคนในระบบเราได้เลย
   ไม่ต้องกลับไปแก้ชีต** · ชีตอ่านไม่ได้ก็ยังทำงานจากทะเบียนในระบบ
 - **หน้าจัดการ**: เมนูสามขีด → **ทีม & สิทธิ์ → พนักงาน (ตำแหน่ง/เวลาเข้างาน)**
+  · **ลิงก์ตรง `/dashboard/?panel=employees`** (พาเนลเป็น modal ไม่มี URL ของตัวเอง → `_PANEL_URL` ที่ท้าย index.html แปลง `?panel=` เป็นการเรียกฟังก์ชัน · รองรับ `customers`/`db` ด้วย)
   (`openEmployees()`/`renderEmployees()` ใน [index.html](dashboard/templates/dashboard/index.html)) —
   ตารางแก้ในช่องได้เลย + เพิ่มคนใหม่ + ปิดใช้งาน/ลบ
 - **★ `/api/v1/employees` ตอบจากฐานข้อมูลแล้ว** (n8n เอาไปใช้แทนโหนดชีตได้): เพิ่ม **`userIds`**
@@ -628,6 +629,7 @@ panel **"📊 แหล่งข้อมูล (Sheets)"** → ปุ่ม **�
   เทียบกับชีตไม่ได้เลย · NFKC แปลงกลับเป็นตัวอักษรปกติก่อน
 - **⚠️ กติกาเดิมยังอยู่: ห้ามส่ง LINE user id ของพนักงานออกหน้าเว็บ** — พาเนลโชว์แค่ "ผูกไว้กี่บัญชี" ·
   `/api/v1/employees` ส่ง id ได้ (ป้องกันด้วยคีย์ + เป็น server-to-server)
+- **📄 [deploy/n8n_employees_postgres.json](deploy/n8n_employees_postgres.json)** — โหนด Postgres 3 ตัวสำเร็จรูป (ดึงรายชื่อ · หา userId นี้คือใคร · บันทึกหมายเหตุ) ก๊อปวางบน canvas ของ n8n ได้เลย เหลือแค่เลือก credential
 - **📄 [deploy/n8n_postgres_access.md](deploy/n8n_postgres_access.md) + [.sql](deploy/n8n_postgres_access.sql)** — ถ้าจะให้ n8n ใช้ **โหนด Postgres** แทนโหนดชีต: SSH tunnel (แนะนำ) / เปิดพอร์ตเฉพาะ IP / หรือใช้ HTTP API ·
   ไฟล์ SQL สร้าง role `n8n` + view **`v_employees`** (1 แถว/คน · มี `line_user_ids` ครบทุกบอท) และ **`v_employee_line`** (1 แถว/บัญชี LINE) · เขียนได้ช่องเดียวคือ `note` (หมายเหตุ ลา/สาย) — **ห้ามให้ n8n ใช้ user `oxlet`/`postgres`** (ฐานข้อมูลนี้มีแชทลูกค้า)
 - **⚠️ ต่อ Postgres ตรงจาก n8n ยังทำไม่ได้** — ฐานข้อมูลตั้ง `listen_addresses = localhost`
