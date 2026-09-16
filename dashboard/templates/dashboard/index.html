@@ -1360,10 +1360,8 @@
       { k:'crm', sec: 'ลูกค้า & ข้อมูล', items: [
         { i:'lucide:message-circle', l:'แชทลูกค้า (LINE OA)', fn:'openCustomerChat()',
           tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
-        { i:'lucide:database',    l:'ฐานข้อมูล & ดาวน์โหลด',   fn:'openDbPanel()',           boss:true,
-          tip:'ระบบเก็บอะไรไว้บ้าง (ทุกตาราง/จำนวนแถว/ป้าย PDPA) + ปุ่มดาวน์โหลด CSV รายตาราง หรือ .zip ทั้งหมด (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
-        { i:'lucide:database',    l:'ดูข้อมูลดิบ (SQL)',       fn:'openSqlPanel()',          boss:true,
-          tip:'ยิงคำสั่ง SELECT ดูข้อมูลจริงในฐานข้อมูล แล้วดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV · อ่านอย่างเดียว เขียน/ลบไม่ได้' },
+        { i:'lucide:database',    l:'ฐานข้อมูล (SQL)',         fn:'openSqlPanel()',          boss:true,
+          tip:'ดูข้อมูลดิบทุกตาราง · ยิงคำสั่ง SELECT เอง · ดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV หรือทั้งฐานข้อมูลเป็น .zip · อ่านอย่างเดียว เขียน/ลบไม่ได้ (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
         { i:'lucide:car-front',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
           tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
         { i:'lucide:save',        l:'ส่งคะแนนเข้าชีต',         fn:'exportLeadScore()',       tip:"เขียนคะแนนเซลล์ของเดือนนี้ลง Sheet 'leadscore'" },
@@ -5679,7 +5677,14 @@
     // ═══ ดูข้อมูลดิบด้วย SQL (แบบ DbVisualizer) — ★ 16 ก.ย.69 เจ้าของขอ ═══
     //   "ให้มันแสดง query แบบเป็น raw data · query จาก postgres จริงๆ · export ตาม filter ได้"
     //   ตัวบังคับ "อ่านอย่างเดียว" อยู่ฝั่งเซิร์ฟเวอร์ (READ ONLY transaction) — ที่นี่แค่หน้าจอ
-    let _sqlSchema = null, _sqlTblQ = '', _sqlOpen = '', _sqlBusy = false;
+    let _sqlSchema = null, _sqlTblQ = '', _sqlOpen = '', _sqlBusy = false, _sqlInv = null;
+
+    // แผนที่ ชื่อตาราง → {แถว, PDPA} จากสารบัญ (ยุบพาเนลสารบัญเดิมเข้ามาที่นี่ 16 ก.ย.69)
+    function _sqlInfo() {
+      const m = {};
+      ((_sqlInv || {}).groups || []).forEach(g => (g.tables || []).forEach(t => { m[t.table] = t; }));
+      return m;
+    }
 
     async function openSqlPanel() {
       const old = document.getElementById('sql-overlay'); if (old) old.remove();
@@ -5690,10 +5695,17 @@
       ov.innerHTML = `<div id="sql-box" style="background:var(--bg);border-radius:16px;max-width:1500px;width:100%;padding:18px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังอ่านรายชื่อตาราง...</div></div>`;
       document.body.appendChild(ov);
       try {
-        const r = await fetch('/api/admin/db_query', {credentials:'same-origin'});
+        // สารบัญ (จำนวนแถว/ป้าย PDPA/หมายเหตุเรื่อง Google Sheets) โหลดคู่กันไป —
+        // ล้มก็ไม่เป็นไร หน้ายังใช้ได้ แค่ไม่มีจำนวนแถวโชว์
+        const [r, ri] = await Promise.all([
+          fetch('/api/admin/db_query', {credentials:'same-origin'}),
+          fetch('/api/admin/db_tables', {credentials:'same-origin'}).catch(() => null),
+        ]);
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
         _sqlSchema = d; _sqlTblQ = '';
+        _sqlInv = null;
+        try { if (ri) _sqlInv = await ri.json(); } catch (e) { _sqlInv = null; }
       } catch (e) {
         const bx = document.getElementById('sql-box');
         if (bx) bx.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
@@ -5714,6 +5726,7 @@
       const box = document.getElementById('sql-box'); if (!box || !_sqlSchema) return;
       const [df, dt] = _sqlDefaultDates();
       const q = (_sqlTblQ || '').trim().toLowerCase();
+      const info = _sqlInfo();
       const tabs = (_sqlSchema.tables || []).filter(t => !q ||
         (t.table + ' ' + (t.label || '') + ' ' + t.columns.map(c => c.name).join(' ')).toLowerCase().includes(q));
 
@@ -5721,6 +5734,14 @@
         <div><div style="font-size:17px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:7px">${ic('lucide:database',18)} ดูข้อมูลดิบ (SQL)</div>
         <div style="font-size:11px;color:var(--t3);margin-top:3px">อ่านจาก ${h(_sqlSchema.vendor||'')} ของจริง · <b>อ่านอย่างเดียว</b> เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ</div></div>
         <button onclick="document.getElementById('sql-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
+
+      // ⚠️ ข้อมูลขายไม่ได้อยู่ในนี้ — ถ้าไม่เขียนไว้ คนอ่านจะเข้าใจผิดว่า "ระบบเก็บแค่นี้"
+      //    (ยกมาจากพาเนลสารบัญเดิมที่ยุบทิ้ง · CLAUDE.md ระบุว่าห้ามเอาออก)
+      const _inv = _sqlInv || {}, _tot = _inv.totals || {};
+      html += `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:11px;padding:9px 12px;font-size:11px;color:var(--t2);margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+        <div><b>ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้</b> — ลีด / เคสจอง / ยอดขาย อยู่ใน <b>Google Sheets</b>
+          <span style="color:var(--t3)">· ที่นี่เก็บงานติดตามรถ · เบิก-คืนรถ · เช็คชื่อ · แชท · ล็อกระบบ${_tot.rows ? ' · รวม ' + Number(_tot.rows).toLocaleString('en-US') + ' แถว' : ''}</span></div>
+        <button onclick="dbExportAll(this)" style="padding:6px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:11px;cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
 
       html += `<div style="display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:12px;align-items:start">`;
 
@@ -5734,7 +5755,8 @@
         html += `<div style="margin-bottom:2px">
           <div style="display:flex;align-items:center;gap:5px">
             <span onclick="_sqlOpen='${open?'':h(t.table)}';renderSqlPanel()" title="ดูคอลัมน์" style="cursor:pointer;color:var(--t3);font-size:10px;width:11px;flex-shrink:0">${open?'▾':'▸'}</span>
-            <span onclick="sqlPickTable('${h(t.table)}')" title="${h(t.label||t.table)}" style="cursor:pointer;font-size:11.5px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(t.table)}${t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
+            <span onclick="sqlPickTable('${h(t.table)}')" title="${h((info[t.table]||{}).what || t.label || t.table)}" style="cursor:pointer;font-size:11.5px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${h(t.table)}${(info[t.table]||{}).pii||t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
+            ${info[t.table] && info[t.table].rows != null ? `<span style="font-size:10px;color:var(--t3);flex-shrink:0">${Number(info[t.table].rows).toLocaleString('en-US')}</span>` : ''}
           </div>`;
         if (open) {
           html += `<div style="margin:3px 0 6px 16px">` + t.columns.map(c =>
@@ -5887,122 +5909,9 @@
       }
     }
 
-    let _dbData = null, _dbQ = '';
-    async function openDbPanel() {
-      const old = document.getElementById('db-overlay'); if (old) old.remove();
-      const overlay = document.createElement('div');
-      overlay.id = 'db-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = `<div id="db-box" style="background:var(--bg);border-radius:16px;max-width:900px;width:100%;padding:22px" onclick="event.stopPropagation()"><div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังอ่านสารบัญฐานข้อมูล...</div></div>`;
-      document.body.appendChild(overlay);
-      try {
-        const r = await fetch('/api/admin/db_tables', {credentials:'same-origin'});
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
-        _dbData = d; _dbQ = '';
-        renderDbPanel();
-      } catch (e) {
-        const bx = document.getElementById('db-box');
-        if (bx) bx.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div><div style="text-align:center"><button onclick="document.getElementById('db-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
-      }
-    }
-
-    function _dbSearch(v) { _dbQ = (v || '').trim().toLowerCase(); renderDbPanel(true); }
-
-    function renderDbPanel(keepFocus) {
-      const box = document.getElementById('db-box'); if (!box || !_dbData) return;
-      const d = _dbData, t = d.totals || {};
-      const nf = (n) => (n == null ? '–' : Number(n).toLocaleString('en-US'));
-      const q = _dbQ;
-      const match = (r) => !q || (r.table + ' ' + (r.name||'') + ' ' + (r.what||'') + ' ' + (r.model||'')).toLowerCase().includes(q);
-
-      let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
-        <div><div style="font-size:17px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:7px">${ic('lucide:database',18)} ฐานข้อมูล</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:3px">${h(d.engine||'')} · อ่านเมื่อ ${h((d.generatedAt||'').replace('T',' '))}</div></div>
-        <button onclick="document.getElementById('db-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
-
-      const cards = [
-        {l:'ตาราง',             v: nf(t.tables), c:'var(--blue)'},
-        {l:'แถวรวมทุกตาราง',    v: nf(t.rows),   c:'var(--green)'},
-        {l:'มีข้อมูลส่วนบุคคล', v: nf(t.pii) + ' ตาราง', c:'var(--amber)'},
-      ];
-      html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0">` +
-        cards.map(c => `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:10px 12px;background:var(--bg2)">
-          <div style="font-size:10px;color:var(--t3)">${c.l}</div>
-          <div style="font-size:19px;font-weight:800;color:${c.c}">${c.v}</div></div>`).join('') + `</div>`;
-
-      // ⬇ ดาวน์โหลดข้อมูลออกไปเป็นไฟล์ (เจ้าของขอ ก.ย.69) — เนื้อข้อมูลจริง ไม่ใช่แค่จำนวนแถว
-      //   สิทธิ์ตัดสินที่เซิร์ฟเวอร์ (_is_boss) เหมือนกัน · LINE id พนักงานถูกปิดก่อนเขียนไฟล์
-      html += `<div style="border:.5px solid var(--bd2);background:var(--bg2);border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="font-size:11.5px;color:var(--t2)"><b>ดาวน์โหลดข้อมูลของเรา</b>
-          <div style="color:var(--t3);font-size:10.5px;margin-top:2px">CSV เปิดด้วย Excel ได้เลย (ภาษาไทยไม่เพี้ยน) · กดปุ่ม ⬇ ท้ายแถวเพื่อเอาทีละตาราง</div></div>
-        <button onclick="dbExportAll(this)" style="padding:8px 14px;border-radius:10px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
-
-      // ⚠️ ข้อมูลขายไม่ได้อยู่ในนี้ — ถ้าไม่เขียนไว้ คนอ่านจะเข้าใจผิดว่า "ระบบเก็บแค่นี้"
-      html += `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:12px;padding:10px 12px;font-size:11.5px;color:var(--t2);margin-bottom:12px">
-        <b>ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้</b> — ลีด / เคสจอง / พนักงาน อยู่ใน <b>Google Sheets</b> (ฐานข้อมูลนี้เก็บงานติดตามรถ · เบิก-คืนรถ · ค่าตั้งค่าและสถิติ)
-        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">` +
-        (d.sheets||[]).map(s => `<div style="color:var(--t3)">• <b style="color:var(--t2)">${h(s.name)}</b> — ${h(s.what)}</div>`).join('') + `</div></div>`;
-
-      html += `<input id="dbq" value="${h(q)}" oninput="_dbSearch(this.value)" placeholder="ค้นหาตาราง / คำอธิบาย..." style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:12.5px;margin-bottom:12px">`;
-
-      let shown = 0;
-      (d.groups||[]).forEach(g => {
-        const rows = (g.tables||[]).filter(match);
-        if (!rows.length) return;
-        shown += rows.length;
-        const sub = rows.reduce((a,r) => a + (r.rows||0), 0);
-        html += `<div style="font-size:12px;font-weight:800;color:var(--t2);margin:14px 0 6px;display:flex;justify-content:space-between">
-          <span>${h(g.label)}</span><span style="color:var(--t3);font-weight:600">${nf(sub)} แถว</span></div>`;
-        html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">
-          <thead><tr style="color:var(--t3);text-align:left">
-            <th style="padding:5px 6px;font-weight:600">ตาราง</th>
-            <th style="padding:5px 6px;font-weight:600;text-align:right">แถว</th>
-            <th style="padding:5px 6px;font-weight:600;text-align:right">คอลัมน์</th>
-            <th style="padding:5px 6px;font-weight:600">เก็บอะไร</th>
-            <th style="padding:5px 6px;font-weight:600;text-align:center">ไฟล์</th></tr></thead><tbody>`;
-        rows.forEach(r => {
-          const warn = r.missing ? `<span title="ตารางนี้ยังไม่มีในฐานข้อมูล — ยัง migrate ไม่ครบ" style="color:var(--red);font-size:10px">· ยังไม่ migrate</span>`
-                     : (r.error ? `<span title="${h(r.error)}" style="color:var(--red);font-size:10px">· อ่านไม่ได้</span>` : '');
-          const pii = r.pii ? `<span title="มีข้อมูลส่วนบุคคล (ชื่อ / LINE id / รูป) — ระวังเรื่อง PDPA" style="font-size:9px;padding:1px 5px;border-radius:6px;background:var(--amber-bg);color:var(--amber);border:.5px solid var(--amber-mid);font-weight:700;white-space:nowrap">PDPA</span>` : '';
-          html += `<tr style="border-top:.5px solid var(--bd)">
-            <td style="padding:6px;vertical-align:top">
-              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap"><b style="color:var(--t1)">${h(r.name)}</b>${pii}</div>
-              <div style="color:var(--t3);font-size:10px;font-family:monospace">${h(r.table)}${r.model?' · '+h(r.model):''} ${warn}</div></td>
-            <td style="padding:6px;text-align:right;vertical-align:top;font-weight:700;color:${(r.rows||0)>0?'var(--t1)':'var(--t3)'}">${nf(r.rows)}</td>
-            <td style="padding:6px;text-align:right;vertical-align:top;color:var(--t3)">${nf(r.cols)}</td>
-            <td style="padding:6px;vertical-align:top;color:var(--t2)">${h(r.what||'—')}${r.keep?`<div style="color:var(--t3);font-size:10px;margin-top:2px">เก็บ: ${h(r.keep)}</div>`:''}</td>
-            <td style="padding:6px;text-align:center;vertical-align:top">${(r.rows||0)>0&&r.model?`<button onclick="dbExportTable('${h(r.table)}')" title="ดาวน์โหลดตารางนี้เป็น CSV" style="border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);border-radius:8px;padding:3px 8px;font-size:11px;cursor:pointer">⬇</button>`:''}</td></tr>`;
-        });
-        html += `</tbody></table></div>`;
-      });
-      if (!shown) html += `<div style="text-align:center;color:var(--t3);padding:24px">ไม่เจอตารางที่ตรงกับ "${h(q)}"</div>`;
-
-      // dash_kv เป็น "ที่เก็บของรวม" — ชื่อตารางไม่บอกว่ามีอะไร ลิสต์คีย์ข้างในให้ดูด้วย
-      const kv = (_dbData.kv||[]).filter(k => !q || (k.key + ' ' + (k.what||'')).toLowerCase().includes(q));
-      if (kv.length) {
-        html += `<div style="font-size:12px;font-weight:800;color:var(--t2);margin:16px 0 6px">ข้างใน dash_kv (ค่าคอนฟิก + สถานะระบบ)</div>
-          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px"><tbody>`;
-        kv.forEach(k => {
-          html += `<tr style="border-top:.5px solid var(--bd)">
-            <td style="padding:5px 6px;font-family:monospace;color:var(--t1);white-space:nowrap">${h(k.key)}</td>
-            <td style="padding:5px 6px;color:var(--t2)">${h(k.what||'—')}</td>
-            <td style="padding:5px 6px;text-align:right;color:var(--t3);white-space:nowrap">${k.sizeKb} KB</td>
-            <td style="padding:5px 6px;text-align:right;color:var(--t3);white-space:nowrap">${h((k.updatedAt||'').slice(0,16).replace('T',' '))}</td></tr>`;
-        });
-        html += `</tbody></table></div>`;
-      }
-
-      html += `<div style="text-align:center;margin-top:16px"><button onclick="document.getElementById('db-overlay').remove()" style="padding:9px 20px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
-      box.innerHTML = html;
-      if (keepFocus) { const el = document.getElementById('dbq'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
-    }
-
     // ── ⬇ ดาวน์โหลดข้อมูลออกเป็นไฟล์ (endpoint เดียวกันทั้ง 2 ปุ่ม · เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์) ──
     //  เปิดเป็น URL ตรงๆ ให้เบราว์เซอร์เซฟเอง — ไม่ fetch มาเก็บในแรมก่อน
     //  (ไฟล์ zip ทุกตารางอาจหลายสิบ MB · blob ในแรมแล้วค่อยเซฟ = เสี่ยงแท็บค้างบนมือถือ)
-    function dbExportTable(t) { window.location.href = '/api/admin/db_export?table=' + encodeURIComponent(t); }
     function dbExportAll(btn) {
       // ทุกตารางต้องอ่าน+บีบอัดก่อน อาจนิ่งหลายวินาที → บอกผู้ใช้ว่ากำลังทำ ไม่งั้นจะกดซ้ำ
       if (btn) { btn.disabled = true; const o = btn.textContent; btn.textContent = 'กำลังรวมไฟล์...';
@@ -7979,7 +7888,8 @@
     // ★ 16 ก.ย.69 — ลิงก์ตรงเข้าพาเนล (`?panel=employees`) เพราะพาเนลเป็น modal ไม่มี URL ของตัวเอง
     //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
     //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
-    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openDbPanel', sql:'openSqlPanel' };
+    // db: ชี้มาหน้าใหม่ — ลิงก์เก่าที่เคยแจกไว้จะได้ไม่ตาย (พาเนลสารบัญเดิมถูกยุบรวมแล้ว 16 ก.ย.69)
+    const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel' };
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];
