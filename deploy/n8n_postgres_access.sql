@@ -1,6 +1,8 @@
 -- ============================================================
 -- เปิดให้ n8n อ่าน "ทะเบียนพนักงาน" จาก Postgres ของเราโดยตรง (แทนโหนด Google Sheets)
--- รันบนเซิร์ฟเวอร์: sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sql
+-- รันบนเซิร์ฟเวอร์:
+--   sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
+-- ⚠️ **ห้ามเขียนรหัสผ่านลงไฟล์นี้** (ไฟล์อยู่ใน git = ใครอ่าน repo ก็เห็น) — ส่งผ่าน -v pw=... เท่านั้น
 -- ★ 16 ก.ย.69
 --
 -- หลักการ: **ไม่ให้สิทธิ์ตาราง ให้แต่ view ที่จำเป็น**
@@ -9,13 +11,18 @@
 --   - ห้ามลบ/แก้อย่างอื่น · ห้ามสร้างตาราง
 -- ============================================================
 
--- 1) ผู้ใช้สำหรับ n8n (เปลี่ยนรหัสผ่านก่อนรัน!)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n') THEN
-    CREATE ROLE n8n LOGIN PASSWORD 'เปลี่ยนรหัสนี้ก่อนรัน';
-  END IF;
-END $$;
+-- 1) ผู้ใช้สำหรับ n8n — รหัสผ่านมาจาก -v pw=... (ไม่รับค่า = หยุด ไม่สร้างรหัสเดาง่ายทิ้งไว้)
+\if :{?pw}
+\else
+\echo '*** ต้องส่งรหัสผ่านมาด้วย: psql -d oxlet -v pw="''รหัสที่ตั้งเอง''" -f deploy/n8n_postgres_access.sql'
+\quit
+\endif
+
+SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n')
+            THEN 'ALTER ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
+            ELSE 'CREATE ROLE n8n LOGIN PASSWORD ' || quote_literal(:'pw')
+       END AS stmt \gset
+:stmt ;
 
 GRANT CONNECT ON DATABASE oxlet TO n8n;
 GRANT USAGE ON SCHEMA public TO n8n;

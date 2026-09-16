@@ -19,8 +19,8 @@ printf 'no-agent-forwarding,no-X11-forwarding,no-pty,permitopen="127.0.0.1:5432"
   > /home/n8ntunnel/.ssh/authorized_keys
 chown -R n8ntunnel:n8ntunnel /home/n8ntunnel/.ssh && chmod 600 /home/n8ntunnel/.ssh/authorized_keys
 
-# สิทธิ์ในฐานข้อมูล (แก้รหัสในไฟล์ก่อน)
-cd /opt/oxlet && sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sql
+# สิทธิ์ในฐานข้อมูล — ส่งรหัสผ่านทาง -v (ห้ามเขียนลงไฟล์ ไฟล์อยู่ใน git)
+cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
 ```
 
 ตั้งใน n8n (Credential → Postgres):
@@ -41,7 +41,7 @@ systemctl restart postgresql
 # 3) ไฟร์วอลล์
 ufw allow from <IP ของ n8n> to any port 5432 proto tcp
 # 4) สิทธิ์
-cd /opt/oxlet && sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sql
+cd /opt/oxlet && sudo -u postgres psql -d oxlet -v pw="'รหัสที่ตั้งเอง'" -f deploy/n8n_postgres_access.sql
 ```
 ⚠️ **ยืนยันไอพีขาออกจริงของ n8n ก่อน** (บนเครื่อง n8n: `curl -s ifconfig.me`) — ใส่ผิดคือเปิดให้คนอื่น
 ⚠️ ฐานข้อมูลนี้มีแชทลูกค้าและ LINE id พนักงาน — **อย่าใช้ user `oxlet`/`postgres` ใน n8n เด็ดขาด**
@@ -67,3 +67,11 @@ cd /opt/oxlet && sudo -u postgres psql -d oxlet -f deploy/n8n_postgres_access.sq
 
 ⚠️ **`v_employee_line.user_id` มีทั้งไอดีบอทเดิมและบอทใหม่** → workflow ไม่ต้องแก้ไอดีอีกเวลาสลับบอท
 (ต่างจากชีตที่มีชุดเดียว)
+
+---
+
+## เปลี่ยนรหัสผ่าน role `n8n` ทีหลัง
+```bash
+sudo -u postgres psql -d oxlet -c "ALTER ROLE n8n PASSWORD 'รหัสใหม่';"
+```
+รันซ้ำไฟล์ SQL ก็ได้ (มันจะ `ALTER` ให้ถ้า role มีอยู่แล้ว) · **เปลี่ยนแล้วอย่าลืมแก้ credential ใน n8n ด้วย**
