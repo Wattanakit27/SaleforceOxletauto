@@ -890,6 +890,8 @@ def api_checkins(request):
     เจ้าของสั่งย้ายจากชีต "เช็คชื่อ" มาเก็บใน Postgres: *"มันเป็นการเก็บทุกๆ วันอยู่แล้ว
     ไม่ต้องมานั่งลบข้อมูลแบบเดิม"* → n8n เขียนลง `checkout_checkin` หน้านี้อ่านมาโชว์
 
+    `?from=&to=` = **โหมดสรุปช่วง** — รายคน: มากี่วัน · สายกี่ครั้ง · มาเฉลี่ยกี่โมง (เรียงคนสายบ่อยขึ้นก่อน)
+
     คืน 3 ก้อน: **มาแล้ว** (ตรงเวลา/สาย) · **ยังไม่เช็คชื่อ** · **วันหยุดของคนนั้น**
     — "ยังไม่เช็คชื่อ" ตัดคนที่วันนี้ตรงกับวันหยุดในทะเบียนออก ไม่งั้นจะขึ้นแดงทั้งที่เขาหยุดจริง
     """
@@ -899,6 +901,50 @@ def api_checkins(request):
     from .models import CheckIn, Employee
 
     today = timezone.localdate()
+
+    # ── โหมดสรุปช่วง: ?from=&to= — "ใครมากี่วัน สายกี่ครั้ง มาเฉลี่ยกี่โมง" ──
+    f_raw, t_raw = (request.GET.get("from") or "").strip(), (request.GET.get("to") or "").strip()
+    if f_raw or t_raw:
+        def _d(v, default):
+            try:
+                return _date.fromisoformat(v)
+            except ValueError:
+                return default
+        d_to = _d(t_raw, today)
+        d_from = _d(f_raw, d_to.replace(day=1))
+        if d_from > d_to:
+            d_from, d_to = d_to, d_from
+
+        agg = {}
+        for c in (CheckIn.objects.filter(date_iso__gte=d_from, date_iso__lte=d_to)
+                  .select_related("employee").order_by("date_iso")):
+            key = c.employee_id or ("uid:" + c.user_id)
+            a = agg.setdefault(key, {
+                "name": (c.employee.nickname if c.employee_id and c.employee else "") or c.display_name or "ไม่ทราบชื่อ",
+                "position": (c.employee.position if c.employee_id and c.employee else ""),
+                "linked": bool(c.employee_id),
+                "days": 0, "ontime": 0, "late": 0, "abnormal": 0, "_mins": [], "last": ""})
+            a["days"] += 1
+            a[c.status if c.status in ("ontime", "late", "abnormal") else "abnormal"] += 1
+            a["last"] = c.date_iso.isoformat()
+            m = (c.time_hm or "").split(":")
+            if len(m) == 2 and m[0].isdigit() and m[1].isdigit():
+                a["_mins"].append(int(m[0]) * 60 + int(m[1]))
+
+        rows = []
+        for a in agg.values():
+            mins = a.pop("_mins")
+            if mins:
+                avg = sum(mins) // len(mins)
+                a["avgTime"] = "%02d:%02d" % (avg // 60, avg % 60)
+            else:
+                a["avgTime"] = ""
+            rows.append(a)
+        rows.sort(key=lambda r: (-r["late"], -r["days"], r["name"]))
+        return JsonResponse({"ok": True, "mode": "range", "from": d_from.isoformat(), "to": d_to.isoformat(),
+                             "rows": rows, "employees": Employee.objects.filter(active=True).count()},
+                            json_dumps_params={"ensure_ascii": False})
+
     raw = (request.GET.get("date") or "").strip()
     try:
         day = _date.fromisoformat(raw) if raw else today

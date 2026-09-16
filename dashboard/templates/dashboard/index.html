@@ -5848,7 +5848,8 @@
           <input type="date" value="${h(j.date)}" onchange="loadCheckins(this.value)" style="font-size:12px;padding:5px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
           <button onclick="document.getElementById('cki-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button>
         </div></div>`;
-      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px">วัน${h(j.dayName)} · พนักงานที่ใช้งานอยู่ ${j.employees} คน · สาย/ตรงเวลาตัดสินจากเวลาเข้างานของแต่ละคน</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:10px">วัน${h(j.dayName)} · พนักงานที่ใช้งานอยู่ ${j.employees} คน · สาย/ตรงเวลาตัดสินจากเวลาเข้างานของแต่ละคน</div>`;
+      html += `<div style="margin-bottom:12px"><button onclick="loadCheckinRange()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">📊 สรุปทั้งเดือน (ใครสายบ่อย)</button></div>`;
       html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         ${kpi('ตรงเวลา', c.ontime||0, 'var(--green)')}${kpi('สาย', c.late||0, 'var(--red)')}
         ${kpi('อ่านเวลาไม่ออก', c.abnormal||0, 'var(--amber)')}${kpi('ยังไม่เช็คชื่อ', (j.missing||[]).length, 'var(--amber)')}
@@ -5889,6 +5890,58 @@
       };
       html += mk('ยังไม่เช็คชื่อ', j.missing || [], 'var(--amber)');
       html += mk('วันหยุดวันนี้', j.dayoff || [], 'var(--t2)');
+      box.innerHTML = html;
+    }
+
+    // สรุปช่วง: ใครมากี่วัน สายกี่ครั้ง มาเฉลี่ยกี่โมง (ข้อมูลสะสมรายวัน — วันใหม่ = แถวใหม่ ไม่ทับของเดิม)
+    async function loadCheckinRange(from, to) {
+      const box = document.getElementById('cki-box'); if (!box) return;
+      const base = _ckiDate || new Date().toISOString().slice(0,10);
+      const f = from || (base.slice(0,8) + '01');
+      const t = to || base;
+      box.innerHTML = `<div style="text-align:center;color:var(--t3);padding:40px"><div class="spin" style="margin:0 auto 12px"></div>กำลังสรุป...</div>`;
+      let j;
+      try {
+        const r = await fetch(`/checkout/api/checkins?from=${encodeURIComponent(f)}&to=${encodeURIComponent(t)}`, {credentials:'same-origin'});
+        j = await r.json();
+        if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      } catch (e) {
+        box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">โหลดไม่ได้: ${h(String(e.message||e))}</div>`;
+        return;
+      }
+      const rows = j.rows || [];
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:16px;font-weight:800;color:var(--t1)">สรุปเช็คชื่อ</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" value="${h(j.from)}" onchange="loadCheckinRange(this.value, '${h(j.to)}')" style="font-size:12px;padding:5px 8px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <span style="color:var(--t3);font-size:12px">ถึง</span>
+          <input type="date" value="${h(j.to)}" onchange="loadCheckinRange('${h(j.from)}', this.value)" style="font-size:12px;padding:5px 8px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <button onclick="loadCheckins('${h(j.to)}')" style="font-size:12px;padding:5px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ดูรายวัน</button>
+          <button onclick="document.getElementById('cki-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button>
+        </div></div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px">เรียงคนที่สายบ่อยที่สุดขึ้นก่อน · เวลาเฉลี่ย = เฉลี่ยเวลาที่เช็คชื่อในช่วงนี้</div>`;
+      if (!rows.length) {
+        html += `<div style="padding:18px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:10px">ยังไม่มีข้อมูลในช่วงนี้</div>`;
+      } else {
+        html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="color:var(--t3);font-size:11px;text-align:left">
+            <th style="padding:6px 5px">ชื่อ</th><th style="padding:6px 5px">ตำแหน่ง</th>
+            <th style="padding:6px 5px">มา (วัน)</th><th style="padding:6px 5px">ตรงเวลา</th>
+            <th style="padding:6px 5px">สาย</th><th style="padding:6px 5px">อ่านไม่ออก</th>
+            <th style="padding:6px 5px">มาเฉลี่ย</th><th style="padding:6px 5px">ล่าสุด</th></tr></thead><tbody>`;
+        rows.forEach(r => {
+          html += `<tr style="border-top:.5px solid var(--bd2)">
+            <td style="padding:5px;font-weight:600;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:10px;color:var(--amber)">(ยังไม่ผูก)</span>'}</td>
+            <td style="padding:5px;color:var(--t2)">${h(r.position||'-')}</td>
+            <td style="padding:5px;font-weight:700">${r.days}</td>
+            <td style="padding:5px;color:var(--green)">${r.ontime||0}</td>
+            <td style="padding:5px;color:${r.late?'var(--red)':'var(--t3)'};font-weight:${r.late?700:400}">${r.late||0}</td>
+            <td style="padding:5px;color:${r.abnormal?'var(--amber)':'var(--t3)'}">${r.abnormal||0}</td>
+            <td style="padding:5px;color:var(--t1)">${h(r.avgTime||'-')}</td>
+            <td style="padding:5px;color:var(--t3);font-size:11px">${h(r.last||'')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+      }
       box.innerHTML = html;
     }
 
