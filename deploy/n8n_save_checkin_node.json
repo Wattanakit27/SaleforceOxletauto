@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH d AS (SELECT $1::jsonb AS j)\nINSERT INTO checkout_checkin\n  (user_id, employee_id, display_name, date_iso, checkin_at, time_hm, work_start,\n   status, reason, time_source, full_address, province, note, raw, created_at, updated_at)\nSELECT j->>'userId',\n       (SELECT employee_id FROM v_employee_line WHERE user_id = j->>'userId' LIMIT 1),\n       coalesce(j->>'displayName',''),\n       (j->>'date_iso')::date,\n       nullif(j->>'checkin_iso','')::timestamptz,\n       coalesce(j->>'time_hm',''),\n       coalesce((SELECT \"เวลาเข้างาน\" FROM v_employee_line WHERE user_id = j->>'userId' LIMIT 1), ''),\n       coalesce(j->>'status','abnormal'),\n       coalesce(j->>'reason',''),\n       CASE WHEN (j->>'found_overlay_text')::text IN ('true','t') THEN 'image' ELSE 'message' END,\n       coalesce(j->>'full_address',''),\n       coalesce(j->>'province',''),\n       '',\n       j,\n       now(), now()\nFROM d\nON CONFLICT (user_id, date_iso) DO UPDATE SET\n  checkin_at  = EXCLUDED.checkin_at,\n  time_hm     = EXCLUDED.time_hm,\n  work_start  = EXCLUDED.work_start,\n  status      = EXCLUDED.status,\n  reason      = EXCLUDED.reason,\n  time_source = EXCLUDED.time_source,\n  full_address= EXCLUDED.full_address,\n  province    = EXCLUDED.province,\n  raw         = EXCLUDED.raw,\n  updated_at  = now()\nRETURNING id, status, time_hm, date_iso;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2000,
+        1712
+      ],
+      "id": "ck02aaaa-bbbb-4ccc-8ddd-eeeeffff0002",
+      "name": "Save Check-in Data (Postgres)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "notes": "แทนโหนดชีต Save Check-in Data · รับ output ของ Prepare Row เดิมได้เลย · ซ้ำวันเดิมคนเดิม = ทับแถวเดิม (ON CONFLICT) · ข้อมูล OCR ทั้งก้อนเก็บในช่อง raw"
+    }
+  ],
+  "connections": {},
+  "pinData": {}
+}
