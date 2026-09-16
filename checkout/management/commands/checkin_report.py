@@ -23,6 +23,8 @@ class Command(BaseCommand):
         p.add_argument("--out", default="", help="เซฟรูปไว้ที่ไฟล์นี้ (ไม่ส่ง LINE)")
         p.add_argument("--dry-run", action="store_true", help="ดูสรุป ไม่สร้างรูป ไม่ส่ง")
         p.add_argument("--no-tag", action="store_true", help="ไม่ต้องแท็กคนที่ยังไม่เช็คชื่อ")
+        p.add_argument("--escalate", action="store_true",
+                       help='ส่ง "ข้อความรอบสาย" แทนรูปตาราง (ตามคนที่ยังไม่เช็ค + แท็กผู้บริหาร)')
 
     # ── ชื่อเล่น → LINE id (ไม่ต้องให้คนไปหา id เอง) ──
     def _resolve(self, who):
@@ -83,8 +85,28 @@ class Command(BaseCommand):
         if data["missing"]:
             self.stdout.write("  ต้องแท็ก: " + ", ".join(m["name"] for m in data["missing"]))
 
+        if o["escalate"]:
+            mgr = R.managers()
+            self.stdout.write("  จะแท็กผู้บริหาร: %s"
+                              % (", ".join(m["name"] for m in mgr) or "(ยังไม่ได้ติ๊กใครในหน้าพนักงาน)"))
+
         if o["dry_run"]:
-            self.stdout.write("\n(--dry-run: ไม่สร้างรูป ไม่ส่ง)")
+            if o["escalate"]:
+                for m in R.escalation_messages(data, "", mention=False):
+                    self.stdout.write("\n--- ข้อความที่จะส่ง ---\n" + m["text"])
+            self.stdout.write("\n(--dry-run: ไม่ส่ง)")
+            return
+
+        if o["escalate"]:
+            if not o["to"]:
+                self.stderr.write("ต้องใส่ --to ด้วย")
+                return
+            target, err = self._resolve(o["to"])
+            if err:
+                self.stderr.write(err)
+                return
+            ok, msg = R.send_escalation(target, day)
+            self.stdout.write(("\nส่งแล้ว: " if ok else "\nส่งไม่สำเร็จ: ") + str(msg))
             return
 
         if o["out"] or not o["to"]:

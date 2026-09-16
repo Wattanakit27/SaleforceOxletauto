@@ -381,6 +381,10 @@ class Employee(models.Model):
     #   ติ๊กออก = ไม่ขึ้นในพาเนล "เช็คชื่อเข้างาน" เลย (ไม่นับเป็นคนที่ต้องมา · ไม่ขึ้น "ยังไม่เช็คชื่อ")
     #   **ไม่เดาจาก "ไม่ได้กรอกตำแหน่ง/เวลา"** เพราะพนักงานใหม่ที่ยังกรอกไม่ครบจะหายไปด้วย
     track_checkin = models.BooleanField("ต้องเช็คชื่อเข้างาน", default=True, db_index=True)
+    # ★ 16 ก.ย.69 — ติ๊ก = ถูกแท็กในข้อความรอบสาย ("ยังไม่เช็คครับ @ผู้บริหาร")
+    #   ของเดิม workflow n8n ฝัง userId ของผู้บริหารไว้ในโค้ด → เปลี่ยนคนทีต้องไปแก้โค้ด
+    #   และไอดีนั้นเป็นของบอทตัวเก่าด้วย (คนละ provider กับบอทที่ส่งตอนนี้)
+    notify_missing = models.BooleanField("แท็กเวลามีคนไม่เช็คชื่อ", default=False, db_index=True)
     note = models.CharField("หมายเหตุ", max_length=200, blank=True)
     source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=MANUAL)
     created_at = models.DateTimeField(auto_now_add=True)

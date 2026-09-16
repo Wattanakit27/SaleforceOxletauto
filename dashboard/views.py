@@ -1487,6 +1487,15 @@ def cron_tick(request):
         except Exception as e:
             cards_result = {"error": str(e)[:200]}
 
+    # ── 🕘 เช็คชื่อเข้างาน: รูปตาราง + ตามคนที่ยังไม่เช็ค (แทน Schedule Trigger ของ n8n) ──
+    #    ปิดอยู่โดยปริยาย · เปิด/ตั้งเวลาที่ `manage.py checkin_schedule`
+    checkin_result = ""
+    try:
+        from checkout.checkin_report import maybe_send as _ck_send
+        checkin_result = _ck_send(now.strftime("%H:%M"), now.date().isoformat())
+    except Exception as e:
+        checkin_result = "error: %s" % str(e)[:200]
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1496,6 +1505,7 @@ def cron_tick(request):
         "refresh_error": refresh_error,        # ★ เดิมกลืนเงียบ — ต้นเหตุ "ข้อมูลค้างเป็นสัปดาห์"
         "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
+        "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
     }, json_dumps_params={"ensure_ascii": False})
 
 

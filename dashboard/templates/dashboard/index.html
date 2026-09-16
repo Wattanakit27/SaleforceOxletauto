@@ -6155,7 +6155,7 @@
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
         <div style="font-size:16px;font-weight:800;color:var(--t1)">พนักงาน ${_empRows.length} คน</div>
         <button onclick="document.getElementById('emp-overlay').remove()" style="font-size:12px;padding:5px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
-      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.7">ทะเบียนนี้อยู่ในระบบเรา ไม่ต้องไปแก้ในชีต · ผูกกับ LINE แล้ว ${linked} คน (คนเดียวผูกได้หลายบัญชี เพราะบอทแต่ละตัวให้ไอดีคนละชุด)<br>คนใหม่ที่ยังไม่ผูก LINE ระบบจะผูกให้เองเมื่อเขาพิมพ์ในกลุ่ม ถ้า "ชื่อที่ตั้งใน LINE" ตรงกับที่กรอกไว้<br><b>คนใหม่เข้ากลุ่มแล้วพิมพ์ = ระบบเพิ่มชื่อให้เอง</b> เหลือแค่มาเติม ชื่อเล่น / ตำแหน่ง / เวลาเข้างาน / วันหยุด<br><b>ผู้บริหารที่ไม่ต้องเช็คชื่อ</b> — ติ๊กช่อง "เช็คชื่อ" ออก แล้วกดบันทึก จะไม่ขึ้นในหน้าเช็คชื่อเข้างานอีก</div>`;
+      html += `<div style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.7">ทะเบียนนี้อยู่ในระบบเรา ไม่ต้องไปแก้ในชีต · ผูกกับ LINE แล้ว ${linked} คน (คนเดียวผูกได้หลายบัญชี เพราะบอทแต่ละตัวให้ไอดีคนละชุด)<br>คนใหม่ที่ยังไม่ผูก LINE ระบบจะผูกให้เองเมื่อเขาพิมพ์ในกลุ่ม ถ้า "ชื่อที่ตั้งใน LINE" ตรงกับที่กรอกไว้<br><b>คนใหม่เข้ากลุ่มแล้วพิมพ์ = ระบบเพิ่มชื่อให้เอง</b> เหลือแค่มาเติม ชื่อเล่น / ตำแหน่ง / เวลาเข้างาน / วันหยุด<br><b>ผู้บริหารที่ไม่ต้องเช็คชื่อ</b> — ติ๊กช่อง "เช็คชื่อ" ออก แล้วกดบันทึก จะไม่ขึ้นในหน้าเช็คชื่อเข้างานอีก<br><b>ช่อง "แจ้งเตือน"</b> — ติ๊กให้หัวหน้า/ผู้บริหาร จะถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ</div>`;
       const needs = _empRows.filter(e => e.needsInfo);
       if (needs.length) html += `<div style="font-size:12px;font-weight:700;color:var(--amber);background:var(--bg2);border:.5px solid var(--bd2);border-radius:10px;padding:8px 11px;margin-bottom:10px">ระบบเพิ่มให้ ${needs.length} คน — รอกรอกตำแหน่ง/เวลาเข้างาน: ${needs.map(e => h(e.nickname)).join(' · ')}</div>`;
       html += `<input value="${h(_empQ)}" oninput="_empQ=this.value;renderEmployees()" placeholder="ค้นหา ชื่อเล่น / ชื่อ LINE / ตำแหน่ง" style="width:100%;font-size:13px;padding:8px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);margin-bottom:12px">`;
@@ -6174,8 +6174,9 @@
           <th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
           <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
           <th style="padding:6px 5px" title="ติ๊กออกสำหรับผู้บริหาร — จะไม่ขึ้นในหน้าเช็คชื่อเข้างานเลย">เช็คชื่อ</th>
+          <th style="padding:6px 5px" title="ติ๊ก = ถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ (หัวหน้า/ผู้บริหาร)">แจ้งเตือน</th>
           <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
-      if (!rows.length) html += `<tr><td colspan="10" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
+      if (!rows.length) html += `<tr><td colspan="11" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
@@ -6187,6 +6188,7 @@
           <td style="padding:5px">${_empInput('emp_note_'+e.id, e.note, '', '150px')}</td>
           <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_trk_${e.id}" ${e.trackCheckin===false?'':'checked'} title="ติ๊กออก = ผู้บริหาร ไม่ต้องเช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_ntf_${e.id}" ${e.notifyMissing?'checked':''} title="ติ๊ก = ถูกแท็กตอนมีคนยังไม่เช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;white-space:nowrap">
             <button onclick="empSave(${e.id})" style="font-size:11px;padding:5px 9px;border-radius:8px;border:none;background:var(--blue);color:#fff;cursor:pointer">บันทึก</button>
@@ -6226,7 +6228,8 @@
       _empPost({action:'save', id:id, nickname:_empV('emp_nick_'+id), displayName:_empV('emp_dn_'+id),
                 position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
                 note:_empV('emp_note_'+id), active: act ? act.checked : true,
-                trackCheckin: trk ? trk.checked : true}, 'emp_msg');
+                trackCheckin: trk ? trk.checked : true,
+                notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false}, 'emp_msg');
     }
 
     function empDel(id, name) {

@@ -346,3 +346,142 @@ def send(target_id: str, day=None, tag=True) -> tuple:
                           mention=not target_id.startswith("U"))
     sc, resp = push_line_message(target_id, msgs, token, what="ตารางเช็คชื่อเข้างาน")
     return (sc == 200), (url if sc == 200 else "LINE %s: %s" % (sc, (resp or "")[:250]))
+
+
+# ═══════════ รอบสาย: ตามคนที่ยังไม่เช็คชื่อ + แท็กผู้บริหาร ═══════════
+#  คัดลอกการทำงานจาก workflow "Schedule Trigger 10:00" ของ n8n มาทั้งชุด
+#  ต่างกันตรง **ไม่ฝัง userId ของผู้บริหารไว้ในโค้ด** — ติ๊กเลือกคนได้ในหน้า "พนักงาน"
+#  (`Employee.notify_missing`) เพราะของเดิมเปลี่ยนคนทีต้องไปแก้โค้ด และไอดีที่ฝังไว้
+#  เป็นของบอทตัวเก่า (คนละ provider กับบอทที่ส่งอยู่ตอนนี้ = แท็กไม่ติด)
+
+def managers(channel="") -> list:
+    """คนที่ต้องถูกแท็กเวลามีคนไม่เช็คชื่อ — `[{name, userId}]` (เฉพาะไอดีฝั่งบัญชีที่ส่ง)"""
+    from .models import Employee, LineProfile
+
+    out = []
+    for e in Employee.objects.filter(notify_missing=True).order_by("nickname"):
+        uid = ""
+        for p in LineProfile.objects.filter(employee_id=e.id):
+            if channel and p.channel and p.channel != channel:
+                continue
+            uid = p.user_id
+            break
+        out.append({"name": e.nickname, "userId": uid})
+    return out
+
+
+def escalation_messages(data: dict, channel="", mention=True, round_name="10:00 น.") -> list:
+    """ข้อความรอบสาย — ไม่มีใครขาด = คืนลิสต์ว่าง (ไม่ต้องส่งอะไรเลย ตามของเดิม)"""
+    miss = data["missing"]
+    if not miss:
+        return []
+
+    ids = _mention_ids(miss, channel) if mention else {}
+    text = "⚠️ แจ้งเตือนรอบ %s\nพนักงาน %d คน ยังไม่เช็คชื่อ:\n\n" % (round_name, len(miss))
+    sub = {}
+    for i, m in enumerate(miss):
+        uid = ids.get(m["id"])
+        pos = " (%s)" % m["position"] if m["position"] else ""
+        if uid:
+            k = "emp%d" % (i + 1)
+            sub[k] = {"type": "mention", "mentionee": {"type": "user", "userId": uid}}
+            text += "%d. {%s}%s\n" % (i + 1, k, pos)
+        else:
+            text += "%d. %s%s\n" % (i + 1, m["name"], pos)
+
+    mgrs = managers(channel) if mention else []
+    tag_m = [g for g in mgrs if g["userId"]]
+    if tag_m:
+        text += "\nยังไม่เช็คครับ\n"
+        for i, g in enumerate(tag_m):
+            k = "mgr%d" % (i + 1)
+            sub[k] = {"type": "mention", "mentionee": {"type": "user", "userId": g["userId"]}}
+            text += "{%s}%s" % (k, " " if i < len(tag_m) - 1 else "")
+    elif mgrs:
+        # ติ๊กไว้แต่แท็กไม่ได้ (ไม่มีไอดีฝั่งบัญชีนี้) — บอกชื่อไปแทน ดีกว่าเงียบ
+        text += "\nยังไม่เช็คครับ " + " ".join(g["name"] for g in mgrs)
+
+    return [{"type": "textV2", "text": text, "substitution": sub} if sub
+            else {"type": "text", "text": text}]
+
+
+def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
+    """ส่งข้อความรอบสายเข้าปลายทาง · คืน `(ok, ข้อความสถานะ)`"""
+    from dashboard.services.line_channels import token_for
+    from dashboard.services.line_notify import push_line_message
+
+    if not target_id:
+        return False, "ไม่ได้บอกว่าจะส่งให้ใคร"
+    data = collect(day)
+    msgs = escalation_messages(data, _channel_of_token(token_for(target_id)),
+                               mention=not target_id.startswith("U"), round_name=round_name)
+    if not msgs:
+        return True, "ทุกคนเช็คชื่อครบแล้ว — ไม่ต้องส่ง"
+    token = token_for(target_id)
+    if not token:
+        return False, "ยังไม่ได้ตั้ง LINE token"
+    sc, resp = push_line_message(target_id, msgs, token, what="ตามคนยังไม่เช็คชื่อ (รอบสาย)")
+    return (sc == 200), ("ส่งแล้ว %d คน" % len(data["missing"]) if sc == 200
+                         else "LINE %s: %s" % (sc, (resp or "")[:250]))
+
+
+# ═══════════ ตั้งเวลาส่งเอง (แทน Schedule Trigger ของ n8n) ═══════════
+CFG_KEY = "checkin_notify_config"
+_LAST_KEY = "checkin_notify_last"
+DEFAULT_CFG = {"enabled": False, "table_time": "09:30", "escalate_time": "10:00",
+               "mode": "test", "group_id": "", "test_id": ""}
+
+
+def config() -> dict:
+    from dashboard.services import cache_store
+    c = dict(DEFAULT_CFG)
+    c.update(((cache_store.get_kv(CFG_KEY) or {}).get("data") or {}))
+    return c
+
+
+def save_config(cfg: dict) -> dict:
+    from dashboard.services import cache_store
+    clean = dict(DEFAULT_CFG)
+    clean.update({k: cfg[k] for k in DEFAULT_CFG if k in cfg})
+    clean["enabled"] = bool(clean["enabled"])
+    cache_store.set_kv(CFG_KEY, clean)
+    return clean
+
+
+def maybe_send(now_hhmm: str, today_iso: str) -> str:
+    """เรียกจาก `cron_tick` ทุกนาที — ถึงเวลาที่ตั้งไว้ค่อยส่ง · คืนสิ่งที่ทำ ('' = ไม่ได้ทำ)
+
+    **กันส่งซ้ำด้วย KV `checkin_notify_last`** (วัน+รอบ) — cron ยิงทุกนาที ถ้าไม่กัน
+    นาทีเดียวกันอาจถูกยิงซ้ำจากคนละ worker
+    """
+    from dashboard.services import cache_store
+
+    cfg = config()
+    if not cfg.get("enabled"):
+        return ""
+    target = cfg["test_id"] if cfg.get("mode") == "test" else cfg["group_id"]
+    if not target:
+        return ""
+
+    which = ("table" if now_hhmm == (cfg.get("table_time") or "") else
+             "escalate" if now_hhmm == (cfg.get("escalate_time") or "") else "")
+    if not which:
+        return ""
+
+    last = (cache_store.get_kv(_LAST_KEY) or {}).get("data") or {}
+    if last.get("date") == today_iso and last.get(which):
+        return ""
+    if last.get("date") != today_iso:
+        last = {"date": today_iso}
+
+    try:
+        if which == "table":
+            ok, msg = send(target)
+        else:
+            ok, msg = send_escalation(target, round_name=(cfg.get("escalate_time") or "") + " น.")
+    except Exception as e:
+        ok, msg = False, str(e)[:200]
+
+    last[which] = True
+    cache_store.set_kv(_LAST_KEY, last)
+    return "%s: %s (%s)" % (which, "ok" if ok else "ล้มเหลว", msg)

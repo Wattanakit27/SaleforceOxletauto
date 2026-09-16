@@ -861,6 +861,8 @@ def api_employees(request):
             "active": bool(b.get("active", True)),
             # ติ๊กออก = ผู้บริหาร/ไม่ต้องเช็คชื่อ → ไม่โผล่ในพาเนลเช็คชื่อเลย
             "track_checkin": bool(b.get("trackCheckin", True)),
+            # ติ๊ก = ถูกแท็กในข้อความรอบสาย (แทน MANAGERS ที่ n8n ฝัง userId ไว้ในโค้ด)
+            "notify_missing": bool(b.get("notifyMissing", False)),
         }
         row = Employee.objects.filter(pk=b.get("id") or 0).first()
         if row:
@@ -883,7 +885,7 @@ def api_employees(request):
             "id": e.pk, "nickname": e.nickname, "displayName": e.display_name,
             "position": e.position, "workStart": e.work_start, "dayOff": e.day_off,
             "groupId": e.group_id, "note": e.note, "active": e.active,
-            "trackCheckin": e.track_checkin,
+            "trackCheckin": e.track_checkin, "notifyMissing": e.notify_missing,
             "fromSheet": e.source == Employee.SHEET,
             # ระบบเพิ่มให้เองตอนเจอในกลุ่ม + ยังไม่มีใครมากรอกตำแหน่ง/เวลา = ต้องมีคนตามเติม
             "needsInfo": e.source == Employee.AUTO and not (e.position and e.work_start),
