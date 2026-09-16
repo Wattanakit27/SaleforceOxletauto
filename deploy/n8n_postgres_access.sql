@@ -51,6 +51,7 @@ SELECT e.id                AS employee_id,
        e.note              AS "หมายเหตุ",
        e.group_id,
        e.active,
+       e.track_checkin      AS "ต้องเช็คชื่อ",   -- false = ผู้บริหาร ไม่เก็บเวลาเข้างาน
        COALESCE(array_agg(p.user_id) FILTER (WHERE p.user_id IS NOT NULL), '{}') AS line_user_ids
 FROM checkout_employee e
 LEFT JOIN checkout_lineprofile p ON p.employee_id = e.id
@@ -65,6 +66,7 @@ SELECT p.user_id,
        e.position          AS "ตำแหน่งงาน",
        e.work_start        AS "เวลาเข้างาน",
        e.day_off           AS "วันหยุด",
+       e.track_checkin      AS "ต้องเช็คชื่อ",
        e.active
 FROM checkout_lineprofile p
 JOIN checkout_employee e ON e.id = p.employee_id;

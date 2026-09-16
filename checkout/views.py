@@ -854,6 +854,8 @@ def api_employees(request):
             "group_id": (b.get("groupId") or "").strip()[:64],
             "note": (b.get("note") or "").strip()[:200],
             "active": bool(b.get("active", True)),
+            # ติ๊กออก = ผู้บริหาร/ไม่ต้องเช็คชื่อ → ไม่โผล่ในพาเนลเช็คชื่อเลย
+            "track_checkin": bool(b.get("trackCheckin", True)),
         }
         row = Employee.objects.filter(pk=b.get("id") or 0).first()
         if row:
@@ -876,6 +878,7 @@ def api_employees(request):
             "id": e.pk, "nickname": e.nickname, "displayName": e.display_name,
             "position": e.position, "workStart": e.work_start, "dayOff": e.day_off,
             "groupId": e.group_id, "note": e.note, "active": e.active,
+            "trackCheckin": e.track_checkin,
             "fromSheet": e.source == Employee.SHEET,
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
@@ -894,6 +897,10 @@ def api_checkins(request):
 
     คืน 3 ก้อน: **มาแล้ว** (ตรงเวลา/สาย) · **ยังไม่เช็คชื่อ** · **วันหยุดของคนนั้น**
     — "ยังไม่เช็คชื่อ" ตัดคนที่วันนี้ตรงกับวันหยุดในทะเบียนออก ไม่งั้นจะขึ้นแดงทั้งที่เขาหยุดจริง
+
+    ★ **คนที่ติ๊ก "ไม่ต้องเช็คชื่อ" (ผู้บริหาร) ไม่นับในหน้านี้เลย** — ไม่อยู่ในยอด "ต้องมา"
+      และไม่ขึ้นค้างในกลุ่มยังไม่เช็คชื่อ/ยังไม่ได้ตั้งเวลา (เจ้าของสั่ง 16 ก.ย.69)
+      แต่ถ้าเขาเช็คชื่อเข้ามาจริง **แถวนั้นยังโชว์** — ข้อมูลที่มีอยู่แล้วไม่ซ่อน
     """
     if not _admin(request):
         return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
@@ -941,8 +948,9 @@ def api_checkins(request):
                 a["avgTime"] = ""
             rows.append(a)
         rows.sort(key=lambda r: (-r["late"], -r["days"], r["name"]))
+        n_emp = Employee.objects.filter(active=True, track_checkin=True).count()
         return JsonResponse({"ok": True, "mode": "range", "from": d_from.isoformat(), "to": d_to.isoformat(),
-                             "rows": rows, "employees": Employee.objects.filter(active=True).count()},
+                             "rows": rows, "employees": n_emp},
                             json_dumps_params={"ensure_ascii": False})
 
     raw = (request.GET.get("date") or "").strip()
@@ -970,7 +978,8 @@ def api_checkins(request):
         })
 
     missing, dayoff = [], []
-    for e in Employee.objects.filter(active=True).order_by("position", "nickname"):
+    for e in (Employee.objects.filter(active=True, track_checkin=True)
+              .order_by("position", "nickname")):
         if e.id in seen_emp:
             continue
         item = {"name": e.nickname, "position": e.position, "workStart": e.work_start,
@@ -983,7 +992,7 @@ def api_checkins(request):
     return JsonResponse({"ok": True, "date": day.isoformat(), "dayName": day_name,
                          "isToday": day == today, "counts": n,
                          "rows": rows, "missing": missing, "dayoff": dayoff,
-                         "employees": Employee.objects.filter(active=True).count()},
+                         "employees": Employee.objects.filter(active=True, track_checkin=True).count()},
                         json_dumps_params={"ensure_ascii": False})
 
 

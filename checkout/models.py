@@ -376,6 +376,10 @@ class Employee(models.Model):
     day_off = models.CharField("วันหยุด", max_length=40, blank=True)
     group_id = models.CharField("กลุ่ม LINE ที่ผูกไว้", max_length=64, blank=True)
     active = models.BooleanField("ยังทำงานอยู่", default=True, db_index=True)
+    # ★ 16 ก.ย.69 (เจ้าของสั่ง) — ผู้บริหารไม่ต้องเช็คชื่อเข้างาน
+    #   ติ๊กออก = ไม่ขึ้นในพาเนล "เช็คชื่อเข้างาน" เลย (ไม่นับเป็นคนที่ต้องมา · ไม่ขึ้น "ยังไม่เช็คชื่อ")
+    #   **ไม่เดาจาก "ไม่ได้กรอกตำแหน่ง/เวลา"** เพราะพนักงานใหม่ที่ยังกรอกไม่ครบจะหายไปด้วย
+    track_checkin = models.BooleanField("ต้องเช็คชื่อเข้างาน", default=True, db_index=True)
     note = models.CharField("หมายเหตุ", max_length=200, blank=True)
     source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=MANUAL)
     created_at = models.DateTimeField(auto_now_add=True)
