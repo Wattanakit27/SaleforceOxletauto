@@ -70,6 +70,7 @@ DROP VIEW IF EXISTS v_employee_line;
 CREATE VIEW v_employee_line AS
 SELECT p.user_id,
        p.channel           AS line_account,   -- crm = บอทเดิม · push = บอทใหม่
+       p.display_name      AS display_name,   -- ★ 17 ก.ย.69 ชื่อที่ "ตั้งใน LINE" ของบัญชีนั้น
        e.id                AS employee_id,
        e.nickname          AS "ชื่อเล่น",
        e.position          AS "ตำแหน่งงาน",
@@ -117,17 +118,17 @@ GRANT USAGE, SELECT ON SEQUENCE checkout_checkin_id_seq TO n8n;
 --     FROM d
 --     ON CONFLICT (user_id, date_iso) DO UPDATE SET ... ;
 
--- 6) โปรไฟล์คน LINE — ให้ workflow "ซื้อขายเทิร์นรถ" เลิกใช้แท็บชีต "รายชื่อสมาชิกกลุ่ม"
---    (★ 17 ก.ย.69 · เจ้าของสั่ง "เปลี่ยนโหนดชีตเป็นโหนด Postgres ในการเก็บชื่อเล่น")
---    อ่าน: เอาไปทำ map ชื่อที่ตั้งใน LINE → ชื่อเล่น · เขียน: อัปเดตชื่อที่ตั้งใน LINE เท่านั้น
-GRANT SELECT, INSERT, UPDATE ON checkout_lineprofile TO n8n;
-GRANT USAGE, SELECT ON SEQUENCE checkout_lineprofile_id_seq TO n8n;
-
--- ❗ n8n **ห้ามแตะ nickname / is_employee / employee_id** — 3 ช่องนี้เป็นของระบบเรา
---    (จับคู่กับทะเบียนพนักงานเอง) · ถ้าเขียนทับด้วยค่าว่าง คนที่จับคู่ไว้แล้ว
---    จะถูกรีเซ็ตกลับเป็น "ลูกค้า" ทุกครั้งที่พิมพ์ — คำสั่งใน
---    deploy/n8n_members_postgres.json เขียนแค่ display_name / group_id / last_seen
---    (สิทธิ์ระดับคอลัมน์บังคับไม่ได้เพราะต้อง INSERT ทั้งแถว → คุมด้วยตัวคำสั่งแทน)
+-- 6) แทนแท็บชีต "รายชื่อสมาชิกกลุ่ม" ของ workflow ซื้อขายเทิร์นรถ (★ 17 ก.ย.69)
+--    เจ้าของสั่ง "เปลี่ยนโหนดชีตเป็นโหนด Postgres ในการเก็บชื่อเล่น"
+--
+--    ⚠️★ **ไม่ต้อง GRANT อะไรเพิ่มเลย** — คำสั่งใน deploy/n8n_members_postgres.json
+--       อ่านจาก v_employee_line + v_employees ที่ให้สิทธิ์ไว้แล้วในข้อ 3
+--
+--    เวอร์ชันแรกผมสั่ง `GRANT SELECT, INSERT, UPDATE ON checkout_lineprofile` ซึ่ง **ผิดหลักของไฟล์นี้**
+--    ("ไม่ให้สิทธิ์ตาราง ให้แต่ view ที่จำเป็น") — ตารางนั้นมี **โปรไฟล์ลูกค้าปนอยู่ด้วย**
+--    (วัดจริง 17/09: 217 แถว = พนักงาน 95 + ลูกค้า 122) → n8n จะอ่านแชท/โปรไฟล์ลูกค้าได้หมด
+--    ตอนนี้เพิ่ม display_name เข้า v_employee_line แทน · view นั้น JOIN กับทะเบียนพนักงานอยู่แล้ว
+--    จึง **เห็นเฉพาะพนักงาน 95 บัญชี ลูกค้าไม่หลุดออกไปเลย**
 --
 -- ตรวจว่า map ชื่อได้กี่คน:
---   SELECT count(*) FROM checkout_lineprofile WHERE nickname <> '';
+--   SELECT count(*) FROM v_employee_line WHERE display_name <> '' AND "ชื่อเล่น" <> '';
