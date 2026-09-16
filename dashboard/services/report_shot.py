@@ -137,15 +137,27 @@ def _report_dir() -> str:
     return d
 
 
-def _cleanup_old(days: int = 7) -> None:
-    """ลบรูปรายงานเก่ากว่า N วัน (กันสะสม)"""
+def _cleanup_old(days: int = 7) -> int:
+    """ลบรูปที่แคปไว้เก่ากว่า N วัน (กันสะสม) · คืนจำนวนไฟล์ที่ลบ
+
+    ⚠️★ 16 ก.ย.69 — เดิมกวาดแต่ `report_*.png` (รายงานรายวัน) **ลืมรูปการ์ด `card_*.png`**
+      ซึ่งแคปวันละหลายใบตั้งแต่ ก.ค.69 → ค้างบนดิสก์ 5,575 ไฟล์ = **1.3 GB** (เก่ากว่า 7 วัน 933 MB)
+      รูปพวกนี้ใช้ครั้งเดียว (LINE ดึงไปแล้วจบ) ไม่มีใครเปิดย้อนหลัง
+    """
+    n = 0
     try:
         cutoff = time.time() - days * 86400
-        for f in glob.glob(os.path.join(_report_dir(), "report_*.png")):
-            if os.path.getmtime(f) < cutoff:
-                os.remove(f)
+        for pat in ("report_*.png", "card_*.png"):
+            for f in glob.glob(os.path.join(_report_dir(), pat)):
+                try:
+                    if os.path.getmtime(f) < cutoff:
+                        os.remove(f)
+                        n += 1
+                except Exception:
+                    continue      # ไฟล์เดียวลบไม่ได้ ต้องไม่ทำให้ที่เหลือไม่ถูกกวาด
     except Exception:
         pass
+    return n
 
 
 # แต่ละรูปที่จะแคป: (element id, wrapper id ที่ซ่อนอยู่ height:0 ต้องเปิดก่อน)
