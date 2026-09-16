@@ -76,6 +76,26 @@ for (const it of items) {
   }
 }
 
+// ★★ V11 — ถ้ายังไม่เจอ nickByUserId ใน items ให้ไปหยิบจากโหนด Postgres ตรงๆ
+//   จำเป็นเพราะ "ต่อสายเข้า Merge" พลาดง่ายมาก (ลืมลาก / ลากผิดช่อง / Merge ตัดทิ้ง)
+//   แล้วอาการที่ได้คือ "ชื่อเล่นไม่เปลี่ยน" ซึ่งดูไม่ออกเลยว่าเป็นเพราะสายไม่ถึง
+//   ดึงตรงแบบนี้ = ขอแค่โหนดนั้นรันไปแล้วในรอบเดียวกัน ไม่สนว่าต่อสายยังไง
+if (!nickById) {
+  const NODE_NAMES = [
+    "หาชื่อเล่นจาก userId (Postgres)",
+    "ดึงชื่อเล่นพนักงาน (Postgres)",
+    "Get Members (Master)",
+  ];
+  for (const name of NODE_NAMES) {
+    if (nickById) break;
+    // n8n มี 2 แบบตามรุ่นของโหนด (Code ใหม่ใช้ $(), Function เดิมใช้ $node)
+    try { nickById = String($(name).first().json.nickByUserId || ""); } catch (e) { /* ข้าม */ }
+    if (!nickById) {
+      try { nickById = String($node[name].json.nickByUserId || ""); } catch (e) { /* ข้าม */ }
+    }
+  }
+}
+
 // 3. Helper Functions
 const clean = (v) => String(v ?? "").trim();
 const hasPhone = (t) => /0\d{8,9}/.test(String(t || "").replace(/[-\s]/g, ""));
