@@ -27,7 +27,13 @@ def is_line_user_id(s) -> bool:
 
 
 def _norm(s) -> str:
-    return _KEEP.sub("", (s or "")).lower()
+    """ทำชื่อให้เทียบกันได้ — ตัดอิโมจิ/ช่องว่าง/ตัวพิมพ์ + **แปลงตัวอักษรแฟนซีเป็นตัวธรรมดาก่อน**
+
+    ★ 16 ก.ย.69: ชื่อ LINE หลายคนใช้ยูนิโค้ดสวยๆ (เช่น `𝑃` `𝗠𝗮𝗶` `Ｍａｉ`) ซึ่งไม่ใช่ A-Z ปกติ
+      → เดิมโดน `_KEEP` ตัดทิ้งหมดจนเหลือสตริงว่าง เทียบกับชีตไม่ได้เลย · NFKC แปลงกลับเป็น `P`/`Mai`
+    """
+    import unicodedata
+    return _KEEP.sub("", unicodedata.normalize("NFKC", s or "")).lower()
 
 
 def _load(force=False):
