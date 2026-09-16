@@ -147,7 +147,8 @@ def _cleanup_old(days: int = 7) -> int:
     n = 0
     try:
         cutoff = time.time() - days * 86400
-        for pat in ("report_*.png", "card_*.png"):
+        # ★ เพิ่มรูปตารางเช็คชื่อ (16 ก.ย.69) — ลืมใส่ = สะสมวันละใบไม่มีใครกวาด
+        for pat in ("report_*.png", "card_*.png", "checkin_*.png"):
             for f in glob.glob(os.path.join(_report_dir(), pat)):
                 try:
                     if os.path.getmtime(f) < cutoff:
