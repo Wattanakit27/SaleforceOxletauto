@@ -1265,11 +1265,15 @@ def api_needs(request):
             hits = {}                       # ระบบรถล่ม/ยังไม่ต่อ DB = ยังดูรายการได้ตามปกติ
 
     def one(n):
-        p = n.profile
+        p = n.profile                       # ว่างได้ — เคสจากกลุ่มจ่ายเบอร์ไม่มีโปรไฟล์ LINE
         return {
             "id": n.pk,
-            "name": p.show_name or "(ไม่รู้ชื่อ)",
-            "userId": "" if p.is_employee else p.user_id,
+            "name": n.who,
+            "userId": "" if (not p or p.is_employee) else p.user_id,
+            "leadCode": n.lead_code or "",
+            "source": n.source,
+            "contact": n.contact or "",
+            "channel": n.channel or "",
             "want": n.car_model or n.car_text or "",
             "carText": n.car_text or "",
             "budget": n.budget_max, "budgetMin": n.budget_min,

@@ -504,8 +504,14 @@ class CustomerNeed(models.Model):
     # เหตุผลที่ "ของยังขาด" ไม่ใช่ "คนไม่เอา" → เก็บรอรถได้
     WAITABLE = {RJ_PRICE, RJ_NOCAR}
 
+    # ★ ว่างได้ — เคสจาก **กลุ่มจ่ายเบอร์** เป็นลูกค้าจาก TikTok/FB ที่ยังไม่เคยทักเข้า LINE OA
+    #   จึงไม่มีโปรไฟล์ให้ผูก · ใช้ `lead_code` + `customer_name` แทน
+    #   (ห้ามสร้าง LineProfile ปลอมให้ ไม่งั้นทะเบียนลูกค้าจะเต็มไปด้วยคนที่บอทไม่เคยเห็น)
     profile = models.ForeignKey("LineProfile", verbose_name="ลูกค้า", on_delete=models.CASCADE,
-                                related_name="needs")
+                                related_name="needs", null=True, blank=True)
+    customer_name = models.CharField("ชื่อลูกค้า (เคสจากกลุ่ม)", max_length=120, blank=True)
+    contact = models.CharField("เบอร์/ไลน์ไอดีที่ให้ไว้", max_length=120, blank=True)
+    channel = models.CharField("ช่องทางที่ได้ลีดมา", max_length=80, blank=True)
 
     # ── รถที่หา ──
     car_text = models.CharField("ที่ลูกค้าพิมพ์มา", max_length=300, blank=True)
@@ -554,8 +560,15 @@ class CustomerNeed(models.Model):
             models.Index(fields=["status", "-updated_at"]),
         ]
 
+    @property
+    def who(self) -> str:
+        """ชื่อที่เอาไปโชว์ — โปรไฟล์ LINE ก่อน ไม่มีค่อยใช้ชื่อจากใบจ่ายลีด"""
+        if self.profile_id:
+            return self.profile.show_name or self.customer_name or "(ไม่รู้ชื่อ)"
+        return self.customer_name or self.lead_code or "(ไม่รู้ชื่อ)"
+
     def __str__(self):
-        who = self.profile.show_name if self.profile_id else "-"
+        who = self.who
         return "%s: %s %s" % (who, self.car_model or self.car_text[:30] or "?",
                               ("≤%s" % self.budget_max) if self.budget_max else "")
 

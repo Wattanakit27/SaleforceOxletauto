@@ -5,6 +5,7 @@
     python manage.py customer_needs --analyze            # อ่านแชทแล้วสรุปความต้องการ (ใช้ Gemini)
     python manage.py customer_needs --analyze --limit 5 --dry-run
     python manage.py customer_needs --match              # ใครรอรถอยู่ แล้วตอนนี้มีรถตรงสเปกไหม
+    python manage.py customer_needs --group              # อ่านกลุ่มจ่ายเบอร์เข้าระบบ
     python manage.py customer_needs --match --out d:\\ผล.txt
 
 ⚠️ **ไม่มีคำสั่งไหนส่งข้อความหาลูกค้า** — อ่าน + เขียนฐานข้อมูลเราเองล้วนๆ
@@ -21,6 +22,8 @@ class Command(BaseCommand):
     def add_arguments(self, p):
         p.add_argument("--analyze", action="store_true", help="อ่านแชทแล้วสรุปความต้องการ")
         p.add_argument("--match", action="store_true", help="จับคู่คนที่รอรถกับสต็อก")
+        p.add_argument("--group", action="store_true",
+                       help="อ่านกลุ่มจ่ายเบอร์ (ใบจ่ายลีด + เคส 'ไม่มีรถ')")
         p.add_argument("--limit", type=int, default=50, help="วิเคราะห์กี่คน (default 50)")
         p.add_argument("--days", type=int, default=14, help="ย้อนหลังกี่วัน (default 14)")
         p.add_argument("--force", action="store_true", help="วิเคราะห์ใหม่แม้บทสนทนาไม่เปลี่ยน")
@@ -65,6 +68,14 @@ class Command(BaseCommand):
                 for e in res["errors"][:5]:
                     w("    ! " + e)
 
+        if o["group"]:
+            from checkout import leadgroup
+            st = leadgroup.ingest()
+            w("== อ่านกลุ่มจ่ายเบอร์ ==")
+            for k, v in st.items():
+                w("  %-20s %s" % (k, v))
+            w("  (\"ไม่มีรถ\" = ลูกค้าหารถที่เรายังไม่มี → เก็บรอไว้ พอรถเข้าจะขึ้นในพาเนล)")
+
         if o["match"]:
             from checkout import need_match
             rows = need_match.scan()
@@ -82,7 +93,7 @@ class Command(BaseCommand):
                         c["code"], c["brand"], c["model"], c["year"] or "",
                         ("%s บ." % f"{c['price']:,}") if c["price"] else "(ยังไม่ใส่ราคา)"))
 
-        if not o["analyze"] and not o["match"]:
+        if not o["analyze"] and not o["match"] and not o["group"]:
             w("== ความต้องการลูกค้าที่เก็บไว้ ==")
             total = CustomerNeed.objects.count()
             w("  ทั้งหมด        %d" % total)
