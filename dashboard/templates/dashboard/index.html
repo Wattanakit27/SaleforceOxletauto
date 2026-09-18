@@ -6566,18 +6566,94 @@
         <button onclick="document.getElementById('cust-overlay').remove()" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px">×</button></div>`;
       if (p.status) html += `<div style="font-size:11.5px;color:var(--t3);margin-top:6px">สเตตัส: ${h(p.status)}</div>`;
 
-      const ms = d.messages || [];
-      html += `<div style="margin-top:12px;border:.5px solid var(--bd2);border-radius:12px;padding:10px;background:var(--bg2);max-height:52vh;overflow-y:auto">`;
-      if (!ms.length) html += `<div style="text-align:center;color:var(--t3);padding:20px">ไม่มีข้อความที่เก็บไว้</div>`;
-      ms.forEach(m => {
-        html += `<div style="display:flex;gap:8px;padding:5px 2px;border-top:.5px solid var(--bd)">
-          <span style="color:var(--t3);font-size:10.5px;white-space:nowrap;min-width:74px">${h(m.at)}</span>
-          <span style="color:var(--t1);font-size:12px;white-space:pre-wrap;word-break:break-word">${h(m.text)}</span></div>`;
-      });
+      // ★ ก.ย.69 — บทสนทนา 2 ฝั่ง: ลูกค้าชิดซ้าย · เราชิดขวา
+      //   ต้องแยกฝั่งให้เห็นชัด ไม่งั้นอ่านย้อนหลังแล้วไม่รู้ว่าใครพูดประโยคไหน
+      //   (ซึ่งเป็นข้อมูลที่จะเอาไปสอน chatbot — สลับฝั่งเมื่อไหร่ก็สอนผิดทันที)
+      html += `<div id="cc-thread" style="margin-top:12px;border:.5px solid var(--bd2);border-radius:12px;padding:12px;background:var(--bg2);max-height:46vh;overflow-y:auto">`;
+      html += ccBubbles(d.messages || []);
       html += `</div>`;
-      html += `<div style="font-size:10.5px;color:var(--t3);margin-top:8px">แสดงย้อนหลังสูงสุด ${d.limit} ข้อความ · เก็บเฉพาะข้อความที่ลูกค้าส่งเข้ามา — <b>ข้อความที่แอดมินตอบกลับไม่ได้ผ่านระบบนี้</b> (LINE ไม่ส่งขาตอบกลับมา)</div>`;
+
+      if (d.canReply && p.userId) {
+        html += `<div style="margin-top:10px;display:flex;gap:8px;align-items:flex-end">
+          <textarea id="cc-text" rows="2" placeholder="พิมพ์ข้อความตอบลูกค้า…  (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัดใหม่)"
+            style="flex:1;resize:vertical;min-height:44px;border:.5px solid var(--bd2);border-radius:10px;padding:9px 11px;background:var(--bg);color:var(--t1);font-size:12.5px;font-family:inherit"></textarea>
+          <button id="cc-send" onclick="ccSend('${h(p.userId)}')"
+            style="border:none;background:var(--blue);color:#fff;border-radius:10px;padding:11px 18px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap">ส่ง</button>
+        </div>
+        <div id="cc-err" style="display:none;font-size:11.5px;color:var(--red);margin-top:6px"></div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:7px">ส่งจากบัญชี OA ที่ลูกค้าคุยอยู่ · ทุกข้อความที่ตอบจากหน้านี้จะถูกเก็บเป็นบทสนทนาไว้ใช้พัฒนา chatbot</div>`;
+      } else if (p.isEmployee) {
+        html += `<div style="font-size:11.5px;color:var(--t3);margin-top:10px">คนนี้เป็นพนักงาน — หน้านี้ไว้ตอบลูกค้าเท่านั้น</div>`;
+      }
+
+      html += `<div style="font-size:10.5px;color:var(--t3);margin-top:8px">แสดงย้อนหลังสูงสุด ${d.limit} ข้อความ · <b>ข้อความที่แอดมินตอบจากแอป LINE OA Manager จะไม่ขึ้นที่นี่</b> (LINE ไม่ส่งขาตอบของตัวเองกลับมา) — ตอบจากหน้านี้ถึงจะถูกบันทึก</div>`;
       html += `<div style="text-align:center;margin-top:14px"><button onclick="document.getElementById('cust-overlay').remove()" style="padding:9px 20px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
       box.innerHTML = html;
+      ccBindInput(p.userId || '');
+      ccScroll();
+    }
+
+    // บับเบิลของบทสนทนา — แยกเป็นฟังก์ชันเพราะตอนส่งข้อความใหม่ต้องต่อท้ายทีละอัน
+    function ccBubbles(ms) {
+      if (!ms.length) return `<div style="text-align:center;color:var(--t3);padding:20px">ไม่มีข้อความที่เก็บไว้</div>`;
+      return ms.map(ccBubble).join('');
+    }
+    function ccBubble(m) {
+      const out = (m.dir === 'out');
+      const side = out ? 'flex-end' : 'flex-start';
+      const bg   = out ? 'var(--blue)' : 'var(--bg)';
+      const fg   = out ? '#fff' : 'var(--t1)';
+      const who  = out ? ('เรา' + (m.by ? ' · ' + h(String(m.by)) : '')) : '';
+      return `<div style="display:flex;justify-content:${side};margin-bottom:8px">
+        <div style="max-width:78%">
+          <div style="background:${bg};color:${fg};border-radius:13px;padding:8px 12px;font-size:12.5px;white-space:pre-wrap;word-break:break-word">${h(String(m.text || ''))}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:3px;text-align:${out?'right':'left'}">${who ? who + ' · ' : ''}${h(String(m.at || ''))}</div>
+        </div></div>`;
+    }
+    function ccScroll() {
+      const t = document.getElementById('cc-thread');
+      if (t) t.scrollTop = t.scrollHeight;          // เปิดมาต้องเห็นข้อความล่าสุดก่อน
+    }
+    function ccBindInput(uid) {
+      const ta = document.getElementById('cc-text');
+      if (!ta) return;
+      ta.focus();
+      ta.onkeydown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ccSend(uid); }
+      };
+    }
+
+    async function ccSend(uid) {
+      const ta = document.getElementById('cc-text');
+      const btn = document.getElementById('cc-send');
+      const er = document.getElementById('cc-err');
+      if (!ta || !btn) return;
+      const text = (ta.value || '').trim();
+      if (!text) return;
+      btn.disabled = true; btn.textContent = 'กำลังส่ง…'; btn.style.opacity = '.6';
+      if (er) er.style.display = 'none';
+      try {
+        const r = await fetch('/checkout/api/reply', {
+          method: 'POST', credentials: 'same-origin',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({user_id: uid, text: text}),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        const t = document.getElementById('cc-thread');
+        if (t) {
+          // ข้อความแรกของห้อง = ต้องล้างคำว่า "ไม่มีข้อความ" ออกก่อน
+          if (t.querySelector('div[style*="text-align:center"]')) t.innerHTML = '';
+          t.insertAdjacentHTML('beforeend', ccBubble(d.message));
+        }
+        ta.value = ''; ccScroll();
+      } catch (e) {
+        // ★ ส่งไม่ออกต้องคงข้อความไว้ในช่อง — ผู้ใช้จะได้ไม่ต้องพิมพ์ใหม่
+        if (er) { er.textContent = String(e.message || e); er.style.display = 'block'; }
+      } finally {
+        btn.disabled = false; btn.textContent = 'ส่ง'; btn.style.opacity = '1';
+        ta.focus();
+      }
     }
 
     async function openHealthPanel() {

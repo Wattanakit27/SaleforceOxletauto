@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/line_config", views.api_line_config, name="checkout_line_config"),
     # แชทลูกค้า (CRM) — อ่านอย่างเดียว · แดชบอร์ดหลักเปิดเป็นพาเนลของตัวเอง
     path("api/customers", views.api_customers, name="checkout_customers"),
+    path("api/reply", views.api_reply, name="checkout_reply"),
     # ทะเบียนพนักงาน (ย้ายมาจากชีต · แก้ในระบบเราได้เลย)
     path("api/employees", views.api_employees, name="checkout_employees"),
     # เช็คชื่อเข้างานรายวัน (n8n เขียนเข้ามา · หน้านี้อ่านอย่างเดียว)

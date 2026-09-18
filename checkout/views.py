@@ -1149,7 +1149,11 @@ def api_customers(request):
                 "type": g.msg_type or "",
                 "media": bool(g.has_media),
                 "channel": g.channel or "",
+                # ★ ก.ย.69 — ฝั่งไหนพูด + ใครเป็นคนตอบ (หน้าเว็บวางซ้าย/ขวาจากตรงนี้)
+                "dir": g.direction or "in",
+                "by": g.sent_by_name or "",
             } for g in rows],
+            "canReply": bool(uid) and not emp,
             "limit": CUST_MSG_MAX,
         }, json_dumps_params={"ensure_ascii": False})
 
@@ -1185,6 +1189,46 @@ def api_customers(request):
     return JsonResponse({"ok": True, "totals": totals, "byChannel": by_channel,
                          "customers": out, "shown": len(out), "max": CUST_LIST_MAX},
                         json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def api_reply(request):
+    """**ตอบแชทลูกค้า** — POST `{user_id, text}` · admin/ผู้บริหารเท่านั้น
+
+    ★ ก.ย.69 เจ้าของสั่งทำหน้าตอบแชท · ดู [chat.py](chat.py) สำหรับกติกาการเลือกบัญชี OA
+      และเหตุผลที่ต้องเก็บข้อความขาออกลงฐานข้อมูลด้วย (= ข้อมูลสอน chatbot)
+
+    `csrf_exempt` เพราะพาเนลอยู่ในหน้าแดชบอร์ดที่โพสต์ JSON แบบเดียวกับ endpoint อื่นของไฟล์นี้
+    — ตัวกันจริงคือ `_admin()` ที่เช็ค session ฝั่งขาย
+    """
+    actor = _admin(request)
+    if not actor:
+        return JsonResponse({"ok": False, "error": "ต้อง login admin/ผู้บริหาร"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "ต้องเป็น POST"}, status=405,
+                            json_dumps_params={"ensure_ascii": False})
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except Exception:
+        body = {}
+    uid = (body.get("user_id") or "").strip()
+    text = (body.get("text") or "").strip()
+
+    from .chat import ReplyError, send_reply
+    try:
+        row = send_reply(uid, text, actor)
+    except ReplyError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400,
+                            json_dumps_params={"ensure_ascii": False})
+    except Exception as e:                      # เน็ตล่ม/LINE ไม่ตอบ — อย่าคืน 500 เปล่าๆ
+        return JsonResponse({"ok": False, "error": "ส่งไม่สำเร็จ: %s" % e}, status=502,
+                            json_dumps_params={"ensure_ascii": False})
+
+    return JsonResponse({"ok": True, "message": {
+        "at": timezone.localtime(row.sent_at).strftime("%d/%m %H:%M"),
+        "text": row.text, "dir": "out", "by": row.sent_by_name or "",
+    }}, json_dumps_params={"ensure_ascii": False})
 
 
 def chat_stats():

@@ -273,6 +273,22 @@ class GroupChat(models.Model):
     #   ไม่งั้นพอบัญชีใหม่เริ่มรับด้วย จะแยกไม่ออกว่าใครคุยกับตัวไหน (มาจาก webhook `destination`)
     channel = models.CharField("บัญชีที่รับข้อความ", max_length=24, blank=True, db_index=True)
 
+    # ★★ ก.ย.69 — ทิศทางของข้อความ (เจ้าของสั่งทำหน้าตอบแชท)
+    #   เดิมตารางนี้เก็บ "ขาเข้า" อย่างเดียว → อ่านย้อนหลังแล้วเห็นแต่ฝั่งลูกค้าพูด
+    #   ไม่รู้ว่าแอดมินตอบว่าอะไร = **เอาไปสอน chatbot ไม่ได้เลย** เพราะไม่มีคู่ถาม-ตอบ
+    #   เก็บขาออกลงตารางเดียวกันเพื่อให้อ่านเป็นบทสนทนาต่อเนื่องได้ (เรียงตาม sent_at)
+    IN, OUT = "in", "out"
+    DIRECTION_CHOICES = [(IN, "ลูกค้าส่งมา"), (OUT, "เราตอบไป")]
+    direction = models.CharField("ทิศทาง", max_length=4, choices=DIRECTION_CHOICES,
+                                 default=IN, db_index=True)
+
+    # ใครเป็นคนตอบ (เฉพาะ direction=out) — ตอบคำถาม "แอดมินคนไหนตอบลูกค้ายังไง"
+    # FK ไปทะเบียนพนักงาน + เก็บชื่อเป็นข้อความคู่กัน เผื่อคนนั้นถูกลบออกจากทะเบียนทีหลัง
+    sent_by = models.ForeignKey("Employee", verbose_name="คนตอบ", null=True, blank=True,
+                                on_delete=models.SET_NULL, related_name="replies")
+    sent_by_name = models.CharField("ชื่อคนตอบ", max_length=80, blank=True)
+    send_error = models.CharField("ส่งไม่สำเร็จเพราะ", max_length=200, blank=True)
+
     sent_at = models.DateTimeField("เวลาในกลุ่ม", null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -447,3 +463,107 @@ class CheckIn(models.Model):
     def __str__(self):
         who = self.employee.nickname if self.employee_id and self.employee else (self.display_name or self.user_id[:8])
         return "%s %s %s" % (self.date_iso, who, self.get_status_display())
+
+
+class CustomerNeed(models.Model):
+    """**ลูกค้าคนนี้กำลังหารถอะไร งบเท่าไหร่** — 1 แถว = ความต้องการ 1 เรื่อง
+
+    ★ ก.ย.69 เจ้าของสั่ง: *"เก็บทุกอย่างที่คิดว่าเป็นข้อมูล ทั้งลูกค้าหารถราคาเท่านี้
+      แท็กลูกค้าคนนี้เป็น lead แล้วตามต่อว่าเป็น rj เพราะอะไร ถ้าเพราะราคาไม่ถึง
+      ก็เก็บไว้รอรถที่ราคาพอดีตามงบ"*
+
+    **ทำไมต้องเป็นตารางแยก ไม่ใช่ฟิลด์ใน LineProfile**: คนเดียวหารถได้หลายรอบ
+    (รอบนี้หา Yaris งบ 3 แสน · อีกสามเดือนมาหากระบะ) — ยัดลงโปรไฟล์จะทับกันจนเหลือรอบเดียว
+
+    **หัวใจอยู่ที่ `reject_kind`** — ปิดเคสเพราะ "ไม่มีรถ/ราคาไม่ลงตัว" ไม่ใช่การเสียลูกค้า
+    แต่เป็น **ใบสั่งซื้อที่รอของ** · พอรถเข้าสต็อกตรงสเปก/งบ ต้องเอากลับมาเสนอได้ทันที
+    (ต่างจาก "เครดิตไม่ผ่าน/ซื้อที่อื่นแล้ว" ที่รอไปก็ไม่ได้อะไร)
+    """
+
+    # ── สถานะของความต้องการ ──
+    NEW, LEAD, BOOKED, WON, RJ = "new", "lead", "booked", "won", "rj"
+    STATUS_CHOICES = [
+        (NEW, "เพิ่งถามเข้ามา"),
+        (LEAD, "เป็นลีดแล้ว (มีเซลล์ตาม)"),
+        (BOOKED, "จองแล้ว"),
+        (WON, "ปิดการขายได้"),
+        (RJ, "ไม่ได้ไปต่อ (RJ)"),
+    ]
+
+    # ── ไม่ได้ไปต่อเพราะอะไร — ตัวนี้ตัดสินว่า "รอรถให้ได้ไหม" ──
+    RJ_PRICE, RJ_NOCAR, RJ_CREDIT, RJ_LOST, RJ_SILENT, RJ_OTHER = (
+        "price", "nocar", "credit", "lost", "silent", "other")
+    REJECT_CHOICES = [
+        (RJ_PRICE, "ราคา/งบไม่ลงตัว"),          # ← รอรถที่เข้างบได้
+        (RJ_NOCAR, "ไม่มีรถรุ่นที่ต้องการ"),      # ← รอรถรุ่นนั้นเข้าได้
+        (RJ_CREDIT, "เครดิต/ไฟแนนซ์ไม่ผ่าน"),
+        (RJ_LOST, "ซื้อที่อื่น/ได้รถแล้ว"),
+        (RJ_SILENT, "ติดต่อไม่ได้/เงียบไป"),
+        (RJ_OTHER, "อื่นๆ"),
+    ]
+    # เหตุผลที่ "ของยังขาด" ไม่ใช่ "คนไม่เอา" → เก็บรอรถได้
+    WAITABLE = {RJ_PRICE, RJ_NOCAR}
+
+    profile = models.ForeignKey("LineProfile", verbose_name="ลูกค้า", on_delete=models.CASCADE,
+                                related_name="needs")
+
+    # ── รถที่หา ──
+    car_text = models.CharField("ที่ลูกค้าพิมพ์มา", max_length=300, blank=True)
+    car_model = models.CharField("รุ่นที่จับได้", max_length=80, blank=True, db_index=True)
+    car_year_min = models.PositiveSmallIntegerField("ปีตั้งแต่", null=True, blank=True)
+    car_year_max = models.PositiveSmallIntegerField("ปีถึง", null=True, blank=True)
+
+    # ── งบ ── (เก็บ 2 แบบ เพราะลูกค้าพูดคนละอย่าง: "ไม่เกิน 4 แสน" vs "ผ่อนเดือนละ 8 พัน")
+    budget_max = models.PositiveIntegerField("งบสูงสุด (บาท)", null=True, blank=True, db_index=True)
+    budget_min = models.PositiveIntegerField("งบต่ำสุด (บาท)", null=True, blank=True)
+    monthly_max = models.PositiveIntegerField("ผ่อนไหวเดือนละ (บาท)", null=True, blank=True)
+    down_max = models.PositiveIntegerField("ดาวน์ได้ (บาท)", null=True, blank=True)
+
+    status = models.CharField("สถานะ", max_length=8, choices=STATUS_CHOICES,
+                              default=NEW, db_index=True)
+    reject_kind = models.CharField("RJ เพราะ", max_length=8, choices=REJECT_CHOICES,
+                                   blank=True, db_index=True)
+    reject_note = models.CharField("รายละเอียดที่ปิดเคส", max_length=300, blank=True)
+
+    # ★ ยังรอรถอยู่ไหม — ตั้ง True อัตโนมัติเมื่อ RJ ด้วยเหตุผลใน WAITABLE
+    #   ปิดเองได้ถ้าลูกค้าบอกว่าไม่เอาแล้ว (ไม่งั้นจะทักหาคนที่ไปซื้อที่อื่นแล้ว)
+    waiting = models.BooleanField("รอรถที่ตรงสเปกอยู่", default=False, db_index=True)
+
+    lead_code = models.CharField("รหัสลีด (ถ้ามี)", max_length=32, blank=True, db_index=True)
+    seller = models.CharField("เซลล์ที่ดูแล", max_length=80, blank=True)
+
+    # ที่มา: จับเองจากแชท / แอดมินกรอก / จากกลุ่มจ่ายเบอร์
+    CHAT, MANUAL, GROUP = "chat", "manual", "group"
+    SRC_CHOICES = [(CHAT, "จับจากแชทลูกค้า"), (MANUAL, "แอดมินกรอกเอง"), (GROUP, "จากกลุ่มจ่ายเบอร์")]
+    source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=CHAT)
+    # ข้อความที่ใช้สรุปออกมาเป็นแถวนี้ (ไว้ตรวจย้อนหลังว่าจับถูกไหม)
+    evidence = models.TextField("ข้อความที่ใช้สรุป", blank=True)
+    confidence = models.CharField("ความมั่นใจ", max_length=8, blank=True)
+
+    note = models.TextField("หมายเหตุ", blank=True)
+    created_at = models.DateTimeField("บันทึกเมื่อ", auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField("แก้ล่าสุด", auto_now=True)
+    matched_at = models.DateTimeField("เจอรถที่ตรง", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        verbose_name = "ความต้องการลูกค้า"
+        verbose_name_plural = "ความต้องการลูกค้า"
+        indexes = [
+            models.Index(fields=["waiting", "car_model"]),
+            models.Index(fields=["status", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        who = self.profile.show_name if self.profile_id else "-"
+        return "%s: %s %s" % (who, self.car_model or self.car_text[:30] or "?",
+                              ("≤%s" % self.budget_max) if self.budget_max else "")
+
+    def mark_reject(self, kind, note=""):
+        """ปิดเคส — ตั้ง `waiting` ให้เองตามเหตุผล (อย่าให้คนมานั่งจำว่าอันไหนรอได้)"""
+        self.status = self.RJ
+        self.reject_kind = kind
+        if note:
+            self.reject_note = note[:300]
+        self.waiting = kind in self.WAITABLE
+        return self
