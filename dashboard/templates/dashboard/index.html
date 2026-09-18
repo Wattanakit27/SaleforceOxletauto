@@ -6573,7 +6573,14 @@
       html += ccBubbles(d.messages || []);
       html += `</div>`;
 
-      if (d.canReply && p.userId) {
+      // ★ ก.ย.69 — สวิตช์ล็อกการส่งจริง (เจ้าของสั่ง "อย่าเพิ่งส่งข้อความอะไรหาลูกค้า")
+      //   ซ่อนปุ่มอย่างเดียวไม่พอ เซิร์ฟเวอร์ปฏิเสธด้วย — ตรงนี้แค่บอกผู้ใช้ว่าทำไมส่งไม่ได้
+      if (d.canReply && p.userId && !d.replyOn) {
+        html += `<div style="margin-top:10px;border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:11px;padding:11px 13px">
+          <div style="font-size:12.5px;font-weight:700;color:var(--amber)">🔒 ยังล็อกการส่งหาลูกค้าไว้อยู่</div>
+          <div style="font-size:11.5px;color:var(--t2);margin-top:4px;line-height:1.6">ระบบพร้อมแล้ว แต่ตั้งใจล็อกไว้จนกว่าจะสั่งเปิด — ยังไม่มีข้อความออกไปหาลูกค้าแน่นอน<br>
+          เปิดเมื่อพร้อม: <code style="font-size:11px">manage.py checkout_config --reply on</code></div></div>`;
+      } else if (d.canReply && p.userId) {
         html += `<div style="margin-top:10px;display:flex;gap:8px;align-items:flex-end">
           <textarea id="cc-text" rows="2" placeholder="พิมพ์ข้อความตอบลูกค้า…  (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัดใหม่)"
             style="flex:1;resize:vertical;min-height:44px;border:.5px solid var(--bd2);border-radius:10px;padding:9px 11px;background:var(--bg);color:var(--t1);font-size:12.5px;font-family:inherit"></textarea>

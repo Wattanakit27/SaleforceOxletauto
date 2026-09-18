@@ -1154,6 +1154,8 @@ def api_customers(request):
                 "by": g.sent_by_name or "",
             } for g in rows],
             "canReply": bool(uid) and not emp,
+            # ★ สวิตช์ล็อกการส่งจริง — หน้าเว็บต้องรู้ เพื่อบอกผู้ใช้ว่าทำไมส่งไม่ได้
+            "replyOn": __import__("checkout.chat", fromlist=["chat"]).reply_on(),
             "limit": CUST_MSG_MAX,
         }, json_dumps_params={"ensure_ascii": False})
 

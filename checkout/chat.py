@@ -32,6 +32,26 @@ class ReplyError(Exception):
     """ส่งไม่ได้ — ข้อความในนี้เอาไปโชว์ผู้ใช้ได้เลย (ภาษาคน ไม่ใช่ error ดิบ)"""
 
 
+def reply_on() -> bool:
+    """เปิดให้ส่งข้อความหาลูกค้าจริงหรือยัง — **ปิดโดยปริยาย**
+
+    ★ ก.ย.69 เจ้าของสั่ง: *"อย่าเพิ่งส่งข้อความอะไรหาลูกค้านะ"*
+
+    **ทำไมต้องมีสวิตช์แยก ทั้งที่ปุ่มอยู่หลัง login แอดมินอยู่แล้ว** — ปุ่มที่ส่งของจริงออกไป
+    หาคนนอกบริษัท กดพลาดแล้วเรียกคืนไม่ได้ · ระหว่างที่ยังทดสอบกันอยู่ ต้องล็อกไว้ที่
+    ฝั่งเซิร์ฟเวอร์ ไม่ใช่แค่ซ่อนปุ่ม (ยิง API ตรงได้) · กติกาเดียวกับ `lineout.send_on()`
+    ที่คุมการโพสต์เข้ากลุ่ม
+
+    เปิดเมื่อพร้อม: `manage.py checkout_config --reply on`
+    """
+    try:
+        from dashboard.services import cache_store
+        cfg = (cache_store.get_kv("checkout_line_config") or {}).get("data") or {}
+        return bool(cfg.get("reply_customer"))
+    except Exception:
+        return False                      # อ่านค่าไม่ได้ = ถือว่าปิด (fail-safe)
+
+
 def _channel_for(prof: LineProfile) -> str:
     """ลูกค้าคนนี้คุยอยู่กับบัญชี OA ตัวไหน
 
@@ -78,6 +98,12 @@ def send_reply(user_id: str, text: str, actor: dict | None = None) -> GroupChat:
     prof = LineProfile.objects.filter(user_id=user_id).first()
     if not prof:
         raise ReplyError("ไม่รู้จักลูกค้าคนนี้ (ยังไม่เคยมีข้อความเข้ามา)")
+
+    # ★ ด่านสุดท้ายก่อนออกไปหาคนนอกบริษัท — เช็คหลังตรวจ input ครบแล้ว
+    #   เพื่อให้คนทดสอบเจอ error เรื่องข้อความผิดก่อน ไม่ใช่มาติดตรงนี้แล้วไม่รู้ว่าอย่างอื่นถูกไหม
+    if not reply_on():
+        raise ReplyError("ยังปิดการส่งหาลูกค้าอยู่ (ตั้งใจล็อกไว้) — "
+                         "เปิดด้วยคำสั่ง `manage.py checkout_config --reply on` บนเซิร์ฟเวอร์")
 
     channel = _channel_for(prof)
     token = LC.token_of(channel) if channel else LC.dm_token()
