@@ -49,20 +49,48 @@ def _stock():
     return out
 
 
+# ★ ยี่ห้อ — ตรงแค่ยี่ห้อ **ไม่พอ** ที่จะเรียกว่า "รถตรงสเปก"
+#   เจอจริงตอนทดสอบ: ลูกค้าหา "Toyota Camry" แล้วระบบจับ Toyota Yaris มาด้วย
+#   เพราะคำว่า toyota ไปตรงกับรถโตโยต้าทุกคันในสต็อก → เสนอผิดคัน เสียเครดิตกับลูกค้า
+_BRANDS = {
+    "toyota", "honda", "nissan", "mazda", "isuzu", "mitsubishi", "ford", "suzuki",
+    "hyundai", "kia", "chevrolet", "mg", "benz", "mercedes", "bmw", "audi", "volvo",
+    "subaru", "lexus", "โตโยต้า", "ฮอนด้า", "นิสสัน", "มาสด้า", "อีซูซุ", "มิตซู",
+    "มิตซูบิชิ", "ฟอร์ด", "ซูซูกิ", "ฮุนได", "เชฟโรเลต", "เบนซ์",
+}
+# คำที่โผล่ในประโยคแต่ไม่ได้บอกว่าเป็นรถรุ่นไหน
+_STOP = {"ลูกค้า", "สนใจ", "อยาก", "ต้องการ", "ราคา", "ประมาณ", "ไม่มีรถ", "ไม่มี",
+         "เงินสด", "ผ่อน", "ดาวน์", "ครับ", "ค่ะ", "คัน", "รถ"}
+
+
+def _tokens(text: str) -> tuple[list, list]:
+    """แยกคำที่ใช้เทียบ → (คำที่เป็นชื่อรุ่น, คำที่เป็นยี่ห้อ)"""
+    model, brand = [], []
+    for w in _norm(text).split():
+        if len(w) < 3 or w in _STOP:
+            continue
+        if w.isdigit():
+            continue                               # ปี/งบ ("2014", "200") ไม่ใช่ชื่อรุ่น
+        (brand if w in _BRANDS else model).append(w)
+    return model, brand
+
+
 def matches_for(need: CustomerNeed, stock=None) -> list:
     """รถในสต็อกที่ตรงกับความต้องการนี้ (ตรงรุ่น + เข้างบ + ปีตรง)"""
-    want = _norm(need.car_model or need.car_text)
-    if not want:
-        return []                                  # ไม่รู้ว่าหารุ่นไหน = จับคู่ไม่ได้
-    words = [w for w in want.split() if len(w) >= 3]
+    model_w, brand_w = _tokens(need.car_model or need.car_text)
+    # ต้องตรงที่ **ชื่อรุ่น** · รู้แค่ยี่ห้อ ("อยากได้โตโยต้า") ถือว่ากว้างเกินไป ไม่เดาให้
+    words = model_w
     if not words:
         return []
 
     cap = int((need.budget_max or 0) * PRICE_GRACE) if need.budget_max else 0
     hits = []
     for c in (stock if stock is not None else _stock()):
-        # ตรงรุ่น: คำใดคำหนึ่งของสิ่งที่ลูกค้าหา ต้องอยู่ในชื่อรถ
+        # ตรงรุ่น: ชื่อรุ่นที่ลูกค้าบอกต้องอยู่ในชื่อรถ
         if not any(w in c["key"] for w in words):
+            continue
+        # ถ้าลูกค้าระบุยี่ห้อมาด้วย ก็ต้องเป็นยี่ห้อนั้น (กัน "City" ของ Honda ไปชนรุ่นอื่น)
+        if brand_w and not any(b in c["key"] for b in brand_w):
             continue
         # เข้างบ — รถที่ยังไม่ได้ใส่ราคา (0) ไม่ตัดทิ้ง แต่ติดป้ายว่าไม่รู้ราคา
         if cap and c["price"] and c["price"] > cap:
@@ -95,10 +123,14 @@ def scan(mark: bool = True) -> list:
             continue
         if mark and not need.matched_at:
             CustomerNeed.objects.filter(pk=need.pk).update(matched_at=timezone.now())
+        # ⚠️ `profile` ว่างได้ — เคสจากกลุ่มจ่ายเบอร์เป็นลีดจาก TikTok/FB ที่ยังไม่เคย
+        #    ทักเข้า LINE OA · ใช้ `need.who` (ชื่อจากใบจ่ายลีด) แทน และไม่มี user_id ให้ทัก
         out.append({
             "need": need,
-            "customer": need.profile.show_name,
-            "user_id": need.profile.user_id,
+            "customer": need.who,
+            "user_id": need.profile.user_id if need.profile_id else "",
+            "leadCode": need.lead_code or "",
+            "contact": need.contact or "",
             "want": need.car_model or need.car_text,
             "budget": need.budget_max,
             "why": need.get_reject_kind_display() if need.reject_kind else "",

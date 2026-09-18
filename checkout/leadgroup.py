@@ -118,6 +118,88 @@ def classify(msg: str) -> tuple[str, bool]:
     return "", False
 
 
+# ── แกะตัวเลขจากข้อความอัปเดต ────────────────────────────────────
+# **ทำไมต้องแกะ** — ถ้าไม่รู้งบ ตอนจับคู่สต็อกจะไม่มีตัวกรองราคา แล้วเสนอรถ 489,000
+# ให้คนที่บอกว่า "ไม่ข้าม 250000" (เจอจริงตอนทดสอบกับข้อมูล prod) = เสียเครดิตกับลูกค้า
+
+# "แสน"/"ล้าน" ต้องคูณ — "3 แสน" = 300,000 ไม่ใช่ 3
+_UNIT = [("ล้าน", 1000000), ("แสน", 100000), ("หมื่น", 10000), ("พัน", 1000)]
+# ผ่อนต่อเดือนกับราคารถอยู่คนละสเกล ใช้แยกว่าเลขที่เจอเป็นอะไร
+_MONTHLY_CAP = 40000
+_PRICE_FLOOR = 40000
+
+
+def _money(tok: str, unit: str = "") -> int:
+    """'250000' / '250,000' / '3 แสน' / '2.5 แสน' → จำนวนเต็มบาท"""
+    try:
+        n = float(tok.replace(",", "").strip())
+    except ValueError:
+        return 0
+    for name, mul in _UNIT:
+        if name in unit:
+            return int(n * mul)
+    return int(n)
+
+
+_NUM = r"(\d[\d,]*(?:\.\d+)?)\s*(ล้าน|แสน|หมื่น|พัน)?"
+_BUDGET_RE = re.compile(
+    r"(?:งบ|ราคา|ไม่เกิน|ไม่ข้าม|ไม่ถึง|ภายใน|วงเงิน|สด)\s*(?:ไม่เกิน|ไม่ข้าม)?\s*" + _NUM)
+_MONTHLY_RE = re.compile(r"ผ่อน\D{0,8}" + _NUM)
+# "ปี 18" · "ปี 2014" · "ปี 23-24" · "ปี 12-14"
+_YEAR_RE = re.compile(r"ปี\s*(\d{2,4})\s*(?:[-–ถึง/]\s*(\d{2,4}))?")
+
+# ชื่อรุ่นที่คนพิมพ์เป็นไทย — สต็อกเก็บเป็นอังกฤษ ไม่แปลงก็จับคู่ไม่เจอ
+_TH_MODEL = {
+    "แคมรี่": "camry", "แคมรี": "camry", "ซีวิค": "civic", "ซิตี้": "city",
+    "ยาริส": "yaris", "อัลเมร่า": "almera", "ฟอร์จูนเนอร์": "fortuner",
+    "วีออส": "vios", "แจ๊ส": "jazz", "แอคคอร์ด": "accord", "มาร์ช": "march",
+    "อัลติส": "altis", "รีโว่": "revo", "วีโก้": "vigo", "ดีแม็ก": "d-max",
+    "ปาเจโร่": "pajero", "เทอร์ร่า": "terra", "ครอส": "cross", "ซิตี": "city",
+}
+
+
+def _year4(v: int) -> int:
+    """18 → 2018 · 67 → 2024 (พ.ศ. 2 หลัก) · 2014 → 2014"""
+    if v >= 1000:
+        return v - 543 if v > 2500 else v
+    return 2500 + v - 543 if v >= 50 else 2000 + v
+
+
+def parse_specs(text: str) -> dict:
+    """แกะ งบ/ผ่อน/ปี/ชื่อรุ่น จากข้อความที่คนพิมพ์ — ไม่เจอก็คืนค่าว่าง ไม่เดา"""
+    t = (text or "")
+    out = {}
+
+    m = _BUDGET_RE.search(t)
+    if m:
+        v = _money(m.group(1), m.group(2) or "")
+        if v >= _PRICE_FLOOR:
+            out["budget_max"] = v
+
+    m = _MONTHLY_RE.search(t)
+    if m:
+        v = _money(m.group(1), m.group(2) or "")
+        # "ผ่อน 7-8000" → regex จับ 7 มาก่อน · ค่าที่เล็กเกินไปถือว่าอ่านไม่ออก ทิ้ง
+        if 1000 <= v <= _MONTHLY_CAP:
+            out["monthly_max"] = v
+
+    m = _YEAR_RE.search(t)
+    if m:
+        a = _year4(int(m.group(1)))
+        b = _year4(int(m.group(2))) if m.group(2) else None
+        if 1990 <= a <= 2100:
+            out["car_year_min"] = a
+            if b and a <= b <= 2100:
+                out["car_year_max"] = b
+
+    low = t.lower()
+    for th, en in _TH_MODEL.items():
+        if th in low:
+            out["car_model"] = en
+            break
+    return out
+
+
 def _find(lead_code: str) -> CustomerNeed | None:
     """หาเคสจากเลขลีด — เทียบด้วย **ตัวเลขท้าย** เพราะในกลุ่มพิมพ์แค่ `7364`
     แต่ใบจ่ายลีดเป็น `TLD9-7364`
@@ -197,6 +279,10 @@ def ingest(limit: int = 4000) -> dict:
                 # ข้อความนี้แหละคือ "รถที่ลูกค้าหาแล้วเราไม่มี" — เชื่อถือกว่าชื่อโฆษณาเสมอ
                 need.car_text = msg[:300]
                 need.confidence = "high"
+                # ★ แกะ งบ/ผ่อน/ปี/ชื่อรุ่นไทย ออกมาด้วย ไม่งั้นตอนจับคู่สต็อกไม่มีตัวกรองราคา
+                #   แล้วจะเสนอรถ 489,000 ให้คนที่บอกว่า "ไม่ข้าม 250000" (เจอจริงกับข้อมูล prod)
+                for k, v in parse_specs(msg).items():
+                    setattr(need, k, v)
             else:
                 st["ปิดเคส"] += 1
         need.evidence = (need.evidence or "")[:600] + "\n[อัปเดต] " + msg[:300]

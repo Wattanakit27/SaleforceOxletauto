@@ -84,7 +84,11 @@ class Command(BaseCommand):
             w("   (รายการนี้ไว้ให้คนของเราตัดสินใจเอง — ระบบไม่ได้ทักลูกค้า)")
             for r in rows:
                 w("")
-                w("  ลูกค้า : %s" % r["customer"])
+                w("  ลูกค้า : %s%s" % (
+                    r["customer"],
+                    "  [ลีด %s]" % r["leadCode"] if r.get("leadCode") else ""))
+                if not r["user_id"] and r.get("contact"):
+                    w("  ติดต่อ : %s  (ไม่ได้ทักผ่าน LINE OA — ต้องโทร)" % r["contact"])
                 w("  อยากได้: %s%s%s" % (r["want"],
                                         " · งบ %s" % f"{r['budget']:,}" if r["budget"] else "",
                                         " · เคยปิดเพราะ %s" % r["why"] if r["why"] else ""))
