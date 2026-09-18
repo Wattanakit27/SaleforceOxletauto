@@ -1233,6 +1233,77 @@ def api_reply(request):
     }}, json_dumps_params={"ensure_ascii": False})
 
 
+def api_needs(request):
+    """**ความต้องการลูกค้า** — ใครหารถอะไร งบเท่าไหร่ ใครรอรถอยู่ (admin/ผู้บริหาร)
+
+    `?waiting=1` = เฉพาะคนที่รอรถ · `?match=1` = แนบรถในสต็อกที่ตรงสเปกมาด้วย
+
+    ★ ก.ย.69 — **อ่านอย่างเดียว ไม่มีการส่งข้อความหาลูกค้าจากหน้านี้**
+      รายการนี้ไว้ให้คนของเราเห็นว่า "มีของให้เสนอแล้วนะ" แล้วตัดสินใจทักเอง
+    """
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin/ผู้บริหาร"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from .models import CustomerNeed
+
+    qs = CustomerNeed.objects.select_related("profile").order_by("-updated_at")
+    if request.GET.get("waiting"):
+        qs = qs.filter(waiting=True)
+    rows = list(qs[:300])
+
+    # จับคู่สต็อกทีเดียวสำหรับทุกแถว — อ่านรถครั้งเดียว ไม่ยิงต่อแถว
+    hits = {}
+    if request.GET.get("match"):
+        try:
+            from . import need_match
+            stock = need_match._stock()
+            for n in rows:
+                m = need_match.matches_for(n, stock)
+                if m:
+                    hits[n.pk] = m[:3]
+        except Exception:
+            hits = {}                       # ระบบรถล่ม/ยังไม่ต่อ DB = ยังดูรายการได้ตามปกติ
+
+    def one(n):
+        p = n.profile
+        return {
+            "id": n.pk,
+            "name": p.show_name or "(ไม่รู้ชื่อ)",
+            "userId": "" if p.is_employee else p.user_id,
+            "want": n.car_model or n.car_text or "",
+            "carText": n.car_text or "",
+            "budget": n.budget_max, "budgetMin": n.budget_min,
+            "monthly": n.monthly_max, "down": n.down_max,
+            "yearMin": n.car_year_min, "yearMax": n.car_year_max,
+            "status": n.status, "statusName": n.get_status_display(),
+            "rejectKind": n.reject_kind,
+            "rejectName": n.get_reject_kind_display() if n.reject_kind else "",
+            "waiting": n.waiting,
+            "confidence": n.confidence or "",
+            "evidence": n.evidence or "",
+            "seller": n.seller or "",
+            "at": timezone.localtime(n.updated_at).strftime("%d/%m/%y %H:%M"),
+            "cars": [{"code": c["code"], "name": ("%s %s" % (c["brand"], c["model"])).strip(),
+                      "year": c["year"], "price": c["price"]} for c in hits.get(n.pk, [])],
+        }
+
+    all_q = CustomerNeed.objects.all()
+    return JsonResponse({
+        "ok": True,
+        "needs": [one(n) for n in rows],
+        "totals": {
+            "all": all_q.count(),
+            "waiting": all_q.filter(waiting=True).count(),
+            "matched": len(hits),
+        },
+        # นับ RJ แยกเหตุผล — เห็นทันทีว่าที่เสียไปเป็นเพราะ "ของขาด" หรือ "คนไม่เอา"
+        "byReject": {lbl: all_q.filter(reject_kind=k).count()
+                     for k, lbl in CustomerNeed.REJECT_CHOICES if k},
+        "waitable": [lbl for k, lbl in CustomerNeed.REJECT_CHOICES
+                     if k in CustomerNeed.WAITABLE],
+    }, json_dumps_params={"ensure_ascii": False})
+
+
 def chat_stats():
     """สรุปคลังแชทสำหรับพาเนลตั้งค่า — {total, groups:[{id,name,n,last}], media}"""
     from django.db.models import Count, Max
