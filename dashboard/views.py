@@ -2557,6 +2557,20 @@ def admin_tiktok_accounts(request):
                          "accounts": rows}, json_dumps_params={"ensure_ascii": False})
 
 
+@require_GET
+def legal_page(request, doc):
+    """**public** — ข้อกำหนดการใช้งาน / นโยบายความเป็นส่วนตัว · ก.ย.69
+
+    TikTok บังคับให้แอป (รวม Sandbox) มีลิงก์ Terms of Service + Privacy Policy ถึงจะบันทึกการตั้งค่าได้
+    เนื้อหาเขียนตามที่ระบบทำจริง (อ่านอย่างเดียว · token เข้ารหัส · ลบเมื่อยกเลิกสิทธิ์)
+    ⚠️ เป็นเอกสารในนามบริษัท — ก่อนส่งแอปให้ TikTok รีวิว ควรให้บริษัท/ฝ่ายกฎหมายตรวจ
+    """
+    return render(request, "dashboard/legal.html", {
+        "doc": "privacy" if doc == "privacy" else "terms",
+        "contact": getattr(settings, "LEGAL_CONTACT", ""),
+        "effective_th": "20 กันยายน 2569", "effective_en": "20 September 2026"})
+
+
 @csrf_exempt
 def admin_tiktok_sync(request):
     """Admin — ดึงยอดคลิป TikTok · GET = สถานะ · POST = ดึงเดี๋ยวนี้ (ด่านกันกดถี่ → 429 + เหตุผล)"""

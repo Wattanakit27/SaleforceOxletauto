@@ -149,6 +149,9 @@ TIKTOK_REDIRECT_URI = os.getenv("TIKTOK_REDIRECT_URI", "")
 # สิทธิ์ที่ขอจากเจ้าของช่อง — ต้องเปิดไว้ในหน้าแอปก่อน ไม่งั้น TikTok ปฏิเสธทั้งลิงก์
 # ยอดผู้ติดตาม/ไลก์รวมของช่อง = user.info.stats · ชื่อผู้ใช้ @ = user.info.profile
 TIKTOK_SCOPES = os.getenv("TIKTOK_SCOPES", "user.info.basic,video.list")
+# ช่องทางติดต่อที่โชว์ในหน้า /legal/terms/ และ /legal/privacy/ (TikTok บังคับให้มี 2 หน้านี้)
+# ว่าง = เขียนว่า "ติดต่อผ่านช่องทางทางการของบริษัท" · ใส่อีเมล/เบอร์บริษัทที่เปิดเผยได้
+LEGAL_CONTACT = os.getenv("LEGAL_CONTACT", "")
 
 # ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
 # อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)

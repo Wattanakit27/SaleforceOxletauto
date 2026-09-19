@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if doc == "privacy" %}นโยบายความเป็นส่วนตัว · Privacy Policy{% else %}ข้อกำหนดการใช้งาน · Terms of Service{% endif %} — Oxlet Auto</title>
+  <style>
+    body { margin: 0; background: #f6f6f8; color: #1d1d1f; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.7; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 18px 48px; }
+    .card { background: #fff; border-radius: 14px; padding: 26px 24px; box-shadow: 0 2px 14px rgba(0,0,0,.06); margin-bottom: 18px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 16px; margin: 22px 0 6px; }
+    p, li { font-size: 14.5px; color: #333; }
+    .muted { color: #777; font-size: 13px; }
+    nav a { color: #555; font-size: 13px; margin-right: 14px; }
+    @media (max-width: 480px) { .card { padding: 20px 16px; } }
+  </style>
+</head>
+<body>
+<main>
+  <nav><a href="/legal/terms/">Terms of Service</a><a href="/legal/privacy/">Privacy Policy</a></nav>
+
+{% if doc == "privacy" %}
+  <div class="card">
+    <h1>นโยบายความเป็นส่วนตัว</h1>
+    <div class="muted">บริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด (Oxlet Auto) · มีผลตั้งแต่ {{ effective_th }}</div>
+
+    <h2>ขอบเขต</h2>
+    <p>นโยบายนี้ใช้กับเครื่องมือวิเคราะห์ภายในของ Oxlet Auto ที่เชื่อมต่อกับบัญชี TikTok
+       ผ่าน TikTok Login Kit และใช้เฉพาะกับบัญชีที่เจ้าของบัญชีกด "อนุญาต" ด้วยตัวเองเท่านั้น</p>
+
+    <h2>ข้อมูลที่เราเข้าถึง</h2>
+    <ul>
+      <li>ข้อมูลพื้นฐานของบัญชี: รหัสบัญชีสำหรับแอป (open_id) และชื่อที่แสดง</li>
+      <li>รายการคลิปของบัญชี พร้อมยอดวิว ยอดไลก์ ยอดคอมเมนต์ และยอดแชร์ ชื่อคลิป ความยาว และลิงก์คลิป</li>
+      <li>หากเจ้าของบัญชีให้สิทธิ์เพิ่มเติม: จำนวนผู้ติดตาม ยอดไลก์รวม และจำนวนคลิปของบัญชี</li>
+    </ul>
+
+    <h2>สิ่งที่เราไม่ทำ</h2>
+    <ul>
+      <li>ไม่โพสต์ ไม่แก้ไข และไม่ลบเนื้อหาใดๆ ในบัญชีของท่าน</li>
+      <li>ไม่อ่านข้อความส่วนตัว ไม่เข้าถึงรหัสผ่าน และไม่เก็บรูปโปรไฟล์</li>
+      <li>ไม่ขาย ไม่ให้เช่า และไม่เปิดเผยข้อมูลให้บุคคลภายนอก</li>
+    </ul>
+
+    <h2>วัตถุประสงค์การใช้</h2>
+    <p>ใช้จัดทำรายงานผลงานของช่อง TikTok ที่ Oxlet Auto ดำเนินการหรือได้รับอนุญาต เช่น
+       ยอดวิวและการมีส่วนร่วมรายวัน เพื่อการตัดสินใจภายในบริษัทเท่านั้น</p>
+
+    <h2>การเก็บรักษาข้อมูล</h2>
+    <ul>
+      <li>โทเคนการเข้าถึงถูกเข้ารหัสก่อนจัดเก็บ</li>
+      <li>สถิติรายคลิปและรายบัญชีเก็บไว้ตลอดช่วงที่บัญชียังเชื่อมต่ออยู่</li>
+      <li>ข้อมูลดิบจาก TikTok API เก็บไม่เกิน 90 วัน และข้อมูลแจ้งเตือนจาก TikTok (webhook) เก็บไม่เกิน 180 วัน จากนั้นลบโดยอัตโนมัติ</li>
+    </ul>
+
+    <h2>การยกเลิกสิทธิ์และการลบข้อมูล</h2>
+    <p>ท่านยกเลิกสิทธิ์ได้ทุกเมื่อจากการตั้งค่าของแอป TikTok (จัดการสิทธิ์ของแอป) เมื่อ TikTok แจ้งการยกเลิกมายังเรา
+       ระบบจะหยุดดึงข้อมูลและลบโทเคนของบัญชีนั้นโดยอัตโนมัติ หากต้องการให้ลบสถิติที่เก็บไว้ด้วย โปรดติดต่อเรา</p>
+
+    <h2>ติดต่อ</h2>
+    <p>{% if contact %}{{ contact }}{% else %}ติดต่อผ่านช่องทางทางการของบริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด{% endif %}</p>
+  </div>
+
+  <div class="card" lang="en">
+    <h1>Privacy Policy</h1>
+    <div class="muted">Oxlet Auto Co., Ltd. · Effective {{ effective_en }}</div>
+    <h2>Scope</h2>
+    <p>This policy covers Oxlet Auto's internal analytics tool that connects to TikTok accounts through TikTok Login Kit.
+       It applies only to accounts whose owners explicitly click "Authorize".</p>
+    <h2>Data we access</h2>
+    <ul>
+      <li>Basic account info: the app-scoped account ID (open_id) and display name.</li>
+      <li>The account's video list with view, like, comment and share counts, title, duration and link.</li>
+      <li>If the owner grants the additional permission: follower count, total likes and video count.</li>
+    </ul>
+    <h2>What we do not do</h2>
+    <ul>
+      <li>We never post, edit or delete content on your account.</li>
+      <li>We do not read private messages, access passwords, or store profile pictures.</li>
+      <li>We do not sell, rent or share your data with third parties.</li>
+    </ul>
+    <h2>How we use it</h2>
+    <p>To produce internal performance reports (e.g. daily views and engagement) for TikTok channels operated by or
+       authorized to Oxlet Auto.</p>
+    <h2>Retention</h2>
+    <p>Access tokens are encrypted at rest. Video and account statistics are kept while the account remains connected.
+       Raw API responses are deleted after 90 days and TikTok webhook events after 180 days.</p>
+    <h2>Revoking access and deletion</h2>
+    <p>You can revoke access at any time in the TikTok app's app-permission settings. When TikTok notifies us, we stop
+       collecting data and automatically delete that account's tokens. Contact us to also delete stored statistics.</p>
+    <h2>Contact</h2>
+    <p>{% if contact %}{{ contact }}{% else %}Please contact Oxlet Auto Co., Ltd. through its official channels.{% endif %}</p>
+  </div>
+
+{% else %}
+  <div class="card">
+    <h1>ข้อกำหนดการใช้งาน</h1>
+    <div class="muted">บริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด (Oxlet Auto) · มีผลตั้งแต่ {{ effective_th }}</div>
+
+    <h2>บริการ</h2>
+    <p>บริการนี้เป็นเครื่องมือวิเคราะห์ภายในของ Oxlet Auto สำหรับอ่านสถิติของช่อง TikTok
+       ที่บริษัทดำเนินการหรือได้รับอนุญาตจากเจ้าของช่อง ไม่ได้เปิดให้บุคคลทั่วไปสมัครใช้งาน</p>
+
+    <h2>การให้สิทธิ์</h2>
+    <p>เมื่อเจ้าของบัญชีกด "อนุญาต" ในหน้าของ TikTok ถือว่ายินยอมให้ Oxlet Auto อ่านข้อมูลตามที่ระบุใน
+       <a href="/legal/privacy/">นโยบายความเป็นส่วนตัว</a> แบบอ่านอย่างเดียว บริการนี้ไม่โพสต์หรือแก้ไขเนื้อหาในบัญชี</p>
+
+    <h2>การยกเลิก</h2>
+    <p>เจ้าของบัญชียกเลิกสิทธิ์ได้ทุกเมื่อจากการตั้งค่าของแอป TikTok โดยไม่มีค่าใช้จ่าย</p>
+
+    <h2>ข้อจำกัดความรับผิด</h2>
+    <p>ข้อมูลสถิติมาจาก TikTok API ตามที่ TikTok ให้บริการ บริษัทไม่รับประกันความครบถ้วนหรือความตรงเวลาของข้อมูลดังกล่าว</p>
+
+    <h2>การใช้ข้อมูลของ TikTok</h2>
+    <p>การใช้งานเป็นไปตามข้อกำหนดสำหรับนักพัฒนาของ TikTok และนโยบายของแพลตฟอร์ม TikTok</p>
+
+    <h2>กฎหมายที่ใช้บังคับ</h2>
+    <p>ข้อกำหนดนี้อยู่ภายใต้กฎหมายแห่งราชอาณาจักรไทย</p>
+
+    <h2>ติดต่อ</h2>
+    <p>{% if contact %}{{ contact }}{% else %}ติดต่อผ่านช่องทางทางการของบริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด{% endif %}</p>
+  </div>
+
+  <div class="card" lang="en">
+    <h1>Terms of Service</h1>
+    <div class="muted">Oxlet Auto Co., Ltd. · Effective {{ effective_en }}</div>
+    <h2>Service</h2>
+    <p>This is Oxlet Auto's internal analytics tool that reads statistics of TikTok channels operated by the company
+       or authorized by their owners. It is not open for public sign-up.</p>
+    <h2>Authorization</h2>
+    <p>By clicking "Authorize" on TikTok, the account owner allows Oxlet Auto read-only access to the data described in
+       our <a href="/legal/privacy/">Privacy Policy</a>. The service never posts or edits account content.</p>
+    <h2>Revocation</h2>
+    <p>Owners may revoke access at any time, free of charge, in the TikTok app's settings.</p>
+    <h2>Disclaimer</h2>
+    <p>Statistics are provided by the TikTok API as-is. The company does not guarantee their completeness or timeliness.</p>
+    <h2>TikTok data</h2>
+    <p>Use of TikTok data follows TikTok's Developer Terms and platform policies.</p>
+    <h2>Governing law</h2>
+    <p>These terms are governed by the laws of the Kingdom of Thailand.</p>
+    <h2>Contact</h2>
+    <p>{% if contact %}{{ contact }}{% else %}Please contact Oxlet Auto Co., Ltd. through its official channels.{% endif %}</p>
+  </div>
+{% endif %}
+</main>
+</body>
+</html>
