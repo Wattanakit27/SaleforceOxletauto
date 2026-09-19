@@ -120,20 +120,31 @@ def _check(node: str) -> None:
         raise ForeignAsset(
             "บัญชีโฆษณา act_%s ไม่อยู่ใน META_AD_ACCOUNTS — เป็นของบริษัทอื่น" % m.group(1))
 
+    if node in pages():
+        return
+
+    # ★ id ที่สืบมาจากคำตอบที่ผ่านด่านแล้ว — เช็ค **ก่อน** ดูรูปแบบ
+    #   เพราะ id ลูกของ Meta มีหลายทรงเกินกว่าจะไล่เขียน regex ได้หมด:
+    #   โพสต์ `<page>_<post>` · วิดีโอเลขล้วน · **บทสนทนา Messenger `t_123…`** ·
+    #   คอมเมนต์ `<post>_<comment>` · adset/ad เลขล้วน
+    #   (เจอจริงตอนใช้งาน: conversation id ขึ้นต้น `t_` โดนปฏิเสธทั้งที่เป็นของเพจเราเอง
+    #    เพราะโค้ดเดิมเช็ค _known แค่ในกิ่ง "เลขล้วน" กับ "<a>_<b>")
+    if node in _known:
+        return
+
     m = _COMPOUND_RE.match(node)             # โพสต์: <page_id>_<post_id>
     if m:
-        if m.group(1) in pages() or node in _known:
+        if m.group(1) in pages():
             return
         raise ForeignAsset("โพสต์ %s ไม่ได้อยู่ใต้เพจของบริษัทนี้" % node)
 
     if _NUM_RE.match(node):
-        if node in pages() or node in _known:
-            return
         raise ForeignAsset(
             "id %s ไม่อยู่ใน META_PAGE_IDS และไม่ได้สืบมาจาก asset ของเรา"
             " — ถ้าเป็นเพจของบริษัทนี้จริง ให้เพิ่มใน META_PAGE_IDS" % node)
 
-    raise ForeignAsset("ปลายทาง %r ไม่รู้จัก — ปฏิเสธไว้ก่อน" % node[:40])
+    raise ForeignAsset(
+        "ปลายทาง %r ไม่รู้จัก และไม่ได้สืบมาจาก asset ของเรา — ปฏิเสธไว้ก่อน" % node[:40])
 
 
 # ── ตัวยิงคำขอ ───────────────────────────────────────────────────
