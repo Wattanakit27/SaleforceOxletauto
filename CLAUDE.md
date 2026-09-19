@@ -1614,6 +1614,13 @@ python-dotenv ใช้ **ตัวท้ายสุด** → `settings.META_AC
     - **สถานะเปิด/ปิด = class `nav-open` บน `<body>`** (ห้ามเก็บใน `#dashboard-root`) — เพราะ `render()` ล้าง `innerHTML` ทุกครั้ง ถ้าเก็บข้างในจะเด้งปิดเองทุกรอบ render
     - ไอคอน `menu`/`x` เพิ่มใน dict **`LUCIDE`** (index.html) แล้ว — dict นี้เป็น hardcode ไม่ได้โหลดจาก CDN **ใช้ไอคอนใหม่ต้องเพิ่ม path เข้า dict ก่อน** ไม่งั้น `ic()` คืน svg เปล่า
     - **แก้ CSS ต้อง bump `?v=` ที่ link globals.css** — มี 2 ที่ (index.html + seller.html) ต้องตรงกัน
+    - **★ 20 ก.ย.69 — ตอนนี้มี 5 หน้า** (index · seller · sql · login · magic_link) ใช้เลขเดียวกันทั้งหมด
+    - **⚠️★ ต้องรัน `collectstatic` ก่อน `restart` ทุกครั้งที่แก้ CSS/JS** — เว็บเสิร์ฟจากสำเนาใน `staticfiles/`
+      ไม่ใช่ไฟล์ในโค้ด · และสั่งให้เบราว์เซอร์**จำไฟล์ 30 วัน** (`Cache-Control: max-age=2592000`)
+    - **เหตุการณ์จริง 20 ก.ย.69**: หน้า UI deploy (`78ccded`) โดยไม่รัน collectstatic → เว็บส่ง **CSS เก่า 12 ส.ค.
+      ภายใต้เลขใหม่ `?v=20260920a`** → เบราว์เซอร์ที่เปิดช่วงนั้นจำไฟล์ผิดไว้ในชื่อที่ถูก **รัน collectstatic ทีหลัง
+      ก็ไม่หาย** (เมนูซ้ายพัง: โลโก้ขยายเต็มกล่อง ชื่อ 2 บรรทัดติดกัน) · แก้ด้วยการเปลี่ยนเลขเป็น `20260920b`
+      · **กฎ: ถ้าเผลอเสิร์ฟ CSS เก่าภายใต้เลขใหม่ไปแล้ว ต้องเปลี่ยนเลขอีกรอบเสมอ** — Ctrl+F5 แก้ได้แค่เครื่องเดียว
     - **⚠️ 3 บั๊กที่เคยทำให้แถบนี้ไม่ขึ้นเลย/หน้าตาเพี้ยน (แก้แล้ว ส.ค.69 · อย่าให้กลับมา)**: (1) selector เขียน **`#root`** แต่ id จริงของ container ใน index.html คือ **`#dashboard-root`** (`#root` เป็นของ seller.html ซึ่ง**ไม่มี** `#nav-slide` เลย → กฎตายสนิททั้งคู่) (2) ตอน init JS สั่ง **`root.style.display='block'`** ซึ่งเป็น **inline style ชนะ CSS เสมอ** → ต้องใช้ **`root.style.display=''`** (ล้าง inline `display:none` แล้วปล่อยให้ CSS คุม) (3) สไตล์ฐานของ `#nav-slide` เขียน inline บน element ใน `render()` → CSS override ไม่ได้
     - **กฎ**: สไตล์ของ `#nav-slide` อยู่ใน **คลาส `.nav-slide` ใน globals.css เท่านั้น** — **ห้ามเขียน inline style บน element ใน `render()`**
   - **★ ประวัติในป๊อปอัปบอร์ดโชว์รูปแล้ว (ส.ค.69 · แก้บั๊ก "มือถือเห็นรูป คอมไม่เห็น")**: `car_json` ส่ง `logs[].media` มาให้ตลอด แต่ [dashboard.html](templates/dashboard.html) `openCar()` **ไม่เคย render `l.media`** (หน้าสแกน/หน้าเซลล์ render อยู่แล้ว) → คนดูจากคอมไม่เห็นรูปที่หน้างานถ่ายส่งมา · เพิ่ม `_thumbs(l)` (รูป 56px กดเปิดเต็ม · วิดีโอเป็นปุ่ม ▶) + ขยายกล่องประวัติ 160→300px
