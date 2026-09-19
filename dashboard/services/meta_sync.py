@@ -124,6 +124,15 @@ def _unlock():
     cache_store.set_kv(LOCK_KEY, {})
 
 
+def _touch():
+    """ต่ออายุล็อกระหว่างงานยาว — รอบแรกของแชท Messenger อาจยาว 10+ นาที
+    ถ้าไม่ต่อ ล็อกหมดอายุกลางทาง แล้วรอบถัดไปของ cron จะเริ่มซ้อนขึ้นมา"""
+    lk = _kv(LOCK_KEY)
+    if lk:
+        lk["started"] = timezone.now().isoformat()
+        cache_store.set_kv(LOCK_KEY, lk)
+
+
 # ── ดึงยอดโพสต์ ─────────────────────────────────────────────────
 def sync_posts(trigger: str, snap_date, taken_at) -> dict:
     """ยอดสะสมของทุกโพสต์ในเพจของเรา (ย้อน POST_WINDOW_DAYS วัน) → 1 แถว/โพสต์"""
@@ -266,9 +275,20 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
     try:
         p = sync_posts(trigger, snap_date, timezone.now())
         a = sync_ads(trigger, ads_days or ADS_LOOKBACK_DAYS)
+        # แชท Messenger (CRM raw) → checkout_fbchat / checkout_fbprofile
+        # ทำ **หลังสุด** เพราะช้าสุดและมีเพดานต่อรอบ — ถ้ามันล้ม ยอดโพสต์/โฆษณาต้องได้ไปแล้ว
+        try:
+            from checkout.fb_sync import sync as _fb_sync
+            _touch()
+            m = _fb_sync(trigger, touch=_touch)
+        except Exception as e:
+            m = {"errors": ["แชท Messenger พัง: %s" % str(e)[:160]]}
         res.update(posts=p["snapshots"], pages=p["pages"], adsRows=a["rows"],
                    accounts=a["accounts"], raw=p["raw"] + a["raw"],
-                   errors=p["errors"] + a["errors"], trimmed=trim_raw())
+                   messenger={k: m.get(k) for k in ("threadsSeen", "threadsSynced", "unchanged",
+                                                   "newMsgs", "profiles", "stopped", "sec")},
+                   errors=p["errors"] + a["errors"] + (m.get("errors") or []),
+                   trimmed=trim_raw())
         res["ok"] = not res["errors"]
         res["postsOk"] = p["snapshots"] > 0 and not p["errors"]
     except Exception as e:                       # ห้ามทำให้ cron_tick ล้มตาม

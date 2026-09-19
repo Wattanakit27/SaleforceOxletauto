@@ -580,3 +580,122 @@ class CustomerNeed(models.Model):
             self.reject_note = note[:300]
         self.waiting = kind in self.WAITABLE
         return self
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Facebook Messenger — ★ ก.ย.69 · เจ้าของสั่ง "CRM เป็น raw data ตั้งชื่อ table ให้เหมือน
+# CRM ฝั่ง LINE" แล้วเลือก **ตารางแยก ชื่อคู่ขนาน** (ไม่รวมกับตาราง LINE)
+#
+#   ฝั่ง LINE              ฝั่ง Facebook
+#   checkout_groupchat  ↔  checkout_fbchat      (1 แถว = 1 ข้อความ)
+#   checkout_lineprofile ↔ checkout_fbprofile   (1 แถว = 1 คน)
+#
+# ชื่อช่องใช้ชื่อเดียวกับฝั่ง LINE ทุกช่องที่ความหมายตรงกัน → เขียน SQL ข้าม 2 ฝั่งได้ง่าย
+# ช่องที่มีแต่ฝั่ง LINE (สติกเกอร์แพ็ก · LINE emoji · สเตตัส/ภาษา) ไม่ได้ใส่ — Messenger ไม่มี
+#
+# ที่มาของข้อมูล: **ดึงจาก Graph API ทุกเที่ยงคืน** (checkout/fb_sync.py ผ่านด่าน meta.py)
+# ไม่ได้มาจาก webhook — จึงไม่ใช่ real-time (ข้อความวันนี้เห็นพรุ่งนี้)
+# ─────────────────────────────────────────────────────────────────────
+class FbChat(models.Model):
+    """ข้อความ Messenger ของเพจเรา — ทั้งที่ลูกค้าส่งมา (`in`) และที่เพจตอบไป (`out`)
+
+    ⚠️ ข้อมูลส่วนบุคคล (PDPA) — อายุเท่าแชทลูกค้าฝั่ง LINE (`CUSTOMER_CHAT_KEEP_DAYS` = 60 วัน)
+    ⚠️ `sender_id` = **PSID** (id ที่ Facebook ออกให้ "ต่อเพจ") — คนเดียวทัก 2 เพจได้ 2 id
+       และ **ไม่ใช่ LINE user id** เอาไปทักทาง LINE ไม่ได้
+    """
+    USER = "user"
+    TYPE_CHOICES = [(USER, "ลูกค้าทักเข้าเพจ")]
+    chat_type = models.CharField("ประเภทแชท", max_length=8, choices=TYPE_CHOICES,
+                                 default=USER, db_index=True)
+    # ≈ group_id ฝั่ง LINE — "คุยกันที่ไหน" · ของ Messenger คือห้องสนทนา t_…
+    thread_id = models.CharField("ห้องสนทนา (t_…)", max_length=64, db_index=True)
+    message_id = models.CharField("message id", max_length=160, unique=True)
+
+    sender_id = models.CharField("PSID ผู้ส่ง", max_length=64, blank=True)
+    sender_name = models.CharField("ชื่อผู้ส่ง", max_length=120, blank=True)
+
+    msg_type = models.CharField("ชนิด", max_length=12, blank=True, db_index=True)
+    text = models.TextField("ข้อความ", blank=True)
+    sticker_id = models.CharField("สติกเกอร์", max_length=300, blank=True)
+    # ข้อความดิบจาก Meta ทั้งก้อน (tags อ่านแล้ว/ส่งจากมือถือ · ไฟล์แนบ) — ตัด paging ที่มี token ออกแล้ว
+    extra = models.JSONField("ข้อมูลดิบของข้อความ", default=dict, blank=True)
+
+    has_media = models.BooleanField("มีไฟล์แนบ", default=False, db_index=True)
+    media_token = models.CharField("ไฟล์ที่โหลดเก็บแล้ว", max_length=200, blank=True)
+
+    # ≈ channel ฝั่ง LINE ("บอทตัวไหนได้ยิน") → ของ Facebook คือ "เพจไหน"
+    channel = models.CharField("เพจ", max_length=24, blank=True, db_index=True)
+
+    IN, OUT = "in", "out"
+    DIRECTION_CHOICES = [(IN, "ลูกค้าส่งมา"), (OUT, "เพจตอบไป")]
+    direction = models.CharField("ทิศทาง", max_length=4, choices=DIRECTION_CHOICES,
+                                 default=IN, db_index=True)
+    # ใครในทีมเป็นคนตอบ — Facebook **ไม่บอก** (ขาออกเป็นชื่อเพจเสมอ) · ช่องนี้เผื่อวันที่ตอบผ่านระบบเรา
+    sent_by = models.ForeignKey("Employee", verbose_name="คนตอบ", null=True, blank=True,
+                                on_delete=models.SET_NULL, related_name="fb_replies")
+    sent_by_name = models.CharField("ชื่อคนตอบ", max_length=80, blank=True)
+    send_error = models.CharField("ส่งไม่สำเร็จเพราะ", max_length=200, blank=True)
+
+    sent_at = models.DateTimeField("เวลาที่ส่ง", null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-sent_at", "-id"]
+        indexes = [models.Index(fields=["thread_id", "-sent_at"]),
+                   models.Index(fields=["channel", "-sent_at"])]
+        verbose_name = "แชท Facebook Messenger"
+        verbose_name_plural = "แชท Facebook Messenger"
+
+    def __str__(self):
+        return "%s · %s: %s" % (self.thread_id[:12], self.sender_name or "-",
+                                (self.text or self.msg_type)[:40])
+
+
+class FbProfile(models.Model):
+    """คนที่ทักเข้าเพจ — **1 แถวต่อคนต่อเพจ** (ไม่ใช่ต่อข้อความ) · คู่ขนานกับ `LineProfile`
+
+    ⚠️ unique = (เพจ, PSID) ไม่ใช่ PSID อย่างเดียว — Facebook ออก id "ต่อเพจ"
+       คนเดียวทัก 2 เพจ = 2 แถว และ **ระบบรู้เองไม่ได้ว่าเป็นคนเดียวกัน**
+       (เหมือนปัญหา LINE คนละ provider)
+    ⚠️ ได้แค่ **ชื่อ** จาก Facebook — ขอโปรไฟล์ผ่าน PSID ไม่ได้ · email ที่ Meta ให้เป็นของปลอม
+       (`<id>@facebook.com`) จึงไม่เก็บ
+    """
+    USER = "user"
+    SRC_CHOICES = [(USER, "ทักเข้าเพจ")]
+
+    user_id = models.CharField("PSID", max_length=64, db_index=True)
+    display_name = models.CharField("ชื่อใน Facebook", max_length=120, blank=True)
+
+    nickname = models.CharField("ชื่อเล่น (ถ้าเป็นพนักงาน)", max_length=80, blank=True)
+    is_employee = models.BooleanField("เป็นพนักงาน", default=False, db_index=True)
+    employee = models.ForeignKey("Employee", verbose_name="เป็นพนักงานคนนี้", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="fb_accounts")
+
+    source = models.CharField("เจอครั้งแรกจาก", max_length=8, choices=SRC_CHOICES, default=USER)
+    channel = models.CharField("เพจ", max_length=24, db_index=True)
+
+    # ของที่มีแต่ฝั่ง Messenger
+    thread_id = models.CharField("ห้องสนทนา (t_…)", max_length=64, blank=True, db_index=True)
+    inbox_link = models.CharField("ลิงก์เปิดใน Inbox", max_length=300, blank=True)
+    # เวลา updated_time ของห้องตอนดึงล่าสุด — **ตรงกัน = ไม่มีอะไรใหม่ ข้ามได้โดยไม่ต้องยิง API**
+    thread_updated = models.DateTimeField("ห้องขยับล่าสุด (ตอนดึง)", null=True, blank=True)
+
+    msg_count = models.PositiveIntegerField("จำนวนข้อความในห้อง", default=0)
+    first_seen = models.DateTimeField("ทักครั้งแรก (เท่าที่ดึงได้)", default=timezone.now)
+    last_seen = models.DateTimeField("ล่าสุด", default=timezone.now, db_index=True)
+    fetched_at = models.DateTimeField("ดึงล่าสุด", null=True, blank=True)
+    raw = models.JSONField("คำตอบดิบจาก Meta", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "โปรไฟล์คน Facebook"
+        verbose_name_plural = "โปรไฟล์คน Facebook"
+        constraints = [models.UniqueConstraint(fields=["channel", "user_id"],
+                                               name="uniq_fbprofile_page_psid")]
+        indexes = [models.Index(fields=["is_employee", "-last_seen"])]
+
+    @property
+    def show_name(self):
+        return self.nickname or self.display_name or "ไม่ทราบชื่อ"
+
+    def __str__(self):
+        return "%s (%s)" % (self.show_name, "พนักงาน" if self.is_employee else "ลูกค้า")

@@ -80,7 +80,12 @@ def is_configured() -> bool:
 # post/video/ad/adset id เป็นเลขล้วนเหมือนกันหมด แยกจาก id ของบริษัทอื่นด้วยตาไม่ได้
 # → เก็บ id ที่ **โผล่มาจากคำตอบของคำขอที่ผ่าน allowlist แล้ว** เอาไว้ แล้วอนุญาตเฉพาะพวกนั้น
 #   (ปลอดภัยกว่าให้ผู้เรียกยืนยันเอง เพราะผู้เรียกในอนาคตจะยืนยันมั่ว ๆ แล้วรูรั่วกลับมา)
-_known: set = set()
+# ★ เป็น dict (เรียงตามลำดับที่เพิ่ม) ไม่ใช่ set — ต้องมี **เพดาน** เพราะ worker ของ gunicorn
+#   อยู่นานหลายวัน และดึงแชท Messenger ทีเป็นหมื่นข้อความ → โตไม่หยุด = กินแรมเรื่อย ๆ
+#   เกินเพดานให้ทิ้ง "ของเก่าสุด" (id ที่เพิ่งได้มา = ที่กำลังจะใช้ต่อ ต้องไม่หาย)
+_known: dict = {}
+_KNOWN_CAP = 200_000
+_KNOWN_KEEP = 150_000
 
 # ── โควต้าการเรียก (rate limit) ─────────────────────────────────────
 # Meta บอกเปอร์เซ็นต์ที่ใช้ไปแล้วมาใน header ทุกคำตอบ — **ไม่ต้องเดาจากจำนวนครั้งที่กด**
@@ -102,7 +107,12 @@ def _harvest(obj, depth: int = 0) -> None:
     if isinstance(obj, dict):
         v = obj.get("id")
         if isinstance(v, (str, int)):
-            _known.add(str(v))
+            k = str(v)
+            _known.pop(k, None)                  # ย้ายไปท้าย = ใหม่ล่าสุด
+            _known[k] = True
+            if len(_known) > _KNOWN_CAP:
+                for old in list(_known)[:len(_known) - _KNOWN_KEEP]:
+                    del _known[old]
         for x in obj.values():
             _harvest(x, depth + 1)
     elif isinstance(obj, list):

@@ -38,6 +38,16 @@ APP_ORDER = ["dashboard", "cars", "checkout", "auth", "admin", "contenttypes", "
 #   keep  = นโยบายเก็บ/ลบ (ว่าง = ไม่มีนโยบาย เก็บถาวร)
 TABLES = {
     # ---------- ล็อกของระบบ ----------
+    "checkout_fbchat": dict(
+        name="แชท Facebook Messenger",
+        what="ข้อความในเพจเรา ทั้งที่ลูกค้าส่งมาและที่เพจตอบ (คู่ขนานกับ checkout_groupchat ฝั่ง LINE) · "
+             "ดึงจาก Facebook ทุกเที่ยงคืน ไม่ใช่ real-time · sender_id = PSID (id ต่อเพจ ไม่ใช่ LINE id)",
+        pii=True, keep="เก็บ 60 วัน (เท่าแชทลูกค้าฝั่ง LINE) แล้วลบเอง"),
+    "checkout_fbprofile": dict(
+        name="โปรไฟล์คน Facebook",
+        what="คนที่ทักเข้าเพจ 1 แถวต่อคนต่อเพจ — ชื่อ · ห้องสนทนา · ลิงก์เปิดใน Inbox · จำนวนข้อความ "
+             "(คู่ขนานกับ checkout_lineprofile) · Facebook ให้แค่ชื่อ ไม่มีเบอร์/อีเมลจริง",
+        pii=True, keep="ลูกค้าที่เงียบเกิน 60 วันลบเอง"),
     "dash_meta_post_snapshot": dict(
         name="ยอดโพสต์ Facebook (ทุกเที่ยงคืน)",
         what="ยอดสะสมของทุกโพสต์ในเพจเรา (วิว/ไลก์/คอมเมนต์/แชร์/คลิก/ดูเฉลี่ย) จดทุกเที่ยงคืน · "
