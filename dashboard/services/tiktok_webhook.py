@@ -140,6 +140,14 @@ def handle(body: bytes, sig_header: str) -> tuple:
                       client_key=str(data.get("client_key") or "")[:80],
                       user_openid=str(data.get("user_openid") or "")[:120],
                       create_time=ct, signature_ok=sig_ok, content=content, raw=data))
+    # เจ้าของช่องกดยกเลิกสิทธิ์จากฝั่ง TikTok → ปิดช่องนั้น + ทิ้ง token (เก็บไว้ก็ใช้ไม่ได้แล้ว)
+    #   ทำเฉพาะ event ที่ตรวจลายเซ็นผ่าน — ไม่งั้นใครก็ยิง event ปลอมมาตัดช่องเราทิ้งได้
+    if created and sig_ok and data.get("event") == "authorization.removed" and data.get("user_openid"):
+        try:
+            from . import tiktok_oauth
+            tiktok_oauth.mark_revoked(str(data["user_openid"]))
+        except Exception:
+            pass
     _beat(ok=True, event=str(data.get("event") or ""), duplicate=not created,
           signed=sig_ok is True)
     _trim_daily()

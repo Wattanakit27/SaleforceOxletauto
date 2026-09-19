@@ -12,3 +12,5 @@ Pillow>=10.0               # ImageField/FileField ของ cars/ + render QR PN
 playwright>=1.40           # headless Chromium แคป #rpt-card → ส่งรูปเข้า LINE · ต้อง `playwright install chromium --with-deps` หลัง pip install
 # ── ดึงรถสดจากเว็บ Car Spend (cars/carspend.py + manage.py sync_carspend) ──
 beautifulsoup4>=4.12       # parse HTML หน้า list/detail ของ autosoftware.co.th
+# ── เข้ารหัส token ของ TikTok ก่อนเก็บลงฐานข้อมูล (dashboard/services/tiktok_oauth.py) ──
+cryptography>=42           # Fernet · เดิมติดมากับแพ็กเกจอื่นอยู่แล้ว ใส่ไว้ตรงๆ กันวันที่มันหลุด

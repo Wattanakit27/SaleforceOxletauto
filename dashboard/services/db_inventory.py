@@ -48,6 +48,24 @@ TABLES = {
         what="คนที่ทักเข้าเพจ 1 แถวต่อคนต่อเพจ — ชื่อ · ห้องสนทนา · ลิงก์เปิดใน Inbox · จำนวนข้อความ "
              "(คู่ขนานกับ checkout_lineprofile) · Facebook ให้แค่ชื่อ ไม่มีเบอร์/อีเมลจริง",
         pii=True, keep="ลูกค้าที่เงียบเกิน 60 วันลบเอง"),
+    "dash_tiktok_account": dict(
+        name="ช่อง TikTok ที่เชื่อมแล้ว",
+        what="ช่องที่เจ้าของกดอนุญาตให้ระบบอ่านข้อมูล 1 แถวต่อช่อง · ชื่อช่อง · สิทธิ์ที่ได้ · สถานะ · "
+             "token เก็บแบบเข้ารหัส (หน้านี้และไฟล์ export ไม่แสดง)",
+        pii=True, keep="เก็บจนกว่าเจ้าของช่องยกเลิกสิทธิ์"),
+    "dash_tiktok_video_snapshot": dict(
+        name="ยอดคลิป TikTok (ทุกเที่ยงคืน)",
+        what="ยอดสะสมของทุกคลิป (วิว/ไลก์/คอมเมนต์/แชร์) ของทุกช่องที่เชื่อม จดทุกเที่ยงคืน · "
+             "แถว cron วันนี้ลบเมื่อวาน = ยอดรายวัน",
+        pii=False, keep="เก็บถาวร"),
+    "dash_tiktok_account_snapshot": dict(
+        name="ยอดช่อง TikTok (รายวัน)",
+        what="ผู้ติดตาม · ไลก์รวม · จำนวนคลิป ของแต่ละช่อง ณ สิ้นวัน (เฉพาะช่องที่ให้สิทธิ์ user.info.stats)",
+        pii=False, keep="เก็บถาวร"),
+    "dash_tiktok_raw": dict(
+        name="ข้อมูลดิบจาก TikTok",
+        what="คำตอบจาก TikTok API ทั้งก้อน (รายการคลิป + ยอดช่อง) ไว้คิดตัวเลขใหม่ย้อนหลัง",
+        pii=False, keep="เก็บ 90 วัน แล้วลบเอง"),
     "dash_tiktok_event": dict(
         name="event จาก TikTok (webhook)",
         what="สิ่งที่ TikTok for Developers ยิงเข้า /api/tiktok/webhook — 1 แถวต่อ event เก็บ body ดิบทั้งก้อน · "

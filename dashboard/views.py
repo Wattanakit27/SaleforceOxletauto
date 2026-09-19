@@ -1527,6 +1527,22 @@ def cron_tick(request):
     except Exception as e:
         meta_result = "error: %s" % str(e)[:200]
 
+    # ── 🎵 TikTok: ต่ออายุ access token ที่ใกล้หมด (อายุ ~24 ชม.) — ทีละ 3 ช่องต่อนาที ไม่หน่วง cron ──
+    tiktok_result = {}
+    try:
+        from .services.tiktok_oauth import refresh_due as _tt_refresh
+        tiktok_result = _tt_refresh()
+    except Exception as e:
+        tiktok_result = {"error": str(e)[:200]}
+    # ── 🎵 TikTok: ดึงยอดวิว/engagement รายคลิปทุกเที่ยงคืน (ใน thread · ต่อจากต่ออายุ token ข้างบน) ──
+    try:
+        from .services.tiktok_sync import maybe_run as _tt_run
+        _r = _tt_run(now)
+        if _r:
+            tiktok_result = dict(tiktok_result or {}, sync=_r)
+    except Exception as e:
+        tiktok_result = dict(tiktok_result or {}, syncError=str(e)[:200])
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1537,7 +1553,8 @@ def cron_tick(request):
         "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
-        "meta": meta_result,         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
+        "meta": meta_result,
+        "tiktok": tiktok_result,     # ต่ออายุ token TikTok ({} = ไม่มีช่องไหนใกล้หมด)         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -2479,6 +2496,85 @@ def admin_report_config(request):
     return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
 
 
+def _tiktok_page(status: int, msg: str, name: str = ""):
+    """หน้าที่เจ้าของช่องเห็นหลังกดอนุญาต — คนนอกบริษัทก็เห็นได้ จึงไม่โชว์อะไรภายในเลย"""
+    from django.utils.html import escape
+    ok = status == 200
+    body = ('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>เชื่อมช่อง TikTok</title></head>'
+            '<body style="font-family:system-ui,sans-serif;background:#f5f5f7;margin:0;'
+            'display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px">'
+            '<div style="background:#fff;border-radius:16px;padding:28px 26px;max-width:420px;'
+            'text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.08)">'
+            '<div style="font-size:44px">%s</div>'
+            '<h2 style="margin:10px 0 6px">%s</h2>%s'
+            '<p style="color:#555;line-height:1.6">%s</p>'
+            '<p style="color:#999;font-size:13px">ปิดหน้านี้ได้เลย</p></div></body></html>') % (
+        "✅" if ok else "⚠️",
+        "เชื่อมช่องเรียบร้อย" if ok else "ยังเชื่อมไม่สำเร็จ",
+        ('<p style="font-weight:700;font-size:17px">%s</p>' % escape(name)) if name else "",
+        escape("อ๊อกเล็ตธ์ออโต้ อ่านข้อมูลคลิปของช่องนี้ได้แล้ว" if ok else msg))
+    return HttpResponse(body, status=status, content_type="text/html; charset=utf-8")
+
+
+@csrf_exempt
+def admin_tiktok_accounts(request):
+    """Admin — ช่อง TikTok ที่เชื่อมแล้ว · GET = รายการ (ไม่มี token) · POST {label} = สร้างลิงก์ขออนุญาต"""
+    user = _session_user(request)
+    if not _is_admin(user):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from .models import TikTokAccount
+    from .services import tiktok_oauth
+    if request.method == "POST":
+        try:
+            label = (json.loads(request.body or "{}").get("label") or "").strip()
+        except ValueError:
+            label = ""
+        if not label:
+            return JsonResponse({"ok": False, "error": "ใส่ชื่อช่องก่อน (ไว้จำว่าลิงก์นี้ส่งให้ช่องไหน)"},
+                                status=400, json_dumps_params={"ensure_ascii": False})
+        try:
+            who = (user.get("nickname") or user.get("user_id") or "")[:80]
+            link = tiktok_oauth.make_link(label, who)
+        except tiktok_oauth.TikTokError as e:
+            return JsonResponse({"ok": False, "error": str(e)}, status=503,
+                                json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({"ok": True, "label": label, "link": link,
+                             "expiresDays": tiktok_oauth.STATE_TTL_DAYS},
+                            json_dumps_params={"ensure_ascii": False})
+    rows = [{"label": a.label, "displayName": a.display_name, "username": a.username,
+             "status": a.status, "statusText": a.get_status_display(), "scope": a.scope,
+             "lastError": a.last_error, "connectedAt": a.connected_at.isoformat() if a.connected_at else "",
+             "accessExpiresAt": a.access_expires_at.isoformat() if a.access_expires_at else "",
+             "refreshExpiresAt": a.refresh_expires_at.isoformat() if a.refresh_expires_at else "",
+             "stats": {k: a.profile.get(k) for k in ("follower_count", "likes_count", "video_count")
+                       if k in (a.profile or {})}}
+            for a in TikTokAccount.objects.all()]
+    return JsonResponse({"ok": True, "configured": tiktok_oauth.is_configured(),
+                         "redirectUri": tiktok_oauth.redirect_uri(), "scopes": tiktok_oauth.scopes(),
+                         "accounts": rows}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_tiktok_sync(request):
+    """Admin — ดึงยอดคลิป TikTok · GET = สถานะ · POST = ดึงเดี๋ยวนี้ (ด่านกันกดถี่ → 429 + เหตุผล)"""
+    user = _session_user(request)
+    if not _is_admin(user):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from .services import tiktok_sync
+    if request.method == "POST":
+        chk = tiktok_sync.can_manual()
+        if not chk["ok"]:
+            return JsonResponse({"ok": False, "error": chk["reason"], "waitMin": chk["waitMin"]},
+                                status=429, json_dumps_params={"ensure_ascii": False})
+        tiktok_sync.start_background("manual", (user.get("nickname") or user.get("user_id") or "")[:40])
+        return JsonResponse({"ok": True, "started": True}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, **tiktok_sync.status()}, json_dumps_params={"ensure_ascii": False})
+
+
 @csrf_exempt
 def tiktok_webhook(request):
     """**public** — webhook ของ TikTok for Developers · ★ ก.ย.69 (เจ้าของขอ callback ไปวางในหน้า TikTok)
@@ -2488,6 +2584,12 @@ def tiktok_webhook(request):
     ตรวจลายเซ็น/กันซ้ำ/อายุข้อมูล อยู่ใน `services/tiktok_webhook.py`
     """
     if request.method == "GET":
+        # ★ path เดียวกันเป็น Redirect URI ของ Login Kit ด้วย (เจ้าของลงทะเบียนไว้แบบนี้ในแท็บ Web)
+        #   → มี code/error = เจ้าของช่องเพิ่งกดอนุญาต/ยกเลิกในหน้า TikTok แล้วถูกพากลับมา
+        if "code" in request.GET or "error" in request.GET:
+            from .services import tiktok_oauth
+            code, msg, name = tiktok_oauth.callback(request.GET)
+            return _tiktok_page(code, msg, name)
         ch = request.GET.get("challenge", "")
         return HttpResponse(ch[:200] if ch else "ok", content_type="text/plain; charset=utf-8")
     if request.method != "POST":

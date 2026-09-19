@@ -34,7 +34,8 @@ TIMEOUT_MS = 20_000        # query นานเกินนี้ = ตัด (n
 CELL_MAX = 2000            # ตัดข้อความยาวๆ ก่อนส่งขึ้นจอ (ไฟล์ export ไม่ตัด)
 
 # ── ชื่อคอลัมน์ที่ไม่แสดงค่าเด็ดขาด (กติกาเดิมจาก db_export.ALWAYS_DROP) ──
-HIDE_FIELDS = {"password", "session_data"}
+# + token ของ TikTok (เข้ารหัสไว้แล้วก็จริง แต่ไม่มีเหตุให้โชว์ — กันพลาดอีกชั้น)
+HIDE_FIELDS = {"password", "session_data", "access_token", "refresh_token"}
 
 _START = re.compile(r"^\s*(select|with)\b", re.I)
 # ★ คำสั่งเขียนที่ "ซ่อนใน WITH" — `WITH x AS (DELETE ... RETURNING *) SELECT * FROM x`

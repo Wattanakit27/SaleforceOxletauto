@@ -120,6 +120,8 @@ python manage.py runserver
 | `/api/admin/line_group_name` | `admin_line_group_name` | admin POST `{id}`: ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่ม) → ปุ่ม "ตรวจชื่อ" ในพาเนลรายงาน (ยืนยันว่า id คือกลุ่มไหน) |
 | `/api/admin/line_groups` | `admin_line_groups` | admin GET: รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook · KVStore `line_groups`) → dropdown เลือกกลุ่มในพาเนลรายงาน |
 | `/api/tiktok/webhook` | `tiktok_webhook` | **public** (csrf_exempt) — **webhook ของ TikTok for Developers** (ก.ย.69 เจ้าของขอ callback ไปวางในหน้า TikTok) · POST = event → `dash_tiktok_event` (raw) · GET = 200 (`?challenge=` ตอบค่ากลับ) · ตรวจลายเซ็น `TikTok-Signature` ด้วย `TIKTOK_CLIENT_SECRET` · ดู section "TikTok webhook" |
+| `/api/admin/tiktok/accounts` | `admin_tiktok_accounts` | admin: GET=ช่อง TikTok ที่เชื่อมแล้ว (**ไม่มี token**) · POST `{label}` = สร้างลิงก์ขออนุญาตรายช่อง (ใช้ได้ครั้งเดียว หมดอายุ 7 วัน) |
+| `/api/admin/tiktok/sync` | `admin_tiktok_sync` | admin: GET=สถานะดึงยอดคลิป · POST=ดึงเดี๋ยวนี้ (ด่านกันกดถี่ 15 นาที → 429) |
 | `/api/line/webhook` | `line_webhook` | **public** (csrf_exempt) — LINE Messaging API webhook · จับ `groupId`+ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message) → เก็บ `line_groups` (ยืนยัน signature ถ้ามี `LINE_CHANNEL_SECRET`) · **ต้อง register URL นี้ใน LINE Console** (Messaging API → Webhook URL = `SITE_URL/api/line/webhook` · เปิด Use webhook) |
 | `/api/line/group_ingest` | `line_group_ingest` | **public** (csrf_exempt · auth `?secret=CRON_SECRET` / header `X-Cron-Secret`) — รับ group event จาก **n8n** (กรณี n8n เป็นตัวรับ LINE webhook แล้ว forward มา) → เก็บ `line_groups` เดียวกับ webhook · body ยืดหยุ่น (LINE raw `{events:[...]}` / `{groupId,groupName?}` / list) · คืน `{ok,count,groups}` |
 | `/api/admin/update_release_date` | `update_release_date` | **admin (session) หรือเซลล์ (token/session + ownership)** POST: inline edit วันที่/สถานะ เขียนกลับชีตยอดขายตรงเซลล์ — body `{tab,row,col(2\|13\|14\|18\|19\|20\|21\|23),value,token?}` → `update_release_date()` PUT cell — **2=วันจอง · 13=N สถานะเคส (จอง/จอง(ซื้อสด)/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก · validate ตัด (ซื้อสด) แล้วต้องเป็น 1 ใน 6) · 14=เซ็น · 18=เอกสาร · 19/20=ผล · 21/23=ปล่อย**. เซลล์แก้ได้เฉพาะเคสตัวเอง (เช็คชื่อที่ marker ของแถว = `cell(r,0)`). ใช้จาก `saveReleaseDate`/`saveTimelineDate`/`saveCaseStatus` (index.html แอดมิน + seller.html เซลล์ · modal เคสจองมี dropdown สถานะ + แก้วันที่) |
@@ -1364,7 +1366,41 @@ python-dotenv ใช้ **ตัวท้ายสุด** → `settings.META_AC
   · ซ้ำแล้วยังตอบ **200** (ถ้าตอบอย่างอื่นมันจะยิงซ้ำไม่หยุด)
 - **อายุ 180 วัน** (`KEEP_DAYS`) ลบเองวันละครั้งตอนมี event เข้า · body เกิน 1 MB = 413 · ไม่ใช่ JSON = 400
 - **heartbeat** KV `tiktok_webhook_last` = ครั้งล่าสุดที่ถูกยิง + ผ่าน/ไม่ผ่านเพราะอะไร
-- **ยังไม่ได้ทำ**: ใช้งานข้อมูล (ตอนนี้เก็บดิบอย่างเดียว ดูได้ที่หน้า SQL) · TikTok Login/เรียก API ของ TikTok
+- `authorization.removed` (ตรวจลายเซ็นผ่านเท่านั้น) → ปิดช่องนั้น + ลบ token ทิ้ง (`tiktok_oauth.mark_revoked`)
+- **GET บน path เดียวกัน = Redirect URI ของ Login Kit ด้วย** (เจ้าของลงทะเบียนไว้แบบนี้ในแท็บ Web)
+  → มี `code`/`error` ใน query = เจ้าของช่องเพิ่งกดอนุญาต/ยกเลิก → `tiktok_oauth.callback()`
+
+### 🎵 เชื่อม 10+ ช่อง + ดึงยอดวิว/engagement — [tiktok_oauth.py](dashboard/services/tiktok_oauth.py) · [tiktok_sync.py](dashboard/services/tiktok_sync.py)
+*"เรายังมีอีกสิบช่องที่ยังไม่เชื่อม เราต้องดึง engagement พร้อมยอดวิวมาจาก TikTok เหมือนกัน เช่น Facebook"*
+
+**เชื่อมช่อง (Login Kit / OAuth v2)**
+1. `python manage.py tiktok_accounts --link "ชื่อช่อง" --link …` (หรือ `--links-file`) → ลิงก์ **1 ลิงก์ต่อช่อง**
+   · หรือ POST `/api/admin/tiktok/accounts {label}`
+2. เจ้าของช่องเปิดลิงก์ กดอนุญาต → TikTok พากลับ `/api/tiktok/webhook?code=&state=`
+3. ตรวจ state → แลก code (`open.tiktokapis.com/v2/oauth/token/`) → ดึงชื่อช่อง → เก็บ `dash_tiktok_account`
+- **state = เลขสุ่ม เก็บฝั่งเซิร์ฟเวอร์ (KV `tiktok_oauth:<state>`) ใช้ได้ครั้งเดียว หมดอายุ 7 วัน**
+  — เอกสารที่เจ้าของได้มาให้ใส่ `state=CHANNEL_ID` ซึ่งเดาได้ = ใครก็พาช่องตัวเองมาผูกกับชื่อช่องเราได้
+- **token เข้ารหัส Fernet** (กุญแจ = sha256 ของ SECRET_KEY) · **เปลี่ยน SECRET_KEY = ถอดไม่ได้ ต้องกดอนุญาตใหม่ทุกช่อง**
+  · หน้า SQL ซ่อนคอลัมน์ `access_token`/`refresh_token` · ไฟล์ export ตัดทิ้ง (`ALWAYS_DROP`) — กันหลายชั้น
+- **access token อายุ ~24 ชม. → `cron_tick` เรียก `refresh_due()` ต่ออายุก่อนหมด 2 ชม.** ทีละ 3 ช่องต่อนาที
+  · refresh token ~365 วัน · ต่ออายุไม่ได้ = `status=error` + `last_error`
+- `TIKTOK_SCOPES` (env · default `user.info.basic,video.list`) — **สิทธิ์ต้องเปิดในหน้าแอปก่อน ไม่งั้น TikTok
+  ปฏิเสธทั้งลิงก์** · อยากได้ผู้ติดตาม/ไลก์รวมของช่อง ต้องเพิ่ม `user.info.stats`
+- `dependency`: `cryptography` (ใส่ใน requirements.txt แล้ว · เดิมติดมากับแพ็กเกจอื่นทั้งในเครื่องและเซิร์ฟเวอร์)
+
+**ดึงยอดทุกเที่ยงคืน (กติกาเดียวกับ Facebook)**: `cron_tick` → `tiktok_sync.maybe_run()` ช่วง 00:00–02:59 ใน thread
+| ตาราง (dashboard migration **0010**) | เก็บอะไร |
+|---|---|
+| `dash_tiktok_video_snapshot` | ยอดสะสมรายคลิป (วิว · ไลก์ · คอมเมนต์ · แชร์) คลิปย้อน 90 วัน · ยอดรายวัน = cron D − D-1 |
+| `dash_tiktok_account_snapshot` | ผู้ติดตาม · ไลก์รวม · จำนวนคลิป (เฉพาะช่องที่ให้ `user.info.stats`) |
+| `dash_tiktok_raw` | คำตอบดิบทั้งก้อน · เก็บ 90 วัน |
+- **★ รอบ cron ของวันเดียวกันรันซ้ำได้ ไม่เบิ้ล** — ลบแถว cron ของวันนั้นของช่องนั้นก่อนใส่ (ในธุรกรรมเดียว)
+  · บทเรียนจากรอบแรกของ Facebook 20 ก.ย.69: **gunicorn ถูกรีสตาร์ทตอน 00:07 thread ที่ดึงอยู่ตายตาม**
+  แล้ว cron เริ่มรอบใหม่ → ถ้าไม่กันจะมียอด 2 ชุดในวันเดียว
+- **ช่องเดียวพังไม่ลากช่องอื่น** · token ถูกยกเลิก/สิทธิ์ไม่พอ → ช่องนั้น `status=error` ช่องอื่นดึงต่อ
+- ปุ่มกดเอง: `/api/admin/tiktok/sync` ห่างกัน ≥15 นาที · `manage.py tiktok_accounts --sync` ดึงแล้วรอจนเสร็จ
+- ผลรอบล่าสุด KV `tiktok_sync_last` · ประวัติ `dash_event_log` kind=`tiktok_sync` / `tiktok_oauth`
+- **ยังไม่ได้ทำ**: หน้าจอ (ส่งต่อหน้า UI) · คอมเมนต์รายอันของ TikTok (API ของ Login Kit ไม่ให้)
 
 ## Conventions
 

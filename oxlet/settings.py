@@ -143,6 +143,12 @@ META_PAGE_IDS = [p.strip() for p in os.getenv("META_PAGE_IDS", "").split(",") if
 # ตั้งแล้ว = ลายเซ็นไม่ตรง → ตอบ 401 ไม่เก็บ
 TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
+# Login Kit (OAuth) — เชื่อมช่อง TikTok หลายช่องเข้าระบบ
+# redirect URI ต้องตรงกับที่ลงทะเบียนในแท็บ Web ของแอปทุกตัวอักษร · ว่าง = SITE_URL + /api/tiktok/webhook
+TIKTOK_REDIRECT_URI = os.getenv("TIKTOK_REDIRECT_URI", "")
+# สิทธิ์ที่ขอจากเจ้าของช่อง — ต้องเปิดไว้ในหน้าแอปก่อน ไม่งั้น TikTok ปฏิเสธทั้งลิงก์
+# ยอดผู้ติดตาม/ไลก์รวมของช่อง = user.info.stats · ชื่อผู้ใช้ @ = user.info.profile
+TIKTOK_SCOPES = os.getenv("TIKTOK_SCOPES", "user.info.basic,video.list")
 
 # ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
 # อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)

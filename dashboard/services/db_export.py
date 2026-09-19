@@ -31,6 +31,8 @@ import re
 ALWAYS_DROP = {
     ("auth_user", "password"),          # แฮชรหัสผ่าน — หลุดไปก็เอาไปลองถอดได้
     ("django_session", "session_data"), # เท่ากับคุกกี้ล็อกอินของคนอื่น
+    ("dash_tiktok_account", "access_token"),   # ถือ token = อ่านข้อมูลช่อง TikTok นั้นได้แทนเรา
+    ("dash_tiktok_account", "refresh_token"),  # (เก็บแบบเข้ารหัสอยู่แล้ว · ไม่ออกไฟล์ซ้ำอีกชั้น)
 }
 
 # ตารางที่ export ไปก็ไม่มีประโยชน์ (ตารางเชื่อมของ Django ล้วนๆ)

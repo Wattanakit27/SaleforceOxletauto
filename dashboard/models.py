@@ -281,3 +281,118 @@ class TikTokEvent(models.Model):
 
     def __str__(self):
         return "%s %s" % (self.received_at, self.event)
+
+
+class TikTokAccount(models.Model):
+    """ช่อง TikTok ที่เจ้าของกดอนุญาตให้ระบบเราอ่านข้อมูล — 1 แถวต่อช่อง (open_id) · ก.ย.69
+
+    ได้มาจาก Login Kit: เจ้าของช่องเปิดลิงก์ขออนุญาต → TikTok ส่ง `code` กลับมาที่
+    `/api/tiktok/webhook` → เราแลกเป็น access_token (อายุ ~24 ชม.) + refresh_token (~365 วัน)
+
+    ★ **token เข้ารหัสก่อนเก็บ** (Fernet · กุญแจสร้างจาก SECRET_KEY) — ใครเปิดหน้า "ฐานข้อมูล (SQL)"
+      หรือไฟล์ export จะเห็นแต่ค่าที่ถูกเข้ารหัส · ถือ token = ดึงข้อมูลช่องนั้นได้แทนเรา
+      ⚠️ เปลี่ยน SECRET_KEY เมื่อไหร่ ถอดรหัสไม่ได้ ต้องให้เจ้าของช่องกดอนุญาตใหม่
+    ★ access_token ต่ออายุเองจาก cron (`tiktok_oauth.refresh_due`) ก่อนหมด 2 ชม.
+    """
+    ACTIVE, ERROR, REVOKED = "active", "error", "revoked"
+    STATUS_CHOICES = [(ACTIVE, "ใช้งานได้"), (ERROR, "ต่ออายุไม่สำเร็จ"), (REVOKED, "เจ้าของยกเลิกสิทธิ์")]
+
+    open_id = models.CharField("open_id (id ช่องต่อแอป)", max_length=120, unique=True)
+    label = models.CharField("ชื่อที่เราตั้ง (ตอนสร้างลิงก์)", max_length=120, blank=True)
+    display_name = models.CharField("ชื่อช่อง", max_length=200, blank=True)
+    username = models.CharField("@ชื่อผู้ใช้", max_length=120, blank=True)
+    scope = models.CharField("สิทธิ์ที่ได้", max_length=300, blank=True)
+    profile = models.JSONField("ข้อมูลช่องจาก TikTok (ไม่มีรูป)", default=dict, blank=True)
+
+    access_token = models.TextField("access token (เข้ารหัส)", blank=True)
+    access_expires_at = models.DateTimeField("access token หมดอายุ", null=True, blank=True)
+    refresh_token = models.TextField("refresh token (เข้ารหัส)", blank=True)
+    refresh_expires_at = models.DateTimeField("refresh token หมดอายุ", null=True, blank=True)
+
+    status = models.CharField("สถานะ", max_length=10, choices=STATUS_CHOICES, default=ACTIVE, db_index=True)
+    last_error = models.CharField("ผิดพลาดล่าสุด", max_length=300, blank=True)
+    connected_by = models.CharField("ใครสร้างลิงก์", max_length=80, blank=True)
+    connected_at = models.DateTimeField("เชื่อมเมื่อ", auto_now_add=True)
+    refreshed_at = models.DateTimeField("ต่ออายุล่าสุด", null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_tiktok_account"
+        verbose_name = "ช่อง TikTok ที่เชื่อมแล้ว"
+        verbose_name_plural = "ช่อง TikTok ที่เชื่อมแล้ว"
+        ordering = ["label", "display_name"]
+
+    def __str__(self):
+        return "%s (%s)" % (self.label or self.display_name or self.open_id[:10], self.status)
+
+
+class TikTokVideoSnapshot(models.Model):
+    """ยอดสะสมของคลิป TikTok 1 คลิป ณ เวลาที่ดึง — คู่ขนานกับ `MetaPostSnapshot` ฝั่ง Facebook
+
+    TikTok ให้ยอด (วิว/ไลก์/คอมเมนต์/แชร์) เป็น **ยอดสะสม** เท่านั้น ไม่มีรายวัน
+    → ยอดรายวัน = แถว `trigger='cron'` วัน D ลบวัน D-1 · `snap_date` ของรอบเที่ยงคืน = วันที่เพิ่งจบไป
+    ★ รอบ cron ของวันเดียวกันรันซ้ำได้ (เช่นระบบรีสตาร์ทกลางทาง) — ลบของวันนั้นของช่องนั้นก่อนแล้วค่อยใส่
+      จึงมี 1 แถวต่อคลิปต่อวันเสมอ ไม่เบิ้ล
+    """
+    CRON, MANUAL = "cron", "manual"
+
+    taken_at = models.DateTimeField("ดึงเมื่อ", db_index=True)
+    snap_date = models.DateField("ยอดสะสม ณ สิ้นวัน", db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default=CRON)
+    open_id = models.CharField("ช่อง (open_id)", max_length=120, db_index=True)
+    video_id = models.CharField("คลิป", max_length=64, db_index=True)
+    create_time = models.DateTimeField("โพสต์เมื่อ", null=True, blank=True)
+    title = models.CharField("ชื่อ/คำบรรยาย (ตัดสั้น)", max_length=300, blank=True)
+    share_url = models.URLField("ลิงก์คลิป", max_length=300, blank=True)
+    duration = models.IntegerField("ยาว (วินาที)", default=0)
+
+    view_count = models.BigIntegerField("วิว", default=0)
+    like_count = models.BigIntegerField("ไลก์", default=0)
+    comment_count = models.BigIntegerField("คอมเมนต์", default=0)
+    share_count = models.BigIntegerField("แชร์", default=0)
+
+    class Meta:
+        db_table = "dash_tiktok_video_snapshot"
+        verbose_name = "ยอดคลิป TikTok (รายวัน)"
+        verbose_name_plural = "ยอดคลิป TikTok (รายวัน)"
+        ordering = ["-taken_at"]
+        indexes = [models.Index(fields=["video_id", "snap_date"]),
+                   models.Index(fields=["open_id", "trigger", "snap_date"])]
+
+    def __str__(self):
+        return "%s %s %s" % (self.snap_date, self.video_id, self.view_count)
+
+
+class TikTokAccountSnapshot(models.Model):
+    """ยอดรวมของช่อง ณ สิ้นวัน (ผู้ติดตาม/ไลก์รวม/จำนวนคลิป) — ได้เฉพาะช่องที่ให้สิทธิ์ `user.info.stats`"""
+    taken_at = models.DateTimeField("ดึงเมื่อ", db_index=True)
+    snap_date = models.DateField("ยอด ณ สิ้นวัน", db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default="cron")
+    open_id = models.CharField("ช่อง (open_id)", max_length=120, db_index=True)
+    follower_count = models.BigIntegerField("ผู้ติดตาม", null=True, blank=True)
+    following_count = models.BigIntegerField("กำลังติดตาม", null=True, blank=True)
+    likes_count = models.BigIntegerField("ไลก์รวมทั้งช่อง", null=True, blank=True)
+    video_count = models.IntegerField("จำนวนคลิป", null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_tiktok_account_snapshot"
+        verbose_name = "ยอดช่อง TikTok (รายวัน)"
+        verbose_name_plural = "ยอดช่อง TikTok (รายวัน)"
+        ordering = ["-taken_at"]
+        indexes = [models.Index(fields=["open_id", "trigger", "snap_date"])]
+
+
+class TikTokRaw(models.Model):
+    """คำตอบดิบจาก TikTok API ทั้งก้อน — ไว้คิดตัวเลขใหม่ย้อนหลัง · มีวันหมดอายุ (`KEEP_DAYS`)"""
+    KEEP_DAYS = 90
+
+    fetched_at = models.DateTimeField("ดึงเมื่อ", auto_now_add=True, db_index=True)
+    kind = models.CharField("ชนิด", max_length=16, db_index=True)       # videos / user
+    open_id = models.CharField("ช่อง (open_id)", max_length=120, blank=True, db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default="cron")
+    data = models.JSONField("คำตอบดิบ", default=dict, blank=True)
+
+    class Meta:
+        db_table = "dash_tiktok_raw"
+        verbose_name = "ข้อมูลดิบจาก TikTok"
+        verbose_name_plural = "ข้อมูลดิบจาก TikTok"
+        ordering = ["-fetched_at"]
