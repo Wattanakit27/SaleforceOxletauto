@@ -248,3 +248,36 @@ class MetaRaw(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.fetched_at, self.kind, self.ref_id)
+
+
+class TikTokEvent(models.Model):
+    """event ที่ TikTok ยิงเข้า webhook ของเรา — 1 แถวต่อ event · เก็บดิบทั้งก้อน (ก.ย.69)
+
+    TikTok for Developers ส่งมาเป็น JSON: `client_key` · `event` (เช่น authorization.removed,
+    video.publish.completed) · `create_time` (unix) · `user_openid` · `content` (JSON ที่เป็น *string* ซ้อนอีกชั้น)
+    · ลายเซ็นอยู่ใน header `TikTok-Signature: t=<เวลา>,s=<hmac>`
+
+    **กันซ้ำด้วย `body_hash`** — TikTok ไม่มี event id ให้ และลองส่งซ้ำเมื่อเราตอบช้า/ไม่ใช่ 200
+    **มีอายุ `KEEP_DAYS`** — ล็อกที่ไม่มีวันหมดอายุ = ตารางโตไม่หยุด (บทเรียนเดิม)
+    """
+    KEEP_DAYS = 180
+
+    received_at = models.DateTimeField("ได้รับเมื่อ", auto_now_add=True, db_index=True)
+    event = models.CharField("ชนิด event", max_length=80, blank=True, db_index=True)
+    client_key = models.CharField("แอป TikTok (client_key)", max_length=80, blank=True, db_index=True)
+    user_openid = models.CharField("ผู้ใช้ (open_id)", max_length=120, blank=True, db_index=True)
+    create_time = models.DateTimeField("TikTok สร้างเมื่อ", null=True, blank=True)
+    # True = ลายเซ็นตรง · None = ยังไม่ได้ตั้ง secret จึงไม่ได้ตรวจ (ลายเซ็นไม่ตรงจะไม่ถูกเก็บเลย)
+    signature_ok = models.BooleanField("ลายเซ็นถูกต้อง", null=True, blank=True)
+    content = models.JSONField("content (แกะจาก string แล้ว)", default=dict, blank=True)
+    raw = models.JSONField("body ดิบทั้งก้อน", default=dict, blank=True)
+    body_hash = models.CharField("ลายนิ้วมือ body (กันซ้ำ)", max_length=64, unique=True)
+
+    class Meta:
+        db_table = "dash_tiktok_event"
+        verbose_name = "event จาก TikTok (webhook)"
+        verbose_name_plural = "event จาก TikTok (webhook)"
+        ordering = ["-received_at"]
+
+    def __str__(self):
+        return "%s %s" % (self.received_at, self.event)

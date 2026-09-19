@@ -119,6 +119,7 @@ python manage.py runserver
 | `/api/admin/report_test` | `admin_report_test` | admin POST `{target?}`: แคปตารางรายงาน (Playwright) → ส่งรูปเข้า LINE เดี๋ยวนี้ (ปุ่ม "ส่งทดสอบ") · ⚠️ ได้จริงเฉพาะ prod (LINE ต้องดึงรูปจาก URL https สาธารณะ) |
 | `/api/admin/line_group_name` | `admin_line_group_name` | admin POST `{id}`: ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่ม) → ปุ่ม "ตรวจชื่อ" ในพาเนลรายงาน (ยืนยันว่า id คือกลุ่มไหน) |
 | `/api/admin/line_groups` | `admin_line_groups` | admin GET: รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook · KVStore `line_groups`) → dropdown เลือกกลุ่มในพาเนลรายงาน |
+| `/api/tiktok/webhook` | `tiktok_webhook` | **public** (csrf_exempt) — **webhook ของ TikTok for Developers** (ก.ย.69 เจ้าของขอ callback ไปวางในหน้า TikTok) · POST = event → `dash_tiktok_event` (raw) · GET = 200 (`?challenge=` ตอบค่ากลับ) · ตรวจลายเซ็น `TikTok-Signature` ด้วย `TIKTOK_CLIENT_SECRET` · ดู section "TikTok webhook" |
 | `/api/line/webhook` | `line_webhook` | **public** (csrf_exempt) — LINE Messaging API webhook · จับ `groupId`+ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message) → เก็บ `line_groups` (ยืนยัน signature ถ้ามี `LINE_CHANNEL_SECRET`) · **ต้อง register URL นี้ใน LINE Console** (Messaging API → Webhook URL = `SITE_URL/api/line/webhook` · เปิด Use webhook) |
 | `/api/line/group_ingest` | `line_group_ingest` | **public** (csrf_exempt · auth `?secret=CRON_SECRET` / header `X-Cron-Secret`) — รับ group event จาก **n8n** (กรณี n8n เป็นตัวรับ LINE webhook แล้ว forward มา) → เก็บ `line_groups` เดียวกับ webhook · body ยืดหยุ่น (LINE raw `{events:[...]}` / `{groupId,groupName?}` / list) · คืน `{ok,count,groups}` |
 | `/api/admin/update_release_date` | `update_release_date` | **admin (session) หรือเซลล์ (token/session + ownership)** POST: inline edit วันที่/สถานะ เขียนกลับชีตยอดขายตรงเซลล์ — body `{tab,row,col(2\|13\|14\|18\|19\|20\|21\|23),value,token?}` → `update_release_date()` PUT cell — **2=วันจอง · 13=N สถานะเคส (จอง/จอง(ซื้อสด)/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก · validate ตัด (ซื้อสด) แล้วต้องเป็น 1 ใน 6) · 14=เซ็น · 18=เอกสาร · 19/20=ผล · 21/23=ปล่อย**. เซลล์แก้ได้เฉพาะเคสตัวเอง (เช็คชื่อที่ marker ของแถว = `cell(r,0)`). ใช้จาก `saveReleaseDate`/`saveTimelineDate`/`saveCaseStatus` (index.html แอดมิน + seller.html เซลล์ · modal เคสจองมี dropdown สถานะ + แก้วันที่) |
@@ -1344,6 +1345,26 @@ Meta ส่ง `post_video_views`/`_organic`/`_paid`/`avg_time_watched`/`view_ti
 ### ⚠️ `.env` มี `META_ACCESS_TOKEN` ซ้ำ 2 บรรทัด — **ตัวหลังเป็นค่าว่างและมันทับตัวจริง**
 python-dotenv ใช้ **ตัวท้ายสุด** → `settings.META_ACCESS_TOKEN` เป็น `""` มาตลอดโดยไม่มีใครรู้
 · แก้แล้ว (ลบตัวว่างออก) · **เวลาเติมคีย์ใหม่ใน `.env` ให้ค้นก่อนว่ามีอยู่แล้วหรือยัง**
+
+## TikTok webhook — [tiktok_webhook.py](dashboard/services/tiktok_webhook.py) · ก.ย.69
+*"เตรียมสภาพแวดล้อมอีกอันหนึ่ง เอาไว้เก็บ TikTok Dev · ขอ callback ไปวางที่ webhook ของเว็บนั้น"*
+
+- **callback URL = `https://srv1793506.hstgr.cloud/api/tiktok/webhook`** (= `SITE_URL` + path)
+  · ต้องเป็น https สาธารณะ → **ใช้ได้หลัง deploy ขึ้นเซิร์ฟเวอร์เท่านั้น** (localhost TikTok ยิงไม่ถึง)
+- **env**: `TIKTOK_CLIENT_KEY` · `TIKTOK_CLIENT_SECRET` (ประกาศใน settings.py แล้ว — บทเรียน
+  `LINE_CHANNEL_SECRET` ที่ไม่ถูกประกาศจนข้ามการตรวจลายเซ็นมาตลอด)
+- **ลายเซ็น** = HMAC-SHA256(client_secret, `"<t>.<body ดิบ>"`) เทียบกับ `s` ใน header
+  `TikTok-Signature: t=…,s=…` · เวลา `t` เก่า/ล้ำได้ไม่เกิน 10 นาที (กันเอาของเก่ามายิงซ้ำ)
+  - **ตั้ง secret แล้ว** → ไม่ตรง/ไม่มี header/เวลาเก่า = **401 ไม่เก็บ** (+ จดใน `dash_event_log`)
+  - **ยังไม่ตั้ง** → รับและเก็บ แต่ `signature_ok = NULL` — ตั้งใจให้ผ่านช่วงตั้งค่าครั้งแรก
+    (TikTok อาจยิงทดสอบก่อนที่เราจะใส่ secret) · **⚠️ อย่าปล่อยไว้แบบไม่ตั้ง** ใครรู้ URL ก็ยิงของปลอมได้
+- **ตาราง `dash_tiktok_event`** (dashboard migration **0009**): event · client_key · user_openid ·
+  create_time · signature_ok · `content` (**แกะ JSON ที่ TikTok ห่อเป็น string ซ้อนมาแล้ว**) · `raw` (body ทั้งก้อน)
+- **กันซ้ำด้วย `body_hash`** (sha256 ของ body) — TikTok ไม่มี event id และส่งซ้ำเมื่อเราตอบช้า
+  · ซ้ำแล้วยังตอบ **200** (ถ้าตอบอย่างอื่นมันจะยิงซ้ำไม่หยุด)
+- **อายุ 180 วัน** (`KEEP_DAYS`) ลบเองวันละครั้งตอนมี event เข้า · body เกิน 1 MB = 413 · ไม่ใช่ JSON = 400
+- **heartbeat** KV `tiktok_webhook_last` = ครั้งล่าสุดที่ถูกยิง + ผ่าน/ไม่ผ่านเพราะอะไร
+- **ยังไม่ได้ทำ**: ใช้งานข้อมูล (ตอนนี้เก็บดิบอย่างเดียว ดูได้ที่หน้า SQL) · TikTok Login/เรียก API ของ TikTok
 
 ## Conventions
 

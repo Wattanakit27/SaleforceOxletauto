@@ -2480,6 +2480,24 @@ def admin_report_config(request):
 
 
 @csrf_exempt
+def tiktok_webhook(request):
+    """**public** — webhook ของ TikTok for Developers · ★ ก.ย.69 (เจ้าของขอ callback ไปวางในหน้า TikTok)
+
+    callback URL = `SITE_URL/api/tiktok/webhook` · POST = event (เก็บลง `dash_tiktok_event`)
+    · GET = ตอบ 200 ไว้ให้หน้าตั้งค่าเช็คว่า URL เปิดได้ (ถ้าส่ง `?challenge=` มาจะตอบค่านั้นกลับ)
+    ตรวจลายเซ็น/กันซ้ำ/อายุข้อมูล อยู่ใน `services/tiktok_webhook.py`
+    """
+    if request.method == "GET":
+        ch = request.GET.get("challenge", "")
+        return HttpResponse(ch[:200] if ch else "ok", content_type="text/plain; charset=utf-8")
+    if request.method != "POST":
+        return HttpResponse(status=405)
+    from .services import tiktok_webhook as tw
+    code, body = tw.handle(request.body, request.headers.get("TikTok-Signature", ""))
+    return JsonResponse(body, status=code, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
 def admin_meta_sync(request):
     """Admin — ดึงข้อมูล Meta (Facebook) · GET = สถานะ · POST = กด sync เดี๋ยวนี้
 

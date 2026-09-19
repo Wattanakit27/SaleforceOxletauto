@@ -136,6 +136,14 @@ META_AD_ACCOUNTS = [a.strip().replace("act_", "")
                     for a in os.getenv("META_AD_ACCOUNTS", "").split(",") if a.strip()]
 META_PAGE_IDS = [p.strip() for p in os.getenv("META_PAGE_IDS", "").split(",") if p.strip()]
 
+# ===== TikTok for Developers — webhook (ก.ย.69) =====
+# callback URL ที่วางในหน้า TikTok Developer = SITE_URL + /api/tiktok/webhook
+# CLIENT_SECRET ใช้ตรวจลายเซ็น (header TikTok-Signature) — SECRET ห้าม commit ลง git
+# ไม่ตั้ง secret = ยังรับ/เก็บได้ แต่ติดป้าย "ยังไม่ได้ตรวจลายเซ็น" (signature_ok = NULL)
+# ตั้งแล้ว = ลายเซ็นไม่ตรง → ตอบ 401 ไม่เก็บ
+TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
+TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
+
 # ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
 # อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)
 # ★ ไม่ตั้งค่า = ปิดสนิท (endpoint คืน 503) — ข้อมูลพนักงาน/LINE id เป็นข้อมูลส่วนบุคคล

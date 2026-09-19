@@ -48,6 +48,11 @@ TABLES = {
         what="คนที่ทักเข้าเพจ 1 แถวต่อคนต่อเพจ — ชื่อ · ห้องสนทนา · ลิงก์เปิดใน Inbox · จำนวนข้อความ "
              "(คู่ขนานกับ checkout_lineprofile) · Facebook ให้แค่ชื่อ ไม่มีเบอร์/อีเมลจริง",
         pii=True, keep="ลูกค้าที่เงียบเกิน 60 วันลบเอง"),
+    "dash_tiktok_event": dict(
+        name="event จาก TikTok (webhook)",
+        what="สิ่งที่ TikTok for Developers ยิงเข้า /api/tiktok/webhook — 1 แถวต่อ event เก็บ body ดิบทั้งก้อน · "
+             "signature_ok = ตรวจลายเซ็นผ่าน (ว่าง = ยังไม่ได้ตั้ง TIKTOK_CLIENT_SECRET จึงไม่ได้ตรวจ)",
+        pii=True, keep="เก็บ 180 วัน แล้วลบเอง"),
     "dash_meta_post_snapshot": dict(
         name="ยอดโพสต์ Facebook (ทุกเที่ยงคืน)",
         what="ยอดสะสมของทุกโพสต์ในเพจเรา (วิว/ไลก์/คอมเมนต์/แชร์/คลิก/ดูเฉลี่ย) จดทุกเที่ยงคืน · "
