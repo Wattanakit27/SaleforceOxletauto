@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>เบิก-คืนรถส่วนกลาง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f5f6fa; --bg2:#fff; --bd:#e6e7ef; --t1:#1f2333; --t2:#5a6072; --t3:#9195a8;
@@ -14,47 +15,47 @@
            --blue:#60a5fa; --green:#4ade80; --amber:#fbbf24; --red:#f87171; }
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:'Sarabun',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;padding:14px}
+  body{margin:0;font-family:'Noto Sans Thai', 'Segoe UI', Tahoma, sans-serif;background:var(--bg);color:var(--t1);font-size:14.5px;padding:14px}
   h1{font-size:18px;font-weight:800;margin:0 0 3px}
-  .sub{font-size:12px;color:var(--t3);margin-bottom:14px}
+  .sub{font-size:13px;color:var(--t3);margin-bottom:14px}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
   .kpi{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:12px 14px}
   .kpi .n{font-size:24px;font-weight:800;line-height:1.1}
-  .kpi .l{font-size:11.5px;color:var(--t3);margin-top:2px}
+  .kpi .l{font-size:13px;color:var(--t3);margin-top:2px}
   button{font-family:inherit;cursor:pointer;border-radius:9px;border:.5px solid var(--bd);background:var(--bg2);color:var(--t1);padding:7px 12px;font-size:13px;font-weight:600}
   button.pri{background:var(--blue);color:#fff;border:none}
   button.g{background:var(--green);color:#fff;border:none}
-  button.sm{padding:4px 9px;font-size:11.5px;font-weight:700}
+  button.sm{padding:4px 9px;font-size:13px;font-weight:700}
   input,select{font-family:inherit;padding:7px 10px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--t1);font-size:13px}
   .card{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;overflow:hidden}
   /* ── แถบเครื่องมือ: ค้นหา + ตัวกรอง + ปุ่ม อยู่ในกล่องเดียว ไม่กระจัดกระจาย ── */
   .tools{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:12px;
          display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .search{position:relative;flex:1 1 260px;min-width:220px}
-  .search input{width:100%;padding-left:30px;padding-right:28px}
-  .search .ic{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:13px;pointer-events:none}
+  .search input{width:100%;padding-left:34px;padding-right:28px}
+  .search .ic{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:17px;pointer-events:none}
   .search .clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--t3);
-               padding:2px 6px;font-size:15px;line-height:1;display:none}
+               padding:2px 6px;font-size:14.5px;line-height:1;display:none}
   .search.has .clr{display:block}
-  .seg{display:flex;gap:4px;background:var(--bg);border:.5px solid var(--bd);border-radius:9px;padding:3px}
-  .seg button{border:none;background:transparent;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--t2);border-radius:7px}
+  .seg{display:flex;gap:4px;background:var(--bg);border:.5px solid var(--bd);border-radius:7px;padding:3px}
+  .seg button{border:none;background:transparent;padding:5px 11px;font-size:13px;font-weight:600;color:var(--t2);border-radius:7px}
   .seg button.on{background:var(--bg2);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .spacer{flex:1 1 auto}
   /* ── รถที่ถูกเบิกบ่อย ── */
   .tops{display:flex;gap:8px;flex-wrap:wrap;padding:11px 12px}
   .top{display:flex;align-items:center;gap:8px;background:var(--bg);border:.5px solid var(--bd);border-radius:10px;
-       padding:6px 11px;cursor:pointer;font-size:12.5px}
+       padding:6px 11px;cursor:pointer;font-size:13px}
   .top:hover{border-color:var(--blue)}
-  .top b{font-size:14px}
-  .top .n{background:var(--blue);color:#fff;border-radius:20px;padding:1px 8px;font-size:11.5px;font-weight:800}
-  .top .dot{width:7px;height:7px;border-radius:50%;background:var(--amber)}
+  .top b{font-size:14.5px}
+  .top .n{background:var(--blue);color:#fff;border-radius:5px;padding:1px 8px;font-size:13px;font-weight:800}
+  .top .dot{width:9px;height:9px;border-radius:50%;background:var(--amber)}
   .head{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:.5px solid var(--bd)}
-  .head h2{font-size:13.5px;font-weight:700;margin:0}
+  .head h2{font-size:14.5px;font-weight:700;margin:0}
   table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
-  th{background:var(--bg);color:var(--t2);font-weight:600;text-align:left;padding:9px 11px;font-size:11.5px;border-bottom:1px solid var(--bd)}
+  th{background:var(--bg);color:var(--t2);font-weight:600;text-align:left;padding:9px 11px;font-size:13px;border-bottom:1px solid var(--bd)}
   td{padding:9px 11px;border-bottom:.5px solid var(--bd)}
   tr:last-child td{border-bottom:none}
-  .chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+  .chip{display:inline-block;padding:2px 9px;border-radius:5px;font-size:13px;font-weight:700}
   .addform{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;display:none;gap:8px;flex-wrap:wrap;align-items:center}
   .addform.show{display:flex}
   .panel{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;display:none}
@@ -63,14 +64,14 @@
   .opt{display:flex;gap:8px;align-items:flex-start;padding:7px 0;font-size:13px;line-height:1.5}
   .opt input{width:18px;height:18px;margin-top:1px;flex:0 0 auto}
   .warn{background:color-mix(in srgb,var(--amber) 13%,transparent);border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);
-        color:var(--amber);padding:9px 12px;border-radius:9px;margin-bottom:10px;font-size:12.5px;font-weight:600}
+        color:var(--amber);padding:9px 12px;border-radius:9px;margin-bottom:10px;font-size:13px;font-weight:600}
   .scroll{overflow-x:auto}
   /* รูปหลักฐานในตาราง — กดเปิดไฟล์เต็มใน Drive/ดิสก์ */
   .thumbs{display:flex;align-items:center;gap:3px}
-  .th{width:26px;height:26px;border-radius:5px;overflow:hidden;border:.5px solid var(--bd);display:block;flex:0 0 auto}
+  .th{width:34px;height:34px;border-radius:6px;overflow:hidden;border:.5px solid var(--bd);display:block;flex:0 0 auto}
   .th img{width:100%;height:100%;object-fit:cover;display:block}
-  .th.vid{display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--t2);font-size:11px;text-decoration:none}
-  .more{font-size:11px;color:var(--t3);font-weight:700}
+  .th.vid{display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--t2);font-size:14.5px;text-decoration:none}
+  .more{font-size:13px;color:var(--t3);font-weight:700}
   .muted{color:var(--t3)}
   .deny{background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:30px;text-align:center;color:var(--t2)}
 </style>
@@ -88,7 +89,7 @@
   <div class="card" id="topcard" style="margin-bottom:12px;display:none">
     <div class="head">
       <h2>🚗 รถที่ถูกเบิกบ่อยสุด</h2>
-      <span class="muted" style="font-size:11.5px">นับจากทุกเคสในระบบ · กดเพื่อดูเฉพาะคันนั้น</span>
+      <span class="muted" style="font-size:13px">นับจากทุกเคสในระบบ · กดเพื่อดูเฉพาะคันนั้น</span>
     </div>
     <div class="tops" id="tops"></div>
   </div>
@@ -117,7 +118,7 @@
   <div class="panel" id="linebox">
     <div class="head" style="padding:0 0 10px 0">
       <h2>⚙️ กลุ่ม LINE ที่ดักเก็บข้อมูล</h2>
-      <span class="muted" style="font-size:11.5px" id="lineFrom"></span>
+      <span class="muted" style="font-size:13px" id="lineFrom"></span>
     </div>
     <div id="lineWarn"></div>
     <div class="row2">
@@ -133,17 +134,17 @@
     <label class="opt"><input type="checkbox" id="ckStoreChat">
       <span><b>เก็บแชทของทุกกลุ่มลงฐานข้อมูล</b>
         <span class="muted">(ข้อความ/สติกเกอร์/อิโมจิ + ตำแหน่งรูป · แยกตามกลุ่ม)</span></span></label>
-    <div id="chatBox" class="muted" style="font-size:12px;line-height:1.7;margin:2px 0 8px 26px"></div>
+    <div id="chatBox" class="muted" style="font-size:13px;line-height:1.7;margin:2px 0 8px 26px"></div>
     <label class="opt"><input type="checkbox" id="ckStoreCust">
       <span><b>เก็บแชทลูกค้าที่ทักเข้า LINE OA</b>
         <span class="muted">(แชท 1:1 · เก็บสั้นกว่าแชทกลุ่ม เพราะเป็นบทสนทนากับคนนอก)</span></span></label>
-    <div id="custBox" class="muted" style="font-size:12px;line-height:1.7;margin:2px 0 8px 26px"></div>
+    <div id="custBox" class="muted" style="font-size:13px;line-height:1.7;margin:2px 0 8px 26px"></div>
     <div class="row2" style="margin-top:10px">
       <button class="g" onclick="saveLine()">บันทึก</button>
       <button onclick="toggleLine()">ปิด</button>
-      <span class="muted" id="lineMsg" style="font-size:12px"></span>
+      <span class="muted" id="lineMsg" style="font-size:13px"></span>
     </div>
-    <div class="muted" style="font-size:11.5px;margin-top:9px;line-height:1.6" id="hookHint"></div>
+    <div class="muted" style="font-size:13px;margin-top:9px;line-height:1.6" id="hookHint"></div>
   </div>
 
   <div class="addform" id="addform">
@@ -158,7 +159,7 @@
   <div class="card">
     <div class="head">
       <h2>รายการเบิก-คืน</h2>
-      <span class="muted" id="status" style="font-size:11.5px"></span>
+      <span class="muted" id="status" style="font-size:13px"></span>
     </div>
     <div class="scroll">
       <table>
@@ -341,7 +342,7 @@ async function loadLine(){
           + (u.last ? ' <span class="muted">(ล่าสุด ' + esc(u.last) + ')</span>' : '')
           + (u.userId
               ? '<br><code onclick="ckCopy(this)" title="กดเพื่อคัดลอก LINE user id (ใช้ทักกลับ)"'
-                + ' style="font-size:10px;cursor:pointer;opacity:.65">' + esc(u.userId) + '</code>'
+                + ' style="font-size:13px;cursor:pointer;opacity:.65">' + esc(u.userId) + '</code>'
               : '')
           + '</span></div>').join('')
       + '</div>'

@@ -14,26 +14,26 @@
   .stage-drop i{width:24px;height:24px}
   .stage-drop:hover{border-color:var(--accent)}
   .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-size:12px;background:var(--bg3);border:.5px solid var(--line)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;font-size:13px;background:var(--bg3);border:.5px solid var(--line)}
   .chip.on{border-color:var(--accent);color:var(--fg)}
   .kv{padding:8px 2px;border-bottom:.5px solid var(--line)}
-  .kv span:first-child{display:block;font-size:11px;color:var(--mut)}
-  .kv span:last-child{display:block;font-size:14px;font-weight:600;word-break:break-word}
+  .kv span:first-child{display:block;font-size:13px;color:var(--mut)}
+  .kv span:last-child{display:block;font-size:14.5px;font-weight:600;word-break:break-word}
   /* KPI */
   .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
   .k{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:flex;gap:12px;align-items:center}
   .k .ic{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .k .ic i{width:20px;height:20px}
-  .k .lbl{font-size:12px;color:var(--mut);margin-bottom:2px}
+  .k .lbl{font-size:13px;color:var(--mut);margin-bottom:2px}
   .k .n{font-size:24px;font-weight:800;line-height:1.1}
-  .k .sub{font-size:11px;color:var(--mut)}
+  .k .sub{font-size:13px;color:var(--mut)}
   /* charts */
   .chartgrid{display:grid;grid-template-columns:1.55fr 1fr;gap:12px;margin-bottom:14px}
   @media(max-width:760px){.chartgrid{grid-template-columns:1fr}}
   .chead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-  .chead h2{margin:0;font-size:15px}
+  .chead h2{margin:0;font-size:14.5px}
   .plegend{display:flex;flex-wrap:wrap;gap:6px}
-  .plegend .pill{font-size:11px;padding:3px 9px}
+  .plegend .pill{font-size:13px;padding:3px 9px}
   .hleg{display:flex;flex-direction:column;gap:7px;margin-top:12px}
   .hleg .row2{display:flex;align-items:center;gap:9px;font-size:13px}
   .hleg .row2 b{margin-left:auto;font-variant-numeric:tabular-nums}
@@ -47,8 +47,8 @@
   @media(max-width:640px){
     #carTable th:nth-child(4),#carTable td:nth-child(4){display:none}
     #carTable th:nth-child(7),#carTable td:nth-child(7){display:none}
-    #carTable th,#carTable td{padding:8px 5px;font-size:12px}
-    #carTable .pill{font-size:11px;padding:3px 7px}
+    #carTable th,#carTable td{padding:8px 5px;font-size:13px}
+    #carTable .pill{font-size:13px;padding:3px 7px}
   }
   /* ฝังในแท็บ "สถานะรถ" ของ sales / โหมดเซลล์ (iframe) → ซ่อนหัว+ปุ่มซ้ำ (toolbar อยู่นอกกรอบแล้ว)
      ให้บอร์ดเต็มจอ · workers ที่เข้า /track/ ตรง (ไม่ใช่ iframe) ยังเห็นหัว/สลับภาษาปกติ */
@@ -64,7 +64,7 @@
               display:flex;flex-direction:column;gap:6px;padding:14px 12px;overflow-y:auto}
   body.trknav-open .trk-drawer{transform:translateX(0)}
   .trk-drawer .btn{width:100%;justify-content:flex-start}
-  .trk-drawer .sec{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--mut);
+  .trk-drawer .sec{font-size:13px;font-weight:800;letter-spacing:.6px;color:var(--mut);
                    padding:10px 4px 4px;margin-top:6px;border-top:1px solid var(--line)}
   .trk-drawer .sec:first-of-type{margin-top:0;border-top:none}
   .trk-dhead{display:flex;align-items:center;justify-content:space-between;gap:8px;
@@ -102,7 +102,7 @@
 
   <div class="sec" data-i18n="secExport">ดาวน์โหลด</div>
   <a class="btn" href="{% url 'export_timeline_all' %}" onclick="closeTrkNav()"><i data-lucide="download"></i> <span data-i18n="expAll">Export ไทม์ไลน์ทุกคัน (beta)</span></a>
-  <div class="mut" style="font-size:11px;padding:2px 4px 0;line-height:1.5" data-i18n="expAllHint">CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน</div>
+  <div class="mut" style="font-size:13px;padding:2px 4px 0;line-height:1.5" data-i18n="expAllHint">CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน</div>
 
   <div class="sec" data-i18n="secLang">ภาษา</div>
   <div class="row" id="langSw" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-lang="th" onclick="setTrkLang('th')">ไทย</button><button class="btn sm" data-lang="en" onclick="setTrkLang('en')">EN</button><button class="btn sm" data-lang="mm" onclick="setTrkLang('mm')">မြန်မာ</button><button class="btn sm" data-lang="kh" onclick="setTrkLang('kh')">ខ្មែរ</button></div>
@@ -131,7 +131,7 @@
 <!-- บอร์ดสถานะรถ (คัมบัง) — โฟกัสสเตปของตัวเอง · สลับดูทั้งหมดได้ · กดการ์ด = ดู/เปลี่ยนสเตป -->
 <div class="card" style="padding:14px;margin-bottom:14px">
   <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-    <div><h2 style="margin:0;font-size:15px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> <span data-i18n="board">บอร์ดสถานะรถ</span></h2><span class="mut sm" data-i18n="tapCard">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
+    <div><h2 style="margin:0;font-size:14.5px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> <span data-i18n="board">บอร์ดสถานะรถ</span></h2><span class="mut sm" data-i18n="tapCard">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
     {% if has_my %}<div class="row" style="gap:6px">
       <button id="bmMine" class="btn sm pri" onclick="setBoardMode('mine')" data-i18n="mine">งานของฉัน</button>
       <button id="bmAll" class="btn sm" onclick="setBoardMode('all')" data-i18n="all">ทั้งหมด</button>
@@ -142,15 +142,15 @@
       {% for col in board_cols %}
       <div class="bcol" data-mine="{% if col.mine %}1{% else %}0{% endif %}" style="width:212px;flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px{% if col.mine %};outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:-1px{% endif %}">
         <div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px">
-          <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:13px;height:13px"></i> <span class="stg-name">{{ col.name }}</span></span>
+          <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:15px;height:15px"></i> <span class="stg-name">{{ col.name }}</span></span>
           <span class="mut sm" style="font-weight:700">{{ col.cars|length }}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">
           {% for c in col.cars %}
           <div class="bcard" onclick="openCar('{{ c.code }}')" title="{{ c.code }} · {{ c.priority_name }}" style="background:var(--card);border:.5px solid var(--line);border-left:3px solid {{ c.card_color }};border-radius:9px;padding:8px 9px;cursor:pointer">
-            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.card_label }}</b><span class="row" style="gap:4px;align-items:center">{% for f in c.flags %}<i data-lucide="{{ f.icon }}" style="width:13px;height:13px;color:{{ f.color }}" title="{{ f.name }}"></i>{% endfor %}<span class="dot" style="background:{{ c.card_color }}" title="{{ c.priority_name }}"></span></span></div>
+            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.card_label }}</b><span class="row" style="gap:4px;align-items:center">{% for f in c.flags %}<i data-lucide="{{ f.icon }}" style="width:16px;height:16px;color:{{ f.color }}" title="{{ f.name }}"></i>{% endfor %}<span class="dot" style="background:{{ c.card_color }}" title="{{ c.priority_name }}"></span></span></div>
             <div class="sm" style="color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div>
-            {% if c.out_now %}<div class="sm" title="{{ c.out_now.why }} {{ c.out_now.where }}" style="margin:3px 0;padding:2px 7px;border-radius:6px;background:color-mix(in srgb,#f59e0b 18%,transparent);color:#b45309;font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚗 ออกนอกลาน · {{ c.out_now.who }}</div>{% endif %}
+            {% if c.out_now %}<div class="sm" title="{{ c.out_now.why }} {{ c.out_now.where }}" style="margin:3px 0;padding:2px 7px;border-radius:6px;background:color-mix(in srgb,#f59e0b 18%,transparent);color:#b45309;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚗 ออกนอกลาน · {{ c.out_now.who }}</div>{% endif %}
             <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · {% if c.need_photo %}<span style="color:#2563eb;font-weight:600" data-i18n="fWait">รอถ่ายรูป</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span>{% else %}<span data-i18n="stuck">ค้าง</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span>{% endif %}</div>
           </div>
           {% empty %}
@@ -276,7 +276,7 @@
 </div>
 <div id="stageModal" class="ov" onclick="if(event.target===this)closeStage()" style="z-index:120">
   <div class="modal" style="max-width:400px">
-    <h2 style="font-size:16px;margin:0 0 6px" data-i18n="confirmTitle">ยืนยันเปลี่ยนสเตป</h2>
+    <h2 style="font-size:17px;margin:0 0 6px" data-i18n="confirmTitle">ยืนยันเปลี่ยนสเตป</h2>
     <div id="stageMsg" class="mut sm" style="margin-bottom:12px"></div>
     <!-- เช็คลิสต์ตรวจรถ (โชว์เมื่อสเตปกลุ่มตรวจ/ขึ้นโชว์/ปล่อย · ผลต่อท้ายหมายเหตุ · default ติ๊กหมด เอาออกเฉพาะข้อมีปัญหา) -->
     <div id="stageChkWrap" style="display:none;border:.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg2);margin-bottom:10px;max-height:220px;overflow-y:auto">
@@ -397,8 +397,8 @@
         <button class="btn sm" onclick="closeCar()">✕</button>
       </div>
       <div class="row" style="gap:6px;margin:10px 0 12px">
-        <span class="pill" data-stage="${d.stage}" style="font-size:13.5px;padding:5px 12px">${stgName(d.stage)}</span>
-        <span class="pill" style="font-size:13.5px;padding:5px 12px"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
+        <span class="pill" data-stage="${d.stage}" style="font-size:14.5px;padding:5px 12px">${stgName(d.stage)}</span>
+        <span class="pill" style="font-size:14.5px;padding:5px 12px"><span class="dot ${d.flag}"></span> ${flagTxt} ${d.daysInStage} วัน</span>
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
@@ -422,7 +422,7 @@
       </div>`}
       <div class="sm mut" style="margin:14px 0 6px">${T('flags')}</div>
       <div class="row" style="gap:14px;align-items:center;flex-wrap:wrap">
-        ${FLAG_DEFS.map(f=>`<label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600;padding:6px 0">
+        ${FLAG_DEFS.map(f=>`<label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600;padding:6px 0">
           <input type="checkbox" id="fl_${f.key}" ${d[f.js]?'checked':''} onchange="setFlag('${d.code}','${f.key}',this.checked)" ${((d.flagPerms||{})[f.key]===false)?'disabled title="ดูได้อย่างเดียว — บทบาทของคุณติ๊กช่องนี้ไม่ได้"':''} style="width:22px;height:22px;accent-color:${f.color};flex-shrink:0;cursor:pointer">
           <i data-lucide="${f.icon}" style="width:18px;height:18px;color:${f.color}"></i> ${f.name}</label>`).join('')}
         <span id="flagMsg" class="mut sm"></span>
@@ -432,7 +432,7 @@
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
       <div style="max-height:300px;overflow:auto">${logs}</div>
       <div class="row" style="gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:.5px solid var(--line)">
-        <label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14px;font-weight:600">
+        <label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600">
           <input type="checkbox" id="expPhotos" style="width:22px;height:22px;flex-shrink:0;cursor:pointer">
           <i data-lucide="image" style="width:18px;height:18px"></i> ${T('expPhotos')}
         </label>
@@ -476,7 +476,7 @@
     if(!el) return;
     el.innerHTML=arr.map((m,i)=>m.video
       ? `<span class="pill sm">🎬<button onclick="rmMedia('${el.id}',${i})" style="border:0;background:none;cursor:pointer;color:var(--red)">✕</button></span>`
-      : `<span style="position:relative;display:inline-block"><img src="${m.url}" style="width:46px;height:46px;object-fit:cover;border-radius:6px"><button onclick="rmMedia('${el.id}',${i})" style="position:absolute;top:-6px;right:-6px;border:0;border-radius:50%;background:var(--red);color:#fff;width:18px;height:18px;cursor:pointer;font-size:11px">✕</button></span>`
+      : `<span style="position:relative;display:inline-block"><img src="${m.url}" style="width:46px;height:46px;object-fit:cover;border-radius:6px"><button onclick="rmMedia('${el.id}',${i})" style="position:absolute;top:-6px;right:-6px;border:0;border-radius:50%;background:var(--red);color:#fff;width:18px;height:18px;cursor:pointer;font-size:13px">✕</button></span>`
     ).join('');
   }
   function rmMedia(elId,i){ _stageMedia.splice(i,1); renderThumbs(document.getElementById(elId),_stageMedia); }   // เหลือชุดเดียว (ถ่ายคอนเทนต์ถอดแล้ว ส.ค.69)

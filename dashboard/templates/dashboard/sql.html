@@ -6,7 +6,7 @@
   <title>ดูข้อมูลดิบ (SQL) · Oxlet</title>
   {% load static %}
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260919c">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260920a">
   <script>
     // ธีมเดียวกับแดชบอร์ด (คีย์ oxlet_theme) — ตั้งก่อน paint กันจอกระพริบ
     (function(){
@@ -23,7 +23,7 @@
     .sq-top { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: .5px solid var(--bd2);
               display: flex; align-items: center; gap: 12px; padding: 10px 18px; }
     .sq-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px;
-               border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); text-decoration: none; font-size: 12.5px; }
+               border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); text-decoration: none; font-size: var(--fs-body); }
     .sq-back:hover { color: var(--t1); }
     .sq-wrap { padding: 14px 18px 24px; max-width: 1800px; margin: 0 auto; }
     /* หน้าเต็ม: รายชื่อตาราง + ตารางผลลัพธ์ สูงเต็มจอ (เดิมในหน้าต่างลอยสูงแค่ 620/430px) */
@@ -42,8 +42,8 @@
   <div class="sq-top">
     <a class="sq-back" href="/dashboard/"><span id="ic-back"></span> กลับแดชบอร์ด</a>
     <div style="min-width:0">
-      <div style="font-size:16px;font-weight:800;display:flex;align-items:center;gap:7px"><span id="ic-db"></span> ดูข้อมูลดิบ (SQL)</div>
-      <div id="sq-sub" style="font-size:11px;color:var(--t3);margin-top:2px">อ่านอย่างเดียว เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ</div>
+      <div style="font-size:var(--fs-h);font-weight:800;display:flex;align-items:center;gap:7px"><span id="ic-db"></span> ดูข้อมูลดิบ (SQL)</div>
+      <div id="sq-sub" style="font-size:var(--fs-body);color:var(--t3);margin-top:2px">อ่านอย่างเดียว เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ</div>
     </div>
   </div>
   <div class="sq-wrap"><div id="sql-box"><div style="text-align:center;color:var(--t3);padding:60px"><div class="spin" style="margin:0 auto 12px"></div>กำลังอ่านรายชื่อตาราง...</div></div></div>
@@ -120,28 +120,28 @@
 
     // ⚠️ ข้อมูลขายไม่ได้อยู่ในนี้ — ถ้าไม่เขียนไว้ คนอ่านจะเข้าใจผิดว่า "ระบบเก็บแค่นี้" (CLAUDE.md: ห้ามเอาออก)
     const _tot = (_sqlInv || {}).totals || {};
-    let html = `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:11px;padding:9px 12px;font-size:11.5px;color:var(--t2);margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+    let html = `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:11px;padding:9px 12px;font-size:var(--fs-body);color:var(--t2);margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
       <div><b>ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้</b> — ลีด / เคสจอง / ยอดขาย อยู่ใน <b>Google Sheets</b>
         <span style="color:var(--t3)">· ที่นี่เก็บงานติดตามรถ · เบิก-คืนรถ · เช็คชื่อ · แชท · ล็อกระบบ · Facebook${_tot.rows ? ' · รวม ' + Number(_tot.rows).toLocaleString('en-US') + ' แถว' : ''}</span></div>
-      <button onclick="dbExportAll(this)" style="padding:6px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
+      <button onclick="dbExportAll(this)" style="padding:6px 12px;border-radius:7px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:var(--fs-body);cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
 
     html += `<div class="sq-grid">`;
     html += `<div class="sq-side" style="border:.5px solid var(--bd2);border-radius:12px;background:var(--bg2);padding:9px">
       <input id="sql-tblq" value="${h(_sqlTblQ)}" oninput="_sqlTblQ=this.value;renderSqlPanel();const e=document.getElementById('sql-tblq');e.focus();e.selectionStart=e.selectionEnd=e.value.length" placeholder="ค้นหาตาราง/คอลัมน์"
-        style="width:100%;font-size:12px;padding:6px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);margin-bottom:7px">
-      <div style="font-size:10.5px;color:var(--t3);margin-bottom:5px">${tabs.length} ตาราง — กดชื่อเพื่อดูข้อมูล · <span style="color:var(--amber)">•</span> = ข้อมูลส่วนบุคคล</div>`;
+        style="width:100%;font-size:var(--fs-body);padding:6px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);margin-bottom:7px">
+      <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:5px">${tabs.length} ตาราง — กดชื่อเพื่อดูข้อมูล · <span style="color:var(--amber)">•</span> = ข้อมูลส่วนบุคคล</div>`;
     tabs.forEach(t => {
       const open = _sqlOpen === t.table;
       const inf = info[t.table] || {};
       html += `<div style="margin-bottom:2px">
         <div style="display:flex;align-items:center;gap:5px">
-          <span onclick="_sqlOpen='${open?'':h(t.table)}';renderSqlPanel()" title="ดูคอลัมน์" style="cursor:pointer;color:var(--t3);font-size:10px;width:11px;flex-shrink:0">${open?'▾':'▸'}</span>
-          <span onclick="sqlPickTable('${h(t.table)}')" title="${h(inf.what || t.label || t.table)}" style="cursor:pointer;font-size:12px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${h(t.table)}${inf.pii||t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
-          ${inf.rows != null ? `<span style="font-size:10.5px;color:var(--t3);flex-shrink:0">${Number(inf.rows).toLocaleString('en-US')}</span>` : ''}
+          <span onclick="_sqlOpen='${open?'':h(t.table)}';renderSqlPanel()" title="ดูคอลัมน์" style="cursor:pointer;color:var(--t3);font-size:var(--fs-body);width:11px;flex-shrink:0">${open?'▾':'▸'}</span>
+          <span onclick="sqlPickTable('${h(t.table)}')" title="${h(inf.what || t.label || t.table)}" style="cursor:pointer;font-size:var(--fs-body);color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${h(t.table)}${inf.pii||t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
+          ${inf.rows != null ? `<span style="font-size:var(--fs-body);color:var(--t3);flex-shrink:0">${Number(inf.rows).toLocaleString('en-US')}</span>` : ''}
         </div>`;
       if (open) {
         html += `<div style="margin:3px 0 6px 16px">` + t.columns.map(c =>
-          `<div onclick="sqlInsert('${h(c.name)}')" title="${h(c.type)} — กดเพื่อแทรกชื่อคอลัมน์" style="cursor:pointer;font-size:11px;color:var(--t3);padding:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name)} <span style="opacity:.6">${h(c.type)}</span></div>`).join('') + `</div>`;
+          `<div onclick="sqlInsert('${h(c.name)}')" title="${h(c.type)} — กดเพื่อแทรกชื่อคอลัมน์" style="cursor:pointer;font-size:var(--fs-body);color:var(--t3);padding:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name)} <span style="opacity:.6">${h(c.type)}</span></div>`).join('') + `</div>`;
       }
       html += `</div>`;
     });
@@ -149,22 +149,22 @@
 
     html += `<div style="min-width:0">
       <textarea id="sql-text" spellcheck="false" placeholder="SELECT * FROM checkout_checkin ORDER BY date_iso DESC"
-        style="width:100%;height:150px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;padding:10px 12px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);resize:vertical"></textarea>
+        style="width:100%;height:150px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:var(--fs-body);line-height:1.55;padding:10px 12px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);resize:vertical"></textarea>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:9px 0 4px">
-        <button onclick="sqlRun()" style="font-size:13px;font-weight:700;padding:7px 20px;border-radius:9px;border:none;background:var(--green);color:#fff;cursor:pointer">▶ รัน</button>
-        <span style="font-size:11.5px;color:var(--t3);margin-left:4px">ช่วงวันที่</span>
-        <input type="date" id="sql-from" value="${h(keep.f||df)}" style="font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
-        <span style="font-size:11.5px;color:var(--t3)">ถึง</span>
-        <input type="date" id="sql-to" value="${h(keep.t||dt)}" style="font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
-        <span style="font-size:11.5px;color:var(--t3);margin-left:6px">โชว์</span>
-        <input type="number" id="sql-limit" value="${h(keep.l||200)}" min="1" max="2000" style="width:70px;font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
-        <button onclick="sqlExport()" style="font-size:12.5px;padding:7px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;margin-left:auto">⬇ ดาวน์โหลด CSV (ทุกแถวตามเงื่อนไข)</button>
+        <button onclick="sqlRun()" style="font-size:var(--fs-body);font-weight:700;padding:7px 20px;border-radius:9px;border:none;background:var(--green);color:#fff;cursor:pointer">▶ รัน</button>
+        <span style="font-size:var(--fs-body);color:var(--t3);margin-left:4px">ช่วงวันที่</span>
+        <input type="date" id="sql-from" value="${h(keep.f||df)}" style="font-size:var(--fs-body);padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <span style="font-size:var(--fs-body);color:var(--t3)">ถึง</span>
+        <input type="date" id="sql-to" value="${h(keep.t||dt)}" style="font-size:var(--fs-body);padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <span style="font-size:var(--fs-body);color:var(--t3);margin-left:6px">โชว์</span>
+        <input type="number" id="sql-limit" value="${h(keep.l||200)}" min="1" max="2000" style="width:70px;font-size:var(--fs-body);padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <button onclick="sqlExport()" style="font-size:var(--fs-body);padding:7px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;margin-left:auto">⬇ ดาวน์โหลด CSV (ทุกแถวตามเงื่อนไข)</button>
       </div>
-      <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.7">
+      <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;line-height:1.7">
         ใส่ <b>:from</b> / <b>:to</b> ในคำสั่งเพื่อใช้ช่วงวันที่ด้านบน เช่น <code style="background:var(--bg2);padding:1px 5px;border-radius:5px">WHERE sent_at &gt;= :from AND sent_at &lt; :to</code>
         — <b>:to</b> เผื่อถึงสิ้นวันสุดท้ายให้แล้ว จึงใช้เครื่องหมาย <b>&lt;</b> · กด Ctrl+Enter เพื่อรัน
       </div>
-      <div id="sql-res"><div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12.5px">กดชื่อตารางทางซ้าย หรือพิมพ์คำสั่งแล้วกด "รัน"</div></div>
+      <div id="sql-res"><div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:var(--fs-body)">กดชื่อตารางทางซ้าย หรือพิมพ์คำสั่งแล้วกด "รัน"</div></div>
     </div></div>`;
 
     box.innerHTML = html;
@@ -225,12 +225,12 @@
       d = await r.json();
     } catch (e) {
       _sqlBusy = false;
-      _sqlSetRes(`<div style="padding:14px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:13px">ผิดพลาด: ${h(e.message||e)}</div>`);
+      _sqlSetRes(`<div style="padding:14px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:var(--fs-body)">ผิดพลาด: ${h(e.message||e)}</div>`);
       return;
     }
     _sqlBusy = false;
     if (!d.ok) {
-      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:13px;line-height:1.7"><b>รันไม่ได้</b><br>${h(d.error || 'ไม่ทราบสาเหตุ')}</div>`);
+      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:var(--fs-body);line-height:1.7"><b>รันไม่ได้</b><br>${h(d.error || 'ไม่ทราบสาเหตุ')}</div>`);
       return;
     }
     _sqlSetRes(_sqlGrid(d));
@@ -238,12 +238,12 @@
 
   function _sqlGrid(d) {
     const cols = d.columns || [], rows = d.rows || [];
-    if (!cols.length) return `<div style="padding:24px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12.5px">คำสั่งนี้ไม่มีข้อมูลให้แสดง</div>`;
-    let s = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:var(--t3)">
+    if (!cols.length) return `<div style="padding:24px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:var(--fs-body)">คำสั่งนี้ไม่มีข้อมูลให้แสดง</div>`;
+    let s = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;font-size:var(--fs-body);color:var(--t3)">
       <div><b style="color:var(--t1)">${rows.length.toLocaleString('en-US')}</b> แถว · ${cols.length} คอลัมน์ · ใช้เวลา ${h(d.ms)} มิลลิวินาที</div>
       ${d.truncated ? `<div style="color:var(--amber)">แสดงแค่ ${h(d.limit)} แถวแรก — กด "ดาวน์โหลด CSV" เพื่อเอาทั้งหมด</div>` : ''}</div>`;
     s += `<div class="sq-res-scroll" style="overflow:auto;border:.5px solid var(--bd2);border-radius:11px">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap">
+      <table style="width:100%;border-collapse:collapse;font-size:var(--fs-body);font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap">
       <thead><tr style="position:sticky;top:0;background:var(--bg2);z-index:1">
         <th style="padding:6px 8px;text-align:right;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd2)">#</th>` +
       cols.map(c => `<th style="padding:6px 10px;text-align:left;color:var(--t2);font-weight:700;border-bottom:.5px solid var(--bd2)">${h(c)}</th>`).join('') +
@@ -263,13 +263,13 @@
 
   async function sqlExport() {
     const keep = _sqlResHtml;
-    _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--bg2);color:var(--t2);font-size:13px"><div class="spin" style="display:inline-block;vertical-align:-3px;margin-right:8px"></div>กำลังเตรียมไฟล์... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</div>`);
+    _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--bg2);color:var(--t2);font-size:var(--fs-body)"><div class="spin" style="display:inline-block;vertical-align:-3px;margin-right:8px"></div>กำลังเตรียมไฟล์... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</div>`);
     try {
       const r = await fetch('/api/admin/db_query', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_sqlBody({export:1}))});
       if (!r.ok) {
         let msg = 'HTTP ' + r.status;
         try { msg = (await r.json()).error || msg; } catch (e) {}
-        _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:13px">ดาวน์โหลดไม่ได้: ${h(msg)}</div>`);
+        _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:var(--fs-body)">ดาวน์โหลดไม่ได้: ${h(msg)}</div>`);
         return;
       }
       const n = r.headers.get('X-Row-Count') || '?';
@@ -283,9 +283,9 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       _sqlResHtml = keep;
       const el = document.getElementById('sql-res');
-      if (el) el.innerHTML = `<div style="padding:9px 13px;border-radius:10px;background:var(--bg2);color:var(--green);font-size:12.5px;font-weight:700;margin-bottom:8px">✓ ดาวน์โหลดแล้ว ${Number(n).toLocaleString('en-US')} แถว</div>` + keep;
+      if (el) el.innerHTML = `<div style="padding:9px 13px;border-radius:10px;background:var(--bg2);color:var(--green);font-size:var(--fs-body);font-weight:700;margin-bottom:8px">✓ ดาวน์โหลดแล้ว ${Number(n).toLocaleString('en-US')} แถว</div>` + keep;
     } catch (e) {
-      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:13px">ดาวน์โหลดไม่ได้: ${h(e.message||e)}</div>`);
+      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:var(--fs-body)">ดาวน์โหลดไม่ได้: ${h(e.message||e)}</div>`);
     }
   }
 

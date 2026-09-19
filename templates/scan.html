@@ -13,22 +13,22 @@
     #scanRoot .sc-grid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
     #scanRoot .sc-side{position:sticky;top:80px;max-height:calc(100vh - 100px);overflow:auto}
   }
-  #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:16px;border:1px solid var(--line)}
-  #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
+  #scanRoot .lang-row{display:flex;gap:4px;justify-content:center;margin-bottom:14px;background:var(--card);padding:4px;border-radius:7px;border:1px solid var(--line)}
+  #scanRoot .langbtn{flex:1;padding:8px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--mut);font-family:inherit}
   #scanRoot .sc-photo{width:100%;height:auto;max-height:380px;object-fit:contain;background:var(--bg2);border-radius:13px;margin-bottom:13px;display:block}
   #scanRoot .sc-stage{background:rgba(123,97,255,.18);color:var(--accent);font-weight:600}
   #scanRoot .sc-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:2px 0 13px}
-  #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--mut)}
-  #scanRoot .sc-flow #selPill{padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--mut);font-weight:700}
+  #scanRoot .sc-flow .cur{padding:6px 12px;border-radius:8px;background:var(--bg3);color:var(--mut)}
+  #scanRoot .sc-flow #selPill{padding:6px 12px;border-radius:8px;background:var(--bg3);color:var(--mut);font-weight:700}
   #scanRoot .sc-flow #selPill.sel{background:rgba(123,97,255,.18);color:var(--accent)}
   #scanRoot .sc-chips{display:flex;gap:7px;flex-wrap:wrap}
   /* หัวกลุ่มเฟส — แบ่งปุ่ม 20 อันเป็น 4 ก้อนตามสายพาน ให้กวาดตาง่าย (ส.ค.69) */
-  #scanRoot .sc-ph{font-size:11px;font-weight:700;color:var(--mut);margin:11px 0 6px;display:flex;align-items:center;gap:8px}
+  #scanRoot .sc-ph{font-size:13px;font-weight:700;color:var(--mut);margin:11px 0 6px;display:flex;align-items:center;gap:8px}
   #scanRoot .sc-ph::after{content:"";flex:1;height:1px;background:var(--line)}
-  #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
+  #scanRoot .sc-chip{display:inline-flex;align-items:center;gap:5px;padding:9px 13px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500}
   #scanRoot .sc-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
   /* ★ ส.ค.69 — บอกว่ากดแล้วงานไปอยู่ฝ่ายไหนต่อ (จอแคบซ่อน เหลือ tooltip ตอนกดค้าง/ทาบ) */
-  #scanRoot .sc-own{font-size:11px;opacity:.62;margin-left:3px;white-space:nowrap}
+  #scanRoot .sc-own{font-size:13px;opacity:.62;margin-left:3px;white-space:nowrap}
   #scanRoot .sc-chip.on .sc-own{opacity:.9}
   @media (max-width:560px){ #scanRoot .sc-own{display:none} }
   #scanRoot .sc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--mut);background:var(--bg2);text-align:center}
@@ -36,12 +36,12 @@
   /* ★ ก.ย.69 — ช่องติ๊ก "ถ่ายครบมุมไหน" (2 คอลัมน์ · กดง่ายบนมือถือหน้างาน) */
   #scanRoot .sc-shots{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   #scanRoot .sc-shot{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--line);
-           border-radius:10px;font-size:13.5px;cursor:pointer;background:var(--bg)}
+           border-radius:10px;font-size:14.5px;cursor:pointer;background:var(--bg)}
   #scanRoot .sc-shot input{width:20px;height:20px;accent-color:#16a34a;flex:0 0 auto}
   #scanRoot .sc-shot:has(input:checked){border-color:#16a34a;background:color-mix(in srgb,#16a34a 8%,transparent)}
-  #scanRoot .sc-confirm{width:100%;justify-content:center;padding:14px;font-size:15px;font-weight:800;border-radius:12px}
+  #scanRoot .sc-confirm{width:100%;justify-content:center;padding:14px;font-size:14.5px;font-weight:800;border-radius:12px}
   /* ธงงานค้าง — checkbox ใหญ่ กดง่ายบนมือถือหน้างาน */
-  #scanRoot .sc-flag{display:flex;align-items:center;gap:9px;padding:8px 0;cursor:pointer;font-size:14px;font-weight:600}
+  #scanRoot .sc-flag{display:flex;align-items:center;gap:9px;padding:8px 0;cursor:pointer;font-size:14.5px;font-weight:600}
   #scanRoot .sc-flag input{width:22px;height:22px;flex-shrink:0;cursor:pointer}
   #scanRoot .sc-tl{display:flex;gap:11px}
   #scanRoot .sc-tl .col{flex-shrink:0;display:flex;flex-direction:column;align-items:center}
@@ -52,10 +52,10 @@
   @media (max-width:560px){
     #scanRoot{max-width:100%}
     #scanRoot .sc-photo{max-height:300px}
-    #scanRoot h2{font-size:15px}
+    #scanRoot h2{font-size:14.5px}
     #scanRoot .lang-row{gap:3px;padding:3px}
-    #scanRoot .lang-row .langbtn{font-size:11px;padding:7px 1px}
-    #scanRoot .sc-chip{font-size:12.5px;padding:8px 11px}
+    #scanRoot .lang-row .langbtn{font-size:13px;padding:7px 1px}
+    #scanRoot .sc-chip{font-size:13px;padding:8px 11px}
   }
 </style>
 <div id="scanRoot">
@@ -88,7 +88,7 @@
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
       <div class="mut sm" data-i18n="prio">ความด่วน{% if not can_set_priority %} <span data-i18n="viewOnly">(ดูอย่างเดียว)</span>{% endif %}</div>
       <div class="row" style="gap:10px;align-items:center;margin-top:6px;display:flex">
-        <select id="prioSel" onchange="scSetPriority(this.value)" {% if not can_set_priority %}disabled{% endif %} style="flex:1;padding:11px 12px;border-radius:10px;font-size:14px">
+        <select id="prioSel" onchange="scSetPriority(this.value)" {% if not can_set_priority %}disabled{% endif %} style="flex:1;padding:11px 12px;border-radius:10px;font-size:14.5px">
           {% for p in priorities %}<option value="{{ p.key }}" {% if car.priority == p.key %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
         </select>
         <span id="prioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;display:inline-block;background:{{ car.priority_color }}"></span>
@@ -134,12 +134,12 @@
             <div class="sc-chips" style="margin:5px 0 9px">
               {% for p in ck_purposes %}<button type="button" class="sc-chip" data-ck="{{ p.key }}" onclick="ckPick('{{ p.key }}',this)"><i data-lucide="{{ p.icon }}"></i> {{ p.name }}</button>{% endfor %}
             </div>
-            <input id="ckDest" placeholder="ปลายทาง (เช่น ขนส่งชลบุรี · ศูนย์ฮอนด้าแสงหงษ์)" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14px">
+            <input id="ckDest" placeholder="ปลายทาง (เช่น ขนส่งชลบุรี · ศูนย์ฮอนด้าแสงหงษ์)" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14.5px">
             <label class="sc-flag" style="margin-top:8px"><input type="checkbox" id="ckFuel" style="accent-color:#f59e0b"> <i data-lucide="fuel" style="width:18px;height:18px;color:#f59e0b"></i> <span>ขอเบิกน้ำมันด้วย</span></label>
           </div>
 
           <div style="margin-top:8px"><div class="mut sm" id="ckOdoLabel">เลขไมล์ตอนเบิก</div>
-            <input id="ckOdo" inputmode="numeric" placeholder="เช่น 45120" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14px"></div>
+            <input id="ckOdo" inputmode="numeric" placeholder="เช่น 45120" style="width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;font-size:14.5px"></div>
 
           <label class="sc-flag" id="ckDamageRow" style="display:none;margin-top:8px"><input type="checkbox" id="ckDamage" style="accent-color:#dc2626"> <i data-lucide="alert-triangle" style="width:18px;height:18px;color:#dc2626"></i> <span>มีความเสียหาย/รอยใหม่</span></label>
 
@@ -156,7 +156,7 @@
             <div style="margin-top:10px;border-top:1px dashed var(--line);padding-top:9px">
               <div class="row" style="justify-content:space-between;align-items:center">
                 <div class="mut sm">ถ่ายครบมุมไหนบ้าง</div>
-                <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="ckAllShots()">ครบทุกมุม</button>
+                <button type="button" class="btn" style="padding:4px 10px;font-size:13px" onclick="ckAllShots()">ครบทุกมุม</button>
               </div>
               <div id="ckShotBox" class="sc-shots" style="margin-top:7px"></div>
               <div class="mut sm" id="ckShotWarn" style="margin-top:5px"></div>
@@ -213,7 +213,7 @@
       <div id="chkWrap" style="display:none;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg2)">
         <div class="sm" style="font-weight:700;margin-bottom:4px" data-i18n="chkTitle">เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา</div>
         {% for it in checklist_items %}
-        <label class="sc-flag" style="padding:5px 0;font-size:13.5px"><input type="checkbox" class="chk-item" value="{{ it }}" checked style="accent-color:#16a34a"> <span>{{ it }}</span></label>
+        <label class="sc-flag" style="padding:5px 0;font-size:14.5px"><input type="checkbox" class="chk-item" value="{{ it }}" checked style="accent-color:#16a34a"> <span>{{ it }}</span></label>
         {% endfor %}
       </div>
 
@@ -252,7 +252,7 @@
         {% if l.note %}<div class="mut sm" style="margin-top:4px;white-space:pre-line">{{ l.note }}</div>{% endif %}
         {% if l.media %}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-          {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--line);font-size:12px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:60px;height:60px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
+          {% for m in l.media %}{% if m.video %}<a href="{{ m.url }}" target="_blank" style="display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--line);font-size:13px;text-decoration:none">▶ วิดีโอ</a>{% else %}<a href="{{ m.url }}" target="_blank"><img src="{{ m.url }}" loading="lazy" style="width:60px;height:60px;object-fit:cover;border-radius:8px;display:block"></a>{% endif %}{% endfor %}
         </div>
         {% endif %}
       </div>
@@ -503,7 +503,7 @@
           ? '<div style="width:56px;height:56px;border-radius:8px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px">🎥</div>'
           : '<img src="'+URL.createObjectURL(f)+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;display:block">';
         return '<div style="position:relative;display:inline-block;margin:6px 8px 0 0;vertical-align:top">'+thumb+
-               '<button type="button" data-rm="'+i+'" aria-label="ลบ" style="position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:14px;line-height:1;cursor:pointer">×</button></div>';
+               '<button type="button" data-rm="'+i+'" aria-label="ลบ" style="position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:14.5px;line-height:1;cursor:pointer">×</button></div>';
       }).join('') + '<div class="mut sm" style="margin-top:4px">'+picked.length+' ไฟล์</div>';
       prev.querySelectorAll('[data-rm]').forEach(function(b){ b.onclick=function(){ picked.splice(+b.getAttribute('data-rm'),1); render(); }; });
     }

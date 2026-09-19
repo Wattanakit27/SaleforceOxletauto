@@ -6,7 +6,7 @@
   <title>Dashboard{% if seller %} — {{ seller }}{% endif %}</title>
   <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
   <link rel="apple-touch-icon" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
-  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260912a">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260920a">
   <script>
     (function(){
       try {
@@ -23,46 +23,46 @@
     .seller-page { max-width: 1080px; margin: 0 auto; padding: 14px; }
     .seller-hd { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--bg); border:.5px solid var(--bd); border-radius:14px; margin-bottom:10px; gap:10px; box-shadow:var(--shadow); }
     .seller-hd h1 { font-size:20px; font-weight:800; color:var(--t1); margin:0; word-break:break-word; }
-    .seller-hd .sub { font-size:12px; color:var(--t3); margin-top:2px; }
+    .seller-hd .sub { font-size:var(--fs-body); color:var(--t3); margin-top:2px; }
     .filter-bar { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:10px 12px; margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; box-shadow:var(--shadow); }
-    .filter-bar .lbl { font-size:11px; color:var(--t3); font-weight:600; margin-right:4px; }
-    .f-btn { font-size:11px; padding:5px 11px; border-radius:14px; border:.5px solid var(--bd2); background:var(--bg2); color:var(--t2); cursor:pointer; font-family:inherit; white-space:nowrap; transition:background .15s ease,border-color .15s ease,color .15s ease; }
+    .filter-bar .lbl { font-size:var(--fs-body); color:var(--t3); font-weight:600; margin-right:4px; }
+    .f-btn { font-size:var(--fs-body); padding:5px 11px; border-radius:7px; border:.5px solid var(--bd2); background:var(--bg2); color:var(--t2); cursor:pointer; font-family:inherit; white-space:nowrap; transition:background .15s ease,border-color .15s ease,color .15s ease; }
     .f-btn:hover { border-color:var(--blue); color:var(--t1); }
-    .f-btn.on { background:var(--grad); color:#fff; border-color:transparent; font-weight:600; box-shadow:0 3px 10px rgba(124,58,237,.3); }
+    .f-btn.on { background:var(--grad); color:#fff; border-color:transparent; font-weight:600; box-shadow:0 3px 10px rgba(0,0,0,0.22); }
     .f-divider { width:1px; height:20px; background:var(--bd); margin:0 4px; }
     .kgrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
     .kpi-card { position:relative; overflow:hidden; background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:12px 11px 11px; cursor:pointer; transition:transform .14s ease, box-shadow .14s ease; min-width:0; box-shadow:var(--shadow); }
     .kpi-card::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; background:var(--grad); opacity:.85; }
     .kpi-card:hover { transform:translateY(-3px); box-shadow:var(--shadow-h); }
     .kpi-card.active { border-color:var(--blue); box-shadow:0 0 0 2px var(--blue-bg), var(--shadow); }
-    .kpi-card .kl { font-size:10px; color:var(--t3); font-weight:500; margin-bottom:4px; line-height:1.3; word-break:break-word; }
+    .kpi-card .kl { font-size:var(--fs-body); color:var(--t3); font-weight:500; margin-bottom:4px; line-height:1.3; word-break:break-word; }
     .kpi-card .kv { font-size:22px; font-weight:800; line-height:1; }
-    .kpi-card .ks { font-size:10px; color:var(--t3); margin-top:3px; word-break:break-word; line-height:1.4; }
+    .kpi-card .ks { font-size:var(--fs-body); color:var(--t3); margin-top:3px; word-break:break-word; line-height:1.4; }
     .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
     .cgrid > .chart-card.span2 { grid-column: span 2; }
     .chart-card { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:12px; min-width:0; box-shadow:var(--shadow); }
-    .chart-card .chart-title { font-size:12px; font-weight:700; color:var(--t1); margin-bottom:8px; display:flex; align-items:center; gap:7px; }
-    .chart-card .chart-title::before { content:""; width:4px; height:14px; border-radius:3px; background:var(--grad); flex-shrink:0; box-shadow:0 1px 4px rgba(124,58,237,.4); }
+    .chart-card .chart-title { font-size:var(--fs-body); font-weight:700; color:var(--t1); margin-bottom:8px; display:flex; align-items:center; gap:7px; }
+    .chart-card .chart-title::before { content:""; width:4px; height:14px; border-radius:3px; background:var(--grad); flex-shrink:0; box-shadow:0 1px 4px rgba(0,0,0,0.22); }
     .chart-card .chart-box { position:relative; height:220px; }
     .chart-card.span2 .chart-box { height:240px; }
     .section { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:13px; margin-bottom:10px; box-shadow:var(--shadow); }
-    .section h2 { font-size:14px; font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:7px; }
-    .section h2::before { content:""; width:4px; height:16px; border-radius:3px; background:var(--grad); flex-shrink:0; box-shadow:0 1px 4px rgba(124,58,237,.4); }
-    .section h2 .count { font-size:11px; color:var(--t3); font-weight:500; margin-left:auto; }
-    .lead-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; padding:8px 10px; border:.5px solid var(--bd); border-radius:8px; margin-bottom:6px; font-size:12px; cursor:pointer; }
+    .section h2 { font-size:var(--fs-sub); font-weight:700; color:var(--t1); margin:0 0 10px; display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:7px; }
+    .section h2::before { content:""; width:4px; height:16px; border-radius:3px; background:var(--grad); flex-shrink:0; box-shadow:0 1px 4px rgba(0,0,0,0.22); }
+    .section h2 .count { font-size:var(--fs-body); color:var(--t3); font-weight:500; margin-left:auto; }
+    .lead-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; padding:8px 10px; border:.5px solid var(--bd); border-radius:8px; margin-bottom:6px; font-size:var(--fs-body); cursor:pointer; }
     .lead-row.must { border-color:var(--red); background:var(--red-bg); }
-    .lead-row .code { font-weight:700; color:var(--blue); font-size:11px; }
+    .lead-row .code { font-weight:700; color:var(--blue); font-size:var(--fs-body); }
     .lead-row .phone { font-family:monospace; color:var(--t1); font-weight:600; }
-    .lead-row .info { font-size:10px; color:var(--t2); margin-top:2px; word-break:break-word; }
+    .lead-row .info { font-size:var(--fs-body); color:var(--t2); margin-top:2px; word-break:break-word; }
     .lead-row .badge-col { display:flex; flex-direction:column; gap:3px; align-items:flex-end; min-width:80px; }
-    .badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap; }
+    .badge { font-size:var(--fs-body); font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap; }
     .b-red { background:var(--red); color:#fff; }
     .b-amber { background:var(--amber-bg); color:var(--amber); }
     .b-green { background:var(--green-bg); color:var(--green); }
     .b-gray { background:var(--bg2); color:var(--t3); }
     .dots-mini { display:inline-flex; gap:2px; align-items:center; }
     .dot-mini { width:7px; height:7px; border-radius:50%; }
-    .empty { text-align:center; padding:24px; color:var(--t3); font-size:13px; }
+    .empty { text-align:center; padding:24px; color:var(--t3); font-size:var(--fs-body); }
     .err-wrap { text-align:center; padding:80px 16px; }
     .err-wrap .ttl { font-size:18px; font-weight:700; color:var(--t1); margin-bottom:6px; }
     /* booking table — บน mobile ห่อด้วย wrapper ที่ scroll ได้ */
@@ -85,8 +85,8 @@
     }
     @media (max-width:420px) {
       .kpi-card .kv { font-size:18px; }
-      .kpi-card .kl, .kpi-card .ks { font-size:9.5px; }
-      .seller-hd h1 { font-size:17px; }
+      .kpi-card .kl, .kpi-card .ks { font-size:var(--fs-body); }
+      .seller-hd h1 { font-size:var(--fs-h); }
       .seller-hd { padding: 12px 13px; }
     }
   </style>
@@ -96,10 +96,10 @@
   {% if error %}
   <div class="err-wrap">
     <div class="ttl">{% if seller %}เกิดข้อผิดพลาด{% else %}ไม่มีสิทธิ์เข้าถึง{% endif %}</div>
-    <div style="font-size:13px;color:var(--t2);margin-top:8px">{{ error }}</div>
+    <div style="font-size:var(--fs-body);color:var(--t2);margin-top:8px">{{ error }}</div>
   </div>
   {% else %}
-  <div id="root"><div class="loading-container"><div class="spin"></div><span style="font-size:13px">กำลังโหลด...</span></div></div>
+  <div id="root"><div class="loading-container"><div class="spin"></div><span style="font-size:var(--fs-body)">กำลังโหลด...</span></div></div>
   {% endif %}
 </div>
 
@@ -115,7 +115,9 @@
   const sname = (n) => n === 'ADMIN' ? 'เทเลเซลล์' : (n || '');
   // ไอคอน Iconify (Lucide) แทนอิโมจิ — คืน HTML string (inherit currentColor)
   const LUCIDE={'alarm-clock':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3L2 6m20 0l-3-3M6.38 18.7L4 21m13.64-2.33L20 21"/></g>','arrow-up-right':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10v10M7 17L17 7"/>','bar-chart-3':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18m-3-4V9m-5 8V5M8 17v-3"/>','bell':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.268 21a2 2 0 0 0 3.464 0m-10.47-5.674A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>','bookmark':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>','bot':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2m16 0h2m-7-1v2m-6-2v2"/></g>','brain':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 18V5m3 8a4.17 4.17 0 0 1-3-4a4.17 4.17 0 0 1-3 4m8.598-6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></g>','briefcase':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></g>','brush':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m11 10l3 3m-7.5 8A3.5 3.5 0 1 0 3 17.5a2.62 2.62 0 0 1-.708 1.792A1 1 0 0 0 3 21z"/><path d="M9.969 17.031L21.378 5.624a1 1 0 0 0-3.002-3.002L6.967 14.031"/></g>','calendar':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M8 2v4m8-4v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></g>','calendar-days':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M8 2v4m8-4v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></g>','camera':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/></g>','car-front':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m21 8l-2 2l-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10L3 8m4 6h.01M17 14h.01"/><rect width="18" height="8" x="3" y="10" rx="2"/><path d="M5 18v2m14-2v2"/></g>','circle-check':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12l2 2l4-4"/></g>','circle-x':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9l-6 6m0-6l6 6"/></g>','clapperboard':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m12.296 3.464l3.02 3.956M20.2 6L3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3zM3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm3.18-5.724l3.1 3.899"/>','clipboard-list':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2m4 7h4m-4 5h4m-8-5h.01M8 16h.01"/></g>','credit-card':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></g>','crown':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294zM5 21h14"/>','eye':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696a10.75 10.75 0 0 1 19.876 0a1 1 0 0 1 0 .696a10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></g>','file-pen':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"/><path d="M14 2v5a1 1 0 0 0 1 1h5m-9.622 4.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"/></g>','file-text':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5M10 9H8m8 4H8m8 4H8"/></g>','filter':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 3H2l8 9.46V19l4 2v-8.54z"/>','flame':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0a5 5 0 0 1 1-3a1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>','flask-conical':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2M6.453 15h11.094M8.5 2h7"/>','handshake':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m11 17l2 2a1 1 0 1 0 3-3"/><path d="m14 14l2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3l1 11h-2M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8"/></g>','hourglass':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 22h14M5 2h14m-2 20v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>','inbox':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11"/></g>','landmark':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 18v-7m1.119-8.795a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949zM14 18v-7m4 7v-7M3 22h18M6 18v-7"/>','lightbulb':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 14c.2-1 .7-1.7 1.5-2.5c1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5c.7.7 1.3 1.5 1.5 2.5m0 4h6m-5 4h4"/>','link':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g>','log-out':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m16 17l5-5l-5-5m5 5H9m0 9H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>','mail':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m22 7l-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect width="20" height="16" x="2" y="4" rx="2"/></g>','map-pin':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></g>','megaphone':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M6 14a12 12 0 0 0 2.4 7.2a2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14M8 6v8"/></g>','moon':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>','mouse-pointer-click':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4.1L12 6M5.1 8l-2.9-.8M6 12l-1.9 2M7.2 2.2L8 5.1m1.037 4.59a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/>','package':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73zm1 .27V12"/><path d="M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15"/></g>','paperclip':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m16 6l-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/>','pen-line':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 21h8m.174-14.188a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>','pencil':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4"/>','phone':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233a14 14 0 0 0 6.392 6.384"/>','plus':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7-7v14"/>','radio':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M16.247 7.761a6 6 0 0 1 0 8.478m2.828-11.306a10 10 0 0 1 0 14.134m-14.15 0a10 10 0 0 1 0-14.134m2.828 11.306a6 6 0 0 1 0-8.478"/><circle cx="12" cy="12" r="2"/></g>','refresh-cw':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9a9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5m5 4a9 9 0 0 1-9 9a9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></g>','repeat':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m17 2l4 4l-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4l4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></g>','rocket':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></g>','rotate-cw':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></g>','save':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/></g>','search':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m21 21l-4.34-4.34"/><circle cx="11" cy="11" r="8"/></g>','send':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11zm7.318-19.539l-10.94 10.939"/>','settings':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0a2.34 2.34 0 0 0 3.319 1.915a2.34 2.34 0 0 1 2.33 4.033a2.34 2.34 0 0 0 0 3.831a2.34 2.34 0 0 1-2.33 4.033a2.34 2.34 0 0 0-3.319 1.915a2.34 2.34 0 0 1-4.659 0a2.34 2.34 0 0 0-3.32-1.915a2.34 2.34 0 0 1-2.33-4.033a2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></g>','shopping-cart':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></g>','snowflake':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m10 20l-1.25-2.5L6 18m4-14L8.75 6.5L6 6m8 14l1.25-2.5L18 18M14 4l1.25 2.5L18 6"/><path d="m17 21l-3-6h-4m7-12l-3 6l1.5 3M2 12h6.5L10 9m10 1l-1.5 2l1.5 2"/><path d="M22 12h-6.5L14 15M4 10l1.5 2L4 14m3 7l3-6l-1.5-3M7 3l3 6h4"/></g>','sparkles':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594zM20 2v4m2-2h-4"/><circle cx="4" cy="20" r="2"/></g>','sun':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></g>','tag':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></g>','target':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></g>','thermometer':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0"/>','trash-2':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 11v6m4-6v6m5-11v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>','trending-up':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M16 7h6v6"/><path d="m22 7l-8.5 8.5l-5-5L2 17"/></g>','triangle-alert':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4m0 4h.01"/>','trophy':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978m7-7.318v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978M18 9h1.5a1 1 0 0 0 0-5H18M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1zm0 0H4.5a1 1 0 0 1 0-5H6"/></g>','tv':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m17 2l-5 5l-5-5"/><rect width="20" height="15" x="2" y="7" rx="2"/></g>','user':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>','user-round':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></g>','wallet':'<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></g>','zap':'<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>'};
-  const ic = (name, size=16) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;flex-shrink:0">${LUCIDE[name.replace('lucide:','')]||''}</svg>`;
+  // ★ ก.ย.69 เจ้าของแจ้ง "ไอคอนบางตัวเล็ก" → ขยายไอคอนขนาดเล็ก (≤16px) ขึ้น 2px ทั้งหน้าที่จุดเดียว
+  //   ไอคอนใหญ่ (≥17px เช่นหัวการ์ด/โลโก้) คงเดิม · อยากได้ขนาดเป๊ะตามที่ส่งมา = ส่ง size ≥17
+  const ic = (name, size=16) => { size = size <= 16 ? size + 2 : size; return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;flex-shrink:0">${LUCIDE[name.replace('lucide:','')]||''}</svg>`; };
   // 🟢 heartbeat — ให้เซลล์ที่กำลังใช้งานถูกนับใน "คนเข้าเว็บตอนนี้" (แอดมินเห็นในหน้าหลัก)
   (function(){ function ping(){ fetch('/api/presence?p=seller',{credentials:'same-origin'}).catch(function(){}); } ping(); setInterval(ping, 45000); })();
   const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
@@ -352,9 +354,9 @@
   function sellerBellHtml() {
     const a = computeSellerAlerts();
     const tot = a.total;
-    const badge = tot > 0 ? `<span style="position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:9px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)">${tot > 99 ? '99+' : tot}</span>` : '';
+    const badge = tot > 0 ? `<span style="position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 3px;border-radius:5px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)">${tot > 99 ? '99+' : tot}</span>` : '';
     const color = a.badYr.length > 0 ? 'var(--red)' : (a.relBlank.length > 0 ? 'var(--amber)' : (tot > 0 ? 'var(--blue)' : 'var(--t3)'));
-    return `<button id="seller-alerts-bell" onclick="openSellerAlertsPanel()" title="แจ้งเตือน: งานที่ต้องทำ / เคสปล่อยลงวันไม่ครบ" style="margin-left:auto;position:relative;font-size:15px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:${color};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell', 17)}${badge}</button>`;
+    return `<button id="seller-alerts-bell" onclick="openSellerAlertsPanel()" title="แจ้งเตือน: งานที่ต้องทำ / เคสปล่อยลงวันไม่ครบ" style="margin-left:auto;position:relative;font-size:var(--fs-sub);padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:${color};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell', 17)}${badge}</button>`;
   }
 
   function openSellerAlertsPanel() {
@@ -374,56 +376,56 @@
     _right = Math.min(_right, Math.max(8, Math.round(window.innerWidth - _pw - 8)));
 
     let bd = '';
-    if (!tot) bd += `<div style="text-align:center;color:var(--green);padding:44px 12px"><div>${ic('lucide:circle-check', 32)}</div><div style="margin-top:8px;font-weight:700;font-size:13px">ไม่มีงานค้าง ✓</div></div>`;
+    if (!tot) bd += `<div style="text-align:center;color:var(--green);padding:44px 12px"><div>${ic('lucide:circle-check', 32)}</div><div style="margin-top:8px;font-weight:700;font-size:var(--fs-body)">ไม่มีงานค้าง ✓</div></div>`;
 
     // ── งานเดือนนี้: ยังไม่โทร / ต้องตามต่อ (แตะ → กรอง lead list) ──
     if (a.notCalled > 0 || a.follow > 0) {
       bd += `<div style="margin-bottom:15px">`;
-      bd += `<div style="font-size:12.5px;font-weight:800;color:var(--amber)">${ic('lucide:phone', 15)} งานเดือน${h(a.curMonthName)}</div>`;
-      bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">แตะเพื่อกรองดูในรายการเคส</div>`;
+      bd += `<div style="font-size:var(--fs-body);font-weight:800;color:var(--amber)">${ic('lucide:phone', 15)} งานเดือน${h(a.curMonthName)}</div>`;
+      bd += `<div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 6px">แตะเพื่อกรองดูในรายการเคส</div>`;
       bd += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
-      if (a.notCalled > 0) bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('notCalled')" style="font-size:11.5px;background:var(--red-bg,#fdecec);border:.5px solid var(--red,#e5484d);border-radius:8px;padding:5px 11px;cursor:pointer;color:var(--red,#e5484d);font-weight:700">ยังไม่โทร ${a.notCalled}</button>`;
-      if (a.follow > 0) bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('follow')" style="font-size:11.5px;background:var(--blue-bg,#eaf2fe);border:.5px solid var(--blue,#3b82f6);border-radius:8px;padding:5px 11px;cursor:pointer;color:var(--blue,#3b82f6);font-weight:700">ต้องตามต่อ ${a.follow}</button>`;
+      if (a.notCalled > 0) bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('notCalled')" style="font-size:var(--fs-body);background:var(--red-bg,#fdecec);border:.5px solid var(--red,#e5484d);border-radius:8px;padding:5px 11px;cursor:pointer;color:var(--red,#e5484d);font-weight:700">ยังไม่โทร ${a.notCalled}</button>`;
+      if (a.follow > 0) bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('follow')" style="font-size:var(--fs-body);background:var(--blue-bg,#eaf2fe);border:.5px solid var(--blue,#3b82f6);border-radius:8px;padding:5px 11px;cursor:pointer;color:var(--blue,#3b82f6);font-weight:700">ต้องตามต่อ ${a.follow}</button>`;
       bd += `</div></div>`;
     }
 
     // ── ปล่อยแล้วลงวันไม่ครบ (เคสตัวเอง) ──
     if (a.relBlank.length) {
       bd += `<div style="margin-bottom:15px">`;
-      bd += `<div style="font-size:12.5px;font-weight:800;color:var(--amber)">${ic('lucide:calendar', 15)} ปล่อยแล้วลงวันไม่ครบ · ${a.relBlank.length}</div>`;
-      bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">ลงวัน เซ็น/ผล/ปล่อย ให้ครบ คะแนนเวลาปิดจะขึ้น · แตะไปเติม</div>`;
+      bd += `<div style="font-size:var(--fs-body);font-weight:800;color:var(--amber)">${ic('lucide:calendar', 15)} ปล่อยแล้วลงวันไม่ครบ · ${a.relBlank.length}</div>`;
+      bd += `<div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 6px">ลงวัน เซ็น/ผล/ปล่อย ให้ครบ คะแนนเวลาปิดจะขึ้น · แตะไปเติม</div>`;
       a.relBlank.slice(0, 40).forEach(o => {
-        bd += `<div onclick="${_close};openBookingDetail(${o.i})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11.5px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h((o.b.customer || '-').slice(0, 22))}</span><span style="color:var(--amber);font-weight:600;white-space:nowrap;font-size:10.5px">ขาด ${h((o.miss || []).join('/'))}</span></div>`;
+        bd += `<div onclick="${_close};openBookingDetail(${o.i})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:var(--fs-body)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h((o.b.customer || '-').slice(0, 22))}</span><span style="color:var(--amber);font-weight:600;white-space:nowrap;font-size:var(--fs-body)">ขาด ${h((o.miss || []).join('/'))}</span></div>`;
       });
-      if (a.relBlank.length > 40) bd += `<div style="font-size:10px;color:var(--t3);padding:5px 0">… อีก ${a.relBlank.length - 40} เคส</div>`;
+      if (a.relBlank.length > 40) bd += `<div style="font-size:var(--fs-body);color:var(--t3);padding:5px 0">… อีก ${a.relBlank.length - 40} เคส</div>`;
       bd += `</div>`;
     }
 
     // ── ยังไม่ลงสถานะลูกค้า (Z) ──
     if (a.noStatus > 0) {
       bd += `<div style="margin-bottom:6px">`;
-      bd += `<div style="font-size:12.5px;font-weight:800;color:var(--blue)">${ic('lucide:bell', 15)} ยังไม่ลงสถานะลูกค้า · ${a.noStatus}</div>`;
-      bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">กดเปิดเคสแล้วเลือกสถานะ จะช่วยจัดลำดับการตามให้แม่นขึ้น</div>`;
-      bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('notCalled')" style="font-size:11px;padding:5px 11px;border-radius:9px;border:.5px solid var(--blue,#3b82f6);background:var(--blue-bg,#eaf2fe);color:var(--blue,#3b82f6);font-weight:700;cursor:pointer">ดูรายการเคส →</button>`;
+      bd += `<div style="font-size:var(--fs-body);font-weight:800;color:var(--blue)">${ic('lucide:bell', 15)} ยังไม่ลงสถานะลูกค้า · ${a.noStatus}</div>`;
+      bd += `<div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 6px">กดเปิดเคสแล้วเลือกสถานะ จะช่วยจัดลำดับการตามให้แม่นขึ้น</div>`;
+      bd += `<button onclick="${_close};setPageMode('dashboard');setKpi('notCalled')" style="font-size:var(--fs-body);padding:5px 11px;border-radius:7px;border:.5px solid var(--blue,#3b82f6);background:var(--blue-bg,#eaf2fe);color:var(--blue,#3b82f6);font-weight:700;cursor:pointer">ดูรายการเคส →</button>`;
       bd += `</div>`;
     }
 
     // ── วันที่ปีผิด (เคสตัวเอง) — แตะไปแก้ ──
     if (a.badYr.length) {
       bd += `<div style="margin-bottom:6px">`;
-      bd += `<div style="font-size:12.5px;font-weight:800;color:var(--red)">${ic('lucide:triangle-alert', 15)} วันที่ปีผิด · ${a.badYr.length}</div>`;
-      bd += `<div style="font-size:10px;color:var(--t3);margin:2px 0 6px">ปีนอก 2020–2035 (มักพิมพ์ 1969) ทำให้อายุเคส/คะแนนเวลาเพี้ยน → แตะไปแก้</div>`;
+      bd += `<div style="font-size:var(--fs-body);font-weight:800;color:var(--red)">${ic('lucide:triangle-alert', 15)} วันที่ปีผิด · ${a.badYr.length}</div>`;
+      bd += `<div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 6px">ปีนอก 2020–2035 (มักพิมพ์ 1969) ทำให้อายุเคส/คะแนนเวลาเพี้ยน → แตะไปแก้</div>`;
       a.badYr.slice(0, 40).forEach(o => {
-        bd += `<div onclick="${_close};openBadYrCase(${o.gi})" style="padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:11px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h((o.b.customer || '-').slice(0, 22))}</b></div><div style="color:var(--red);font-size:10px;margin-top:1px">${h(o.errs.join(' · '))}</div></div>`;
+        bd += `<div onclick="${_close};openBadYrCase(${o.gi})" style="padding:7px 2px;border-bottom:.5px solid var(--bd);cursor:pointer;font-size:var(--fs-body)"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${h((o.b.customer || '-').slice(0, 22))}</b></div><div style="color:var(--red);font-size:var(--fs-body);margin-top:1px">${h(o.errs.join(' · '))}</div></div>`;
       });
-      if (a.badYr.length > 40) bd += `<div style="font-size:10px;color:var(--t3);padding:5px 0">… อีก ${a.badYr.length - 40} เคส</div>`;
+      if (a.badYr.length > 40) bd += `<div style="font-size:var(--fs-body);color:var(--t3);padding:5px 0">… อีก ${a.badYr.length - 40} เคส</div>`;
       bd += `</div>`;
     }
 
     overlay.innerHTML = `<div id="salerts-pop" style="position:fixed;top:${_top}px;right:${_right}px;width:min(340px,92vw);max-height:min(76vh,640px);background:var(--bg);border:.5px solid var(--bd);border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden;transform-origin:top right;transform:translateY(-8px) scale(.98);opacity:0;transition:transform .15s ease,opacity .15s ease" onclick="event.stopPropagation()">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;border-bottom:.5px solid var(--bd);flex-shrink:0">
-        <div style="font-size:14px;font-weight:800;color:var(--t1)">${ic('lucide:bell', 16)} แจ้งเตือน ${tot ? `<span style="font-size:12px;color:var(--red)">(${tot})</span>` : ''}</div>
-        <button onclick="${_close}" style="padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:700;font-size:12px;cursor:pointer">✕</button>
+        <div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1)">${ic('lucide:bell', 16)} แจ้งเตือน ${tot ? `<span style="font-size:var(--fs-body);color:var(--red)">(${tot})</span>` : ''}</div>
+        <button onclick="${_close}" style="padding:4px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-weight:700;font-size:var(--fs-body);cursor:pointer">✕</button>
       </div>
       <div style="flex:1;overflow-y:auto;padding:12px 14px">${bd}</div>
     </div>`;
@@ -555,10 +557,10 @@
     const medals = ['🥇','🥈','🥉'];
     const cols = '.4fr 1.1fr .55fr .55fr .6fr .7fr .7fr .75fr .8fr .85fr .7fr .8fr';
     let s = `<div class="section" style="margin-bottom:14px">
-      <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:trophy',16)} ตารางคะแนนเซลล์ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(100 คะแนน · เดือนนี้)</span></h2>
-      <div style="font-size:11px;color:var(--t3);margin-bottom:8px">อันดับคะแนนทุกเซลล์ของเดือนนี้ — <b style="color:var(--blue)">แถวสีน้ำเงิน = ของคุณ</b></div>
+      <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:trophy',16)} ตารางคะแนนเซลล์ <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3);font-family:inherit">(100 คะแนน · เดือนนี้)</span></h2>
+      <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px">อันดับคะแนนทุกเซลล์ของเดือนนี้ — <b style="color:var(--blue)">แถวสีน้ำเงิน = ของคุณ</b></div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div style="min-width:720px">
-        <div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:9.5px;color:var(--t3);padding:5px 6px;border-bottom:.5px solid var(--bd);font-weight:600">
+        <div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:var(--fs-body);color:var(--t3);padding:5px 6px;border-bottom:.5px solid var(--bd);font-weight:600">
           <span>#</span><span>เซลล์</span><span style="text-align:right">ปล่อย</span><span style="text-align:right">จอง</span><span style="text-align:right">Conv%</span>
           <span style="text-align:right">จบ/30</span><span style="text-align:right">จอง/10</span><span style="text-align:right">Conv/20</span><span style="text-align:right">เวลา/10</span><span style="text-align:right">ตาม/20</span><span style="text-align:right">แบน/10</span><span style="text-align:right">รวม</span>
         </div>`;
@@ -566,19 +568,19 @@
       const me = e.name === SELLER_NAME;
       const rank = medals[i] || (i + 1);
       const tc = e.total >= 70 ? 'var(--green)' : e.total >= 50 ? 'var(--blue)' : e.total >= 30 ? 'var(--amber)' : 'var(--red)';
-      s += `<div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:11px;padding:6px;border-bottom:.5px solid var(--bd);${me?'background:var(--blue-bg,#eef2ff);border-radius:6px':''}">
-        <span style="${i<3?'font-size:13px':'color:var(--t3)'}">${rank}</span>
+      s += `<div style="display:grid;grid-template-columns:${cols};gap:3px;font-size:var(--fs-body);padding:6px;border-bottom:.5px solid var(--bd);${me?'background:var(--blue-bg,#eef2ff);border-radius:6px':''}">
+        <span style="${i<3?'font-size:var(--fs-body)':'color:var(--t3)'}">${rank}</span>
         <span style="font-weight:${me?'800':i<3?'700':'500'};${me?'color:var(--blue)':''}">${h(sname(e.name))}${me?' (คุณ)':''}</span>
         <span style="text-align:right;color:var(--t2)">${e.dones}</span>
         <span style="text-align:right;color:var(--t2)">${e.jongs}</span>
-        <span style="text-align:right;color:var(--t3);font-size:10px">${f1(e.conv)}</span>
+        <span style="text-align:right;color:var(--t3);font-size:var(--fs-body)">${f1(e.conv)}</span>
         <span style="text-align:right;color:var(--green-mid)">${f1(e.sDone)}</span>
         <span style="text-align:right;color:var(--blue)">${f1(e.sJong)}</span>
         <span style="text-align:right;color:var(--blue)">${f1(e.sConv)}</span>
         <span style="text-align:right;color:#7c3aed">${f1(e.sVel)}</span>
         <span style="text-align:right;color:var(--amber)">${f1(e.sFollow)}</span>
         <span style="text-align:right;color:${e.sBan<10?'var(--red)':'var(--t2)'}">${f1(e.sBan)}</span>
-        <span style="text-align:right;color:${tc};font-weight:800;font-size:12.5px">${f1(e.total)}</span>
+        <span style="text-align:right;color:${tc};font-weight:800;font-size:var(--fs-body)">${f1(e.total)}</span>
       </div>`;
     });
     s += `</div></div></div>`;
@@ -661,7 +663,7 @@
     if (typeof Chart === 'undefined') return;
     const _dark = document.documentElement.getAttribute('data-theme') === 'dark';
     Chart.defaults.color = _dark ? '#aaa0c4' : '#56506b';
-    Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(109,40,217,0.08)';
+    Chart.defaults.borderColor = _dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
     const daily = D.daily || {};
     const monthly = D.monthly || {};
     // 📅 ตามตัวกรองวันที่เสมอ (รายวันถ้าช่วงสั้น · รายเดือนถ้าช่วงยาว) — ไม่โชว์ 12 เดือนทั้งปีอีก
@@ -866,7 +868,7 @@
         </div>
         <div style="text-align:right">
           <div style="font-size:22px;font-weight:800;color:var(--green)">${doneCount}/${scaledTarget}</div>
-          <div style="font-size:11px;color:var(--t3)">ปล่อยในช่วงนี้</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">ปล่อยในช่วงนี้</div>
         </div>
       </div>
 
@@ -884,9 +886,9 @@
 
       <div class="filter-bar">
         <span class="lbl">${ic('lucide:calendar',16)} วันที่รับเคส</span>
-        <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
-        <span style="font-size:11px;color:var(--t3)">ถึง</span>
-        <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+        <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
+        <span style="font-size:var(--fs-body);color:var(--t3)">ถึง</span>
+        <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
         <button class="f-btn" onclick="setRangeMonth()">เดือนนี้</button>
         <button class="f-btn" onclick="setRangeYear()">ทั้งปี</button>
         <button class="f-btn ${(fDateFrom&&fDateFrom===fDateTo)?'on':''}" onclick="setRangeToday()">วันนี้</button>
@@ -925,27 +927,27 @@
           return `
             <div style="background:var(--bg);border-radius:6px;padding:7px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="openLeadDetail('${code}')">
               <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:600;color:var(--t1)">${car}</div>
-                <div style="font-size:10.5px;color:var(--t3)">${code} · ${phone} · ${lastInfo}</div>
+                <div style="font-size:var(--fs-body);font-weight:600;color:var(--t1)">${car}</div>
+                <div style="font-size:var(--fs-body);color:var(--t3)">${code} · ${phone} · ${lastInfo}</div>
               </div>
-              <div style="background:var(--red);color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;flex-shrink:0">${days}d</div>
+              <div style="background:var(--red);color:#fff;padding:3px 8px;border-radius:7px;font-size:var(--fs-body);font-weight:700;flex-shrink:0">${days}d</div>
             </div>
           `;
         };
         return `
         <div style="background:var(--red-bg,#fee);border:.5px solid var(--red-mid,#fca);border-left:3px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:14px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
-            <div style="font-size:13px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:6px">
-              ${ic('lucide:triangle-alert',16)} เคสค้าง — ยังไม่โทรเกิน 7 วัน <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px">${staleCases.length}</span>
+            <div style="font-size:var(--fs-body);font-weight:700;color:var(--red);display:flex;align-items:center;gap:6px">
+              ${ic('lucide:triangle-alert',16)} เคสค้าง — ยังไม่โทรเกิน 7 วัน <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:5px;font-size:var(--fs-body)">${staleCases.length}</span>
             </div>
-            <div style="font-size:10.5px;color:var(--t3)">เรียงจากค้างนานสุด — คลิกดูรายละเอียด</div>
+            <div style="font-size:var(--fs-body);color:var(--t3)">เรียงจากค้างนานสุด — คลิกดูรายละเอียด</div>
           </div>
           <div style="display:grid;gap:5px">
           ${showTop.map(rowHtml).join('')}
           </div>
           ${rest.length > 0 ? `
             <details style="margin-top:6px">
-              <summary style="font-size:11px;color:var(--red);cursor:pointer;padding:4px 0;font-weight:600;text-align:center">+ ดูอีก ${rest.length} เคส</summary>
+              <summary style="font-size:var(--fs-body);color:var(--red);cursor:pointer;padding:4px 0;font-weight:600;text-align:center">+ ดูอีก ${rest.length} เคส</summary>
               <div style="display:grid;gap:5px;margin-top:5px">${rest.map(rowHtml).join('')}</div>
             </details>
           ` : ''}
@@ -984,10 +986,10 @@
 
         return `
         <div class="section" style="margin-bottom:14px">
-          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:flame',16)} ตามด่วน — โทรก่อน <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(Top ${priorityLeads.length})</span>
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);color:var(--t2);font-size:11px;font-weight:700;cursor:help;border:.5px solid var(--bd2);margin-left:4px" onclick="showLeadScoreHelp()" title="ดูสูตร Lead Score">?</span>
+          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:flame',16)} ตามด่วน — โทรก่อน <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3);font-family:inherit">(Top ${priorityLeads.length})</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);color:var(--t2);font-size:var(--fs-body);font-weight:700;cursor:help;border:.5px solid var(--bd2);margin-left:4px" onclick="showLeadScoreHelp()" title="ดูสูตร Lead Score">?</span>
           </h2>
-          <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เรียงตามความด่วน: <b>ยังไม่โทร</b> + <b>ฮอท × ดองนาน</b> + <b>ถึงรอบตาม</b> + <b>ลูกค้าสนใจมาก</b> → เคสเพิ่งตามจะพักไว้ (ไม่เด้งซ้ำ)</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;line-height:1.5">เรียงตามความด่วน: <b>ยังไม่โทร</b> + <b>ฮอท × ดองนาน</b> + <b>ถึงรอบตาม</b> + <b>ลูกค้าสนใจมาก</b> → เคสเพิ่งตามจะพักไว้ (ไม่เด้งซ้ำ)</div>
           <div style="display:grid;grid-template-columns:1fr;gap:8px">
           ${priorityLeads.map((l, i) => {
             const tier = l.leadTier || '❄cold';
@@ -1005,20 +1007,20 @@
               <div style="background:${tierBg(tier)};border:.5px solid var(--bd);border-left:3px solid ${tierColor(tier)};border-radius:8px;padding:10px 12px;cursor:pointer" onclick="openLeadDetail('${code}')">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
                   <div style="flex:1;min-width:0">
-                    <div style="font-size:13px;font-weight:700;color:var(--t1)">#${i+1} · ${car}</div>
-                    <div style="font-size:11px;color:var(--t3);margin-top:1px">${code} · ${phone} · โทรไปแล้ว ${updates} ครั้ง</div>
+                    <div style="font-size:var(--fs-body);font-weight:700;color:var(--t1)">#${i+1} · ${car}</div>
+                    <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">${code} · ${phone} · โทรไปแล้ว ${updates} ครั้ง</div>
                   </div>
                   <div style="text-align:right;flex-shrink:0">
                     <div style="font-size:18px;font-weight:800;color:${tierColor(tier)}">${score}</div>
-                    <div style="font-size:10px;color:${tierColor(tier)};font-weight:600">${h(tier)}</div>
+                    <div style="font-size:var(--fs-body);color:${tierColor(tier)};font-weight:600">${h(tier)}</div>
                   </div>
                 </div>
-                <div style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:${reason.c};margin:5px 0 1px">${ic('lucide:zap',12)} ด่วนเพราะ: ${h(reason.t)}</div>
+                <div style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-body);font-weight:700;color:${reason.c};margin:5px 0 1px">${ic('lucide:zap',12)} ด่วนเพราะ: ${h(reason.t)}</div>
                 <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:6px 9px;background:var(--bg);border-radius:6px;border-left:2px solid ${action.color}">
-                  <span style="font-size:14px">${action.icon}</span>
-                  <span style="font-size:11.5px;font-weight:600;color:${action.color}">ขั้นถัดไป: ${h(action.text)}</span>
+                  <span style="font-size:var(--fs-sub)">${action.icon}</span>
+                  <span style="font-size:var(--fs-body);font-weight:600;color:${action.color}">ขั้นถัดไป: ${h(action.text)}</span>
                 </div>
-                ${breakdownStr ? `<div style="font-size:10px;color:var(--t3);line-height:1.4;margin-top:4px;border-top:.5px dashed var(--bd);padding-top:4px">${breakdownStr}</div>` : ''}
+                ${breakdownStr ? `<div style="font-size:var(--fs-body);color:var(--t3);line-height:1.4;margin-top:4px;border-top:.5px dashed var(--bd);padding-top:4px">${breakdownStr}</div>` : ''}
               </div>
             `;
           }).join('')}
@@ -1051,19 +1053,19 @@
         if (stuck.length === 0) return '';
         return `
         <div class="section" style="margin-bottom:14px">
-          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:flag',16)} ดีลค้าง — ดันต่อ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">(${stuck.length})</span></h2>
-          <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เคสจองที่ค้างนานในแต่ละขั้น — ดันเอกสาร/ตามผลให้เดินต่อ (ดีลเกือบปิดแล้ว ไม่ใช่ลีดใหม่)</div>
+          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:flag',16)} ดีลค้าง — ดันต่อ <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3);font-family:inherit">(${stuck.length})</span></h2>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;line-height:1.5">เคสจองที่ค้างนานในแต่ละขั้น — ดันเอกสาร/ตามผลให้เดินต่อ (ดีลเกือบปิดแล้ว ไม่ใช่ลีดใหม่)</div>
           <div style="display:grid;gap:8px">
           ${stuck.map(({ b, idx, reason, days, color }) => `
               <div style="background:var(--bg2);border:.5px solid var(--bd);border-left:3px solid ${color};border-radius:8px;padding:10px 12px;cursor:pointer" onclick="openBookingDetail(${idx})">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
                   <div style="flex:1;min-width:0">
-                    <div style="font-size:13px;font-weight:700;color:var(--t1)">${h(b.customer || b.car || '-')}</div>
-                    <div style="font-size:11px;color:var(--t3);margin-top:1px">${h(b.car || '')}${b.car ? ' · ' : ''}จอง ${h(b.date || '-')}</div>
+                    <div style="font-size:var(--fs-body);font-weight:700;color:var(--t1)">${h(b.customer || b.car || '-')}</div>
+                    <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">${h(b.car || '')}${b.car ? ' · ' : ''}จอง ${h(b.date || '-')}</div>
                   </div>
-                  <span class="badge" style="background:${color};color:#fff;font-size:10px;flex-shrink:0">${h(b.status)}</span>
+                  <span class="badge" style="background:${color};color:#fff;font-size:var(--fs-body);flex-shrink:0">${h(b.status)}</span>
                 </div>
-                <div style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:${color};margin-top:6px">${ic('lucide:alarm-clock',12)} ${reason} ${days} วัน</div>
+                <div style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-body);font-weight:700;color:${color};margin-top:6px">${ic('lucide:alarm-clock',12)} ${reason} ${days} วัน</div>
               </div>
           `).join('')}
           </div>
@@ -1116,42 +1118,42 @@
 
         return `
         <div class="section" style="margin-bottom:14px">
-          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:filter',16)} Pipeline ของคุณ <span style="font-size:11px;font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
-          <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">เห็นว่าเคสหายไปตรง stage ไหน → ช่วยรู้ว่าควรพัฒนาตรงไหน (รับเยอะแต่ตามไม่ครบ? ตามได้แต่จองไม่ลง?)</div>
+          <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:filter',16)} Pipeline ของคุณ <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3);font-family:inherit">${h(periodLabel)}</span></h2>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;line-height:1.5">เห็นว่าเคสหายไปตรง stage ไหน → ช่วยรู้ว่าควรพัฒนาตรงไหน (รับเยอะแต่ตามไม่ครบ? ตามได้แต่จองไม่ลง?)</div>
 
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
             <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
-              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:clipboard-list',16)} รับเข้ามา</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:3px">${ic('lucide:clipboard-list',16)} รับเข้ามา</div>
               <div style="font-size:21px;font-weight:800;color:var(--blue)">${received}</div>
-              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">100%</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">100%</div>
             </div>
             <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
-              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:phone',16)} โทรตามแล้ว</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:3px">${ic('lucide:phone',16)} โทรตามแล้ว</div>
               <div style="font-size:21px;font-weight:800;color:var(--amber)">${called}</div>
-              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((called/received)*100):0}%</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">${received>0?Math.round((called/received)*100):0}%</div>
             </div>
             <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
-              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:file-pen',16)} จอง</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:3px">${ic('lucide:file-pen',16)} จอง</div>
               <div style="font-size:21px;font-weight:800;color:var(--green)">${booked}</div>
-              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((booked/received)*100):0}%</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">${received>0?Math.round((booked/received)*100):0}%</div>
             </div>
             <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow)">
-              <div style="font-size:10px;color:var(--t3);margin-bottom:3px">${ic('lucide:car-front',16)} ปล่อยรถ</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:3px">${ic('lucide:car-front',16)} ปล่อยรถ</div>
               <div style="font-size:21px;font-weight:800;color:#3a8a3a">${released}</div>
-              <div style="font-size:9.5px;color:var(--t3);margin-top:1px">${received>0?Math.round((released/received)*100):0}%</div>
+              <div style="font-size:var(--fs-body);color:var(--t3);margin-top:1px">${received>0?Math.round((released/received)*100):0}%</div>
             </div>
           </div>
-          <div style="text-align:center;font-size:10.5px;color:var(--t3);margin-bottom:10px">
+          <div style="text-align:center;font-size:var(--fs-body);color:var(--t3);margin-bottom:10px">
             Conversion: โทร <b style="color:${rateColor(callRate, 80, 60)}">${callRate}%</b> → จอง <b style="color:${rateColor(bookRate, 25, 15)}">${bookRate}%</b> → ปิด <b style="color:${rateColor(releaseRate, 70, 40)}">${releaseRate}%</b>
           </div>
 
           ${insights.length > 0 ? `
-            <div style="background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:6px;padding:9px 12px;font-size:11.5px;line-height:1.7;color:var(--t1)">
+            <div style="background:var(--amber-bg,#fff7e6);border-left:3px solid var(--amber);border-radius:6px;padding:9px 12px;font-size:var(--fs-body);line-height:1.7;color:var(--t1)">
               <div style="font-weight:700;color:var(--amber);margin-bottom:3px">${ic('lucide:lightbulb',16)} สังเกตได้</div>
               ${insights.map(i => `<div>• ${i}</div>`).join('')}
             </div>
           ` : `
-            <div style="background:var(--bg2);border-radius:6px;padding:9px 12px;font-size:11px;color:var(--t2);text-align:center">
+            <div style="background:var(--bg2);border-radius:6px;padding:9px 12px;font-size:var(--fs-body);color:var(--t2);text-align:center">
               ${received < 10 ? 'รับเคสน้อย — sample ยังเล็กไป รอข้อมูลครบก่อน' : '✅ funnel ดูสมดุล — pipeline ของคุณเคลื่อนได้ดี'}
             </div>
           `}
@@ -1182,9 +1184,9 @@
         }).join('')}
       </div>
 
-      <div style="display:flex;gap:6px;background:var(--bg2);border:.5px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:10px">
-        <button onclick="setViewMode('leads')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='leads'?'var(--blue)':'transparent'};color:${viewMode==='leads'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">รายการ Lead <span style="opacity:.85;font-weight:400">(${allLeads.length})</span></button>
-        <button onclick="setViewMode('bookings')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='bookings'?'var(--blue)':'transparent'};color:${viewMode==='bookings'?'#fff':'var(--t2)'};font-size:13px;font-weight:700;cursor:pointer">เคสจอง <span style="opacity:.85;font-weight:400">(${bookings.length})</span></button>
+      <div style="display:flex;gap:6px;background:var(--bg2);border:.5px solid var(--bd);border-radius:7px;padding:4px;margin-bottom:10px">
+        <button onclick="setViewMode('leads')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='leads'?'var(--blue)':'transparent'};color:${viewMode==='leads'?'#fff':'var(--t2)'};font-size:var(--fs-body);font-weight:700;cursor:pointer">รายการ Lead <span style="opacity:.85;font-weight:400">(${allLeads.length})</span></button>
+        <button onclick="setViewMode('bookings')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;background:${viewMode==='bookings'?'var(--blue)':'transparent'};color:${viewMode==='bookings'?'#fff':'var(--t2)'};font-size:var(--fs-body);font-weight:700;cursor:pointer">เคสจอง <span style="opacity:.85;font-weight:400">(${bookings.length})</span></button>
       </div>
 
       ${viewMode === 'leads' ? renderLeadList(allLeads) : renderBookingSection(bookings)}
@@ -1236,12 +1238,12 @@
       <h2>${h(title)} <span class="count">${filtered.length} เคส · ${h(hintText)} · คลิกดูรายละเอียด</span></h2>
 
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:8px 10px;background:var(--bg2);border-radius:8px">
-        <span style="font-size:11px;color:var(--t3);font-weight:600">สถานะ</span>
-        <select id="status-filter-dd" onchange="setStatusFilter(this.value)" style="padding:5px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer;outline:none;max-width:160px">
+        <span style="font-size:var(--fs-body);color:var(--t3);font-weight:600">สถานะ</span>
+        <select id="status-filter-dd" onchange="setStatusFilter(this.value)" style="padding:5px 10px;border:.5px solid var(--bd2);border-radius:6px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer;outline:none;max-width:160px">
           ${STATUS_FILTERS.map(s => `<option value="${s.key}" ${statusFilter===s.key?'selected':''}>${h(s.label)}</option>`).join('')}
         </select>
         <span style="width:1px;height:18px;background:var(--bd);margin:0 2px"></span>
-        <span style="font-size:11px;color:var(--t3);font-weight:600">เรียง</span>
+        <span style="font-size:var(--fs-body);color:var(--t3);font-weight:600">เรียง</span>
         ${SORT_OPTIONS.map(o => {
           const on = sortOrder === o.key;
           return `<button class="f-btn ${on?'on':''}" onclick="setSortOrder('${o.key}')">${h(o.label)}</button>`;
@@ -1293,8 +1295,8 @@
   function noteSlotsHtml(l) {
     return leadNoteParts(l).map((v, i) => `
       <div style="display:flex;gap:7px;align-items:center;margin-bottom:5px">
-        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--bg2);color:var(--t3);font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700">${i+1}</span>
-        <input class="note-slot" value="${h(v)}" placeholder="อัพเดทครั้งที่ ${i+1}…" style="flex:1;min-width:0;padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px">
+        <span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--bg2);color:var(--t3);font-size:var(--fs-body);display:flex;align-items:center;justify-content:center;font-weight:700">${i+1}</span>
+        <input class="note-slot" value="${h(v)}" placeholder="อัพเดทครั้งที่ ${i+1}…" style="flex:1;min-width:0;padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body)">
       </div>`).join('');
   }
   // สถานะลูกค้า (คอลัม Z) → badge สีตามความสำคัญ
@@ -1415,28 +1417,28 @@
       const styleVal = opts.mono ? 'font-family:monospace;' : '';
       const wrap = opts.wrap ? 'white-space:pre-wrap;word-break:break-word;' : '';
       return `<div style="display:grid;grid-template-columns:110px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
-        <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
-        <div style="font-size:12px;color:var(--t1);${styleVal}${wrap}">${h(value)}</div>
+        <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">${h(label)}</div>
+        <div style="font-size:var(--fs-body);color:var(--t1);${styleVal}${wrap}">${h(value)}</div>
       </div>`;
     };
 
     // text field ที่กรอกแล้วเขียนลงชีต (blur)
     const editTextRow = (label, field, value) => `
       <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:.5px solid var(--bd)">
-        <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
-        <input value="${h(value||'')}" data-orig="${h(value||'')}" onblur="onBlurField('${safeCode}','${field}',this)" placeholder="—" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;min-width:0">
+        <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">${h(label)}</div>
+        <input value="${h(value||'')}" data-orig="${h(value||'')}" onblur="onBlurField('${safeCode}','${field}',this)" placeholder="—" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;min-width:0">
       </div>`;
 
     const mustCall = l.callProof !== 'ส่งแล้ว' && l.updateCount < C.UPD_TGT;
 
     const phoneClean = (l.phone||'').replace(/[^0-9+]/g, '');
-    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">โทร ${h(l.phone)}</a>` : '';
+    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:7px 14px;border-radius:8px;font-size:var(--fs-body);font-weight:600;text-decoration:none">โทร ${h(l.phone)}</a>` : '';
 
     overlay.innerHTML = `
       <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
         <div style="background:${mustCall?'var(--red-bg)':'var(--blue-bg)'};padding:14px 16px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:10px">
           <div>
-            <div style="font-size:11px;color:var(--t3);font-weight:600">รับเข้า ${h(l.dateIn||'-')}${l.timeIn?' '+h(l.timeIn):''}</div>
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">รับเข้า ${h(l.dateIn||'-')}${l.timeIn?' '+h(l.timeIn):''}</div>
             <div style="font-size:18px;font-weight:800;color:${mustCall?'var(--red)':'var(--blue)'}">${h(l.code||'-')}</div>
           </div>
           <button onclick="document.getElementById('lead-detail-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
@@ -1451,35 +1453,35 @@
             <span class="badge b-gray">${dotsMini(l.updateCount)}</span>
           </div>
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px;padding-top:4px">การติดต่อ</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin-bottom:4px;padding-top:4px">การติดต่อ</div>
           ${row('เบอร์โทร', l.phone, {mono:true})}
           ${row('ช่องทาง', l.channel)}
           ${row('ประเภท Lead', l.leadType)}
           ${row('รถสนใจ', l.car)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 6px">สถานะ <span style="font-weight:400;color:var(--t3)">(แก้แล้วเขียนลงชีตทันที)</span></div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 6px">สถานะ <span style="font-weight:400;color:var(--t3)">(แก้แล้วเขียนลงชีตทันที)</span></div>
           <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:.5px solid var(--bd)">
-            <div style="font-size:11px;color:var(--t3);font-weight:600">สถานะลูกค้า</div>
-            <select onchange="saveLeadField('${safeCode}','customer_status',this.value,this)" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">สถานะลูกค้า</div>
+            <select onchange="saveLeadField('${safeCode}','customer_status',this.value,this)" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
               <option value="">— ยังไม่ตี —</option>
               ${Z_STATUSES.map(s => { const dead = Z_DEAD.some(k => s.includes(k)); return `<option value="${h(s)}" ${l.customerStatus === s ? 'selected' : ''}>${h(s)}${dead ? ' · เคสเสีย' : ''}</option>`; }).join('')}
             </select>
           </div>
-          <div id="field-save-msg" style="font-size:11px;text-align:center;min-height:15px;margin:4px 0"></div>
+          <div id="field-save-msg" style="font-size:var(--fs-body);text-align:center;min-height:15px;margin:4px 0"></div>
           ${row('Status เซลล์', l.salesStatus)}
           ${row('Status แอดมิน', l.adminStatus)}
           ${row('จำนวนอัพเดท', `${l.updateCount} / ${C.UPD_TGT} ครั้ง`)}
           ${row('อัพเดทล่าสุด', l.lastUpdate)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 6px">${ic('lucide:file-pen',16)} มากรอกชีตกันเถอะ <span style="font-weight:400;color:var(--t3)">(คอลัม S · ${l.updateCount||0} อัพเดท · กรอกแล้วเขียนลงชีตจริง)</span></div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 6px">${ic('lucide:file-pen',16)} มากรอกชีตกันเถอะ <span style="font-weight:400;color:var(--t3)">(คอลัม S · ${l.updateCount||0} อัพเดท · กรอกแล้วเขียนลงชีตจริง)</span></div>
           <div id="note-slots">${noteSlotsHtml(l)}</div>
-          <button id="save-note-btn" onclick="saveLeadNote('${(l.code||'').replace(/'/g,'')}')" style="margin-top:6px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer">${ic('lucide:save',16)} บันทึกลงชีต</button>
-          <div id="save-note-msg" style="font-size:11px;margin-top:6px;text-align:center"></div>
+          <button id="save-note-btn" onclick="saveLeadNote('${(l.code||'').replace(/'/g,'')}')" style="margin-top:6px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--blue);color:var(--on-blue);font-weight:700;font-size:var(--fs-body);cursor:pointer">${ic('lucide:save',16)} บันทึกลงชีต</button>
+          <div id="save-note-msg" style="font-size:var(--fs-body);margin-top:6px;text-align:center"></div>
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:16px 0 6px">ข้อมูลลูกค้า <span style="font-weight:400;color:var(--t3)">(กรอกแล้วเขียนลงชีต)</span></div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:16px 0 6px">ข้อมูลลูกค้า <span style="font-weight:400;color:var(--t3)">(กรอกแล้วเขียนลงชีต)</span></div>
           <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:.5px solid var(--bd)">
-            <div style="font-size:11px;color:var(--t3);font-weight:600">ประเภทลูกค้า</div>
-            <select onchange="onSelectField('${safeCode}','customer_type',this)" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">ประเภทลูกค้า</div>
+            <select onchange="onSelectField('${safeCode}','customer_type',this)" style="padding:7px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
               <option value="">— เลือก —</option>
               ${customerTypeOptions(l.customerType).map(o => `<option ${l.customerType === o ? 'selected' : ''}>${h(o)}</option>`).join('')}
               <option value="__add__">➕ เพิ่มเอง…</option>
@@ -1490,8 +1492,8 @@
           ${editTextRow('อายุงาน', 'job_tenure', l.jobTenure)}
           ${editTextRow('ประวัติการผ่อน', 'payment_history', l.paymentHistory)}
           <div style="padding:8px 0">
-            <div style="font-size:11px;color:var(--t3);font-weight:600;margin-bottom:4px">PROFILE ลูกค้า</div>
-            <textarea onblur="onBlurField('${safeCode}','customer_profile',this)" data-orig="${h(l.profile||'')}" rows="3" placeholder="—" style="width:100%;padding:8px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:12px;font-family:inherit;line-height:1.5;resize:vertical">${h(l.profile||'')}</textarea>
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600;margin-bottom:4px">PROFILE ลูกค้า</div>
+            <textarea onblur="onBlurField('${safeCode}','customer_profile',this)" data-orig="${h(l.profile||'')}" rows="3" placeholder="—" style="width:100%;padding:8px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;line-height:1.5;resize:vertical">${h(l.profile||'')}</textarea>
           </div>
         </div>
       </div>
@@ -1524,22 +1526,22 @@
     if (filtered.length === 0) {
       html += `<div class="empty">ไม่มีเคสในสถานะนี้</div>`;
     } else {
-      html += `<table style="width:100%;font-size:12px;border-collapse:collapse">
+      html += `<table style="width:100%;font-size:var(--fs-body);border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">วันที่</th>
-          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ลูกค้า</th>
-          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">รถ</th>
-          <th style="text-align:left;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">สถานะ</th>
-          <th style="text-align:right;padding:6px;color:var(--t3);font-size:10px;border-bottom:.5px solid var(--bd)">ราคา</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:var(--fs-body);border-bottom:.5px solid var(--bd)">วันที่</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:var(--fs-body);border-bottom:.5px solid var(--bd)">ลูกค้า</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:var(--fs-body);border-bottom:.5px solid var(--bd)">รถ</th>
+          <th style="text-align:left;padding:6px;color:var(--t3);font-size:var(--fs-body);border-bottom:.5px solid var(--bd)">สถานะ</th>
+          <th style="text-align:right;padding:6px;color:var(--t3);font-size:var(--fs-body);border-bottom:.5px solid var(--bd)">ราคา</th>
         </tr></thead><tbody>`;
       filtered.forEach((b, idx) => {
         const col = (C.STATUS_COLOR||{})[b.status] || '#888';
         const origIdx = bookings.indexOf(b);
         html += `<tr onclick="openBookingDetail(${origIdx})" style="cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
           <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.date)}</td>
-          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:10px;color:var(--t3)">${h(b.phone)}</div></td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><div style="color:var(--t1);font-weight:600">${h(b.customer)}</div><div style="font-family:monospace;font-size:var(--fs-body);color:var(--t3)">${h(b.phone)}</div></td>
           <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);color:var(--t2)">${h(b.car)}${b.year?` (${h(b.year)})`:''}</td>
-          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><span class="badge" style="background:${col};color:#fff">${h(b.status)}</span>${b.isCash?' <span style="font-size:10px;color:var(--t3)">(สด)</span>':''}</td>
+          <td style="padding:8px 6px;border-bottom:.5px solid var(--bd)"><span class="badge" style="background:${col};color:#fff">${h(b.status)}</span>${b.isCash?' <span style="font-size:var(--fs-body);color:var(--t3)">(สด)</span>':''}</td>
           <td style="padding:8px 6px;border-bottom:.5px solid var(--bd);text-align:right;font-family:monospace">${b.price?Number(b.price).toLocaleString():'-'}</td>
         </tr>`;
       });
@@ -1574,13 +1576,13 @@
   function _dateEditRow(label, curVal, col, idx, hint) {
     return `
           <div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
-            <div style="font-size:11px;color:var(--t3);font-weight:600;padding-top:6px">✏️ ${h(label)}</div>
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600;padding-top:6px">✏️ ${h(label)}</div>
             <div>
               <div style="display:flex;gap:6px;align-items:center">
-                <input type="date" id="td-${col}" value="${_toISODate(curVal||'')}" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px">
-                <button onclick="saveTimelineDate(${idx},${col})" style="padding:6px 13px;border-radius:8px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">บันทึก</button>
+                <input type="date" id="td-${col}" value="${_toISODate(curVal||'')}" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body)">
+                <button onclick="saveTimelineDate(${idx},${col})" style="padding:6px 13px;border-radius:8px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:var(--fs-body);cursor:pointer;white-space:nowrap">บันทึก</button>
               </div>
-              <div id="tdmsg-${col}" style="font-size:10px;color:var(--t3);padding:3px 0 0">${hint ? h(hint) : ''}</div>
+              <div id="tdmsg-${col}" style="font-size:var(--fs-body);color:var(--t3);padding:3px 0 0">${hint ? h(hint) : ''}</div>
             </div>
           </div>`;
   }
@@ -1606,14 +1608,14 @@
       const styleVal = opts.mono ? 'font-family:monospace;' : '';
       const wrap = opts.wrap ? 'white-space:pre-wrap;word-break:break-word;' : '';
       return `<div style="display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:.5px solid var(--bd)">
-        <div style="font-size:11px;color:var(--t3);font-weight:600">${h(label)}</div>
-        <div style="font-size:12px;color:var(--t1);${styleVal}${wrap}">${typeof value === 'number' ? value.toLocaleString() : h(value)}</div>
+        <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600">${h(label)}</div>
+        <div style="font-size:var(--fs-body);color:var(--t1);${styleVal}${wrap}">${typeof value === 'number' ? value.toLocaleString() : h(value)}</div>
       </div>`;
     };
 
     const statusColor = (C.STATUS_COLOR||{})[b.status] || '#888';
     const phoneClean = (b.phone||'').replace(/[^0-9+]/g, '');
-    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">โทร ${h(b.phone)}</a>` : '';
+    const callLink = phoneClean ? `<a href="tel:${phoneClean}" style="background:var(--green);color:#fff;padding:7px 14px;border-radius:8px;font-size:var(--fs-body);font-weight:600;text-decoration:none">โทร ${h(b.phone)}</a>` : '';
 
     // ✏️ แก้วันที่ timeline (เคสของตัวเอง) — เขียนกลับชีต · ช่วยให้คะแนนความเร็วถูกต้อง
     const _canEdit = b.sheetTab && b.sheetRow;
@@ -1625,9 +1627,9 @@
       <div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden" onclick="event.stopPropagation()">
         <div style="background:${statusColor};padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
           <div>
-            <div style="font-size:11px;color:#fff;opacity:.85;font-weight:600">เคสจอง · ${h(b.date||'-')}</div>
+            <div style="font-size:var(--fs-body);color:#fff;opacity:.85;font-weight:600">เคสจอง · ${h(b.date||'-')}</div>
             <div style="font-size:18px;font-weight:800;color:#fff">${h(b.customer||'-')}</div>
-            <div style="font-size:11px;color:#fff;opacity:.9;margin-top:2px">สถานะ <b>${h(b.status||'-')}</b>${b.isCash?' · ซื้อสด':''}</div>
+            <div style="font-size:var(--fs-body);color:#fff;opacity:.9;margin-top:2px">สถานะ <b>${h(b.status||'-')}</b>${b.isCash?' · ซื้อสด':''}</div>
           </div>
           <button onclick="document.getElementById('book-detail-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:#fff;cursor:pointer;line-height:1;opacity:.9">✕</button>
         </div>
@@ -1635,39 +1637,39 @@
         <div style="overflow-y:auto;padding:14px 16px;flex:1">
           ${callLink ? `<div style="margin-bottom:12px;text-align:center">${callLink}</div>` : ''}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px">ลูกค้า</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin-bottom:4px">ลูกค้า</div>
           ${row('ชื่อลูกค้า', b.customer)}
           ${row('เบอร์โทร', b.phone, {mono:true})}
           ${row('Lead Code', b.leadCode, {mono:true})}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">รถ</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 4px">รถ</div>
           ${row('รถ', b.car)}
           ${row('ปีรถ', b.year)}
           ${row('ทะเบียน', b.plate)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">ราคา / การจ่าย</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 4px">ราคา / การจ่าย</div>
           ${row('ราคาขาย', b.price)}
           ${row('เงินจอง', b.deposit)}
           ${row('ไฟแนนซ์', b.finance)}
           ${row('เกรด', b.grade)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">สถานะเคส</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 4px">สถานะเคส</div>
           ${_canEdit ? (() => {
             const opts = ['จอง', 'จอง (ซื้อสด)', 'รอเซ็นต์', 'รอผล', 'รอปล่อย', 'ปล่อย', 'รีเจ็ก'];
             const cur = (b.status || '').trim();
             const known = opts.includes(cur);
             return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:.5px solid var(--bd)">
-              <div style="font-size:11px;color:var(--t3);font-weight:600;width:90px;flex-shrink:0">สถานะ</div>
-              <select onchange="saveCaseStatus(${idx}, this)" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:12px;font-family:inherit;cursor:pointer">
+              <div style="font-size:var(--fs-body);color:var(--t3);font-weight:600;width:90px;flex-shrink:0">สถานะ</div>
+              <select onchange="saveCaseStatus(${idx}, this)" style="flex:1;min-width:0;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
                 ${opts.map(s => `<option value="${h(s)}" ${cur === s ? 'selected' : ''}>${h(s)}</option>`).join('')}
                 ${known ? '' : `<option value="${h(cur)}" selected>${h(cur || '(ไม่ระบุ)')}</option>`}
               </select>
-              <span id="stmsg" style="font-size:10.5px;color:var(--t3);white-space:nowrap"></span>
+              <span id="stmsg" style="font-size:var(--fs-body);color:var(--t3);white-space:nowrap"></span>
             </div>
-            <div style="font-size:10px;color:var(--t3);margin:3px 0 0">เปลี่ยนแล้วบันทึกลงชีตอัตโนมัติ · แก้ได้เฉพาะเคสของตัวเอง</div>`;
+            <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 0">เปลี่ยนแล้วบันทึกลงชีตอัตโนมัติ · แก้ได้เฉพาะเคสของตัวเอง</div>`;
           })() : row('สถานะ', b.status)}
 
-          <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">ไทม์ไลน์</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 4px">ไทม์ไลน์</div>
           ${_canEdit ? _dateEditRow('วันที่จอง', b.date, 2, idx, 'แก้วันจองถ้าปีผิด (เช่น 1969) → บันทึก') : row('วันที่จอง', b.date)}
           ${_canEdit ? _dateEditRow('วันที่เซ็นต์', b.signDate, b.signCol||14, idx) : row('วันที่เซ็นต์', b.signDate)}
           ${_canEdit ? _dateEditRow('วันที่รู้ผล', b.resultDate, b.resultCol||19, idx) : row('วันที่รู้ผล', b.resultDate)}
@@ -1675,8 +1677,8 @@
           ${_canEdit ? _dateEditRow('วันที่ปล่อยรถ', (b.releaseDatePrimary||''), b.releaseCol||23, idx, _relHint) : row('วันที่ปล่อยรถ', b.releaseDate)}
 
           ${b.note && b.note !== '-' ? `
-            <div style="font-size:11px;color:var(--t3);font-weight:700;margin:14px 0 4px">หมายเหตุ</div>
-            <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(b.note)}</div>
+            <div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:14px 0 4px">หมายเหตุ</div>
+            <div style="padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:var(--fs-body);color:var(--t1);white-space:pre-wrap;word-break:break-word;line-height:1.5">${h(b.note)}</div>
           ` : ''}
         </div>
       </div>
@@ -1799,15 +1801,15 @@
     overlay.innerHTML = `
       <div style="background:var(--bg);border-radius:14px;max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden">
         <div style="padding:14px 18px;border-bottom:.5px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--t1)">${ic('lucide:target',16)} Lead Score — สูตรคำนวณ</h3>
+          <h3 style="margin:0;font-size:var(--fs-sub);font-weight:700;color:var(--t1)">${ic('lucide:target',16)} Lead Score — สูตรคำนวณ</h3>
           <button onclick="document.getElementById('leadscore-help-overlay').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer;line-height:1">✕</button>
         </div>
-        <div style="padding:14px 18px;overflow-y:auto;flex:1;font-size:12px;line-height:1.7;color:var(--t1)">
+        <div style="padding:14px 18px;overflow-y:auto;flex:1;font-size:var(--fs-body);line-height:1.7;color:var(--t1)">
           <p style="margin:0 0 10px"><b>Lead Score คือคะแนนคุณภาพของแต่ละ lead</b> บอกว่า "เคสนี้น่าปิดแค่ไหน" — ใช้ priority ว่าโทรอันไหนก่อน</p>
 
           <div style="margin:10px 0;padding:10px 12px;background:var(--bg2);border-radius:8px">
             <b style="color:var(--blue)">คิดจาก 4 ส่วน:</b>
-            <ul style="margin:6px 0 0 18px;padding:0;font-size:11.5px">
+            <ul style="margin:6px 0 0 18px;padding:0;font-size:var(--fs-body)">
               <li><b>ความใหม่ (Freshness)</b> — ≤3 วัน +20 · 4-7 วัน +10 · เย็น(&gt;14) -5</li>
               <li><b>ประเภท (Type)</b> — Very Hot +60 · Hot / TLD&nbsp;Hot +50 · MerHot +38 · TLD / Moderate +35 · BLD +30 · Hot RB +28 · Hot RJ +22 · RJ +15</li>
               <li><b>ช่องทาง (Channel)</b> — Walk-in +15 · TikTok/ไลฟ์ +10 · FB +5</li>
@@ -1817,20 +1819,20 @@
 
           <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap">
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--red-bg,#fee);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--red)">${ic('lucide:flame',16)} hot</div>
-              <div style="font-size:10px;color:var(--t3)">≥ 55 คะแนน</div>
+              <div style="font-size:var(--fs-sub);font-weight:700;color:var(--red)">${ic('lucide:flame',16)} hot</div>
+              <div style="font-size:var(--fs-body);color:var(--t3)">≥ 55 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--amber-bg,#fff7e6);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--amber)">${ic('lucide:thermometer',16)} warm</div>
-              <div style="font-size:10px;color:var(--t3)">35-54 คะแนน</div>
+              <div style="font-size:var(--fs-sub);font-weight:700;color:var(--amber)">${ic('lucide:thermometer',16)} warm</div>
+              <div style="font-size:var(--fs-body);color:var(--t3)">35-54 คะแนน</div>
             </div>
             <div style="flex:1;min-width:120px;padding:8px 10px;background:var(--blue-bg,#e7f0fd);border-radius:8px;text-align:center">
-              <div style="font-size:14px;font-weight:700;color:var(--blue)">${ic('lucide:snowflake',16)} cold</div>
-              <div style="font-size:10px;color:var(--t3)">&lt; 35 คะแนน</div>
+              <div style="font-size:var(--fs-sub);font-weight:700;color:var(--blue)">${ic('lucide:snowflake',16)} cold</div>
+              <div style="font-size:var(--fs-body);color:var(--t3)">&lt; 35 คะแนน</div>
             </div>
           </div>
 
-          <div style="margin-top:10px;padding:10px 12px;background:var(--blue-bg);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.6">
+          <div style="margin-top:10px;padding:10px 12px;background:var(--blue-bg);border-radius:8px;font-size:var(--fs-body);color:var(--t2);line-height:1.6">
             <b style="color:var(--blue)">หมายเหตุ:</b> เกณฑ์ + คะแนนปรับได้ที่ Google Sheet tab "เกณฑ์คะแนน lead" (admin เท่านั้น)
           </div>
         </div>
@@ -1845,15 +1847,15 @@
   function modeBar() {
     return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:var(--bg);border:.5px solid var(--bd);border-radius:12px;padding:10px 14px">
-        <span style="font-size:12px;color:var(--t3);font-weight:700">โหมด</span>
-        <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">
+        <span style="font-size:var(--fs-body);color:var(--t3);font-weight:700">โหมด</span>
+        <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-weight:600;font-family:inherit;cursor:pointer">
           <option value="dashboard" ${pageMode==='dashboard'?'selected':''}>📊 แดชบอร์ดของฉัน</option>
           <option value="cars" ${pageMode==='cars'?'selected':''}>🚗 สถานะรถ</option>
           <option value="loan" ${(pageMode==='loan'||pageMode==='finance')?'selected':''}>📄 ยื่นสินเชื่อ / เช็คไฟแนนซ์</option>
         </select>
         ${sellerBellHtml()}
-        <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:15px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
-        <a href="/logout/" title="ออกจากระบบ" onclick="return confirm('ออกจากระบบ?')" style="font-size:13px;padding:7px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;text-decoration:none;white-space:nowrap;font-weight:600">ออกจากระบบ</a>
+        <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:var(--fs-sub);padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
+        <a href="/logout/" title="ออกจากระบบ" onclick="return confirm('ออกจากระบบ?')" style="font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;text-decoration:none;white-space:nowrap;font-weight:600">ออกจากระบบ</a>
       </div>`;
   }
   function setPageMode(v) { pageMode = v; window.scrollTo(0,0); render(); }
@@ -1876,8 +1878,8 @@
   const FC_DOCS_DEFAULT = ['บัตรประชาชน', 'ทะเบียนบ้าน'];
 
   function renderFinanceMode() {
-    const lbl = (t) => `<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
-    const inStyle = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;font-family:inherit;box-sizing:border-box';
+    const lbl = (t) => `<div style="font-size:var(--fs-body);color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
+    const inStyle = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body);outline:none;font-family:inherit;box-sizing:border-box';
     const inp = (id, ph, val) => `<input id="${id}" placeholder="${h(ph||'')}" value="${h(val||'')}" style="${inStyle}">`;
     const sel = (id, opts) => `<select id="${id}" style="${inStyle};cursor:pointer">${opts.map((o,i)=>`<option value="${i===0?'':h(o)}">${h(o)}</option>`).join('')}</select>`;
     const area = (id, ph) => `<textarea id="${id}" placeholder="${h(ph||'')}" rows="2" style="${inStyle};resize:vertical;min-height:54px"></textarea>`;
@@ -1885,7 +1887,7 @@
 
     const docsHtml = FC_DOCS.map(doc => {
       const checked = FC_DOCS_DEFAULT.includes(doc) ? 'checked' : '';
-      return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--t1);cursor:pointer;padding:4px 8px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg2)"><input type="checkbox" class="fc-doc" value="${h(doc)}" ${checked}>${h(doc)}</label>`;
+      return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-body);color:var(--t1);cursor:pointer;padding:4px 8px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg2)"><input type="checkbox" class="fc-doc" value="${h(doc)}" ${checked}>${h(doc)}</label>`;
     }).join('');
 
     const html = `
@@ -1893,16 +1895,16 @@
       <div style="background:var(--green-bg,#eaf3de);border:.5px solid var(--green-mid,#1d9e75);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
         <div style="font-size:26px">${ic('lucide:clipboard-list',16)}</div>
         <div>
-          <div style="font-size:17px;font-weight:800;color:var(--t1)">เช็คเคสไฟแนนซ์ก่อนเซ็น</div>
-          <div style="font-size:12px;color:var(--t2)">กรอกข้อมูล แล้วกด "บันทึก & ส่ง LINE" เพื่อส่งให้ Senior อนุมัติ</div>
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">เช็คเคสไฟแนนซ์ก่อนเซ็น</div>
+          <div style="font-size:var(--fs-body);color:var(--t2)">กรอกข้อมูล แล้วกด "บันทึก & ส่ง LINE" เพื่อส่งให้ Senior อนุมัติ</div>
         </div>
       </div>
 
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <input id="fc_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanDoc(this)">
-        <button onclick="document.getElementById('fc_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนเอกสาร กรอกให้อัตโนมัติ</button>
-        <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบอนุมัติ/ฟอร์ม → ระบบกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนกดส่ง</b> (โดยเฉพาะตัวเลข)</span>
-        <span id="fc_scan_status" style="font-size:12px"></span>
+        <button onclick="document.getElementById('fc_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:var(--on-blue);font-size:var(--fs-body);font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนเอกสาร กรอกให้อัตโนมัติ</button>
+        <span style="font-size:var(--fs-body);color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบอนุมัติ/ฟอร์ม → ระบบกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนกดส่ง</b> (โดยเฉพาะตัวเลข)</span>
+        <span id="fc_scan_status" style="font-size:var(--fs-body)"></span>
       </div>
 
       <div class="section">
@@ -1947,9 +1949,9 @@
       <div id="fc-preview-box" style="display:none;margin-bottom:10px"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button onclick="previewFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
-        <button onclick="copyFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
-        <button id="fc-send-btn" onclick="sendFinance()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--green-mid,#1d9e75);color:#fff;font-size:13px;font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก & ส่ง LINE</button>
+        <button onclick="previewFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
+        <button onclick="copyFinance()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
+        <button id="fc-send-btn" onclick="sendFinance()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--green-mid,#1d9e75);color:#fff;font-size:var(--fs-body);font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก & ส่ง LINE</button>
       </div>
     `;
     document.getElementById('root').innerHTML = html;
@@ -1993,13 +1995,13 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const box = document.getElementById('fc-preview-box');
     const txt = financeText(collectFinance());
     box.style.display = 'block';
-    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;color:var(--t1)">${h(txt)}</div>`;
+    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:var(--fs-body);line-height:1.7;color:var(--t1)">${h(txt)}</div>`;
     box.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
   function copyFinance() {
     navigator.clipboard.writeText(financeText(collectFinance())).then(() => {
       const box = document.getElementById('fc-result');
-      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
       setTimeout(() => { box.innerHTML = ''; }, 2000);
     });
   }
@@ -2020,12 +2022,12 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
       } else {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
       }
     } catch (e) {
-      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
     } finally {
       btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
     }
@@ -2111,8 +2113,8 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     'referrer','referrerPhone','sales','date'];
 
   function renderLoanMode() {
-    const inS = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:13px;outline:none;font-family:inherit;box-sizing:border-box';
-    const lbl = (t) => `<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
+    const inS = 'width:100%;padding:9px 11px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body);outline:none;font-family:inherit;box-sizing:border-box';
+    const lbl = (t) => `<div style="font-size:var(--fs-body);color:var(--t2);font-weight:600;margin-bottom:5px">${t}</div>`;
     const inp = (id, ph, val) => `<input id="ln_${id}" placeholder="${h(ph||'')}" value="${h(val||'')}" style="${inS}">`;
     const num = (id, ph) => `<input id="ln_${id}" type="text" inputmode="numeric" placeholder="${h(ph||'')}" style="${inS}">`;
     const sel = (id, opts) => `<select id="ln_${id}" style="${inS};cursor:pointer">${opts.map((o,i)=>`<option value="${i===0?'':h(o)}">${h(o)}</option>`).join('')}</select>`;
@@ -2125,16 +2127,16 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px solid var(--blue);border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
         <div style="font-size:26px">${ic('lucide:file-text',16)}</div>
         <div>
-          <div style="font-size:17px;font-weight:800;color:var(--t1)">ข้อมูลผู้ยื่นขอสินเชื่อรถยนต์มือสอง</div>
-          <div style="font-size:12px;color:var(--t2)">ถ่ายรูปใบยื่น → กรอกอัตโนมัติ → ตรวจ/แก้ → ส่งให้ Senior อนุมัติ</div>
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">ข้อมูลผู้ยื่นขอสินเชื่อรถยนต์มือสอง</div>
+          <div style="font-size:var(--fs-body);color:var(--t2)">ถ่ายรูปใบยื่น → กรอกอัตโนมัติ → ตรวจ/แก้ → ส่งให้ Senior อนุมัติ</div>
         </div>
       </div>
 
       <div style="background:var(--blue-bg,#e6f1fb);border:.5px dashed var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <input id="ln_scan_input" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanLoanDoc(this)">
-        <button onclick="document.getElementById('ln_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนใบยื่น กรอกอัตโนมัติ</button>
-        <span style="font-size:11px;color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบกระดาษ → ระบบอ่านลายมือกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนส่ง</b></span>
-        <span id="ln_scan_status" style="font-size:12px"></span>
+        <button onclick="document.getElementById('ln_scan_input').click()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--blue);color:var(--on-blue);font-size:var(--fs-body);font-weight:700;cursor:pointer;white-space:nowrap">${ic('lucide:camera',16)} สแกนใบยื่น กรอกอัตโนมัติ</button>
+        <span style="font-size:var(--fs-body);color:var(--t2);flex:1;min-width:160px">ถ่ายรูปใบกระดาษ → ระบบอ่านลายมือกรอกให้ แล้ว<b>ตรวจ/แก้ก่อนส่ง</b></span>
+        <span id="ln_scan_status" style="font-size:var(--fs-body)"></span>
       </div>
 
       <div class="section">
@@ -2203,7 +2205,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       </div>
 
       <div class="section">
-        <h2>${ic('lucide:credit-card',16)} ผลอนุมัติไฟแนนซ์ &amp; นัดเซ็น <span style="font-size:11px;font-weight:400;color:var(--t3)">(กรอกตอนเช็คก่อนเซ็น)</span></h2>
+        <h2>${ic('lucide:credit-card',16)} ผลอนุมัติไฟแนนซ์ &amp; นัดเซ็น <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3)">(กรอกตอนเช็คก่อนเซ็น)</span></h2>
         ${grid(
           f('ราคารถ (บาท)', num('price','000,000')) +
           f('สถานะอนุมัติ', sel('apprStatus', FC_STATUSES)) +
@@ -2217,7 +2219,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       </div>
 
       <details class="section" style="padding:0">
-        <summary style="list-style:none;cursor:pointer;padding:13px;font-size:14px;font-weight:700;color:var(--t1)">${ic('lucide:handshake',16)} ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:11px;font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
+        <summary style="list-style:none;cursor:pointer;padding:13px;font-size:var(--fs-sub);font-weight:700;color:var(--t1)">${ic('lucide:handshake',16)} ผู้ค้ำ / ผู้กู้ร่วม <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3)">(ถ้ามี — กดเพื่อกรอก)</span></summary>
         <div style="padding:0 13px 13px">
           ${grid(
             f('ชื่อผู้ค้ำ', inp('gCustomer','ชื่อ-นามสกุล')) +
@@ -2245,9 +2247,9 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       <div id="ln-preview-box" style="display:none;margin-bottom:10px"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button onclick="previewLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
-        <button onclick="copyLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
-        <button id="ln-send-btn" onclick="sendLoan()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก &amp; ส่ง LINE</button>
+        <button onclick="previewLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-weight:700;cursor:pointer">${ic('lucide:eye',16)} ดูตัวอย่าง</button>
+        <button onclick="copyLoan()" style="padding:12px 18px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-weight:700;cursor:pointer">${ic('lucide:clipboard-list',16)} คัดลอกข้อความ</button>
+        <button id="ln-send-btn" onclick="sendLoan()" style="flex:1;min-width:180px;padding:12px 18px;border-radius:11px;border:none;background:var(--blue);color:var(--on-blue);font-size:var(--fs-body);font-weight:800;cursor:pointer">${ic('lucide:save',16)} บันทึก &amp; ส่ง LINE</button>
       </div>
     `;
     document.getElementById('root').innerHTML = html;
@@ -2320,19 +2322,19 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       const list = by[k]||[], mine=_my.has(k);
       const cards = list.map(c=>{ const fc=_scFlag[c.flag]||'var(--t3)';
         return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="cursor:pointer;background:var(--bg);border:.5px solid var(--bd);border-left:3px solid ${fc};border-radius:9px;padding:7px 8px">
-          <div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:13px;color:var(--t1)">${h(c.plate||c.code)}</b><span style="width:7px;height:7px;border-radius:50%;background:${fc};margin-top:3px;flex-shrink:0"></span></div>
-          <div style="font-size:11.5px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.title||c.code)}</div>
-          <div style="font-size:10px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.branch||'')} · ${c.days} ${h(scT('days'))}</div>
-        </div>`; }).join('') || `<div style="font-size:11px;color:var(--t3);text-align:center;padding:8px 0">—</div>`;
+          <div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:var(--fs-body);color:var(--t1)">${h(c.plate||c.code)}</b><span style="width:7px;height:7px;border-radius:50%;background:${fc};margin-top:3px;flex-shrink:0"></span></div>
+          <div style="font-size:var(--fs-body);color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.title||c.code)}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.branch||'')} · ${c.days} ${h(scT('days'))}</div>
+        </div>`; }).join('') || `<div style="font-size:var(--fs-body);color:var(--t3);text-align:center;padding:8px 0">—</div>`;
       return `<div style="width:178px;flex:0 0 auto;background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:9px${mine?';outline:2px solid color-mix(in srgb,var(--blue) 50%,transparent);outline-offset:-1px':''}">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(scStageName(k,n))}</span><span style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">${list.length}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:var(--fs-body);font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(scStageName(k,n))}</span><span style="font-size:var(--fs-body);font-weight:700;color:var(--t3);flex-shrink:0">${list.length}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">${cards}</div>
       </div>`;
     }).join('');
-    const _tb=(m,l)=>`<button onclick="_scBoardMode='${m}';renderSellerCars()" style="font-size:11.5px;padding:5px 11px;border-radius:999px;cursor:pointer;border:.5px solid ${_scBoardMode===m?'var(--blue)':'var(--bd2)'};background:${_scBoardMode===m?'var(--blue)':'var(--bg2)'};color:${_scBoardMode===m?'#fff':'var(--t2)'};font-weight:${_scBoardMode===m?'700':'500'}">${h(l)}</button>`;
+    const _tb=(m,l)=>`<button onclick="_scBoardMode='${m}';renderSellerCars()" style="font-size:var(--fs-body);padding:5px 11px;border-radius:8px;cursor:pointer;border:.5px solid ${_scBoardMode===m?'var(--blue)':'var(--bd2)'};background:${_scBoardMode===m?'var(--blue)':'var(--bg2)'};color:${_scBoardMode===m?'#fff':'var(--t2)'};font-weight:${_scBoardMode===m?'700':'500'}">${h(l)}</button>`;
     const toggle = _my.size ? `<div style="display:flex;gap:5px">${_tb('mine',scB('myWork'))}${_tb('all',scB('all'))}</div>` : '';
     return `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:13px;color:var(--t1)">${ic('lucide:car-front',16)} ${h(scB('board'))}</b>${toggle}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:var(--fs-body);color:var(--t1)">${ic('lucide:car-front',16)} ${h(scB('board'))}</b>${toggle}</div>
       <div style="overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch"><div style="display:flex;gap:8px;min-width:max-content;align-items:flex-start">${colHtml}</div></div>
     </div>`;
   }
@@ -2363,7 +2365,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     return `<div style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:62vw;padding:2px">${
       SC_LANGS.map(([code,label]) => {
         const on = _scLang === code;
-        return `<button onclick="setScLang('${code}')" style="flex:0 0 auto;font-size:12px;padding:6px 11px;border-radius:999px;cursor:pointer;white-space:nowrap;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t2)'};font-weight:${on?'700':'500'}">${h(label)}</button>`;
+        return `<button onclick="setScLang('${code}')" style="flex:0 0 auto;font-size:var(--fs-body);padding:6px 11px;border-radius:8px;cursor:pointer;white-space:nowrap;border:.5px solid ${on?'var(--blue)':'var(--bd2)'};background:${on?'var(--blue)':'var(--bg2)'};color:${on?'#fff':'var(--t2)'};font-weight:${on?'700':'500'}">${h(label)}</button>`;
       }).join('')}</div>`;
   }
 
@@ -2387,19 +2389,19 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const stageOpts = (D2.stages || []).map(s => `<option value="${s[0]}" ${_scF.stage===s[0]?'selected':''}>${h(scStageName(s[0],s[1]))}</option>`).join('');
     let html = scBoard(D2) + `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:14px;padding:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-        <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="${h(scT('searchPh'))}" style="font-size:12px;padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
-        <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:12px;padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">${h(scT('allStages'))}</option>${stageOpts}</select>
-        <span style="font-size:12px;color:var(--t3);margin-left:auto">${cars.length} ${h(scT('cars'))}</span>
+        <input value="${h(_scF.q||'')}" oninput="_scF.q=this.value;renderSellerCars()" placeholder="${h(scT('searchPh'))}" style="font-size:var(--fs-body);padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);flex:1;min-width:180px;max-width:300px">
+        <select onchange="_scF.stage=this.value;renderSellerCars()" style="font-size:var(--fs-body);padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)"><option value="">${h(scT('allStages'))}</option>${stageOpts}</select>
+        <span style="font-size:var(--fs-body);color:var(--t3);margin-left:auto">${cars.length} ${h(scT('cars'))}</span>
       </div>`;
-    if (!myStages.length) html += `<div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-radius:9px;color:var(--amber);font-size:12px;margin-bottom:10px">${h(scT('noPerm'))} (/track/users/)</div>`;
+    if (!myStages.length) html += `<div style="padding:10px 12px;background:var(--amber-bg,#fff7e6);border-radius:9px;color:var(--amber);font-size:var(--fs-body);margin-bottom:10px">${h(scT('noPerm'))} (/track/users/)</div>`;
     html += cars.map(c => {
       const ph = c.photo ? `<img src="${c.photo}" loading="lazy" style="width:72px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:54px;border-radius:8px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3)">${ic('lucide:car-front',20)}</div>`;
       return `<div onclick="openSellerCar('${(c.code||'').replace(/'/g,'')}')" style="display:flex;gap:10px;padding:12px 4px;border-top:.5px solid var(--bd);align-items:center;cursor:pointer">
         ${ph}
         <div style="flex:1;min-width:0">
-          <div style="font-weight:800;color:var(--t1);font-size:15px">${h(c.plate||c.code)} <span style="font-weight:500;color:var(--t2);font-size:13px">· ${h(c.title||'')}</span></div>
-          <div style="font-size:12px;color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.code):''}</div>
-          <div style="margin-top:5px"><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(scStageName(c.stage,c.stageName))} · ${c.days} ${h(scT('days'))}</span></div>
+          <div style="font-weight:800;color:var(--t1);font-size:var(--fs-sub)">${h(c.plate||c.code)} <span style="font-weight:500;color:var(--t2);font-size:var(--fs-body)">· ${h(c.title||'')}</span></div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0">${h(c.branch||'')}${c.plate?' · '+h(c.code):''}</div>
+          <div style="margin-top:5px"><span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-body);padding:3px 9px;border-radius:8px;background:var(--bg2);color:var(--t1)"><span style="width:7px;height:7px;border-radius:50%;background:${_scFlag[c.flag]||'var(--t3)'}"></span> ${h(scStageName(c.stage,c.stageName))} · ${c.days} ${h(scT('days'))}</span></div>
         </div>
         <span style="color:var(--t3);flex-shrink:0">${ic('lucide:arrow-up-right',18)}</span>
       </div>`;
@@ -2423,7 +2425,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const wrap = document.getElementById('scWrap'); if (!wrap) return;
     const car = _scCar;
     const hdr = `<div class="seller-hd" style="margin-bottom:10px">
-        <button onclick="scBackToList()" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;padding:7px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-family:inherit"><span style="font-size:16px;line-height:1">‹</span> ${h(scT('back'))}</button>
+        <button onclick="scBackToList()" style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-body);padding:7px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-family:inherit"><span style="font-size:var(--fs-h);line-height:1">‹</span> ${h(scT('back'))}</button>
         ${scLangSwitcher()}</div>`;
     if (!car) { wrap.innerHTML = hdr + `<div style="padding:30px;text-align:center;color:var(--t3)">${h(scT('loading'))}</div>`; return; }
     if (car.error) { wrap.innerHTML = hdr + `<div style="padding:24px;color:var(--red)">${h(car.error)}</div>`; return; }
@@ -2436,12 +2438,12 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
             <div style="min-width:0">
               <div style="font-size:24px;font-weight:800;color:var(--t1);line-height:1.15">${h(car.plate||car.code||'')}</div>
-              ${car.plate?`<div style="font-size:12.5px;color:var(--t3);margin-top:2px">${h(scT('carCode'))}: ${h(car.code||'')}</div>`:''}
+              ${car.plate?`<div style="font-size:var(--fs-body);color:var(--t3);margin-top:2px">${h(scT('carCode'))}: ${h(car.code||'')}</div>`:''}
             </div>
-            <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--blue-bg,#eaf2fe);color:var(--blue)"><span style="width:7px;height:7px;border-radius:50%;background:${flagCol}"></span>${h(scStageName(car.stage,car.stageName))}</span>
+            <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-body);font-weight:700;padding:5px 11px;border-radius:8px;background:var(--blue-bg,#eaf2fe);color:var(--blue)"><span style="width:7px;height:7px;border-radius:50%;background:${flagCol}"></span>${h(scStageName(car.stage,car.stageName))}</span>
           </div>
-          <div style="font-size:14.5px;color:var(--t2);margin-top:8px">${h(car.title||[car.brand,car.model,car.year].filter(Boolean).join(' '))}</div>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--t3)">
+          <div style="font-size:var(--fs-sub);color:var(--t2);margin-top:8px">${h(car.title||[car.brand,car.model,car.year].filter(Boolean).join(' '))}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-body);color:var(--t3)">
             <span>${ic('lucide:map-pin',13)} ${h(scT('branch'))}: ${h(car.branch||'-')}</span>
             <span>${ic('lucide:calendar',13)} ${h(scT('currentStage'))}: ${car.daysInStage} ${h(scT('days'))}</span>
           </div>
@@ -2457,48 +2459,48 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
     const _showPrio = !_prioStages.length || _prioStages.indexOf(car.stage) >= 0;
     const prioCard = `
       <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow);margin-bottom:12px">
-        ${!_showPrio ? '' : `<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:flame',16)} ${h(scT('prio'))}</div>
+        ${!_showPrio ? '' : `<div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1);margin-bottom:8px">${ic('lucide:flame',16)} ${h(scT('prio'))}</div>
         <div style="display:flex;gap:10px;align-items:center">
-          <select id="scPrio" onchange="scSetPriority(this.value)" ${(_scData&&_scData.canPriority===false)?'disabled':''} style="flex:1;padding:11px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit;cursor:pointer">
+          <select id="scPrio" onchange="scSetPriority(this.value)" ${(_scData&&_scData.canPriority===false)?'disabled':''} style="flex:1;padding:11px 12px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:var(--fs-sub);font-family:inherit;cursor:pointer">
             ${_prios.map(p=>`<option value="${h(p.key)}" ${car.priority===p.key?'selected':''}>${h(p.name)}</option>`).join('')}
           </select>
           <span id="scPrioDot" style="width:16px;height:16px;border-radius:50%;flex-shrink:0;background:${h(car.priorityColor||'#eab308')}"></span>
         </div>`}
-        <div style="font-size:12.5px;font-weight:800;color:var(--t1);margin:${_showPrio?'14px':'0'} 0 4px">${h(scT('flags'))}</div>
-        ${_flagDefs.map(f=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:6px 0;font-size:13.5px;font-weight:600;color:var(--t1)">
+        <div style="font-size:var(--fs-body);font-weight:800;color:var(--t1);margin:${_showPrio?'14px':'0'} 0 4px">${h(scT('flags'))}</div>
+        ${_flagDefs.map(f=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:6px 0;font-size:var(--fs-sub);font-weight:600;color:var(--t1)">
           <input type="checkbox" ${car[f.key==='need_photo'?'needPhoto':f.key==='need_content'?'needContent':'needTire']?'checked':''}
                  onchange="scSetFlag('${h(f.key)}',this.checked)" ${(((_scData||{}).flagPerms||{})[f.key]===false)?'disabled title="ดูได้อย่างเดียว"':''} style="width:22px;height:22px;accent-color:${h(f.color)};flex-shrink:0;cursor:pointer">
           ${h(f.name)}</label>`).join('')}
-        <span id="scPrioMsg" style="font-size:12px;color:var(--t3)"></span>
+        <span id="scPrioMsg" style="font-size:var(--fs-body);color:var(--t3)"></span>
       </div>`;
 
     let body;
     if (!myStages.length) {
-      body = `<div style="padding:14px;background:var(--amber-bg,#fff7e6);border-radius:12px;color:var(--amber);font-size:12.5px">${h(scT('noPerm'))}</div>`;
+      body = `<div style="padding:14px;background:var(--amber-bg,#fff7e6);border-radius:12px;color:var(--amber);font-size:var(--fs-body)">${h(scT('noPerm'))}</div>`;
     } else {
       body = `
         <div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow);margin-bottom:12px">
-          <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:4px">${ic('lucide:repeat',16)} ${h(scT('changeStage'))}</div>
-          <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">${h(scT('pickStage'))}</div>
+          <div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1);margin-bottom:4px">${ic('lucide:repeat',16)} ${h(scT('changeStage'))}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px">${h(scT('pickStage'))}</div>
           <div id="scChanger"></div>
           <div id="scChkWrap" style="display:none;margin-top:14px;border:.5px solid var(--bd);border-radius:12px;padding:11px 13px;background:var(--bg2)">
-            <div style="font-size:12.5px;font-weight:700;color:var(--t2);margin-bottom:4px">เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา</div>
-            ${(((_scData||{}).checklist||{}).items||[]).map(it=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:5px 0;font-size:13px;color:var(--t1)"><input type="checkbox" class="sc-chk" value="${h(it)}" checked style="width:19px;height:19px;accent-color:#16a34a;flex-shrink:0">${h(it)}</label>`).join('')}
+            <div style="font-size:var(--fs-body);font-weight:700;color:var(--t2);margin-bottom:4px">เช็คลิสต์ตรวจรถ — เอาติ๊กออกเฉพาะข้อที่มีปัญหา</div>
+            ${(((_scData||{}).checklist||{}).items||[]).map(it=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:5px 0;font-size:var(--fs-body);color:var(--t1)"><input type="checkbox" class="sc-chk" value="${h(it)}" checked style="width:19px;height:19px;accent-color:#16a34a;flex-shrink:0">${h(it)}</label>`).join('')}
           </div>
           <div style="margin-top:14px">
-            <label style="font-size:12.5px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${h(scT('note'))}</label>
-            <textarea id="scNote" rows="5" placeholder="${h(scT('notePh'))}" style="width:100%;padding:10px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;min-height:120px"></textarea>
+            <label style="font-size:var(--fs-body);font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${h(scT('note'))}</label>
+            <textarea id="scNote" rows="5" placeholder="${h(scT('notePh'))}" style="width:100%;padding:10px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-family:inherit;line-height:1.6;resize:vertical;min-height:120px"></textarea>
           </div>
           <div style="margin-top:14px">
-            <label style="font-size:12.5px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${ic('lucide:camera',15)} ${h(scT('addPhoto'))}</label>
+            <label style="font-size:var(--fs-body);font-weight:700;color:var(--t2);display:block;margin-bottom:5px">${ic('lucide:camera',15)} ${h(scT('addPhoto'))}</label>
             <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:18px;border:1.5px dashed var(--bd2);border-radius:12px;cursor:pointer;color:var(--t3);background:var(--bg2)">
               <input type="file" accept="image/*,video/*" multiple onchange="scAddPhotos(this)" style="display:none">
-              ${ic('lucide:camera',24)}<span style="font-size:12px;text-align:center">${h(scT('photoHint'))}</span>
+              ${ic('lucide:camera',24)}<span style="font-size:var(--fs-body);text-align:center">${h(scT('photoHint'))}</span>
             </label>
             <div id="scPhotoStrip" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
           </div>
-          <button id="scConfirmBtn" onclick="scConfirmStage()" style="width:100%;margin-top:16px;padding:13px;border-radius:12px;border:none;background:var(--blue);color:#fff;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;opacity:.55" disabled>${ic('lucide:circle-check',18)} ${h(scT('confirm'))}</button>
-          <div style="text-align:center;font-size:11px;color:var(--t3);margin-top:7px">${h(scT('by'))}: ${h((_scData&&_scData.me) || car.lastWorker || '')}</div>
+          <button id="scConfirmBtn" onclick="scConfirmStage()" style="width:100%;margin-top:16px;padding:13px;border-radius:12px;border:none;background:var(--blue);color:var(--on-blue);font-size:var(--fs-sub);font-weight:800;cursor:pointer;font-family:inherit;opacity:.55" disabled>${ic('lucide:circle-check',18)} ${h(scT('confirm'))}</button>
+          <div style="text-align:center;font-size:var(--fs-body);color:var(--t3);margin-top:7px">${h(scT('by'))}: ${h((_scData&&_scData.me) || car.lastWorker || '')}</div>
         </div>`;
     }
     wrap.innerHTML = hdr + hero + prioCard + body + scHistoryHtml(car);
@@ -2517,20 +2519,20 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
       const col = s[3] || 'var(--bd2)';
       const own = s[4] || '';
       const tip = own ? ` title="กดแล้วงานไปที่: ${h(own)}"` : '';
-      const ownTxt = own ? `<span style="font-size:10.5px;opacity:${on?'.92':'.6'};margin-left:4px;font-weight:500">→ ${h(own)}</span>` : '';
-      return `<button onclick="scPickStage('${s[0]}')"${tip} style="font-size:12.5px;padding:8px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?col:'var(--bd2)'};border-left:5px solid ${col};background:${on?col:'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}${ownTxt}</button>`;
+      const ownTxt = own ? `<span style="font-size:var(--fs-body);opacity:${on?'.92':'.6'};margin-left:4px;font-weight:500">→ ${h(own)}</span>` : '';
+      return `<button onclick="scPickStage('${s[0]}')"${tip} style="font-size:var(--fs-body);padding:8px 13px;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:inherit;border:.5px solid ${on?col:'var(--bd2)'};border-left:5px solid ${col};background:${on?col:'var(--bg2)'};color:${on?'#fff':'var(--t1)'};font-weight:${on?'700':'500'}">${on?ic('lucide:circle-check',14)+' ':''}${h(scStageName(s[0],s[1]))}${ownTxt}</button>`;
     };
     // จัดกลุ่มปุ่มตามเฟส (myStages[2] = คีย์เฟสจาก cars_api · ส.ค.69) — กลุ่มเดียวไม่ต้องมีหัว
     const SC_PH = {intake_phase:{TH:'รับเข้า',EN:'Intake',MM:'ဝင်ရောက်',KH:'ទទួលចូល'}, recon_phase:{TH:'ทำสภาพ',EN:'Recondition',MM:'ပြင်ဆင်ရေး',KH:'កែសម្ផស្ស'}, sale_phase:{TH:'ขาย',EN:'Sales',MM:'အရောင်း',KH:'លក់'}, release_phase:{TH:'ปล่อยรถ',EN:'Release',MM:'ထုတ်ပေး',KH:'ប្រគល់'}};
     const _phLbl = k => { const x = SC_PH[k]; return x ? (x[_scLang] || x.TH) : ''; };
     const items = myStages.filter(s => s[0] !== _scCar.stage);
     const groups = []; items.forEach(s => { const ph = s[2] || ''; if (!groups.length || groups[groups.length-1].ph !== ph) groups.push({ph, items: []}); groups[groups.length-1].items.push(s); });
-    const chips = groups.map(g => `${groups.length>1?`<div style="font-size:11px;color:var(--t3);font-weight:700;margin:9px 0 5px;display:flex;align-items:center;gap:8px">${h(_phLbl(g.ph))}<span style="flex:1;height:1px;background:var(--bd)"></span></div>`:''}<div style="display:flex;gap:7px;flex-wrap:wrap">${g.items.map(_chip).join('')}</div>`).join('');
+    const chips = groups.map(g => `${groups.length>1?`<div style="font-size:var(--fs-body);color:var(--t3);font-weight:700;margin:9px 0 5px;display:flex;align-items:center;gap:8px">${h(_phLbl(g.ph))}<span style="flex:1;height:1px;background:var(--bd)"></span></div>`:''}<div style="display:flex;gap:7px;flex-wrap:wrap">${g.items.map(_chip).join('')}</div>`).join('');
     box.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px;font-size:13px">
-        <span style="padding:6px 12px;border-radius:999px;background:var(--bg2);color:var(--t2);font-weight:600">${h(curName)}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px;font-size:var(--fs-body)">
+        <span style="padding:6px 12px;border-radius:8px;background:var(--bg2);color:var(--t2);font-weight:600">${h(curName)}</span>
         <span style="color:var(--t3)">→</span>
-        <span style="padding:6px 12px;border-radius:999px;background:${_scSel?'var(--blue-bg,#eaf2fe)':'var(--bg2)'};color:${_scSel?'var(--blue)':'var(--t3)'};font-weight:700">${h(selName)}</span>
+        <span style="padding:6px 12px;border-radius:8px;background:${_scSel?'var(--blue-bg,#eaf2fe)':'var(--bg2)'};color:${_scSel?'var(--blue)':'var(--t3)'};font-weight:700">${h(selName)}</span>
       </div>
       <div>${chips}</div>`;
     const btn = document.getElementById('scConfirmBtn');
@@ -2653,7 +2655,7 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
   function scHistoryHtml(car) {
     const logs = (car && car.logs) || [];
     let inner;
-    if (!logs.length) { inner = `<div style="padding:14px 2px;color:var(--t3);font-size:12.5px">${h(scT('noHistory'))}</div>`; }
+    if (!logs.length) { inner = `<div style="padding:14px 2px;color:var(--t3);font-size:var(--fs-body)">${h(scT('noHistory'))}</div>`; }
     else {
       inner = logs.map((l, i) => {
         const media = (l.media || []).slice(0, 4).map(u => {
@@ -2667,16 +2669,16 @@ ${ic('lucide:file-pen',16)} ${x(d.extra)}`;
             ${i<logs.length-1?'<span style="flex:1;width:1.5px;background:var(--bd);margin-top:3px"></span>':''}
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${h(scStageName(l.stageKey, l.stage))}${l.dur?` <span style="font-weight:600;font-size:11px;color:var(--blue)">⏱ ${l.cur?'อยู่มาแล้ว ':''}${h(l.dur)}</span>`:''}</div>
-            ${l.note?`<div style="font-size:11.5px;color:var(--t2);margin-top:1px;white-space:pre-line">${h(l.note)}</div>`:''}
-            <div style="font-size:11px;color:var(--t3);margin-top:2px">${h(l.at||'')}${l.worker?' · '+h(l.worker):''}</div>
+            <div style="font-size:var(--fs-body);font-weight:700;color:var(--t1)">${h(scStageName(l.stageKey, l.stage))}${l.dur?` <span style="font-weight:600;font-size:var(--fs-body);color:var(--blue)">⏱ ${l.cur?'อยู่มาแล้ว ':''}${h(l.dur)}</span>`:''}</div>
+            ${l.note?`<div style="font-size:var(--fs-body);color:var(--t2);margin-top:1px;white-space:pre-line">${h(l.note)}</div>`:''}
+            <div style="font-size:var(--fs-body);color:var(--t3);margin-top:2px">${h(l.at||'')}${l.worker?' · '+h(l.worker):''}</div>
             ${media?`<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${media}</div>`:''}
           </div>
         </div>`;
       }).join('');
     }
     return `<div style="background:var(--bg);border:.5px solid var(--bd);border-radius:16px;padding:15px;box-shadow:var(--shadow)">
-        <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:6px">${ic('lucide:clipboard-list',16)} ${h(scT('history'))}</div>
+        <div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1);margin-bottom:6px">${ic('lucide:clipboard-list',16)} ${h(scT('history'))}</div>
         ${inner}
       </div>`;
   }
@@ -2716,13 +2718,13 @@ ${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
   function previewLoan() {
     const box = document.getElementById('ln-preview-box');
     box.style.display = 'block';
-    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;color:var(--t1)">${h(loanText(collectLoan()))}</div>`;
+    box.innerHTML = `<div style="background:var(--bg2);border:.5px solid var(--bd);border-radius:11px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;font-size:var(--fs-body);line-height:1.7;color:var(--t1)">${h(loanText(collectLoan()))}</div>`;
     box.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
   function copyLoan() {
     navigator.clipboard.writeText(loanText(collectLoan())).then(() => {
       const box = document.getElementById('ln-result');
-      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
+      box.innerHTML = `<div style="padding:9px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:circle-check',16)} คัดลอกข้อความแล้ว</div>`;
       setTimeout(() => { box.innerHTML = ''; }, 2000);
     });
   }
@@ -2741,12 +2743,12 @@ ${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
       });
       const j = await res.json();
       if (!res.ok || j.error) {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:triangle-alert',16)} ${h(j.error || 'ส่งล้มเหลว')}</div>`;
       } else {
-        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
+        box.innerHTML = `<div style="padding:10px 13px;background:var(--green-bg,#eaf3de);color:var(--green);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:circle-check',16)} ส่งเข้า LINE แล้ว — รอ Senior อนุมัติ</div>`;
       }
     } catch (e) {
-      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:12px;font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
+      box.innerHTML = `<div style="padding:10px 13px;background:var(--red-bg,#fcebeb);color:var(--red);border-radius:10px;font-size:var(--fs-body);font-weight:600">${ic('lucide:triangle-alert',16)} ${h(e.message)}</div>`;
     } finally {
       btn.disabled = false; btn.textContent = '💾 บันทึก & ส่ง LINE';
     }
@@ -2780,9 +2782,9 @@ ${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
   function renderAICoachCard() {
     return `
       <div class="section" style="margin-bottom:10px;border-left:3px solid var(--purple-mid,#8b5cf6)">
-        <h2 style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${ic('lucide:bot',16)} AI โค้ชส่วนตัว <span style="font-size:11px;font-weight:400;color:var(--t3)">วิเคราะห์ผลงาน + แนะนำ</span></h2>
-        <div id="ai-coach-result" style="font-size:12.5px;color:var(--t1);line-height:1.7"></div>
-        <button id="ai-coach-btn" onclick="runAICoach()" style="margin-top:6px;padding:9px 16px;border-radius:10px;border:none;background:var(--purple-mid,#8b5cf6);color:#fff;font-size:13px;font-weight:700;cursor:pointer">${ic('lucide:sparkles',16)} ให้ AI วิเคราะห์ผลงานฉัน</button>
+        <h2 style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${ic('lucide:bot',16)} AI โค้ชส่วนตัว <span style="font-size:var(--fs-body);font-weight:400;color:var(--t3)">วิเคราะห์ผลงาน + แนะนำ</span></h2>
+        <div id="ai-coach-result" style="font-size:var(--fs-body);color:var(--t1);line-height:1.7"></div>
+        <button id="ai-coach-btn" onclick="runAICoach()" style="margin-top:6px;padding:9px 16px;border-radius:10px;border:none;background:var(--blue);color:var(--on-blue);font-size:var(--fs-body);font-weight:700;cursor:pointer">${ic('lucide:sparkles',16)} ให้ AI วิเคราะห์ผลงานฉัน</button>
       </div>`;
   }
   function aiStatsSummary() {
@@ -2825,6 +2827,6 @@ ${ic('lucide:file-pen',16)} ${x(d.note)}${fin}`;
   render();
 </script>
 {% endif %}
-{% if APP_VERSION %}<div style="position:fixed;bottom:6px;right:10px;font-size:10.5px;color:#94a3b8;opacity:.75;z-index:9999;pointer-events:none">{{ APP_VERSION }}</div>{% endif %}
+{% if APP_VERSION %}<div style="position:fixed;bottom:6px;right:10px;font-size:var(--fs-body);color:#94a3b8;opacity:.75;z-index:9999;pointer-events:none">{{ APP_VERSION }}</div>{% endif %}
 </body>
 </html>
