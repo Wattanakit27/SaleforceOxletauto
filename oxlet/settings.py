@@ -116,6 +116,26 @@ FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c
 # Gemini API key — สแกนเอกสาร OCR (server-side เท่านั้น) — SECRET ต้องตั้งบน Vercel
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# ===== Meta (Facebook/Instagram) Graph API =====
+# token ตัวเดียวพอ · ว่าง = ยังไม่ใช้ · SECRET ห้าม commit ลง git
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+META_API_VERSION = os.getenv("META_API_VERSION", "v21.0")
+
+# ★★ แยกบริษัทให้ขาด — เจ้าของทำงาน 2 บริษัท (อ๊อกเล็ตธ์ออโต้ + OSUKA) ซึ่ง "ต้องไม่ปนกัน"
+#
+# ปัญหา: token ของ Meta ออกในนาม **โปรไฟล์ Facebook ของคน** ไม่ใช่ในนามบริษัท
+#        → `/me/adaccounts` คืน *ทุก* บัญชีที่คนนั้นแตะได้ รวมบัญชีของบริษัทอื่นด้วย
+#        (วัดจริง ก.ย.69: token เห็น 4 บัญชี หนึ่งในนั้นคือ OSUKA คนละบริษัท ใช้เงิน 5 ล้าน)
+#        ออก token ใหม่กี่รอบก็เหมือนเดิม เพราะสิทธิ์ผูกกับตัวคน ไม่ใช่ตัว token
+#
+# ทางแก้: **ระบุ asset ของบริษัทนี้ให้ชัด** แล้วให้โค้ดแตะได้แค่ในลิสต์
+#        · ห้ามเรียก /me/adaccounts หรือ /me/accounts ในโค้ดที่ใช้งานจริง (มันเหวี่ยงไปทุกบริษัท)
+#        · ★ ไม่ตั้ง = ปิดสนิท (แบบเดียวกับ EXTERNAL_API_KEY) — เปิดโดยปริยายวันหนึ่งจะดูด
+#          ข้อมูลบริษัทอื่นเข้าแดชบอร์ดนี้แบบไม่มีใครรู้ แล้วตัวเลขจะเพี้ยนโดยหาต้นตอไม่เจอ
+META_AD_ACCOUNTS = [a.strip().replace("act_", "")
+                    for a in os.getenv("META_AD_ACCOUNTS", "").split(",") if a.strip()]
+META_PAGE_IDS = [p.strip() for p in os.getenv("META_PAGE_IDS", "").split(",") if p.strip()]
+
 # ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
 # อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)
 # ★ ไม่ตั้งค่า = ปิดสนิท (endpoint คืน 503) — ข้อมูลพนักงาน/LINE id เป็นข้อมูลส่วนบุคคล
