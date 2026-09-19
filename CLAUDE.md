@@ -114,6 +114,7 @@ python manage.py runserver
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
+| `/api/admin/meta_sync` | `admin_meta_sync` | admin: GET=สถานะดึงข้อมูล Meta (รอบล่าสุด · โควต้า · กดได้ไหม) · POST=ดึงเดี๋ยวนี้ (รันใน thread) — **มีด่านกันกดถี่ ไม่ผ่าน=429+เหตุผล+นาทีที่ต้องรอ** · เมนู "Meta (Facebook) — ดึงข้อมูล" · `?panel=meta` |
 | `/api/admin/report_test` | `admin_report_test` | admin POST `{target?}`: แคปตารางรายงาน (Playwright) → ส่งรูปเข้า LINE เดี๋ยวนี้ (ปุ่ม "ส่งทดสอบ") · ⚠️ ได้จริงเฉพาะ prod (LINE ต้องดึงรูปจาก URL https สาธารณะ) |
 | `/api/admin/line_group_name` | `admin_line_group_name` | admin POST `{id}`: ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่ม) → ปุ่ม "ตรวจชื่อ" ในพาเนลรายงาน (ยืนยันว่า id คือกลุ่มไหน) |
 | `/api/admin/line_groups` | `admin_line_groups` | admin GET: รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook · KVStore `line_groups`) → dropdown เลือกกลุ่มในพาเนลรายงาน |
@@ -1249,6 +1250,56 @@ CRON_SECRET=xxx
   · `page_daily_follows_unique` · `page_views_total` (period=day) — **`page_impressions` ถูกถอดจาก v21**
 - อยากได้ "ไลก์โพสต์นี้วันนี้กี่คน" ต้อง **จด snapshot เองรายวันแล้วหาผลต่าง** (ย้อนหลังไม่ได้)
 - `recommendation_type` ของรีวิวเชื่อไม่ได้ (รีวิวขึ้นต้น "แย่ 👎👎👎" ถูกติดป้าย `positive`)
+
+### 🌙 ดึงยอดโพสต์ + ผลโฆษณาทุกเที่ยงคืน — [meta_sync.py](dashboard/services/meta_sync.py) · ก.ย.69
+*"ดึงทุกๆ เที่ยงคืน ตั้งเวลาไว้เลย · ข้อมูลโฆษณาก็ดึงมาเป็น raw data พร้อมกัน · เว้นแต่จะกด sync
+ เอง ซึ่งขึ้นแจ้งเตือนกรณี sync ถี่เกินไปว่า token อาจติด limit ให้เว้นช่วง"*
+
+**3 ตาราง** (dashboard migration **0008**):
+| ตาราง | เก็บอะไร | อายุ |
+|---|---|---|
+| `dash_meta_post_snapshot` | **ยอดสะสม**ของโพสต์ 1 แถว/โพสต์/รอบ (วิวแยกแอด-ออร์แกนิก · ไลก์แยกชนิด · คอมเมนต์ · แชร์ · คลิก · ดูเฉลี่ย · ดูครบ 30 วิ) | ถาวร |
+| `dash_meta_ad_daily` | ผลโฆษณา **1 แถว/ad/วัน** (upsert) · `actions` = ของดิบ | ถาวร |
+| `dash_meta_raw` | คำตอบดิบจาก Meta ทั้งก้อน | **90 วัน** (`KEEP_DAYS`) |
+
+- **ยอดรายวันของโพสต์ = แถว `trigger='cron'` วัน D ลบวัน D-1** · `snap_date` ของรอบเที่ยงคืน =
+  **วันที่เพิ่งจบไป** (ไม่ใช่วันที่ดึง) · แถว `manual` (กดเอง) **ห้ามเอาไปลบหายอดรายวัน**
+- **โฆษณาต่างจากโพสต์**: Meta แยกรายวันให้เอง + ย้อนหลังได้ → upsert ทับ 3 วันล่าสุดทุกรอบ
+  (Meta แก้ตัวเลขโฆษณาย้อนหลัง)
+- **เวลา**: `cron_tick` → `maybe_run()` ช่วง **00:00–02:59** ถ้าวันนี้ยังไม่สำเร็จ → เริ่ม **ใน thread**
+  (ดึง 90 วันใช้ ~40-60 วิ ห้ามหน่วง cron_tick/ชน nginx 120 วิ) · ล้ม = เว้น 20 นาทีค่อยลองใหม่
+  (ไม่ลองทุกนาที = ไม่เผาโควต้า) · KV `meta_sync_daily` จดว่าวันนี้ทำแล้ว **เฉพาะตอนดึงโพสต์สำเร็จ**
+- **ล็อกกันรันซ้อน** KV `meta_sync_lock` (หมดอายุ 20 นาที กัน thread ตายแล้วล็อกค้างตลอดไป)
+- **ปุ่มกดเอง `can_manual()`**: ห่างกัน ≥15 นาที · โควต้า ≥75% = ห้าม · Meta ส่ง
+  `estimated_time_to_regain_access` = บอกเวลารอจริง · กำลังรันอยู่ = ห้าม
+  **บล็อก 2 ชั้น**: ปุ่มถูกปิดในหน้าเว็บ **และ** endpoint ตอบ 429 เอง
+- **โควต้าอ่านจาก header จริง** (`meta.last_usage` · `x-business-use-case-usage` ฯลฯ) ไม่ได้เดาจากจำนวนครั้งที่กด
+- **ดึงโพสต์ทีละ 50 พร้อม insights ในคำขอเดียว** (field expansion) — ไม่ยิงทีละโพสต์
+- **ผลรอบล่าสุด**: KV `meta_sync_last` · **ประวัติ**: `dash_event_log` kind=`meta_sync`
+- คำสั่งดูผลรายวัน (หน้า "ฐานข้อมูล (SQL)"):
+  `SELECT snap_date, sum(video_views) FROM dash_meta_post_snapshot WHERE trigger='cron' GROUP BY 1 ORDER BY 1`
+
+**⚠️★ 3 บั๊กที่เจอตอนทดสอบกับ API จริง (แก้แล้ว — อย่าให้กลับมา)**
+1. **token หลุดลง raw** — ลิงก์ `paging.next` **มี access_token ฝังใน URL** และ `paging` ไม่ได้อยู่แค่
+   ชั้นนอก ยังซ้อนใน `insights` ของ*ทุกโพสต์* → `_raw()` ต้องตัด `paging` **ทุกชั้น** (ตัดแค่ชั้นนอกแล้วยังหลุด)
+   · ตัวกรองข้อมูลส่วนบุคคลของหน้า SQL/export กรองแค่ LINE id **ไม่ได้กรอง token ของ Meta**
+2. **วิวเป็น 0 ทุกโพสต์** — Meta ส่ง metric วิดีโอชื่อเดียวกัน **2 ชุด** (`period=lifetime` กับ `period=day`)
+   เก็บเป็น dict แล้วตัว `day` ทับ → ได้ค่าวันเก่าสุดใน series (มักเป็น 0) · ต้องเลือก `lifetime` เท่านั้น
+3. **conversation id `t_…` โดนด่านบล็อก** ทั้งที่เป็นของเพจเรา — `_check()` ต้องเช็ค `_known` ก่อนดูรูปแบบ id
+- **Meta ตอบ "An unknown error occurred" แบบสุ่ม** → `meta.get` ลองซ้ำ 2 ครั้ง **เฉพาะ error ชั่วคราว**
+  (code 1/2/`is_transient`) · **ห้ามลองซ้ำตอนติดลิมิต** (ยิงซ้ำ = โดนพักนานขึ้น)
+
+**★ แก้ข้อมูลที่เคยบอกเจ้าของผิด**: เคยบอกว่า "วิวรายวันต่อโพสต์ Meta ไม่ให้" — **ผิดสำหรับวิดีโอ**
+Meta ส่ง `post_video_views`/`_organic`/`_paid`/`avg_time_watched`/`view_time` แบบ `period=day` มาด้วย
+(เห็นในคำตอบของ field expansion) · **ที่ไม่มีรายวันจริงคือ ไลก์/แชร์/คอมเมนต์ระดับโพสต์**
+· ชุด `day` อยู่ใน `dash_meta_raw` ครบ (ยังไม่ได้แตกเป็นตาราง) · ยังไม่ได้วัดว่าย้อนได้กี่วัน
+
+**ขนาดข้อมูล (วัดจริง)**: ฐานข้อมูล prod ทั้งก้อน **25 MB** (ก.ย.69) · raw ~6.5 KB/โพสต์ ×
+~2,000 โพสต์ใน 90 วัน ≈ **12-15 MB/วัน** ก่อนบีบอัด → **raw ใหญ่กว่าทั้งฐานข้อมูลภายใน 2 วัน**
+ดิสก์ว่าง 90 GB รับไหว แต่ถ้าวันหนึ่งฐานข้อมูลโตผิดปกติ ต้นเหตุน่าจะอยู่ที่ตารางนี้
+
+**Deploy**: `git pull` → `migrate` (สร้าง 3 ตาราง) → เติม `META_ACCESS_TOKEN` / `META_AD_ACCOUNTS` /
+`META_PAGE_IDS` ใน `.env` → restart · ไม่ตั้ง = ปิดสนิท รอบเที่ยงคืนไม่ทำอะไร
 
 ### ⚠️★ อุบัติเหตุที่เกือบเกิด (ก.ย.69) — token จริงไปอยู่ใน `deploy/.env.example`
 ไฟล์นี้ **ถูก track ใน git** แต่เนื้อไฟล์ทั้ง 68 บรรทัดถูกทับด้วย **token จริงบรรทัดเดียว**

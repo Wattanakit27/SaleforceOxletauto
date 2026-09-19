@@ -1385,6 +1385,8 @@
         { i:'lucide:package',     l:'ตั้งค่าหมวดวิธีได้รถ',    fn:'openMethodMap()',         tip:'จับคู่ค่าวิธีได้รถ (คอลัมน์ AT) → หาเอง/online/รถเทิร์น/ขายหน้าร้าน' },
         { i:'lucide:bell',        l:'แจ้งเตือนตามด่วน',        fn:'openCronPanel()',         tip:'ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)' },
         { i:'lucide:send',        l:'รายงานเข้าไลน์',          fn:'openReportLine()',        tip:'แคปตารางรายงานส่งเข้ากลุ่ม LINE อัตโนมัติรายวัน' },
+        { i:'lucide:refresh-cw',  l:'Meta (Facebook) — ดึงข้อมูล', fn:'openMetaSync()',
+          tip:'ยอดวิว/ไลก์/คอมเมนต์/แชร์ของโพสต์ + ผลโฆษณา ดึงเองทุกเที่ยงคืน · กดดึงเดี๋ยวนี้ได้ (มีช่วงพักกันโควต้าเต็ม)' },
         { i:'lucide:repeat',      l:'ตั้งค่ากลุ่ม LINE ที่ดักเก็บ', fn:"gotoCheckout('line')",
           tip:'เลือกกลุ่มที่ให้บอทอ่านเพื่อสร้างเคสเบิก-คืนรถ + สวิตช์เก็บแชทกลุ่ม/แชทลูกค้า (อยู่ในหน้าเบิก-คืนรถ)' },
       ]},
@@ -5351,6 +5353,75 @@
     }
 
     // 📊 รายงานเข้าไลน์ (รายวัน) — ตั้งค่าเวลา/เปิด-ปิด/ปลายทาง + ส่งทดสอบ (แคปด้วย Playwright บน server)
+    // ── 📘 Meta (Facebook): ดึงยอดโพสต์ + ผลโฆษณา — ★ ก.ย.69 ──
+    //   ทุกเที่ยงคืนดึงเอง (cron) · ปุ่มนี้ = ดึงเดี๋ยวนี้ · มีด่านกันกดถี่ (token เดียวใช้ทุกงาน
+    //   ถ้ากดรัวจนโควต้าเต็ม Meta จะพักทั้ง token รอบเที่ยงคืนก็ล้มตาม)
+    let _msPoll = null;
+    async function openMetaSync(){ const ov=_trkOverlay('meta-sync','<p class="mut">กำลังโหลด…</p>'); await renderMetaSync(ov); }
+    async function renderMetaSync(ov, note){
+      ov=ov||document.getElementById('meta-sync'); if(!ov) return;
+      let d; try{ d=await (await fetch('/api/admin/meta_sync',{credentials:'same-origin'})).json(); }
+      catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+h(String(d.error||'ไม่มีสิทธิ์'))+'</p>'; return; }
+      const L=d.last||{}, M=d.manual||{}, lim=d.limits||{};
+      const fmt=iso=>{ try{ return new Date(iso).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}); }catch(_){ return iso||'-'; } };
+      const running=!!(d.running&&d.running.started);
+      const pct=Number((L.usage||{}).pct||0);
+      const barCol=pct>=Number(lim.usagePct||75)?'var(--red)':pct>=50?'var(--amber,#d97706)':'var(--green)';
+      const box='background:var(--bg2);border-radius:10px;padding:11px 13px;margin-bottom:10px';
+      const errs=(L.errors||[]).map(e=>`<div style="color:var(--red);font-size:12px">• ${h(String(e))}</div>`).join('');
+      const who=L.trigger==='cron'?'รอบเที่ยงคืน':('กดเอง'+(L.by?' โดย '+h(String(L.by)):''));
+      const lastHtml = L.at
+        ? `<div style="font-weight:700;margin-bottom:4px">${L.ok?ic('lucide:circle-check',15):ic('lucide:triangle-alert',15)} ดึงล่าสุด ${h(fmt(L.at))}</div>
+           <div class="mut" style="font-size:12px;line-height:1.7">${who} · ใช้เวลา ${h(String(Math.round((L.ms||0)/1000)))} วิ
+             · ยอดของวันที่ ${h(String(L.snapDate||'-'))}<br>
+             โพสต์ ${h(String(L.posts||0))} โพสต์ · ผลโฆษณา ${h(String(L.adsRows||0))} แถว · ข้อมูลดิบ ${h(String(L.raw||0))} ก้อน</div>${errs}`
+        : '<div class="mut">ยังไม่เคยดึง</div>';
+      const btnDis = running || !M.ok;
+      const why = running ? 'กำลังดึงข้อมูลอยู่… (หน้านี้จะอัปเดตเองเมื่อเสร็จ)' : (M.ok ? '' : String(M.reason||''));
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:17px;font-weight:800">${ic('lucide:refresh-cw',18)} Meta (Facebook) — ดึงข้อมูล</div>
+          <button onclick="document.getElementById('meta-sync').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:12px;margin:6px 0 14px;line-height:1.6">
+          ยอดวิว/ไลก์/คอมเมนต์/แชร์ ของทุกโพสต์ (ย้อน ${h(String(lim.postDays||90))} วัน) + ผลโฆษณารายวัน · เก็บเป็นข้อมูลดิบในฐานข้อมูล
+          · ไลก์/แชร์ Meta ให้แค่ยอดสะสม เราจึงจดทุกเที่ยงคืนแล้วเอามาลบกันเอง</div>
+        ${d.configured?'':`<div style="${box};color:var(--red)">${ic('lucide:triangle-alert',15)} ยังไม่ได้ตั้งค่า token หรือยังไม่ได้ระบุเพจ/บัญชีโฆษณาของบริษัท — ใช้งานไม่ได้</div>`}
+        <div style="${box}">
+          <div style="font-weight:700;margin-bottom:4px">${ic('lucide:alarm-clock',15)} ดึงอัตโนมัติทุกวัน 00:00</div>
+          <div class="mut" style="font-size:12px">ครั้งถัดไป ${h(String(d.nextRun||'-'))}
+            ${d.daily&&d.daily.date?' · รอบล่าสุดสำเร็จวันที่ '+h(String(d.daily.date)):''}
+            · เพจ ${h(String((d.pages||[]).length))} · บัญชีโฆษณา ${h(String((d.accounts||[]).length))}</div></div>
+        <div style="${box}">${lastHtml}</div>
+        <div style="${box}">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+            <span style="font-weight:700">โควต้าการเรียก Meta (รอบล่าสุด)</span><span>${h(String(pct))}%</span></div>
+          <div style="height:8px;border-radius:5px;background:var(--bd);overflow:hidden"><div style="height:100%;width:${Math.min(100,pct)}%;background:${barCol}"></div></div>
+          <div class="mut" style="font-size:11px;margin-top:5px">เกิน ${h(String(lim.usagePct||75))}% จะกดดึงเองไม่ได้ (เผื่อไว้ให้รอบเที่ยงคืน) · Meta รีเซ็ตโควต้าทุก 1 ชม.</div></div>
+        ${why?`<div style="${box};border:.5px solid ${running?'var(--bd2)':'var(--red)'};color:${running?'var(--t2)':'var(--red)'};font-size:13px">${running?ic('lucide:hourglass',15):ic('lucide:triangle-alert',15)} ${h(why)}</div>`:''}
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="ms_btn" onclick="runMetaSync()" ${btnDis?'disabled':''}
+            style="padding:10px 18px;border-radius:9px;border:none;background:${btnDis?'var(--bd2)':'var(--blue)'};color:#fff;font-weight:700;cursor:${btnDis?'not-allowed':'pointer'};font-size:13px">
+            ${ic('lucide:refresh-cw',15)} ดึงข้อมูลเดี๋ยวนี้</button>
+          <span id="ms_status" style="font-size:12px">${note&&String(note)!==why?h(String(note)):''}</span></div>
+        <div class="mut" style="font-size:11px;margin-top:12px;line-height:1.7">
+          กดดึงเองได้ห่างกันอย่างน้อย ${h(String(lim.gapMin||15))} นาที — token ตัวเดียวใช้ทั้งดึงยอด อ่านแชท และโฆษณา
+          ถ้ากดถี่จนโควต้าเต็ม Meta จะพักทุกงานของ token นี้ รวมถึงรอบเที่ยงคืน<br>
+          ยอดรายวันคิดจากรอบเที่ยงคืนเท่านั้น — การกดดึงเองระหว่างวันใช้ดูยอดล่าสุด ไม่ได้ทำให้ยอดรายวันเปลี่ยน</div>`;
+      clearTimeout(_msPoll);
+      if(running) _msPoll=setTimeout(()=>{ if(document.getElementById('meta-sync')) renderMetaSync(); }, 4000);
+    }
+    async function runMetaSync(){
+      const b=document.getElementById('ms_btn'); if(b){ b.disabled=true; }
+      const s=document.getElementById('ms_status'); if(s){ s.textContent='กำลังเริ่ม…'; s.style.color='var(--t3)'; }
+      try{
+        const r=await fetch('/api/admin/meta_sync',{method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}});
+        const j=await r.json();
+        if(!j.ok){ renderMetaSync(null, j.error||'ไม่สำเร็จ'); return; }
+        renderMetaSync(null, 'เริ่มดึงแล้ว — ใช้เวลาประมาณ 1 นาที');
+      }catch(e){ if(s){ s.textContent='ผิดพลาด: '+e; s.style.color='var(--red)'; } }
+    }
     async function openReportLine(){ const ov=_trkOverlay('report-line','<p class="mut">กำลังโหลด…</p>'); await renderReportLine(ov); }
     async function renderReportLine(ov){
       ov=ov||document.getElementById('report-line'); if(!ov) return;
@@ -8286,7 +8357,7 @@
     // db: ชี้มาหน้าใหม่ — ลิงก์เก่าที่เคยแจกไว้จะได้ไม่ตาย (พาเนลสารบัญเดิมถูกยุบรวมแล้ว 16 ก.ย.69)
     const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', checkinset:'openCheckinConfig',
                          customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel',
-                         needs:'openNeedsPanel' };
+                         needs:'openNeedsPanel', meta:'openMetaSync' };
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];

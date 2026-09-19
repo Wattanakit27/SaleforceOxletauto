@@ -128,3 +128,123 @@ class EventLog(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.at, self.kind, "ok" if self.ok else "FAIL")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Meta (Facebook) — ก.ย.69 · เจ้าของสั่ง "ดึงทุกเที่ยงคืน เก็บเป็น raw data"
+#
+# ทำไมต้องจดเอง: Meta ให้ "ยอดสะสม" ของโพสต์เท่านั้น (วิว/ไลก์/แชร์) ไม่มีรายวัน
+# และไม่มีเวลาที่แต่ละคนกด → ทางเดียวที่จะรู้ "วันนี้วิวเพิ่มกี่" คือจดยอดสะสม
+# ทุกเที่ยงคืนแล้วเอามาลบกันเอง · **ย้อนหลังไม่ได้** เริ่มนับวันที่เปิดเก็บ
+#
+# ★ ทุกแถวมาจาก `dashboard/services/meta.py` ซึ่งกันไม่ให้ asset ของบริษัทอื่น
+#   (OSUKA) หลุดเข้ามา — ห้ามเขียนตารางพวกนี้จากโค้ดที่ยิง Graph API ตรง
+# ─────────────────────────────────────────────────────────────────────
+class MetaPostSnapshot(models.Model):
+    """ยอดสะสมของโพสต์ 1 โพสต์ ณ เวลาที่ดึง — 1 แถวต่อ "โพสต์ × รอบที่ดึง"
+
+    **ใช้หายอดรายวัน**: เอาแถว `trigger='cron'` ของวัน D ลบกับวัน D-1
+    (รอบ cron ดึงตอนเที่ยงคืน → `snap_date` = วันที่ **เพิ่งจบไป** ไม่ใช่วันที่ดึง)
+
+    แถว `trigger='manual'` (กดปุ่ม sync เอง) เก็บไว้ดูยอดล่าสุดระหว่างวัน
+    **อย่าเอาไปลบหายอดรายวัน** ไม่งั้นวันนั้นจะถูกหั่นเป็นสองท่อน
+
+    ยอดติดลบได้ (Meta ลบไลก์/วิวปลอมย้อนหลัง) — เก็บตามจริง ไม่ปัดเป็น 0
+    """
+    CRON, MANUAL = "cron", "manual"
+
+    taken_at = models.DateTimeField("ดึงเมื่อ", db_index=True)
+    snap_date = models.DateField("ยอดสะสม ณ สิ้นวัน", db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default=CRON)   # cron / manual
+
+    page_id = models.CharField("เพจ", max_length=32, db_index=True)
+    post_id = models.CharField("โพสต์", max_length=64, db_index=True)
+    post_type = models.CharField("ชนิด", max_length=32, blank=True)      # video / photo / album …
+    created_time = models.DateTimeField("โพสต์เมื่อ", null=True, blank=True)
+    permalink = models.URLField("ลิงก์", max_length=300, blank=True)
+    message = models.CharField("ข้อความ (ตัดสั้น)", max_length=200, blank=True)
+
+    reactions = models.IntegerField("รีแอ็กรวม", default=0)
+    reactions_by_type = models.JSONField("รีแอ็กแยกชนิด", default=dict, blank=True)
+    comments = models.IntegerField("คอมเมนต์", default=0)
+    shares = models.IntegerField("แชร์", default=0)
+    clicks = models.IntegerField("คลิก", default=0)
+
+    video_views = models.IntegerField("วิว (3 วิ+)", default=0)
+    video_views_organic = models.IntegerField("วิวออร์แกนิก", default=0)
+    video_views_paid = models.IntegerField("วิวจากโฆษณา", default=0)
+    video_avg_watch_ms = models.IntegerField("ดูเฉลี่ย (มิลลิวินาที)", default=0)
+    video_complete_30s = models.IntegerField("ดูครบ 30 วิ", default=0)
+    video_view_time_ms = models.BigIntegerField("เวลาดูรวม (มิลลิวินาที)", default=0)
+
+    class Meta:
+        db_table = "dash_meta_post_snapshot"
+        verbose_name = "ยอดโพสต์ Facebook (รายวัน)"
+        verbose_name_plural = "ยอดโพสต์ Facebook (รายวัน)"
+        ordering = ["-taken_at"]
+        indexes = [models.Index(fields=["post_id", "snap_date"]),
+                   models.Index(fields=["trigger", "snap_date"])]
+
+    def __str__(self):
+        return "%s %s %s" % (self.snap_date, self.post_id, self.trigger)
+
+
+class MetaAdDaily(models.Model):
+    """ผลโฆษณา 1 ตัว × 1 วัน — ★ ต่างจากโพสต์: **Meta แยกรายวันให้เอง + ย้อนหลังได้**
+
+    จึงเป็น "1 แถวต่อ ad ต่อวัน" (upsert) ไม่ใช่ snapshot · ทุกรอบดึงย้อน 3 วันมาทับ
+    เพราะ Meta **แก้ตัวเลขโฆษณาย้อนหลัง** (attribution มาช้าได้ถึงหลายวัน)
+    `actions` = ของดิบจาก Meta ทั้งก้อน (ลีด · แชท · คลิกลิงก์ ฯลฯ มีหลายสิบชนิด)
+    """
+    date = models.DateField("วันที่", db_index=True)
+    account_id = models.CharField("บัญชีโฆษณา", max_length=32, db_index=True)
+    campaign_id = models.CharField("แคมเปญ", max_length=32, blank=True, db_index=True)
+    campaign_name = models.CharField("ชื่อแคมเปญ", max_length=300, blank=True)
+    adset_id = models.CharField("ชุดโฆษณา", max_length=32, blank=True)
+    adset_name = models.CharField("ชื่อชุดโฆษณา", max_length=300, blank=True)
+    ad_id = models.CharField("โฆษณา", max_length=32, db_index=True)
+    ad_name = models.CharField("ชื่อโฆษณา", max_length=300, blank=True)
+
+    spend = models.DecimalField("ใช้เงิน (บาท)", max_digits=14, decimal_places=2, default=0)
+    impressions = models.IntegerField("แสดงผล", default=0)
+    reach = models.IntegerField("เข้าถึง (คน)", default=0)
+    clicks = models.IntegerField("คลิก", default=0)
+    actions = models.JSONField("actions ดิบ", default=list, blank=True)
+    cost_per_action = models.JSONField("ต้นทุนต่อ action ดิบ", default=list, blank=True)
+    updated_at = models.DateTimeField("ดึงล่าสุด", auto_now=True)
+
+    class Meta:
+        db_table = "dash_meta_ad_daily"
+        verbose_name = "ผลโฆษณา Facebook (รายวัน)"
+        verbose_name_plural = "ผลโฆษณา Facebook (รายวัน)"
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["date", "ad_id"],
+                                               name="uniq_meta_ad_day")]
+
+    def __str__(self):
+        return "%s %s %s" % (self.date, self.ad_id, self.spend)
+
+
+class MetaRaw(models.Model):
+    """คำตอบดิบจาก Meta ทั้งก้อน — ไว้คิดตัวเลขใหม่ย้อนหลังในวันที่อยากรู้อะไรที่ไม่ได้คิดไว้
+
+    **มีวันหมดอายุ `KEEP_DAYS`** — วัดจริง ~6.5 KB/โพสต์ × ~1,800 โพสต์/วัน ≈ 12 MB/วัน
+    ถ้าไม่ลบจะกิน ~4 GB/ปี (บทเรียนเดิม: รูปรายงานที่ไม่มีใครกวาดกินไป 1.3 GB)
+    ตัวเลขที่ต้องใช้ระยะยาวถูกแตกไปเก็บใน 2 ตารางข้างบนแล้ว ตารางนี้เป็นของสำรอง
+    """
+    KEEP_DAYS = 90
+
+    fetched_at = models.DateTimeField("ดึงเมื่อ", auto_now_add=True, db_index=True)
+    kind = models.CharField("ชนิด", max_length=16, db_index=True)       # posts / ads / page
+    ref_id = models.CharField("ของใคร", max_length=40, blank=True)       # page id / act id
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default="cron")
+    data = models.JSONField("คำตอบดิบ", default=dict, blank=True)
+
+    class Meta:
+        db_table = "dash_meta_raw"
+        verbose_name = "ข้อมูลดิบจาก Meta"
+        verbose_name_plural = "ข้อมูลดิบจาก Meta"
+        ordering = ["-fetched_at"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.fetched_at, self.kind, self.ref_id)

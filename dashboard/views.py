@@ -1496,6 +1496,16 @@ def cron_tick(request):
     except Exception as e:
         checkin_result = "error: %s" % str(e)[:200]
 
+    # ── 📘 Meta (Facebook): ดึงยอดโพสต์ + ผลโฆษณา ทุกเที่ยงคืน ──
+    #    เริ่มงานใน thread แล้วคืนทันที (ดึงย้อน 90 วันใช้หลายสิบวินาที ห้ามหน่วง cron_tick)
+    #    ช่วง 00:00–02:59 · ล้มแล้วลองใหม่ได้เองหลังเว้น 20 นาที
+    meta_result = ""
+    try:
+        from .services.meta_sync import maybe_run as _meta_run
+        meta_result = _meta_run(now)
+    except Exception as e:
+        meta_result = "error: %s" % str(e)[:200]
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1506,6 +1516,7 @@ def cron_tick(request):
         "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
+        "meta": meta_result,         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -2445,6 +2456,30 @@ def admin_report_config(request):
         save_report_config(cfg)
         return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
     return JsonResponse({"ok": True, "config": get_report_config()}, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def admin_meta_sync(request):
+    """Admin — ดึงข้อมูล Meta (Facebook) · GET = สถานะ · POST = กด sync เดี๋ยวนี้
+
+    ★ ด่านกันกดถี่ (`meta_sync.can_manual`) — token เดียวใช้ทุกงาน ถ้ากดรัวจนโควต้าเต็ม
+      Meta จะพักทั้ง token รอบเที่ยงคืนก็ล้มตาม · ไม่ผ่านด่าน = ตอบ 429 พร้อมเหตุผล+เวลาที่ต้องรอ
+    งานจริงรันใน thread แล้วตอบกลับทันที (หน้าเว็บ poll GET ดูว่าเสร็จหรือยัง)
+    """
+    user = _session_user(request)
+    if not _is_admin(user):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from .services import meta_sync
+    if request.method == "POST":
+        chk = meta_sync.can_manual()
+        if not chk["ok"]:
+            return JsonResponse({"ok": False, "error": chk["reason"], "waitMin": chk["waitMin"]},
+                                status=429, json_dumps_params={"ensure_ascii": False})
+        who = (user.get("nickname") or user.get("display_name") or user.get("user_id") or "")[:40]
+        meta_sync.start_background("manual", who)
+        return JsonResponse({"ok": True, "started": True}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, **meta_sync.status()}, json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt

@@ -82,6 +82,14 @@ def is_configured() -> bool:
 #   (ปลอดภัยกว่าให้ผู้เรียกยืนยันเอง เพราะผู้เรียกในอนาคตจะยืนยันมั่ว ๆ แล้วรูรั่วกลับมา)
 _known: set = set()
 
+# ── โควต้าการเรียก (rate limit) ─────────────────────────────────────
+# Meta บอกเปอร์เซ็นต์ที่ใช้ไปแล้วมาใน header ทุกคำตอบ — **ไม่ต้องเดาจากจำนวนครั้งที่กด**
+#   x-app-usage / x-page-usage            = {"call_count": %, "total_cputime": %, "total_time": %}
+#   x-business-use-case-usage             = {"<id>": [{..., "estimated_time_to_regain_access": นาที}]}
+#   x-ad-account-usage                    = {"acc_id_util_pct": %, "reset_time_duration": วินาที}
+# ถึง 100% = โดนพัก (คำขอทุกตัวล้มจนกว่าจะหาย) → ปุ่ม sync ต้องดูค่านี้ก่อนยอมให้กด
+last_usage: dict = {"pct": 0, "regain_min": 0, "src": {}}
+
 _ACT_RE = re.compile(r"^act_(\d+)$")
 _NUM_RE = re.compile(r"^\d+$")
 _COMPOUND_RE = re.compile(r"^(\d+)_(\d+)$")     # <page_id>_<post_id>
@@ -100,6 +108,39 @@ def _harvest(obj, depth: int = 0) -> None:
     elif isinstance(obj, list):
         for x in obj[:500]:
             _harvest(x, depth + 1)
+
+
+def _note_usage(headers) -> None:
+    """อ่านเปอร์เซ็นต์โควต้าจาก header แล้วจำค่า "สูงสุด" ไว้ใน `last_usage`"""
+    import json as _json
+    pct, regain, src = 0, 0, {}
+    for h in ("x-app-usage", "x-page-usage", "x-business-use-case-usage", "x-ad-account-usage"):
+        raw = headers.get(h) if headers else None
+        if not raw:
+            continue
+        try:
+            v = _json.loads(raw)
+        except ValueError:
+            continue
+        src[h] = v
+        groups = []
+        if h == "x-business-use-case-usage" and isinstance(v, dict):
+            for lst in v.values():
+                groups.extend(lst if isinstance(lst, list) else [])
+        else:
+            groups = [v] if isinstance(v, dict) else []
+        for g in groups:
+            for k in ("call_count", "total_cputime", "total_time", "acc_id_util_pct"):
+                try:
+                    pct = max(pct, int(float(g.get(k) or 0)))
+                except (TypeError, ValueError):
+                    pass
+            try:
+                regain = max(regain, int(g.get("estimated_time_to_regain_access") or 0))
+            except (TypeError, ValueError):
+                pass
+    if src:
+        last_usage.update({"pct": pct, "regain_min": regain, "src": src})
 
 
 def _check(node: str) -> None:
@@ -160,19 +201,57 @@ def get(path: str, _token: str = "", **params):
     p = "/" + (path or "").lstrip("/")
     _check(p.split("/")[1] if len(p.split("/")) > 1 else "")
 
-    try:
-        r = requests.get(_base() + p, params=dict(access_token=_token or token(), **params),
-                         timeout=TIMEOUT)
-        data = r.json()
-    except requests.RequestException as e:
-        raise MetaError("ต่อ Graph API ไม่ได้: %s" % e)
-    except ValueError:
-        raise MetaError("Graph API ตอบไม่ใช่ JSON (HTTP %s)" % r.status_code)
+    # ★ ลองซ้ำเฉพาะ error "ชั่วคราว" ของ Meta (code 1/2 หรือ is_transient)
+    #   เจอจริงตอนทดสอบ: ดึงโฆษณารอบแรกผ่าน รอบสองได้ "An unknown error occurred" เฉยๆ
+    #   **ห้ามลองซ้ำตอนติดลิมิต** (code 4/17/32/613/80001-80014) — ยิงซ้ำ = ยิ่งโดนพักนานขึ้น
+    for attempt in range(3):
+        try:
+            r = requests.get(_base() + p, params=dict(access_token=_token or token(), **params),
+                             timeout=TIMEOUT)
+            data = r.json()
+        except requests.RequestException as e:
+            raise MetaError("ต่อ Graph API ไม่ได้: %s" % e)
+        except ValueError:
+            raise MetaError("Graph API ตอบไม่ใช่ JSON (HTTP %s)" % r.status_code)
 
-    if isinstance(data, dict) and data.get("error"):
-        raise MetaError(str((data["error"] or {}).get("message"))[:200])
+        _note_usage(r.headers)
+        err = data.get("error") if isinstance(data, dict) else None
+        if not err:
+            break
+        code = (err or {}).get("code")
+        transient = (err or {}).get("is_transient") or code in (1, 2)
+        if transient and attempt < 2:
+            import time as _t
+            _t.sleep(2 + attempt * 4)          # 2 วิ แล้ว 6 วิ
+            continue
+        raise MetaError(str((err or {}).get("message"))[:200])
     _harvest(data)
     return data
+
+
+def paged(path: str, _token: str = "", max_pages: int = 50, **params):
+    """ไล่ทุกหน้าของผลลัพธ์ (yield ทีละก้อนคำตอบ) — ★ ลิงก์ `next` ถูกตรวจซ้ำทุกหน้า
+
+    ลิงก์ `next` ที่ Meta ให้มาชี้ไปโหนดเดิมก็จริง แต่เราไม่เชื่อ — ดึง path ออกมา
+    ผ่าน `_check()` อีกรอบก่อนยิง (กันวันที่ Meta เปลี่ยนรูปแบบลิงก์แล้วพาไปที่อื่น)
+    """
+    from urllib.parse import urlparse, parse_qsl
+
+    data = get(path, _token=_token, **params)
+    yield data
+    n = 1
+    nxt = ((data.get("paging") or {}).get("next") or "") if isinstance(data, dict) else ""
+    while nxt and n < max_pages:
+        u = urlparse(nxt)
+        if u.netloc != "graph.facebook.com":
+            raise ForeignAsset("ลิงก์หน้าถัดไปไม่ได้ชี้ไป graph.facebook.com — หยุดไว้ก่อน")
+        segs = [x for x in u.path.split("/") if x]
+        rel = "/" + "/".join(segs[1:] if segs and segs[0].startswith("v") else segs)
+        q = {k: v for k, v in parse_qsl(u.query) if k != "access_token"}
+        data = get(rel, _token=_token, **q)
+        yield data
+        n += 1
+        nxt = ((data.get("paging") or {}).get("next") or "") if isinstance(data, dict) else ""
 
 
 def page_token(page_id: str) -> str:

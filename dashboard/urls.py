@@ -42,6 +42,7 @@ urlpatterns = [
     path("api/admin/db_query", views.admin_db_query, name="admin_db_query"),
     path("api/admin/refresh_data", views.admin_refresh_data, name="admin_refresh_data"),
     path("api/admin/report_config", views.admin_report_config, name="admin_report_config"),
+    path("api/admin/meta_sync", views.admin_meta_sync, name="admin_meta_sync"),
     path("api/admin/purchase_method_config", views.admin_purchase_method_config, name="admin_purchase_method_config"),
     path("api/admin/yod_stock", views.admin_yod_stock, name="admin_yod_stock"),
     path("api/admin/leadreport_plan", views.admin_leadreport_plan, name="admin_leadreport_plan"),
