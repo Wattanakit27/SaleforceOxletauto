@@ -296,6 +296,27 @@ def _save_form(kind, row):
 
 @ensure_csrf_cookie
 @require_GET
+def sql_page(request):
+    """หน้าเต็ม "ดูข้อมูลดิบ (SQL)" — `/dashboard/sql/` · ★ ก.ย.69 เจ้าของสั่ง
+
+    *"ไม่อยากให้มีหน้าต่างลอยแบบนี้เลย เอาเป็น URL นึงหรือว่าพาร์ทนึงเลยก็ได้"*
+    เดิมเป็นหน้าต่างลอยในแดชบอร์ด → จอแคบ ตารางผลลัพธ์เห็นได้นิดเดียว · แชร์ลิงก์ไม่ได้
+    ตอนนี้เป็นหน้าของตัวเอง · `?table=<ชื่อตาราง>` = เปิดตารางนั้นให้เลย (ลิงก์ส่งต่อกันได้)
+
+    สิทธิ์เท่าเดิม `_is_boss` (แอดมินสูงสุด/ผู้บริหาร) · API ที่หน้านี้เรียก
+    (`/api/admin/db_query`, `/api/admin/db_tables`) ก็เช็คสิทธิ์ซ้ำเองอยู่แล้ว
+    """
+    if not _session_user(request):
+        return HttpResponseRedirect("/login/?next=/dashboard/sql/")
+    if not _is_boss(request):
+        return HttpResponse("หน้านี้เปิดได้เฉพาะแอดมินสูงสุด / ผู้บริหาร", status=403,
+                            content_type="text/plain; charset=utf-8")
+    return render(request, "dashboard/sql.html",
+                  {"start_table": (request.GET.get("table") or "")[:64]})
+
+
+@ensure_csrf_cookie
+@require_GET
 def dashboard_page(request):
     """Main dashboard — ต้อง login (admin/ผู้บริหารเท่านั้น).
     เซลล์ทั่วไป → redirect ไปหน้าส่วนตัว /me/ (กันเห็น data รวมของทุกคนผ่าน DevTools).

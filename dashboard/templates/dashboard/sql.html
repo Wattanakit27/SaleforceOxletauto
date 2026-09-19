@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ดูข้อมูลดิบ (SQL) · Oxlet</title>
+  {% load static %}
+  <link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
+  <link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260919c">
+  <script>
+    // ธีมเดียวกับแดชบอร์ด (คีย์ oxlet_theme) — ตั้งก่อน paint กันจอกระพริบ
+    (function(){
+      try {
+        var t = localStorage.getItem('oxlet_theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
+    })();
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--t1); overflow-x: hidden; }
+    .sq-top { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: .5px solid var(--bd2);
+              display: flex; align-items: center; gap: 12px; padding: 10px 18px; }
+    .sq-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px;
+               border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); text-decoration: none; font-size: 12.5px; }
+    .sq-back:hover { color: var(--t1); }
+    .sq-wrap { padding: 14px 18px 24px; max-width: 1800px; margin: 0 auto; }
+    /* หน้าเต็ม: รายชื่อตาราง + ตารางผลลัพธ์ สูงเต็มจอ (เดิมในหน้าต่างลอยสูงแค่ 620/430px) */
+    .sq-grid { display: grid; grid-template-columns: minmax(0,250px) minmax(0,1fr); gap: 14px; align-items: start; }
+    .sq-side { position: sticky; top: 62px; max-height: calc(100vh - 80px); overflow: auto; }
+    .sq-res-scroll { max-height: calc(100vh - 330px); min-height: 260px; }
+    @media (max-width: 760px) {
+      .sq-grid { grid-template-columns: minmax(0,1fr); }
+      .sq-side { position: static; max-height: 260px; }
+      .sq-wrap { padding: 12px 16px 20px; }
+      .sq-top { padding: 10px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sq-top">
+    <a class="sq-back" href="/dashboard/"><span id="ic-back"></span> กลับแดชบอร์ด</a>
+    <div style="min-width:0">
+      <div style="font-size:16px;font-weight:800;display:flex;align-items:center;gap:7px"><span id="ic-db"></span> ดูข้อมูลดิบ (SQL)</div>
+      <div id="sq-sub" style="font-size:11px;color:var(--t3);margin-top:2px">อ่านอย่างเดียว เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ</div>
+    </div>
+  </div>
+  <div class="sq-wrap"><div id="sql-box"><div style="text-align:center;color:var(--t3);padding:60px"><div class="spin" style="margin:0 auto 12px"></div>กำลังอ่านรายชื่อตาราง...</div></div></div>
+
+<script>
+  // ═══ ดูข้อมูลดิบด้วย SQL — หน้าเต็ม (ย้ายจากหน้าต่างลอยในแดชบอร์ด · ก.ย.69 เจ้าของสั่ง) ═══
+  //   ตัวบังคับ "อ่านอย่างเดียว" อยู่ฝั่งเซิร์ฟเวอร์ (READ ONLY transaction) — ที่นี่แค่หน้าจอ
+  //   API เดิมทั้งหมด: /api/admin/db_query · /api/admin/db_tables · /api/admin/db_export
+  const START_TABLE = "{{ start_table|escapejs }}";
+
+  const h = s => (s === null || s === undefined) ? '' : String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const _ICONS = {
+    'database': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></g>',
+    'arrow-left': '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m12 19l-7-7l7-7m7 7H5"/>',
+  };
+  const ic = (n, sz=16) => `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 24 24" style="vertical-align:-0.15em;flex-shrink:0">${_ICONS[n]||''}</svg>`;
+  function getCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  document.getElementById('ic-back').innerHTML = ic('arrow-left', 15);
+  document.getElementById('ic-db').innerHTML = ic('database', 18);
+
+  let _sqlSchema = null, _sqlTblQ = '', _sqlOpen = '', _sqlBusy = false, _sqlInv = null;
+  let _sqlText = '', _sqlResHtml = '';
+  try { _sqlText = sessionStorage.getItem('oxlet_sql_text') || ''; } catch (e) {}
+  const _saveText = () => { try { sessionStorage.setItem('oxlet_sql_text', _sqlText); } catch (e) {} };
+
+  function _sqlInfo() {
+    const m = {};
+    ((_sqlInv || {}).groups || []).forEach(g => (g.tables || []).forEach(t => { m[t.table] = t; }));
+    return m;
+  }
+
+  async function initSql() {
+    try {
+      // สารบัญ (จำนวนแถว/ป้าย PDPA) โหลดคู่กัน — ล้มก็ไม่เป็นไร แค่ไม่มีจำนวนแถวโชว์
+      const [r, ri] = await Promise.all([
+        fetch('/api/admin/db_query', {credentials:'same-origin'}),
+        fetch('/api/admin/db_tables', {credentials:'same-origin'}).catch(() => null),
+      ]);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      _sqlSchema = d;
+      try { if (ri) _sqlInv = await ri.json(); } catch (e) { _sqlInv = null; }
+    } catch (e) {
+      document.getElementById('sql-box').innerHTML =
+        `<div style="text-align:center;padding:40px;color:var(--red)">เปิดไม่ได้: ${h(e.message||e)}</div>`;
+      return;
+    }
+    document.getElementById('sq-sub').innerHTML =
+      `อ่านจาก ${h(_sqlSchema.vendor||'')} ของจริง · <b>อ่านอย่างเดียว</b> เขียน/แก้/ลบไม่ได้ · LINE id ของพนักงานถูกปิดอัตโนมัติ`;
+    renderSqlPanel();
+    if (START_TABLE && (_sqlSchema.tables || []).some(t => t.table === START_TABLE)) sqlPickTable(START_TABLE);
+  }
+
+  function _sqlDefaultDates() {
+    const to = new Date(), fm = new Date();
+    fm.setDate(fm.getDate() - 30);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    return [iso(fm), iso(to)];
+  }
+
+  function renderSqlPanel() {
+    const box = document.getElementById('sql-box'); if (!box || !_sqlSchema) return;
+    const keep = {f: (document.getElementById('sql-from')||{}).value, t: (document.getElementById('sql-to')||{}).value,
+                  l: (document.getElementById('sql-limit')||{}).value};
+    const [df, dt] = _sqlDefaultDates();
+    const q = (_sqlTblQ || '').trim().toLowerCase();
+    const info = _sqlInfo();
+    const tabs = (_sqlSchema.tables || []).filter(t => !q ||
+      (t.table + ' ' + (t.label || '') + ' ' + t.columns.map(c => c.name).join(' ')).toLowerCase().includes(q));
+
+    // ⚠️ ข้อมูลขายไม่ได้อยู่ในนี้ — ถ้าไม่เขียนไว้ คนอ่านจะเข้าใจผิดว่า "ระบบเก็บแค่นี้" (CLAUDE.md: ห้ามเอาออก)
+    const _tot = (_sqlInv || {}).totals || {};
+    let html = `<div style="border:.5px solid var(--amber-mid);background:var(--amber-bg);border-radius:11px;padding:9px 12px;font-size:11.5px;color:var(--t2);margin-bottom:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+      <div><b>ข้อมูลการขายไม่ได้อยู่ในฐานข้อมูลนี้</b> — ลีด / เคสจอง / ยอดขาย อยู่ใน <b>Google Sheets</b>
+        <span style="color:var(--t3)">· ที่นี่เก็บงานติดตามรถ · เบิก-คืนรถ · เช็คชื่อ · แชท · ล็อกระบบ · Facebook${_tot.rows ? ' · รวม ' + Number(_tot.rows).toLocaleString('en-US') + ' แถว' : ''}</span></div>
+      <button onclick="dbExportAll(this)" style="padding:6px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap">⬇ ทั้งหมด (.zip)</button></div>`;
+
+    html += `<div class="sq-grid">`;
+    html += `<div class="sq-side" style="border:.5px solid var(--bd2);border-radius:12px;background:var(--bg2);padding:9px">
+      <input id="sql-tblq" value="${h(_sqlTblQ)}" oninput="_sqlTblQ=this.value;renderSqlPanel();const e=document.getElementById('sql-tblq');e.focus();e.selectionStart=e.selectionEnd=e.value.length" placeholder="ค้นหาตาราง/คอลัมน์"
+        style="width:100%;font-size:12px;padding:6px 8px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);margin-bottom:7px">
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:5px">${tabs.length} ตาราง — กดชื่อเพื่อดูข้อมูล · <span style="color:var(--amber)">•</span> = ข้อมูลส่วนบุคคล</div>`;
+    tabs.forEach(t => {
+      const open = _sqlOpen === t.table;
+      const inf = info[t.table] || {};
+      html += `<div style="margin-bottom:2px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span onclick="_sqlOpen='${open?'':h(t.table)}';renderSqlPanel()" title="ดูคอลัมน์" style="cursor:pointer;color:var(--t3);font-size:10px;width:11px;flex-shrink:0">${open?'▾':'▸'}</span>
+          <span onclick="sqlPickTable('${h(t.table)}')" title="${h(inf.what || t.label || t.table)}" style="cursor:pointer;font-size:12px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${h(t.table)}${inf.pii||t.pii?' <span style="color:var(--amber)" title="มีข้อมูลส่วนบุคคล">•</span>':''}</span>
+          ${inf.rows != null ? `<span style="font-size:10.5px;color:var(--t3);flex-shrink:0">${Number(inf.rows).toLocaleString('en-US')}</span>` : ''}
+        </div>`;
+      if (open) {
+        html += `<div style="margin:3px 0 6px 16px">` + t.columns.map(c =>
+          `<div onclick="sqlInsert('${h(c.name)}')" title="${h(c.type)} — กดเพื่อแทรกชื่อคอลัมน์" style="cursor:pointer;font-size:11px;color:var(--t3);padding:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name)} <span style="opacity:.6">${h(c.type)}</span></div>`).join('') + `</div>`;
+      }
+      html += `</div>`;
+    });
+    html += `</div>`;
+
+    html += `<div style="min-width:0">
+      <textarea id="sql-text" spellcheck="false" placeholder="SELECT * FROM checkout_checkin ORDER BY date_iso DESC"
+        style="width:100%;height:150px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;padding:10px 12px;border-radius:11px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);resize:vertical"></textarea>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:9px 0 4px">
+        <button onclick="sqlRun()" style="font-size:13px;font-weight:700;padding:7px 20px;border-radius:9px;border:none;background:var(--green);color:#fff;cursor:pointer">▶ รัน</button>
+        <span style="font-size:11.5px;color:var(--t3);margin-left:4px">ช่วงวันที่</span>
+        <input type="date" id="sql-from" value="${h(keep.f||df)}" style="font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <span style="font-size:11.5px;color:var(--t3)">ถึง</span>
+        <input type="date" id="sql-to" value="${h(keep.t||dt)}" style="font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <span style="font-size:11.5px;color:var(--t3);margin-left:6px">โชว์</span>
+        <input type="number" id="sql-limit" value="${h(keep.l||200)}" min="1" max="2000" style="width:70px;font-size:12px;padding:5px 7px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+        <button onclick="sqlExport()" style="font-size:12.5px;padding:7px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;margin-left:auto">⬇ ดาวน์โหลด CSV (ทุกแถวตามเงื่อนไข)</button>
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.7">
+        ใส่ <b>:from</b> / <b>:to</b> ในคำสั่งเพื่อใช้ช่วงวันที่ด้านบน เช่น <code style="background:var(--bg2);padding:1px 5px;border-radius:5px">WHERE sent_at &gt;= :from AND sent_at &lt; :to</code>
+        — <b>:to</b> เผื่อถึงสิ้นวันสุดท้ายให้แล้ว จึงใช้เครื่องหมาย <b>&lt;</b> · กด Ctrl+Enter เพื่อรัน
+      </div>
+      <div id="sql-res"><div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12.5px">กดชื่อตารางทางซ้าย หรือพิมพ์คำสั่งแล้วกด "รัน"</div></div>
+    </div></div>`;
+
+    box.innerHTML = html;
+    const ta = document.getElementById('sql-text');
+    if (ta) {
+      ta.value = _sqlText || '';
+      ta.onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sqlRun(); } };
+      ta.oninput = () => { _sqlText = ta.value; _saveText(); };
+    }
+    if (_sqlResHtml) document.getElementById('sql-res').innerHTML = _sqlResHtml;
+  }
+
+  async function sqlPickTable(table) {
+    const t = (_sqlSchema.tables || []).find(x => x.table === table) || {};
+    const col = (t.dateColumns || [])[0] || '';
+    try {
+      const r = await fetch('/api/admin/db_query?table=' + encodeURIComponent(table) + '&date_col=' + encodeURIComponent(col), {credentials:'same-origin'});
+      const d = await r.json();
+      _sqlText = d.sql || ('SELECT * FROM ' + table);
+    } catch (e) { _sqlText = 'SELECT * FROM ' + table; }
+    _saveText();
+    const ta = document.getElementById('sql-text');
+    if (ta) ta.value = _sqlText;
+    // ลิงก์ในแถบที่อยู่ = ตารางที่เปิดอยู่ → ก๊อปส่งต่อให้คนอื่นเปิดตารางเดียวกันได้
+    try { history.replaceState(null, '', '/dashboard/sql/?table=' + encodeURIComponent(table)); } catch (e) {}
+    sqlRun();
+  }
+
+  function sqlInsert(txt) {
+    const ta = document.getElementById('sql-text'); if (!ta) return;
+    const p = ta.selectionStart || ta.value.length;
+    ta.value = ta.value.slice(0, p) + txt + ta.value.slice(ta.selectionEnd || p);
+    _sqlText = ta.value; _saveText();
+    ta.focus(); ta.selectionStart = ta.selectionEnd = p + txt.length;
+  }
+
+  function _sqlBody(extra) {
+    return Object.assign({
+      sql: (document.getElementById('sql-text') || {}).value || '',
+      from: (document.getElementById('sql-from') || {}).value || '',
+      to: (document.getElementById('sql-to') || {}).value || '',
+      limit: Number((document.getElementById('sql-limit') || {}).value || 200),
+    }, extra || {});
+  }
+
+  function _sqlSetRes(html) {
+    _sqlResHtml = html;
+    const el = document.getElementById('sql-res'); if (el) el.innerHTML = html;
+  }
+
+  async function sqlRun() {
+    if (_sqlBusy) return;
+    _sqlBusy = true;
+    _sqlSetRes(`<div style="padding:26px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px"><div class="spin" style="margin:0 auto 10px"></div>กำลังอ่านข้อมูล...</div>`);
+    let d;
+    try {
+      const r = await fetch('/api/admin/db_query', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_sqlBody())});
+      d = await r.json();
+    } catch (e) {
+      _sqlBusy = false;
+      _sqlSetRes(`<div style="padding:14px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:13px">ผิดพลาด: ${h(e.message||e)}</div>`);
+      return;
+    }
+    _sqlBusy = false;
+    if (!d.ok) {
+      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:13px;line-height:1.7"><b>รันไม่ได้</b><br>${h(d.error || 'ไม่ทราบสาเหตุ')}</div>`);
+      return;
+    }
+    _sqlSetRes(_sqlGrid(d));
+  }
+
+  function _sqlGrid(d) {
+    const cols = d.columns || [], rows = d.rows || [];
+    if (!cols.length) return `<div style="padding:24px;text-align:center;color:var(--t3);background:var(--bg2);border-radius:11px;font-size:12.5px">คำสั่งนี้ไม่มีข้อมูลให้แสดง</div>`;
+    let s = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:var(--t3)">
+      <div><b style="color:var(--t1)">${rows.length.toLocaleString('en-US')}</b> แถว · ${cols.length} คอลัมน์ · ใช้เวลา ${h(d.ms)} มิลลิวินาที</div>
+      ${d.truncated ? `<div style="color:var(--amber)">แสดงแค่ ${h(d.limit)} แถวแรก — กด "ดาวน์โหลด CSV" เพื่อเอาทั้งหมด</div>` : ''}</div>`;
+    s += `<div class="sq-res-scroll" style="overflow:auto;border:.5px solid var(--bd2);border-radius:11px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap">
+      <thead><tr style="position:sticky;top:0;background:var(--bg2);z-index:1">
+        <th style="padding:6px 8px;text-align:right;color:var(--t3);font-weight:600;border-bottom:.5px solid var(--bd2)">#</th>` +
+      cols.map(c => `<th style="padding:6px 10px;text-align:left;color:var(--t2);font-weight:700;border-bottom:.5px solid var(--bd2)">${h(c)}</th>`).join('') +
+      `</tr></thead><tbody>`;
+    rows.forEach((r, i) => {
+      s += `<tr style="border-top:.5px solid var(--bd2)"><td style="padding:4px 8px;text-align:right;color:var(--t3)">${i + 1}</td>` +
+        r.map(v => {
+          if (v === null || v === undefined) return `<td style="padding:4px 10px;color:var(--t3);opacity:.55">NULL</td>`;
+          const txt = String(v);
+          const num = (typeof v === 'number');
+          return `<td style="padding:4px 10px;color:var(--t1);${num?'text-align:right;':''}max-width:480px;overflow:hidden;text-overflow:ellipsis" title="${h(txt.slice(0,600))}">${h(txt.length > 180 ? txt.slice(0,180) + '…' : txt)}</td>`;
+        }).join('') + `</tr>`;
+    });
+    s += `</tbody></table></div>`;
+    return s;
+  }
+
+  async function sqlExport() {
+    const keep = _sqlResHtml;
+    _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--bg2);color:var(--t2);font-size:13px"><div class="spin" style="display:inline-block;vertical-align:-3px;margin-right:8px"></div>กำลังเตรียมไฟล์... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</div>`);
+    try {
+      const r = await fetch('/api/admin/db_query', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify(_sqlBody({export:1}))});
+      if (!r.ok) {
+        let msg = 'HTTP ' + r.status;
+        try { msg = (await r.json()).error || msg; } catch (e) {}
+        _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);border:.5px solid var(--red-mid);color:var(--red);font-size:13px">ดาวน์โหลดไม่ได้: ${h(msg)}</div>`);
+        return;
+      }
+      const n = r.headers.get('X-Row-Count') || '?';
+      const blob = await r.blob();
+      const dis = r.headers.get('Content-Disposition') || '';
+      const m = /filename\*=UTF-8''([^;]+)/.exec(dis);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = m ? decodeURIComponent(m[1]) : 'ข้อมูล.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      _sqlResHtml = keep;
+      const el = document.getElementById('sql-res');
+      if (el) el.innerHTML = `<div style="padding:9px 13px;border-radius:10px;background:var(--bg2);color:var(--green);font-size:12.5px;font-weight:700;margin-bottom:8px">✓ ดาวน์โหลดแล้ว ${Number(n).toLocaleString('en-US')} แถว</div>` + keep;
+    } catch (e) {
+      _sqlSetRes(`<div style="padding:13px 15px;border-radius:11px;background:var(--red-bg);color:var(--red);font-size:13px">ดาวน์โหลดไม่ได้: ${h(e.message||e)}</div>`);
+    }
+  }
+
+  // ทุกตารางเป็น .zip — เปิดเป็น URL ตรงให้เบราว์เซอร์เซฟเอง (ไม่เอาไฟล์หลายสิบ MB มาไว้ในแรมก่อน)
+  function dbExportAll(btn) {
+    if (btn) { btn.disabled = true; const o = btn.textContent; btn.textContent = 'กำลังรวมไฟล์...';
+               setTimeout(() => { btn.disabled = false; btn.textContent = o; }, 8000); }
+    window.location.href = '/api/admin/db_export?all=1';
+  }
+
+  initSql();
+</script>
+</body>
+</html>
