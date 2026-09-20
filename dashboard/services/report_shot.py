@@ -715,6 +715,15 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             attempted = (last.get("date") == today_iso and last.get("time") == cfg["time"])
             if attempted and last.get("ok"):
                 continue   # ส่ง "สำเร็จ" รอบเวลานี้แล้ววันนี้ · ส่งไม่สำเร็จ = ลองใหม่ในหน้าต่าง (self-heal)
+            # ★ 20 ก.ย.69 — ล้มแบบ "ถาวร" ห้ามลองซ้ำทั้งวัน
+            #   วัดจริง: การ์ดที่ตั้งปลายทางเป็นกลุ่มที่บอทตัวส่ง **ไม่ได้อยู่ในกลุ่ม** จะได้
+            #   LINE 400 ทุกครั้ง → self-heal เดิมลองใหม่ทุกนาทีตลอดหน้าต่าง 20 นาที
+            #   = แคปรูปด้วย Chromium ทิ้งเปล่า **480 ครั้งใน 7 วัน** (กินแรม/ซีพียูของ VPS)
+            #   ลองซ้ำต่อเฉพาะที่พลาดชั่วคราว (แคปไม่ออก/เน็ต/5xx)
+            if attempted and last.get("fatal"):
+                result["cands"].append({"card": card_id, "skip": "ล้มถาวรวันนี้แล้ว: %s"
+                                        % str(last.get("info") or "")[:80]})
+                continue
             # ปลายทาง: มี group id → ส่งกลุ่ม (แท็ก @All) · ไม่งั้น → test id · ไม่ต้องเลือก mode แล้ว (กันบั๊ก mode=test แต่ test_id ว่าง)
             target = cfg.get("group_id") or cfg.get("test_id")
             is_group = bool(target and target == cfg.get("group_id"))
@@ -766,8 +775,11 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
                     _t2.sleep(3)   # พลาด → พัก 3 วิ (ให้ chromium/แรมเคลียร์) แล้วลองใหม่
                 try:
                     close_old_connections()
+                    # LINE ตอบ 4xx = ปลายทาง/ข้อความผิด → ลองกี่ครั้งก็ได้ผลเดิม (ต่างจากแคปไม่ออก)
+                    _fatal = (not ok) and ("LINE 4" in str(info))
                     cache_store.set_kv("cardline_last_" + card_id,
-                                       {"date": today_iso, "time": ctime, "ok": ok, "info": str(info)[:200]})
+                                       {"date": today_iso, "time": ctime, "ok": ok,
+                                        "fatal": _fatal, "info": str(info)[:200]})
                 except Exception:
                     pass
                 try:

@@ -406,6 +406,34 @@ def build_messages(data: dict, image_url="", channel="", tag=True, mention=True)
     return msgs
 
 
+# ═══════════ ★ 20 ก.ย.69 — แท็กพลาด ต้องไม่ทำให้ "ทั้งข้อความ" หาย ═══════════
+#  ล็อกจริงบนเซิร์ฟเวอร์ 18-20/09: ตารางเช็คชื่อ + รอบสาย **ไม่เข้ากลุ่มเลย 3 วันติด**
+#    LINE 400: "The mentioned user is not found in the group" (substitution[...].mentionee)
+#  = ไอดีถูกต้อง (ฝั่งบัญชีที่ส่ง) แต่ **คนนั้นไม่ได้อยู่ในกลุ่มนั้น** (ลาออก/ไม่เคยเข้ากลุ่ม)
+#  LINE ปฏิเสธทั้งข้อความ → คนทั้งกลุ่มไม่ได้เห็นตารางเลย เพราะแท็กพลาดคนเดียว
+#  **กติกาใหม่: แท็กไม่ได้ = ส่งแบบไม่แท็ก ดีกว่าไม่ส่งเลย** (ชื่อยังอยู่ในข้อความครบ)
+_MENTION_FAIL = ("mentioned user is not found", "mentionee", "mention")
+
+
+def _send_msgs(target_id, build, token, what):
+    """ส่งข้อความ · โดนปฏิเสธเพราะแท็ก = สร้างใหม่แบบไม่แท็กแล้วส่งซ้ำ
+
+    `build(mention)` = ฟังก์ชันสร้างข้อความ (True = แท็ก · False = พิมพ์ชื่อเฉยๆ)
+    คืน `(status, resp, tagged)`
+    """
+    from dashboard.services.line_notify import push_line_message
+
+    sc, resp = push_line_message(target_id, build(True), token, what=what)
+    if sc == 200:
+        return sc, resp, True
+    low = (resp or "").lower()
+    if any(k in low for k in _MENTION_FAIL):
+        sc2, resp2 = push_line_message(target_id, build(False), token,
+                                       what=what + " (ส่งซ้ำแบบไม่แท็ก)")
+        return sc2, resp2, False
+    return sc, resp, True
+
+
 def send(target_id: str, day=None, tag=True) -> tuple:
     """สร้างรูป + ส่งเข้า LINE · คืน `(ok, ข้อความสถานะ)`
 
@@ -435,10 +463,13 @@ def send(target_id: str, day=None, tag=True) -> tuple:
     if not token:
         return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง"
     # แชทส่วนตัว (U…) แท็กไม่ได้ → ส่งเป็นรายชื่อแทน (ดู build_messages)
-    msgs = build_messages(data, url, b["key"], tag,
-                          mention=not target_id.startswith("U"))
-    sc, resp = push_line_message(target_id, msgs, token, what="ตารางเช็คชื่อเข้างาน")
-    return (sc == 200), (url if sc == 200 else "LINE %s: %s" % (sc, (resp or "")[:250]))
+    want_tag = not target_id.startswith("U")     # แชทส่วนตัวแท็กไม่ได้อยู่แล้ว
+    sc, resp, tagged = _send_msgs(
+        target_id, lambda m: build_messages(data, url, b["key"], tag, mention=want_tag and m),
+        token, "ตารางเช็คชื่อเข้างาน")
+    if sc == 200:
+        return True, (url if tagged else url + " (แท็กคนในกลุ่มไม่ได้ ส่งแบบไม่แท็กแทน)")
+    return False, "LINE %s: %s" % (sc, (resp or "")[:250])
 
 
 # ═══════════ รอบสาย: ตามคนที่ยังไม่เช็คชื่อ + แท็กผู้บริหาร ═══════════
@@ -515,9 +546,15 @@ def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
     token = b["token"]
     if not token:
         return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง"
-    sc, resp = push_line_message(target_id, msgs, token, what="ตามคนยังไม่เช็คชื่อ (รอบสาย)")
-    return (sc == 200), ("ส่งแล้ว %d คน" % len(data["missing"]) if sc == 200
-                         else "LINE %s: %s" % (sc, (resp or "")[:250]))
+    want_tag = not target_id.startswith("U")
+    sc, resp, tagged = _send_msgs(
+        target_id,
+        lambda m: escalation_messages(data, b["key"], mention=want_tag and m, round_name=round_name),
+        token, "ตามคนยังไม่เช็คชื่อ (รอบสาย)")
+    if sc == 200:
+        return True, ("ส่งแล้ว %d คน%s" % (len(data["missing"]),
+                                          "" if tagged else " (แท็กไม่ได้ ส่งแบบไม่แท็กแทน)"))
+    return False, "LINE %s: %s" % (sc, (resp or "")[:250])
 
 
 # ═══════════ ตั้งเวลาส่งเอง (แทน Schedule Trigger ของ n8n) ═══════════
