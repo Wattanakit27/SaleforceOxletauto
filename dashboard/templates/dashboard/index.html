@@ -1324,8 +1324,8 @@
         ADMIN_MENU.forEach(g => {
           const items = g.items.filter(it => !(it.boss && !IS_BOSS));   // เมนูเฉพาะ superuser/ผู้บริหาร
           if (!items.length) return;                                    // หมวดว่าง = ไม่โชว์หัวข้อลอยๆ
-          html += navSecHtml(g.k, g.sec, false, false, items.length);
-          const hid = navSecOn(g.k,false) ? '' : ' style="display:none"';
+          if (!g.solo) html += navSecHtml(g.k, g.sec, false, false, items.length);
+          const hid = (g.solo || navSecOn(g.k,false)) ? '' : ' style="display:none"';
           items.forEach(it => {
             const _pk = _pageKey(it.fn);                       // '' = ไม่ใช่พาเนล (ไปแท็บอื่น/สั่งงาน)
             html += `<button class="nav-act" data-sec="${g.k}"${hid} onclick="closeNav();${_pk ? `_pageNext('${_pk}');` : ''}${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
@@ -1374,56 +1374,107 @@
       }
     }
 
-    // ── เมนูจัดการ (แอดมิน) — เดิมเป็น dropdown "เมนูจัดการ ▾" ในหัวเว็บ 12 รายการเรียงรวด
-    //    ย้ายเข้า drawer + แบ่ง 3 หมวด (ส.ค.69) · เพิ่มรายการต่อ = แก้ที่นี่ที่เดียว
+    // ★★ 20 ก.ย.69 — เมนูซ้ายเหลือ "ของที่ใช้บ่อย" · ของตั้งค่าย้ายเข้าหน้า "ตั้งค่า" หน้าเดียว
+    //   (เจ้าของแจ้ง "เมนูรกหูรกตา บางทีเยอะมาก" + ยกตัวอย่าง Facebook ที่แยกพื้นฐาน/ขั้นสูง)
+    //   เดิม 7 หมวด 22 รายการ → ตอนนี้ 2 หมวด + ปุ่มตั้งค่า 1 ปุ่ม
+    //   เกณฑ์แบ่ง: เปิดทุกวัน = อยู่ในเมนู · ตั้งครั้งเดียวแล้วไม่แตะอีก = อยู่ในหน้าตั้งค่า
     const ADMIN_MENU = [
-      // ★ ก.ย.69 — เจ้าของแจ้ง "เมนูยาวเกิน หาไม่เจอ" → จัดหมวดใหม่ + ทุกหมวดพับได้
-      // ★ 19 ก.ย.69 — เจ้าของแจ้งอีกรอบว่า "เมนูรก" → แตกหมวดใหญ่ (6-7 รายการปนหลายเรื่อง)
-      //   ให้เหลือหมวดละ 2-6 รายการที่เป็นเรื่องเดียวกันจริง + กางได้ทีละหมวด (ดู toggleNavSec)
-      //   `k` = คีย์จำสถานะเปิด/ปิดใน localStorage (คงที่ แม้เปลี่ยนชื่อหมวดทีหลัง)
-      { k:'crm', sec: 'ลูกค้า', items: [
+      { k:'work', sec: 'งานประจำวัน', items: [
         { i:'lucide:message-circle', l:'แชทลูกค้า (LINE OA)', fn:'openCustomerChat()',
           tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
+        { i:'lucide:calendar-days', l:'เช็คชื่อเข้างาน',        fn:'openCheckins()',
+          tip:'ใครมา/สาย/ยังไม่เช็คชื่อ รายวัน (บอทบันทึกจากรูปเช็คอินในกลุ่ม LINE)' },
+        { i:'lucide:user',        l:'พนักงาน (ตำแหน่ง/เวลาเข้างาน)', fn:'openEmployees()',
+          tip:'ทะเบียนพนักงานในระบบเรา — เพิ่ม/แก้ได้เลย ไม่ต้องไปแก้ชีต' },
         { i:'lucide:car',         l:'ลูกค้าหารถอะไร (รอรถอยู่)', fn:'openNeedsPanel()',
           tip:'ลูกค้าคนไหนหารถรุ่นไหน งบเท่าไหร่ · ใครปิดเคสไปเพราะ "ราคา/ไม่มีรถ" = ยังรอรถอยู่ พอรถเข้าตรงสเปกจะขึ้นให้เห็นตรงนี้' },
       ]},
-      { k:'staff', sec: 'พนักงาน & เช็คชื่อ', items: [
-        { i:'lucide:user',        l:'พนักงาน (ตำแหน่ง/เวลาเข้างาน)', fn:'openEmployees()',     tip:'ทะเบียนพนักงานในระบบเรา — เพิ่ม/แก้ได้เลย ไม่ต้องไปแก้ชีต' },
-        { i:'lucide:calendar-days', l:'เช็คชื่อเข้างาน',        fn:'openCheckins()',          tip:'ใครมา/สาย/ยังไม่เช็คชื่อ รายวัน (บอทบันทึกจากรูปเช็คอินในกลุ่ม LINE)' },
-        { i:'lucide:alarm-clock',        l:'ตั้งค่าส่งเช็คชื่อเข้าไลน์', fn:'openCheckinConfig()',
-          tip:'เวลาส่งรูปตาราง/เวลาตามคนที่ยังไม่เช็ค · กลุ่มปลายทาง · เพดานกันแท็กหมู่ · วันหยุดบริษัท' },
-        { i:'lucide:id-card',       l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',       tip:'ดูรายชื่อพนักงานและ LINE user_id' },
+      { k:'data', sec: 'ข้อมูลดิบ', items: [
+        { i:'lucide:database',    l:'ฐานข้อมูล (SQL)',         fn:'openSqlPanel()',          boss:true,
+          tip:'ดูข้อมูลดิบทุกตาราง · ยิงคำสั่ง SELECT เอง · ดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV หรือทั้งฐานข้อมูลเป็น .zip · อ่านอย่างเดียว เขียน/ลบไม่ได้ (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
+        { i:'lucide:download',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
+          tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
       ]},
-      { k:'team', sec: 'ทีมขาย & สิทธิ์', items: [
+      // ไม่มีหัวข้อหมวด (solo) — ปุ่มเดียวเข้าหน้ารวมของตั้งค่าทั้งหมด
+      { k:'set', solo: true, items: [
+        { i:'lucide:settings',    l:'ตั้งค่า',                 fn:'openSettings()',
+          tip:'ตั้งค่าทั้งหมดอยู่ในหน้านี้ — ทีม/สิทธิ์ · ส่ง LINE อัตโนมัติ · แหล่งข้อมูล · สถานะระบบ & Log' },
+      ]},
+    ];
+
+    // ── หน้า "ตั้งค่า" — ของที่ตั้งครั้งเดียวแล้วแทบไม่แตะอีก (แบ่งพื้นฐาน/ขั้นสูงแบบ Facebook) ──
+    //   เพิ่มรายการใหม่ = เติมที่นี่ที่เดียว · ได้ URL ของตัวเอง (?panel=<key>) อัตโนมัติ
+    const SETTINGS_MENU = [
+      { g:'พื้นฐาน', d:'คนที่ใช้งาน · เป้า · แจ้งเตือนประจำวัน', items: [
         { i:'lucide:target',      l:'ตั้งเป้า / ทีม',          fn:'openSellerConfigPanel()', tip:'ตั้งเป้าและจัดทีมเซลล์' },
         { i:'lucide:crown',       l:'จัดการแอดมิน',            fn:'openAdminIdsPanel()',     tip:'จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)' },
         { i:'lucide:phone',       l:'จัดการเทเลเซลล์',         fn:'openTeleConfigPanel()',   tip:'ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน' },
-        // ชื่อต้องตรงกับปุ่มในหัวบอร์ด /track/ (templates/dashboard.html) — หน้าเดียวกัน คนละทางเข้า
-        { i:'lucide:shield',   l:'ผู้ใช้/บทบาท (ระบบรถ)',   fn:'openTrkUsers()',          tip:'จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin) — หน้าเดียวกับปุ่ม "ผู้ใช้/บทบาท" ใน /track/' },
-      ]},
-      { k:'line', sec: 'ส่ง LINE อัตโนมัติ', items: [
+        { i:'lucide:alarm-clock', l:'ตั้งค่าส่งเช็คชื่อเข้าไลน์', fn:'openCheckinConfig()',
+          tip:'ตารางเช็คชื่อ + รอบตามคนที่ยังไม่เช็ค ส่งเข้ากลุ่ม LINE เอง' },
         { i:'lucide:bell',        l:'แจ้งเตือนตามด่วน',        fn:'openCronPanel()',         tip:'ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)' },
         { i:'lucide:send',        l:'รายงานเข้าไลน์',          fn:'openReportLine()',        tip:'แคปตารางรายงานส่งเข้ากลุ่ม LINE อัตโนมัติรายวัน' },
-        { i:'lucide:users',      l:'ตั้งค่ากลุ่ม LINE ที่ดักเก็บ', fn:"gotoCheckout('line')",
-          tip:'เลือกกลุ่มที่ให้บอทอ่านเพื่อสร้างเคสเบิก-คืนรถ + สวิตช์เก็บแชทกลุ่ม/แชทลูกค้า (อยู่ในหน้าเบิก-คืนรถ)' },
+        { i:'lucide:id-card',     l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',       tip:'ดูรายชื่อพนักงานและ LINE user_id' },
       ]},
-      { k:'sys', sec: 'ข้อมูล & ดาวน์โหลด', items: [
-        { i:'lucide:database',    l:'ฐานข้อมูล (SQL)',         fn:'openSqlPanel()',          boss:true,
-          tip:'ดูข้อมูลดิบทุกตาราง · ยิงคำสั่ง SELECT เอง · ดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV หรือทั้งฐานข้อมูลเป็น .zip · อ่านอย่างเดียว เขียน/ลบไม่ได้ (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
+      { g:'ขั้นสูง', d:'แหล่งข้อมูล · สิทธิ์ระบบรถ · งานที่ตั้งทีเดียวจบ', items: [
         { i:'lucide:bar-chart-3', l:'แหล่งข้อมูล (Sheets)',    fn:'openSheetsPanel()',       tip:'ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ · ย้ายไฟล์/tab ตอนขึ้นปีใหม่' },
         { i:'lucide:refresh-cw',  l:'Meta (Facebook) — ดึงข้อมูล', fn:'openMetaSync()',
           tip:'ยอดวิว/ไลก์/คอมเมนต์/แชร์ของโพสต์ + ผลโฆษณา ดึงเองทุกเที่ยงคืน · กดดึงเดี๋ยวนี้ได้ (มีช่วงพักกันโควต้าเต็ม)' },
+        { i:'lucide:users',       l:'ตั้งค่ากลุ่ม LINE ที่ดักเก็บ', fn:"gotoCheckout('line')",
+          tip:'เลือกกลุ่มที่ให้บอทอ่านเพื่อสร้างเคสเบิก-คืนรถ + สวิตช์เก็บแชทกลุ่ม/แชทลูกค้า (อยู่ในหน้าเบิก-คืนรถ)' },
         { i:'lucide:package',     l:'ตั้งค่าหมวดวิธีได้รถ',    fn:'openMethodMap()',         tip:'จับคู่ค่าวิธีได้รถ (คอลัมน์ AT) → หาเอง/online/รถเทิร์น/ขายหน้าร้าน' },
-        { i:'lucide:download',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
-          tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
+        // ชื่อต้องตรงกับปุ่มในหัวบอร์ด /track/ (templates/dashboard.html) — หน้าเดียวกัน คนละทางเข้า
+        { i:'lucide:shield',      l:'ผู้ใช้/บทบาท (ระบบรถ)',   fn:'openTrkUsers()',          tip:'จัดการผู้ใช้และบทบาทของระบบติดตามรถ (Executive/Admin) — หน้าเดียวกับปุ่ม "ผู้ใช้/บทบาท" ใน /track/' },
         { i:'lucide:save',        l:'ส่งคะแนนเข้าชีต',         fn:'exportLeadScore()',       tip:"เขียนคะแนนเซลล์ของเดือนนี้ลง Sheet 'leadscore'" },
       ]},
-      { k:'log', sec: 'ตรวจสอบ & Log', items: [
+      { g:'ตรวจสอบ & Log', d:'เปิดดูตอนสงสัยว่าระบบมีปัญหา', items: [
         { i:'lucide:circle-check',l:'สถานะระบบ',               fn:'openHealthPanel()',       tip:'เช็คว่าระบบปกติไหม + รีเฟรชข้อมูลเดี๋ยวนี้' },
         { i:'lucide:search',      l:'ตรวจ Log ข้อมูล',         fn:'openDiagnosticsPanel()',  tip:'ดู Log การกรองข้อมูล (เคสที่หาย/วันที่พัง/สถานะว่าง)' },
         { i:'lucide:user-round',  l:'Log เข้าระบบ',            fn:'openLoginLog()',          tip:'ใครเข้า/พยายามเข้าระบบ เมื่อไหร่' },
       ]},
     ];
+
+    function openSettings() {
+      const ov = document.createElement('div');
+      ov.id = 'settings-overlay';
+      // สร้างเป็นกล่องลอยตามแบบเดิม แล้วให้ตัวแปลง (_pageify) เปลี่ยนเป็นหน้าเต็มให้เอง
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1010;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      let s = `<div style="background:var(--bg);border-radius:16px;max-width:1100px;width:100%;padding:22px" onclick="event.stopPropagation()">`;
+      SETTINGS_MENU.forEach((grp, gi) => {
+        const items = (grp.items || []).filter(it => !(it.boss && !IS_BOSS));
+        if (!items.length) return;
+        s += `<div style="margin-bottom:18px">
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">${h(grp.g)}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 10px">${h(grp.d || '')}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:9px">`;
+        items.forEach((it, ii) => {
+          s += `<button onclick="settingsGo(${gi},${ii})" title="${h(it.tip || '')}"
+            style="display:flex;align-items:flex-start;gap:10px;text-align:left;padding:12px 13px;border-radius:10px;
+                   border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-family:inherit;
+                   font-size:var(--fs-sub);font-weight:600">
+            <span style="color:var(--blue);flex-shrink:0;margin-top:1px">${ic(it.i, 17)}</span>
+            <span style="min-width:0"><span>${h(it.l)}</span>
+              <span style="display:block;font-weight:400;font-size:var(--fs-body);color:var(--t3);margin-top:2px;
+                           overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${h(it.tip || '')}</span></span>
+          </button>`;
+        });
+        s += `</div></div>`;
+      });
+      ov.innerHTML = s + `</div>`;
+      document.body.appendChild(ov);
+    }
+
+    function settingsGo(gi, ii) {
+      const grp = SETTINGS_MENU[gi] || {};
+      const it = (grp.items || []).filter(x => !(x.boss && !IS_BOSS))[ii] || (grp.items || [])[ii];
+      if (!it) return;
+      _pageBack();                                  // ปิดหน้าตั้งค่าก่อน แล้วค่อยเปิดหน้าของรายการนั้น
+      setTimeout(() => {
+        const k = _pageKey(it.fn);
+        if (k) _pageNext(k);
+        try { new Function(it.fn)(); } catch (e) { alert('เปิดไม่ได้: ' + (e.message || e)); }
+      }, 40);
+    }
 
     // ── หมวดในเมนูพับได้ (accordion) — ★ ก.ย.69 เจ้าของแจ้งว่าเมนูยาวเกิน ──
     //   สลับใน DOM ตรงๆ ไม่เรียก render() (render ล้างทั้งหน้า = หนักและเมนูกระพริบ)
@@ -8525,9 +8576,10 @@
     }
     const _pageTitle = (key) => {
       let t = '';
-      (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : []).forEach(g => (g.items || []).forEach(it => {
-        if (_pageKey(it.fn) === key) t = it.l;
-      }));
+      const all = (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : [])
+        .concat(typeof SETTINGS_MENU !== 'undefined' ? SETTINGS_MENU : []);
+      all.forEach(g => (g.items || []).forEach(it => { if (_pageKey(it.fn) === key) t = it.l; }));
+      if (key === 'settings') t = 'ตั้งค่า';
       return t;
     };
 
@@ -8614,10 +8666,12 @@
                          customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel',
                          needs:'openNeedsPanel', meta:'openMetaSync' };
     // ทุกรายการในเมนูได้ URL ของตัวเองอัตโนมัติ (ไม่ต้องมาเติมตารางนี้ทีละอัน)
-    (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : []).forEach(g => (g.items || []).forEach(it => {
-      const k = _pageKey(it.fn);
-      if (!_PANEL_URL[k]) _PANEL_URL[k] = _pageFn(it.fn);
-    }));
+    (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : [])
+      .concat(typeof SETTINGS_MENU !== 'undefined' ? SETTINGS_MENU : [])
+      .forEach(g => (g.items || []).forEach(it => {
+        const k = _pageKey(it.fn);
+        if (!_PANEL_URL[k]) _PANEL_URL[k] = _pageFn(it.fn);
+      }));
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];
