@@ -167,7 +167,16 @@ def sync_posts(trigger: str, snap_date, taken_at) -> dict:
         except meta.MetaError as e:
             out["errors"].append("เพจ %s: %s" % (pid, str(e)[:120]))
         if rows:
-            MetaPostSnapshot.objects.bulk_create(rows, batch_size=500)
+            # ★ 20 ก.ย.69 — รอบ cron ของวันเดียวกัน "รันซ้ำได้ ไม่เบิ้ล"
+            #   เจอจริงคืน 19→20/09: gunicorn ถูกรีสตาร์ตกลางรอบ → thread ตาย → cron เริ่มรอบใหม่
+            #   ได้ **3 ชุดของวันเดียวกัน (3,429 แถวแทนที่จะเป็น 1,143)** · ฝั่งอ่านเลือกแถวล่าสุดอยู่แล้ว
+            #   จึงไม่ทำให้ตัวเลขผิด แต่ตารางบวม 3 เท่าโดยไม่มีประโยชน์
+            #   → ลบชุด cron ของวันนั้น/เพจนั้นก่อนเขียนใหม่ (กติกาเดียวกับฝั่ง TikTok)
+            with transaction.atomic():
+                if trigger == "cron":
+                    MetaPostSnapshot.objects.filter(page_id=pid, snap_date=snap_date,
+                                                    trigger="cron").delete()
+                MetaPostSnapshot.objects.bulk_create(rows, batch_size=500)
         out["pages"][pid] = len(rows)
         out["snapshots"] += len(rows)
     return out
