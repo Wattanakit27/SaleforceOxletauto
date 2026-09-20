@@ -251,7 +251,34 @@ def build_seller_flex(data: dict, base_url: str = "") -> dict:
 
 def push_line_message(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10,
                       what: str = "") -> tuple[int, str]:
-    """ยิง message ไป LINE push endpoint. คืน (status_code, response_text).
+    """ยิง message ไป LINE push endpoint — คืน (status_code, response_text)
+
+    ★ 20 ก.ย.69 — **ตัวกันข้อความหายตอนย้ายมาใช้บอทตัวส่งบัญชีเดียว**
+      เจ้าของกำหนด: OxletAuto = เก็บข้อมูลลูกค้าอย่างเดียว · **OxletautoGiveLead = บอทที่ส่งทุกอย่าง**
+      แต่ LINE ส่งเข้า **แชท 1:1** ได้เฉพาะคนที่ *เพิ่มบัญชีนั้นเป็นเพื่อนแล้ว* — ระหว่างที่พนักงาน
+      ยังเพิ่มบอทใหม่ไม่ครบ ข้อความ "ตามด่วน" จะหายเงียบทั้งคน
+      → ส่งด้วยบัญชีตัวส่งไม่สำเร็จ **และปลายทางเป็นคน (U…)** = **ลองซ้ำด้วยบัญชีตัวรับ 1 ครั้ง**
+      · ล็อกจะเห็น 2 แถว: แถวแรกล้ม + แถวที่สองชื่อ "… (บัญชีตัวส่งไม่ถึง ใช้ตัวรับสำรอง)"
+        → ใช้ไล่ได้เลยว่า **ใครยังไม่ได้เพิ่มบอทใหม่เป็นเพื่อน**
+      · **ไม่ทำกับกลุ่ม (C…)** — กลุ่มที่บอทตัวส่งเข้าไม่ได้ ต้องไปเชิญบอท ไม่ใช่แอบส่งด้วยบัญชีอื่น
+      · เมื่อทุกคนเพิ่มครบแล้ว (ล็อกไม่มีแถว "ใช้ตัวรับสำรอง" ติดกันหลายวัน) ให้ถอดตัวสำรองนี้ทิ้ง
+    """
+    code, text = _push_once(user_id, messages, channel_token, timeout, what)
+    if code != 200 and str(user_id).startswith("U"):
+        try:
+            from . import line_channels as _lc
+            alt = _lc.crm_token()
+            if alt and alt != channel_token and channel_token == _lc.push_token():
+                return _push_once(user_id, messages, alt, timeout,
+                                  (what or "ส่ง LINE") + " (บัญชีตัวส่งไม่ถึง ใช้ตัวรับสำรอง)")
+        except Exception:
+            pass
+    return code, text
+
+
+def _push_once(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10,
+               what: str = "") -> tuple[int, str]:
+    """ยิงจริง 1 ครั้ง + จดล็อก (ตัวเดิม — ตัวห่อข้างบนเป็นคนตัดสินใจว่าจะลองบัญชีสำรองไหม)
 
     ★ 16 ก.ย.69 — **จดผลส่งทุกครั้งลง `dash_event_log`** (เจ้าของสั่งให้เก็บล็อกไว้ในฐานข้อมูล)
       เดิมฟังก์ชันนี้ "ยิงแล้วจบ" ไม่บันทึกอะไรเลย → ตรวจย้อนหลังไม่ได้ว่าส่งออกจริงไหม
@@ -277,7 +304,7 @@ def push_line_message(user_id: str, messages: list[dict], channel_token: str, ti
         return code, text
     except Exception as e:                      # เน็ตล่ม/timeout ก็ต้องมีร่องรอย ไม่ใช่เงียบหาย
         err = "%s: %s" % (type(e).__name__, e)
-        raise
+        raise                                   # ★ คงพฤติกรรมเดิม: ผู้เรียกบางที่ดัก exception เอง
     finally:
         try:
             from .eventlog import log, SEND
