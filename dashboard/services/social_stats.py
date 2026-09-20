@@ -100,6 +100,12 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
         old = best.get(r["post_id"])
         if not old or r["taken_at"] > old["taken_at"]:
             best[r["post_id"]] = r
+    cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    for r in best.values():                     # ยอดสะสมของ "ทุกโพสต์" ที่มี snapshot ในช่วง
+        cum["views"] += int(r["video_views"] or 0)
+        cum["likes"] += int(r["reactions"] or 0)
+        cum["comments"] += int(r["comments"] or 0)
+        cum["shares"] += int(r["shares"] or 0)
     posts = sorted(best.values(),
                    key=lambda r: (r["reactions"] or 0) + (r["comments"] or 0) + (r["shares"] or 0),
                    reverse=True)[:top]
@@ -115,6 +121,8 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
 
     return {
         "daily": daily,
+        # ★ ยอดสะสม = ใช้โชว์ตอนที่ยังทำยอดรายวันไม่ได้ (เก็บไม่ถึง 2 คืน) — ดีกว่าโชว์ "—" เปล่าๆ
+        "cum": cum, "postCount": len(best),
         "ads": ads,
         "posts": [{
             "id": p["post_id"],
@@ -152,11 +160,18 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
         old = best.get(r["video_id"])
         if not old or r["taken_at"] > old["taken_at"]:
             best[r["video_id"]] = r
+    cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    for r in best.values():
+        cum["views"] += int(r["view_count"] or 0)
+        cum["likes"] += int(r["like_count"] or 0)
+        cum["comments"] += int(r["comment_count"] or 0)
+        cum["shares"] += int(r["share_count"] or 0)
     clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
 
     accs = list(TikTokAccount.objects.values("label", "display_name", "status", "scope"))
     return {
         "daily": daily,
+        "cum": cum, "postCount": len(best),
         "posts": [{
             "id": c["video_id"],
             "text": (c["title"] or "")[:120],

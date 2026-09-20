@@ -120,6 +120,8 @@
     // เทรนด์ (FollowupLog รายวัน + SellerWeekly รายสัปดาห์) — inline จาก context · กรองตามช่วงวันที่ในหน้า
     const TRENDS = {{ trends_json|default:'{"daily":[],"weekly":[]}'|safe }};
     const LOGO_URL = "{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}";
+    const FB_ICON = "{% static 'dashboard/image/fb.png' %}";
+    const TT_ICON = "{% static 'dashboard/image/tiktok.jpg' %}";
 
 
     // ── Auth ──
@@ -5055,8 +5057,12 @@
     //   ตัวเลขคำนวณฝั่งเซิร์ฟเวอร์ (`/api/admin/social` → social_stats.py) เพราะตารางเก็บ "ยอดสะสม"
     //   ต้องหาผลต่างรายวันก่อน — ไม่ใช่งานที่ควรทำในเบราว์เซอร์
     //   ★ ผูกกับตัวกรองวันที่ของหน้าเสมอ (กฎเหล็กใน CLAUDE.md) — เปลี่ยนช่วงวัน = โหลดใหม่
-    const SO_COLOR = { meta: '#7c3aed', tiktok: '#14b8a6' };   // ม่วงแบรนด์ · เขียวน้ำทะเล (แยกฝั่งให้ชัด)
+    const SO_COLOR = { meta: '#1877f2', tiktok: '#000000' };   // สีจริงของแต่ละแพลตฟอร์ม
     const SO_NAME = { meta: 'Facebook', tiktok: 'TikTok' };
+    // โลโก้จริงของแพลตฟอร์ม (เจ้าของส่งไฟล์มาให้ · อยู่ใน static/dashboard/image/)
+    const SO_ICON = { meta: FB_ICON, tiktok: TT_ICON };
+    const soLogo = (side, sz) => `<img src="${SO_ICON[side]}" alt="${SO_NAME[side]}" style="width:${sz}px;height:${sz}px;`
+      + `border-radius:${Math.round(sz / 4)}px;object-fit:cover;display:inline-block;vertical-align:-3px;flex-shrink:0">`;
     let _soData = null, _soMetric = 'views', _soLoading = false, _soChart = null, _soRange = '';
 
     function renderSocial() {
@@ -5087,10 +5093,10 @@
     function _soKpi(side) {
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
       const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
-      const cells = _soData.metrics.map(m => `<div style="min-width:82px">
+      const show = noDaily ? (d.cum || {}) : t;                // ไม่มีรายวัน = โชว์ยอดสะสมไปก่อน (ดีกว่าว่างเปล่า)
+      const cells = _soData.metrics.map(m => `<div style="min-width:88px">
         <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
-        <div style="font-size:21px;font-weight:800;color:${noDaily ? 'var(--t3)' : 'var(--t1)'}">${
-          noDaily ? '—' : (t[m] || 0).toLocaleString()}</div></div>`).join('');
+        <div style="font-size:21px;font-weight:800;color:var(--t1)">${(show[m] || 0).toLocaleString()}</div></div>`).join('');
       // ฝั่งไหนยังไม่มีข้อมูลรายวัน = บอกสาเหตุ + ทางแก้ แทนที่จะโชว์ 0 เฉยๆ ให้คนเดาเอง
       let note = '';
       if (side === 'tiktok' && !(d.accounts || []).length) {
@@ -5101,9 +5107,11 @@
         note = 'ตัวเลขนี้เป็น <b>ยอดสะสม</b> ของโพสต์ · กราฟรายวันต้องเก็บอย่างน้อย 2 คืน (ระบบเก็บเองทุกเที่ยงคืน)';
       }
       return `<div class="card" style="flex:1;min-width:320px;border-top:3px solid ${on}">
-        <div class="card-title" style="display:flex;align-items:center;gap:8px">
-          <span style="width:10px;height:10px;border-radius:50%;background:${on};display:inline-block"></span>${SO_NAME[side]}
-          <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ที่เพิ่มขึ้นในช่วงที่เลือก</span></div>
+        <div class="card-title" style="display:flex;align-items:center;gap:9px">
+          ${soLogo(side, 22)}${SO_NAME[side]}
+          <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ${
+            !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก'
+            : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล')}</span></div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
             ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b></div>` : ''}
@@ -5118,15 +5126,15 @@
       rows.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
       if (!rows.length) return `<div style="padding:22px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ยังไม่มีโพสต์ในช่วงที่เลือก</div>`;
       const _n = 'padding:8px 10px;text-align:right;white-space:nowrap';
-      return `<div style="overflow:auto"><table class="shdr" style="width:100%;min-width:720px;table-layout:fixed;border-collapse:collapse;font-size:var(--fs-body)">
+      return `<div style="overflow:auto"><table style="width:100%;min-width:720px;table-layout:fixed;border-collapse:collapse;font-size:var(--fs-body)">
         <thead><tr>
           <th style="text-align:left;padding:8px 10px;width:104px">ช่องทาง</th>
           <th style="text-align:left;padding:8px 10px">โพสต์ / คลิป</th>
           <th style="${_n};width:92px">วิว</th><th style="${_n};width:78px">ไลก์</th>
           <th style="${_n};width:96px">คอมเมนต์</th><th style="${_n};width:78px">แชร์</th>
         </tr></thead><tbody>` + rows.slice(0, 15).map(p => `<tr style="border-top:.5px solid var(--bd2)">
-          <td style="padding:8px;white-space:nowrap"><span style="display:inline-block;padding:1px 8px;border-radius:6px;
-              background:${SO_COLOR[p.side]}1a;color:${SO_COLOR[p.side]};font-weight:700">${SO_NAME[p.side]}</span></td>
+          <td style="padding:8px 10px;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:6px;
+              color:var(--t2);font-weight:600">${soLogo(p.side, 18)}${SO_NAME[p.side]}</span></td>
           <td style="padding:8px 10px;overflow:hidden">
             ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--t1);text-decoration:none">` : ''}
             <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.text || '(ไม่มีข้อความ)')}</span>${p.link ? '</a>' : ''}
