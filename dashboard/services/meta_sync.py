@@ -32,6 +32,11 @@ from . import cache_store, meta
 # ── ค่าตั้ง ─────────────────────────────────────────────────────────
 POST_WINDOW_DAYS = 90        # ตามยอดโพสต์ย้อนหลังกี่วัน (โพสต์เก่ากว่านี้ยอดแทบไม่ขยับแล้ว)
 ADS_LOOKBACK_DAYS = 3        # ดึงโฆษณาย้อนกี่วันมาทับ (Meta แก้ตัวเลขโฆษณาย้อนหลังได้)
+# ★ 20 ก.ย.69 — ต้องขอทีละ 50 แถวเท่านั้น (เดิม 500 = ดึงโฆษณาไม่ได้เลยสักรอบ)
+#   วัดจริงกับบัญชีที่ยิงแอดอยู่: limit=500 → Meta คิดนาน 101 วิแล้วโยน "An unknown error occurred"
+#   (ไม่ใช่สิทธิ์/ไม่ใช่ลิมิต) · limit=50 → 13 วิ ได้ครบ · ตัวที่ทำให้ช้าคือฟิลด์ actions/reach
+#   ซึ่งเราต้องใช้ จึงลดขนาดหน้าแทนการตัดฟิลด์
+ADS_PAGE = 50
 DAILY_WINDOW_HOURS = 3       # รอบเที่ยงคืน: เริ่มได้ถึง 02:59 (ไว้ลองใหม่ถ้ารอบแรกล้ม)
 MANUAL_GAP_MIN = 15          # กด sync เองได้ห่างกันอย่างน้อยกี่นาที
 USAGE_BLOCK_PCT = 75         # โควต้าใช้ไปเกินนี้ = ห้ามกด sync เอง (เผื่อไว้ให้รอบเที่ยงคืน)
@@ -215,7 +220,7 @@ def sync_ads(trigger: str, days: int = ADS_LOOKBACK_DAYS) -> dict:
         n = 0
         try:
             for chunk in meta.paged("/act_%s/insights" % aid, level="ad", time_increment=1,
-                                    time_range=rng, fields=_AD_FIELDS, limit=500):
+                                    time_range=rng, fields=_AD_FIELDS, limit=ADS_PAGE):
                 MetaRaw.objects.create(kind="ads", ref_id="act_" + aid, trigger=trigger, data=_raw(chunk))
                 out["raw"] += 1
                 with transaction.atomic():

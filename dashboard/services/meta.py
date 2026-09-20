@@ -220,6 +220,12 @@ def get(path: str, _token: str = "", **params):
                              timeout=TIMEOUT)
             data = r.json()
         except requests.RequestException as e:
+            # ★ 20 ก.ย.69 — เน็ตสะดุด/สายถูกตัดกลางทาง ก็ลองใหม่ (ไม่ใช่ error ของ Meta)
+            #   เจอจริงตอนดึงโฆษณา: ConnectionReset ระหว่างบัญชีที่สอง → เดิมทิ้งทั้งบัญชีทั้งรอบ
+            if attempt < 2:
+                import time as _t
+                _t.sleep(2 + attempt * 4)
+                continue
             raise MetaError("ต่อ Graph API ไม่ได้: %s" % e)
         except ValueError:
             raise MetaError("Graph API ตอบไม่ใช่ JSON (HTTP %s)" % r.status_code)
