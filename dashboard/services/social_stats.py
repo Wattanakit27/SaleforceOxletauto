@@ -69,6 +69,39 @@ def _daily_from_snapshots(rows, key_id: str) -> dict:
     return out
 
 
+def _daily_one(rows, key_id: str, ids: set) -> dict:
+    """ยอดรายวัน **แยกรายชิ้น** — `{post_id: {วันที่: {views..}}}` (ใช้ตอนกดดูโพสต์/คลิปทีละอัน)
+
+    ใช้ตรรกะเดียวกับ `_daily_from_snapshots` เป๊ะ (แถวล่าสุดของวัน · ผลต่างกับวันก่อน · ติดลบไม่นับ)
+    ต่างแค่ **ไม่รวมทุกโพสต์เข้าด้วยกัน** — คิดแยกทีละชิ้นแล้วเก็บไว้ใต้ id ของมัน
+    """
+    latest: dict = {}
+    for r in rows:
+        pid = r.get(key_id)
+        d = _d(r.get("snap_date"))
+        if not d or (ids and pid not in ids):
+            continue
+        k = (pid, d)
+        old = latest.get(k)
+        if not old or (r.get("taken_at") or 0) > (old.get("taken_at") or 0):
+            latest[k] = r
+    by_post: dict = {}
+    for (pid, d), r in latest.items():
+        by_post.setdefault(pid, []).append((d, r))
+    out: dict = {}
+    for pid, items in by_post.items():
+        items.sort(key=lambda x: x[0])
+        prev, days = None, {}
+        for d, r in items:
+            if prev is not None:
+                days[d.isoformat()] = {m: max(0, int(r.get(m) or 0) - int(prev.get(m) or 0))
+                                       for m in METRICS}
+            prev = r
+        if days:
+            out[pid] = days
+    return out
+
+
 def _range(frm, to) -> tuple:
     t = _d(to) or date.today()
     f = _d(frm) or (t - timedelta(days=29))
@@ -119,10 +152,14 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
         x["impressions"] += int(a["impressions"] or 0)
         x["clicks"] += int(a["clicks"] or 0)
 
+    top_ids = {p["post_id"] for p in posts}
     return {
         "daily": daily,
         # ★ ยอดสะสม = ใช้โชว์ตอนที่ยังทำยอดรายวันไม่ได้ (เก็บไม่ถึง 2 คืน) — ดีกว่าโชว์ "—" เปล่าๆ
         "cum": cum, "postCount": len(best),
+        # ยอดรายวันแยกรายชิ้น — ส่งมาพร้อมก้อนแรกเลย (เฉพาะที่อยู่ในตาราง) กดดูแล้วไม่ต้องยิงใหม่
+        "postDaily": {k: {d: v for d, v in days.items() if f.isoformat() <= d <= t.isoformat()}
+                      for k, days in _daily_one(rows, "post_id", top_ids).items()},
         "ads": ads,
         "posts": [{
             "id": p["post_id"],
@@ -169,9 +206,12 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
 
     accs = list(TikTokAccount.objects.values("label", "display_name", "status", "scope"))
+    top_ids = {c["video_id"] for c in clips}
     return {
         "daily": daily,
         "cum": cum, "postCount": len(best),
+        "postDaily": {k: {d: v for d, v in days.items() if f.isoformat() <= d <= t.isoformat()}
+                      for k, days in _daily_one(rows, "video_id", top_ids).items()},
         "posts": [{
             "id": c["video_id"],
             "text": (c["title"] or "")[:120],

@@ -5064,6 +5064,7 @@
     const soLogo = (side, sz) => `<img src="${SO_ICON[side]}" alt="${SO_NAME[side]}" style="width:${sz}px;height:${sz}px;`
       + `border-radius:${Math.round(sz / 4)}px;object-fit:cover;display:inline-block;vertical-align:-3px;flex-shrink:0">`;
     let _soData = null, _soMetric = 'views', _soLoading = false, _soChart = null, _soRange = '';
+    let _soOpen = null;   // {side, id} = กำลังดูโพสต์/คลิปชิ้นนั้นอยู่ · null = หน้ารวม
 
     function renderSocial() {
       return `<div id="so-box"><div style="text-align:center;color:var(--t3);padding:50px">
@@ -5079,7 +5080,7 @@
                               { credentials: 'same-origin' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
-        _soData = d; _soRange = key;
+        _soData = d; _soRange = key; _soOpen = null;   // เปลี่ยนช่วงวัน = กลับหน้ารวม
       } catch (e) {
         const box = document.getElementById('so-box');
         if (box) box.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message || e))}</div>`;
@@ -5119,6 +5120,7 @@
              border-top:.5px dashed var(--bd2);padding-top:8px">${note}</div>` : ''}</div>`;
     }
 
+    let _soRows = [];
     function _soTopRows() {
       // โพสต์/คลิปที่ปังสุดของทั้ง 2 ฝั่ง รวมตารางเดียว (มีคอลัมน์ช่องทาง) — เทียบกันง่ายกว่าแยก 2 ตาราง
       const rows = [];
@@ -5126,23 +5128,73 @@
       rows.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
       if (!rows.length) return `<div style="padding:22px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ยังไม่มีโพสต์ในช่วงที่เลือก</div>`;
       const _n = 'padding:8px 10px;text-align:right;white-space:nowrap';
+      _soRows = rows;                       // เก็บไว้ให้ปุ่มในแถวอ้างถึงด้วย index
       return `<div style="overflow:auto"><table style="width:100%;min-width:720px;table-layout:fixed;border-collapse:collapse;font-size:var(--fs-body)">
         <thead><tr>
           <th style="text-align:left;padding:8px 10px;width:104px">ช่องทาง</th>
           <th style="text-align:left;padding:8px 10px">โพสต์ / คลิป</th>
           <th style="${_n};width:92px">วิว</th><th style="${_n};width:78px">ไลก์</th>
           <th style="${_n};width:96px">คอมเมนต์</th><th style="${_n};width:78px">แชร์</th>
-        </tr></thead><tbody>` + rows.slice(0, 15).map(p => `<tr style="border-top:.5px solid var(--bd2)">
+        </tr></thead><tbody>` + rows.slice(0, 15).map((p, i) => `<tr onclick="soOpenPost(${i})" title="กดเพื่อดูกราฟรายวันของชิ้นนี้"
+          style="border-top:.5px solid var(--bd2);cursor:pointer" onmouseover="this.style.background='var(--bg2)'"
+          onmouseout="this.style.background=''">
           <td style="padding:8px 10px;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:6px;
               color:var(--t2);font-weight:600">${soLogo(p.side, 18)}${SO_NAME[p.side]}</span></td>
           <td style="padding:8px 10px;overflow:hidden">
-            ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--t1);text-decoration:none">` : ''}
+            ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--t1);text-decoration:none">` : ''}
             <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.text || '(ไม่มีข้อความ)')}</span>${p.link ? '</a>' : ''}
             <div style="color:var(--t3)">${h(p.date || '')}${p.type ? ' · ' + h(p.type) : ''}</div></td>
           <td style="${_n}">${(p.views || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.likes || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.comments || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.shares || 0).toLocaleString()}</td></tr>`).join('') + `</tbody></table></div>`;
+    }
+
+    // ── กดดูรายชิ้น: กราฟหน้าตาเดียวกับหน้ารวม แค่เป็นของโพสต์/คลิปนั้นอันเดียว ──
+    //   ไม่ใช้หน้าต่างลอย — สลับเนื้อหาในแท็บเดิมแล้วมีปุ่ม "กลับ" (กติกาเดียวกับเมนูจัดการ)
+    function soOpenPost(i) {
+      const p = _soRows[i];
+      if (!p) return;
+      _soOpen = { side: p.side, id: p.id };
+      drawSocial();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function soBackToList() { _soOpen = null; drawSocial(); }
+
+    function _soDetailHtml() {
+      const o = _soOpen, d = _soData[o.side] || {};
+      const p = (d.posts || []).find(x => x.id === o.id) || {};
+      const daily = (d.postDaily || {})[o.id] || {};
+      const nDay = Object.keys(daily).length;
+      const chips = _soData.metrics.map(m => `<button onclick="soSetMetric('${m}')"
+        style="padding:5px 13px;border-radius:7px;font-size:var(--fs-body);font-weight:700;cursor:pointer;font-family:inherit;
+               border:.5px solid ${_soMetric === m ? 'transparent' : 'var(--bd2)'};
+               background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
+               color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
+      const kpi = _soData.metrics.map(m => `<div style="min-width:96px">
+          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)} (สะสม)</div>
+          <div style="font-size:21px;font-weight:800;color:var(--t1)">${(p[m] || 0).toLocaleString()}</div></div>`).join('');
+
+      return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <button onclick="soBackToList()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+            border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);
+            font-size:var(--fs-body);cursor:pointer;font-family:inherit">${ic('lucide:arrow-left',15)} กลับ</button>
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1);display:flex;align-items:center;gap:8px">
+            ${soLogo(o.side, 20)} ดูรายชิ้น</div></div>
+        <div class="card" style="margin-bottom:12px;border-top:3px solid ${SO_COLOR[o.side]}">
+          <div style="font-size:var(--fs-sub);font-weight:700;color:var(--t1);line-height:1.6">${h(p.text || '(ไม่มีข้อความ)')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 10px">${h(p.date || '')}${p.type ? ' · ' + h(p.type) : ''}
+            ${p.link ? ` · <a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--blue)">เปิดโพสต์จริง</a>` : ''}</div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">${kpi}</div></div>
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน — เฉพาะชิ้นนี้
+              <span class="info-tip" tabindex="0" data-tip="คิดแบบเดียวกับหน้ารวม\\nยอดวันนี้ = ยอดสะสมวันนี้ − ยอดสะสมเมื่อวาน\\nของโพสต์/คลิปชิ้นนี้อันเดียว">?</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
+          <div style="height:290px"><canvas id="so-chart"></canvas></div>
+          ${nDay ? '' : `<div style="text-align:center;color:var(--t3);font-size:var(--fs-body);margin-top:-150px;line-height:1.8">
+             ชิ้นนี้ยังไม่มียอดรายวัน — ต้องเก็บ snapshot อย่างน้อย 2 คืน<br>
+             <span>ตัวเลขสะสมด้านบนใช้ได้เลย</span></div>`}</div>`;
     }
 
     function drawSocial() {
@@ -5154,7 +5206,8 @@
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
                color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
 
-      box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      if (_soOpen) box.innerHTML = _soDetailHtml();
+      else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
           ${_soKpi('meta')}${_soKpi('tiktok')}</div>
         <div class="card" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -5173,19 +5226,27 @@
       if (_soChart) { try { _soChart.destroy(); } catch (e) {} }
       const days = _soData.days || [];
       const lbl = days.map(d => { const [, m, dd] = d.split('-'); return `${+dd}/${+m}`; });
-      const ds = ['meta', 'tiktok'].map(side => ({
-        label: SO_NAME[side],
-        // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
-        data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
-        borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
-      }));
+      // หน้ารวม = 2 เส้นเทียบกัน · หน้ารายชิ้น = เส้นเดียวของชิ้นนั้น (รูปแบบกราฟเหมือนกันเป๊ะ)
+      const ds = _soOpen
+        ? [{ label: SO_NAME[_soOpen.side],
+             data: days.map(d => {
+               const v = (((_soData[_soOpen.side] || {}).postDaily || {})[_soOpen.id] || {})[d];
+               return v ? (v[_soMetric] || 0) : null;
+             }),
+             borderColor: SO_COLOR[_soOpen.side], backgroundColor: SO_COLOR[_soOpen.side], ..._LINE_DS }]
+        : ['meta', 'tiktok'].map(side => ({
+            label: SO_NAME[side],
+            // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
+            data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
+            borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
+          }));
       const empty = ds.every(s => s.data.every(v => v === null));
       _soChart = new Chart(cv, {
         type: 'line', data: { labels: lbl, datasets: ds },
         options: { responsive: true, maintainAspectRatio: false, scales: _scalesClean(),
                    plugins: { legend: { display: !empty, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } } } },
       });
-      if (empty) {
+      if (empty && !_soOpen) {
         cv.insertAdjacentHTML('afterend', `<div style="position:relative;top:-165px;text-align:center;color:var(--t3);font-size:var(--fs-body);line-height:1.8">
           ยังไม่มียอดรายวันในช่วงนี้<br><span style="color:var(--t3)">ระบบเก็บให้เองทุกเที่ยงคืน — พรุ่งนี้จะเริ่มมีเส้นกราฟ</span></div>`);
       }
