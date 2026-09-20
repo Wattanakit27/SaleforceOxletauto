@@ -1312,11 +1312,13 @@
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
         'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
       };
-      html += navSecHtml('main','หน้าหลัก',true,true);
-      const _mainHid = navSecOn('main',true) ? '' : ' style="display:none"';
+      // ★ 20 ก.ย.69 — เจ้าของสั่ง "ล็อกเมนูตามนี้ ไม่ต้องมีติ๊ก ให้เลื่อนลงเอา"
+      //   = **ไม่มีลูกศรพับ/กางแล้ว** · หัวข้อเป็นป้ายเฉยๆ · แท็บโชว์ครบตลอด (ยาวเกินจอก็เลื่อนเอา)
+      //   ไม่ต้องจำสถานะเปิด/ปิดใน localStorage อีก (navSecOn/toggleNavSec ยังอยู่เผื่อของเดิมอ้างถึง)
+      html += `<div class="nav-sec first"><span>หน้าหลัก</span></div>`;
       NAV_TABS.forEach(t => {
         const go = t.id==='ck' ? 'gotoCheckout()' : `switchTab('${t.id}')`;
-        html += `<button class="ntab${tab===t.id?' on':''}" data-sec="main"${_mainHid} onclick="${go}">${ic(t.i,15)} ${t.l}</button>`;
+        html += `<button class="ntab${tab===t.id?' on':''}" data-sec="main" onclick="${go}">${ic(t.i,15)} ${t.l}</button>`;
       });
       // เมนูจัดการ (แอดมิน) — แบ่ง 3 หมวดต่อท้ายแท็บใน drawer เดียวกัน · กดแล้วปิด drawer ก่อนเปิด modal
       // (ไม่งั้น drawer z-index 1260 บังตัว modal ที่ 1000-1200)
@@ -1328,12 +1330,11 @@
             // ปุ่ม "ตั้งค่า" ทำหน้าตาเป็น "หัวข้อหมวด" เหมือนอันอื่น (เจ้าของแจ้งว่ามันลอยเดี่ยวดูแปลก)
             //   ต่างกันแค่ลูกศรชี้ขวา = กดแล้ว "ไปหน้านั้น" ไม่ใช่กางรายการ (กางแล้วก็รก 16 รายการเหมือนเดิม)
             const it0 = items[0], go = `closeNav();_pageNext('${_pageKey(it0.fn)}');${it0.fn}`;
-            const cnt = (typeof SETTINGS_MENU !== 'undefined' ? SETTINGS_MENU : [])
-              .reduce((a, gr) => a + (gr.items || []).filter(x => !(x.boss && !IS_BOSS)).length, 0);
+            // ไม่ใส่เลขจำนวนรายการ (เจ้าของสั่ง) — เป็นทางเข้าหน้าหนึ่ง ไม่ใช่กองรายการที่ต้องนับ
             html += `<div class="nav-sec" role="button" tabindex="0" title="${h(it0.tip || '')}"`
                   + ` onclick="${go}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${go}}">`
-                  + `<span style="display:inline-flex;align-items:center;gap:8px">${ic(it0.i,16)} ${h(it0.l)}`
-                  + `${cnt ? ` <span class="nav-cnt">${cnt}</span>` : ''}</span>${ic('lucide:chevron-right',13)}</div>`;
+                  + `<span style="display:inline-flex;align-items:center;gap:8px">${ic(it0.i,16)} ${h(it0.l)}</span>`
+                  + `${ic('lucide:chevron-right',13)}</div>`;
             return;
           }
           html += navSecHtml(g.k, g.sec, false, false, items.length);
