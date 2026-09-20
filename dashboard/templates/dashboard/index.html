@@ -5133,8 +5133,10 @@
         <thead><tr>
           <th style="text-align:left;padding:8px 10px;width:104px">ช่องทาง</th>
           <th style="text-align:left;padding:8px 10px">โพสต์ / คลิป</th>
-          <th style="${_n};width:92px">วิว</th><th style="${_n};width:78px">ไลก์</th>
-          <th style="${_n};width:96px">คอมเมนต์</th><th style="${_n};width:78px">แชร์</th>
+          <th style="${_n};width:98px">วิว<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
+          <th style="${_n};width:84px">ไลก์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
+          <th style="${_n};width:104px">คอมเมนต์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
+          <th style="${_n};width:84px">แชร์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
         </tr></thead><tbody>` + rows.slice(0, 15).map((p, i) => `<tr onclick="soOpenPost(${i})" title="กดเพื่อดูกราฟรายวันของชิ้นนี้"
           style="border-top:.5px solid var(--bd2);cursor:pointer" onmouseover="this.style.background='var(--bg2)'"
           onmouseout="this.style.background=''">
@@ -5152,6 +5154,8 @@
 
     // ── กดดูรายชิ้น: กราฟหน้าตาเดียวกับหน้ารวม แค่เป็นของโพสต์/คลิปนั้นอันเดียว ──
     //   ไม่ใช้หน้าต่างลอย — สลับเนื้อหาในแท็บเดิมแล้วมีปุ่ม "กลับ" (กติกาเดียวกับเมนูจัดการ)
+    const _soFmtDay = (iso) => { const [y, m, d] = String(iso || '').split('-'); return d ? `${+d}/${+m}` : iso; };
+
     function soOpenPost(i) {
       const p = _soRows[i];
       if (!p) return;
@@ -5171,9 +5175,16 @@
                border:.5px solid ${_soMetric === m ? 'transparent' : 'var(--bd2)'};
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
                color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
-      const kpi = _soData.metrics.map(m => `<div style="min-width:96px">
-          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)} (สะสม)</div>
-          <div style="font-size:21px;font-weight:800;color:var(--t1)">${(p[m] || 0).toLocaleString()}</div></div>`).join('');
+      // ★ ตัวเลขหลัก = "เกิดขึ้นในช่วงวันที่เลือก" (เจ้าของสั่ง: กดคลิปแล้วต้องรู้ว่าช่วงนี้ได้กี่วิว/ไลก์)
+      //   = ผลรวมของยอดรายวันในช่วง · ยอดสะสมตลอดกาลลดชั้นไปเป็นบรรทัดรอง
+      const inRange = {};
+      _soData.metrics.forEach(m => { inRange[m] = 0; });
+      Object.values(daily).forEach(v => _soData.metrics.forEach(m => { inRange[m] += (v[m] || 0); }));
+      const kpi = _soData.metrics.map(m => `<div style="min-width:104px">
+          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
+          <div style="font-size:23px;font-weight:800;color:${nDay ? 'var(--t1)' : 'var(--t3)'}">${
+            nDay ? (inRange[m] || 0).toLocaleString() : '—'}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${(p[m] || 0).toLocaleString()}</div></div>`).join('');
 
       return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
           <button onclick="soBackToList()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
@@ -5183,6 +5194,10 @@
             ${soLogo(o.side, 20)} ดูรายชิ้น</div></div>
         <div class="card" style="margin-bottom:12px;border-top:3px solid ${SO_COLOR[o.side]}">
           <div style="font-size:var(--fs-sub);font-weight:700;color:var(--t1);line-height:1.6">${h(p.text || '(ไม่มีข้อความ)')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t2);margin-top:8px">
+            ยอดที่เกิดขึ้นระหว่าง <b>${h(_soFmtDay(_soData.from))} – ${h(_soFmtDay(_soData.to))}</b>
+            ${nDay ? `<span style="color:var(--t3)">· จากข้อมูล ${nDay} วัน</span>`
+                   : `<span style="color:var(--amber)">· ยังคำนวณไม่ได้ ต้องเก็บ snapshot 2 คืน</span>`}</div>
           <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 10px">${h(p.date || '')}${p.type ? ' · ' + h(p.type) : ''}
             ${p.link ? ` · <a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--blue)">เปิดโพสต์จริง</a>` : ''}</div>
           <div style="display:flex;gap:20px;flex-wrap:wrap">${kpi}</div></div>
@@ -5215,7 +5230,7 @@
               <span class="info-tip" tabindex="0" data-tip="ตารางเก็บ &quot;ยอดสะสม&quot; ทุกเที่ยงคืน\nยอดรายวัน = ยอดวันนี้ − ยอดเมื่อวาน\nจึงต้องเก็บอย่างน้อย 2 คืนถึงจะมีเส้นกราฟ">?</span></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
           <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
-        <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด
+        <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ตัวเลขเป็นยอดสะสม — กดแถวเพื่อดูเฉพาะช่วงที่เลือก</span>
             <span class="info-tip" tabindex="0" data-tip="เรียงจาก ไลก์ + คอมเมนต์ + แชร์ (ยอดสะสมล่าสุด)\nกดที่ข้อความเพื่อเปิดโพสต์จริง">?</span></div>
           ${_soTopRows()}</div>`;
 
