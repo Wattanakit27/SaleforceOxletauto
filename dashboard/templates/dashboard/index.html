@@ -1324,8 +1324,20 @@
         ADMIN_MENU.forEach(g => {
           const items = g.items.filter(it => !(it.boss && !IS_BOSS));   // เมนูเฉพาะ superuser/ผู้บริหาร
           if (!items.length) return;                                    // หมวดว่าง = ไม่โชว์หัวข้อลอยๆ
-          if (!g.solo) html += navSecHtml(g.k, g.sec, false, false, items.length);
-          const hid = (g.solo || navSecOn(g.k,false)) ? '' : ' style="display:none"';
+          if (g.solo) {
+            // ปุ่ม "ตั้งค่า" ทำหน้าตาเป็น "หัวข้อหมวด" เหมือนอันอื่น (เจ้าของแจ้งว่ามันลอยเดี่ยวดูแปลก)
+            //   ต่างกันแค่ลูกศรชี้ขวา = กดแล้ว "ไปหน้านั้น" ไม่ใช่กางรายการ (กางแล้วก็รก 16 รายการเหมือนเดิม)
+            const it0 = items[0], go = `closeNav();_pageNext('${_pageKey(it0.fn)}');${it0.fn}`;
+            const cnt = (typeof SETTINGS_MENU !== 'undefined' ? SETTINGS_MENU : [])
+              .reduce((a, gr) => a + (gr.items || []).filter(x => !(x.boss && !IS_BOSS)).length, 0);
+            html += `<div class="nav-sec" role="button" tabindex="0" title="${h(it0.tip || '')}"`
+                  + ` onclick="${go}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${go}}">`
+                  + `<span style="display:inline-flex;align-items:center;gap:8px">${ic(it0.i,16)} ${h(it0.l)}`
+                  + `${cnt ? ` <span class="nav-cnt">${cnt}</span>` : ''}</span>${ic('lucide:chevron-right',13)}</div>`;
+            return;
+          }
+          html += navSecHtml(g.k, g.sec, false, false, items.length);
+          const hid = navSecOn(g.k,false) ? '' : ' style="display:none"';
           items.forEach(it => {
             const _pk = _pageKey(it.fn);                       // '' = ไม่ใช่พาเนล (ไปแท็บอื่น/สั่งงาน)
             html += `<button class="nav-act" data-sec="${g.k}"${hid} onclick="closeNav();${_pk ? `_pageNext('${_pk}');` : ''}${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
@@ -1392,6 +1404,8 @@
       { k:'data', sec: 'ข้อมูลดิบ', items: [
         { i:'lucide:database',    l:'ฐานข้อมูล (SQL)',         fn:'openSqlPanel()',          boss:true,
           tip:'ดูข้อมูลดิบทุกตาราง · ยิงคำสั่ง SELECT เอง · ดาวน์โหลดเฉพาะที่กรองไว้ (เช่น ช่วงวันที่) เป็น CSV หรือทั้งฐานข้อมูลเป็น .zip · อ่านอย่างเดียว เขียน/ลบไม่ได้ (เฉพาะแอดมินสูงสุด/ผู้บริหาร)' },
+        { i:'lucide:id-card',     l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',
+          tip:'ดูรายชื่อพนักงานและ LINE user_id — เป็นการดูข้อมูลดิบ ไม่ใช่การตั้งค่า (เจ้าของทักไว้ ก.ย.69)' },
         { i:'lucide:download',   l:'Export ไทม์ไลน์รถ',       fn:"location.href='/track/export'",
           tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
       ]},
@@ -1413,7 +1427,6 @@
           tip:'ตารางเช็คชื่อ + รอบตามคนที่ยังไม่เช็ค ส่งเข้ากลุ่ม LINE เอง' },
         { i:'lucide:bell',        l:'แจ้งเตือนตามด่วน',        fn:'openCronPanel()',         tip:'ส่ง LINE Flex (ทันที + ตั้งเวลาอัตโนมัติ)' },
         { i:'lucide:send',        l:'รายงานเข้าไลน์',          fn:'openReportLine()',        tip:'แคปตารางรายงานส่งเข้ากลุ่ม LINE อัตโนมัติรายวัน' },
-        { i:'lucide:id-card',     l:'LINE ID พนักงาน',         fn:'openLineIdPanel()',       tip:'ดูรายชื่อพนักงานและ LINE user_id' },
       ]},
       { g:'ขั้นสูง', d:'แหล่งข้อมูล · สิทธิ์ระบบรถ · งานที่ตั้งทีเดียวจบ', items: [
         { i:'lucide:bar-chart-3', l:'แหล่งข้อมูล (Sheets)',    fn:'openSheetsPanel()',       tip:'ดูแหล่งข้อมูล Google Sheets ที่ระบบใช้ + สถานะ · ย้ายไฟล์/tab ตอนขึ้นปีใหม่' },
