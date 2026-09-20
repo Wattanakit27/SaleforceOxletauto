@@ -34,6 +34,13 @@ def _tok(target_id) -> str:
     return token_for(target_id)
 
 
+def _fu_tok() -> str:
+    """token ของข้อความ **"ตามด่วน"** — คงบัญชีเดิมตามที่เจ้าของสั่ง (ดู `followup_token`)
+    · อย่าเปลี่ยนมาใช้ `_tok()` เด็ดขาด ไม่งั้นจะย้ายไปบัญชีใหม่ตามนโยบายรวมโดยไม่ตั้งใจ"""
+    from .services.line_channels import followup_token
+    return followup_token()
+
+
 def _push_token() -> str:
     """token ของ **บัญชีตัวส่ง** — ★ ก.ย.69 แยกบอทเป็น 2 ตัว (ดู [line_channels.py](services/line_channels.py))
     ยังไม่ตั้งบัญชีตัวส่ง = ตกไปใช้ตัวเดิม (พฤติกรรมเหมือนก่อนแยก)"""
@@ -1470,7 +1477,7 @@ def cron_tick(request):
                     for _at in _admin_targets:
                         if not _at:
                             continue
-                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], _tok(_at),
+                        _code, _ = push_line_message(_at, [{"type": "text", "text": _m["text"]}], _fu_tok(),
                                                      what="ตามด่วน (สรุปทีมให้แอดมิน)")
                         if _code == 200:
                             followup_sent += 1
@@ -1480,7 +1487,7 @@ def cron_tick(request):
                 for _t in ([_test_tgt] if _test_tgt else (_m.get("recipients") or [])):
                     if not _t:
                         continue
-                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], _tok(_t),
+                    _code, _ = push_line_message(_t, [{"type": "text", "text": _m["text"]}], _fu_tok(),
                                                  what="ตามด่วน (cron ตามตารางส่ง)")
                     if _code == 200:
                         followup_sent += 1
@@ -1983,7 +1990,7 @@ def admin_send_followup(request):
             if not uid:
                 continue
             try:
-                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], _tok(uid),
+                code, text = push_line_message(uid, [{"type": "text", "text": m["text"]}], _fu_tok(),
                                               what="ตามด่วน (ปุ่มส่งทันที)")
                 results.append({"seller": label, "user_id": uid, "sent": code == 200,
                                 **({"error": f"LINE {code}: {text[:120]}"} if code != 200 else {})})
