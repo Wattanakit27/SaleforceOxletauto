@@ -1327,7 +1327,8 @@
           html += navSecHtml(g.k, g.sec, false, false, items.length);
           const hid = navSecOn(g.k,false) ? '' : ' style="display:none"';
           items.forEach(it => {
-            html += `<button class="nav-act" data-sec="${g.k}"${hid} onclick="closeNav();${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
+            const _pk = _pageKey(it.fn);                       // '' = ไม่ใช่พาเนล (ไปแท็บอื่น/สั่งงาน)
+            html += `<button class="nav-act" data-sec="${g.k}"${hid} onclick="closeNav();${_pk ? `_pageNext('${_pk}');` : ''}${it.fn}" title="${h(it.tip)}">${ic(it.i,16)} ${it.l}</button>`;
           });
         });
       }
@@ -8499,13 +8500,128 @@
     //   เจ้าของขอ "ลิงก์หน้าตั้งค่าพนักงาน" ไว้ bookmark / ส่งต่อให้คนอื่นเปิด
     //   เพิ่มพาเนลใหม่ = เติมคีย์ในตารางนี้ (ชื่อฟังก์ชันต้องมีอยู่จริง ไม่งั้นข้ามเงียบ)
     // db: ชี้มาหน้าใหม่ — ลิงก์เก่าที่เคยแจกไว้จะได้ไม่ตาย (พาเนลสารบัญเดิมถูกยุบรวมแล้ว 16 ก.ย.69)
+    // ═══ เปิดพาเนลเป็น "หน้า" ไม่ใช่หน้าต่างลอย (20 ก.ย.69 · เจ้าของสั่งซ้ำ "ไม่เอาหน้าต่างลอย") ═══
+    //   พาเนล 27 ตัวต่างคนต่างสร้างกล่องลอยเอง (`position:fixed;inset:0`) — ถ้าไล่แก้ทีละตัว
+    //   นอกจากจะยาวแล้ว วันหลังมีคนเขียนเพิ่มแบบเดิมก็หลุดอีก → **ดักตอนมันถูกใส่เข้าหน้า
+    //   แล้วแปลงเป็นหน้าเต็มที่จุดเดียว**
+    //   ★ แปลงเฉพาะพาเนลที่เปิดจาก "เมนู" (ตั้งธง _pageNext ก่อนเรียก) — กล่องยืนยัน /
+    //     รายละเอียดเคส ที่เด้งจากในพาเนลยังเป็นกล่องลอยตามเดิม เพราะพวกนั้นเป็น dialog จริงๆ
+    //     (ถามว่า "แน่ใจไหม" แล้วกลับมาที่เดิม ไม่ใช่การย้ายหน้า)
+    //   ★ หน้าที่เปิดถูกยัดไว้ "ข้าง #dashboard-root" (ไม่ใช่ท้าย body) เพื่อให้ได้ระยะเยื้อง
+    //     จากแถบเมนูซ้ายของ `.app` เหมือนหน้าอื่น
+    //   ⚠️ ต้องเป็น `function` (hoist ได้) ห้ามใช้ const/arrow — `render()` ถูกเรียกตั้งแต่ต้นไฟล์
+    //      ซึ่งก่อนบรรทัดนี้ ถ้าเป็น const จะได้ "Cannot access before initialization" แล้วหน้าพังทั้งหน้า
+    function _pageFn(fn) { const m = /^\s*(open[A-Za-z_$][\w$]*)\s*\(/.exec(String(fn || '')); return m ? m[1] : ''; }
+    function _pageKey(fn) {
+      // ★ คืน '' ถ้าไม่ใช่การเปิดพาเนล — บางรายการในเมนูเป็นคำสั่งอื่น เช่น
+      //   `location.href='/track/export'` หรือ `gotoCheckout('line')` (ไปแท็บอื่น)
+      //   เคยไม่กรอง → เครื่องหมาย ' ในคำสั่งหลุดเข้า onclick แล้ว **ปุ่มนั้นพังทั้งปุ่ม**
+      const M = { openCustomerChat:'customers', openNeedsPanel:'needs', openEmployees:'employees',
+                  openCheckins:'checkin', openCheckinConfig:'checkinset', openSqlPanel:'sql',
+                  openMetaSync:'meta' };            // คีย์เดิมที่เคยแจกลิงก์ไปแล้ว — ห้ามเปลี่ยน
+      const n = _pageFn(fn);
+      if (!n) return '';
+      return M[n] || n.replace(/^open/, '').toLowerCase();
+    }
+    const _pageTitle = (key) => {
+      let t = '';
+      (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : []).forEach(g => (g.items || []).forEach(it => {
+        if (_pageKey(it.fn) === key) t = it.l;
+      }));
+      return t;
+    };
+
+    var _pageWant = null, _pageEl = null;   // var: ปุ่มในเมนูถูกวาดก่อนบรรทัดนี้จะทำงาน
+    function _pageNext(key) {
+      _pageWant = key || '';
+      if (!_pageWant) return;
+      setTimeout(() => { _pageWant = null; }, 1500);   // ไม่มีพาเนลเปิด = ทิ้งธง อย่าให้ค้างไปแปลงกล่องอื่น
+    }
+
+    function _pageClose(pop) {
+      // คืนหน้าแดชบอร์ด — เรียกตอนพาเนลถูกลบออกจากหน้า (ทุกพาเนลปิดตัวเองด้วย remove())
+      _pageEl = null;
+      const bar = document.getElementById('ox-page-bar');
+      if (bar) bar.remove();
+      const root = document.getElementById('dashboard-root');
+      if (root) [...root.children].forEach(c => { if (c.dataset.oxHidden) { c.style.display = c.dataset.oxHidden === '1' ? '' : c.dataset.oxHidden; delete c.dataset.oxHidden; } });
+      document.body.classList.remove('ox-paged');
+      if (!pop && /[?&]panel=/.test(location.search)) history.replaceState(null, '', location.pathname);
+    }
+
+    function _pageBack() { if (_pageEl) _pageEl.remove(); }   // observer จะเห็นการลบแล้วคืนหน้าเอง
+
+    function _pageify(el, key) {
+      const root = document.getElementById('dashboard-root');
+      if (!root || !root.parentNode) return;                  // ไม่รู้จะวางตรงไหน = ปล่อยเป็นกล่องลอยเดิม
+      _pageEl = el;
+      document.body.classList.add('ox-paged');
+      // ★ ซ่อนเนื้อหาแดชบอร์ด แต่ **เก็บแถบเมนูซ้ายไว้** — เมนูถูกวาดอยู่ใน #dashboard-root
+      //   ถ้าซ่อนทั้งก้อน (เคยทำ) แถบเมนูจะหายไปด้วย เหลือหน้าว่างๆ ไม่มีทางไปไหนต่อ
+      [...root.children].forEach(c => {
+        if (c.id === 'nav-slide' || c.classList.contains('nav-backdrop')) return;
+        c.dataset.oxHidden = c.style.display || '1';
+        c.style.display = 'none';
+      });
+      // กล่องลอย → บล็อกปกติในหน้า (ล้าง inset/ฉากหลังมืด/จัดกึ่งกลางทิ้ง)
+      el.style.cssText = 'display:block;padding:0 0 28px';
+      const card = el.firstElementChild;
+      if (card) {
+        card.style.maxWidth = '100%';
+        card.style.width = '100%';
+        card.style.maxHeight = 'none';
+        card.style.boxShadow = 'none';
+        card.style.margin = '0';
+      }
+      const bar = document.createElement('div');
+      bar.id = 'ox-page-bar';
+      bar.style.cssText = 'display:flex;align-items:center;gap:12px;margin:0 0 12px';
+      bar.innerHTML = `<button onclick="_pageBack()" style="display:inline-flex;align-items:center;gap:6px;`
+        + `padding:6px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);`
+        + `color:var(--t2);font-size:var(--fs-body);cursor:pointer;font-family:inherit">`
+        + `${ic('lucide:arrow-left', 15)} กลับแดชบอร์ด</button>`
+        + `<div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">${h(_pageTitle(key))}</div>`;
+      root.appendChild(bar);
+      root.appendChild(el);
+      // URL ของหน้านั้นเอง — ก๊อปลิงก์ส่งต่อได้ + ปุ่ม Back ของเบราว์เซอร์กลับแดชบอร์ด
+      if (new URLSearchParams(location.search).get('panel') !== key) {
+        history.pushState({ oxPage: key }, '', location.pathname + '?panel=' + encodeURIComponent(key));
+      }
+      window.scrollTo(0, 0);
+    }
+
+    new MutationObserver(ms => {
+      ms.forEach(m => {
+        // ⚠️ ต้องเช็ค "หลุดจากหน้าไปจริงไหม" ด้วย — ตอน _pageify ย้ายพาเนลจาก <body>
+        //    เข้าไปใน .app มันนับเป็น removedNodes เหมือนกัน (เคยทำให้หน้าปิดตัวเองทันทีที่เปิด)
+        m.removedNodes.forEach(n => { if (n === _pageEl && !document.contains(n)) _pageClose(); });
+        if (!_pageWant) return;
+        m.addedNodes.forEach(n => {
+          if (!_pageWant || n.nodeType !== 1) return;
+          const st = n.style || {};
+          if (st.position !== 'fixed') return;                // ไม่ใช่กล่องลอย = ไม่ยุ่ง
+          if (st.inset !== '0px' && st.top !== '0px') return;
+          const key = _pageWant;
+          _pageWant = null;
+          try { _pageify(n, key); } catch (e) { _pageEl = null; }   // พลาด = ปล่อยเป็นกล่องลอยเดิม
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+
+    window.addEventListener('popstate', () => { if (_pageEl) { const el = _pageEl; _pageEl = null; el.remove(); _pageClose(true); } });
+
     const _PANEL_URL = { employees:'openEmployees', checkin:'openCheckins', checkinset:'openCheckinConfig',
                          customers:'openCustomerChat', db:'openSqlPanel', sql:'openSqlPanel',
                          needs:'openNeedsPanel', meta:'openMetaSync' };
+    // ทุกรายการในเมนูได้ URL ของตัวเองอัตโนมัติ (ไม่ต้องมาเติมตารางนี้ทีละอัน)
+    (typeof ADMIN_MENU !== 'undefined' ? ADMIN_MENU : []).forEach(g => (g.items || []).forEach(it => {
+      const k = _pageKey(it.fn);
+      if (!_PANEL_URL[k]) _PANEL_URL[k] = _pageFn(it.fn);
+    }));
     const _wantPanel = new URLSearchParams(location.search).get('panel');
     if (_wantPanel && _PANEL_URL[_wantPanel]) {
       const _fn = window[_PANEL_URL[_wantPanel]];
-      if (typeof _fn === 'function') setTimeout(_fn, 60);   // รอ render วาดเสร็จก่อน
+      if (typeof _fn === 'function') setTimeout(() => { _pageNext(_wantPanel); _fn(); }, 60);   // รอ render วาดเสร็จก่อน
     }
   </script>
   {% endif %}
