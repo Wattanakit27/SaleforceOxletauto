@@ -2621,6 +2621,25 @@ def tiktok_webhook(request):
 
 
 @csrf_exempt
+def admin_social(request):
+    """Admin — ตัวเลข engagement ของโซเชียล (Meta + TikTok) ให้หน้า "โซเชียล"
+
+    GET `?from=YYYY-MM-DD&to=YYYY-MM-DD` (ไม่ใส่ = 30 วันล่าสุด)
+    คืนก้อนเดียวจบ: ยอดรายวันของแต่ละฝั่ง · ยอดรวมช่วง · โพสต์/คลิปที่ปังสุด · ค่าโฆษณา
+    **ตัวเลขทั้งหมดคำนวณฝั่งเซิร์ฟเวอร์** (ตารางเก็บยอดสะสม ต้องหาผลต่างรายวัน — ดู social_stats)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import social_stats
+    try:
+        data = social_stats.overview(request.GET.get("from"), request.GET.get("to"))
+    except Exception as e:                      # ตารางยังไม่ migrate / DB มีปัญหา = บอกตรงๆ
+        return JsonResponse({"ok": False, "error": "อ่านข้อมูลไม่ได้: %s" % e}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, **data}, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_meta_sync(request):
     """Admin — ดึงข้อมูล Meta (Facebook) · GET = สถานะ · POST = กด sync เดี๋ยวนี้
 

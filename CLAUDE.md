@@ -115,6 +115,7 @@ python manage.py runserver
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
+| `/api/admin/social` | `admin_social` | admin GET `?from=&to=`: ตัวเลข **engagement โซเชียล** (Meta + TikTok) ให้แท็บ **"โซเชียล"** — ยอดรายวัน (หาผลต่างจาก snapshot สะสม) · ยอดรวมช่วง · โพสต์/คลิปที่ปังสุด · ค่าโฆษณา · ดู section "แท็บโซเชียล" |
 | `/api/admin/meta_sync` | `admin_meta_sync` | admin: GET=สถานะดึงข้อมูล Meta (รอบล่าสุด · โควต้า · กดได้ไหม) · POST=ดึงเดี๋ยวนี้ (รันใน thread) — **มีด่านกันกดถี่ ไม่ผ่าน=429+เหตุผล+นาทีที่ต้องรอ** · เมนู "Meta (Facebook) — ดึงข้อมูล" · `?panel=meta` |
 | `/api/admin/report_test` | `admin_report_test` | admin POST `{target?}`: แคปตารางรายงาน (Playwright) → ส่งรูปเข้า LINE เดี๋ยวนี้ (ปุ่ม "ส่งทดสอบ") · ⚠️ ได้จริงเฉพาะ prod (LINE ต้องดึงรูปจาก URL https สาธารณะ) |
 | `/api/admin/line_group_name` | `admin_line_group_name` | admin POST `{id}`: ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่ม) → ปุ่ม "ตรวจชื่อ" ในพาเนลรายงาน (ยืนยันว่า id คือกลุ่มไหน) |
@@ -1443,6 +1444,26 @@ python-dotenv ใช้ **ตัวท้ายสุด** → `settings.META_AC
 - ปุ่มกดเอง: `/api/admin/tiktok/sync` ห่างกัน ≥15 นาที · `manage.py tiktok_accounts --sync` ดึงแล้วรอจนเสร็จ
 - ผลรอบล่าสุด KV `tiktok_sync_last` · ประวัติ `dash_event_log` kind=`tiktok_sync` / `tiktok_oauth`
 - **ยังไม่ได้ทำ**: หน้าจอ (ส่งต่อหน้า UI) · คอมเมนต์รายอันของ TikTok (API ของ Login Kit ไม่ให้)
+
+### 📈 แท็บ "โซเชียล" — กราฟ Engagement (Meta + TikTok) · ก.ย.69 (เจ้าของขอ)
+*"เหลือหน้าของ Graph ดู Engagement ฝั่ง TikTok กับฝั่ง Meta ออกมาเป็นอีกเมนูหนึ่ง"*
+
+- **แท็บใหม่ `so` "โซเชียล"** ใน `NAV_TABS` ([index.html](dashboard/templates/dashboard/index.html))
+  · `renderSocial()` วางโครง → `loadSocial()` ดึง `/api/admin/social` → `drawSocial()` วาด
+  · **ผูกกับตัวกรองวันที่ของหน้า** (`dfFrom`/`dfTo`) ตามกฎเหล็ก — เปลี่ยนช่วง = โหลดใหม่ (cache ต่อช่วง)
+- **[social_stats.py](dashboard/services/social_stats.py)** — คำนวณฝั่งเซิร์ฟเวอร์ทั้งหมด
+  **★ หัวใจ: ตาราง snapshot เก็บ "ยอดสะสม" ไม่ใช่ "ยอดรายวัน"** → ยอดของวันนี้ = วันนี้ − เมื่อวาน
+  · **นับเฉพาะ `trigger='cron'`** (แถว manual เกิดกลางวัน เอามาลบจะได้ครึ่งวันปนเต็มวัน)
+  · **วันเดียวกันมีหลายแถวได้** (19/09 เคยได้ 3 ชุดเพราะ gunicorn รีสตาร์ตกลางรอบ) → หยิบแถวที่ดึงล่าสุดของวันนั้น
+  · **ผลต่างติดลบ = ไม่นับ** (โพสต์ถูกลบ/Meta แก้ย้อนหลัง)
+  · **ต้องมี snapshot ≥ 2 วันถึงจะมีกราฟรายวัน** — วันแรกไม่มีวันก่อนหน้าให้ลบ
+- **หน้าตา**: การ์ดสรุป 2 ฝั่ง (Facebook ม่วง · TikTok เขียวน้ำทะเล) → กราฟเส้นรายวันสลับตัวเลขด้วยชิป
+  (วิว/ไลก์/คอมเมนต์/แชร์) → ตารางโพสต์/คลิปที่คนมีส่วนร่วมมากสุด (รวม 2 ฝั่ง มีคอลัมน์ช่องทาง)
+- **★ ฝั่งที่ยังไม่มีข้อมูล ต้องบอกสาเหตุ+ทางแก้ ไม่ใช่โชว์ 0** — ยังไม่เชื่อมช่อง TikTok / เชื่อมแล้วแต่ไม่มีสิทธิ์
+  `video.list` / เก็บยังไม่ถึง 2 คืน · และ **ไม่มียอดรายวัน = โชว์ "—" ไม่ใช่ 0** (0 แปลว่า "ไม่มีใครมีส่วนร่วม" ซึ่งไม่จริง)
+- **วันที่ยังไม่มี snapshot ส่งเป็น `null` ไม่ใช่ 0** → เส้นกราฟไม่ดิ่งลงศูนย์หลอกตา (กติกาเดียวกับกราฟหน้าภาพรวม)
+- **ยังไม่ได้ทำ**: แยกยอดตามเพจ/ช่อง · ยอด "ไลก์รายวัน" ของ TikTok ระดับช่อง (ต้องขอ scope `user.info.stats`)
+  · ผูกยอดโฆษณากับโพสต์ (Meta ให้ ad_id ไม่ใช่ post_id ตรงๆ)
 
 ## Conventions
 

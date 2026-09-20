@@ -1237,7 +1237,7 @@
       let html = '';
       // ★ 19 ก.ย.69 — จอกว้าง = แถบเมนูซ้ายถาวร (ดู .has-sidebar ใน globals.css) · มือถือยังเป็น ☰ drawer
       document.body.classList.add('has-sidebar');
-      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
+      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'โซเชียล'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
       const _curTab = NAV_TABS.find(t => t.id === tab) || NAV_TABS[0];
 
       // Header
@@ -1304,6 +1304,7 @@
       html += `<div id="nav-ind" class="nav-ind"></div>`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
+        'so': 'Engagement ของ Facebook + TikTok — วิว/ไลก์/คอมเมนต์/แชร์ รายวัน + โพสต์ที่ปังสุด',
         's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
         'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
@@ -1364,12 +1365,14 @@
       else if(tab==='b') html += renderBookings(sellerNames);
       else if(tab==='p') html += renderPurchaseTab();
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
+      else if(tab==='so') html += renderSocial();
       else if(tab==='t') html += renderTracking();
       else if(tab==='ck') html += renderCheckout();
 
       root.innerHTML = html;
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
       if(tab==='o') initCharts();
+      if(tab==='so') loadSocial();    // "โซเชียล" — ดึงยอด engagement ตามช่วงวันที่ของหน้า
       if(tab==='t') loadTracking();   // "สถานะรถ" เรนเดอร์ native (fetch /track/api/cars) ธีมเดียวกับ sales
       if(tab==='p') loadYodStock();   // "จัดซื้อ" — ดึง override สต๊อกที่แก้ไว้ แล้ว refresh ตาราง
       if(tab==='a') loadClipWeek();   // "ไลฟ์" — ดึง override ตารางติดตามคอนเทนต์ (คลิป) รายสัปดาห์
@@ -5048,6 +5051,138 @@
     let _trkData = null, _trkF = {branch:'', stage:'', sort:'photo', q:''};
     // บอร์ดสถานะรถ = ฝัง /track/ (แหล่งเดียว · เหมือนที่คนงาน/เซลล์เห็น) + แถบเครื่องมือแอดมินด้านบน
     //   (/track/ ซ่อน header เองตอน embed · เครื่องมือ เพิ่มรถ(รูปขายโชว์รูม)/สาขา/ถังขยะ ที่ /track/ ไม่มี เก็บไว้ที่นี่)
+    // ═══════════ แท็บ "โซเชียล" — Engagement ฝั่ง Facebook + TikTok (ก.ย.69 · เจ้าของขอ) ═══════════
+    //   ตัวเลขคำนวณฝั่งเซิร์ฟเวอร์ (`/api/admin/social` → social_stats.py) เพราะตารางเก็บ "ยอดสะสม"
+    //   ต้องหาผลต่างรายวันก่อน — ไม่ใช่งานที่ควรทำในเบราว์เซอร์
+    //   ★ ผูกกับตัวกรองวันที่ของหน้าเสมอ (กฎเหล็กใน CLAUDE.md) — เปลี่ยนช่วงวัน = โหลดใหม่
+    const SO_COLOR = { meta: '#7c3aed', tiktok: '#14b8a6' };   // ม่วงแบรนด์ · เขียวน้ำทะเล (แยกฝั่งให้ชัด)
+    const SO_NAME = { meta: 'Facebook', tiktok: 'TikTok' };
+    let _soData = null, _soMetric = 'views', _soLoading = false, _soChart = null, _soRange = '';
+
+    function renderSocial() {
+      return `<div id="so-box"><div style="text-align:center;color:var(--t3);padding:50px">
+        <div class="spin" style="margin:0 auto 12px"></div>กำลังรวมยอดจาก Facebook และ TikTok...</div></div>`;
+    }
+
+    async function loadSocial(force) {
+      const key = dfFrom + '_' + dfTo;
+      if (_soLoading || (!force && _soData && _soRange === key)) { drawSocial(); return; }
+      _soLoading = true;
+      try {
+        const r = await fetch(`/api/admin/social?from=${encodeURIComponent(dfFrom)}&to=${encodeURIComponent(dfTo)}`,
+                              { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _soData = d; _soRange = key;
+      } catch (e) {
+        const box = document.getElementById('so-box');
+        if (box) box.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message || e))}</div>`;
+        return;
+      } finally { _soLoading = false; }
+      drawSocial();
+    }
+
+    function soSetMetric(m) { _soMetric = m; drawSocial(); }
+
+    function _soKpi(side) {
+      const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
+      const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
+      const cells = _soData.metrics.map(m => `<div style="min-width:82px">
+        <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
+        <div style="font-size:21px;font-weight:800;color:${noDaily ? 'var(--t3)' : 'var(--t1)'}">${
+          noDaily ? '—' : (t[m] || 0).toLocaleString()}</div></div>`).join('');
+      // ฝั่งไหนยังไม่มีข้อมูลรายวัน = บอกสาเหตุ + ทางแก้ แทนที่จะโชว์ 0 เฉยๆ ให้คนเดาเอง
+      let note = '';
+      if (side === 'tiktok' && !(d.accounts || []).length) {
+        note = 'ยังไม่ได้เชื่อมช่อง TikTok — สร้างลิงก์ขออนุญาตที่ <code>manage.py tiktok_accounts --link "ชื่อช่อง"</code>';
+      } else if (side === 'tiktok' && d.needScope) {
+        note = 'เชื่อมช่องแล้วแต่ยังไม่ได้สิทธิ์ <b>video.list</b> — เปิดใน TikTok Sandbox แล้วกดอนุญาตใหม่';
+      } else if ((d.days || 0) < 2) {
+        note = 'ตัวเลขนี้เป็น <b>ยอดสะสม</b> ของโพสต์ · กราฟรายวันต้องเก็บอย่างน้อย 2 คืน (ระบบเก็บเองทุกเที่ยงคืน)';
+      }
+      return `<div class="card" style="flex:1;min-width:320px;border-top:3px solid ${on}">
+        <div class="card-title" style="display:flex;align-items:center;gap:8px">
+          <span style="width:10px;height:10px;border-radius:50%;background:${on};display:inline-block"></span>${SO_NAME[side]}
+          <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ที่เพิ่มขึ้นในช่วงที่เลือก</span></div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
+        ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
+            ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b></div>` : ''}
+        ${note ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:9px;line-height:1.7;
+             border-top:.5px dashed var(--bd2);padding-top:8px">${note}</div>` : ''}</div>`;
+    }
+
+    function _soTopRows() {
+      // โพสต์/คลิปที่ปังสุดของทั้ง 2 ฝั่ง รวมตารางเดียว (มีคอลัมน์ช่องทาง) — เทียบกันง่ายกว่าแยก 2 ตาราง
+      const rows = [];
+      ['meta', 'tiktok'].forEach(side => ((_soData[side] || {}).posts || []).forEach(p => rows.push({ ...p, side })));
+      rows.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
+      if (!rows.length) return `<div style="padding:22px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ยังไม่มีโพสต์ในช่วงที่เลือก</div>`;
+      const _n = 'padding:8px 10px;text-align:right;white-space:nowrap';
+      return `<div style="overflow:auto"><table class="shdr" style="width:100%;min-width:720px;table-layout:fixed;border-collapse:collapse;font-size:var(--fs-body)">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;width:104px">ช่องทาง</th>
+          <th style="text-align:left;padding:8px 10px">โพสต์ / คลิป</th>
+          <th style="${_n};width:92px">วิว</th><th style="${_n};width:78px">ไลก์</th>
+          <th style="${_n};width:96px">คอมเมนต์</th><th style="${_n};width:78px">แชร์</th>
+        </tr></thead><tbody>` + rows.slice(0, 15).map(p => `<tr style="border-top:.5px solid var(--bd2)">
+          <td style="padding:8px;white-space:nowrap"><span style="display:inline-block;padding:1px 8px;border-radius:6px;
+              background:${SO_COLOR[p.side]}1a;color:${SO_COLOR[p.side]};font-weight:700">${SO_NAME[p.side]}</span></td>
+          <td style="padding:8px 10px;overflow:hidden">
+            ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--t1);text-decoration:none">` : ''}
+            <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.text || '(ไม่มีข้อความ)')}</span>${p.link ? '</a>' : ''}
+            <div style="color:var(--t3)">${h(p.date || '')}${p.type ? ' · ' + h(p.type) : ''}</div></td>
+          <td style="${_n}">${(p.views || 0).toLocaleString()}</td>
+          <td style="${_n}">${(p.likes || 0).toLocaleString()}</td>
+          <td style="${_n}">${(p.comments || 0).toLocaleString()}</td>
+          <td style="${_n}">${(p.shares || 0).toLocaleString()}</td></tr>`).join('') + `</tbody></table></div>`;
+    }
+
+    function drawSocial() {
+      const box = document.getElementById('so-box');
+      if (!box || !_soData) return;
+      const chips = _soData.metrics.map(m => `<button onclick="soSetMetric('${m}')"
+        style="padding:5px 13px;border-radius:7px;font-size:var(--fs-body);font-weight:700;cursor:pointer;font-family:inherit;
+               border:.5px solid ${_soMetric === m ? 'transparent' : 'var(--bd2)'};
+               background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
+               color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
+
+      box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          ${_soKpi('meta')}${_soKpi('tiktok')}</div>
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน
+              <span class="info-tip" tabindex="0" data-tip="ตารางเก็บ &quot;ยอดสะสม&quot; ทุกเที่ยงคืน\nยอดรายวัน = ยอดวันนี้ − ยอดเมื่อวาน\nจึงต้องเก็บอย่างน้อย 2 คืนถึงจะมีเส้นกราฟ">?</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
+          <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
+        <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด
+            <span class="info-tip" tabindex="0" data-tip="เรียงจาก ไลก์ + คอมเมนต์ + แชร์ (ยอดสะสมล่าสุด)\nกดที่ข้อความเพื่อเปิดโพสต์จริง">?</span></div>
+          ${_soTopRows()}</div>`;
+
+      const cv = document.getElementById('so-chart');
+      if (!cv || typeof Chart === 'undefined') return;
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      _chartLook(dark);
+      if (_soChart) { try { _soChart.destroy(); } catch (e) {} }
+      const days = _soData.days || [];
+      const lbl = days.map(d => { const [, m, dd] = d.split('-'); return `${+dd}/${+m}`; });
+      const ds = ['meta', 'tiktok'].map(side => ({
+        label: SO_NAME[side],
+        // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
+        data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
+        borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
+      }));
+      const empty = ds.every(s => s.data.every(v => v === null));
+      _soChart = new Chart(cv, {
+        type: 'line', data: { labels: lbl, datasets: ds },
+        options: { responsive: true, maintainAspectRatio: false, scales: _scalesClean(),
+                   plugins: { legend: { display: !empty, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } } } },
+      });
+      if (empty) {
+        cv.insertAdjacentHTML('afterend', `<div style="position:relative;top:-165px;text-align:center;color:var(--t3);font-size:var(--fs-body);line-height:1.8">
+          ยังไม่มียอดรายวันในช่วงนี้<br><span style="color:var(--t3)">ระบบเก็บให้เองทุกเที่ยงคืน — พรุ่งนี้จะเริ่มมีเส้นกราฟ</span></div>`);
+      }
+    }
+
     function renderTracking(){ return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
         <button onclick="openTrkAdd()" style="font-size:var(--fs-body);padding:7px 13px;border-radius:9px;border:none;background:var(--blue);color:var(--on-blue);font-weight:700;cursor:pointer">+ เพิ่มรถ</button>
