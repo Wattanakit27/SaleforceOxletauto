@@ -217,6 +217,78 @@ def _post_row(p, pid, trigger, snap_date, taken_at, ct):
 
 
 # ── ดึงผลโฆษณา ─────────────────────────────────────────────────
+# ═══════════ ★ 21 ก.ย.69 — ยอด "ระดับเพจ" ที่ Facebook รายงานเอง ═══════════
+#  เจ้าของถาม: *"วันที่ 10 มี 15 ล้าน ทำไมวันที่ 20 มีแค่ 1 หมื่น 3 · มันจะเก็บไม่ครบ"*
+#
+#  ตัวเลขที่เรามีเดิมคือ **ผลรวมวิววิดีโอรายโพสต์ที่ดึงมาจากฟีด** ซึ่งตอบไม่ได้ว่า
+#  "ขาดอะไรไปไหม" (ฟีดอาจไม่มีรีลส์ · รูป/สเตตัสไม่มีตัวเลขวิว · นิยาม "วิว" ของ
+#  Business Suite กว้างกว่ามาก) → **ดึงยอดที่ Facebook สรุปให้เองระดับเพจมาวางเทียบ**
+#  แล้วช่องว่างจะกลายเป็นตัวเลขที่เห็นได้ ไม่ใช่เรื่องที่ต้องเถียงกัน
+#
+#  **ตัวนี้ไม่ต้องรอสะสมเหมือน snapshot** — Facebook ให้ย้อนหลังมาเลย (ปกติ ~30 วัน)
+PAGE_LOOKBACK_DAYS = 30
+
+#  แยกเป็น 2 ชุด เพราะ **Meta ปฏิเสธทั้งคำขอถ้ามี metric ที่ใช้ไม่ได้แม้ตัวเดียว**
+#  (เช่น `page_impressions` ถูกถอดตั้งแต่ v21) → ชุดหลักพังไม่ได้ · ชุดเสริมขาดได้
+_PAGE_METRICS_CORE = ("page_video_views", "page_post_engagements")
+_PAGE_METRICS_EXTRA = ("page_views_total", "page_daily_follows_unique",
+                       "page_actions_post_reactions_like_total")
+_PAGE_FIELD = {"page_video_views": "video_views", "page_post_engagements": "engagements",
+               "page_views_total": "page_views", "page_daily_follows_unique": "follows",
+               "page_actions_post_reactions_like_total": "likes"}
+
+
+def _insight_date(end_time: str):
+    """แปลง `end_time` ของ Meta → วันที่ของยอดนั้น
+
+    Meta ส่ง "เวลาสิ้นสุดของช่วง" มา (เช่น `2026-09-21T07:00:00+0000` = เที่ยงคืนตามโซนของเพจ)
+    ซึ่ง **เป็นยอดของวันก่อนหน้า** → ลบ 1 วันเสมอ (ไม่ว่าเพจตั้งโซนอะไร ลบแล้วได้วันที่ถูก)
+    """
+    d = _dt(end_time)
+    return (d - timedelta(days=1)).date() if d else None
+
+
+def sync_pages(days: int = PAGE_LOOKBACK_DAYS) -> dict:
+    """ยอดรายวันระดับเพจ (Facebook สรุปให้เอง) → `dash_meta_page_daily` · upsert ทับได้
+
+    เพจเดียวพังไม่ลากเพจอื่น · ชุด metric เสริมพัง = ข้ามเฉพาะชุดนั้น (ยอดหลักยังได้)
+    """
+    from dashboard.models import MetaPageDaily
+
+    out = {"rows": 0, "pages": 0, "raw": 0, "errors": []}
+    until = _bkk_now().date()
+    since = until - timedelta(days=max(1, days))
+    for pid in sorted(meta.pages()):
+        try:
+            pt = meta.page_token(pid)
+        except Exception as e:
+            out["errors"].append("เพจ %s: ขอ token ไม่ได้ (%s)" % (pid, str(e)[:80]))
+            continue
+        by_day = {}
+        for group in (_PAGE_METRICS_CORE, _PAGE_METRICS_EXTRA):
+            try:
+                r = meta.get("/%s/insights" % pid, _token=pt, metric=",".join(group),
+                             period="day", since=since.isoformat(), until=until.isoformat())
+            except Exception as e:
+                # ชุดหลักพัง = ต้องรู้ · ชุดเสริมพัง = เงียบได้ (บาง metric ถูกถอดตามเวอร์ชัน)
+                if group is _PAGE_METRICS_CORE:
+                    out["errors"].append("เพจ %s: %s" % (pid, str(e)[:110]))
+                continue
+            out["raw"] += 1 if _raw(r) else 0
+            for item in (r.get("data") or []):
+                f = _PAGE_FIELD.get(item.get("name") or "")
+                if not f:
+                    continue
+                for v in (item.get("values") or []):
+                    d = _insight_date(v.get("end_time") or "")
+                    if d and since <= d <= until:
+                        by_day.setdefault(d, {})[f] = _int(v.get("value"))
+        for d, vals in by_day.items():
+            MetaPageDaily.objects.update_or_create(page_id=pid, date=d, defaults=vals)
+            out["rows"] += 1
+        out["pages"] += 1
+    return out
+
 def sync_ads(trigger: str, days: int = ADS_LOOKBACK_DAYS) -> dict:
     """ผลโฆษณารายวันระดับ ad (Meta แยกวันให้เอง) → upsert ทับของเดิมในช่วงเดียวกัน"""
     from dashboard.models import MetaAdDaily, MetaRaw
@@ -289,6 +361,11 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
     try:
         p = sync_posts(trigger, snap_date, timezone.now())
         a = sync_ads(trigger, ads_days or ADS_LOOKBACK_DAYS)
+        # ยอดระดับเพจที่ Facebook สรุปเอง — ไว้เทียบว่าที่เรารวมจากโพสต์ครบไหม
+        try:
+            g = sync_pages()
+        except Exception as e:
+            g = {"rows": 0, "raw": 0, "errors": ["ยอดเพจพัง: %s" % str(e)[:160]]}
         # แชท Messenger (CRM raw) → checkout_fbchat / checkout_fbprofile
         # ทำ **หลังสุด** เพราะช้าสุดและมีเพดานต่อรอบ — ถ้ามันล้ม ยอดโพสต์/โฆษณาต้องได้ไปแล้ว
         try:
@@ -298,10 +375,10 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
         except Exception as e:
             m = {"errors": ["แชท Messenger พัง: %s" % str(e)[:160]]}
         res.update(posts=p["snapshots"], pages=p["pages"], adsRows=a["rows"],
-                   accounts=a["accounts"], raw=p["raw"] + a["raw"],
+                   pageRows=g["rows"], accounts=a["accounts"], raw=p["raw"] + a["raw"] + g["raw"],
                    messenger={k: m.get(k) for k in ("threadsSeen", "threadsSynced", "unchanged",
                                                    "newMsgs", "profiles", "stopped", "sec")},
-                   errors=p["errors"] + a["errors"] + (m.get("errors") or []),
+                   errors=p["errors"] + a["errors"] + g["errors"] + (m.get("errors") or []),
                    trimmed=trim_raw())
         res["ok"] = not res["errors"]
         res["postsOk"] = p["snapshots"] > 0 and not p["errors"]

@@ -5106,6 +5106,25 @@
                              : `มีข้อมูล ${ds.length} วัน (${f(ds[0])}–${f(ds[ds.length - 1])})`;
     }
 
+    // ★ 21 ก.ย.69 — วาง "ยอดที่ Facebook รายงานเอง" คู่กับ "ยอดที่เรารวมจากโพสต์"
+    //   เจ้าของถาม *"ทำไมวันที่ 20 มีแค่ 1 หมื่น 3 · มันจะเก็บไม่ครบ"* — ตอบด้วยตัวเลข ไม่ใช่คำอธิบาย
+    //   ของเรา = รวมวิววิดีโอรายโพสต์จากฟีด · ของเพจ = Facebook สรุปเองทั้งเพจ (รวมรีลส์ด้วย)
+    function _soPageCmp() {
+      const d = _soData.meta || {}, pt = d.pageTotal || {};
+      if (!pt.views) return '';                       // ยังไม่มีตัวเทียบ (ยังไม่ได้ดึง/ยังไม่ migrate)
+      const ours = (d.total || {}).views || 0;
+      const pct = pt.views ? Math.round(ours * 100 / pt.views) : 0;
+      const warn = pct < 80;
+      return `<div style="border-top:.5px dashed var(--bd2);margin-top:9px;padding-top:8px;
+              font-size:var(--fs-body);color:var(--t3);line-height:1.8">
+          Facebook รายงานทั้งเพจ (${d.pageDays || 0} วัน): วิววิดีโอ
+          <b style="color:var(--t1)">${(pt.views || 0).toLocaleString()}</b>
+          ${pt.engagements ? ` · มีส่วนร่วม <b style="color:var(--t1)">${pt.engagements.toLocaleString()}</b>` : ''}
+          <br>ที่เรารวมจากโพสต์ได้ <b style="color:var(--t1)">${ours.toLocaleString()}</b>
+          <span style="color:${warn ? 'var(--amber)' : 'var(--t3)'}">(${pct}% ของยอดเพจ${
+            warn ? ' — ส่วนที่ขาดน่าจะเป็นรีลส์/โพสต์ที่ไม่อยู่ในฟีด' : ''})</span></div>`;
+    }
+
     function _soKpi(side) {
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
       const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
@@ -5131,6 +5150,7 @@
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
             ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b></div>` : ''}
+        ${side === 'meta' ? _soPageCmp() : ''}
         ${note ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:9px;line-height:1.7;
              border-top:.5px dashed var(--bd2);padding-top:8px">${note}</div>` : ''}</div>`;
     }
@@ -5273,6 +5293,13 @@
             data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
             borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
           }));
+      // เส้นประ = ยอดที่ Facebook รายงานเองทั้งเพจ (เทียบกับเส้นทึบที่เรารวมจากโพสต์)
+      const _pd = (_soData.meta || {}).pageDaily || {};
+      if (!_soOpen && _soMetric === 'views' && Object.keys(_pd).length) {
+        ds.push({ label: 'Facebook รายงาน (ทั้งเพจ)',
+                  data: days.map(d => (_pd[d] ? (_pd[d].views || 0) : null)),
+                  borderColor: '#94a3b8', backgroundColor: '#94a3b8', ..._LINE_DS, borderDash: [5, 4] });
+      }
       const empty = ds.every(s => s.data.every(v => v === null));
       _soChart = new Chart(cv, {
         type: 'line', data: { labels: lbl, datasets: ds },

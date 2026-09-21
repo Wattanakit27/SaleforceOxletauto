@@ -152,8 +152,26 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
         x["impressions"] += int(a["impressions"] or 0)
         x["clicks"] += int(a["clicks"] or 0)
 
+    # ★ 21 ก.ย.69 — ยอดที่ **Facebook รายงานเองระดับเพจ** (ไม่ได้รวมจากโพสต์)
+    #   เอาไว้วางคู่กันในหน้าเว็บ → ตอบคำถาม "ที่เรารวมจากโพสต์ เก็บครบไหม" ด้วยตัวเลข
+    page_daily, page_total = {}, {"views": 0, "engagements": 0, "pageViews": 0, "follows": 0}
+    try:
+        from dashboard.models import MetaPageDaily
+        for r in (MetaPageDaily.objects.filter(date__gte=f, date__lte=t)
+                  .values("date", "video_views", "engagements", "page_views", "follows")):
+            k = _d(r["date"]).isoformat()
+            x = page_daily.setdefault(k, {"views": 0, "engagements": 0, "pageViews": 0, "follows": 0})
+            for a, b in (("views", "video_views"), ("engagements", "engagements"),
+                         ("pageViews", "page_views"), ("follows", "follows")):
+                x[a] += int(r[b] or 0)
+                page_total[a] += int(r[b] or 0)
+    except Exception:                 # ยังไม่ migrate / ตารางยังว่าง = ไม่มีตัวเทียบ ไม่พัง
+        page_daily, page_total = {}, {}
+
     top_ids = {p["post_id"] for p in posts}
     return {
+        "pageDaily": page_daily, "pageTotal": page_total,
+        "pageDays": len(page_daily),
         "daily": daily,
         # ★ ยอดสะสม = ใช้โชว์ตอนที่ยังทำยอดรายวันไม่ได้ (เก็บไม่ถึง 2 คืน) — ดีกว่าโชว์ "—" เปล่าๆ
         "cum": cum, "postCount": len(best),

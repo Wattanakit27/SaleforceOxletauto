@@ -225,6 +225,35 @@ class MetaAdDaily(models.Model):
         return "%s %s %s" % (self.date, self.ad_id, self.spend)
 
 
+class MetaPageDaily(models.Model):
+    """ยอด **ระดับเพจ** รายวันที่ Facebook สรุปให้เอง — 1 แถว/เพจ/วัน (upsert)
+
+    ★ 21 ก.ย.69 — ทำขึ้นเพื่อตอบคำถามเดียว: **"ที่เรารวมจากโพสต์ เก็บครบไหม"**
+    `dash_meta_post_snapshot` คือยอดที่เรา *รวมเอง* จากโพสต์ในฟีด (วิดีโอเท่านั้นที่มีวิว)
+    ตารางนี้คือยอดที่ **Facebook รายงานเอง** ของทั้งเพจ → เอามาวางเทียบกันแล้วเห็นช่องว่างทันที
+    · ต่างจาก snapshot ตรงที่ **ไม่ต้องรอสะสม** — Meta ให้ย้อนหลังมาเลย (~30 วัน)
+    """
+    page_id = models.CharField("เพจ", max_length=32, db_index=True)
+    date = models.DateField("วันที่", db_index=True)
+    video_views = models.BigIntegerField("วิววิดีโอ (ทั้งเพจ)", default=0)
+    engagements = models.BigIntegerField("การมีส่วนร่วมกับโพสต์", default=0)
+    page_views = models.BigIntegerField("คนเปิดดูเพจ", default=0)
+    follows = models.BigIntegerField("ผู้ติดตามใหม่", default=0)
+    likes = models.BigIntegerField("กดถูกใจโพสต์", default=0)
+    updated_at = models.DateTimeField("ดึงล่าสุด", auto_now=True)
+
+    class Meta:
+        db_table = "dash_meta_page_daily"
+        verbose_name = "ยอดเพจ Facebook (รายวัน)"
+        verbose_name_plural = "ยอดเพจ Facebook (รายวัน)"
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["page_id", "date"],
+                                               name="uniq_meta_page_day")]
+
+    def __str__(self):
+        return "%s %s วิว %s" % (self.date, self.page_id, self.video_views)
+
+
 class MetaRaw(models.Model):
     """คำตอบดิบจาก Meta ทั้งก้อน — ไว้คิดตัวเลขใหม่ย้อนหลังในวันที่อยากรู้อะไรที่ไม่ได้คิดไว้
 
