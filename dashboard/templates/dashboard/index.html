@@ -5091,6 +5091,21 @@
 
     function soSetMetric(m) { _soMetric = m; drawSocial(); }
 
+    // ★ 21 ก.ย.69 — บอกตรงๆ ว่า "ตัวเลขนี้มาจากข้อมูลกี่วัน"
+    //   เจ้าของทัก: *"มันเหมือนยังแยกไม่ได้ เมื่อวาน วันก่อน วันนี้ เท่ากันหมดเลย"*
+    //   ต้นเหตุ = **มียอดรายวันแค่วันเดียวจริงๆ** (เก็บ snapshot ได้ 2 คืน = ลบกันได้ 1 วัน)
+    //   ทุกช่วงวันที่ที่คร่อมวันนั้นจึงได้เลขเดียวกันหมด — ไม่ใช่บั๊ก แต่หน้าเว็บไม่เคยบอก
+    function _soDayList(d) {
+      return Object.keys((d || {}).daily || {}).sort();
+    }
+    function _soDayNote(d) {
+      const ds = _soDayList(d);
+      if (!ds.length) return '';
+      const f = (x) => { const [, m, dd] = x.split('-'); return `${+dd}/${+m}`; };
+      return ds.length === 1 ? `มีข้อมูลวันเดียว (${f(ds[0])})`
+                             : `มีข้อมูล ${ds.length} วัน (${f(ds[0])}–${f(ds[ds.length - 1])})`;
+    }
+
     function _soKpi(side) {
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
       const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
@@ -5111,7 +5126,7 @@
         <div class="card-title" style="display:flex;align-items:center;gap:9px">
           ${soLogo(side, 22)}${SO_NAME[side]}
           <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ${
-            !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก'
+            !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก · ' + _soDayNote(d)
             : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล')}</span></div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
@@ -5226,7 +5241,10 @@
           ${_soKpi('meta')}${_soKpi('tiktok')}</div>
         <div class="card" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-            <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน
+            <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน${(() => {
+              const n = new Set([..._soDayList(_soData.meta), ..._soDayList(_soData.tiktok)]).size;
+              return n && n < 3 ? `<span style="font-weight:500;color:var(--amber);font-size:var(--fs-body)"> · เก็บมาแล้ว ${n} วัน — ระบบเก็บเพิ่มทุกเที่ยงคืน เส้นกราฟจะยาวขึ้นเอง</span>` : '';
+            })()}
               <span class="info-tip" tabindex="0" data-tip="ตารางเก็บ &quot;ยอดสะสม&quot; ทุกเที่ยงคืน\nยอดรายวัน = ยอดวันนี้ − ยอดเมื่อวาน\nจึงต้องเก็บอย่างน้อย 2 คืนถึงจะมีเส้นกราฟ">?</span></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
           <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
