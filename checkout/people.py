@@ -303,8 +303,15 @@ def _employee_for(nick="", display_name="", chat_type="user", group_id="", auto=
     if row:
         return row
     try:
+        # ★ 21 ก.ย.69 — แถวที่สร้างให้เอง **ยังไม่เข้าระบบเช็คชื่อ** (`track_checkin=False`)
+        #   เจ้าของแจ้ง: *"อะไรรรร บางคนไม่อยู่ในกลุ่มด้วยซ้ำ"* — คนที่พิมพ์ใน **กลุ่มอื่น**
+        #   (Branding / รับ-ส่งระหว่างสาขา / ห้องจ่ายเบอร์) ถูกสร้างเป็นพนักงานแล้วไปโผล่
+        #   ในตารางเช็คชื่อ + โดนแท็กทุกเช้า ทั้งที่ไม่ได้อยู่ในกลุ่มเช็คชื่อเลย
+        #   · ชื่อยังเข้าทะเบียนเหมือนเดิม (ป้าย "ใหม่" ในหน้าพนักงาน = รายการงานให้คนมาเติม)
+        #     แล้วค่อย **ติ๊ก "เช็คชื่อ" เอง** เมื่อเขาต้องเช็คชื่อจริง
         return Employee.objects.create(nickname=name[:80], display_name=name[:120],
-                                       group_id=(group_id or "")[:64], source=Employee.AUTO)
+                                       group_id=(group_id or "")[:64], source=Employee.AUTO,
+                                       track_checkin=False)
     except Exception:
         # ชื่อชนกันพอดี (unique) = อีก request สร้างไปแล้ว → ใช้แถวนั้น
         return Employee.objects.filter(nickname=name[:80]).first()

@@ -89,9 +89,17 @@ def collect(day=None) -> dict:
         else:
             orphan.append(c)
 
-    groups, missing = {}, []
+    groups, missing, no_time = {}, [], []
     for e in Employee.objects.filter(active=True, track_checkin=True).order_by("nickname"):
         c = checks.get(e.id)
+        # ★ 21 ก.ย.69 — **ยังไม่ได้ตั้งเวลาเข้างาน = ยังไม่เข้าระบบเช็คชื่อ ไม่เอาเข้าตาราง**
+        #   คนพวกนี้ตัดสินสาย/ตรงเวลาไม่ได้ (ไม่มีอะไรให้เทียบ) → ขึ้น ✗ ทุกวันตลอดไป
+        #   และโดนแท็กตามตัวทั้งที่ไม่มีใครเคยบอกว่าเขาต้องเช็คชื่อ
+        #   · **ไม่ซ่อนเงียบ** — นับไว้บอกท้ายตาราง และหน้า "พนักงาน" ยังลิสต์ให้ไปเติม
+        #   · เช็คชื่อเข้ามาจริง (มี `c`) = โชว์ตามปกติ ไม่ทิ้งข้อมูลที่มีอยู่
+        if not (e.work_start or "").strip() and not c:
+            no_time.append(e.nickname)
+            continue
         t_in = _hhmm(c.time_hm) if c else ""
         # ★ หมายเหตุมาจาก 2 ที่: ของวันนี้ (จากรูปเช็คชื่อ) ก่อน แล้วค่อยของถาวรในทะเบียน
         #   ของถาวร (เช่น "ลาคลอด") **อยู่จนกว่าจะลบเอง** — ตามของเดิมที่หมายเหตุในชีตพนักงานไม่หาย
@@ -130,13 +138,13 @@ def collect(day=None) -> dict:
     ordered = [(t, groups[t]) for t in order]
 
     flat = [r for _, rs in ordered for r in rs]
-    counts = {"total": len(flat),
+    counts = {"total": len(flat), "noTime": len(no_time),
               "ontime": sum(1 for r in flat if r["timeHm"] and not r["late"]),
               "late": sum(1 for r in flat if r["late"]),
               "missing": len(missing),
               "off": sum(1 for r in flat if r["off"] and not r["timeHm"])}
     return {"date": day, "dayName": day_name, "groups": ordered,
-            "missing": missing, "counts": counts}
+            "missing": missing, "noTime": no_time, "counts": counts}
 
 
 # ─────────────────────────── HTML → PNG ───────────────────────────
@@ -189,6 +197,9 @@ def build_html(data: dict) -> str:
     foot = ("มา %d คน (ตรงเวลา %d · สาย %d) · ยังไม่เช็คชื่อ %d · วันหยุด %d"
             " · ✗ = ยังไม่เช็คชื่อ"
             % (c["ontime"] + c["late"], c["ontime"], c["late"], c["missing"], c["off"]))
+    # บอกให้รู้ว่ามีคนถูกกันออกไป **ไม่ใช่หายเงียบ** (ไปเติมเวลาเข้างานที่เมนู "พนักงาน")
+    if c.get("noTime"):
+        foot += " · ยังไม่ได้ตั้งเวลาเข้างาน %d คน (ไม่นับ)" % c["noTime"]
 
     return """<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
