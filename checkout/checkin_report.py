@@ -372,7 +372,101 @@ def too_many(n: int) -> int:
     return cap if (cap and n > cap) else 0
 
 
-def build_messages(data: dict, image_url="", channel="", tag=True, mention=True) -> list:
+# ═══════════ ★ 21 ก.ย.69 — ถาม LINE ก่อนว่า "คนนี้อยู่ในกลุ่มนี้จริงไหม" ═══════════
+#  เจ้าของแจ้ง: *"มันไม่แท็กด้วยซ้ำ และแท็กคนที่ไม่อยู่ในกลุ่มคือไร"*
+#
+#  **ต้นเหตุ**: แท็กพลาดคนเดียว LINE ปฏิเสธทั้งข้อความ → ตัวสำรอง (20 ก.ย.) ส่งซ้ำ
+#  **แบบไม่แท็กใครเลย** · วัดจากล็อกจริง: ล้มแบบนี้ทุกวันตั้งแต่ 19/09 — ข้อความถึงกลุ่ม
+#  แต่ **ไม่มีใครถูกแท็กสักคน** และยังมีชื่อคนที่ไม่ได้อยู่ในกลุ่มปนอยู่ในรายการ
+#
+#  **ทางแก้ที่ถูกต้อง = คัดคนนอกกลุ่มออกตั้งแต่ก่อนส่ง** (ไม่ใช่ล้มแล้วค่อยถอดแท็กทั้งหมด)
+#  LINE มี API ถามตรงๆ ได้: `GET /v2/bot/group/<gid>/member/<uid>` → 200 = อยู่ · 404 = ไม่อยู่
+#  · ถามเฉพาะคนที่กำลังจะแท็ก (วันละไม่กี่คน) · **จำคำตอบไว้** จะได้ไม่ถามซ้ำทุกเช้า
+_MEMBER_KEY = "checkin_group_member"
+_MEMBER_TTL_IN = 7 * 86400      # อยู่ในกลุ่ม = เชื่อได้นาน (คนไม่ค่อยออกจากกลุ่ม)
+_MEMBER_TTL_OUT = 86400         # ไม่อยู่ = ถามใหม่พรุ่งนี้ (เผื่อเพิ่งถูกเชิญเข้ามา)
+
+
+def _member_cache() -> dict:
+    from dashboard.services import cache_store
+    try:
+        return (cache_store.get_kv(_MEMBER_KEY) or {}).get("data") or {}
+    except Exception:
+        return {}
+
+
+def outsiders(group_id: str, uids, token="") -> set:
+    """คืนชุด LINE id ที่ **ยืนยันแล้วว่าไม่ได้อยู่ในกลุ่มนี้**
+
+    - ถาม LINE ทีละคน (เฉพาะที่ยังไม่รู้/คำตอบเก่า) · จำคำตอบใน KV
+    - **ถามไม่ได้ (เน็ตล่ม/ไม่มี token/LINE ตอบอย่างอื่น) = ถือว่าอยู่ในกลุ่ม**
+      → ไม่ตัดใครออกเพราะความไม่แน่ใจ (ตัดผิด = คนที่ต้องโดนตามหายไปเงียบๆ
+      ซึ่งแย่กว่าการมีชื่อเกิน)
+    """
+    import time
+
+    import requests
+
+    from dashboard.services import cache_store
+
+    uids = [u for u in dict.fromkeys(uids) if u]
+    if not (group_id or "").startswith("C") or not uids:
+        return set()
+    if not token:
+        token = bot()["token"]
+    if not token:
+        return set()
+
+    cache = _member_cache()
+    g = dict(cache.get(group_id) or {})
+    now, out, changed = time.time(), set(), False
+    for uid in uids:
+        rec = g.get(uid) or {}
+        ttl = _MEMBER_TTL_IN if rec.get("in") else _MEMBER_TTL_OUT
+        if rec and (now - float(rec.get("at") or 0)) < ttl:
+            if not rec.get("in"):
+                out.add(uid)
+            continue
+        try:
+            r = requests.get("https://api.line.me/v2/bot/group/%s/member/%s" % (group_id, uid),
+                             headers={"Authorization": "Bearer %s" % token}, timeout=8)
+            if r.status_code == 200:
+                g[uid] = {"in": True, "at": now}
+            elif r.status_code == 404:
+                g[uid] = {"in": False, "at": now}
+                out.add(uid)
+            else:                       # 401/429/5xx = ยังไม่รู้ → ไม่จำ ไม่ตัดออก
+                continue
+            changed = True
+        except Exception:
+            continue
+    if changed:
+        cache[group_id] = g
+        try:
+            cache_store.set_kv(_MEMBER_KEY, cache)
+        except Exception:
+            pass
+    return out
+
+
+def only_in_group(missing, ids, group_id="") -> tuple:
+    """ตัดคนที่ไม่ได้อยู่ในกลุ่มออกจากรายชื่อ · คืน `(รายชื่อที่เหลือ, ชื่อที่ตัดออก)`
+
+    คนที่ไม่อยู่ในกลุ่ม **ตัดทั้งชื่อ ไม่ใช่แค่ไม่แท็ก** — ข้อความนี้ส่งเข้ากลุ่มเพื่อ
+    "ตามตัว" คนที่อ่านไม่ได้อยู่ในนั้น จะเอ่ยชื่อไปก็ไม่มีประโยชน์ รกเปล่าๆ
+    (เขายังอยู่ในตารางเช็คชื่อ/หน้าเว็บตามเดิม — ซ่อนจาก *การตามตัว* ไม่ใช่ซ่อนข้อมูล)
+    """
+    if not (group_id or "").startswith("C") or not missing:
+        return missing, []
+    out = outsiders(group_id, [ids.get(m["id"]) for m in missing])
+    if not out:
+        return missing, []
+    keep = [m for m in missing if ids.get(m["id"]) not in out]
+    gone = [m["name"] for m in missing if ids.get(m["id"]) in out]
+    return keep, gone
+
+def build_messages(data: dict, image_url="", channel="", tag=True, mention=True,
+                   group_id="") -> list:
     """ข้อความที่จะส่ง: รูปตาราง + (ถ้ามีคนยังไม่มา) ข้อความตามตัว
 
     `mention=False` → บอกเป็น "รายชื่อ" แทนการแท็ก · ใช้กับ **แชทส่วนตัว (U…)**
@@ -397,6 +491,10 @@ def build_messages(data: dict, image_url="", channel="", tag=True, mention=True)
         return msgs
 
     ids = _mention_ids(miss, channel) if mention else {}
+    # ★ คนที่ไม่ได้อยู่ในกลุ่มนี้ = ตัดออกก่อนเลย (ไม่งั้นแท็กพลาด → ทั้งข้อความโดนตีกลับ)
+    miss, _gone = only_in_group(miss, ids, group_id)
+    if not miss:
+        return msgs
     tagged = [m for m in miss if ids.get(m["id"])]
     plain = [m for m in miss if not ids.get(m["id"])]
 
@@ -476,7 +574,8 @@ def send(target_id: str, day=None, tag=True) -> tuple:
     # แชทส่วนตัว (U…) แท็กไม่ได้ → ส่งเป็นรายชื่อแทน (ดู build_messages)
     want_tag = not target_id.startswith("U")     # แชทส่วนตัวแท็กไม่ได้อยู่แล้ว
     sc, resp, tagged = _send_msgs(
-        target_id, lambda m: build_messages(data, url, b["key"], tag, mention=want_tag and m),
+        target_id, lambda m: build_messages(data, url, b["key"], tag, mention=want_tag and m,
+                                            group_id=target_id if want_tag else ""),
         token, "ตารางเช็คชื่อเข้างาน")
     if sc == 200:
         return True, (url if tagged else url + " (แท็กคนในกลุ่มไม่ได้ ส่งแบบไม่แท็กแทน)")
@@ -501,13 +600,17 @@ def managers(channel="") -> list:
     return out
 
 
-def escalation_messages(data: dict, channel="", mention=True, round_name="10:00 น.") -> list:
+def escalation_messages(data: dict, channel="", mention=True, round_name="10:00 น.",
+                        group_id="") -> list:
     """ข้อความรอบสาย — ไม่มีใครขาด = คืนลิสต์ว่าง (ไม่ต้องส่งอะไรเลย ตามของเดิม)"""
     miss = data["missing"]
     if not miss:
         return []
 
     ids = _mention_ids(miss, channel) if mention else {}
+    miss, _gone = only_in_group(miss, ids, group_id)   # คนนอกกลุ่ม = ไม่ตามในกลุ่มนี้
+    if not miss:
+        return []
     text = "⚠️ แจ้งเตือนรอบ %s\nพนักงาน %d คน ยังไม่เช็คชื่อ:\n\n" % (round_name, len(miss))
     sub = {}
     cap = too_many(len(miss))
@@ -550,8 +653,9 @@ def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
         return False, "ไม่ได้บอกว่าจะส่งให้ใคร"
     data = collect(day)
     b = bot()
-    msgs = escalation_messages(data, b["key"],
-                               mention=not target_id.startswith("U"), round_name=round_name)
+    msgs = escalation_messages(data, b["key"], mention=not target_id.startswith("U"),
+                               round_name=round_name,
+                               group_id=target_id if target_id.startswith("C") else "")
     if not msgs:
         return True, "ทุกคนเช็คชื่อครบแล้ว — ไม่ต้องส่ง"
     token = b["token"]
@@ -560,7 +664,9 @@ def send_escalation(target_id: str, day=None, round_name="10:00 น.") -> tuple:
     want_tag = not target_id.startswith("U")
     sc, resp, tagged = _send_msgs(
         target_id,
-        lambda m: escalation_messages(data, b["key"], mention=want_tag and m, round_name=round_name),
+        lambda m: escalation_messages(data, b["key"], mention=want_tag and m,
+                                      round_name=round_name,
+                                      group_id=target_id if want_tag else ""),
         token, "ตามคนยังไม่เช็คชื่อ (รอบสาย)")
     if sc == 200:
         return True, ("ส่งแล้ว %d คน%s" % (len(data["missing"]),
