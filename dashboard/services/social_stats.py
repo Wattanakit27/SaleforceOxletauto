@@ -199,7 +199,7 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     f, t = _range(frm, to)
     qs = (TikTokVideoSnapshot.objects
           .filter(trigger="cron", snap_date__gte=f - timedelta(days=1), snap_date__lte=t)
-          .values("video_id", "snap_date", "taken_at", "view_count", "like_count",
+          .values("video_id", "open_id", "snap_date", "taken_at", "view_count", "like_count",
                   "comment_count", "share_count"))
     rows = [{"video_id": r["video_id"], "snap_date": r["snap_date"], "taken_at": r["taken_at"],
              "views": r["view_count"], "likes": r["like_count"],
@@ -210,7 +210,7 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     best: dict = {}
     for r in (TikTokVideoSnapshot.objects
               .filter(snap_date__gte=f, snap_date__lte=t)
-              .values("video_id", "taken_at", "title", "share_url", "create_time",
+              .values("video_id", "open_id", "taken_at", "title", "share_url", "create_time",
                       "view_count", "like_count", "comment_count", "share_count")):
         old = best.get(r["video_id"])
         if not old or r["taken_at"] > old["taken_at"]:
@@ -223,8 +223,12 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
         cum["shares"] += int(r["share_count"] or 0)
     clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
 
-    accs = list(TikTokAccount.objects.values("label", "display_name", "status", "scope"))
+    accs = list(TikTokAccount.objects.values("open_id", "label", "display_name", "status", "scope"))
     top_ids = {c["video_id"] for c in clips}
+    # ★ แยกรายช่อง (เจ้าของแจ้ง 24 ก.ย.69 "มันไม่มี TikTok แยกช่อง")
+    ch_name = {a["open_id"]: (a["label"] or a["display_name"] or a["open_id"][:10]) for a in accs}
+    owner_of = {r["video_id"]: r["open_id"] for r in qs}
+    by = _owner_totals(rows, "video_id", owner_of, f, t)
     return {
         "daily": daily,
         "cum": cum, "postCount": len(best),
@@ -240,12 +244,97 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
             "comments": c["comment_count"] or 0, "shares": c["share_count"] or 0,
         } for c in clips],
         "days": _cron_days(TikTokVideoSnapshot, f, t),
+        "byChannel": [dict(v, id=k, name=ch_name.get(k, k[:10]))
+                      for k, v in sorted(by.items(), key=lambda kv: -kv[1]["views"])],
         "accounts": [{"label": a["label"], "name": a["display_name"],
                       "status": a["status"], "scope": a["scope"]} for a in accs],
         # บอกหน้าเว็บให้รู้ว่า "ไม่มีข้อมูล" เพราะอะไร จะได้บอกวิธีแก้แทนกราฟเปล่า
         "needScope": bool(accs) and not any("video.list" in (a["scope"] or "") for a in accs),
     }
 
+
+def _owner_totals(rows, key_id: str, owner_of: dict, f, t) -> dict:
+    """ยอด "ที่เพิ่มขึ้นในช่วง" แยกตามเจ้าของ (ช่อง/เพจ) — `{owner: {views:.., likes:..}}`
+
+    ★ 24 ก.ย.69 (เจ้าของแจ้ง "มันไม่มี TikTok แยกช่อง")
+    คิดรายชิ้นด้วย `_daily_one` ก่อน แล้วค่อยรวมเข้าเจ้าของ — **ห้ามรวมยอดสะสมของช่องตรงๆ
+    แล้วลบกัน** เพราะคลิปที่เพิ่งโพสต์วันนี้จะทำให้ผลต่างพุ่งทั้งที่ไม่มีใครดูเพิ่ม
+    """
+    out: dict = {}
+    for item_id, days in _daily_one(rows, key_id, set()).items():
+        o = owner_of.get(item_id) or ""
+        agg = out.setdefault(o, {m: 0 for m in METRICS})
+        for d, v in days.items():
+            if f.isoformat() <= d <= t.isoformat():
+                for m in METRICS:
+                    agg[m] += v.get(m, 0)
+    return out
+
+
+def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
+    """ยอดของช่อง YouTube — โครงเดียวกับ Meta/TikTok (หน้าเว็บวาดด้วยโค้ดชุดเดียวกัน)
+
+    ⚠️ YouTube **ไม่มียอดแชร์** ใน Data API → `shares` เป็น 0 เสมอ ไม่ใช่ตัวเลขผิด
+    """
+    from dashboard.models import YouTubeChannelSnapshot, YouTubeVideoSnapshot
+
+    f, t = _range(frm, to)
+    qs = (YouTubeVideoSnapshot.objects
+          .filter(trigger="cron", snap_date__gte=f - timedelta(days=1), snap_date__lte=t)
+          .values("video_id", "channel_id", "snap_date", "taken_at",
+                  "view_count", "like_count", "comment_count"))
+    rows = [{"video_id": r["video_id"], "snap_date": r["snap_date"], "taken_at": r["taken_at"],
+             "views": r["view_count"], "likes": r["like_count"],
+             "comments": r["comment_count"], "shares": 0} for r in qs]
+    owner_of = {r["video_id"]: r["channel_id"] for r in qs}
+    daily = {d: v for d, v in _daily_from_snapshots(rows, "video_id").items()
+             if f.isoformat() <= d <= t.isoformat()}
+
+    best: dict = {}
+    for r in (YouTubeVideoSnapshot.objects
+              .filter(snap_date__gte=f, snap_date__lte=t)
+              .values("video_id", "channel_id", "taken_at", "title", "published_at",
+                      "is_short", "view_count", "like_count", "comment_count")):
+        old = best.get(r["video_id"])
+        if not old or r["taken_at"] > old["taken_at"]:
+            best[r["video_id"]] = r
+    cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    for r in best.values():
+        cum["views"] += int(r["view_count"] or 0)
+        cum["likes"] += int(r["like_count"] or 0)
+        cum["comments"] += int(r["comment_count"] or 0)
+    clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
+
+    # ชื่อช่อง = แถวล่าสุดของ snapshot ช่อง
+    names, subs = {}, {}
+    for r in YouTubeChannelSnapshot.objects.order_by("taken_at").values(
+            "channel_id", "title", "subscriber_count"):
+        names[r["channel_id"]] = r["title"] or r["channel_id"]
+        subs[r["channel_id"]] = r["subscriber_count"]
+
+    top_ids = {c["video_id"] for c in clips}
+    by = _owner_totals(rows, "video_id", owner_of, f, t)
+    return {
+        "daily": daily,
+        "cum": cum, "postCount": len(best),
+        "postDaily": {k: {d: v for d, v in days.items() if f.isoformat() <= d <= t.isoformat()}
+                      for k, days in _daily_one(rows, "video_id", top_ids).items()},
+        "posts": [{
+            "id": c["video_id"],
+            "text": (c["title"] or "")[:120],
+            "link": "https://www.youtube.com/watch?v=" + (c["video_id"] or ""),
+            "type": "Shorts" if c["is_short"] else "คลิป",
+            "date": (c["published_at"].date().isoformat() if c["published_at"] else ""),
+            "views": c["view_count"] or 0, "likes": c["like_count"] or 0,
+            "comments": c["comment_count"] or 0, "shares": 0,
+        } for c in clips],
+        "days": _cron_days(YouTubeVideoSnapshot, f, t),
+        "byChannel": [dict(v, id=k, name=names.get(k, k), subs=subs.get(k))
+                      for k, v in sorted(by.items(), key=lambda kv: -kv[1]["views"])],
+        "accounts": [{"label": n, "name": n, "status": "active", "scope": ""}
+                     for n in names.values()],
+        "needScope": False,
+    }
 
 def _cron_days(model, f: date, t: date) -> int:
     """มี snapshot รอบ cron กี่วันในช่วง — <2 วัน = ยังทำกราฟรายวันไม่ได้ (ต้องมีวันก่อนหน้าให้ลบ)"""
@@ -260,7 +349,7 @@ def _cron_days(model, f: date, t: date) -> int:
 def overview(frm=None, to=None) -> dict:
     """ก้อนเดียวที่หน้าเว็บเรียกใช้ — 2 ฝั่ง + ยอดรวมของช่วง"""
     f, t = _range(frm, to)
-    m, k = meta_stats(f, t), tiktok_stats(f, t)
+    m, k, y = meta_stats(f, t), tiktok_stats(f, t), youtube_stats(f, t)
 
     def _sum(daily):
         out = {x: 0 for x in METRICS}
@@ -276,4 +365,5 @@ def overview(frm=None, to=None) -> dict:
         "meta": {**m, "total": _sum(m["daily"]),
                  "adSpend": round(sum(a["spend"] for a in m["ads"].values()), 2)},
         "tiktok": {**k, "total": _sum(k["daily"])},
+        "youtube": {**y, "total": _sum(y["daily"])},
     }

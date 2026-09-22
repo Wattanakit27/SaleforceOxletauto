@@ -122,6 +122,7 @@
     const LOGO_URL = "{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}";
     const FB_ICON = "{% static 'dashboard/image/fb.png' %}";
     const TT_ICON = "{% static 'dashboard/image/tiktok.jpg' %}";
+    const YT_ICON = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#FF0000"/><path d="M20 16l13 8-13 8z" fill="#fff"/></svg>');
 
 
     // ── Auth ──
@@ -1306,7 +1307,7 @@
       html += `<div id="nav-ind" class="nav-ind"></div>`;
       const TAB_DESC = {
         'o': 'KPI รวม + กราฟ trend + เปรียบเทียบเซลล์/ทีม',
-        'so': 'Engagement ของ Facebook + TikTok — วิว/ไลก์/คอมเมนต์/แชร์ รายวัน + โพสต์ที่ปังสุด',
+        'so': 'Engagement ของ Facebook + TikTok + YouTube — วิว/ไลก์/คอมเมนต์/แชร์ รายวัน + แยกรายช่อง + โพสต์ที่ปังสุด',
         's': 'ดูหน้าจริงที่เซลล์แต่ละคนเห็น (เลือกเซลล์จาก dropdown)',
         'c': 'Lead รถ + เคสจอง/ปล่อย + ข้อมูลต้องเติม + เคสติดตาม + Hot Cases',
         'a': 'ไลฟ์สด / คลิป — เซสชั่นไลฟ์ + คลิป TikTok ของเซลล์',
@@ -5059,10 +5060,11 @@
     //   ตัวเลขคำนวณฝั่งเซิร์ฟเวอร์ (`/api/admin/social` → social_stats.py) เพราะตารางเก็บ "ยอดสะสม"
     //   ต้องหาผลต่างรายวันก่อน — ไม่ใช่งานที่ควรทำในเบราว์เซอร์
     //   ★ ผูกกับตัวกรองวันที่ของหน้าเสมอ (กฎเหล็กใน CLAUDE.md) — เปลี่ยนช่วงวัน = โหลดใหม่
-    const SO_COLOR = { meta: '#1877f2', tiktok: '#000000' };   // สีจริงของแต่ละแพลตฟอร์ม
-    const SO_NAME = { meta: 'Facebook', tiktok: 'TikTok' };
+    const SO_SIDES = ['meta', 'tiktok', 'youtube'];   // เพิ่มแพลตฟอร์มใหม่ = เติมที่นี่ที่เดียว
+    const SO_COLOR = { meta: '#1877f2', tiktok: '#000000', youtube: '#FF0000' };   // สีจริงของแต่ละแพลตฟอร์ม
+    const SO_NAME = { meta: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube' };
     // โลโก้จริงของแพลตฟอร์ม (เจ้าของส่งไฟล์มาให้ · อยู่ใน static/dashboard/image/)
-    const SO_ICON = { meta: FB_ICON, tiktok: TT_ICON };
+    const SO_ICON = { meta: FB_ICON, tiktok: TT_ICON, youtube: YT_ICON };
     const soLogo = (side, sz) => `<img src="${SO_ICON[side]}" alt="${SO_NAME[side]}" style="width:${sz}px;height:${sz}px;`
       + `border-radius:${Math.round(sz / 4)}px;object-fit:cover;display:inline-block;vertical-align:-3px;flex-shrink:0">`;
     let _soData = null, _soMetric = 'views', _soLoading = false, _soChart = null, _soRange = '';
@@ -5070,7 +5072,7 @@
 
     function renderSocial() {
       return `<div id="so-box"><div style="text-align:center;color:var(--t3);padding:50px">
-        <div class="spin" style="margin:0 auto 12px"></div>กำลังรวมยอดจาก Facebook และ TikTok...</div></div>`;
+        <div class="spin" style="margin:0 auto 12px"></div>กำลังรวมยอดจาก Facebook, TikTok และ YouTube...</div></div>`;
     }
 
     // ★ 23 ก.ย.69 — แก้บั๊ก "ตัวกรองค้าง" (เจ้าของแจ้ง)
@@ -5177,7 +5179,7 @@
     function _soTopRows() {
       // โพสต์/คลิปที่ปังสุดของทั้ง 2 ฝั่ง รวมตารางเดียว (มีคอลัมน์ช่องทาง) — เทียบกันง่ายกว่าแยก 2 ตาราง
       const rows = [];
-      ['meta', 'tiktok'].forEach(side => ((_soData[side] || {}).posts || []).forEach(p => rows.push({ ...p, side })));
+      SO_SIDES.forEach(side => ((_soData[side] || {}).posts || []).forEach(p => rows.push({ ...p, side })));
       rows.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
       if (!rows.length) return `<div style="padding:22px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ยังไม่มีโพสต์ในช่วงที่เลือก</div>`;
       const _n = 'padding:8px 10px;text-align:right;white-space:nowrap';
@@ -5265,6 +5267,38 @@
              <span>ตัวเลขสะสมด้านบนใช้ได้เลย</span></div>`}</div>`;
     }
 
+    // ★ 24 ก.ย.69 — ตารางแยกรายช่อง (เจ้าของแจ้ง "มันไม่มี TikTok แยกช่อง")
+    //   ยอดที่โชว์ = "ที่เพิ่มขึ้นในช่วงที่เลือก" (ไม่ใช่ยอดสะสม) — คิดรายคลิปก่อนแล้วรวมเข้าช่อง
+    //   ฝั่ง Facebook ยังไม่มีแยกเพจ (เก็บ page_id ไว้แล้ว แต่ยังไม่มีชื่อเพจในตาราง)
+    function _soChannels() {
+      const rows = [];
+      SO_SIDES.forEach(side => ((_soData[side] || {}).byChannel || [])
+        .forEach(c => rows.push({ ...c, side })));
+      if (!rows.length) return '';
+      rows.sort((a, b) => (b.views || 0) - (a.views || 0));
+      const anySub = rows.some(r => r.subs != null);
+      return `<div class="card" style="margin-bottom:12px">
+        <div class="card-title">แยกตามช่อง
+          <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ยอดที่เพิ่มขึ้นในช่วงที่เลือก</span>
+          <span class="info-tip" tabindex="0" data-tip="คิดยอดรายวันของแต่ละคลิปก่อน แล้วค่อยรวมเข้าช่อง\nไม่ได้เอายอดสะสมของช่องมาลบกัน เพราะคลิปที่เพิ่งโพสต์จะทำให้ตัวเลขพุ่งผิด">?</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:var(--fs-body);margin-top:8px">
+          <thead><tr style="color:var(--t3);text-align:right">
+            <th style="text-align:left;padding:7px 8px">ช่อง</th>
+            <th style="padding:7px 8px">วิว</th><th style="padding:7px 8px">ไลก์</th>
+            <th style="padding:7px 8px">คอมเมนต์</th><th style="padding:7px 8px">แชร์</th>
+            ${anySub ? '<th style="padding:7px 8px">ผู้ติดตาม</th>' : ''}</tr></thead><tbody>` +
+        rows.map(r => `<tr style="border-top:.5px solid var(--bd);text-align:right">
+          <td style="text-align:left;padding:7px 8px">
+            <span style="display:inline-flex;align-items:center;gap:7px;color:var(--t1)">
+              ${soLogo(r.side, 18)}${h(String(r.name || r.id || '').slice(0, 40))}</span></td>
+          <td style="padding:7px 8px;font-weight:700">${(r.views || 0).toLocaleString('th-TH')}</td>
+          <td style="padding:7px 8px">${(r.likes || 0).toLocaleString('th-TH')}</td>
+          <td style="padding:7px 8px">${(r.comments || 0).toLocaleString('th-TH')}</td>
+          <td style="padding:7px 8px">${r.side === 'youtube' ? '<span style="color:var(--t3)" title="YouTube API ไม่ให้ยอดแชร์">–</span>' : (r.shares || 0).toLocaleString('th-TH')}</td>
+          ${anySub ? `<td style="padding:7px 8px;color:var(--t2)">${r.subs == null ? '–' : r.subs.toLocaleString('th-TH')}</td>` : ''}</tr>`).join('') +
+        `</tbody></table></div>`;
+    }
+
     function drawSocial() {
       const box = document.getElementById('so-box');
       if (!box || !_soData) return;
@@ -5276,16 +5310,17 @@
 
       if (_soOpen) box.innerHTML = _soDetailHtml();
       else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-          ${_soKpi('meta')}${_soKpi('tiktok')}</div>
+          ${SO_SIDES.map(_soKpi).join('')}</div>
         <div class="card" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
             <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน${(() => {
-              const n = new Set([..._soDayList(_soData.meta), ..._soDayList(_soData.tiktok)]).size;
+              const n = new Set(SO_SIDES.flatMap(s => _soDayList(_soData[s]))).size;
               return n && n < 3 ? `<span style="font-weight:500;color:var(--amber);font-size:var(--fs-body)"> · เก็บมาแล้ว ${n} วัน — ระบบเก็บเพิ่มทุกเที่ยงคืน เส้นกราฟจะยาวขึ้นเอง</span>` : '';
             })()}
               <span class="info-tip" tabindex="0" data-tip="ตารางเก็บ &quot;ยอดสะสม&quot; ทุกเที่ยงคืน\nยอดรายวัน = ยอดวันนี้ − ยอดเมื่อวาน\nจึงต้องเก็บอย่างน้อย 2 คืนถึงจะมีเส้นกราฟ">?</span></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
           <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
+        ${_soChannels()}
         <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ตัวเลขเป็นยอดสะสม — กดแถวเพื่อดูเฉพาะช่วงที่เลือก</span>
             <span class="info-tip" tabindex="0" data-tip="เรียงจาก ไลก์ + คอมเมนต์ + แชร์ (ยอดสะสมล่าสุด)\nกดที่ข้อความเพื่อเปิดโพสต์จริง">?</span></div>
           ${_soTopRows()}</div>`;
@@ -5305,7 +5340,7 @@
                return v ? (v[_soMetric] || 0) : null;
              }),
              borderColor: SO_COLOR[_soOpen.side], backgroundColor: SO_COLOR[_soOpen.side], ..._LINE_DS }]
-        : ['meta', 'tiktok'].map(side => ({
+        : SO_SIDES.map(side => ({
             label: SO_NAME[side],
             // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
             data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
