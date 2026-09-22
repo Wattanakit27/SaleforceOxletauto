@@ -1550,6 +1550,16 @@ def cron_tick(request):
     except Exception as e:
         tiktok_result = dict(tiktok_result or {}, syncError=str(e)[:200])
 
+    # -- YouTube: ดึงยอดช่อง/คลิปทุกเที่ยงคืน (ใน thread - กติกาเดียวกับ Meta/TikTok) --
+    #    ไม่ต้องมี OAuth รายช่องเหมือน TikTok - ใช้ API key ใบเดียว
+    #    ไม่ตั้ง YOUTUBE_API_KEY / YOUTUBE_CHANNELS = ไม่ทำอะไรเลย (ปิดสนิท)
+    youtube_result = ""
+    try:
+        from .services.youtube_sync import maybe_run as _yt_run
+        youtube_result = _yt_run(now)
+    except Exception as e:
+        youtube_result = "error: %s" % str(e)[:200]
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1561,6 +1571,7 @@ def cron_tick(request):
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
         "meta": meta_result,
+        "youtube": youtube_result,
         "tiktok": tiktok_result,     # ต่ออายุ token TikTok ({} = ไม่มีช่องไหนใกล้หมด)         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
     }, json_dumps_params={"ensure_ascii": False})
 
@@ -2621,6 +2632,26 @@ def tiktok_webhook(request):
 
 
 @csrf_exempt
+def admin_ads(request):
+    """Admin — ตัวเลขโฆษณา Meta ให้หน้า "โฆษณา" (แยกออกจากหน้าโซเชียล · 23 ก.ย.69)
+
+    GET `?from=YYYY-MM-DD&to=YYYY-MM-DD` (ไม่ใส่ = 30 วันล่าสุด)
+    คืน: ยอดรวมช่วง + **ต้นทุนต่อหน่วย (ต่อแชท/ต่อลีด/CPC/CPM)** + ยอดรายวัน
+         + แยกตามแคมเปญ + โฆษณาที่ได้แชทเยอะสุด
+    ★ ต้นทุนคิดจาก "ผลรวมหารผลรวม" เสมอ ไม่ใช่เฉลี่ยค่าที่ Meta ส่งมารายแถว (ดู ads_stats)
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import ads_stats
+    try:
+        data = ads_stats.stats(request.GET.get("from"), request.GET.get("to"))
+    except Exception as e:                      # ตารางยังไม่ migrate / DB มีปัญหา = บอกตรงๆ
+        return JsonResponse({"ok": False, "error": "อ่านข้อมูลไม่ได้: %s" % e}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+    return JsonResponse(data, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_social(request):
     """Admin — ตัวเลข engagement ของโซเชียล (Meta + TikTok) ให้หน้า "โซเชียล"
 

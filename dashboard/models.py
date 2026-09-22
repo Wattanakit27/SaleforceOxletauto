@@ -209,6 +209,14 @@ class MetaAdDaily(models.Model):
     impressions = models.IntegerField("แสดงผล", default=0)
     reach = models.IntegerField("เข้าถึง (คน)", default=0)
     clicks = models.IntegerField("คลิก", default=0)
+    # ★ 23 ก.ย.69 — แตกตัวเลขสำคัญออกจาก `actions` JSON มาเป็นคอลัมน์ (ดู ads_stats.ACTION_MAP)
+    #   เดิมมีแต่ JSON ดิบ → จะรู้ "ต้นทุนต่อแชท" ต้องงัด jsonb ทุกครั้ง เขียน SQL เองแทบไม่ได้
+    link_clicks = models.IntegerField("คลิกลิงก์", default=0)
+    video_views = models.IntegerField("วิววิดีโอ", default=0)
+    engagement = models.IntegerField("การมีส่วนร่วมกับโพสต์", default=0)
+    chats = models.IntegerField("เริ่มแชท (7 วัน)", default=0)
+    chats_replied = models.IntegerField("แชทที่ตอบกลับ (7 วัน)", default=0)
+    leads = models.IntegerField("ลีด", default=0)
     actions = models.JSONField("actions ดิบ", default=list, blank=True)
     cost_per_action = models.JSONField("ต้นทุนต่อ action ดิบ", default=list, blank=True)
     updated_at = models.DateTimeField("ดึงล่าสุด", auto_now=True)
@@ -422,7 +430,7 @@ class SocialDaily(models.Model):
     `manage.py social_rebuild` (ต้นฉบับคือตาราง snapshot) · สูตรใช้ตัวเดียวกับที่หน้าเว็บใช้
     (`social_stats._daily_one`) จะได้ไม่มีเลข 2 ชุดที่ไม่ตรงกัน
     """
-    META, TIKTOK = "meta", "tiktok"
+    META, TIKTOK, YOUTUBE = "meta", "tiktok", "youtube"
 
     date = models.DateField("วันที่ของยอด", db_index=True)
     platform = models.CharField("แพลตฟอร์ม", max_length=8, db_index=True)
@@ -472,3 +480,135 @@ class TikTokRaw(models.Model):
         verbose_name = "ข้อมูลดิบจาก TikTok"
         verbose_name_plural = "ข้อมูลดิบจาก TikTok"
         ordering = ["-fetched_at"]
+
+
+class YouTubeChannelSnapshot(models.Model):
+    """ยอดรวมของช่อง YouTube ณ สิ้นวัน (ผู้ติดตาม/วิวรวม/จำนวนคลิป)
+
+    ★ ต่างจาก TikTok/Meta ตรงที่ **ไม่ต้องให้เจ้าของช่องกดอนุญาต** — ยอดพวกนี้เป็นข้อมูลสาธารณะ
+      ขอด้วย API key ใบเดียวได้ทุกช่อง (`YOUTUBE_API_KEY` ใน .env)
+    ⚠️ `subscriber_count` เป็น null ได้ ถ้าเจ้าของช่องตั้งซ่อนจำนวนผู้ติดตามไว้
+    """
+    taken_at = models.DateTimeField("ดึงเมื่อ", db_index=True)
+    snap_date = models.DateField("ยอด ณ สิ้นวัน", db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default="cron")
+    channel_id = models.CharField("ช่อง (UC...)", max_length=64, db_index=True)
+    handle = models.CharField("@handle ที่ตั้งไว้ใน .env", max_length=120, blank=True)
+    title = models.CharField("ชื่อช่อง", max_length=200, blank=True)
+
+    subscriber_count = models.BigIntegerField("ผู้ติดตาม", null=True, blank=True)
+    view_count = models.BigIntegerField("วิวรวมทั้งช่อง", null=True, blank=True)
+    video_count = models.IntegerField("จำนวนคลิป", null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_youtube_channel_snapshot"
+        verbose_name = "ยอดช่อง YouTube (รายวัน)"
+        verbose_name_plural = "ยอดช่อง YouTube (รายวัน)"
+        ordering = ["-taken_at"]
+        indexes = [models.Index(fields=["channel_id", "trigger", "snap_date"])]
+
+    def __str__(self):
+        return "%s %s ผู้ติดตาม %s" % (self.snap_date, self.title, self.subscriber_count)
+
+
+class YouTubeVideoSnapshot(models.Model):
+    """ยอดสะสมของคลิป YouTube 1 คลิป ณ เวลาที่ดึง — คู่ขนานกับ `TikTokVideoSnapshot`
+
+    ยอดรายวัน = แถว `trigger='cron'` วัน D ลบวัน D-1 (กติกาเดียวกับ Meta/TikTok)
+    · `snap_date` ของรอบเที่ยงคืน = วันที่เพิ่งจบไป
+    ★ รอบ cron ของวันเดียวกันรันซ้ำได้ ไม่เบิ้ล — ลบชุด cron ของวันนั้นของช่องนั้นก่อนเขียนใหม่
+
+    ⚠️ **YouTube ไม่ให้ยอดแชร์และยอดดิสไลก์** (ปิดดิสไลก์ตั้งแต่ปี 2021 · แชร์ไม่เคยมีใน API)
+      → คอลัมน์ `shares` ใน `dash_social_daily` ของฝั่ง YouTube จะเป็น 0 เสมอ **ไม่ใช่บั๊ก**
+    ⚠️ `like_count` เป็น null ได้ ถ้าเจ้าของคลิปซ่อนยอดไลก์
+    """
+    CRON, MANUAL = "cron", "manual"
+
+    taken_at = models.DateTimeField("ดึงเมื่อ", db_index=True)
+    snap_date = models.DateField("ยอดสะสม ณ สิ้นวัน", db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default=CRON)
+    channel_id = models.CharField("ช่อง (UC...)", max_length=64, db_index=True)
+    video_id = models.CharField("คลิป", max_length=64, db_index=True)
+    published_at = models.DateTimeField("โพสต์เมื่อ", null=True, blank=True)
+    title = models.CharField("ชื่อคลิป (ตัดสั้น)", max_length=300, blank=True)
+    duration = models.IntegerField("ยาว (วินาที)", default=0)
+    is_short = models.BooleanField("เป็น Shorts (ยาว <= 3 นาที)", default=False)
+
+    view_count = models.BigIntegerField("วิว", default=0)
+    like_count = models.BigIntegerField("ไลก์", default=0)
+    comment_count = models.BigIntegerField("คอมเมนต์", default=0)
+
+    class Meta:
+        db_table = "dash_youtube_video_snapshot"
+        verbose_name = "ยอดคลิป YouTube (รายวัน)"
+        verbose_name_plural = "ยอดคลิป YouTube (รายวัน)"
+        ordering = ["-taken_at"]
+        indexes = [models.Index(fields=["video_id", "snap_date"]),
+                   models.Index(fields=["channel_id", "trigger", "snap_date"])]
+
+    def __str__(self):
+        return "%s %s %s วิว" % (self.snap_date, self.video_id, self.view_count)
+
+
+class YouTubeRaw(models.Model):
+    """คำตอบดิบจาก YouTube API ทั้งก้อน — ไว้คิดตัวเลขใหม่ย้อนหลัง · มีวันหมดอายุ (`KEEP_DAYS`)"""
+    KEEP_DAYS = 90
+
+    fetched_at = models.DateTimeField("ดึงเมื่อ", auto_now_add=True, db_index=True)
+    kind = models.CharField("ชนิด", max_length=16, db_index=True)       # channels / videos
+    channel_id = models.CharField("ช่อง", max_length=64, blank=True, db_index=True)
+    trigger = models.CharField("ดึงเพราะ", max_length=8, default="cron")
+    data = models.JSONField("คำตอบดิบ", default=dict, blank=True)
+
+    class Meta:
+        db_table = "dash_youtube_raw"
+        verbose_name = "ข้อมูลดิบจาก YouTube"
+        verbose_name_plural = "ข้อมูลดิบจาก YouTube"
+        ordering = ["-fetched_at"]
+
+
+class AdsDaily(models.Model):
+    """ยอดโฆษณา **รายวัน (รวมทั้งบัญชี)** — 1 แถว = บัญชีโฆษณา 1 บัญชี × 1 วัน
+
+    ★ 23 ก.ย.69 (เจ้าของสั่ง "เก็บข้อมูลของ Ads เป็น Daily Day กับภาพรวม เก็บพวกค่าต่างๆ
+      ด้วย พวก cost per chat") — คู่ขนานกับ `dash_social_daily` ของฝั่งโซเชียล
+
+    `dash_meta_ad_daily` เป็นรายวัน**ต่อโฆษณาแต่ละชิ้น** (147 ชิ้น × ทุกวัน) ซึ่งละเอียดเกิน
+    สำหรับคำถามแบบ "เดือนนี้ยิงไปเท่าไหร่ ได้แชทกี่ครั้ง" → ตารางนี้คือผลรวมรายวันที่พร้อมใช้
+
+    **⚠️ ไม่เก็บ "ต้นทุนต่อแชท" เป็นคอลัมน์โดยตั้งใจ** — ต้นทุนของช่วงหลายวันต้องคิดจาก
+    **ผลรวมเงิน ÷ ผลรวมแชท** ถ้าเก็บรายวันไว้แล้วมีคนเอาไปเฉลี่ยจะได้เลขผิด
+    (วัดจริง 23 ก.ย.69: ค่าที่ Meta เฉลี่ยมาให้ = ฿61.31 แต่ผลรวมจริง = ฿62.49)
+    · ให้คิดตอนแสดงผลเสมอ (ดู `ads_stats.stats`)
+
+    **เป็นข้อมูล derived** — ลบทิ้งแล้วสร้างใหม่ได้ด้วย `manage.py ads_rebuild`
+    """
+    date = models.DateField("วันที่", db_index=True)
+    account_id = models.CharField("บัญชีโฆษณา", max_length=32, db_index=True)
+
+    spend = models.DecimalField("ใช้เงิน (บาท)", max_digits=14, decimal_places=2, default=0)
+    impressions = models.BigIntegerField("แสดงผล", default=0)
+    reach = models.BigIntegerField("เข้าถึง (คน)", default=0)
+    clicks = models.BigIntegerField("คลิกทั้งหมด", default=0)
+    link_clicks = models.BigIntegerField("คลิกลิงก์", default=0)
+    video_views = models.BigIntegerField("วิววิดีโอ", default=0)
+    engagement = models.BigIntegerField("การมีส่วนร่วมกับโพสต์", default=0)
+    chats = models.BigIntegerField("เริ่มแชท", default=0)
+    chats_replied = models.BigIntegerField("แชทที่ตอบกลับ", default=0)
+    leads = models.BigIntegerField("ลีด", default=0)
+
+    ads = models.IntegerField("จำนวนโฆษณาที่ยิงวันนั้น", default=0)
+    campaigns = models.IntegerField("จำนวนแคมเปญ", default=0)
+    updated_at = models.DateTimeField("คำนวณล่าสุด", auto_now=True)
+
+    class Meta:
+        db_table = "dash_ads_daily"
+        verbose_name = "ยอดโฆษณารายวัน"
+        verbose_name_plural = "ยอดโฆษณารายวัน"
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["account_id", "date"],
+                                               name="uniq_ads_daily")]
+        indexes = [models.Index(fields=["date"])]
+
+    def __str__(self):
+        return "%s %s ใช้ %s บาท" % (self.date, self.account_id, self.spend)

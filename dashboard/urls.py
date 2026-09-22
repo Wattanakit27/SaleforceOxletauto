@@ -44,6 +44,7 @@ urlpatterns = [
     path("api/admin/refresh_data", views.admin_refresh_data, name="admin_refresh_data"),
     path("api/admin/report_config", views.admin_report_config, name="admin_report_config"),
     path("api/admin/social", views.admin_social, name="admin_social"),
+    path("api/admin/ads", views.admin_ads, name="admin_ads"),
     path("api/admin/meta_sync", views.admin_meta_sync, name="admin_meta_sync"),
     path("api/tiktok/webhook", views.tiktok_webhook, name="tiktok_webhook"),
     path("legal/terms/", views.legal_page, {"doc": "terms"}, name="legal_terms"),

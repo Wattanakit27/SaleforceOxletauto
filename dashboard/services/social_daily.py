@@ -95,9 +95,10 @@ def rebuild(days: int = DEFAULT_DAYS) -> dict:
 
     best-effort ต่อแพลตฟอร์ม — ฝั่งหนึ่งพังไม่ลากอีกฝั่ง (เช่นยังไม่ได้เชื่อม TikTok)
     """
-    from dashboard.models import MetaPostSnapshot, SocialDaily, TikTokVideoSnapshot
+    from dashboard.models import (MetaPostSnapshot, SocialDaily, TikTokVideoSnapshot,
+                                  YouTubeVideoSnapshot)
 
-    res = {"meta": 0, "tiktok": 0, "errors": []}
+    res = {"meta": 0, "tiktok": 0, "youtube": 0, "errors": []}
     plan = [
         (SocialDaily.META, MetaPostSnapshot, "post_id", "page_id", "message",
          {"views": "video_views", "likes": "reactions",
@@ -105,6 +106,10 @@ def rebuild(days: int = DEFAULT_DAYS) -> dict:
         (SocialDaily.TIKTOK, TikTokVideoSnapshot, "video_id", "open_id", "title",
          {"views": "view_count", "likes": "like_count",
           "comments": "comment_count", "shares": "share_count"}),
+        # ⚠️ YouTube ไม่มี "แชร์" ใน Data API (และดิสไลก์ถูกปิดตั้งแต่ปี 2021)
+        #    → ไม่ต้องใส่ใน fmap · `_daily_one` จะคิดให้เป็น 0 เอง ไม่ใช่บั๊ก
+        (SocialDaily.YOUTUBE, YouTubeVideoSnapshot, "video_id", "channel_id", "title",
+         {"views": "view_count", "likes": "like_count", "comments": "comment_count"}),
     ]
     for platform, model, key_id, owner, title, fmap in plan:
         try:

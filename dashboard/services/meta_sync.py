@@ -292,6 +292,7 @@ def sync_pages(days: int = PAGE_LOOKBACK_DAYS) -> dict:
 def sync_ads(trigger: str, days: int = ADS_LOOKBACK_DAYS) -> dict:
     """ผลโฆษณารายวันระดับ ad (Meta แยกวันให้เอง) → upsert ทับของเดิมในช่วงเดียวกัน"""
     from dashboard.models import MetaAdDaily, MetaRaw
+    from . import ads_stats
 
     today = _bkk_now().date()
     rng = json.dumps({"since": (today - timedelta(days=max(1, days))).isoformat(),
@@ -323,6 +324,9 @@ def sync_ads(trigger: str, days: int = ADS_LOOKBACK_DAYS) -> dict:
                                 clicks=_int(a.get("clicks")),
                                 actions=a.get("actions") or [],
                                 cost_per_action=a.get("cost_per_action_type") or [],
+                                # แตกตัวเลขสำคัญ (แชท/ลีด/คลิกลิงก์) ออกมาเป็นคอลัมน์เลย
+                                # ไม่งั้นต้องงัด jsonb ทุกครั้งที่อยากรู้ต้นทุนต่อแชท
+                                **ads_stats.extract(a.get("actions") or []),
                             ))
                         n += 1
         except meta.MetaError as e:
@@ -383,6 +387,8 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
         # สร้างตาราง "รายวัน" ใหม่จาก snapshot (ดู social_daily) — พังก็ไม่กระทบ snapshot
         from . import social_daily
         res["daily"] = social_daily.refresh_quiet().get("meta", 0)
+        from . import ads_stats as _ads
+        res["adsDaily"] = _ads.refresh_quiet()
         res["ok"] = not res["errors"]
         res["postsOk"] = p["snapshots"] > 0 and not p["errors"]
     except Exception as e:                       # ห้ามทำให้ cron_tick ล้มตาม

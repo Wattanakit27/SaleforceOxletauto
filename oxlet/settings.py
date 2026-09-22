@@ -153,6 +153,17 @@ TIKTOK_SCOPES = os.getenv("TIKTOK_SCOPES", "user.info.basic,video.list")
 # ว่าง = เขียนว่า "ติดต่อผ่านช่องทางทางการของบริษัท" · ใส่อีเมล/เบอร์บริษัทที่เปิดเผยได้
 LEGAL_CONTACT = os.getenv("LEGAL_CONTACT", "")
 
+# ===== YouTube Data API v3 (ก.ย.69) =====
+# ★ ต่างจาก TikTok/Meta ตรงที่ **ไม่ต้องให้เจ้าของช่องกดอนุญาตเลย** — ยอดสาธารณะ
+#   (ผู้ติดตาม/วิว/ไลก์/คอมเมนต์) ขอด้วย API key ใบเดียวใช้ได้ทุกช่อง ไม่มี OAuth ไม่มี sandbox
+# ★ ไม่ตั้ง = ปิดสนิท (กติกาเดียวกับ META_* / EXTERNAL_API_KEY) — รอบเที่ยงคืนจะไม่ทำอะไรเลย
+# ⚠️ ประกาศตัวแปรไว้ตรงนี้เสมอ แม้ค่าจะมาจาก .env — บทเรียน LINE_CHANNEL_SECRET ที่ลืมประกาศ
+#    แล้ว getattr คืนค่าว่างตลอด = ข้ามการตรวจลายเซ็นมาเป็นเดือนโดยไม่มีใครรู้
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
+# ช่องที่จะดึง — คั่นด้วย comma · ใส่ได้ทั้ง @handle และ channelId (UC...)
+#   ตัวอย่าง: YOUTUBE_CHANNELS=@oxletauto,@oxletauto2,UCxxxxxxxxxxxx
+YOUTUBE_CHANNELS = [c.strip() for c in os.getenv("YOUTUBE_CHANNELS", "").split(",") if c.strip()]
+
 # ===== API สำหรับระบบภายนอก (n8n / เว็บโชว์รูม / partner) =====
 # อ่านอย่างเดียว · ต้องส่งคีย์มาด้วยทุกครั้ง (header X-API-Key หรือ ?key=)
 # ★ ไม่ตั้งค่า = ปิดสนิท (endpoint คืน 503) — ข้อมูลพนักงาน/LINE id เป็นข้อมูลส่วนบุคคล

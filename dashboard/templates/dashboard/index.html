@@ -1239,7 +1239,7 @@
       let html = '';
       // ★ 19 ก.ย.69 — จอกว้าง = แถบเมนูซ้ายถาวร (ดู .has-sidebar ใน globals.css) · มือถือยังเป็น ☰ drawer
       document.body.classList.add('has-sidebar');
-      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'โซเชียล'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
+      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'โซเชียล'},{id:'ad',i:'lucide:wallet',l:'โฆษณา'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
       const _curTab = NAV_TABS.find(t => t.id === tab) || NAV_TABS[0];
 
       // Header
@@ -1368,6 +1368,7 @@
       else if(tab==='p') html += renderPurchaseTab();
       else if(tab==='s') html += renderSeller(sellers, sellerNames, dilMap);
       else if(tab==='so') html += renderSocial();
+      else if(tab==='ad') html += renderAds();
       else if(tab==='t') html += renderTracking();
       else if(tab==='ck') html += renderCheckout();
 
@@ -1375,6 +1376,7 @@
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
       if(tab==='o') initCharts();
       if(tab==='so') loadSocial();    // "โซเชียล" — ดึงยอด engagement ตามช่วงวันที่ของหน้า
+      if(tab==='ad') loadAds();      // "โฆษณา" — ค่าโฆษณา/ต้นทุนต่อแชท ตามช่วงวันที่ของหน้า
       if(tab==='t') loadTracking();   // "สถานะรถ" เรนเดอร์ native (fetch /track/api/cars) ธีมเดียวกับ sales
       if(tab==='p') loadYodStock();   // "จัดซื้อ" — ดึง override สต๊อกที่แก้ไว้ แล้ว refresh ตาราง
       if(tab==='a') loadClipWeek();   // "ไลฟ์" — ดึง override ตารางติดตามคอนเทนต์ (คลิป) รายสัปดาห์
@@ -5071,21 +5073,35 @@
         <div class="spin" style="margin:0 auto 12px"></div>กำลังรวมยอดจาก Facebook และ TikTok...</div></div>`;
     }
 
+    // ★ 23 ก.ย.69 — แก้บั๊ก "ตัวกรองค้าง" (เจ้าของแจ้ง)
+    //   เดิม: กำลังโหลดอยู่แล้วผู้ใช้เปลี่ยนช่วงวันที่ -> `if (_soLoading) return` ทิ้งคำขอใหม่ไปเลย
+    //   → พอคำขอเก่าเสร็จ หน้าจอโชว์ข้อมูล "ช่วงเก่า" แต่ช่องวันที่เป็น "ช่วงใหม่"
+    //      = ดูเหมือนตัวกรองค้าง และไม่มีอะไรมาสั่งโหลดช่วงใหม่อีกเลย (ค้างจนกว่าจะสลับแท็บ)
+    //   ตอนนี้: คำขอใหม่ยกเลิกคำขอเก่าเสมอ + เลขลำดับกันผลเก่ามาทับผลใหม่
+    //   ⚠️ แท็บใหม่ที่ผูกกับช่วงวันที่ต้องใช้ท่าเดียวกันนี้ (ดู loadAds)
+    let _soSeq = 0, _soAbort = null, _soReqKey = '';
     async function loadSocial(force) {
       const key = dfFrom + '_' + dfTo;
-      if (_soLoading || (!force && _soData && _soRange === key)) { drawSocial(); return; }
+      if (!force && !_soLoading && _soData && _soRange === key) { drawSocial(); return; }
+      if (!force && _soLoading && _soReqKey === key) return;      // ช่วงเดิมกำลังโหลดอยู่ รอผลได้เลย
+      if (_soAbort) { try { _soAbort.abort(); } catch (e) {} }    // ทิ้งคำขอเก่าที่ไม่ต้องการแล้ว
+      const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      _soAbort = ac; _soReqKey = key;
+      const seq = ++_soSeq;
       _soLoading = true;
       try {
         const r = await fetch(`/api/admin/social?from=${encodeURIComponent(dfFrom)}&to=${encodeURIComponent(dfTo)}`,
-                              { credentials: 'same-origin' });
+                              { credentials: 'same-origin', signal: ac ? ac.signal : undefined });
         const d = await r.json();
+        if (seq !== _soSeq) return;                              // มีคำขอใหม่แซงแล้ว ทิ้งผลนี้
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
         _soData = d; _soRange = key; _soOpen = null;   // เปลี่ยนช่วงวัน = กลับหน้ารวม
       } catch (e) {
+        if (seq !== _soSeq || (e && e.name === 'AbortError')) return;   // โดนแทนที่คำขอใหม่ = ไม่ใช่ error
         const box = document.getElementById('so-box');
         if (box) box.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message || e))}</div>`;
         return;
-      } finally { _soLoading = false; }
+      } finally { if (seq === _soSeq) _soLoading = false; }
       drawSocial();
     }
 
@@ -5149,7 +5165,9 @@
             : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล')}</span></div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
-            ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b></div>` : ''}
+            ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b>
+            <button onclick="switchTab('ad')" style="margin-left:8px;font-size:var(--fs-body);padding:3px 10px;border-radius:7px;
+              border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ดูหน้าโฆษณา</button></div>` : ''}
         ${side === 'meta' ? _soPageCmp() : ''}
         ${note ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:9px;line-height:1.7;
              border-top:.5px dashed var(--bd2);padding-top:8px">${note}</div>` : ''}</div>`;
@@ -5309,6 +5327,153 @@
       if (empty && !_soOpen) {
         cv.insertAdjacentHTML('afterend', `<div style="position:relative;top:-165px;text-align:center;color:var(--t3);font-size:var(--fs-body);line-height:1.8">
           ยังไม่มียอดรายวันในช่วงนี้<br><span style="color:var(--t3)">ระบบเก็บให้เองทุกเที่ยงคืน — พรุ่งนี้จะเริ่มมีเส้นกราฟ</span></div>`);
+      }
+    }
+
+    // ═══════ แท็บ "โฆษณา" — แยกออกจากหน้าโซเชียล (23 ก.ย.69 · เจ้าของสั่ง) ═══════
+    //  ★ ต้นทุนต่อหน่วยคำนวณฝั่งเซิร์ฟเวอร์จาก "ผลรวมหารผลรวม" เสมอ (ดู ads_stats)
+    //    ห้ามเอาค่า cost_per_action รายแถวของ Meta มาเฉลี่ย — วัดจริงต่างกัน 61.31 vs 62.49 บาท
+    let _adData = null, _adMetric = 'spend', _adLoading = false, _adChart = null, _adRange = '';
+    let _adSeq = 0, _adAbort = null, _adReqKey = '';
+    const AD_CHIPS = ['spend', 'chats', 'leads', 'link_clicks', 'video_views', 'impressions'];
+
+    function renderAds() {
+      return `<div id="ad-box"><div style="text-align:center;color:var(--t3);padding:50px">
+        <div class="spin" style="margin:0 auto 12px"></div>กำลังรวมค่าโฆษณา...</div></div>`;
+    }
+
+    // ★ ท่ากันตัวกรองค้าง — ต้องเหมือน loadSocial เป๊ะ (ดูคำอธิบายบั๊กที่นั่น)
+    async function loadAds(force) {
+      const key = dfFrom + '_' + dfTo;
+      if (!force && !_adLoading && _adData && _adRange === key) { drawAds(); return; }
+      if (!force && _adLoading && _adReqKey === key) return;
+      if (_adAbort) { try { _adAbort.abort(); } catch (e) {} }
+      const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      _adAbort = ac; _adReqKey = key;
+      const seq = ++_adSeq;
+      _adLoading = true;
+      try {
+        const r = await fetch(`/api/admin/ads?from=${encodeURIComponent(dfFrom)}&to=${encodeURIComponent(dfTo)}`,
+                              { credentials: 'same-origin', signal: ac ? ac.signal : undefined });
+        const d = await r.json();
+        if (seq !== _adSeq) return;
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _adData = d; _adRange = key;
+      } catch (e) {
+        if (seq !== _adSeq || (e && e.name === 'AbortError')) return;
+        const box = document.getElementById('ad-box');
+        if (box) box.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message || e))}</div>`;
+        return;
+      } finally { if (seq === _adSeq) _adLoading = false; }
+      drawAds();
+    }
+
+    function adSetMetric(m) { _adMetric = m; drawAds(); }
+
+    function _adB(v) { return (v === null || v === undefined) ? '–' : '฿' + Number(v).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
+    function _adN(v) { return (v === null || v === undefined) ? '–' : Number(v).toLocaleString('th-TH'); }
+
+    function _adKpi(label, value, sub) {
+      return `<div style="min-width:132px">
+        <div style="font-size:var(--fs-body);color:var(--t3)">${h(label)}</div>
+        <div style="font-size:24px;font-weight:800;color:var(--t1);line-height:1.25">${h(value)}</div>
+        ${sub ? `<div style="font-size:var(--fs-body);color:var(--t3)">${h(sub)}</div>` : ''}</div>`;
+    }
+
+    function drawAds() {
+      const box = document.getElementById('ad-box');
+      if (!box || !_adData) return;
+      const t = _adData.total || {}, c = _adData.cost || {}, cov = _adData.coverage || {};
+      const th = _adData.metricTh || {};
+
+      const chips = AD_CHIPS.map(m => `<button onclick="adSetMetric('${m}')"
+          style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;cursor:pointer;
+                 border:.5px solid ${_adMetric === m ? 'transparent' : 'var(--bd2)'};
+                 background:${_adMetric === m ? 'var(--blue)' : 'var(--bg2)'};
+                 color:${_adMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(th[m] || m)}</button>`).join('');
+
+      const covNote = cov.haveDays
+        ? `มีข้อมูล ${cov.haveDays} วัน จาก ${cov.spanDays} วันในช่วงนี้`
+        : 'ยังไม่มีข้อมูลโฆษณาในช่วงนี้';
+      const warn = (cov.haveDays && cov.haveDays < cov.spanDays)
+        ? ` · <span style="color:var(--amber)">ช่วงที่เหลือยังไม่ได้เก็บ (ระบบเริ่มเก็บ 18 ก.ย.69)</span>` : '';
+
+      let html = `<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div class="card-title">ค่าโฆษณา Meta</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soFmtDay(_adData.from))} – ${h(_soFmtDay(_adData.to))} · ${covNote}${warn}</div>
+        </div>
+        <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:14px">
+          ${_adKpi('ใช้เงิน', _adB(t.spend))}
+          ${_adKpi('เริ่มแชท', _adN(t.chats), 'ตอบกลับ ' + _adN(t.chats_replied) + (c.replyRate != null ? ' (' + c.replyRate + '%)' : ''))}
+          ${_adKpi('ต้นทุนต่อแชท', _adB(c.perChat), 'เงินทั้งหมด หาร แชททั้งหมด')}
+          ${_adKpi('ลีด', _adN(t.leads), c.perLead != null ? 'ต้นทุน ' + _adB(c.perLead) + '/ลีด' : '')}
+          ${_adKpi('คลิกลิงก์', _adN(t.link_clicks), c.perLinkClick != null ? _adB(c.perLinkClick) + '/คลิก' : '')}
+          ${_adKpi('แสดงผล', _adN(t.impressions), (c.cpm != null ? 'CPM ' + _adB(c.cpm) : '') + (c.ctr != null ? ' · CTR ' + c.ctr + '%' : ''))}
+        </div></div>`;
+
+      html += `<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div class="card-title">รายวัน</div><div style="display:flex;gap:6px;flex-wrap:wrap">${chips}</div></div>
+        <div style="height:270px;position:relative"><canvas id="adChart"></canvas></div></div>`;
+
+      const camps = _adData.campaigns || [];
+      html += `<div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:10px">แคมเปญ (เรียงตามเงินที่ใช้)</div>`;
+      if (!camps.length) html += `<div style="color:var(--t3);padding:14px">ไม่มีข้อมูล</div>`;
+      else html += `<table style="width:100%;border-collapse:collapse;font-size:var(--fs-body)">
+        <thead><tr style="color:var(--t3);text-align:right">
+          <th style="text-align:left;padding:7px 8px">แคมเปญ</th><th style="padding:7px 8px">ใช้เงิน</th>
+          <th style="padding:7px 8px">แชท</th><th style="padding:7px 8px">ต่อแชท</th>
+          <th style="padding:7px 8px">ลีด</th><th style="padding:7px 8px">คลิกลิงก์</th>
+          <th style="padding:7px 8px">CTR</th></tr></thead><tbody>` +
+        camps.map(r => `<tr style="border-top:.5px solid var(--bd);text-align:right">
+          <td style="text-align:left;padding:7px 8px;color:var(--t1)">${h(String(r.name).slice(0, 58))}</td>
+          <td style="padding:7px 8px;font-weight:700">${_adB(r.spend)}</td>
+          <td style="padding:7px 8px">${_adN(r.chats)}</td>
+          <td style="padding:7px 8px;color:${r.cost.perChat == null ? 'var(--t3)' : 'var(--t1)'}">${_adB(r.cost.perChat)}</td>
+          <td style="padding:7px 8px">${_adN(r.leads)}</td>
+          <td style="padding:7px 8px">${_adN(r.link_clicks)}</td>
+          <td style="padding:7px 8px">${r.cost.ctr == null ? '–' : r.cost.ctr + '%'}</td></tr>`).join('') + `</tbody></table>`;
+      html += `</div>`;
+
+      const ads = _adData.ads || [];
+      html += `<div class="card"><div class="card-title" style="margin-bottom:10px">โฆษณาที่ได้แชทมากสุด</div>`;
+      if (!ads.length) html += `<div style="color:var(--t3);padding:14px">ไม่มีข้อมูล</div>`;
+      else html += `<table style="width:100%;border-collapse:collapse;font-size:var(--fs-body)">
+        <thead><tr style="color:var(--t3);text-align:right">
+          <th style="text-align:left;padding:7px 8px">โฆษณา</th><th style="padding:7px 8px">ใช้เงิน</th>
+          <th style="padding:7px 8px">แชท</th><th style="padding:7px 8px">ต่อแชท</th>
+          <th style="padding:7px 8px">ลีด</th></tr></thead><tbody>` +
+        ads.map(r => `<tr style="border-top:.5px solid var(--bd);text-align:right">
+          <td style="text-align:left;padding:7px 8px">
+            <div style="color:var(--t1)">${h(String(r.name).slice(0, 52))}</div>
+            <div style="color:var(--t3);font-size:11px">${h(String(r.campaign || '').slice(0, 52))}</div></td>
+          <td style="padding:7px 8px;font-weight:700">${_adB(r.spend)}</td>
+          <td style="padding:7px 8px">${_adN(r.chats)}</td>
+          <td style="padding:7px 8px">${_adB(r.cost.perChat)}</td>
+          <td style="padding:7px 8px">${_adN(r.leads)}</td></tr>`).join('') + `</tbody></table>`;
+      html += `</div>`;
+
+      box.innerHTML = html;
+
+      const cv = document.getElementById('adChart');
+      if (!cv || typeof Chart === 'undefined') return;
+      if (_adChart) { try { _adChart.destroy(); } catch (e) {} }
+      const days = _adData.days || [], daily = _adData.daily || {};
+      const lbl = days.map(_soFmtDay);
+      // วันที่ไม่มีข้อมูล = null ไม่ใช่ 0 (เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา)
+      const data = days.map(d => (daily[d] ? (daily[d][_adMetric] || 0) : null));
+      const empty = data.every(v => v === null);
+      _adChart = new Chart(cv, {
+        type: 'line',
+        data: { labels: lbl, datasets: [{ label: th[_adMetric] || _adMetric, data: data,
+                borderColor: '#7c3aed', backgroundColor: '#7c3aed', ..._LINE_DS }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: _scalesClean(),
+                   plugins: { legend: { display: !empty, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } } } },
+      });
+      if (empty) {
+        cv.insertAdjacentHTML('afterend', `<div style="position:relative;top:-165px;text-align:center;color:var(--t3);font-size:var(--fs-body);line-height:1.8">
+          ยังไม่มีข้อมูลโฆษณาในช่วงนี้<br><span style="color:var(--t3)">ระบบดึงให้เองทุกเที่ยงคืน (ย้อนหลัง 3 วัน)</span></div>`);
       }
     }
 
