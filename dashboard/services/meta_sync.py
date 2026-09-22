@@ -380,6 +380,9 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
                                                    "newMsgs", "profiles", "stopped", "sec")},
                    errors=p["errors"] + a["errors"] + g["errors"] + (m.get("errors") or []),
                    trimmed=trim_raw())
+        # สร้างตาราง "รายวัน" ใหม่จาก snapshot (ดู social_daily) — พังก็ไม่กระทบ snapshot
+        from . import social_daily
+        res["daily"] = social_daily.refresh_quiet().get("meta", 0)
         res["ok"] = not res["errors"]
         res["postsOk"] = p["snapshots"] > 0 and not p["errors"]
     except Exception as e:                       # ห้ามทำให้ cron_tick ล้มตาม

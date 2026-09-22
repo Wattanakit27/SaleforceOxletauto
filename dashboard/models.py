@@ -410,6 +410,53 @@ class TikTokAccountSnapshot(models.Model):
         indexes = [models.Index(fields=["open_id", "trigger", "snap_date"])]
 
 
+class SocialDaily(models.Model):
+    """ยอดโซเชียล **รายวันจริง** — 1 แถว = โพสต์/คลิป 1 ชิ้น × 1 วัน
+
+    ★ 23 ก.ย.69 (เจ้าของสั่ง "แยกตาราง Daily กับภาพรวม จะได้กรองวันได้")
+    ตารางเดิม (`dash_meta_post_snapshot` / `dash_tiktok_video_snapshot`) เก็บ **ยอดสะสม**
+    ณ ตอนดึง → ถ้าอยากรู้ "วันนี้ได้กี่วิว" ต้องเอา 2 วันมาลบกันเองทุกครั้ง
+    · ตารางนี้คือผลลัพธ์ที่ลบไว้แล้ว → `WHERE date BETWEEN … ` ได้ตรงๆ ทั้งในหน้า SQL และโค้ด
+
+    **เป็นข้อมูลที่คำนวณมา (derived) ไม่ใช่ต้นฉบับ** — ลบทิ้งแล้วสร้างใหม่ได้เสมอด้วย
+    `manage.py social_rebuild` (ต้นฉบับคือตาราง snapshot) · สูตรใช้ตัวเดียวกับที่หน้าเว็บใช้
+    (`social_stats._daily_one`) จะได้ไม่มีเลข 2 ชุดที่ไม่ตรงกัน
+    """
+    META, TIKTOK = "meta", "tiktok"
+
+    date = models.DateField("วันที่ของยอด", db_index=True)
+    platform = models.CharField("แพลตฟอร์ม", max_length=8, db_index=True)
+    object_id = models.CharField("โพสต์/คลิป", max_length=64, db_index=True)
+    owner_id = models.CharField("เพจ/ช่อง", max_length=120, blank=True, db_index=True)
+    title = models.CharField("ข้อความ/ชื่อคลิป (ย่อ)", max_length=200, blank=True)
+
+    # ยอดที่ "เพิ่มขึ้นในวันนั้น" (ติดลบไม่นับ — โพสต์ถูกลบ/ตัวเลขถูกแก้ย้อนหลัง)
+    views = models.BigIntegerField("วิว (วันนั้น)", default=0)
+    likes = models.BigIntegerField("ไลก์ (วันนั้น)", default=0)
+    comments = models.BigIntegerField("คอมเมนต์ (วันนั้น)", default=0)
+    shares = models.BigIntegerField("แชร์ (วันนั้น)", default=0)
+
+    # ยอดสะสม ณ สิ้นวันนั้น (ไว้เทียบ/ตรวจว่าตัวเลขเพี้ยนไหม)
+    cum_views = models.BigIntegerField("วิวสะสม", default=0)
+    cum_likes = models.BigIntegerField("ไลก์สะสม", default=0)
+    cum_comments = models.BigIntegerField("คอมเมนต์สะสม", default=0)
+    cum_shares = models.BigIntegerField("แชร์สะสม", default=0)
+
+    updated_at = models.DateTimeField("คำนวณล่าสุด", auto_now=True)
+
+    class Meta:
+        db_table = "dash_social_daily"
+        verbose_name = "ยอดโซเชียลรายวัน"
+        verbose_name_plural = "ยอดโซเชียลรายวัน"
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["platform", "object_id", "date"],
+                                               name="uniq_social_daily")]
+        indexes = [models.Index(fields=["platform", "date"])]
+
+    def __str__(self):
+        return "%s %s %s วิว+%s" % (self.date, self.platform, self.object_id, self.views)
+
+
 class TikTokRaw(models.Model):
     """คำตอบดิบจาก TikTok API ทั้งก้อน — ไว้คิดตัวเลขใหม่ย้อนหลัง · มีวันหมดอายุ (`KEEP_DAYS`)"""
     KEEP_DAYS = 90

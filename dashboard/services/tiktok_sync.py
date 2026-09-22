@@ -222,6 +222,9 @@ def run(trigger: str = "cron", by: str = "") -> dict:
             _touch()
         res["channels"] = len(accs)
         res["trimmed"] = trim_raw()
+        # สร้างตาราง "รายวัน" ใหม่จาก snapshot (ดู social_daily) — พังก็ไม่กระทบ snapshot
+        from . import social_daily
+        res["daily"] = social_daily.refresh_quiet().get("tiktok", 0)
         res["ok"] = not res["errors"]
         # อย่างน้อยหนึ่งช่องได้ยอด = ถือว่ารอบเที่ยงคืนวันนี้ทำแล้ว (ช่องที่พังดูใน errors)
         res["done"] = bool(accs) and len(res["errors"]) < len(accs)
