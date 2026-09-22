@@ -25,6 +25,9 @@ class Car(models.Model):
     year = models.PositiveIntegerField("ปี", null=True, blank=True)
     color = models.CharField("สี", max_length=30, blank=True)
     km = models.PositiveIntegerField("เลขไมล์", null=True, blank=True)
+    # ★ 22 ก.ย.69 (เจ้าของแจ้ง "จัดซื้อ ขาดใส่ราคาขาย") — กรอกเองได้จากหน้าเว็บ
+    #   ของนำเข้าจาก Car Spend อยู่ใน extra["price"] (อ่านอย่างเดียว) → ช่องนี้ชนะเสมอเวลาแสดงผล
+    price = models.PositiveIntegerField("ราคาขาย (บาท)", null=True, blank=True)
 
     stage = models.CharField("สเตป", max_length=20, choices=C.STAGE_CHOICES, default=C.STAGE_KEYS[0])
     stage_since = models.DateTimeField("เข้าสเตปเมื่อ", default=timezone.now)

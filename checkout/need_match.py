@@ -35,10 +35,10 @@ def _stock():
     from cars.models import Car
     out = []
     qs = Car.objects.filter(status="active", stage__in=SELLABLE_STAGES, deleted_at__isnull=True)
-    for c in qs.only("code", "brand", "model", "year", "plate", "extra"):
+    for c in qs.only("code", "brand", "model", "year", "plate", "price", "extra"):
         ex = c.extra or {}
         try:
-            price = int(ex.get("price_num") or 0)
+            price = int(c.price or ex.get("price_num") or 0)
         except (TypeError, ValueError):
             price = 0
         out.append({

@@ -66,10 +66,16 @@ def _stage_options(keys, role=None):
     role ส่งมา = ใช้ป้ายปุ่มตามบทบาท (เช่น เซลล์เห็น qc_show เป็น "ตีกลับ QC")"""
     kset = set(keys)
     # (key, ชื่อปุ่ม, ไอคอน, สีเฟส, ฝ่ายที่รับช่วงต่อ) — 2 ตัวท้ายเพิ่ม ส.ค.69 (แต้มสี + tooltip)
-    return [(k, roles.stage_button_label(role, k, n), i,
-             C.PHASE_COLOR.get(C.STAGE_PHASE.get(k, ("", ""))[0], "#64748b"),
-             C.STAGE_OWNER.get(k, ""))
+    # ★ 22 ก.ย.69 — key ที่คืนออกไปคือ "สเตปปลายทางจริง" (บางปุ่มของบางบทบาทพาไปคนละที่กับชื่อคีย์
+    #   ดู roles.STAGE_BUTTON_TARGET) → ทั้งการบังคับรูป/เช็คลิสต์และการบันทึกอิงปลายทางเสมอ
+    opts = [(roles.stage_button_target(role, k), roles.stage_button_label(role, k, n), i,
+             C.PHASE_COLOR.get(C.STAGE_PHASE.get(roles.stage_button_target(role, k), ("", ""))[0], "#64748b"),
+             C.STAGE_OWNER.get(roles.stage_button_target(role, k), ""))
             for k, n, i in C.STAGES if k in kset]
+    # เรียงตามสเตปปลายทาง → ปุ่มที่ไปที่เดียวกันอยู่ติดกัน (เจ้าของขอ "ย้ายมาคู่กับรอเซลล์ตรวจ")
+    _order = {k: n for n, (k, _n, _i) in enumerate(C.STAGES)}
+    opts.sort(key=lambda o: _order.get(o[0], 999))
+    return opts
 
 
 # =========================================================
@@ -118,6 +124,15 @@ def dashboard(request):
         cars = [c for c in cars if c.branch == branch]
     if stage:
         cars = [c for c in cars if c.stage == stage]
+    # ★ 22 ก.ย.69 (เจ้าของแจ้ง "ขาดค้นหาทะเบียนรถ") — หน้างานจำ "ทะเบียน" ไม่ใช่รหัสรถ
+    #   ตัดช่องว่าง/ขีดก่อนเทียบ เพราะคนพิมพ์ทั้ง "1กก1234" และ "1กก 1234" · ค้นรหัส/ยี่ห้อ/รุ่นได้ด้วย
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        key = q.replace(" ", "").replace("-", "").lower()
+        cars = [c for c in cars
+                if key in "".join([c.plate or "", c.plate_original or "", c.code or "",
+                                   c.brand or "", c.model or ""]
+                                  ).replace(" ", "").replace("-", "").lower()]
     # ★ ตัวกรองธงงานค้าง (ยังไม่ถ่ายรูป/คอนเทนต์) — เจ้าของขอให้หางานติดธงได้ง่าย (ส.ค.69)
     flagf = request.GET.get("flag", "")
     if flagf in C.FLAG_KEYS:
@@ -167,7 +182,7 @@ def dashboard(request):
         "total": len(all_cars), "flags": flags, "phase_rows": phase_rows,
         "avg_t2l": avg_t2l, "t2l_target": C.T2L_TARGET_DAYS,
         "cars": cars, "branch_choices": branch_pairs(), "stage_choices": C.STAGES,
-        "cur_branch": branch, "cur_stage": stage, "cur_sort": sort,
+        "cur_branch": branch, "cur_stage": stage, "cur_sort": sort, "cur_q": q,
         "cur_view": view, "active_n": active_n, "sold_n": sold_n,
         "flag_choices": C.CAR_FLAGS, "cur_flag": flagf,
         # สเตปที่บังคับ รูป/หมายเหตุ — ส่งจากเซิร์ฟเวอร์ ไม่ให้ JS hardcode หลุดจากกติกาจริง
@@ -300,6 +315,13 @@ def _fetch_logs(car, limit):
         return list(car.logs.all()[:limit].defer("media")), False
 
 
+def _price_show(car) -> str:
+    """ราคาที่เอาไปโชว์ — ★ ช่อง `price` ที่กรอกในระบบชนะ `extra["price"]` ของที่นำเข้ามา"""
+    if getattr(car, "price", None):
+        return "{:,}".format(car.price)
+    return (car.extra or {}).get("price") or ""
+
+
 @login_required
 def car_json(request, code):
     """รายละเอียดรถ (สำหรับ popup ในหน้าเดียว) — ฟิลด์ + ประวัติสแกน + สเตปที่เปลี่ยนได้."""
@@ -342,7 +364,7 @@ def car_json(request, code):
         "logs": logs, "direct": direct, "canEdit": roles.can_edit_this_car(request.user, car),
         "canDelete": roles.can_manage_users(request.user),  # ลบ = แอดมินเท่านั้น (Exec/Admin)
         # ข้อมูลนำเข้า (ราคา/เจ้าของ/รายละเอียดเครื่องยนต์ ฯลฯ) — เก็บครบใน extra
-        "price": (car.extra or {}).get("price"),
+        "price": _price_show(car),
         "owner": (car.extra or {}).get("owner") or {},
         "detail": (car.extra or {}).get("detail") or {},
     }, json_dumps_params={"ensure_ascii": False})
@@ -1142,14 +1164,14 @@ def cars_api(request):
             "plate": c.plate, "branch": c.branch_name, "brand": c.brand, "model": c.model,
             "stage": c.stage, "stageName": c.stage_name, "stageIcon": c.stage_icon,
             "status": c.status, "sold": (c.status == "sold" or c.stage == "sold"),
-            "flag": c.flag, "days": c.days_in_stage, "price": ex.get("price"),
+            "flag": c.flag, "days": c.days_in_stage, "price": _price_show(c),
             "priority": c.priority, "priorityColor": c.priority_color, "priorityName": c.priority_name,
             "needPhoto": c.need_photo, "needContent": c.need_content, "needTire": c.need_tire, "flags": c.flags,
             "note": c.note, "photo": photo,
             "taxNote": det.get("วันที่ต่อภาษีรถยนต์", ""),
             "province": (ex.get("owner") or {}).get("จังหวัด", ""),
             # สำหรับเรียง: ราคา/ปี/ไมล์/วันรับเข้า/วันแก้ไขล่าสุด
-            "priceNum": ex.get("price_num") or 0,
+            "priceNum": c.price or ex.get("price_num") or 0,
             "year": c.year or 0, "km": c.km or 0,
             "dateInTs": c.date_in.timestamp() if c.date_in else 0,
             "updatedTs": c.updated_at.timestamp() if c.updated_at else 0,
@@ -1390,7 +1412,7 @@ def api_add_car(request):
         branch=(d.get("branch") or C.DEFAULT_BRANCH),
         plate=(d.get("plate") or "")[:20], brand=(d.get("brand") or "")[:40],
         model=(d.get("model") or "")[:60], color=(d.get("color") or "")[:30],
-        year=_to_int(d.get("year")), km=_to_int(d.get("km")),
+        year=_to_int(d.get("year")), km=_to_int(d.get("km")), price=_to_int(d.get("price")),
         status=status, book_status=book, stage=stage,
         tax_due_date=_parse_dateonly(d.get("tax_due_date")),
         note=(d.get("note") or "")[:5000],

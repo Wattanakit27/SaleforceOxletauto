@@ -8,7 +8,7 @@ class CarForm(forms.ModelForm):
     class Meta:
         model = Car
         fields = [
-            "branch", "plate", "brand", "model", "year", "color", "km",
+            "branch", "plate", "brand", "model", "year", "color", "km", "price",
             "status", "priority", "book_status", "tax_due_date", "doc_registration",
             "photo", "note",
         ]

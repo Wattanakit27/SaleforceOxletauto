@@ -158,7 +158,10 @@ FLAG_COLOR = {f[0]: f[3] for f in CAR_FLAGS}
 # ตอนนี้: ทุกบทบาท ทุกสเตป ต้อง "แนบรูป/วิดีโอ + ใส่หมายเหตุ" ก่อนถึงจะเปลี่ยนได้
 #   PROOF_EXEMPT_STAGES = ช่องยกเว้น (ว่าง = บังคับทุกสเตป)
 #   ถ้าภายหลังเจอสเตปที่บังคับไม่ไหวหน้างาน (เช่นงานเอกสารล้วน ไม่มีอะไรให้ถ่าย) ใส่คีย์ตรงนี้จุดเดียวพอ
-PROOF_EXEMPT_STAGES: set[str] = set()
+#   ★ 22 ก.ย.69 (เจ้าของสั่ง) — "ชงล้าง เอารูปกับหมายเหตุออก ไม่ต้องใส่ ย้ายได้เลย"
+#   การส่งรถเข้าคิวล้าง = ย้ายคิว ไม่ใช่การทำงานกับตัวรถ → ไม่มีอะไรให้ถ่ายเป็นหลักฐาน
+#   (ขาออกยังบังคับเหมือนเดิม: ล้างเสร็จ qc_show/qc_release ต้องแนบรูป — หลักฐานอยู่ตรงนั้น)
+PROOF_EXEMPT_STAGES: set[str] = {"wash"}
 STAGE_FORCE_MEDIA = {k for k in STAGE_KEYS if k not in PROOF_EXEMPT_STAGES}
 STAGE_FORCE_NOTE = {k for k in STAGE_KEYS if k not in PROOF_EXEMPT_STAGES}
 

@@ -159,6 +159,22 @@ def flag_perms(user) -> dict:
     return {k: can_set_flag(user, k) for k in _C.FLAG_KEYS}
 
 
+# ★ 22 ก.ย.69 (เจ้าของเคาะ) — ปุ่มที่ "ชื่อปุ่ม" กับ "ปลายทางจริง" ไม่ตรงกัน
+#   เจ้าของแจ้ง: "พอติ๊กแก้ไขรถตรวจขึ้นโชว์กับแก้ไขรถรอปล่อย มันไปสเตชั่นรอ QC ตรวจ
+#                 ที่จริงต้องไปอยู่สเตชั่นรอเซลล์ตรวจ"
+#   ของเดิมปุ่มพารถ "วนกลับเข้าคิวของ QC เอง" → รถค้างอยู่กับ QC ไม่มีใครมารับช่วง
+#   ตอนนี้ = QC แก้เสร็จแล้วส่งต่อให้เซลล์ตรวจรับ (ทั้ง 2 ปุ่ม)
+#   หมายเหตุ: นี่คือ "ปลายทางของปุ่ม" ไม่ใช่การตัดสิทธิ์ — QC ยังตั้งสเตปเดิมได้ถ้าจำเป็น
+STAGE_BUTTON_TARGET = {
+    QC: {"qc_show": "sales_check", "qc_release": "sales_check"},
+}
+
+
+def stage_button_target(role, stage_key) -> str:
+    """สเตปปลายทางจริงของปุ่มนั้น (ไม่ได้ตั้ง override = ไปตามชื่อคีย์ตัวเอง)"""
+    return STAGE_BUTTON_TARGET.get(role, {}).get(stage_key, stage_key)
+
+
 def stage_button_label(role, stage_key, default_name):
     """ชื่อปุ่มสเตปตามบทบาทผู้กด — ไม่มี override = ชื่อสเตปปกติ"""
     return STAGE_BUTTON_LABELS.get(role, {}).get(stage_key, default_name)
