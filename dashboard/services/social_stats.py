@@ -108,6 +108,60 @@ def _range(frm, to) -> tuple:
     return f, t
 
 
+def _channel_rows(inc: dict, cum: dict, posts: dict, names: dict,
+                  subs: dict | None = None, always=()) -> list:
+    """รวมเป็นแถวตาราง "แยกตามช่อง" — ทั้งยอดที่เพิ่มในช่วง **และ** ยอดสะสม
+
+    ★ 24 ก.ย.69 (เจ้าของแจ้ง *"TikTok ก็มีตั้งหลายช่อง Facebook ก็มีตั้งหลายช่อง ทำไมไม่แยกหน่อย"*)
+
+    2 กติกาที่ทำให้ตารางนี้ใช้งานได้ตั้งแต่วันแรก:
+    - **ส่งยอดสะสมมาด้วยเสมอ** — ยอด "ที่เพิ่มขึ้น" ต้องมี snapshot 2 คืนถึงคำนวณได้
+      ถ้าส่งแต่ยอดเพิ่ม ช่วงที่เพิ่งเริ่มเก็บจะเป็น 0 ทั้งตาราง แล้วดูเหมือนระบบพัง
+    - **`always` = ช่องที่เชื่อมไว้แล้ว ต้องมีแถวเสมอ** แม้เดือนนี้ไม่ได้ลงคลิป/โพสต์เลย
+      ไม่งั้นช่องจะ *หายไปเฉยๆ* แล้วคนอ่านสรุปเองว่าระบบมองไม่เห็นช่องนั้น
+    """
+    out = []
+    for cid in (set(inc) | set(cum) | {str(a) for a in always if a}):
+        if not cid:
+            continue
+        i, c = inc.get(cid) or {}, cum.get(cid) or {}
+        out.append({
+            "id": cid, "name": names.get(cid) or cid[:14],
+            # ★ `live` ต้องดูเป็น "รายช่อง" ไม่ใช่รายแพลตฟอร์ม — ช่องที่เพิ่งเก็บคืนแรก
+            #   ยังคิดยอดรายวันไม่ได้ ถ้าโชว์ 0 จะอ่านเป็น "ไม่มีใครดู" ซึ่งไม่จริง
+            "live": cid in inc,
+            **{m: int(i.get(m, 0)) for m in METRICS},
+            "cum": {m: int(c.get(m, 0)) for m in METRICS},
+            "posts": int(posts.get(cid, 0)),
+            "subs": (subs or {}).get(cid),
+        })
+    out.sort(key=lambda r: (r["views"], r["cum"]["views"]), reverse=True)
+    return out
+
+
+def _meta_pages() -> set:
+    try:
+        from . import meta
+        return meta.pages()
+    except Exception:                       # ยังไม่ตั้ง META_PAGE_IDS = ไม่มีรายชื่อบังคับ
+        return set()
+
+
+def _page_names() -> dict:
+    """ชื่อเพจ Facebook — `meta_sync` จดไว้ตอนดึงยอดระดับเพจ (KV `meta_page_names`)
+
+    เก็บใน KV ไม่ใช่คอลัมน์ในตาราง เพราะเป็นแค่ "ป้ายชื่อ" ที่เปลี่ยนได้ตลอด
+    และไม่อยากให้ทุกแถว snapshot ต้องแบกชื่อซ้ำกันเป็นล้านแถว
+    """
+    try:
+        from .cache_store import get_kv
+        v = get_kv("meta_page_names") or {}
+        v = v.get("data", v) if isinstance(v, dict) else {}
+        return {str(k): str(n) for k, n in (v or {}).items() if n}
+    except Exception:
+        return {}
+
+
 def meta_stats(frm=None, to=None, top: int = 10) -> dict:
     """ยอดของเพจ Facebook — รายวัน + โพสต์ที่ปังสุดในช่วง"""
     from dashboard.models import MetaAdDaily, MetaPostSnapshot
@@ -116,11 +170,12 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
     # ดึงย้อนไป 1 วันก่อนช่วงที่ขอ — ไว้เป็น "ฐาน" ให้ลบหายอดวันแรกของช่วงได้
     qs = (MetaPostSnapshot.objects
           .filter(trigger="cron", snap_date__gte=f - timedelta(days=1), snap_date__lte=t)
-          .values("post_id", "snap_date", "taken_at", "video_views", "reactions",
+          .values("post_id", "page_id", "snap_date", "taken_at", "video_views", "reactions",
                   "comments", "shares"))
     rows = [{"post_id": r["post_id"], "snap_date": r["snap_date"], "taken_at": r["taken_at"],
              "views": r["video_views"], "likes": r["reactions"],
              "comments": r["comments"], "shares": r["shares"]} for r in qs]
+    owner_of = {r["post_id"]: r["page_id"] for r in qs}
     daily = {d: v for d, v in _daily_from_snapshots(rows, "post_id").items()
              if f.isoformat() <= d <= t.isoformat()}
 
@@ -128,17 +183,24 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
     best: dict = {}
     for r in (MetaPostSnapshot.objects
               .filter(snap_date__gte=f, snap_date__lte=t)
-              .values("post_id", "taken_at", "message", "permalink", "post_type",
+              .values("post_id", "page_id", "taken_at", "message", "permalink", "post_type",
                       "created_time", "video_views", "reactions", "comments", "shares")):
         old = best.get(r["post_id"])
         if not old or r["taken_at"] > old["taken_at"]:
             best[r["post_id"]] = r
+        owner_of.setdefault(r["post_id"], r["page_id"])
     cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    cum_by, posts_by = {}, {}
     for r in best.values():                     # ยอดสะสมของ "ทุกโพสต์" ที่มี snapshot ในช่วง
         cum["views"] += int(r["video_views"] or 0)
         cum["likes"] += int(r["reactions"] or 0)
         cum["comments"] += int(r["comments"] or 0)
         cum["shares"] += int(r["shares"] or 0)
+        c = cum_by.setdefault(r["page_id"], {m: 0 for m in METRICS})
+        for key, col in (("views", "video_views"), ("likes", "reactions"),
+                         ("comments", "comments"), ("shares", "shares")):
+            c[key] += int(r[col] or 0)
+        posts_by[r["page_id"]] = posts_by.get(r["page_id"], 0) + 1
     posts = sorted(best.values(),
                    key=lambda r: (r["reactions"] or 0) + (r["comments"] or 0) + (r["shares"] or 0),
                    reverse=True)[:top]
@@ -170,6 +232,8 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
 
     top_ids = {p["post_id"] for p in posts}
     return {
+        "byChannel": _channel_rows(_owner_totals(rows, "post_id", owner_of, f, t),
+                                   cum_by, posts_by, _page_names(), always=_meta_pages()),
         "pageDaily": page_daily, "pageTotal": page_total,
         "pageDays": len(page_daily),
         "daily": daily,
@@ -194,7 +258,7 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
 
 def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     """ยอดของช่อง TikTok — โครงเดียวกับฝั่ง Meta (หน้าเว็บวาดด้วยโค้ดชุดเดียวกัน)"""
-    from dashboard.models import TikTokAccount, TikTokVideoSnapshot
+    from dashboard.models import TikTokAccount, TikTokAccountSnapshot, TikTokVideoSnapshot
 
     f, t = _range(frm, to)
     qs = (TikTokVideoSnapshot.objects
@@ -216,11 +280,17 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
         if not old or r["taken_at"] > old["taken_at"]:
             best[r["video_id"]] = r
     cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    cum_by, posts_by = {}, {}
     for r in best.values():
         cum["views"] += int(r["view_count"] or 0)
         cum["likes"] += int(r["like_count"] or 0)
         cum["comments"] += int(r["comment_count"] or 0)
         cum["shares"] += int(r["share_count"] or 0)
+        c = cum_by.setdefault(r["open_id"], {m: 0 for m in METRICS})
+        for key, col in (("views", "view_count"), ("likes", "like_count"),
+                         ("comments", "comment_count"), ("shares", "share_count")):
+            c[key] += int(r[col] or 0)
+        posts_by[r["open_id"]] = posts_by.get(r["open_id"], 0) + 1
     clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
 
     accs = list(TikTokAccount.objects.values("open_id", "label", "display_name", "status", "scope"))
@@ -228,7 +298,12 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     # ★ แยกรายช่อง (เจ้าของแจ้ง 24 ก.ย.69 "มันไม่มี TikTok แยกช่อง")
     ch_name = {a["open_id"]: (a["label"] or a["display_name"] or a["open_id"][:10]) for a in accs}
     owner_of = {r["video_id"]: r["open_id"] for r in qs}
+    for r in best.values():
+        owner_of.setdefault(r["video_id"], r["open_id"])
     by = _owner_totals(rows, "video_id", owner_of, f, t)
+    subs = {}                                   # ผู้ติดตาม = แถวล่าสุดของช่องนั้น
+    for r in TikTokAccountSnapshot.objects.order_by("taken_at").values("open_id", "follower_count"):
+        subs[r["open_id"]] = r["follower_count"]
     return {
         "daily": daily,
         "cum": cum, "postCount": len(best),
@@ -244,8 +319,8 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
             "comments": c["comment_count"] or 0, "shares": c["share_count"] or 0,
         } for c in clips],
         "days": _cron_days(TikTokVideoSnapshot, f, t),
-        "byChannel": [dict(v, id=k, name=ch_name.get(k, k[:10]))
-                      for k, v in sorted(by.items(), key=lambda kv: -kv[1]["views"])],
+        "byChannel": _channel_rows(by, cum_by, posts_by, ch_name, subs,
+                                   always=[a["open_id"] for a in accs]),
         "accounts": [{"label": a["label"], "name": a["display_name"],
                       "status": a["status"], "scope": a["scope"]} for a in accs],
         # บอกหน้าเว็บให้รู้ว่า "ไม่มีข้อมูล" เพราะอะไร จะได้บอกวิธีแก้แทนกราฟเปล่า
@@ -299,10 +374,17 @@ def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
         if not old or r["taken_at"] > old["taken_at"]:
             best[r["video_id"]] = r
     cum = {"views": 0, "likes": 0, "comments": 0, "shares": 0}
+    cum_by, posts_by = {}, {}
     for r in best.values():
         cum["views"] += int(r["view_count"] or 0)
         cum["likes"] += int(r["like_count"] or 0)
         cum["comments"] += int(r["comment_count"] or 0)
+        c = cum_by.setdefault(r["channel_id"], {m: 0 for m in METRICS})
+        for key, col in (("views", "view_count"), ("likes", "like_count"),
+                         ("comments", "comment_count")):
+            c[key] += int(r[col] or 0)
+        posts_by[r["channel_id"]] = posts_by.get(r["channel_id"], 0) + 1
+        owner_of.setdefault(r["video_id"], r["channel_id"])
     clips = sorted(best.values(), key=lambda r: r["view_count"] or 0, reverse=True)[:top]
 
     # ชื่อช่อง = แถวล่าสุดของ snapshot ช่อง
@@ -329,8 +411,7 @@ def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
             "comments": c["comment_count"] or 0, "shares": 0,
         } for c in clips],
         "days": _cron_days(YouTubeVideoSnapshot, f, t),
-        "byChannel": [dict(v, id=k, name=names.get(k, k), subs=subs.get(k))
-                      for k, v in sorted(by.items(), key=lambda kv: -kv[1]["views"])],
+        "byChannel": _channel_rows(by, cum_by, posts_by, names, subs, always=names.keys()),
         "accounts": [{"label": n, "name": n, "status": "active", "scope": ""}
                      for n in names.values()],
         "needScope": False,

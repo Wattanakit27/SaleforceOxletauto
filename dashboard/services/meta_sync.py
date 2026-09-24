@@ -258,12 +258,19 @@ def sync_pages(days: int = PAGE_LOOKBACK_DAYS) -> dict:
     out = {"rows": 0, "pages": 0, "raw": 0, "errors": []}
     until = _bkk_now().date()
     since = until - timedelta(days=max(1, days))
+    names = dict(_kv("meta_page_names"))     # ชื่อเพจ — หน้าโซเชียลเอาไปโชว์ในตาราง "แยกตามเพจ"
     for pid in sorted(meta.pages()):
         try:
             pt = meta.page_token(pid)
         except Exception as e:
             out["errors"].append("เพจ %s: ขอ token ไม่ได้ (%s)" % (pid, str(e)[:80]))
             continue
+        try:                                 # ชื่อเพจไม่ได้ = ไม่ใช่เรื่องใหญ่ ใช้ชื่อเดิม/รหัสแทน
+            nm = (meta.get("/%s" % pid, _token=pt, fields="name") or {}).get("name")
+            if nm:
+                names[str(pid)] = nm
+        except Exception:
+            pass
         by_day = {}
         for group in (_PAGE_METRICS_CORE, _PAGE_METRICS_EXTRA):
             try:
@@ -287,6 +294,8 @@ def sync_pages(days: int = PAGE_LOOKBACK_DAYS) -> dict:
             MetaPageDaily.objects.update_or_create(page_id=pid, date=d, defaults=vals)
             out["rows"] += 1
         out["pages"] += 1
+    if names:
+        cache_store.set_kv("meta_page_names", names)
     return out
 
 def sync_ads(trigger: str, days: int = ADS_LOOKBACK_DAYS) -> dict:
