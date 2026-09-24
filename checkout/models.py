@@ -402,6 +402,13 @@ class Employee(models.Model):
     #   และไอดีนั้นเป็นของบอทตัวเก่าด้วย (คนละ provider กับบอทที่ส่งตอนนี้)
     notify_missing = models.BooleanField("แท็กเวลามีคนไม่เช็คชื่อ", default=False, db_index=True)
     note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+    # ★ 24 ก.ย.69 (เจ้าของแจ้ง "เหมือนมันจะเอาคนที่ลาป่วยเมื่อวาน มาลาป่วยวันนี้ด้วย")
+    #   ช่อง `note` เป็นของ "ตัวคน" แต่ถูกใช้เก็บเรื่อง "รายวัน" (ลาป่วยวันนี้) — n8n เขียนลงมา
+    #   จากข้อความในกลุ่ม แล้ว **ไม่มีใครลบ** → ตารางเช็คชื่อขึ้นว่าลาป่วยทุกวันตลอดไป
+    #   วัดจริงบนเซิร์ฟเวอร์ 24/09: มีหมายเหตุค้างอยู่ 3 คน ("คิมลาป่วยครับ" ฯลฯ)
+    #   → จดวันที่เขียนไว้ แล้วให้หมายเหตุ **มีผลเฉพาะวันนั้น** เว้นแต่ติ๊ก `note_sticky`
+    note_date = models.DateField("วันที่เขียนหมายเหตุ", null=True, blank=True)
+    note_sticky = models.BooleanField("หมายเหตุค้างไว้จนกว่าจะลบ", default=False)
     source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=MANUAL)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -413,6 +420,24 @@ class Employee(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.nickname, self.position or "-")
+
+    def save(self, *args, **kwargs):
+        """เปลี่ยนข้อความหมายเหตุเมื่อไหร่ = ประทับวันที่ให้เอง (โซนไทย)
+
+        ⚠️ ครอบเฉพาะที่เขียนผ่าน Django — **n8n เขียน SQL ตรง** (`UPDATE checkout_employee
+        SET note = …`) จึงต้องมี trigger ฝั่ง Postgres คู่กัน ดู `deploy/n8n_postgres_access.sql`
+        """
+        try:
+            from django.utils import timezone
+            old = type(self).objects.filter(pk=self.pk).values_list("note", flat=True).first() if self.pk else None
+            if (old or "") != (self.note or ""):
+                self.note_date = timezone.localdate() if (self.note or "").strip() else None
+                uf = kwargs.get("update_fields")
+                if uf and "note_date" not in uf:
+                    kwargs["update_fields"] = list(uf) + ["note_date"]
+        except Exception:      # อ่านค่าเดิมไม่ได้ = ไม่ประทับวันที่ ดีกว่าบันทึกไม่ได้
+            pass
+        return super().save(*args, **kwargs)
 
 
 class CheckIn(models.Model):

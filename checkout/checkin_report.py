@@ -70,6 +70,24 @@ def _human_note(s):
     return "" if s in ("ตรงเวลา", "สาย", "มาสาย") else s
 
 
+def _note_for(e, day) -> str:
+    """หมายเหตุในทะเบียนพนักงาน — **มีผลเฉพาะวันที่เขียน** เว้นแต่ติ๊ก "ค้างไว้"
+
+    ★ 24 ก.ย.69 (เจ้าของแจ้ง *"เหมือนมันจะเอาคนที่ลาป่วยเมื่อวาน มาลาป่วยวันนี้ด้วย"*)
+    `Employee.note` เป็นช่องของ "ตัวคน" แต่ถูกใช้เก็บเรื่องรายวัน (n8n คัดข้อความลาจากกลุ่มมาลง)
+    → ไม่มีใครลบ = ขึ้นว่าลาป่วยทุกวันตลอดไป **และคนนั้นไม่ถูกตามตัวด้วย** (มีหมายเหตุ = ไม่แท็ก)
+    ซึ่งอันตรายกว่าตารางรก — คนขาดงานจริงจะไม่มีใครรู้
+
+    หมายเหตุยาว (ลาคลอด) ยังทำได้ด้วยการติ๊ก **"ค้างไว้"** ในหน้าพนักงาน
+    · แถวเก่าที่ยังไม่มี `note_date` (เขียนก่อนฟีเจอร์นี้) = ถือว่าหมดอายุแล้ว
+    """
+    if not (e.note or "").strip():
+        return ""
+    if e.note_sticky:
+        return e.note
+    return e.note if e.note_date == day else ""
+
+
 def collect(day=None) -> dict:
     """รวมข้อมูลของวันนั้น → `{date, dayName, groups, missing, counts}`
 
@@ -103,7 +121,7 @@ def collect(day=None) -> dict:
         t_in = _hhmm(c.time_hm) if c else ""
         # ★ หมายเหตุมาจาก 2 ที่: ของวันนี้ (จากรูปเช็คชื่อ) ก่อน แล้วค่อยของถาวรในทะเบียน
         #   ของถาวร (เช่น "ลาคลอด") **อยู่จนกว่าจะลบเอง** — ตามของเดิมที่หมายเหตุในชีตพนักงานไม่หาย
-        note = _human_note(c.reason if c else "") or _clean_note(e.note)
+        note = _human_note(c.reason if c else "") or _clean_note(_note_for(e, day))
         off_today = bool(e.day_off) and day_name in e.day_off
 
         late = 0

@@ -7188,6 +7188,12 @@
         + `<option value="" ${v ? '' : 'selected'}>ไม่มี</option>${extra}${opts}</select>`;
     }
 
+    // "2026-09-23" → "23/9" (บอกว่าหมายเหตุนี้เขียนไว้วันไหน)
+    function _empDMY(iso) {
+      const p = String(iso || '').split('-');
+      return p.length === 3 ? (+p[2]) + '/' + (+p[1]) : '';
+    }
+
     function _empInput(id, val, ph, w, rowId) {
       // rowId = แถวของคนที่มีอยู่แล้ว → แก้เสร็จแล้วบันทึกให้เลย ไม่ต้องกดปุ่ม
       // (onchange ยิงตอน "ค่าเปลี่ยนจริง + ออกจากช่อง" เท่านั้น ไม่ใช่ทุกตัวอักษร)
@@ -7220,7 +7226,7 @@
         <thead><tr style="color:var(--t3);font-size:var(--fs-body);text-align:left">
           <th style="padding:6px 5px">ชื่อเล่น</th><th style="padding:6px 5px">ชื่อที่ตั้งใน LINE</th>
           <th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
-          <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
+          <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px" title="ใช้เฉพาะวันที่เขียน แล้วหายเอง — ถ้าลายาว (ลาคลอด) ให้ติ๊ก &quot;ค้างไว้&quot;">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
           <th style="padding:6px 5px" title="ติ๊กออกสำหรับผู้บริหาร — จะไม่ขึ้นในหน้าเช็คชื่อเข้างานเลย">เช็คชื่อ</th>
           <th style="padding:6px 5px" title="ติ๊ก = ถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ (หัวหน้า/ผู้บริหาร)">แจ้งเตือน</th>
           <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
@@ -7233,7 +7239,12 @@
           <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px', e.id)}</td>
           <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px', e.id)}</td>
           <td style="padding:5px">${_empDay('emp_off_'+e.id, e.dayOff, '92px', e.id)}</td>
-          <td style="padding:5px">${_empInput('emp_note_'+e.id, e.note, '', '150px', e.id)}</td>
+          <td style="padding:5px;white-space:nowrap">${_empInput('emp_note_'+e.id, e.note, '', '150px', e.id)}
+            <label title="ติ๊ก = อยู่ยาวจนกว่าจะลบเอง (เช่น ลาคลอด) · ไม่ติ๊ก = ใช้เฉพาะวันที่เขียนแล้วหายเอง"
+              style="display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-body);color:var(--t3);cursor:pointer;margin-left:5px">
+              <input type="checkbox" id="emp_stk_${e.id}" ${e.noteSticky?'checked':''} onchange="empSave(${e.id})"
+                style="width:15px;height:15px;cursor:pointer">ค้างไว้</label>
+            ${e.note && e.noteDate && !e.noteSticky ? `<div style="font-size:var(--fs-body);color:var(--t3)">เขียนไว้ ${h(_empDMY(e.noteDate))}</div>` : ''}</td>
           <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_trk_${e.id}" ${e.trackCheckin===false?'':'checked'} onchange="empSave(${e.id})" title="ติ๊กออก = ผู้บริหาร ไม่ต้องเช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_ntf_${e.id}" ${e.notifyMissing?'checked':''} onchange="empSave(${e.id})" title="ติ๊ก = ถูกแท็กตอนมีคนยังไม่เช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
@@ -7303,7 +7314,8 @@
                 position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
                 note:_empV('emp_note_'+id), active: act ? act.checked : true,
                 trackCheckin: trk ? trk.checked : true,
-                notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false},
+                notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false,
+                noteSticky: (document.getElementById('emp_stk_' + id) || {}).checked || false},
                'emp_msg', id);
     }
 

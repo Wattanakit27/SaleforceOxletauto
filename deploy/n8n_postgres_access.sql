@@ -132,3 +132,37 @@ GRANT USAGE, SELECT ON SEQUENCE checkout_checkin_id_seq TO n8n;
 --
 -- ตรวจว่า map ชื่อได้กี่คน:
 --   SELECT count(*) FROM v_employee_line WHERE display_name <> '' AND "ชื่อเล่น" <> '';
+
+-- ============================================================================
+-- 7) ★ 24 ก.ย.69 — หมายเหตุลา "หายเองเมื่อพ้นวัน" (เจ้าของแจ้ง
+--    "เหมือนมันจะเอาคนที่ลาป่วยเมื่อวาน มาลาป่วยวันนี้ด้วย")
+--
+--    ต้นเหตุ: `checkout_employee.note` เป็นช่องของ "ตัวคน" แต่ n8n เอาไว้เก็บเรื่อง **รายวัน**
+--    (คัดข้อความลาจากกลุ่ม LINE มาลง) แล้วไม่มีใครลบ → ตารางเช็คชื่อขึ้นว่าลาป่วยทุกวันตลอดไป
+--    **และคนนั้นไม่ถูกตามตัวด้วย** (กติกาเดิม: มีหมายเหตุ = ไม่แท็ก) — คนขาดงานจริงเลยหายเงียบ
+--    วัดจริง 24/09: ค้างอยู่ 3 คน ("คิมลาป่วยครับ" · "ฟิล์มลาป่วยครับ" · ข้อความไลฟ์ของอุ้ม)
+--
+--    ฝั่งเว็บอ่าน `note` เฉพาะเมื่อ `note_date` = วันนั้น (หรือ `note_sticky` = true สำหรับลายาว)
+--    Django ประทับ `note_date` ให้เองตอนบันทึกผ่านหน้าเว็บ — **แต่ n8n เขียน SQL ตรง**
+--    จึงต้องมี trigger ตัวนี้ ไม่งั้นหมายเหตุจาก n8n จะไม่มีวันที่ = ไม่โชว์เลยสักวัน
+--
+--    ⚠️ ต้องรัน **หลัง** `python manage.py migrate` (คอลัมน์ note_date ต้องมีก่อน)
+--    ⚠️ ใช้เวลาโซนไทย ไม่ใช่ CURRENT_DATE (เซิร์ฟเวอร์เป็น UTC → ก่อนเที่ยงคืนไทยจะได้วันก่อนหน้า)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION checkout_employee_note_stamp() RETURNS trigger AS $$
+BEGIN
+  IF NEW.note IS DISTINCT FROM OLD.note THEN
+    NEW.note_date := CASE WHEN coalesce(btrim(NEW.note), '') = '' THEN NULL
+                          ELSE (now() AT TIME ZONE 'Asia/Bangkok')::date END;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_employee_note_stamp ON checkout_employee;
+CREATE TRIGGER trg_employee_note_stamp
+  BEFORE UPDATE ON checkout_employee
+  FOR EACH ROW EXECUTE FUNCTION checkout_employee_note_stamp();
+
+-- ตรวจว่าใครมีหมายเหตุค้างอยู่ และเป็นของวันไหน:
+--   SELECT nickname, note, note_date, note_sticky
+--     FROM checkout_employee WHERE coalesce(note,'') <> '' ORDER BY note_date;

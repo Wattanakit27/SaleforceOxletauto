@@ -864,6 +864,8 @@ def api_employees(request):
             "track_checkin": bool(b.get("trackCheckin", True)),
             # ติ๊ก = ถูกแท็กในข้อความรอบสาย (แทน MANAGERS ที่ n8n ฝัง userId ไว้ในโค้ด)
             "notify_missing": bool(b.get("notifyMissing", False)),
+            # ติ๊ก = หมายเหตุอยู่ยาว (ลาคลอด) · ไม่ติ๊ก = ใช้เฉพาะวันที่เขียน แล้วหายเอง
+            "note_sticky": bool(b.get("noteSticky", False)),
         }
         row = Employee.objects.filter(pk=b.get("id") or 0).first()
         if row:
@@ -886,6 +888,8 @@ def api_employees(request):
             "id": e.pk, "nickname": e.nickname, "displayName": e.display_name,
             "position": e.position, "workStart": e.work_start, "dayOff": e.day_off,
             "groupId": e.group_id, "note": e.note, "active": e.active,
+            "noteDate": e.note_date.isoformat() if e.note_date else "",
+            "noteSticky": e.note_sticky,
             "trackCheckin": e.track_checkin, "notifyMissing": e.notify_missing,
             "fromSheet": e.source == Employee.SHEET,
             # ระบบเพิ่มให้เองตอนเจอในกลุ่ม + ยังไม่มีใครมากรอกตำแหน่ง/เวลา = ต้องมีคนตามเติม
