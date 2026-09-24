@@ -5179,6 +5179,9 @@
       const ours = (d.total || {}).views || 0;
       const pct = pt.views ? Math.round(ours * 100 / pt.views) : 0;
       const warn = pct < 80;
+      // ★ เกิน 100% ได้จริง — คนละวิธีนับ (ของเรานับวิวรายโพสต์รวมที่มาจากโฆษณา
+      //   ส่วนของเพจเป็นตัวเลขที่ Facebook สรุปเอง) · ถ้าไม่เขียนบอก คนอ่านจะนึกว่าเลขพัง
+      const over = pct > 110;
       return `<div style="border-top:.5px dashed var(--bd2);margin-top:9px;padding-top:8px;
               font-size:var(--fs-body);color:var(--t3);line-height:1.8">
           Facebook รายงานทั้งเพจ (${d.pageDays || 0} วัน): วิววิดีโอ
@@ -5186,12 +5189,19 @@
           ${pt.engagements ? ` · มีส่วนร่วม <b style="color:var(--t1)">${pt.engagements.toLocaleString()}</b>` : ''}
           <br>ที่เรารวมจากโพสต์ได้ <b style="color:var(--t1)">${ours.toLocaleString()}</b>
           <span style="color:${warn ? 'var(--amber)' : 'var(--t3)'}">(${pct}% ของยอดเพจ${
-            warn ? ' — ส่วนที่ขาดน่าจะเป็นรีลส์/โพสต์ที่ไม่อยู่ในฟีด' : ''})</span></div>`;
+            warn ? ' — ส่วนที่ขาดน่าจะเป็นรีลส์/โพสต์ที่ไม่อยู่ในฟีด'
+                 : (over ? ' — มากกว่ายอดเพจได้ เพราะคนละวิธีนับ: ของเรารวมวิวที่มาจากโฆษณาด้วย' : '')})</span></div>`;
     }
 
     function _soKpi(side) {
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
-      const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
+      // ★ 24 ก.ย.69 (เจ้าของถาม "ไม่เข้าใจทำไม TikTok เป็นศูนย์วิวอ่ะ")
+      //   มียอดรายวัน "บางชิ้น" ไม่พอ — ต้องดูว่าครอบคลุมกี่ชิ้นจากทั้งหมด
+      //   วัดจริง 23/09: TikTok จับคู่ลบกันได้ 1 คลิป จาก 533 → ได้ "วิว 1"
+      //   ซึ่งถูกตามสูตร แต่วางข้าง Facebook 76,494 แล้วอ่านเป็น "TikTok ตายแล้ว"
+      const nItem = d.postCount || 0, nDaily = d.dailyItems || 0;
+      const thin = nItem > 0 && nDaily < nItem * 0.5;          // ครอบคลุมไม่ถึงครึ่ง = ยังเชื่อไม่ได้
+      const noDaily = !Object.keys(d.daily || {}).length || thin;
       const show = noDaily ? (d.cum || {}) : t;                // ไม่มีรายวัน = โชว์ยอดสะสมไปก่อน (ดีกว่าว่างเปล่า)
       // ★ 24 ก.ย.69 — ตัวเลข 4 ตัวเป็น "กริด" ไม่ใช่ flex-wrap
       //   ของเดิมห่อบรรทัดเป็น 3+1 → "แชร์" ตกไปอยู่บรรทัดล่างตัวเดียว ดูเหมือนหน้าพัง
@@ -5203,12 +5213,18 @@
       const cells = _soData.metrics.map(m => `<div style="min-width:0">
         <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
         <div style="font-size:21px;font-weight:800;color:var(--t1);white-space:nowrap">${(show[m] || 0).toLocaleString()}</div></div>`).join('');
+      const piece = side === 'meta' ? 'โพสต์' : 'คลิป';   // ชื่อเรียกชิ้นงานของฝั่งนั้น
       // ฝั่งไหนยังไม่มีข้อมูลรายวัน = บอกสาเหตุ + ทางแก้ แทนที่จะโชว์ 0 เฉยๆ ให้คนเดาเอง
       let note = '';
       if (side === 'tiktok' && !(d.accounts || []).length) {
         note = 'ยังไม่ได้เชื่อมช่อง TikTok — สร้างลิงก์ขออนุญาตที่ <code>manage.py tiktok_accounts --link "ชื่อช่อง"</code>';
       } else if (side === 'tiktok' && d.needScope) {
         note = 'เชื่อมช่องแล้วแต่ยังไม่ได้สิทธิ์ <b>video.list</b> — เปิดใน TikTok Sandbox แล้วกดอนุญาตใหม่';
+      } else if (thin) {
+        // บอกด้วย "ตัวเลขจริง" ว่าทำไมยังคิดรายวันไม่ได้ ไม่ใช่ปล่อยให้เดาเอง
+        note = `ยอดรายวันยังคิดได้แค่ <b>${nDaily.toLocaleString()}</b> จาก <b>${nItem.toLocaleString()}</b> ${piece}
+          (${piece}หนึ่งต้องมีข้อมูล 2 คืนถึงเอามาลบกันได้) — เลขข้างบนจึงเป็น <b>ยอดสะสม</b>
+          · ระบบเก็บเองทุกเที่ยงคืน คืนถัดไปจะคิดได้ครบ`;
       } else if ((d.days || 0) < 2) {
         note = 'ตัวเลขนี้เป็น <b>ยอดสะสม</b> ของโพสต์ · กราฟรายวันต้องเก็บอย่างน้อย 2 คืน (ระบบเก็บเองทุกเที่ยงคืน)';
       }
@@ -5217,7 +5233,7 @@
       // คำอธิบายใต้ชื่อ — แยกเป็นบรรทัดของตัวเอง ไม่วางต่อท้ายชื่อ
       // (ของเดิมยาวเกินจนห่อบรรทัดคาบเกี่ยวกับปุ่ม "N ช่อง" แล้วหัวการ์ดเบี้ยวทั้งใบ)
       const sub = !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก · ' + _soDayNote(d)
-        : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล');
+        : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} ${piece}ในช่วงนี้` : 'ยังไม่มีข้อมูล');
       return `<div class="card" style="flex:1;min-width:320px;border-top:3px solid ${on}">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="card-title" style="margin:0;min-width:0">${soLogo(side, 22)}${SO_NAME[side]}</span>
@@ -5429,12 +5445,21 @@
                return v ? (v[_soMetric] || 0) : null;
              }),
              borderColor: SO_COLOR[_soOpen.side], backgroundColor: SO_COLOR[_soOpen.side], ..._LINE_DS }]
-        : SO_SIDES.map(side => ({
-            label: SO_NAME[side],
-            // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
-            data: days.map(d => { const v = ((_soData[side] || {}).daily || {})[d]; return v ? (v[_soMetric] || 0) : null; }),
-            borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
-          }));
+        : SO_SIDES.map(side => {
+            const sd = _soData[side] || {};
+            // ครอบคลุมไม่ถึงครึ่ง (เช่น TikTok จับคู่ได้ 1 จาก 533 คลิป) = ไม่ลากเส้น
+            // เส้นที่ลากจากคลิปเดียวจะแบนติดศูนย์ แล้วอ่านเป็น "ช่องนี้ไม่มีคนดู" ซึ่งไม่จริง
+            const thin = (sd.postCount || 0) > 0 && (sd.dailyItems || 0) < (sd.postCount || 0) * 0.5;
+            return {
+              label: SO_NAME[side],
+              // วันที่ยังไม่มี snapshot = null (ไม่ใช่ 0) — เส้นจะได้ไม่ดิ่งลงศูนย์หลอกตา
+              data: days.map(d => {
+                if (thin) return null;
+                const v = (sd.daily || {})[d]; return v ? (v[_soMetric] || 0) : null;
+              }),
+              borderColor: SO_COLOR[side], backgroundColor: SO_COLOR[side], ..._LINE_DS,
+            };
+          });
       // เส้นประ = ยอดที่ Facebook รายงานเองทั้งเพจ (เทียบกับเส้นทึบที่เรารวมจากโพสต์)
       const _pd = (_soData.meta || {}).pageDaily || {};
       if (!_soOpen && _soMetric === 'views' && Object.keys(_pd).length) {

@@ -231,8 +231,10 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
         page_daily, page_total = {}, {}
 
     top_ids = {p["post_id"] for p in posts}
+    per_item = _daily_one(rows, "post_id", set())
     return {
-        "byChannel": _channel_rows(_owner_totals(rows, "post_id", owner_of, f, t),
+        "dailyItems": _daily_cover(per_item, f, t),   # คิดยอดรายวันได้กี่โพสต์ (เทียบกับ postCount)
+        "byChannel": _channel_rows(_owner_totals(per_item, owner_of, f, t),
                                    cum_by, posts_by, _page_names(), always=_meta_pages()),
         "pageDaily": page_daily, "pageTotal": page_total,
         "pageDays": len(page_daily),
@@ -300,7 +302,8 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     owner_of = {r["video_id"]: r["open_id"] for r in qs}
     for r in best.values():
         owner_of.setdefault(r["video_id"], r["open_id"])
-    by = _owner_totals(rows, "video_id", owner_of, f, t)
+    per_item = _daily_one(rows, "video_id", set())
+    by = _owner_totals(per_item, owner_of, f, t)
     subs = {}                                   # ผู้ติดตาม = แถวล่าสุดของช่องนั้น
     for r in TikTokAccountSnapshot.objects.order_by("taken_at").values("open_id", "follower_count"):
         subs[r["open_id"]] = r["follower_count"]
@@ -319,6 +322,7 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
             "comments": c["comment_count"] or 0, "shares": c["share_count"] or 0,
         } for c in clips],
         "days": _cron_days(TikTokVideoSnapshot, f, t),
+        "dailyItems": _daily_cover(per_item, f, t),   # คิดยอดรายวันได้กี่คลิป (เทียบกับ postCount)
         "byChannel": _channel_rows(by, cum_by, posts_by, ch_name, subs,
                                    always=[a["open_id"] for a in accs]),
         "accounts": [{"label": a["label"], "name": a["display_name"],
@@ -328,15 +332,15 @@ def tiktok_stats(frm=None, to=None, top: int = 10) -> dict:
     }
 
 
-def _owner_totals(rows, key_id: str, owner_of: dict, f, t) -> dict:
+def _owner_totals(per_item: dict, owner_of: dict, f, t) -> dict:
     """ยอด "ที่เพิ่มขึ้นในช่วง" แยกตามเจ้าของ (ช่อง/เพจ) — `{owner: {views:.., likes:..}}`
 
     ★ 24 ก.ย.69 (เจ้าของแจ้ง "มันไม่มี TikTok แยกช่อง")
-    คิดรายชิ้นด้วย `_daily_one` ก่อน แล้วค่อยรวมเข้าเจ้าของ — **ห้ามรวมยอดสะสมของช่องตรงๆ
+    รับ `per_item` = ผลของ `_daily_one` (คิดรายชิ้นมาแล้ว) — **ห้ามรวมยอดสะสมของช่องตรงๆ
     แล้วลบกัน** เพราะคลิปที่เพิ่งโพสต์วันนี้จะทำให้ผลต่างพุ่งทั้งที่ไม่มีใครดูเพิ่ม
     """
     out: dict = {}
-    for item_id, days in _daily_one(rows, key_id, set()).items():
+    for item_id, days in per_item.items():
         o = owner_of.get(item_id) or ""
         agg = out.setdefault(o, {m: 0 for m in METRICS})
         for d, v in days.items():
@@ -344,6 +348,22 @@ def _owner_totals(rows, key_id: str, owner_of: dict, f, t) -> dict:
                 for m in METRICS:
                     agg[m] += v.get(m, 0)
     return out
+
+
+def _daily_cover(per_item: dict, f, t) -> int:
+    """คิดยอดรายวันได้กี่ชิ้นในช่วงนี้ (ชิ้นที่มี snapshot อย่างน้อย 2 คืนติดกัน)
+
+    ★ 24 ก.ย.69 (เจ้าของถาม *"ไม่เข้าใจทำไม TikTok เป็นศูนย์วิวอ่ะ"*)
+    วัดจริง 23/09: TikTok มีคลิปในระบบ 533 คลิป แต่คืนก่อนหน้าเก็บได้แค่ **1 คลิป**
+    (เพิ่งเชื่อมช่องครบตอนบ่าย 23/09) → จับคู่ลบกันได้คลิปเดียว = "วิว 1"
+    ซึ่ง *ถูกตามสูตร* แต่วางข้าง Facebook 76,494 แล้วอ่านเป็น "TikTok ตายแล้ว"
+    → หน้าเว็บต้องรู้สัดส่วนนี้ เพื่อเลือกโชว์ยอดสะสมแทนเมื่อความครอบคลุมต่ำเกินไป
+    """
+    n = 0
+    for days in per_item.values():
+        if any(f.isoformat() <= d <= t.isoformat() for d in days):
+            n += 1
+    return n
 
 
 def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
@@ -395,7 +415,8 @@ def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
         subs[r["channel_id"]] = r["subscriber_count"]
 
     top_ids = {c["video_id"] for c in clips}
-    by = _owner_totals(rows, "video_id", owner_of, f, t)
+    per_item = _daily_one(rows, "video_id", set())
+    by = _owner_totals(per_item, owner_of, f, t)
     return {
         "daily": daily,
         "cum": cum, "postCount": len(best),
@@ -411,6 +432,7 @@ def youtube_stats(frm=None, to=None, top: int = 10) -> dict:
             "comments": c["comment_count"] or 0, "shares": 0,
         } for c in clips],
         "days": _cron_days(YouTubeVideoSnapshot, f, t),
+        "dailyItems": _daily_cover(per_item, f, t),
         "byChannel": _channel_rows(by, cum_by, posts_by, names, subs, always=names.keys()),
         "accounts": [{"label": n, "name": n, "status": "active", "scope": ""}
                      for n in names.values()],
