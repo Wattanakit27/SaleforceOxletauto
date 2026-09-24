@@ -6879,7 +6879,7 @@
                    : r.status === 'late' ? [lateMin ? `สาย ${lateMin} นาที` : 'สาย','var(--red)']
                    : ['อ่านเวลาไม่ออก','var(--amber)'];
           html += `<tr style="border-top:.5px solid var(--bd2)">
-            <td style="padding:7px 5px;font-weight:700;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:var(--fs-body);color:var(--amber)" title="บอทจับคู่กับทะเบียนพนักงานไม่ได้">(ยังไม่ผูก)</span>'}</td>
+            <td style="padding:7px 5px;font-weight:700;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:var(--fs-body);color:var(--amber)" title="บอทจับคู่กับทะเบียนพนักงานไม่ได้">(ยังไม่ผูก)</span>'}${r.rawName?' <span style="font-size:var(--fs-body);color:var(--amber);font-weight:400" title="ยังไม่มีใครตั้งชื่อเล่นให้ — นี่คือชื่อที่เขาตั้งไว้ใน LINE · ตั้งได้ที่เมนู พนักงาน">(ชื่อ LINE)</span>':''}</td>
             <td style="padding:7px 5px;color:var(--t2)">${h(r.position||'-')}</td>
             <td style="padding:7px 5px;text-align:center;color:var(--t3)">${h(r.workStart||'-')}</td>
             <td style="padding:7px 5px;text-align:center;font-size:var(--fs-sub);font-weight:800;color:${st[1]}">${h(r.timeHm||'-')}</td>
@@ -6966,7 +6966,7 @@
             <th style="padding:6px 5px">มาเฉลี่ย</th><th style="padding:6px 5px">ล่าสุด</th></tr></thead><tbody>`;
         rows.forEach(r => {
           html += `<tr style="border-top:.5px solid var(--bd2)">
-            <td style="padding:5px;font-weight:600;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:var(--fs-body);color:var(--amber)">(ยังไม่ผูก)</span>'}</td>
+            <td style="padding:5px;font-weight:600;color:var(--t1)">${h(r.name)}${r.linked?'':' <span style="font-size:var(--fs-body);color:var(--amber)">(ยังไม่ผูก)</span>'}${r.rawName?' <span style="font-size:var(--fs-body);color:var(--amber);font-weight:400" title="ยังไม่มีใครตั้งชื่อเล่นให้ — นี่คือชื่อที่เขาตั้งไว้ใน LINE · ตั้งได้ที่เมนู พนักงาน">(ชื่อ LINE)</span>':''}</td>
             <td style="padding:5px;color:var(--t2)">${h(r.position||'-')}</td>
             <td style="padding:5px;font-weight:700">${r.days}</td>
             <td style="padding:5px;color:var(--green)">${r.ontime||0}</td>
@@ -7234,7 +7234,7 @@
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
-          <td style="padding:5px;white-space:nowrap">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px', e.id)}${e.needsInfo?' <span title="ระบบเพิ่มให้เองตอนเจอในกลุ่ม — ยังไม่มีใครกรอกตำแหน่ง/เวลาเข้างาน" style="font-size:var(--fs-body);font-weight:700;color:var(--amber)">ใหม่</span>':''}</td>
+          <td style="padding:5px;white-space:nowrap">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px', e.id)}${e.needsInfo?' <span title="ระบบเพิ่มให้เองตอนเจอในกลุ่ม — ยังไม่มีใครกรอกตำแหน่ง/เวลาเข้างาน" style="font-size:var(--fs-body);font-weight:700;color:var(--amber)">ใหม่</span>':''}${e.needsNick?' <span title="ชื่อนี้คือชื่อที่เขาตั้งไว้ใน LINE — ระบบใส่ให้ชั่วคราว ยังไม่มีใครตั้งชื่อเล่นจริง · พิมพ์ทับได้เลย" style="font-size:var(--fs-body);font-weight:700;color:var(--amber)">ยังเป็นชื่อ LINE</span>':''}</td>
           <td style="padding:5px">${_empInput('emp_dn_'+e.id, e.displayName, '', '150px', e.id)}</td>
           <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px', e.id)}</td>
           <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px', e.id)}</td>

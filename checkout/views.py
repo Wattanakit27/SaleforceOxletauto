@@ -894,6 +894,11 @@ def api_employees(request):
             "fromSheet": e.source == Employee.SHEET,
             # ระบบเพิ่มให้เองตอนเจอในกลุ่ม + ยังไม่มีใครมากรอกตำแหน่ง/เวลา = ต้องมีคนตามเติม
             "needsInfo": e.source == Employee.AUTO and not (e.position and e.work_start),
+            # ★ 24 ก.ย.69 (เจ้าของแจ้ง "ตั้งชื่อเล่นแล้ว แต่มันขึ้นเป็นชื่อ user")
+            #   แถวที่ระบบสร้างเองใช้ **ชื่อ LINE เป็นชื่อเล่น** ไปก่อน → ทุกหน้าเลยโชว์ชื่อ LINE
+            #   เดิมป้าย "ใหม่" หายทันทีที่กรอกตำแหน่ง/เวลา **ทั้งที่ชื่อเล่นยังไม่ได้ตั้ง**
+            #   → ไม่มีอะไรบอกว่าต้องมาตั้งชื่อ คนเลยนึกว่าระบบไม่ยอมบันทึกที่ตั้งไป
+            "needsNick": bool(e.display_name) and e.nickname == e.display_name,
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
         })
@@ -986,6 +991,9 @@ def api_checkins(request):
             "name": (c.employee.nickname if c.employee_id and c.employee else "") or c.display_name or "ไม่ทราบชื่อ",
             "position": (c.employee.position if c.employee_id and c.employee else ""),
             "timeHm": c.time_hm, "workStart": c.work_start,
+            # ชื่อที่โชว์ยังเป็นชื่อ LINE (ยังไม่มีใครตั้งชื่อเล่นให้) — บอกให้เห็นตรงนี้เลย
+            "rawName": bool(c.employee_id and c.employee and c.employee.display_name
+                            and c.employee.nickname == c.employee.display_name),
             "status": c.status, "reason": c.reason,
             "timeSource": c.time_source, "address": c.full_address,
             "linked": bool(c.employee_id),   # ยังจับคู่กับทะเบียนไม่ได้ = ต้องไปผูกชื่อ
@@ -997,7 +1005,8 @@ def api_checkins(request):
         if e.id in seen_emp:
             continue
         item = {"name": e.nickname, "position": e.position, "workStart": e.work_start,
-                "dayOff": e.day_off, "note": e.note}
+                "dayOff": e.day_off, "note": e.note,
+                "rawName": bool(e.display_name) and e.nickname == e.display_name}
         (dayoff if (e.day_off and day_name in e.day_off) else missing).append(item)
 
     n = {"ontime": sum(1 for r in rows if r["status"] == "ontime"),
