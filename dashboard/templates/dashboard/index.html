@@ -299,6 +299,32 @@
       if(to!==undefined) dfTo = to || dfTo;
       if(dfFrom > dfTo){ const x = dfFrom; dfFrom = dfTo; dfTo = x; }
       lfPage = 1; releasedPage = 1; render();
+      // พิมพ์วันที่อยู่ = คืนโฟกัสให้ช่องเดิม (render() เพิ่งล้าง DOM ทิ้งทั้งหน้า)
+      if(_dfFocus >= 0){
+        const el = document.querySelectorAll('.df-bar input[type=date]')[_dfFocus];
+        if(el) el.focus();
+        _dfFocus = -1;
+      }
+    }
+
+    // ★ 24 ก.ย.69 — แก้บั๊ก "ตัวกรองวันที่ใช้งานไม่ได้เลย" (เจ้าของแจ้ง)
+    //   <input type=date> ยิง change **ตั้งแต่พิมพ์ตัวแรก**: พิมพ์ "2" ของปี 2026
+    //   → ค่ากลายเป็นปี 0002 ซึ่งเป็นวันที่ที่ "ครบ" แล้ว → onchange → render()
+    //   → ล้าง innerHTML ทั้งหน้า → ช่องที่กำลังพิมพ์หายไปพร้อมโฟกัส
+    //   → ตัวเลขที่เหลือ (0,2,6) ตกหมด ค้างที่ 0002 ตลอด = พิมพ์วันที่ไม่ได้เลย
+    //   แก้ 3 ชั้น: (1) ปีนอก 2000–2100 = ยังพิมพ์ไม่เสร็จ ไม่ต้องรีเฟรช
+    //              (2) หน่วง 450ms หลังหยุดพิมพ์ค่อยรีเฟรช (พิมพ์ "2" แล้ว "1" = รีเฟรชครั้งเดียว)
+    //              (3) รีเฟรชเสร็จคืนโฟกัสให้ช่องเดิม
+    let _dfTimer = null, _dfFocus = -1;
+    function dfType(which, value){
+      const y = parseInt(String(value || '').slice(0, 4), 10);
+      if(!(y >= 2000 && y <= 2100)) return;          // ยังพิมพ์ปีไม่เสร็จ — อย่าเพิ่งทำอะไร
+      clearTimeout(_dfTimer);
+      _dfFocus = which;
+      _dfTimer = setTimeout(function(){
+        _dfTimer = null;
+        setDfRange(which === 0 ? value : undefined, which === 1 ? value : undefined);
+      }, 450);
     }
     // list ของ [month, day] ในช่วง (ปีนี้)
     function rangeDays(){
@@ -1869,16 +1895,36 @@
     // ── Date filter bar (${ic('lucide:calendar',16)} กรองวันที่รับเคส — ช่วงวัน จาก-ถึง ข้ามเดือนได้) ──
     function dfThisYear(){ const y=new Date().getFullYear(); setDfRange(y+'-01-01', y+'-12-31'); }  // ทั้งปี = ม.ค.–ธ.ค. (เดิมถึงแค่วันนี้)
     function dfThisMonth(){ const d=new Date(); setDfRange(_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(new Date(d.getFullYear(),d.getMonth()+1,0))); }
+
+    // ★ 24 ก.ย.69 — ปุ่มลัดช่วงวันที่ (เจ้าของขอ: เมื่อวาน / 7 วัน / 1 เดือน / 1 ปี ย้อนหลัง)
+    //   "N วันย้อนหลัง" = นับวันนี้ด้วย (7 วัน = วันนี้ + ย้อนไป 6 วัน) แบบเดียวกับที่คนทั่วไปเข้าใจ
+    //   เพิ่มปุ่มใหม่ = เติมใน _DF_PRESETS ที่เดียว (ตัวไฮไลต์ "ปุ่มไหนกำลังใช้อยู่" คิดให้เอง)
+    function _dfBack(n){ const t = new Date(), f = new Date(); f.setDate(f.getDate() - (n - 1)); return [_ymd(f), _ymd(t)]; }
+    const _DF_PRESETS = [
+      { l:'วันนี้',   tip:'เฉพาะวันนี้',                 r:()=>{ const t=_ymd(new Date()); return [t,t]; } },
+      { l:'เมื่อวาน', tip:'เฉพาะเมื่อวาน',               r:()=>{ const d=new Date(); d.setDate(d.getDate()-1); const s=_ymd(d); return [s,s]; } },
+      { l:'7 วัน',    tip:'7 วันย้อนหลัง (นับวันนี้ด้วย)',  r:()=>_dfBack(7) },
+      { l:'30 วัน',   tip:'30 วันย้อนหลัง (นับวันนี้ด้วย)', r:()=>_dfBack(30) },
+      { l:'1 ปี',     tip:'1 ปีย้อนหลัง (365 วัน)',        r:()=>_dfBack(365) },
+      { l:'เดือนนี้', tip:'ต้นเดือน–สิ้นเดือนนี้',         r:()=>{ const d=new Date(); return [_ymd(new Date(d.getFullYear(),d.getMonth(),1)), _ymd(new Date(d.getFullYear(),d.getMonth()+1,0))]; } },
+      { l:'ทั้งปี',   tip:'ม.ค.–ธ.ค. ของปีนี้',           r:()=>{ const y=new Date().getFullYear(); return [y+'-01-01', y+'-12-31']; } },
+    ];
+    function dfPreset(i){ const p = _DF_PRESETS[i]; if(!p) return; const [f,t] = p.r(); _dfFocus = -1; setDfRange(f, t); }
     const _inp = 'padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer';
     function renderDateFilterBar() {
       const cnt = (FD.followCases||[]).filter(l=>ir(l.dateIn)).length;
       let html = `<div class="df-bar"><span class="df-label">${ic('lucide:calendar',16)} กรองวันที่รับเคส:</span>`;
       html += `<span style="font-size:var(--fs-body);color:var(--t3)">จาก</span>`;
-      html += `<input type="date" value="${dfFrom}" onchange="setDfRange(this.value, undefined)" style="${_inp}">`;
+      // oninput (ไม่ใช่ onchange) + หน่วงใน dfType — ไม่งั้นพิมพ์ตัวแรกหน้าก็ render ทับจนพิมพ์ต่อไม่ได้
+      html += `<input type="date" value="${dfFrom}" oninput="dfType(0, this.value)" style="${_inp}">`;
       html += `<span style="font-size:var(--fs-body);color:var(--t3)">ถึง</span>`;
-      html += `<input type="date" value="${dfTo}" onchange="setDfRange(undefined, this.value)" style="${_inp}">`;
-      html += `<button class="df-btn" onclick="dfThisMonth()" title="เดือนนี้">เดือนนี้</button>`;
-      html += `<button class="df-btn" onclick="dfThisYear()" title="ทั้งปี (ม.ค.–ธ.ค.)">ทั้งปี</button>`;
+      html += `<input type="date" value="${dfTo}" oninput="dfType(1, this.value)" style="${_inp}">`;
+      _DF_PRESETS.forEach((p, i) => {
+        const [f, t] = p.r();
+        const on = (dfFrom === f && dfTo === t);      // ช่วงที่เลือกอยู่ตรงกับปุ่มไหน = ไฮไลต์ปุ่มนั้น
+        html += `<button class="df-btn" onclick="dfPreset(${i})" title="${h(p.tip)}"${on
+          ? ' style="background:var(--blue);color:var(--on-blue);border-color:transparent;font-weight:700"' : ''}>${h(p.l)}</button>`;
+      });
       html += `<span style="font-size:var(--fs-body);color:var(--blue);font-weight:500;margin-left:4px">${cnt} เคสติดตามในช่วง</span>`;
       html += `</div>`;
       return html;
