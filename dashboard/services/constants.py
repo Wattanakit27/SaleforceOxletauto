@@ -147,12 +147,97 @@ def refresh_from_sheet() -> bool:
     ALL_SELLERS.clear()
     ALL_SELLERS.extend(s for ms in TEAMS.values() for s in ms)
 
+    apply_registry_teams()          # ★ ทะเบียนพนักงานเป็นตัวตัดสิน "ทีม" (ดูฟังก์ชันข้างล่าง)
+
     TEAM_ID.clear()
     TEAM_ID.update({n: tid for tid, ms in TEAMS.items() for n in ms})
 
     ADMIN_SELLERS.clear()
     ADMIN_SELLERS.update(new_admins)
     return True
+
+
+def team_id_of(position: str) -> str:
+    """แปลง "ตำแหน่ง/ทีม" ในทะเบียนพนักงาน → รหัสทีมของฝั่งขาย (`"ทีม B"` → `"B"`)
+
+    รับทั้ง `"ทีม B"` · `"B"` · `"ADMIN"` · `"เทเลเซลล์"` — ตำแหน่งที่ไม่ใช่ทีมขาย
+    (เช่น `"ช่างและคนงาน"` `"ออฟฟิศ บ้านเก่า"`) คืน `""` = **ไม่ย้ายทีมให้**
+    """
+    p = (position or "").strip()
+    if not p:
+        return ""
+    low = p.lower()
+    if low in ("admin", "เทเลเซลล์"):
+        return "ADMIN"
+
+    # ⚠️ "ขึ้นต้นด้วยคำว่าทีม" อย่างเดียวไม่พอ — **"ทีมโปรดักชัน" คือแผนก ไม่ใช่ทีมขาย**
+    #   (วัดจริงบน prod 24/09: แซน อยู่ทีมขาย B แต่ในทะเบียนเป็น "ทีมโปรดักชัน"
+    #    ถ้าไม่รัดกฎ เขาจะถูกย้ายไปทีมขายใหม่ชื่อ "โปรดักชัน" ทั้งที่ไม่มีใครสั่ง)
+    #   → รับเฉพาะ "ทีม + รหัสสั้น" (A-Z / 0-9 ไม่เกิน 2 ตัว) เช่น "ทีม A" "ทีม D" "ทีม 1"
+    for pre in ("ทีม ", "ทีม", "team ", "team"):
+        if low.startswith(pre):
+            rest = p[len(pre):].strip()
+            return rest.upper() if _is_team_code(rest) else ""
+    return p.upper() if _is_team_code(p) else ""    # กรอกรหัสทีมตรงๆ ("A")
+
+
+def _is_team_code(s: str) -> bool:
+    s = (s or "").strip()
+    return 1 <= len(s) <= 2 and all("a" <= c.lower() <= "z" or c.isdigit() for c in s)
+
+
+def apply_registry_teams() -> int:
+    """★★ 24 ก.ย.69 — **"ทีม" มีที่เก็บที่เดียว: ทะเบียนพนักงาน** (เจ้าของสั่ง
+    *"เรื่องชื่อเล่นและชื่อทีม ฉันอยากให้ลิงก์กันให้หมดเลย … แค่มาเพิ่มทีมในนี้ก็โผล่ที่อื่นได้ด้วย"*)
+
+    เดิมทีมของคนคนเดียวถูกเก็บ **2 ที่ที่ไม่รู้จักกัน** → ย้ายทีมทีต้องแก้ 2 รอบ:
+      · ตั้งค่าเซลล์ (`cfg_sellers_config`) — แดชบอร์ดขายใช้ (เป้า/คะแนน/ตารางรายทีม)
+      · ทะเบียนพนักงาน (`Employee.position`) — ตารางเช็คชื่อใช้
+
+    ตอนนี้ **อ่านทีมจากทะเบียนทับเสมอ** หลังโหลดตั้งค่าเซลล์เสร็จ → แก้ที่หน้า "พนักงาน"
+    ที่เดียว แดชบอร์ดขายตามทันทีรอบ sync ถัดไป
+
+    กติกาที่ต้องรักษา:
+    - **ตำแหน่งที่ไม่ใช่ทีมขายจะไม่ย้ายใคร** (ช่าง/ออฟฟิศ/เด็กฝึกงาน) — ของเดิมในตั้งค่าเซลล์ชนะ
+      ไม่งั้นเซลล์ที่ถูกจัดเป็น "ออฟฟิศ" ในทะเบียนจะหลุดจากทีมขายทั้งคน
+    - **ทีมใหม่สร้างได้จากทะเบียน** ("ทีม D" → รหัส `D`) และเติมชื่อให้ `TEAM_NAMES` เอง
+    - **เฉพาะคนที่เป็นเซลล์อยู่แล้ว** (มีใน `TARGETS`) — พนักงานทั่วไปไม่ถูกดึงเข้าแดชบอร์ดขาย
+    - ทะเบียนอ่านไม่ได้/ยังไม่ migrate = ไม่ทำอะไร (คงทีมจากตั้งค่าเซลล์)
+    """
+    try:
+        from checkout.models import Employee
+        rows = list(Employee.objects.filter(active=True)
+                    .exclude(position="").values_list("nickname", "position"))
+    except Exception:
+        return 0
+
+    pos_of = {}
+    for nick, pos in rows:
+        key = SELLER_MAP.get((nick or "").strip(), (nick or "").strip())
+        if key:
+            pos_of[key] = pos
+
+    moved = 0
+    for name in list(TARGETS):
+        tid = team_id_of(pos_of.get(name, ""))
+        if not tid:
+            continue
+        cur = next((t for t, ms in TEAMS.items() if name in ms), "")
+        if cur == tid:                  # อยู่ทีมนั้นอยู่แล้ว (อย่าเช็คกับ TEAM_ID — อาจเป็นค่าเก่า)
+            continue
+        if cur:
+            TEAMS[cur] = [n for n in TEAMS[cur] if n != name]
+        TEAMS.setdefault(tid, []).append(name)
+        TEAM_NAMES.setdefault(tid, "ทีม %s" % tid)
+        moved += 1
+
+    for t in [t for t, ms in TEAMS.items() if not ms]:   # ทีมที่ว่างแล้วไม่ต้องโชว์
+        TEAMS.pop(t, None)
+    ALL_SELLERS.clear()
+    ALL_SELLERS.extend(s for ms in TEAMS.values() for s in ms)
+    TEAM_ID.clear()
+    TEAM_ID.update({n: tid for tid, ms in TEAMS.items() for n in ms})
+    return moved
 
 RJ_TYPES = ["RJ", "Hot RJ", "Hot RB", "HOT RJ"]   # "HOT RJ" = variant ตัวใหญ่ในชีต (เดิมหลุดนับเป็น lead ปกติ)
 

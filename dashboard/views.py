@@ -859,9 +859,27 @@ def admin_seller_config(request):
         except Exception as e:
             return JsonResponse({"error": f"บันทึกล้มเหลว: {e}"}, status=500)
 
+        # ★★ 24 ก.ย.69 — เขียนทีมกลับเข้า "ทะเบียนพนักงาน" ด้วย (เจ้าของสั่งให้ทีมลิงก์กันหมด)
+        #   ทะเบียนเป็นตัวตัดสินทีมตอนอ่าน (`constants.apply_registry_teams`) — ถ้าไม่เขียนกลับ
+        #   ทีมที่เพิ่งแก้ตรงนี้จะโดนทะเบียนทับกลับทันทีที่ sync รอบถัดไป (ดูเหมือนบันทึกไม่ติด)
+        #   · best-effort: ทะเบียนล่ม/ยังไม่ migrate = ตั้งค่าเซลล์ยังบันทึกได้ตามปกติ
+        synced = 0
+        try:
+            from checkout.models import Employee
+            from .services.constants import TEAM_NAMES
+            for name, team, _t, _a in cleaned:
+                want = TEAM_NAMES.get(team) or ("ทีม %s" % team)
+                e = Employee.objects.filter(nickname__iexact=name).first()
+                if e and (e.position or "") != want:
+                    e.position = want
+                    e.save(update_fields=["position", "updated_at"])
+                    synced += 1
+        except Exception:
+            pass
+
         # โหลด config ใหม่ทันทีให้ dashboard เห็นค่าใหม่
         refresh_from_sheet()
-        return JsonResponse({"ok": True, "saved": len(cleaned)})
+        return JsonResponse({"ok": True, "saved": len(cleaned), "syncedToStaff": synced})
 
     # GET — ส่ง user_id (จาก employees sheet) แทน token เพื่อให้ admin เห็น URL ส่วนตัวของเซลล์ใน UI
     loaded_from_sheet = refresh_from_sheet()
