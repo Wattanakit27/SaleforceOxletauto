@@ -5147,9 +5147,16 @@
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
       const noDaily = !Object.keys(d.daily || {}).length;     // ยังไม่มียอด "รายวัน" ให้แสดง
       const show = noDaily ? (d.cum || {}) : t;                // ไม่มีรายวัน = โชว์ยอดสะสมไปก่อน (ดีกว่าว่างเปล่า)
-      const cells = _soData.metrics.map(m => `<div style="min-width:88px">
+      // ★ 24 ก.ย.69 — ตัวเลข 4 ตัวเป็น "กริด" ไม่ใช่ flex-wrap
+      //   ของเดิมห่อบรรทัดเป็น 3+1 → "แชร์" ตกไปอยู่บรรทัดล่างตัวเดียว ดูเหมือนหน้าพัง
+      // ★ 24 ก.ย.69 — ตัวเลข 4 ตัวเป็นกริด 2×2 คงที่
+      //   ของเดิม flex-wrap ห่อเป็น 3+1 → "แชร์" ตกไปอยู่บรรทัดล่างตัวเดียว
+      //   เคยลอง 4 ช่องเรียงเดียว: จอ 1280 การ์ดเหลือ 320px → ช่องละ 80px
+      //   แต่ "150,676" กว้างกว่านั้น → เลขไหลไปทับช่องข้างๆ ("150,6763,587")
+      //   2×2 กว้างช่องละครึ่งการ์ดเสมอ ไม่ว่าจอกว้างแค่ไหนก็ไม่ชน
+      const cells = _soData.metrics.map(m => `<div style="min-width:0">
         <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
-        <div style="font-size:21px;font-weight:800;color:var(--t1)">${(show[m] || 0).toLocaleString()}</div></div>`).join('');
+        <div style="font-size:21px;font-weight:800;color:var(--t1);white-space:nowrap">${(show[m] || 0).toLocaleString()}</div></div>`).join('');
       // ฝั่งไหนยังไม่มีข้อมูลรายวัน = บอกสาเหตุ + ทางแก้ แทนที่จะโชว์ 0 เฉยๆ ให้คนเดาเอง
       let note = '';
       if (side === 'tiktok' && !(d.accounts || []).length) {
@@ -5161,16 +5168,19 @@
       }
       // จำนวนช่อง/เพจ ที่รวมอยู่ในตัวเลขใบนี้ — กดแล้วเลื่อนไปตารางแยกช่องข้างล่าง
       const nch = (d.byChannel || []).length, unit = side === 'meta' ? 'เพจ' : 'ช่อง';
+      // คำอธิบายใต้ชื่อ — แยกเป็นบรรทัดของตัวเอง ไม่วางต่อท้ายชื่อ
+      // (ของเดิมยาวเกินจนห่อบรรทัดคาบเกี่ยวกับปุ่ม "N ช่อง" แล้วหัวการ์ดเบี้ยวทั้งใบ)
+      const sub = !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก · ' + _soDayNote(d)
+        : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล');
       return `<div class="card" style="flex:1;min-width:320px;border-top:3px solid ${on}">
-        <div class="card-title" style="display:flex;align-items:center;gap:9px">
-          ${soLogo(side, 22)}${SO_NAME[side]}
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="card-title" style="margin:0;min-width:0">${soLogo(side, 22)}${SO_NAME[side]}</span>
           ${nch ? `<button onclick="soGotoChannels()" title="ดูตารางแยกราย${unit}"
-            style="font-size:var(--fs-body);font-weight:700;padding:2px 9px;border-radius:7px;cursor:pointer;font-family:inherit;
-                   border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2)">${nch} ${unit}</button>` : ''}
-          <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ${
-            !noDaily ? 'ที่เพิ่มขึ้นในช่วงที่เลือก · ' + _soDayNote(d)
-            : (d.postCount ? `ยอดสะสมของ ${(d.postCount).toLocaleString()} โพสต์ในช่วงนี้` : 'ยังไม่มีข้อมูล')}</span></div>
-        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${cells}</div>
+            style="font-size:var(--fs-body);font-weight:700;padding:3px 10px;border-radius:7px;cursor:pointer;font-family:inherit;
+                   white-space:nowrap;flex-shrink:0;margin-left:auto;
+                   border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2)">${nch} ${unit}</button>` : ''}</div>
+        <div style="font-size:var(--fs-body);color:var(--t3);margin-top:3px;line-height:1.6">${sub}</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin-top:11px">${cells}</div>
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
             ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b>
             <button onclick="switchTab('ad')" style="margin-left:8px;font-size:var(--fs-body);padding:3px 10px;border-radius:7px;
