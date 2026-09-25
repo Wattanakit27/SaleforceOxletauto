@@ -91,24 +91,123 @@ def _demand_by_model():
                 continue
             demand[k] = demand.get(k, 0) + int(n or 0)
             shown.setdefault(k, name)          # ชื่อแรกที่เจอ = ชื่อไว้โชว์ให้คนอ่าน
+    return _fold_rare(demand, shown)
+
+
+def _fold_rare(demand, shown):
+    """ยุบ "ชื่อเดียวกันเขียนยาวกว่า" ที่แทบไม่มีใครถามหา เข้าไปในชื่อหลัก
+
+    ★★ บั๊กที่เจอ 26/09 (ตอนตัวเลข Altis ไม่ตรงกับที่วัดไว้ จึงไล่ทีละคัน):
+       ชีตลีดมีทั้ง **"Altis" (ถามหา 101)** และ **"Corolla Altis" (ถามหา 1)** = คนละคีย์
+       · รถในสต๊อกชื่อ `Corolla Altis ALTIS ปี 14-18` → กติกา "เทียบรุ่นยาวก่อน" เลือก
+         `corollaaltis` ชนะ `altis` → ไปลงคีย์ที่ดีมานด์ = 1 ซึ่งต่ำกว่า `MIN_DEMAND`
+         **→ หายจากตารางทั้งคัน และคีย์ `altis` เหลือ "พร้อมขาย 0" ทั้งที่มีรถ 3 คัน**
+       · กติกา "ยาวก่อน" ยังต้องมีอยู่ (`civicfc` ต้องชนะ `civic`) — แต่ต้องยุบเฉพาะ
+         **คีย์ยาวที่ดีมานด์ต่ำกว่าเกณฑ์** เท่านั้น · `almeraturbo` (33) ไม่ถูกยุบ = ถูกต้อง
+         เพราะ Almera Turbo เป็นรุ่นต่างจาก Almera จริงๆ
+    """
+    big = [k for k, v in demand.items() if v >= MIN_DEMAND]
+    for k in sorted(demand, key=len, reverse=True):
+        if demand[k] >= MIN_DEMAND:
+            continue
+        host = max((b for b in big if b != k and b in k), key=lambda b: demand[b], default="")
+        if host:
+            demand[host] += demand.pop(k)
+            shown.pop(k, None)
     return demand, shown
 
 
-def _stock_by_model(vocab):
-    """สต๊อกของเราแยกรุ่น — `({คีย์: พร้อมขาย}, {คีย์: มีทั้งหมด})` · อ่านไม่ได้ = ว่าง"""
+_PLATE = re.compile(r"^\s*(\d{0,3})\s*([ก-ฮ]{1,3})\s*(\d{1,4})")
+
+
+def norm_plate(s):
+    """ทะเบียนไทยให้เทียบข้ามระบบได้ — เอาแค่ "เลข+อักษร+เลข" ทิ้งชื่อจังหวัดที่ติดมา
+
+    ★ ในชีตกรอกเป็น `5ขล739 กรุงเทพมหานคร` · `4ขย4388กท` · `1 ขด116 กรุงเทพมหานคร`
+      (จังหวัดมีทั้งเต็ม/ย่อ/ติดกัน · บางคันเว้นวรรคกลางทะเบียนเอง) · ฝั่งสต๊อกเป็น `8กษ1332` เปล่าๆ
+      → **ไม่ตัดจังหวัดออกก่อน จับคู่ได้ 5 จาก 466 คัน · ตัดแล้วได้ 163** (วัดจริง 26/09)
+    """
+    m = _PLATE.match(str(s or "").strip())
+    if m:
+        return "%s%s%s" % m.groups()
+    return re.sub(r"[\s\-.()]", "", str(s or ""))
+
+
+def _plate_models():
+    """`{ทะเบียน: ชื่อรุ่นสะอาดจากชีต}` — จากบล็อกจัดซื้อรับเข้า (AR ทะเบียน + AV รถตามสูตร)
+
+    ★★ 26 ก.ย.69 (เจ้าของสั่ง *"ลองเทียบทะเบียนดู มันเป็นข้อมูลชุดเดียวกัน"*)
+       ชื่อรุ่นในตาราง `Car` มาจาก **Car Spend ซึ่งเป็นป้ายหมวด ไม่ใช่รุ่นจริง**:
+       รถปี 2023 ยังถูกป้ายว่า `Civic FC ปี 16-20 FC ปี 16-20` · Corolla Cross ถูกป้ายว่า `Corolla Altis`
+       · Almera Turbo เขียนแค่ `Almera` · **ไม่มีคำว่า FE/FK เลยสักคัน** ทั้งที่ฝั่งลูกค้าถามหาแยก 4 ชื่อ
+       → เทียบด้วยชื่อ **ไม่มีทางตรง** แต่ทะเบียนเป็นค่าเดียวกันทั้ง 2 ฝั่ง
+       · **ห้ามเดารุ่นจากปีรถ** — วัดจริง `2ขล9894` ปี 2021 ชีตบอก **Civic FE** (เจน 11 เปิดกลางปี 2021)
+         กฎ "FE = 2022+" ที่เคยคิดไว้จะจับผิดทันที
+    """
+    from .cache_store import get_kv
+
+    blob = get_kv("main") or {}
+    data = blob.get("data", blob) if isinstance(blob, dict) else {}
+    out = {}
+    for r in (data or {}).get("boughtCars") or []:
+        if not isinstance(r, (list, tuple)) or len(r) < 7:
+            continue          # แคชรุ่นก่อน 26/09 ยังไม่มีช่องทะเบียน
+        k, name = norm_plate(r[6]), str(r[4] or "").strip()
+        if k and name:
+            out[k] = name     # แถวเดือนหลังชนะ (ข้อมูลใหม่กว่า)
+    return out
+
+
+def _stock_rows():
+    """`[(brand, model, stage, plate)]` ของรถที่ยังไม่ขาย · อ่านไม่ได้ = `None`
+
+    แยกเป็นฟังก์ชันเพื่อ **พรีวิว/เทสต์ด้วยสต๊อกจริงจากเซิร์ฟเวอร์บนเครื่อง dev ได้**
+    (เครื่อง dev เป็น SQLite ว่าง ถ้าอ่านตรงจะได้ "ทุกรุ่น 0 คัน" ซึ่งเป็นภาพลวง)
+    """
     try:
         from cars.models import Car
-        rows = list(Car.objects.exclude(status="sold").values_list("brand", "model", "stage"))
+        return list(Car.objects.exclude(status="sold")
+                    .values_list("brand", "model", "stage", "plate"))
     except Exception:
+        return None
+
+
+# ผลการนับสต๊อกรอบล่าสุด — `{show, named, unnamed}` · ให้รายงานบอกได้ว่า "ยังมีอีก N คันที่ไม่รู้รุ่น"
+STOCK_INFO = {}
+
+
+def _stock_by_model(vocab):
+    """สต๊อกของเราแยกรุ่น — `({คีย์: พร้อมขาย}, {คีย์: มีทั้งหมด})` · อ่านไม่ได้ = ว่าง
+
+    ชื่อรุ่นเอาจาก **ชีต (จับด้วยทะเบียน) ก่อน** แล้วค่อยตกไปใช้ชื่อของ Car Spend
+    """
+    rows = _stock_rows()
+    if rows is None:
         return {}, {}
-    show, total = {}, {}
-    for brand, model, stage in rows:
-        k = match_model("%s %s" % (brand or "", model or ""), vocab)
+    names = _plate_models()
+    show, total, n_show, n_named, n_out = {}, {}, 0, 0, 0
+    for brand, model, stage, plate in rows:
+        if stage == "show":
+            n_show += 1
+        sheet = names.get(norm_plate(plate))
+        if sheet:
+            k = match_model(sheet, vocab)
+            if stage == "show":
+                n_named += 1
+        else:
+            k = match_model("%s %s" % (brand or "", model or ""), vocab)
         if not k:
-            continue                      # รุ่นหายาก (March/Wish/Leaf) ที่ตลาดไม่ได้ถามหา
+            # รุ่นที่ตลาดไม่ได้ถามหาเลย (BMW 116i / Leaf / March) — ไม่มีคีย์ให้ลง
+            if stage == "show":
+                n_out += 1
+            continue
         total[k] = total.get(k, 0) + 1
         if stage == "show":
             show[k] = show.get(k, 0) + 1
+    STOCK_INFO.clear()
+    # `uncounted` = พร้อมขายแต่ไม่ได้อยู่ในตารางเลย (ต่างจาก `unnamed` ที่แค่ไม่มีชื่อจากชีต
+    # แต่ยังนับได้จากชื่อ Car Spend) — เขียนบอกผู้ใช้ต้องใช้ตัวนี้ ไม่ใช่ unnamed
+    STOCK_INFO.update(show=n_show, named=n_named, unnamed=n_show - n_named, uncounted=n_out)
     return show, total
 
 
@@ -220,6 +319,16 @@ def rank_cases(cases, gap=None):
 _NUM = "①②③④⑤⑥"
 
 
+def _not_ready(g):
+    """" (มีอีก N คัน แต่ยังไม่พร้อมขาย)" — กัน "0 คัน" ถูกอ่านว่า "ไม่มีรถรุ่นนี้เลย"
+
+    ★ เจ้าของทักตรงนี้เอง (*"ทำไมรถ Civic จะมีศูนย์คันได้ยังไง"*) — วัดจริง: Civic FE พร้อมขาย 0
+      **ถูกแล้ว** แต่เรามีรถรุ่นนั้น 4 คัน ติดจอง/ซ่อม/รอปิดการขายอยู่ · ไม่เขียนกำกับ คนอ่านสรุปว่าระบบพัง
+    """
+    n = (g.get("total") or 0) - (g.get("show") or 0)
+    return " (มีอีก %d คัน ยังไม่พร้อมขาย)" % n if n > 0 else ""
+
+
 def _case_lines(c, i):
     """1 เคส → หลายบรรทัด (ชื่อ/รถ/เบอร์/เหตุผลที่ควรโทร)"""
     L = ["%s %s" % (_NUM[i] if i < len(_NUM) else "%d." % (i + 1),
@@ -229,8 +338,8 @@ def _case_lines(c, i):
         L.append("   %s" % who)
     g = c.get("gap")
     if g:
-        L.append("   %s — ตลาดถามหา %d ครั้ง · เรามีพร้อมขาย %d คัน"
-                 % (g["name"][:16], g["demand"], g["show"]))
+        L.append("   %s — ตลาดถามหา %d ครั้ง · เรามีพร้อมขาย %d คัน%s"
+                 % (g["name"][:16], g["demand"], g["show"], _not_ready(g)))
         if g.get("recent"):
             L.append("   (รุ่นนี้เพิ่งรับเข้ามาแล้ว %d คัน)" % g["recent"])
     L.append("   %s · ค้าง %d วัน" % (
@@ -260,8 +369,11 @@ def build_room_reports(days=7, max_cars=MAX_CARS, rooms=None, gap=None, cases=No
         gap_lines = ["รถที่ขาดหนักสุดตอนนี้ (%d เดือนล่าสุด)" % DEMAND_MONTHS]
         for g in gap[:TOP_GAP]:
             tail = " · เพิ่งรับเข้า %d" % g["recent"] if g.get("recent") else ""
-            gap_lines.append("  %-12s ถามหา %3d · มี %d คัน%s"
-                             % (g["name"][:12], g["demand"], g["show"], tail))
+            gap_lines.append("  %-12s ถามหา %3d · พร้อมขาย %d%s%s"
+                             % (g["name"][:12], g["demand"], g["show"], tail, _not_ready(g)))
+        if STOCK_INFO.get("uncounted"):
+            gap_lines.append("  (พร้อมขายอีก %d คันเป็นรุ่นที่ตลาดไม่ได้ถามหา ไม่ได้นับในตารางนี้)"
+                             % STOCK_INFO["uncounted"])
 
     out = []
     for gid, person in rooms.items():

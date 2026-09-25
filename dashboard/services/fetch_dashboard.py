@@ -694,13 +694,16 @@ def _fetch_purchase_data() -> dict:
                     leads.append([m, day, ch, buy, buyer, q.upper()])
                 # ── รถที่ซื้อได้จริง (AS วันที่ · AT วิธี · AU จัดซื้อ · AQ รุ่นรถ · AV รถตามสูตร) ──
                 #   ต้องมีวันที่ parse ได้ + คนซื้อ (กันแถว summary รายสัปดาห์ปน)
+                #   ★ 26 ก.ย.69 เพิ่ม AR (ทะเบียน) — กุญแจแท้ที่ใช้จับรถคันนี้กับสต๊อก
+                #   ชื่อรุ่นของ Car Spend หยาบเกิน (ปี 2023 ยังติดป้าย "Civic FC ปี 16-20")
+                #   แต่ AV ของชีตแม่น → จับด้วยทะเบียนแล้วยืมชื่อมาใช้ (ดู purchase_report._plate_models)
                 #   ★ 25 ก.ย.69 เพิ่ม AQ/AV — เดิมอ่านแค่ 3 ช่อง ตอบได้แค่ "เข้ากี่คัน ใครซื้อ"
                 #   **ตอบไม่ได้ว่าเข้ารุ่นอะไร** ทั้งที่ AV เป็นชื่อสูตรสะอาดชุดเดียวกับฝั่งลีด
                 #   ⚠️ ต่อท้ายลิสต์เท่านั้น — index 0-3 เดิมห้ามขยับ (index.html อ่าน r[2]/r[3] อยู่)
                 bdate, method, bbuyer = g(44), g(45), g(46)
                 bmd = parse_month_day(bdate)
                 if bmd and bbuyer:
-                    bought.append([bmd[0], bmd[1], method, bbuyer, g(47), g(42)])
+                    bought.append([bmd[0], bmd[1], method, bbuyer, g(47), g(42), g(43)])
     except Exception:
         return {"leads": leads, "bought": bought}
     return {"leads": leads, "bought": bought}
@@ -1915,7 +1918,7 @@ def _compute_dashboard_data() -> dict:
         "leadCarsByMonth": lead_cars_by_month,
         "leadCarSellerMonth": lead_car_seller_month,
         "purchaseLeads": _purchase_data["leads"],    # ฝั่งจัดซื้อ lead: [m,d,channel,buy,buyer,quality]
-        "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer,รถตามสูตร(AV),รุ่นรถ(AQ)]
+        "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer,รถตามสูตร(AV),รุ่นรถ(AQ),ทะเบียน(AR)]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
         "leadNoChannelByMonth": lead_nochannel_by_month,   # lead ที่ไม่ได้กรอกช่องทาง {m:{d:count}}
