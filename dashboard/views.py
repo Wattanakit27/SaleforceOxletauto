@@ -2682,6 +2682,20 @@ def admin_social(request):
         return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401)
     from .services import social_stats
     try:
+        # ★ 26 ก.ย.69 — `?side=&owner=` = ขอคลิป/โพสต์ของช่องนั้นช่องเดียว (หน้า "ดูรายช่อง")
+        #   แยกคำขอออกจากก้อนภาพรวม เพราะเพจเดียวมีโพสต์ 580+ ชิ้น (ดู social_stats.channel_posts)
+        owner = (request.GET.get("owner") or "").strip()
+        if owner:
+            def _int(k, dv):
+                try:
+                    return max(0, int(request.GET.get(k) or dv))
+                except (TypeError, ValueError):
+                    return dv
+            data = social_stats.channel_posts(
+                (request.GET.get("side") or "").strip(), owner,
+                request.GET.get("from"), request.GET.get("to"),
+                limit=min(_int("limit", 48), 200), offset=_int("offset", 0))
+            return JsonResponse({"ok": True, **data}, json_dumps_params={"ensure_ascii": False})
         data = social_stats.overview(request.GET.get("from"), request.GET.get("to"))
     except Exception as e:                      # ตารางยังไม่ migrate / DB มีปัญหา = บอกตรงๆ
         return JsonResponse({"ok": False, "error": "อ่านข้อมูลไม่ได้: %s" % e}, status=500,

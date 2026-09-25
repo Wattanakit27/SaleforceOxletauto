@@ -5331,7 +5331,7 @@
             ยอดที่เกิดขึ้นระหว่าง <b>${h(_soFmtDay(_soData.from))} – ${h(_soFmtDay(_soData.to))}</b>
             ${nDay ? `<span style="color:var(--t3)">· จากข้อมูล ${nDay} วัน</span>`
                    : `<span style="color:var(--amber)">· ยังคำนวณไม่ได้ ต้องเก็บ snapshot 2 คืน</span>`}</div>
-          <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 10px">${h(p.date || '')}${p.type ? ' · ' + h(p.type) : ''}
+          <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 10px">${h(_soFmtDay(p.date || ''))}${p.type ? ' · ' + h(p.type) : ''}
             ${p.link ? ` · <a href="${h(p.link)}" target="_blank" rel="noopener" style="color:var(--blue)">เปิดโพสต์จริง</a>` : ''}</div>
           <div style="display:flex;gap:20px;flex-wrap:wrap">${kpi}</div></div>
         <div class="card">
@@ -5388,7 +5388,11 @@
         rows.map(r => {
           const idle = !r.posts;                       // ไม่มีคลิป/โพสต์ในช่วงนี้เลย
           const num = v => r.live ? _n(v) : dash('ยังคิดยอดรายวันไม่ได้ — เก็บยังไม่ครบ 2 คืน');
-          return `<tr style="border-top:.5px solid var(--bd);text-align:right${idle ? ';opacity:.55' : ''}">
+          // ★ 26 ก.ย.69 — กดแถวเพื่อเข้าไปดูคลิปของช่องนั้น (เจ้าของขอ "อยากให้แบ่งช่องได้")
+          return `<tr onclick="soOpenChannel('${h(String(r.side))}','${h(String(r.id || ''))}')"
+            title="ดูคลิป/โพสต์ของช่องนี้" style="border-top:.5px solid var(--bd);text-align:right;cursor:pointer${
+              idle ? ';opacity:.55' : ''}" onmouseover="this.style.background='var(--bg2)'"
+            onmouseout="this.style.background=''">
           <td style="text-align:left;${th};max-width:330px">
             <span style="display:inline-flex;align-items:flex-start;gap:7px;color:var(--t1)">
               <span style="flex-shrink:0;margin-top:2px">${soLogo(r.side, 18)}</span>
@@ -5405,6 +5409,137 @@
         `</tbody></table></div></div>`;
     }
 
+    // ═══ หน้า "ดูรายช่อง" — คลิป/โพสต์ทั้งหมดของช่องนั้น แบบการ์ด (26 ก.ย.69 · เจ้าของขอ) ═══
+    //   *"อยากให้มันสามารถกดเข้าไปดูรายละเอียดของคลิปนั้นได้ แล้วก็อยากให้มันแบ่งช่องได้ด้วย
+    //     ถ้าคุณรู้จักแอดไลบรารี ฉันอยากได้ประมาณนั้น"*
+    //   ⚠️ ดึงตอนกดเข้ามาดูเท่านั้น (`?side=&owner=`) — เพจเดียวมีโพสต์ 580+ ชิ้น
+    //      ถ้าส่งมาพร้อมก้อนภาพรวมทุกครั้งที่เปลี่ยนช่วงวันที่ = JSON หลายร้อย KB
+    let _soCh = null;   // {side, id, name, rows, total, loading, err} · null = ไม่ได้อยู่หน้าช่อง
+
+    async function soOpenChannel(side, id, name) {
+      _soOpen = null;
+      // ชื่อช่องหาเองจากตารางแยกช่อง — จะได้ไม่ต้องยัดชื่อไทย (มี ' " ปนได้) ลงใน onclick
+      if (!name) {
+        const r = ((_soData[side] || {}).byChannel || []).find(x => x.id === id);
+        name = (r && r.name) || id;
+      }
+      _soCh = { side: side, id: id, name: name, rows: [], total: 0, loading: true, err: '' };
+      drawSocial();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      _soChFetch(0);
+    }
+
+    async function _soChFetch(offset) {
+      const c = _soCh;
+      if (!c) return;
+      c.loading = true; drawSocial();
+      try {
+        const r = await fetch('/api/admin/social?side=' + encodeURIComponent(c.side)
+          + '&owner=' + encodeURIComponent(c.id)
+          + '&from=' + encodeURIComponent(dfFrom) + '&to=' + encodeURIComponent(dfTo)
+          + '&offset=' + offset, { credentials: 'same-origin' });
+        const d = await r.json();
+        if (_soCh !== c) return;                       // ผู้ใช้กดออกไปแล้ว ทิ้งผลนี้
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        c.rows = offset ? c.rows.concat(d.rows || []) : (d.rows || []);
+        c.total = d.total || 0;
+        // ยัดเข้าก้อนหลัก → หน้า "ดูรายชิ้น" เดิมใช้ได้ทันที ไม่ต้องแก้อะไรเลย
+        const sd = _soData[c.side] || (_soData[c.side] = {});
+        sd.posts = sd.posts || []; sd.postDaily = sd.postDaily || {};
+        (d.rows || []).forEach(p => { if (!sd.posts.some(x => x.id === p.id)) sd.posts.push(p); });
+        Object.assign(sd.postDaily, d.daily || {});
+      } catch (e) {
+        if (_soCh === c) c.err = String((e && e.message) || e);
+      } finally {
+        if (_soCh === c) { c.loading = false; drawSocial(); }
+      }
+    }
+
+    function soChBack() { _soCh = null; _soOpen = null; drawSocial(); }
+    function soChMore() { if (_soCh) _soChFetch(_soCh.rows.length); }
+    // เปิดหน้ารายชิ้นด้วย id ตรงๆ (การ์ดในหน้าช่องไม่ได้อยู่ใน `_soRows` ของตารางหน้ารวม)
+    function soOpenPostId(side, id) {
+      _soOpen = { side: side, id: id };
+      drawSocial();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function _soCard(p, side) {
+      const inc = p.inc || {}, _n = v => (v || 0).toLocaleString('th-TH');
+      // รูปปก: ตอนนี้มีเฉพาะ YouTube (สร้างจาก video id ได้) · TikTok/FB ใช้กรอบสีประจำแพลตฟอร์มแทน
+      const cover = p.thumb
+        ? `<img src="${h(p.thumb)}" alt="" loading="lazy" style="width:100%;height:130px;object-fit:cover;display:block"
+             onerror="this.style.display='none'">`
+        // ฝั่งที่ยังไม่มีรูปปก = แถบเตี้ยๆ พอให้รู้ว่าเป็นแพลตฟอร์มไหน (ไม่ปล่อยกล่องเทาสูง 130px ทิ้งไว้เปล่าๆ)
+        : `<div title="ยังไม่ได้เก็บรูปปกของ${SO_NAME[side]}" style="height:44px;display:flex;align-items:center;
+             justify-content:center;background:color-mix(in srgb,${SO_COLOR[side]} 10%,transparent)">${soLogo(side, 22)}</div>`;
+      const small = ['likes', 'comments', 'shares'].map(m => `<span style="white-space:nowrap">
+          ${h(_soData.metricTh[m] || m)} <b style="color:var(--t1)">${p.live ? _n(inc[m]) : '–'}</b></span>`).join('');
+      return `<div style="border:.5px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--bg1);
+          display:flex;flex-direction:column">
+        <div style="background:var(--bg2)">${cover}</div>
+        <div style="padding:9px 11px;display:flex;flex-direction:column;gap:7px;flex:1">
+          <div style="font-size:var(--fs-body);color:var(--t1);line-height:1.5;display:-webkit-box;
+            -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em">${h(p.text || '(ไม่มีข้อความ)')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soFmtDay(p.date || ''))}${p.type ? ' · ' + h(p.type) : ''}</div>
+          <div style="display:flex;align-items:baseline;gap:7px">
+            <span title="${p.live ? '' : 'ยังคิดยอดรายวันของชิ้นนี้ไม่ได้ — ต้องเก็บ snapshot 2 คืน'}"
+              style="font-size:21px;font-weight:800;color:${p.live ? 'var(--t1)' : 'var(--t3)'}">${
+              p.live ? _n(inc.views) : '–'}</span>
+            <span style="font-size:var(--fs-body);color:var(--t3)">วิวในช่วงนี้ · สะสม ${_n(p.views)}</span></div>
+          <div style="display:flex;gap:11px;flex-wrap:wrap;font-size:var(--fs-body);color:var(--t3)">${small}</div>
+          <div style="display:flex;gap:7px;margin-top:auto;padding-top:4px">
+            <button onclick="soOpenPostId('${h(side)}','${h(String(p.id)).replace(/'/g, '&#39;')}')"
+              style="flex:1;padding:6px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);
+                color:var(--t2);font-size:var(--fs-body);cursor:pointer;font-family:inherit">ดูกราฟรายวัน</button>
+            ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener"
+              style="padding:6px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);
+                color:var(--t2);font-size:var(--fs-body);text-decoration:none">เปิดจริง</a>` : ''}</div>
+        </div></div>`;
+    }
+
+    function _soChannelHtml() {
+      const c = _soCh;
+      const row = ((_soData[c.side] || {}).byChannel || []).find(x => x.id === c.id) || {};
+      const _n = v => (v || 0).toLocaleString('th-TH');
+      // ★ KPI ของช่อง = ตัวเลขจากตารางแยกช่อง (คิดครบทุกคลิปของช่อง)
+      //   ห้ามรวมจากการ์ดที่โหลดมา — โหลดมาทีละหน้า ตัวเลขจะต่ำกว่าจริงและขยับทุกครั้งที่กด "ดูเพิ่ม"
+      const kpi = _soData.metrics.map(m => `<div style="min-width:96px">
+          <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
+          <div style="font-size:23px;font-weight:800;color:${row.live ? 'var(--t1)' : 'var(--t3)'}">${
+            row.live ? _n(row[m]) : '–'}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${_n((row.cum || {})[m])}</div></div>`).join('');
+      const shown = c.rows.length;
+      return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <button onclick="soChBack()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+            border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);
+            font-size:var(--fs-body);cursor:pointer;font-family:inherit">${ic('lucide:arrow-left',15)} กลับ</button>
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1);display:flex;align-items:center;gap:8px">
+            ${soLogo(c.side, 20)} ${h(String(c.name || c.id || ''))}</div></div>
+        <div class="card" style="margin-bottom:12px;border-top:3px solid ${SO_COLOR[c.side]}">
+          <div style="font-size:var(--fs-body);color:var(--t2);margin-bottom:10px">
+            ยอดที่เกิดขึ้นระหว่าง <b>${h(_soFmtDay(_soData.from))} – ${h(_soFmtDay(_soData.to))}</b>
+            · ชิ้นงานในช่วงนี้ <b>${_n(row.posts)}</b>
+            ${row.subs != null ? ` · ผู้ติดตาม <b>${_n(row.subs)}</b>` : ''}
+            ${row.live ? '' : `<span style="color:var(--amber)"> · ยังคิดยอดรายวันไม่ได้ ต้องเก็บ snapshot 2 คืน</span>`}</div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">${kpi}</div></div>
+        <div class="card">
+          <div class="card-title">คลิป / โพสต์ ของช่องนี้
+            <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">${
+              c.total ? ` · แสดง ${_n(shown)} จาก ${_n(c.total)} ชิ้น · เรียงตามวิวที่เพิ่มขึ้นในช่วงนี้` : ''}</span>
+            <span class="info-tip" tabindex="0" data-tip="ตัวเลขใหญ่ = วิวที่เพิ่มขึ้นในช่วงวันที่เลือก\\nบรรทัดรอง = ยอดสะสมตลอดกาล\\n\\nกด &quot;ดูกราฟรายวัน&quot; เพื่อดู performance ของคลิปนั้นทีละวัน">?</span></div>
+          ${c.err ? `<div style="padding:26px;text-align:center;color:var(--red);font-size:var(--fs-body)">เปิดไม่ได้: ${h(c.err)}</div>`
+            : (!shown && c.loading) ? `<div style="text-align:center;padding:40px"><div class="spin" style="margin:0 auto"></div></div>`
+            : !shown ? `<div style="padding:26px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ช่องนี้ไม่มีคลิป/โพสต์ในช่วงที่เลือก</div>`
+            : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;margin-top:8px">
+                ${c.rows.map(p => _soCard(p, c.side)).join('')}</div>
+               ${shown < c.total ? `<div style="text-align:center;margin-top:12px">
+                  <button onclick="soChMore()" ${c.loading ? 'disabled' : ''} style="padding:8px 18px;border-radius:8px;
+                    border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);font-size:var(--fs-body);
+                    cursor:pointer;font-family:inherit">${c.loading ? 'กำลังโหลด...' : 'ดูเพิ่ม'}</button></div>` : ''}`}
+        </div>`;
+    }
+
     function drawSocial() {
       const box = document.getElementById('so-box');
       if (!box || !_soData) return;
@@ -5415,6 +5550,7 @@
                color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
 
       if (_soOpen) box.innerHTML = _soDetailHtml();
+      else if (_soCh) box.innerHTML = _soChannelHtml();   // หน้าช่อง — ไม่มี canvas จึงข้ามส่วนกราฟไปเอง
       else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
           ${SO_SIDES.map(_soKpi).join('')}</div>
         <div class="card" style="margin-bottom:12px">

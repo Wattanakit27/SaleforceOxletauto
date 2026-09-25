@@ -449,6 +449,112 @@ def _cron_days(model, f: date, t: date) -> int:
         return 0
 
 
+def _side_cfg() -> dict:
+    """ชื่อคอลัมน์ของแต่ละแพลตฟอร์ม — 3 ตารางเก็บเรื่องเดียวกันแต่ตั้งชื่อคนละแบบ
+
+    **เพิ่มแพลตฟอร์มใหม่ = เติมที่นี่ที่เดียว** แล้ว `channel_posts()` ใช้ได้เลย
+    """
+    from dashboard.models import MetaPostSnapshot, TikTokVideoSnapshot, YouTubeVideoSnapshot
+
+    return {
+        "meta": dict(model=MetaPostSnapshot, owner="page_id", pid="post_id", when="created_time",
+                     title="message", link="permalink", kind="post_type",
+                     cols={"views": "video_views", "likes": "reactions",
+                           "comments": "comments", "shares": "shares"}),
+        "tiktok": dict(model=TikTokVideoSnapshot, owner="open_id", pid="video_id", when="create_time",
+                       title="title", link="share_url", kind=None,
+                       cols={"views": "view_count", "likes": "like_count",
+                             "comments": "comment_count", "shares": "share_count"}),
+        "youtube": dict(model=YouTubeVideoSnapshot, owner="channel_id", pid="video_id",
+                        when="published_at", title="title", link=None, kind=None,
+                        cols={"views": "view_count", "likes": "like_count",
+                              "comments": "comment_count", "shares": None}),
+    }
+
+
+def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, offset: int = 0) -> dict:
+    """คลิป/โพสต์ **ทั้งหมดของช่องเดียว** — สำหรับหน้า "ดูรายช่อง" (26 ก.ย.69 · เจ้าของขอ)
+
+    *"อยากให้มันสามารถกดเข้าไปดูรายละเอียดของคลิปนั้นได้ แล้วก็อยากให้มันแบ่งช่องได้ด้วย
+    ถ้าคุณรู้จักแอดไลบรารี ฉันอยากได้ประมาณนั้น … อยากวัด performance ของคลิปหนึ่งคลิป
+    หรือช่องหนึ่งช่องไปเลย"*
+
+    ทำไมต้องมี endpoint แยก แทนที่จะส่งมาพร้อมก้อนแรก: เพจเดียวมีโพสต์ **580-589 ชิ้น**
+    (วัดจริง 26/09) รวมทุกช่อง ~2,000 ชิ้น · ถ้าส่งมาหมดพร้อม `postDaily` ของทุกชิ้น
+    ก้อน JSON จะหลายร้อย KB ต่อการเปลี่ยนช่วงวันที่หนึ่งครั้ง → ดึงเฉพาะตอนกดเข้าไปดูช่องนั้น
+
+    คืน `{rows, total, daily}` — `daily` เป็นของเฉพาะแถวที่ส่งไป (หน้าเว็บเอาไป merge
+    เข้า `postDaily` แล้วหน้ารายชิ้นเดิมทำงานต่อได้ทันที ไม่ต้องแก้)
+    """
+    cfg = _side_cfg().get(side)
+    if not cfg or not owner:
+        return {"rows": [], "total": 0, "daily": {}}
+    f, t = _range(frm, to)
+    M, own, pid, cols = cfg["model"], cfg["owner"], cfg["pid"], cfg["cols"]
+
+    want = {pid, "snap_date", "taken_at", cfg["when"], cfg["title"]}
+    want |= {c for c in cols.values() if c}
+    for k in ("link", "kind"):
+        if cfg[k]:
+            want.add(cfg[k])
+
+    def _num(r, m):
+        col = cols.get(m)
+        return int(r.get(col) or 0) if col else 0
+
+    # ยอดรายวัน = ผลต่างของ snapshot รอบ cron (ต้องเผื่อวันก่อนหน้า 1 วันไว้เป็นฐานลบ)
+    daily_rows = [{"id": r[pid], "snap_date": r["snap_date"], "taken_at": r["taken_at"],
+                   **{m: _num(r, m) for m in METRICS}}
+                  for r in M.objects.filter(trigger="cron", snap_date__gte=f - timedelta(days=1),
+                                            snap_date__lte=t, **{own: owner}).values(*want)]
+    per_item = _daily_one(daily_rows, "id", set())
+    per_item = {k: {d: v for d, v in days.items() if f.isoformat() <= d <= t.isoformat()}
+                for k, days in per_item.items()}
+
+    best: dict = {}
+    for r in M.objects.filter(snap_date__gte=f, snap_date__lte=t, **{own: owner}).values(*want):
+        old = best.get(r[pid])
+        if not old or r["taken_at"] > old["taken_at"]:
+            best[r[pid]] = r
+
+    rows = []
+    for vid, r in best.items():
+        days = per_item.get(vid) or {}
+        inc = {m: sum(v.get(m, 0) for v in days.values()) for m in METRICS}
+        when = r.get(cfg["when"])
+        rows.append({
+            "id": vid,
+            "text": (r.get(cfg["title"]) or "")[:160],
+            "link": (r.get(cfg["link"]) if cfg["link"] else "") or _fallback_link(side, vid),
+            "thumb": _thumb(side, vid),
+            "type": (r.get(cfg["kind"]) if cfg["kind"] else "") or "",
+            "date": when.date().isoformat() if when else "",
+            "live": bool(days),          # คิดยอดรายวันของชิ้นนี้ได้หรือยัง
+            "inc": inc,
+            **{m: _num(r, m) for m in METRICS},      # ยอดสะสม
+        })
+    # เรียง "ที่เพิ่มขึ้นในช่วง" ก่อน แล้วค่อยยอดสะสม — ช่วงที่ยังคิดรายวันไม่ได้จะได้ไม่สุ่มเรียง
+    rows.sort(key=lambda r: (r["inc"]["views"], r["views"]), reverse=True)
+    page = rows[max(0, offset):max(0, offset) + max(1, limit)]
+    return {"rows": page, "total": len(rows),
+            "daily": {r["id"]: per_item.get(r["id"], {}) for r in page}}
+
+
+def _thumb(side: str, vid: str) -> str:
+    """รูปปกของคลิป — ตอนนี้ได้เฉพาะ YouTube (สร้างจาก id ได้ตรงๆ ไม่ต้องเก็บเพิ่ม)
+
+    ⚠️ TikTok/Facebook **ยังไม่มี** — API ให้ลิงก์รูปปกมาแบบมีวันหมดอายุ (signed URL)
+       เก็บลงฐานข้อมูลแล้วอีกไม่กี่ชั่วโมงก็เปิดไม่ขึ้น · จะให้มีจริงต้องโหลดไฟล์มาเก็บเอง
+       → การ์ดของ 2 ฝั่งนี้ใช้กรอบสีประจำแพลตฟอร์มแทนรูป
+    """
+    return "https://i.ytimg.com/vi/%s/mqdefault.jpg" % vid if side == "youtube" and vid else ""
+
+
+def _fallback_link(side: str, vid: str) -> str:
+    """ลิงก์ไปโพสต์จริง สำหรับฝั่งที่ไม่ได้เก็บลิงก์ไว้ (YouTube ประกอบจาก id ได้)"""
+    return "https://www.youtube.com/watch?v=%s" % vid if side == "youtube" and vid else ""
+
+
 def overview(frm=None, to=None) -> dict:
     """ก้อนเดียวที่หน้าเว็บเรียกใช้ — 2 ฝั่ง + ยอดรวมของช่วง"""
     f, t = _range(frm, to)
