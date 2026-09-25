@@ -636,7 +636,19 @@ def _dedup_booking_cases(cases: list[dict]) -> list[dict]:
     return out
 
 
-# ── ฝั่งจัดซื้อ (รับซื้อรถ) — spreadsheet แยก · tab "ขายรถจบออนไลน์ <เดือน>69" ──
+def _be2(year=None) -> str:
+    """ปี พ.ศ. 2 หลักของ "ตอนนี้" — ชื่อแท็บในชีตทุกไฟล์ลงท้ายด้วยเลขนี้ (2026 → "69")
+
+    ★ 25 ก.ย.69 — เดิมฝัง `69` ไว้ในชื่อแท็บตรงๆ 2 จุด → **1 ม.ค. 70 จะอ่านไม่เจอทั้งคู่
+    แบบเงียบๆ** (ฟังก์ชันคืน None/ลิสต์ว่าง ไม่มี error) · ที่อื่นในโปรเจกต์คำนวณ `(ปี+543)%100`
+    กันไว้อยู่แล้ว 6 จุด — 2 จุดนี้หลุดไป
+    """
+    if year is None:
+        year = bangkok_now().year
+    return "%02d" % ((year + 543) % 100)
+
+
+# ── ฝั่งจัดซื้อ (รับซื้อรถ) — spreadsheet แยก · tab "ขายรถจบออนไลน์ <เดือน><ปี พ.ศ.2 หลัก>" ──
 # คอลัมน์: A(0)=วันที่ · I(8)=ช่องทาง · K(10)=รับซื้อ/ไม่รับซื้อ · M(12)=จัดซื้อ · O(14)=คุณภาพ(HOT/VERY HOT/COOL/REJECT)
 PURCHASE_SID = "1u6A0uYbbY8GshZID1n379bKd5yHqNMoGT88bjFiSWNE"
 
@@ -661,7 +673,7 @@ def _fetch_purchase_data() -> dict:
                             headers=headers, timeout=15).json()
         titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
         for m in range(1, 13):
-            tab = f"ขายรถจบออนไลน์ {MONTHS_FULL[m - 1]}69"
+            tab = f"ขายรถจบออนไลน์ {MONTHS_FULL[m - 1]}{_be2()}"
             if tab not in titles:
                 continue
             rng = urllib.parse.quote(f"{tab}!A3:AV400")   # A-O = lead · AS(44)/AT(45)/AU(46) = รถซื้อจริง
@@ -680,11 +692,15 @@ def _fetch_purchase_data() -> dict:
                     buy_raw = g(10)
                     buy = 2 if "ไม่รับ" in buy_raw else (1 if "รับซื้อ" in buy_raw else 0)
                     leads.append([m, day, ch, buy, buyer, q.upper()])
-                # ── รถที่ซื้อได้จริง (AS วันที่ · AT วิธี · AU จัดซื้อ) ── ต้องมีวันที่ parse ได้ + คนซื้อ (กันแถว summary รายสัปดาห์ปน)
+                # ── รถที่ซื้อได้จริง (AS วันที่ · AT วิธี · AU จัดซื้อ · AQ รุ่นรถ · AV รถตามสูตร) ──
+                #   ต้องมีวันที่ parse ได้ + คนซื้อ (กันแถว summary รายสัปดาห์ปน)
+                #   ★ 25 ก.ย.69 เพิ่ม AQ/AV — เดิมอ่านแค่ 3 ช่อง ตอบได้แค่ "เข้ากี่คัน ใครซื้อ"
+                #   **ตอบไม่ได้ว่าเข้ารุ่นอะไร** ทั้งที่ AV เป็นชื่อสูตรสะอาดชุดเดียวกับฝั่งลีด
+                #   ⚠️ ต่อท้ายลิสต์เท่านั้น — index 0-3 เดิมห้ามขยับ (index.html อ่าน r[2]/r[3] อยู่)
                 bdate, method, bbuyer = g(44), g(45), g(46)
                 bmd = parse_month_day(bdate)
                 if bmd and bbuyer:
-                    bought.append([bmd[0], bmd[1], method, bbuyer])
+                    bought.append([bmd[0], bmd[1], method, bbuyer, g(47), g(42)])
     except Exception:
         return {"leads": leads, "bought": bought}
     return {"leads": leads, "bought": bought}
@@ -695,6 +711,44 @@ def _fetch_purchase_data() -> dict:
 BOOK_SID = "13jiQTOvcCvlKLGvjrb348_iRWoiMpumqqeEgOTkTgB0"
 
 
+def _find_yod_tab(titles, m, look_back=6):
+    """หาแท็บ "ยอดรถเข้า" ของเดือน m — ไม่มีก็ **ถอยไปเดือนก่อนหน้าได้ถึง 6 เดือน**
+
+    คืน `(ชื่อแท็บจริง, เดือนที่ได้)` · ไม่เจอเลย = `(None, 0)`
+
+    ★ 25 ก.ย.69 — เดิมไม่เจอเดือนที่ขอ = คืน `None` ทันที **แล้วทั้งตารางหายไปเงียบๆ**
+    วัดจริง: แท็บมีถึง "ยอดรถเข้า กรกฎาคม69" เท่านั้น → ส.ค.+ก.ย. ได้ `yodRotKao=null`
+    มา 2 เดือนโดยไม่มีใครรู้ (ตารางวางแผน "ต้องเติมรุ่นไหน" หายจากหน้าเว็บ)
+    · ตอนนี้ถอยไปใช้เดือนล่าสุดที่มีแทน แล้วติดธง `stale` ให้หน้าเว็บบอกผู้ใช้ว่ากำลังดูของเดือนไหน
+    · **เทียบชื่อแบบตัดช่องว่างหัวท้าย** — ชีตนี้มีแท็บที่ขึ้นต้นด้วยช่องว่างจริง (' จอง/จบ กันยายน 69')
+      แต่ **คืนชื่อดิบเสมอ** เพราะเอาไปประกอบ range ต้องตรงเป๊ะ
+    """
+    from .constants import MONTHS_FULL
+
+    norm = {t.strip(): t for t in titles}
+    for back in range(look_back + 1):
+        mm = m - back
+        year_off = 0
+        while mm < 1:
+            mm += 12
+            year_off -= 1
+        name = MONTHS_FULL[mm - 1]
+        want = "ยอดรถเข้า %s%s" % (name, _be2(bangkok_now().year + year_off))
+        if want in norm:
+            return norm[want], mm
+        # สะกดเพี้ยน/เว้นวรรคไม่เหมือนกัน (เจอจริง: "กุมพาพันธู์69")
+        #   · เทียบด้วย **3 ตัวแรก** ของชื่อเดือน — ไม่ซ้ำกันสักเดือน (มกร/กุม/มีน/เมษ/พฤษ/มิถ/
+        #     กรก/สิง/กัน/ตุล/พฤศ/ธัน) และรอด "กุมภ" vs "กุมพ" ที่ตัวที่ 4 ต่างกัน
+        #   · ⚠️ **ทำเฉพาะปีเดียวกันเท่านั้น** (`year_off == 0`) — ไม่งั้นตอนขอเดือน ม.ค.
+        #     มันจะถอยข้ามปีไปจับแท็บ "กรกฎาคม" **ของปีที่แล้ว** มาแสดงเป็นข้อมูลเดือนนี้
+        if year_off == 0:
+            for t in titles:
+                ts = t.strip()
+                if ts.startswith("ยอดรถเข้า") and name[:3] in ts and _be2() in ts:
+                    return t, mm
+    return None, 0
+
+
 def _fetch_yod_rot_kao(m: int) -> dict | None:
     """คืน per-รุ่น: จอง/จบ ย้อนหลังรายเดือน + สต๊อก(กรอกมือ) + ซื้อได้/ปล่อย/Lead → เหลือ/ต้องเติม
     เหลือ = สต๊อคต้นเดือน + ซื้อได้ − ปล่อย · ต้องเติม = เป้า − เหลือ (คำนวณเองให้ตรงชีต · รวมจอง/จบ รวมครบทุกเดือน)
@@ -702,7 +756,6 @@ def _fetch_yod_rot_kao(m: int) -> dict | None:
     import urllib.parse
     import requests
     from google.auth.transport.requests import Request as AuthRequest
-    from .constants import MONTHS_FULL
     from .google_sheets import _get_credentials, SHEETS_API
 
     def _num(s):
@@ -721,13 +774,7 @@ def _fetch_yod_rot_kao(m: int) -> dict | None:
         meta = requests.get(f"{SHEETS_API}/{BOOK_SID}?fields=sheets.properties.title",
                             headers=headers, timeout=15).json()
         titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
-        want = f"ยอดรถเข้า {MONTHS_FULL[m - 1]}69"
-        tab = want if want in titles else None
-        if not tab:   # fuzzy: ขึ้นต้น "ยอดรถเข้า" + มีชื่อเดือน (กันสะกดผิด เช่น กุมพาพันธู์)
-            for t in titles:
-                if t.startswith("ยอดรถเข้า") and MONTHS_FULL[m - 1][:4] in t:
-                    tab = t
-                    break
+        tab, used_m = _find_yod_tab(titles, m)
         if not tab:
             return None
         rng = urllib.parse.quote(f"{tab}!A1:BZ200")
@@ -823,7 +870,9 @@ def _fetch_yod_rot_kao(m: int) -> dict | None:
                 "tad": _num(cell(r_, c_tad)), "mee": _num(cell(r_, c_mee)), "mew": _num(cell(r_, c_mew)),
                 "status": cell(r_, c_stat), "note": note,
             })
-        return {"month": m, "tab": tab, "months": [p[0] for p in pairs], "rows": rows}
+        # `asked` = เดือนที่ขอ · `month` = เดือนของข้อมูลที่ได้จริง · ต่างกัน = กำลังใช้ของเก่า
+        return {"month": used_m, "asked": m, "stale": used_m != m,
+                "tab": tab, "months": [p[0] for p in pairs], "rows": rows}
     except Exception:
         return None
 
@@ -1866,7 +1915,7 @@ def _compute_dashboard_data() -> dict:
         "leadCarsByMonth": lead_cars_by_month,
         "leadCarSellerMonth": lead_car_seller_month,
         "purchaseLeads": _purchase_data["leads"],    # ฝั่งจัดซื้อ lead: [m,d,channel,buy,buyer,quality]
-        "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer]
+        "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer,รถตามสูตร(AV),รุ่นรถ(AQ)]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
         "leadNoChannelByMonth": lead_nochannel_by_month,   # lead ที่ไม่ได้กรอกช่องทาง {m:{d:count}}

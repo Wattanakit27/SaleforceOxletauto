@@ -34,10 +34,12 @@ class Command(BaseCommand):
 
         if o["gap"]:
             say("รถที่ตลาดหา แต่เราไม่มีของ (%d เดือนล่าสุด)" % R.DEMAND_MONTHS)
-            say("  %-14s %8s %9s %9s %8s" % ("รุ่น", "ถามหา", "พร้อมขาย", "มีทั้งหมด", "คะแนน"))
+            say("  %-14s %8s %9s %9s %11s %8s"
+                % ("รุ่น", "ถามหา", "พร้อมขาย", "มีทั้งหมด", "เพิ่งรับเข้า", "คะแนน"))
             for g in gap[:20]:
-                say("  %-14s %8d %9d %9d %8.0f"
-                    % (g["name"][:14], g["demand"], g["show"], g["total"], g["score"]))
+                say("  %-14s %8d %9d %9d %11d %8.0f"
+                    % (g["name"][:14], g["demand"], g["show"], g["total"],
+                       g.get("recent", 0), g["score"]))
             return self._done(lines, o)
 
         rep = R.build_room_reports(days=o["days"], gap=gap,

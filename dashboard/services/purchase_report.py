@@ -34,6 +34,8 @@ MIN_DEMAND = 30
 MAX_CARS = 6
 # รุ่นที่ขาดหนักสุด โชว์ท้ายข้อความกี่รุ่น
 TOP_GAP = 5
+# "เพิ่งรับเข้ามา" นับย้อนหลังกี่วัน — เผื่อช่วงที่สต๊อกยังตามไม่ทัน (ดู `recent_bought`)
+BOUGHT_DAYS = 14
 
 # ห้อง LINE ของแต่ละคน (บอทตัวส่งอยู่ครบทั้ง 2 ห้องแล้ว · ยืนยัน 25/09)
 #   แก้ได้ที่ KV "purchase_report_rooms" = {"<group id>": "<ชื่อคนจัดซื้อ>"} โดยไม่ต้อง deploy
@@ -110,6 +112,44 @@ def _stock_by_model(vocab):
     return show, total
 
 
+def recent_bought(days, vocab):
+    """รุ่นที่ "เพิ่งรับเข้ามาแล้ว" ในช่วงนี้ — `{คีย์รุ่น: จำนวนคัน}`
+
+    ★★ ทำไมจำเป็น: ช่อง "พร้อมขาย" มาจากตาราง `Car` ซึ่งเติมด้วย `sync_carspend`
+       ที่ **ยังไม่ได้ตั้ง cron** (วัดจริง 25/09: รถที่รับเข้าวันที่ 23 ยังไม่มีในตาราง)
+       → รุ่นที่จัดซื้อเพิ่งหามาได้ จะยังขึ้นว่า "ขาดตลาด" แล้วทีมไปวิ่งหาซ้ำ
+       ตัวนี้อ่าน **บล็อกจัดซื้อรับเข้า (AP–AV) ในชีตเดียวกับเคส** ที่ทีมกรอกเองวันต่อวัน
+       → ทันกว่าสต๊อกหลายวัน · ใช้ช่อง **AV "รถตามสูตร"** (สะอาด ไม่ต้องเดา)
+    """
+    import datetime
+
+    from .cache_store import get_kv
+    from .fetch_dashboard import bangkok_now
+
+    blob = get_kv("main") or {}
+    data = blob.get("data", blob) if isinstance(blob, dict) else {}
+    rows = (data or {}).get("boughtCars") or []
+    now = bangkok_now()
+    today = datetime.date(now.year, now.month, now.day)
+
+    out = {}
+    for r in rows:
+        if not isinstance(r, (list, tuple)) or len(r) < 5:
+            continue          # แถวจากแคชรุ่นก่อน 25/09 (ยังไม่มี AV) — ข้าม ไม่เดาจากอะไรอื่น
+        try:
+            m, d = int(r[0]), int(r[1])
+            when = datetime.date(now.year if m <= now.month else now.year - 1, m, d)
+        except Exception:
+            continue
+        age = (today - when).days
+        if age < 0 or age > days:
+            continue
+        k = match_model(r[4] or (r[5] if len(r) > 5 else ""), vocab)
+        if k:
+            out[k] = out.get(k, 0) + 1
+    return out
+
+
 def match_model(text, vocab):
     """หาว่าในข้อความมีรุ่นไหนอยู่ — คืนรุ่นที่ "ยาวที่สุด" ที่เจอ
 
@@ -125,22 +165,27 @@ def match_model(text, vocab):
 def market_gap():
     """รุ่นไหน "ตลาดหา แต่เราไม่มีของ" — เรียงขาดมากสุดก่อน
 
-    คืน list ของ dict: `{key, name, demand, show, total, score}`
-    `score = ถามหา ÷ (พร้อมขาย + 1)` — +1 กันหารศูนย์ และทำให้ "มี 0 คัน" แรงกว่า "มี 1 คัน"
+    คืน list ของ dict: `{key, name, demand, show, total, recent, score}`
+    `score = ถามหา ÷ (พร้อมขาย + เพิ่งรับเข้า + 1)`
+      - +1 กันหารศูนย์ และทำให้ "มี 0 คัน" แรงกว่า "มี 1 คัน"
+      - **+ เพิ่งรับเข้า** — รุ่นที่จัดซื้อหามาได้แล้วเมื่อไม่กี่วันก่อน ต้องหยุดขึ้นว่าขาด
+        แม้สต๊อกจะยังไม่อัปเดต (ดู `recent_bought`)
     """
     demand, shown = _demand_by_model()
     if not demand:
         return []
     vocab = sorted(demand, key=len, reverse=True)
     show, total = _stock_by_model(vocab)
+    bought = recent_bought(BOUGHT_DAYS, vocab)
 
     out = []
     for k, d in demand.items():
         if d < MIN_DEMAND:
             continue
-        s = show.get(k, 0)
-        out.append({"key": k, "name": shown.get(k, k), "demand": d,
-                    "show": s, "total": total.get(k, 0), "score": d / (s + 1.0)})
+        s, rec = show.get(k, 0), bought.get(k, 0)
+        out.append({"key": k, "name": shown.get(k, k), "demand": d, "show": s,
+                    "total": total.get(k, 0), "recent": rec,
+                    "score": d / (s + rec + 1.0)})
     out.sort(key=lambda r: -r["score"])
     return out
 
@@ -152,6 +197,11 @@ def rank_cases(cases, gap=None):
       1. **ยังไม่ได้โทรเลย** — มาก่อนเสมอ ไม่ว่ารุ่นอะไร (งานที่ยังไม่เริ่ม = เสี่ยงหลุดมือสุด)
       2. **รุ่นที่ขาดตลาด** — ของที่ลูกค้าถามหาแต่เราไม่มี
       3. **ดองนาน** — ยิ่งค้างนานยิ่งเย็น
+
+    ★ 25 ก.ย.69 — จับรุ่นจากช่อง **S "รถตามสูตร"** ก่อน แล้วค่อยเดาจาก D (ที่คนพิมพ์อิสระ)
+      ทีมกรอก S ไว้ 98% และเป็นคำตัดสินของคน → ทำสิ่งที่ตัวเดาทำไม่ได้:
+      "Toyota Yaris ปี19 เทาดำ" → **New Yaris 5 ประตู** · "CIVIC ปี16 ดำ" → **Civic FC**
+      (คนละรุ่นกันในสายตาตลาด แต่ข้อความที่คนพิมพ์ไม่ได้บอกไว้)
     """
     if gap is None:
         gap = market_gap()
@@ -159,7 +209,7 @@ def rank_cases(cases, gap=None):
     vocab = sorted(by_key, key=len, reverse=True)
 
     for c in cases:
-        k = match_model(c.get("car"), vocab)
+        k = match_model(c.get("model_std"), vocab) or match_model(c.get("car"), vocab)
         g = by_key.get(k)
         c["model"] = g["name"] if g else ""
         c["gap"] = g
@@ -173,13 +223,16 @@ _NUM = "①②③④⑤⑥"
 def _case_lines(c, i):
     """1 เคส → หลายบรรทัด (ชื่อ/รถ/เบอร์/เหตุผลที่ควรโทร)"""
     L = ["%s %s" % (_NUM[i] if i < len(_NUM) else "%d." % (i + 1),
-                    (c.get("car") or "(ไม่ระบุรุ่น)")[:34])]
+                    (c.get("car") or "(ไม่ระบุรุ่น)")[:44])]
     who = " · ".join(x for x in ((c.get("name") or "")[:22], c.get("phone") or "") if x)
     if who:
         L.append("   %s" % who)
     g = c.get("gap")
     if g:
-        L.append("   ตลาดถามหา %d ครั้ง · เรามีพร้อมขาย %d คัน" % (g["demand"], g["show"]))
+        L.append("   %s — ตลาดถามหา %d ครั้ง · เรามีพร้อมขาย %d คัน"
+                 % (g["name"][:16], g["demand"], g["show"]))
+        if g.get("recent"):
+            L.append("   (รุ่นนี้เพิ่งรับเข้ามาแล้ว %d คัน)" % g["recent"])
     L.append("   %s · ค้าง %d วัน" % (
         "ยังไม่ได้โทร" if not c.get("talked") else "คุยแล้ว รอตัดสิน", c.get("age", 0)))
     return L
@@ -204,9 +257,11 @@ def build_room_reports(days=7, max_cars=MAX_CARS, rooms=None, gap=None, cases=No
 
     gap_lines = []
     if gap:
-        gap_lines = ["รถที่ขาดหนักสุดตอนนี้ (3 เดือนล่าสุด)"]
+        gap_lines = ["รถที่ขาดหนักสุดตอนนี้ (%d เดือนล่าสุด)" % DEMAND_MONTHS]
         for g in gap[:TOP_GAP]:
-            gap_lines.append("  %-12s ถามหา %3d · มี %d คัน" % (g["name"][:12], g["demand"], g["show"]))
+            tail = " · เพิ่งรับเข้า %d" % g["recent"] if g.get("recent") else ""
+            gap_lines.append("  %-12s ถามหา %3d · มี %d คัน%s"
+                             % (g["name"][:12], g["demand"], g["show"], tail))
 
     out = []
     for gid, person in rooms.items():
