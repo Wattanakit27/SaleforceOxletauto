@@ -5194,6 +5194,38 @@
                  : (over ? ' — มากกว่ายอดเพจได้ เพราะคนละวิธีนับ: ของเรารวมวิวที่มาจากโฆษณาด้วย' : '')})</span></div>`;
     }
 
+    // ★ 26 ก.ย.69 — แยกช่องให้เห็นตั้งแต่ในการ์ดสรุป (เจ้าของ: "กระจุกกันอยู่เลย")
+    //   การ์ดเดิมโชว์เลขก้อนเดียวต่อแพลตฟอร์ม (TikTok 343,635 = รวม 10 ช่อง)
+    //   ตารางแยกช่องมีอยู่ แต่อยู่ใต้กราฟ ต้องเลื่อนลงไปอีกจอถึงเจอ = เท่ากับไม่มี
+    //   ★ ช่องที่ยังคิดยอดรายวันไม่ได้ โชว์ "ยอดสะสม" พร้อมป้ายกำกับ — ไม่ใช่ 0 หรือช่องว่าง
+    const SO_CHAN_TOP = 4;                       // โชว์กี่ช่องในการ์ด ที่เหลือยุบเป็น "+N ช่อง"
+    function _soChanRows(side, d) {
+      const all = (d.byChannel || []).slice();
+      if (all.length < 2) return '';             // ช่องเดียว = ไม่มีอะไรให้แยก
+      const live = !!Object.keys(d.daily || {}).length;
+      const val = c => (c.live != null ? c.live : live) ? (c.views || 0) : ((c.cum || {}).views || 0);
+      const isCum = c => !((c.live != null ? c.live : live));
+      all.sort((a, b) => val(b) - val(a));
+      const top = all.slice(0, SO_CHAN_TOP), rest = all.length - top.length;
+      const unit = side === 'meta' ? 'เพจ' : 'ช่อง';
+      const rows = top.map(c => `<div onclick="soOpenChannel('${h(String(side))}','${h(String(c.id || ''))}')"
+        title="ดูคลิป/โพสต์ของ${unit}นี้"
+        style="display:flex;align-items:baseline;gap:8px;padding:4px 6px;border-radius:6px;cursor:pointer"
+        onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <span style="flex:1;min-width:0;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          >${h(String(c.name || c.id || ''))}</span>
+        <span style="font-weight:700;color:var(--t1);white-space:nowrap">${val(c).toLocaleString()}</span>
+        ${isCum(c) ? '<span style="font-size:var(--fs-body);color:var(--t3);white-space:nowrap">สะสม</span>' : ''}
+      </div>`).join('');
+      return `<div style="margin-top:11px;border-top:.5px dashed var(--bd2);padding-top:8px">
+        <div style="display:flex;align-items:baseline;gap:8px;padding:0 6px 4px;font-size:var(--fs-body);color:var(--t3)">
+          <span style="flex:1">แยกราย${unit} (${all.length})</span><span>วิว</span></div>
+        ${rows}
+        ${rest > 0 ? `<button onclick="soGotoChannels()"
+          style="margin-top:4px;width:100%;text-align:left;padding:4px 6px;border:0;background:none;cursor:pointer;
+                 font-family:inherit;font-size:var(--fs-body);color:var(--blue)">+ อีก ${rest} ${unit} — ดูตารางเต็ม</button>` : ''}</div>`;
+    }
+
     function _soKpi(side) {
       const d = _soData[side] || {}, t = d.total || {}, on = SO_COLOR[side];
       // ★ 24 ก.ย.69 (เจ้าของถาม "ไม่เข้าใจทำไม TikTok เป็นศูนย์วิวอ่ะ")
@@ -5244,6 +5276,7 @@
                    border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2)">${nch} ${unit}</button>` : ''}</div>
         <div style="font-size:var(--fs-body);color:var(--t3);margin-top:3px;line-height:1.6">${sub}</div>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin-top:11px">${cells}</div>
+        ${_soChanRows(side, d)}
         ${side === 'meta' && _soData.meta.adSpend ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px">
             ค่าโฆษณาในช่วงนี้ <b style="color:var(--t1)">${fmtBaht(_soData.meta.adSpend)}</b>
             <button onclick="switchTab('ad')" style="margin-left:8px;font-size:var(--fs-body);padding:3px 10px;border-radius:7px;
@@ -5553,6 +5586,7 @@
       else if (_soCh) box.innerHTML = _soChannelHtml();   // หน้าช่อง — ไม่มี canvas จึงข้ามส่วนกราฟไปเอง
       else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
           ${SO_SIDES.map(_soKpi).join('')}</div>
+        ${_soChannels()}
         <div class="card" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
             <div class="card-title" style="margin:0">ยอดที่เพิ่มขึ้นรายวัน${(() => {
@@ -5562,7 +5596,6 @@
               <span class="info-tip" tabindex="0" data-tip="ตารางเก็บ &quot;ยอดสะสม&quot; ทุกเที่ยงคืน\nยอดรายวัน = ยอดวันนี้ − ยอดเมื่อวาน\nจึงต้องเก็บอย่างน้อย 2 คืนถึงจะมีเส้นกราฟ">?</span></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${chips}</div></div>
           <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
-        ${_soChannels()}
         <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ตัวเลขเป็นยอดสะสม — กดแถวเพื่อดูเฉพาะช่วงที่เลือก</span>
             <span class="info-tip" tabindex="0" data-tip="เรียงจาก ไลก์ + คอมเมนต์ + แชร์ (ยอดสะสมล่าสุด)\nกดที่ข้อความเพื่อเปิดโพสต์จริง">?</span></div>
           ${_soTopRows()}</div>`;
