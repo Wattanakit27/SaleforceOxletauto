@@ -40,6 +40,11 @@ class Command(BaseCommand):
         from dashboard.services import covers
         want = [s for s in covers.SIDES if not o["side"] or s == o["side"]]
 
+        w = _owner_warning()
+        if w:
+            say(w)
+            say("")
+
         if o["fetch"]:
             for side in want:
                 say("ดึงรูปปกฝั่ง %s …" % side)
@@ -65,6 +70,34 @@ class Command(BaseCommand):
             self.stdout.write("เขียนผลลง %s แล้ว" % o["out"])
 
 
+def _owner_warning() -> str:
+    """เตือนเมื่อจะสร้างไฟล์ด้วย user ที่ไม่ใช่เจ้าของ media/
+
+    ★ กับดักตอน deploy: บนเซิร์ฟเวอร์ `media/` เป็นของ user `oxlet` (ตัวที่รันเว็บ+cron)
+      ถ้ารันคำสั่งนี้ด้วย **root** โฟลเดอร์ `media/covers/` จะเกิดมาเป็นของ root
+      → รอบ sync เที่ยงคืนที่รันในนาม `oxlet` **เขียนรูปปกไม่ได้อีกเลย แบบเงียบๆ**
+    """
+    import os
+    if not hasattr(os, "geteuid"):          # Windows — ไม่มีเรื่องเจ้าของไฟล์แบบนี้
+        return ""
+    try:
+        from django.conf import settings
+        root = str(settings.MEDIA_ROOT)
+        owner = os.stat(root).st_uid
+        me = os.geteuid()
+        if owner == me:
+            return ""
+        import pwd
+        nm = pwd.getpwuid(owner).pw_name
+        return ("⚠️ กำลังรันในนาม uid %d แต่ %s เป็นของ '%s'\n"
+                "   ถ้าสร้างไฟล์ตอนนี้ โฟลเดอร์รูปปกจะเป็นของ uid %d แล้ว sync เที่ยงคืน\n"
+                "   (รันในนาม '%s') จะเขียนรูปใหม่ไม่ได้อีกเลยแบบเงียบๆ\n"
+                "   → ให้รันแบบนี้แทน:  sudo -u %s .venv/bin/python manage.py social_covers --fetch"
+                % (me, root, nm, me, nm, nm))
+    except Exception:
+        return ""
+
+
 def _item_count(side: str) -> int:
     from dashboard.models import MetaPostSnapshot, TikTokVideoSnapshot
     try:
@@ -82,7 +115,13 @@ def _fetch(side: str, say) -> int:
         from dashboard.models import TikTokAccount
         from dashboard.services import tiktok_oauth, tiktok_sync
         n = 0
-        for acc in TikTokAccount.objects.filter(status="ok"):
+        # ★ ใช้ค่าคงที่ของโมเดล ไม่ใช่สตริงที่พิมพ์เอง
+        #   เคยเขียน status="ok" ซึ่งไม่มีอยู่จริง (ของจริงคือ "active") → กรองได้ 0 ช่อง
+        #   แล้วคำสั่งรายงาน "โหลดใหม่ 0" เงียบๆ เหมือนทำงานปกติ หาสาเหตุไม่เจอ
+        accs = list(TikTokAccount.objects.filter(status=TikTokAccount.ACTIVE))
+        if not accs:
+            say("  ไม่มีช่อง TikTok ที่ใช้งานได้เลย — ยังไม่ได้เชื่อมช่อง หรือ token ถูกยกเลิก")
+        for acc in accs:
             try:
                 token = tiktok_oauth.access_token_for(acc.open_id)
             except Exception as e:
