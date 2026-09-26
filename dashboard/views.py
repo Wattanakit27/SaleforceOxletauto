@@ -2467,6 +2467,62 @@ def admin_system_health(request):
     except Exception:
         pass
 
+    # ── ★ 26 ก.ย.69 — รายงานที่ตั้งเวลาไว้ "ส่งไม่ออก" ต้องร้องตรงนี้ ────────────
+    #   เจอจริง: การ์ด 4 ใบล้มติดกัน 10 วัน (528 ครั้ง · LINE 400 เพราะปลายทางเป็น
+    #   group id ของบอทเก่า) แต่ร่องรอยอยู่ใน KV `cardline_last_<card>` เท่านั้น
+    #   → ต้องเปิดพาเนลของการ์ดทีละใบถึงจะเห็น = เท่ากับไม่มีใครเห็น
+    #   บทเรียนเดิมซ้ำรอบที่ 3: "หยุดส่งเงียบๆ" คือโหมดพังที่แพงที่สุดของระบบนี้
+    try:
+        # นำเข้าเองในบล็อกนี้ ไม่พึ่ง _gkv ของบล็อกก่อนหน้า (ถ้าบล็อกนั้นล้มตอน import
+        # ตัวแปรจะไม่ถูกผูก แล้วบล็อกนี้จะพังตามแบบไม่มีใครรู้)
+        from .services.cache_store import get_kv as _gkv
+        from .services.report_shot import _LINE_CARDS, get_card_config
+        _bad = []            # เปิดอยู่ + รอบล่าสุดล้ม
+        _noroute = []        # เปิดอยู่ + ยังไม่ได้ตั้งปลายทาง
+        for _cid, _cname in _LINE_CARDS.items():
+            try:
+                _cfg = get_card_config(_cid)
+            except Exception:
+                continue
+            if not _cfg.get("enabled"):
+                continue
+            if not ((_cfg.get("group_id") or "") if _cfg.get("mode") == "group" else (_cfg.get("test_id") or "")):
+                _noroute.append(_cname)
+                continue
+            _l = (_gkv("cardline_last_" + _cid) or {}).get("data") or {}
+            if _l and _l.get("ok") is False:
+                _bad.append("%s (%s)" % (_cname, _l.get("date") or ""))
+        if _bad:
+            issues.append({"level": "err",
+                           "msg": "การ์ดตั้งเวลาส่งไม่ออก %d ใบ: %s — มักเป็นเพราะกลุ่มปลายทาง"
+                                  "เป็น id ของบอทเก่า · รัน `manage.py line_push_switch` ดู"
+                                  % (len(_bad), " · ".join(_bad[:4]))})
+        if _noroute:
+            issues.append({"level": "warn",
+                           "msg": "การ์ดเปิดไว้แต่ยังไม่ได้เลือกปลายทาง %d ใบ: %s"
+                                  % (len(_noroute), " · ".join(_noroute[:4]))})
+
+        # รายงานรายวัน 2 รูป — เปิดไว้แต่ไม่มีกลุ่ม / วันนี้เลยเวลาแล้วยังไม่ได้ส่ง
+        _rc = (_gkv("report_line_config") or {}).get("data") or {}
+        if _rc.get("enabled"):
+            _tgt = (_rc.get("group_id") or "") if _rc.get("mode") == "group" else (_rc.get("test_id") or "")
+            if not _tgt:
+                issues.append({"level": "err", "msg": "รายงานรายวันเปิดอยู่แต่ยังไม่ได้เลือกปลายทาง — จะไม่ส่งเลย"})
+            else:
+                _rl = (_gkv("report_line_last") or {}).get("data") or {}
+                _hhmm = str(_rc.get("time") or "")
+                # เทียบเฉพาะเมื่อเลยเวลาส่งของวันนี้มาแล้วอย่างน้อย 30 นาที
+                if len(_hhmm) == 5 and _rl.get("date") != now.date().isoformat():
+                    try:
+                        _h, _m = int(_hhmm[:2]), int(_hhmm[3:])
+                        if now.hour * 60 + now.minute >= _h * 60 + _m + 30:
+                            issues.append({"level": "err",
+                                           "msg": "รายงานรายวัน (%s) วันนี้ยังไม่ได้ส่ง — เลยเวลามาแล้ว" % _hhmm})
+                    except ValueError:
+                        pass
+    except Exception:
+        pass
+
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
     return JsonResponse({
