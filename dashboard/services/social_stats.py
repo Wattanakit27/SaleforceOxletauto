@@ -472,7 +472,36 @@ def _side_cfg() -> dict:
     }
 
 
-def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, offset: int = 0) -> dict:
+SORT_KEYS = ("date", "views", "likes", "comments", "shares")
+
+
+def _sort_rows(rows: list, sort: str, direction: str, basis: str) -> list:
+    """เรียงคลิป/โพสต์ — ทำฝั่งเซิร์ฟเวอร์เสมอ
+
+    ★ ห้ามเรียงฝั่งหน้าเว็บ เพราะหน้าเว็บโหลดมาทีละ 48 ชิ้นจาก 580
+      เรียงเฉพาะที่โหลดมา = "คลิปวิวน้อยสุด" จะเป็นคลิปวิวน้อยสุด *ในหน้านี้* ซึ่งไม่ใช่คำตอบ
+
+    ★ เรียงจากน้อยไปมากด้วย "ยอดในช่วง" → ชิ้นที่ยัง **คิดยอดรายวันไม่ได้** ต้องไปอยู่ท้าย
+      (ต้องมี snapshot 2 คืนถึงลบกันได้) ไม่งั้น "วิวน้อยที่สุด" จะกลายเป็นกอง 0
+      ของคลิปที่ยังไม่มีข้อมูล — เลขที่ถูกตามสูตร แต่ตอบผิดคำถาม
+    """
+    asc = direction == "asc"
+    if sort == "date":
+        rows.sort(key=lambda r: (r.get("date") or ""), reverse=not asc)
+        return rows
+    m = sort if sort in METRICS else "views"
+    use_inc = basis != "total"
+    def key(r):
+        v = (r["inc"].get(m, 0) if use_inc else r.get(m, 0)) or 0
+        unknown = 1 if (use_inc and not r.get("live")) else 0   # ยังคิดรายวันไม่ได้ = ท้ายแถวเสมอ
+        return (unknown, v if asc else -v, -(r.get(m) or 0))
+    rows.sort(key=key)
+    return rows
+
+
+def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, offset: int = 0,
+                  sort: str = "views", direction: str = "desc",
+                  basis: str = "range") -> dict:
     """คลิป/โพสต์ **ทั้งหมดของช่องเดียว** — สำหรับหน้า "ดูรายช่อง" (26 ก.ย.69 · เจ้าของขอ)
 
     *"อยากให้มันสามารถกดเข้าไปดูรายละเอียดของคลิปนั้นได้ แล้วก็อยากให้มันแบ่งช่องได้ด้วย
@@ -517,6 +546,13 @@ def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, off
         if not old or r["taken_at"] > old["taken_at"]:
             best[r[pid]] = r
 
+    # อ่านรายชื่อรูปปกที่เก็บไว้ทีเดียว ดีกว่าเช็คไฟล์ทีละแถว (หน้าหนึ่ง 48 แถว)
+    try:
+        from . import covers
+        thumb_cache = covers.have(side) if side in covers.SIDES else None
+    except Exception:
+        thumb_cache = None
+
     rows = []
     for vid, r in best.items():
         days = per_item.get(vid) or {}
@@ -526,28 +562,38 @@ def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, off
             "id": vid,
             "text": (r.get(cfg["title"]) or "")[:160],
             "link": (r.get(cfg["link"]) if cfg["link"] else "") or _fallback_link(side, vid),
-            "thumb": _thumb(side, vid),
+            "thumb": _thumb(side, vid, cache=thumb_cache),
             "type": (r.get(cfg["kind"]) if cfg["kind"] else "") or "",
             "date": when.date().isoformat() if when else "",
             "live": bool(days),          # คิดยอดรายวันของชิ้นนี้ได้หรือยัง
             "inc": inc,
             **{m: _num(r, m) for m in METRICS},      # ยอดสะสม
         })
-    # เรียง "ที่เพิ่มขึ้นในช่วง" ก่อน แล้วค่อยยอดสะสม — ช่วงที่ยังคิดรายวันไม่ได้จะได้ไม่สุ่มเรียง
-    rows.sort(key=lambda r: (r["inc"]["views"], r["views"]), reverse=True)
+    _sort_rows(rows, sort if sort in SORT_KEYS else "views",
+               "asc" if direction == "asc" else "desc",
+               "total" if basis == "total" else "range")
     page = rows[max(0, offset):max(0, offset) + max(1, limit)]
     return {"rows": page, "total": len(rows),
             "daily": {r["id"]: per_item.get(r["id"], {}) for r in page}}
 
 
-def _thumb(side: str, vid: str) -> str:
-    """รูปปกของคลิป — ตอนนี้ได้เฉพาะ YouTube (สร้างจาก id ได้ตรงๆ ไม่ต้องเก็บเพิ่ม)
+def _thumb(side: str, vid: str, cache=None) -> str:
+    """รูปปกของคลิป/โพสต์
 
-    ⚠️ TikTok/Facebook **ยังไม่มี** — API ให้ลิงก์รูปปกมาแบบมีวันหมดอายุ (signed URL)
-       เก็บลงฐานข้อมูลแล้วอีกไม่กี่ชั่วโมงก็เปิดไม่ขึ้น · จะให้มีจริงต้องโหลดไฟล์มาเก็บเอง
-       → การ์ดของ 2 ฝั่งนี้ใช้กรอบสีประจำแพลตฟอร์มแทนรูป
+    · **YouTube** — ประกอบจาก video id ได้ฟรี ไม่หมดอายุ ไม่ต้องเก็บไฟล์
+    · **TikTok / Facebook** — ลิงก์ที่ API ให้มาหมดอายุใน ~6 ชม. จึง **โหลดไฟล์มาเก็บเอง**
+      ตอน sync แล้วเสิร์ฟจาก /media/ ของเรา (ดู [covers.py](covers.py) · 26 ก.ย.69)
+      ยังไม่มีไฟล์ = คืน '' แล้วหน้าเว็บใช้แถบสีประจำแพลตฟอร์มแทน
+
+    `cache` = ชุด id ที่มีไฟล์แล้ว (อ่านทีเดียวต่อคำขอ) — ไม่งั้นต้องเช็คไฟล์ทีละแถว
     """
-    return "https://i.ytimg.com/vi/%s/mqdefault.jpg" % vid if side == "youtube" and vid else ""
+    if side == "youtube":
+        return "https://i.ytimg.com/vi/%s/mqdefault.jpg" % vid if vid else ""
+    try:
+        from . import covers
+        return covers.url_for(side, vid, cache=cache)
+    except Exception:
+        return ""
 
 
 def _fallback_link(side: str, vid: str) -> str:

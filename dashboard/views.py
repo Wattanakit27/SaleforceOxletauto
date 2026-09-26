@@ -2750,7 +2750,12 @@ def admin_social(request):
             data = social_stats.channel_posts(
                 (request.GET.get("side") or "").strip(), owner,
                 request.GET.get("from"), request.GET.get("to"),
-                limit=min(_int("limit", 48), 200), offset=_int("offset", 0))
+                limit=min(_int("limit", 48), 200), offset=_int("offset", 0),
+                # ★ เรียงทำฝั่งเซิร์ฟเวอร์เสมอ — หน้าเว็บโหลดทีละ 48 จาก 580 ชิ้น
+                #   ถ้าเรียงฝั่งหน้าเว็บจะได้ "น้อยสุดในหน้านี้" ไม่ใช่ "น้อยสุดของช่อง"
+                sort=(request.GET.get("sort") or "views").strip(),
+                direction=(request.GET.get("dir") or "desc").strip(),
+                basis=(request.GET.get("basis") or "range").strip())
             return JsonResponse({"ok": True, **data}, json_dumps_params={"ensure_ascii": False})
         data = social_stats.overview(request.GET.get("from"), request.GET.get("to"))
     except Exception as e:                      # ตารางยังไม่ migrate / DB มีปัญหา = บอกตรงๆ

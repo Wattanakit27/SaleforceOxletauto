@@ -5456,7 +5456,8 @@
         const r = ((_soData[side] || {}).byChannel || []).find(x => x.id === id);
         name = (r && r.name) || id;
       }
-      _soCh = { side: side, id: id, name: name, rows: [], total: 0, loading: true, err: '' };
+      _soCh = { side: side, id: id, name: name, rows: [], total: 0, loading: true, err: '',
+                sort: 'views', dir: 'desc', basis: 'range' };
       drawSocial();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       _soChFetch(0);
@@ -5470,7 +5471,11 @@
         const r = await fetch('/api/admin/social?side=' + encodeURIComponent(c.side)
           + '&owner=' + encodeURIComponent(c.id)
           + '&from=' + encodeURIComponent(dfFrom) + '&to=' + encodeURIComponent(dfTo)
-          + '&offset=' + offset, { credentials: 'same-origin' });
+          + '&offset=' + offset
+          // เรียงทำฝั่งเซิร์ฟเวอร์ — หน้านี้โหลดทีละ 48 จาก 580 ชิ้น
+          // ถ้าเรียงเองในหน้าเว็บจะได้ "น้อยสุดในหน้านี้" ไม่ใช่ "น้อยสุดของช่อง"
+          + '&sort=' + encodeURIComponent(c.sort) + '&dir=' + encodeURIComponent(c.dir)
+          + '&basis=' + encodeURIComponent(c.basis), { credentials: 'same-origin' });
         const d = await r.json();
         if (_soCh !== c) return;                       // ผู้ใช้กดออกไปแล้ว ทิ้งผลนี้
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
@@ -5489,6 +5494,24 @@
     }
 
     function soChBack() { _soCh = null; _soOpen = null; drawSocial(); }
+
+    // ═══ เรียงลำดับคลิปในหน้าช่อง (26 ก.ย.69 · เจ้าของขอ) ═══
+    //   3 ช่องเล็กแทน dropdown ยาว 14 บรรทัด: เรียงตามอะไร · มาก→น้อย/น้อย→มาก · นับยอดแบบไหน
+    //   → ได้ 5 × 2 × 2 = 20 แบบ จากตัวควบคุมแค่ 3 ตัว
+    const SO_SORTS = [['views','วิว'],['likes','ไลก์'],['comments','คอมเมนต์'],
+                      ['shares','แชร์'],['date','วันลงคลิป']];
+    function soChSort(k, v) {
+      if (!_soCh) return;
+      _soCh[k] = v;
+      _soCh.rows = []; _soCh.total = 0;   // เรียงใหม่ = ต้องขอหน้าแรกใหม่ ไม่ใช่ต่อท้ายของเดิม
+      _soChFetch(0);
+    }
+    function _soSortNote(c) {
+      if (c.sort === 'date') return c.dir === 'asc' ? 'เก่าสุดก่อน' : 'ใหม่สุดก่อน';
+      const nm = (SO_SORTS.find(x => x[0] === c.sort) || ['', ''])[1];
+      return (c.dir === 'asc' ? nm + 'น้อยสุดก่อน' : nm + 'มากสุดก่อน')
+           + (c.basis === 'total' ? ' (ยอดสะสมตลอดกาล)' : ' (ยอดที่เพิ่มในช่วงนี้)');
+    }
     function soChMore() { if (_soCh) _soChFetch(_soCh.rows.length); }
     // เปิดหน้ารายชิ้นด้วย id ตรงๆ (การ์ดในหน้าช่องไม่ได้อยู่ใน `_soRows` ของตารางหน้ารวม)
     function soOpenPostId(side, id) {
@@ -5499,13 +5522,17 @@
 
     function _soCard(p, side) {
       const inc = p.inc || {}, _n = v => (v || 0).toLocaleString('th-TH');
-      // รูปปก: ตอนนี้มีเฉพาะ YouTube (สร้างจาก video id ได้) · TikTok/FB ใช้กรอบสีประจำแพลตฟอร์มแทน
-      const cover = p.thumb
-        ? `<img src="${h(p.thumb)}" alt="" loading="lazy" style="width:100%;height:130px;object-fit:cover;display:block"
-             onerror="this.style.display='none'">`
-        // ฝั่งที่ยังไม่มีรูปปก = แถบเตี้ยๆ พอให้รู้ว่าเป็นแพลตฟอร์มไหน (ไม่ปล่อยกล่องเทาสูง 130px ทิ้งไว้เปล่าๆ)
-        : `<div title="ยังไม่ได้เก็บรูปปกของ${SO_NAME[side]}" style="height:44px;display:flex;align-items:center;
-             justify-content:center;background:color-mix(in srgb,${SO_COLOR[side]} 10%,transparent)">${soLogo(side, 22)}</div>`;
+      // รูปปก — YouTube ประกอบจาก id ได้ฟรี · TikTok/Facebook โหลดไฟล์มาเก็บเองตอน sync (covers.py)
+      // ★ กรอบสูง 150px เสมอ ไม่ว่าจะมีรูปหรือไม่ → การ์ดทุกใบสูงเท่ากัน กริดไม่ขรุขระ
+      // ★ วางรูป "ทับ" โลโก้ที่รออยู่ข้างใน แทนการสลับ HTML ตอน error
+      //   (เคยใช้ onerror ยัด innerHTML → ต้อง escape ซ้อน 2 ชั้น แล้วบางจังหวะได้กล่องว่าง)
+      //   โหลดไม่ขึ้นก็แค่ this.remove() เห็นโลโก้ที่อยู่ข้างหลัง — ไม่ต้อง escape อะไรเลย
+      const cover = `<div style="position:relative;height:150px;display:flex;align-items:center;
+          justify-content:center;background:color-mix(in srgb,${SO_COLOR[side]} 10%,transparent)"
+          ${p.thumb ? '' : `title="ยังไม่ได้เก็บรูปปกของ${SO_NAME[side]} — ระบบโหลดให้เองตอน sync รอบถัดไป"`}>
+          ${soLogo(side, 30)}
+          ${p.thumb ? `<img src="${h(p.thumb)}" alt="" loading="lazy" onerror="this.remove()"
+            style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : ''}</div>`;
       const small = ['likes', 'comments', 'shares'].map(m => `<span style="white-space:nowrap">
           ${h(_soData.metricTh[m] || m)} <b style="color:var(--t1)">${p.live ? _n(inc[m]) : '–'}</b></span>`).join('');
       return `<div style="border:.5px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--bg1);
@@ -5530,6 +5557,10 @@
                 color:var(--t2);font-size:var(--fs-body);text-decoration:none">เปิดจริง</a>` : ''}</div>
         </div></div>`;
     }
+
+    // สไตล์ช่องเลือกของแถบเรียง — มุมมน 7px ตามกติกา "ห้ามทรงแคปซูล"
+    const _soSel = 'padding:4px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);'
+                 + 'color:var(--t2);font-size:var(--fs-body);font-family:inherit;cursor:pointer';
 
     function _soChannelHtml() {
       const c = _soCh;
@@ -5557,10 +5588,23 @@
             ${row.live ? '' : `<span style="color:var(--amber)"> · ยังคิดยอดรายวันไม่ได้ ต้องเก็บ snapshot 2 คืน</span>`}</div>
           <div style="display:flex;gap:20px;flex-wrap:wrap">${kpi}</div></div>
         <div class="card">
-          <div class="card-title">คลิป / โพสต์ ของช่องนี้
-            <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">${
-              c.total ? ` · แสดง ${_n(shown)} จาก ${_n(c.total)} ชิ้น · เรียงตามวิวที่เพิ่มขึ้นในช่วงนี้` : ''}</span>
-            <span class="info-tip" tabindex="0" data-tip="ตัวเลขใหญ่ = วิวที่เพิ่มขึ้นในช่วงวันที่เลือก\\nบรรทัดรอง = ยอดสะสมตลอดกาล\\n\\nกด &quot;ดูกราฟรายวัน&quot; เพื่อดู performance ของคลิปนั้นทีละวัน">?</span></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+            <div class="card-title" style="margin:0">คลิป / โพสต์ ของช่องนี้
+              <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">${
+                c.total ? ` · แสดง ${_n(shown)} จาก ${_n(c.total)} ชิ้น · ${h(_soSortNote(c))}` : ''}</span>
+              <span class="info-tip" tabindex="0" data-tip="ตัวเลขใหญ่ = วิวที่เพิ่มขึ้นในช่วงวันที่เลือก\\nบรรทัดรอง = ยอดสะสมตลอดกาล\\n\\nกด &quot;ดูกราฟรายวัน&quot; เพื่อดู performance ของคลิปนั้นทีละวัน">?</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center">
+              <span style="font-size:var(--fs-body);color:var(--t3)">เรียงตาม</span>
+              <select onchange="soChSort('sort',this.value)" style="${_soSel}">${
+                SO_SORTS.map(o => `<option value="${o[0]}" ${c.sort === o[0] ? 'selected' : ''}>${h(o[1])}</option>`).join('')}</select>
+              <select onchange="soChSort('dir',this.value)" style="${_soSel}">
+                <option value="desc" ${c.dir === 'desc' ? 'selected' : ''}>${c.sort === 'date' ? 'ใหม่ → เก่า' : 'มาก → น้อย'}</option>
+                <option value="asc" ${c.dir === 'asc' ? 'selected' : ''}>${c.sort === 'date' ? 'เก่า → ใหม่' : 'น้อย → มาก'}</option></select>
+              ${c.sort === 'date' ? '' : `<select onchange="soChSort('basis',this.value)" style="${_soSel}"
+                title="นับจากยอดที่เพิ่มขึ้นในช่วงวันที่เลือก หรือยอดสะสมตลอดกาลของคลิป">
+                <option value="range" ${c.basis === 'range' ? 'selected' : ''}>ยอดในช่วงนี้</option>
+                <option value="total" ${c.basis === 'total' ? 'selected' : ''}>ยอดสะสม</option></select>`}
+            </div></div>
           ${c.err ? `<div style="padding:26px;text-align:center;color:var(--red);font-size:var(--fs-body)">เปิดไม่ได้: ${h(c.err)}</div>`
             : (!shown && c.loading) ? `<div style="text-align:center;padding:40px"><div class="spin" style="margin:0 auto"></div></div>`
             : !shown ? `<div style="padding:26px;text-align:center;color:var(--t3);font-size:var(--fs-body)">ช่องนี้ไม่มีคลิป/โพสต์ในช่วงที่เลือก</div>`

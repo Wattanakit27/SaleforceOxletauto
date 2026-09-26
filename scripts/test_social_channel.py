@@ -51,19 +51,19 @@ T = date(2026, 9, 25)
 Y = T - timedelta(days=1)
 
 
-def tt(vid, own, d, views, likes=0, trig="cron"):
+def tt(vid, own, d, views, likes=0, trig="cron", posted=1):
     TikTokVideoSnapshot.objects.create(
         taken_at=datetime(d.year, d.month, d.day, 1, 0, tzinfo=timezone.utc),
         snap_date=d, trigger=trig, open_id=own, video_id=vid,
         title="คลิป %s" % vid, share_url="https://tiktok.com/%s" % vid,
-        create_time=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        create_time=datetime(2026, 9, posted, tzinfo=timezone.utc),
         view_count=views, like_count=likes, comment_count=0, share_count=0)
 
 
 # ช่อง A: 3 คลิป · ช่อง B: 1 คลิป (ต้องไม่ปนกัน)
-tt("a1", "chA", Y, 1000); tt("a1", "chA", T, 1500, 20)          # +500
-tt("a2", "chA", Y, 100);  tt("a2", "chA", T, 9100)               # +9000  ← ควรมาก่อน
-tt("a3", "chA", T, 777)                                           # คืนเดียว = live False
+tt("a1", "chA", Y, 1000, posted=5); tt("a1", "chA", T, 1500, 20, posted=5)   # +500  · ลง 5/9
+tt("a2", "chA", Y, 100, posted=2);  tt("a2", "chA", T, 9100, posted=2)       # +9000 · ลง 2/9
+tt("a3", "chA", T, 777, posted=9)                                 # คืนเดียว = live False · ลง 9/9
 tt("b1", "chB", Y, 50);   tt("b1", "chB", T, 5050)               # คนละช่อง
 
 print("channel_posts — TikTok ช่อง chA")
@@ -111,6 +111,26 @@ print("\nกันพลาด")
 eq(S.channel_posts("tiktok", "", T, T)["rows"], [], "ไม่ส่ง owner = ไม่คืนอะไร")
 eq(S.channel_posts("ไม่มีฝั่งนี้", "chA", T, T)["total"], 0, "ฝั่งที่ไม่รู้จัก = ไม่พัง")
 eq(S.channel_posts("tiktok", "chไม่มีจริง", T, T)["total"], 0, "ช่องที่ไม่มีข้อมูล = 0 แถว")
+
+
+print("")
+print("เรียงลำดับ (26 ก.ย.69 — เจ้าของขอตัวกรอง)")
+
+
+def ids(**kw):
+    return [x["id"] for x in S.channel_posts("tiktok", "chA", T, T, **kw)["rows"]]
+
+
+eq(ids(sort="views", direction="desc"), ["a2", "a1", "a3"], "วิวมากสุด (ยอดในช่วง)")
+eq(ids(sort="views", direction="asc"),  ["a1", "a2", "a3"], "วิวน้อยสุด — a3 ที่คิดรายวันไม่ได้ต้องอยู่ท้าย")
+eq(ids(sort="views", direction="desc", basis="total"), ["a2", "a1", "a3"], "วิวสะสมมากสุด")
+eq(ids(sort="views", direction="asc",  basis="total"), ["a3", "a1", "a2"], "วิวสะสมน้อยสุด (a3=777 มาก่อน)")
+eq(ids(sort="likes", direction="desc"), ["a1", "a2", "a3"], "ไลก์มากสุด (a1 ไลก์ +20)")
+eq(ids(sort="date",  direction="desc"), ["a3", "a1", "a2"], "วันลงคลิป ใหม่→เก่า (9/9 · 5/9 · 2/9)")
+eq(ids(sort="date",  direction="asc"),  ["a2", "a1", "a3"], "วันลงคลิป เก่า→ใหม่")
+eq(ids(sort="ไม่มีคีย์นี้", direction="desc"), ["a2", "a1", "a3"], "คีย์เรียงมั่ว = ตกไปใช้วิว ไม่พัง")
+# ★ เรียงต้องทำก่อนแบ่งหน้า — ไม่งั้น "วิวน้อยสุด" จะกลายเป็น "น้อยสุดในหน้านี้"
+eq(ids(sort="views", direction="asc", limit=1), ["a1"], "หน้าแรกของ 'วิวน้อยสุด' = a1 จริง (เรียงก่อนตัดหน้า)")
 
 runner.teardown_databases(old_cfg)
 teardown_test_environment()

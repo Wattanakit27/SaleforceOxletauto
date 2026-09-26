@@ -40,7 +40,9 @@ DAILY_WINDOW_HOURS = 3       # รอบเที่ยงคืน: เริ�
 MANUAL_GAP_MIN = 15
 LOCK_TTL_MIN = 20
 
-_VIDEO_FIELDS = ("id,create_time,title,video_description,duration,share_url,"
+# ★ 26 ก.ย.69 ขอ cover_image_url เพิ่ม — ลิงก์นี้ **หมดอายุใน ~6 ชม.** จึงไม่เก็บลง DB
+#   แต่โหลด "ตัวไฟล์" มาเก็บเองท้ายรอบผ่าน covers.save_many() (ดู covers.py)
+_VIDEO_FIELDS = ("id,create_time,title,video_description,duration,share_url,cover_image_url,"
                  "view_count,like_count,comment_count,share_count")
 _STAT_FIELDS = "open_id,follower_count,following_count,likes_count,video_count"
 
@@ -139,6 +141,7 @@ def sync_account(acc, trigger: str, snap_date, taken_at) -> dict:
             likes_count=u.get("likes_count"), video_count=u.get("video_count"))
 
     rows, cursor = [], None
+    covers_todo = []            # (video_id, ลิงก์รูปปก) — โหลดท้ายรอบ ไม่ขวางการเก็บตัวเลข
     for _ in range(MAX_PAGES):
         j = _videos_page(token, cursor)
         TikTokRaw.objects.create(kind="videos", open_id=acc.open_id, trigger=trigger, data=j)
@@ -154,6 +157,7 @@ def sync_account(acc, trigger: str, snap_date, taken_at) -> dict:
             if ct and ct < cutoff:                      # เรียงใหม่→เก่า เจอเก่ากว่าเกณฑ์ = จบ
                 stop = True
                 break
+            covers_todo.append((str(v.get("id") or ""), v.get("cover_image_url") or ""))
             rows.append(TikTokVideoSnapshot(
                 taken_at=taken_at, snap_date=snap_date, trigger=trigger, open_id=acc.open_id,
                 video_id=str(v.get("id") or "")[:64], create_time=ct,
@@ -177,6 +181,13 @@ def sync_account(acc, trigger: str, snap_date, taken_at) -> dict:
             stat_row.save()
     out["videos"] = len(rows)
     out["stats"] = stat_row is not None
+    # ★ รูปปกทำ "หลัง" เขียนตัวเลขเสร็จเสมอ — ตัวเลขคือของที่เสียแล้วเสียเลย
+    #   ส่วนรูปปกโหลดใหม่รอบหน้าได้ · โหลดไม่ได้ก็ไม่ทำให้รอบนี้ล้ม
+    try:
+        from . import covers
+        out["covers"] = covers.save_many("tiktok", covers_todo)
+    except Exception:
+        out["covers"] = 0
     return out
 
 

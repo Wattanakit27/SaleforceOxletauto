@@ -52,7 +52,9 @@ _POST_METRICS = ",".join([
     "post_video_views_organic", "post_video_views_paid", "post_video_avg_time_watched",
     "post_video_complete_views_30s", "post_video_view_time",
 ])
-_POST_FIELDS = ("id,created_time,message,permalink_url,status_type,attachments{media_type},"
+# ★ 26 ก.ย.69 ขอ full_picture เพิ่ม (รูปปกโพสต์) — เป็น CDN URL ที่หมดอายุเหมือนฝั่ง TikTok
+#   จึงโหลดไฟล์มาเก็บเองท้ายรอบ ไม่เก็บลิงก์ลง DB
+_POST_FIELDS = ("id,created_time,message,permalink_url,status_type,full_picture,attachments{media_type},"
                 "reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),"
                 "shares,insights.metric(%s)" % _POST_METRICS)
 _AD_FIELDS = ("date_start,account_id,campaign_id,campaign_name,adset_id,adset_name,"
@@ -152,6 +154,7 @@ def sync_posts(trigger: str, snap_date, taken_at) -> dict:
             out["errors"].append("เพจ %s: ขอ page token ไม่ได้ (%s)" % (pid, str(e)[:80]))
             continue
         rows, stop = [], False
+        covers_todo = []        # (post_id, ลิงก์รูปปก) — โหลดท้ายเพจ ไม่ขวางการเก็บตัวเลข
         try:
             for chunk in meta.paged("/%s/posts" % pid, _token=pt, fields=_POST_FIELDS, limit=50):
                 MetaRaw.objects.create(kind="posts", ref_id=pid, trigger=trigger, data=_raw(chunk))
@@ -161,6 +164,7 @@ def sync_posts(trigger: str, snap_date, taken_at) -> dict:
                     if ct and ct < cutoff:      # เรียงใหม่→เก่า เจอเก่ากว่าเกณฑ์ = จบ
                         stop = True
                         break
+                    covers_todo.append((str(p.get("id") or ""), p.get("full_picture") or ""))
                     rows.append(_post_row(p, pid, trigger, snap_date, taken_at, ct))
                 if stop:
                     break
@@ -179,6 +183,12 @@ def sync_posts(trigger: str, snap_date, taken_at) -> dict:
                 MetaPostSnapshot.objects.bulk_create(rows, batch_size=500)
         out["pages"][pid] = len(rows)
         out["snapshots"] += len(rows)
+        # ★ รูปปกทำ "หลัง" เขียนตัวเลขเสร็จเสมอ — ตัวเลขเสียแล้วเสียเลย รูปปกโหลดใหม่รอบหน้าได้
+        try:
+            from . import covers
+            out["covers"] = out.get("covers", 0) + covers.save_many("meta", covers_todo)
+        except Exception:
+            pass
     return out
 
 
