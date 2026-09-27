@@ -79,12 +79,37 @@ def _tab_of(url):
     return raw.split("/values/")[1].split("!")[0].strip("'")
 
 
+def _range_of(url):
+    import urllib.parse
+    raw = urllib.parse.unquote(url)
+    part = raw.split("/values/")[1].split("?")[0].split(":append")[0]
+    return part.split("!")[1] if "!" in part else ""
+
+
 def fake_get(url, **kw):
+    """เลียนพฤติกรรม Sheets API จริง — **ต้องตัดตามช่วงที่ขอ** ไม่ใช่คืนทั้งตาราง
+    ไม่งั้นเทสต์จะไม่จับบั๊ก "อ่านช่วงแคบเกินแล้วกันเขียนซ้ำไม่เห็นแถวเก่า" """
     if "fields=sheets.properties" in url:
         return _Resp({"sheets": [{"properties": {"title": t}} for t in SHEETS]})
-    if "/values/" in url:
-        return _Resp({"values": SHEETS.get(_tab_of(url), [])})
-    return _Resp({}, 404)
+    if "/values/" not in url:
+        return _Resp({}, 404)
+    rows = SHEETS.get(_tab_of(url), [])
+    rng = _range_of(url)
+    m = __import__("re").match(r"^([A-Z]+)(\d+):([A-Z]+)(\d+)$", rng)
+    if not m:
+        return _Resp({"values": rows})
+    def n(c):                                   # A→0 · L→11
+        v = 0
+        for ch in c:
+            v = v * 26 + (ord(ch) - 64)
+        return v - 1
+    c1, r1, c2, r2 = n(m.group(1)), int(m.group(2)), n(m.group(3)), int(m.group(4))
+    out = []
+    for r in rows[r1 - 1:r2]:
+        out.append([(r[i] if i < len(r) else "") for i in range(c1, c2 + 1)])
+    while out and not any(str(c).strip() for c in out[-1]):
+        out.pop()
+    return _Resp({"values": out})
 
 
 def fake_post(url, **kw):
@@ -251,6 +276,16 @@ GroupChat.objects.create(group_id=GID, message_id="m4", sender_id=UID_S, sender_
                          msg_type="text", text="ดีครับ ปิดให้เลย", sent_at=timezone.now())
 r3 = CO.sync(days=30)
 ck("ข้อความใหม่ถูกเพิ่มต่อท้าย", r3["new"] == 1 and len(SHEETS[tab]) == before + 1, r3)
+
+# ★ แท็บโตเกินช่วงที่เคยอ่าน (5,000 แถว) แล้วต้องยังกันเขียนซ้ำได้
+#   ถ้าอ่านช่วงแคบ ตัวกันซ้ำจะมองไม่เห็นแถวเก่า → เขียนซ้ำแบบเงียบๆ
+pad = [["", "", "", "", "", "", "", "", "", "", "", "pad:%d" % i] for i in range(6000)]
+SHEETS[tab].extend(pad)
+grew = len(SHEETS[tab])
+r4 = CO.sync(days=30, include_old=True)
+ck("★ แท็บโตเกิน 6,000 แถวแล้วยังไม่เขียนซ้ำ",
+   r4["new"] == 0 and len(SHEETS[tab]) == grew, r4)
+del SHEETS[tab][-6000:]
 
 # ═══════════════════ 8. dry-run + สวิตช์ปิด ═══════════════════
 print("\n[8] ทดลอง (dry-run) และสวิตช์")

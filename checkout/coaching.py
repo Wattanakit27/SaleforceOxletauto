@@ -186,16 +186,30 @@ def _append(tab, rows) -> int:
     return done
 
 
+def _col_letter(i) -> str:
+    s = ""
+    while True:
+        s, i = chr(65 + i % 26) + s, i // 26 - 1
+        if i < 0:
+            return s
+
+
 def _ensure_header(tab) -> set:
-    """ทำให้แท็บมีหัวตาราง แล้วคืน `รหัสอ้างอิง` ที่มีอยู่แล้ว (ใช้กันเขียนซ้ำ)"""
+    """ทำให้แท็บมีหัวตาราง แล้วคืน `รหัสอ้างอิง` ที่มีอยู่แล้ว (ใช้กันเขียนซ้ำ)
+
+    ★ อ่าน **เฉพาะคอลัมน์รหัสอ้างอิง ช่วงกว้าง** ไม่ใช่ทั้งตาราง —
+    ถ้าอ่านแบบจำกัดแถว (เช่น A1:AZ5000) วันที่แท็บโตเกินนั้น ตัวกันเขียนซ้ำจะมองไม่เห็นแถวเก่า
+    แล้ว **เขียนซ้ำแบบเงียบๆ** (แท็บนี้โตทุกวัน · นำเข้าครั้งแรกก็ 1,688 แถวแล้ว)
+    """
     from dashboard.services.google_sheets import ensure_sheet_tab
     ensure_sheet_tab(SHEET_ID, tab)
-    rows = _read(tab)
-    if not rows or not any(str(c).strip() for c in rows[0]):
+    head = _read(tab, "A1:%s1" % _col_letter(REF_COL))
+    if not head or not any(str(c).strip() for c in head[0]):
         _append(tab, [COLUMNS])
         return set()
-    return {str(r[REF_COL]).strip() for r in rows[1:]
-            if len(r) > REF_COL and str(r[REF_COL]).strip()}
+    col = _col_letter(REF_COL)
+    refs = _read(tab, "%s2:%s200000" % (col, col))
+    return {str(r[0]).strip() for r in refs if r and str(r[0]).strip()}
 
 
 # ── ทีมของแต่ละคน (จากทะเบียนพนักงาน) ──
