@@ -1578,6 +1578,16 @@ def cron_tick(request):
     except Exception as e:
         youtube_result = "error: %s" % str(e)[:200]
 
+    # ── 🎓 ห้องโค้ชเซลล์: ซิงก์บทสนทนา Senior/Junior ลงชีต วันละครั้ง ──
+    #    จำเป็นเพราะแชทดิบถูกลบเมื่อครบ 90 วัน (CHAT_KEEP_DAYS) → ชีตเป็นตัวถาวร
+    #    ถ้าไม่ซิงก์ ข้อมูลโค้ชจะหายไปเองเงียบๆ · ปิดไว้ = ไม่ทำอะไร
+    coach_result = ""
+    try:
+        from checkout.coaching import maybe_sync as _coach_sync
+        coach_result = _coach_sync(now)
+    except Exception as e:
+        coach_result = "error: %s" % str(e)[:200]
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1588,6 +1598,7 @@ def cron_tick(request):
         "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
+        "coach": coach_result,       # ซิงก์บันทึกห้องโค้ชลงชีต ('' = ทำแล้ววันนี้ / ปิดอยู่)
         "meta": meta_result,
         "youtube": youtube_result,
         "tiktok": tiktok_result,     # ต่ออายุ token TikTok ({} = ไม่มีช่องไหนใกล้หมด)         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
