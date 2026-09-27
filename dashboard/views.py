@@ -2523,6 +2523,39 @@ def admin_system_health(request):
     except Exception:
         pass
 
+    # ── ★★ 27 ก.ย.69 — "งานส่งออกล้มทั้งงาน" ต้องร้อง ไม่ใช่เฉพาะการ์ด ───────────
+    #   เจอจริง: **ตามด่วนล้มทุกคนทุกรอบ 3 วัน (25-27 ก.ย. · 46 ครั้ง/วัน)** โดยไม่มี
+    #   อะไรฟ้องเลย — บล็อกข้างบนดูแต่ KV ของการ์ด ส่วนตามด่วน/เช็คชื่อ/ตามงานจัดซื้อ
+    #   ไม่มีใครเฝ้า · ต้นเหตุคือย้ายขาส่ง 1:1 ไปบอทตัวส่งแต่ผู้รับยังเป็นไอดีบอทเดิม
+    #   **รอบที่ 4 ของ "หยุดส่งเงียบๆ"** → เลิกเฝ้าทีละงาน มาอ่าน `dash_event_log` ตรงๆ
+    #   เพื่อให้งานส่งออก **ทุกตัว รวมของที่จะเพิ่มในอนาคต** ได้การเฝ้าฟรี
+    try:
+        from datetime import timedelta as _td
+
+        from .models import EventLog as _EL
+        from .services.eventlog import SEND as _SEND
+        _since = now - _td(hours=24)
+        _tally = {}
+        for _r in (_EL.objects.filter(kind=_SEND, at__gte=_since)
+                   .values_list("name", "ok")):
+            _nm = (_r[0] or "(ไม่ระบุเรื่อง)").split(" (บัญชีตัวส่งไม่ถึง")[0]
+            _t = _tally.setdefault(_nm, [0, 0])
+            _t[0 if _r[1] else 1] += 1
+        _dead = ["%s (ล้ม %d)" % (k, v[1]) for k, v in sorted(_tally.items())
+                 if v[1] and not v[0]]
+        _part = ["%s (ไม่ถึง %d จาก %d)" % (k, v[1], v[0] + v[1])
+                 for k, v in sorted(_tally.items()) if v[1] and v[0]]
+        if _dead:
+            issues.append({"level": "err",
+                           "msg": "งานส่งเข้าไลน์ล้มทั้งงานใน 24 ชม.: %s — ไม่มีใครได้รับเลย "
+                                  "· ไล่ตัวจริงที่ตาราง dash_event_log (kind='line_send' AND NOT ok)"
+                                  % " · ".join(_dead[:4])})
+        if _part:
+            issues.append({"level": "warn",
+                           "msg": "ส่งเข้าไลน์ไม่ถึงบางคน: %s" % " · ".join(_part[:4])})
+    except Exception:                       # ยังไม่ migrate / ตารางล็อกอ่านไม่ได้ = ข้ามเงียบ
+        pass
+
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
     return JsonResponse({

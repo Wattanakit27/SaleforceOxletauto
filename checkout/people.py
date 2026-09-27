@@ -130,6 +130,40 @@ def line_id_for(display_name="") -> str:
     return _CACHE["uid_of_name"].get(_norm(dn), "")
 
 
+def id_for_channel(user_id="", channel="") -> str:
+    """ไอดีของ **คนคนเดียวกันนี้** ในฝั่งบัญชีที่ระบุ — หาไม่ได้ = คืนค่าว่าง (ไม่เดา)
+
+    ★★ 27 ก.ย.69 — ต้นเหตุจริงของ **"ตามด่วนหยุดส่งทั้งทีม 25-27 ก.ย."**
+      LINE ออก userId **ต่อ provider** → ไอดีชุดที่นำเข้าจากชีต (= บอทเดิม)
+      เอาไปส่งด้วย token ของบอทตัวส่ง = **LINE ไม่รู้จักผู้รับ → 400 ทุกคน**
+      วัดจริงบน prod: 23 ไอดีที่ล้ม **ไม่มีสักตัวที่เป็นฝั่ง `push`**
+      แต่ **15 จาก 16 คนมีไอดีฝั่งนั้นอยู่ในทะเบียนแล้ว** (มาจาก webhook)
+      → ไม่ใช่ "ยังไม่ได้แอดบอท" อย่างที่เข้าใจตอนแรก แต่คือ **หยิบไอดีผิดฝั่ง**
+
+    ⚠️ **แปลงให้เฉพาะพนักงาน** (แถวที่ผูก `Employee` ไว้) — **ลูกค้าไม่แตะเลย**
+       เพราะการตอบแชทลูกค้าเลือกบัญชีตามที่เขาคุยอยู่แล้ว (`chat._channel_for`)
+       ถ้ามาแปลงให้ด้วย จะกลายเป็นส่งข้ามบัญชีที่ลูกค้าไม่ได้แอดไว้
+    """
+    uid, ch = (user_id or "").strip(), (channel or "").strip().lower()
+    if not uid or not ch:
+        return ""
+    try:
+        from .models import LineProfile
+        me = LineProfile.objects.filter(user_id=uid).values("employee_id", "channel").first()
+        if not me:
+            return ""
+        if (me["channel"] or "").strip().lower() == ch:
+            return uid                              # ถูกฝั่งอยู่แล้ว
+        if not me["employee_id"]:
+            return ""                               # ลูกค้า/ยังไม่ผูกทะเบียน = ไม่เดา
+        alt = (LineProfile.objects
+               .filter(employee_id=me["employee_id"], channel=ch)
+               .values_list("user_id", flat=True).first())
+        return (alt or "").strip()
+    except Exception:                               # ยังไม่ migrate / DB ล่ม = ไม่แปลง
+        return ""
+
+
 def safe_name(name="") -> str:
     """กันพลาด: ถ้าค่าที่จะโชว์เป็น userId ดิบ (หรือ username `line_<uid>`) → แปลงเป็นชื่อเล่น"""
     n = (name or "").strip()

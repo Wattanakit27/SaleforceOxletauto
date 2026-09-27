@@ -264,12 +264,47 @@ def push_line_message(user_id: str, messages: list[dict], channel_token: str, ti
     ตอนนี้ **ส่งไม่ถึงก็คือไม่ถึง** แล้วจดไว้ใน `dash_event_log` ให้ไล่ได้ว่าใคร —
     วิธีแก้ที่ถูกต้องคือ **ให้คนนั้นแอดบอทตัวส่งเป็นเพื่อน** ไม่ใช่แอบส่งด้วยบัญชีอื่น
     (วัดจริง 7 วัน: ตัวสำรองถูกใช้แค่ 1 ครั้ง = ไม่มีใครพึ่งมันอยู่)
+
+    ★★ 27 ก.ย.69 — **ก่อนส่งหา "คน" จะแปลงไอดีให้ตรงฝั่งบัญชีที่ใช้ส่งก่อนเสมอ** (`_dm_target`)
+      เพราะ "แอดบอทเป็นเพื่อนแล้ว" ไม่พอ — **ไอดีต้องเป็นของ provider เดียวกันด้วย**
+      (ไอดีจากชีตเป็นของบอทเดิม → ส่งด้วยบอทตัวส่ง = 400 ทุกคน · ทำตามด่วนตาย 3 วัน)
     """
-    return _push_once(user_id, messages, channel_token, timeout, what)
+    to, extra = _dm_target(user_id, channel_token)
+    return _push_once(to, messages, channel_token, timeout, what, **extra)
+
+
+def _dm_target(user_id: str, channel_token: str) -> tuple[str, dict]:
+    """แปลงไอดีผู้รับให้เป็น **ฝั่งเดียวกับบัญชีที่กำลังส่ง** — เฉพาะแชท 1:1 ของพนักงาน
+
+    ★★ 27 ก.ย.69 — เจ้าของแจ้งว่ารายงาน/แจ้งเตือนหายไป · ไล่ `dash_event_log` แล้วพบว่า
+      **ตามด่วนล้มทุกคนทุกรอบตั้งแต่ 25 ก.ย.** (17-24 ก.ย. สำเร็จ 46 ครั้ง/วัน ไม่เคยล้ม)
+      ต้นเหตุ = ตอนย้ายขาส่ง 1:1 ไปบอทตัวส่ง (24 ก.ย.) **ผู้รับยังเป็นไอดีฝั่งบอทเดิม**
+      (มาจากชีตพนักงาน) ซึ่งบอทตัวส่ง "ไม่รู้จัก" → LINE ตอบ 400 เหมือนกันหมด
+
+    **ไม่ใช่การกลับไปใช้บัญชีเก่า** — ยังส่งจากบอทตัวส่งบัญชีเดียวตามที่เจ้าของกำหนด
+    แค่หยิบไอดีของคนนั้น "ฝั่งบัญชีเดียวกัน" มาใช้ (`people.id_for_channel`)
+
+    · แปลงไม่ได้ = **ส่งด้วยไอดีเดิม** (ไม่กลืนงาน · ผลยังถูกจดใน `dash_event_log` ตามเดิม)
+    · กลุ่ม `C…` / ห้อง `R…` ไม่เกี่ยว — ไอดีกลุ่มเปลี่ยนตามบอทเหมือนกัน แต่แก้ที่ปลายทาง
+      ในหน้าตั้งค่า (`line_push_switch`) ไม่ใช่ตอนส่ง
+    """
+    uid = (user_id or "").strip()
+    if not uid.startswith("U"):
+        return uid, {}
+    try:
+        from . import line_channels
+        from checkout.people import id_for_channel
+        ch = line_channels.key_of_token(channel_token)
+        alt = id_for_channel(uid, ch)
+        if alt and alt != uid:
+            return alt, {"remap": ch}               # จดไว้ว่าเปลี่ยนไอดีให้ ฝั่งไหน
+    except Exception:
+        pass
+    return uid, {}
 
 
 def _push_once(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10,
-               what: str = "") -> tuple[int, str]:
+               what: str = "", **extra) -> tuple[int, str]:
     """ยิงจริง 1 ครั้ง + จดล็อก (ตัวเดิม — ตัวห่อข้างบนเป็นคนตัดสินใจว่าจะลองบัญชีสำรองไหม)
 
     ★ 16 ก.ย.69 — **จดผลส่งทุกครั้งลง `dash_event_log`** (เจ้าของสั่งให้เก็บล็อกไว้ในฐานข้อมูล)
@@ -305,7 +340,8 @@ def _push_once(user_id: str, messages: list[dict], channel_token: str, timeout: 
                 status=code or None,
                 msgs=len(messages or []),
                 # เก็บเฉพาะคำตอบตอนพลาด — ตอนสำเร็จ LINE ตอบ "{}" ไม่มีอะไรให้ดู
-                error=(err or (text[:300] if code != 200 else "")) or None)
+                error=(err or (text[:300] if code != 200 else "")) or None,
+                **extra)
         except Exception:
             pass
 

@@ -236,6 +236,22 @@ def token_of(key: str) -> str:
     return crm_token()
 
 
+def key_of_token(token: str) -> str:
+    """token นี้เป็นของบัญชีไหน → `"crm"` / `"push"` / คีย์ของบัญชีที่เพิ่มเอง / `""`
+
+    **เทียบสตริงตรงๆ ไม่ยิงเน็ต** — ต่างจาก `channel_of()` ที่ต้องถาม LINE ว่า
+    userId ของบอทคืออะไร · จำเป็นเพราะ `push_line_message()` รับมาแต่ตัว token
+    จึงไม่รู้ว่ากำลังส่งในนามบัญชีไหน แล้วเลือกไอดีผู้รับให้ตรงฝั่งไม่ได้
+    """
+    t = (token or "").strip()
+    if not t:
+        return ""
+    for a in accounts():
+        if a["token"] == t:
+            return a["key"]
+    return ""
+
+
 def channel_of(destination: str) -> str:
     """event นี้มาจากบัญชีไหน → `"crm"` / `"push"` / `""` (ไม่ทราบ)
 
