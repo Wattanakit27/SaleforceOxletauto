@@ -724,3 +724,52 @@ class FbProfile(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.show_name, "พนักงาน" if self.is_employee else "ลูกค้า")
+
+
+class LineGroup(models.Model):
+    """ทะเบียนกลุ่ม LINE — **1 แถว = 1 กลุ่ม**
+
+    ทำไมต้องมี (เจ้าของสั่ง 28 ก.ย.69: *"จริงๆ ควรแยกชัดกลุ่มแต่ละกลุ่มนะ"*):
+      เดิมทะเบียนกลุ่มเป็น **JSON ก้อนเดียวใน `dash_kv['line_groups']`**
+      → เขียน SQL หากลุ่มไม่ได้ · ไม่มีที่ติดป้ายว่ากลุ่มไหนทำงานอะไร
+      · ตาราง `checkout_groupchat` มีแต่ `group_id` ดิบ 16 กลุ่มกองรวมกันแยกไม่ออก
+
+    ★ **ไม่แยกตารางแชทต่อกลุ่ม** — กลุ่มใหม่ = เพิ่ม "แถว" ไม่ใช่เพิ่มตาราง/migration ใหม่
+      แล้วให้แยกด้วย `kind` (ประเภทงาน) ซึ่ง join เข้ากับแชทได้ที่ `group_id`
+    ★ KVStore `line_groups` **ยังเขียนอยู่เหมือนเดิม** — ของเดิมหลายตัวอ่านคีย์นั้น
+      (`line_push_switch` · dropdown เลือกกลุ่ม · `/api/v1/groups`) ตารางนี้มาเสริม ไม่ได้มาแทน
+    """
+    COACHING, LEAD, TRADEIN, BOOKING, PURCHASE = "coaching", "lead", "tradein", "booking", "purchase"
+    FINANCE, TRANSFER, CHECKIN, ADMIN, CONTENT, HR, OTHER = (
+        "finance", "transfer", "checkin", "admin", "content", "hr", "other")
+    KIND_CHOICES = [
+        (COACHING, "ห้องโค้ชเซลล์ (Senior/Junior)"), (LEAD, "จ่ายเบอร์ / จ่ายลีด"),
+        (TRADEIN, "ซื้อ-ขาย / เทิร์นรถ"), (BOOKING, "จองรถ"), (PURCHASE, "จัดซื้อ / รับรถเข้า"),
+        (FINANCE, "จัดไฟแนนซ์"), (TRANSFER, "รับ-ส่งระหว่างสาขา"), (CHECKIN, "เช็คชื่อเข้างาน"),
+        (ADMIN, "ทีมแอดมิน / ออฟฟิศ"), (CONTENT, "คอนเทนต์ / การตลาด"),
+        (HR, "รับสมัครงาน / บุคคล"), (OTHER, "อื่นๆ / ยังไม่จัดหมวด"),
+    ]
+
+    group_id = models.CharField("LINE group id", max_length=64, unique=True)
+    name = models.CharField("ชื่อกลุ่ม", max_length=160, blank=True, db_index=True)
+    kind = models.CharField("ประเภทงาน", max_length=16, choices=KIND_CHOICES,
+                            default=OTHER, db_index=True)
+    # ★ ค่าที่ "ระบบเดาให้จากชื่อกลุ่ม" ต้องติดป้ายไว้ ไม่งั้นมันกลายเป็นของจริงในสายตาคนใช้
+    #   แล้วไม่มีใครไปแก้ (บทเรียนเดิม: ชื่อเล่นที่ระบบเดาใส่ให้ในทะเบียนพนักงาน)
+    kind_auto = models.BooleanField("ประเภทนี้ระบบเดาให้", default=True)
+
+    channels = models.JSONField("บัญชีบอทที่อยู่ในกลุ่มนี้", default=list, blank=True)
+    source = models.CharField("ที่มา", max_length=12, blank=True)   # webhook / manual / chat
+    note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+    active = models.BooleanField("ยังใช้งานอยู่", default=True, db_index=True)
+
+    first_seen = models.DateTimeField("รู้จักครั้งแรก", default=timezone.now)
+    last_seen = models.DateTimeField("ได้ยินล่าสุด", default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "กลุ่ม LINE"
+        verbose_name_plural = "กลุ่ม LINE"
+        ordering = ["kind", "name"]
+
+    def __str__(self):
+        return "%s (%s)" % (self.name or self.group_id, self.get_kind_display())

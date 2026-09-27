@@ -3368,6 +3368,29 @@ def _store_line_groups(pairs, channel="", source="webhook"):
             cache_store.set_kv("line_groups", fresh)
         except Exception:
             pass
+        # ★ 28 ก.ย.69 — เขียนลงตาราง `checkout_linegroup` ด้วย (เจ้าของสั่ง "ควรแยกชัดกลุ่มแต่ละกลุ่ม")
+        #   KV ข้างบนยังเขียนเหมือนเดิม — ของเดิมหลายตัวอ่านคีย์นั้น (line_push_switch · dropdown
+        #   เลือกกลุ่ม · /api/v1/groups) · ตารางมาเสริมให้ query/ติดป้ายประเภทได้ ไม่ได้มาแทน
+        #   best-effort: ยังไม่ migrate / DB ล่ม = ข้ามเงียบ ห้ามทำให้ webhook พัง
+        try:
+            from checkout.management.commands.line_groups_sync import guess_kind
+            from checkout.models import LineGroup
+            for a in added:
+                g, created = LineGroup.objects.get_or_create(
+                    group_id=a["id"], defaults={"name": a["name"] or "", "source": source})
+                fields = ["last_seen"]
+                g.last_seen = bangkok_now()
+                if a["name"] and g.name != a["name"]:
+                    g.name, fields = a["name"], fields + ["name"]
+                if a["channels"] != (g.channels or []):
+                    g.channels, fields = a["channels"], fields + ["channels"]
+                if g.kind_auto:                      # คนตั้งเองแล้ว = ไม่เดาทับ
+                    kind = guess_kind(g.name)
+                    if kind != g.kind:
+                        g.kind, fields = kind, fields + ["kind"]
+                g.save(update_fields=fields)
+        except Exception:
+            pass
     return added
 
 

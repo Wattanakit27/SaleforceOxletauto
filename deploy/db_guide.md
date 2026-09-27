@@ -109,6 +109,8 @@ SELECT sum(spend) / nullif(sum(chats), 0) FROM dash_ads_daily WHERE date >= '202
 | พนักงานมีใคร ตำแหน่งอะไร เข้างานกี่โมง | `checkout_employee` |
 | ใครมาสาย มาแล้วกี่วันในเดือนนี้ | `checkout_checkin` |
 | ลูกค้ากำลังหารถอะไร งบเท่าไหร่ | `checkout_customerneed` |
+| **มีกลุ่ม LINE อะไรบ้าง แต่ละกลุ่มทำงานอะไร** | **`checkout_linegroup`** (หรือ view `v_line_group`) |
+| แชทของกลุ่มใดกลุ่มหนึ่ง (เช่นห้องโค้ชเซลล์) | **view `v_group_chat`** กรองด้วย `"ประเภทกลุ่ม"` |
 | ลูกค้าคุยอะไรกับเรา (LINE / Facebook) | `checkout_groupchat` · `checkout_fbchat` |
 | งานส่งข้อความอัตโนมัติล้มไหม เมื่อไหร่ | `dash_event_log` |
 
@@ -1077,6 +1079,40 @@ SELECT sum(spend) / nullif(sum(chats), 0) FROM dash_ads_daily WHERE date >= '202
 
 </details>
 
+#### `checkout_linegroup`  —  ทะเบียนกลุ่ม LINE
+
+16 กลุ่ม  ·  🟢 อ่านได้โดยไม่กระทบความเป็นส่วนตัว (เป็นสารบัญ ไม่มีชื่อคน ไม่มีเนื้อแชท)
+
+**1 แถว = 1 กลุ่ม** — ชื่อกลุ่ม · **ประเภทงาน** (`kind`) · บอทตัวไหนอยู่ในกลุ่มนี้ · ได้ยินล่าสุดเมื่อไหร่
+
+★ **ตารางนี้คือตัวที่ทำให้ "แยกแชทเป็นรายกลุ่ม" ได้** — `checkout_groupchat` เก็บทุกกลุ่มรวมกัน
+โดยมีแค่ `group_id` ดิบ · join ตารางนี้เข้าไปที่ `group_id` จะได้ชื่อกลุ่มกับประเภทมาใช้กรอง
+
+`kind` ที่มี: `coaching` (ห้องโค้ชเซลล์) · `lead` (จ่ายเบอร์) · `tradein` (ซื้อ-ขาย/เทิร์นรถ) ·
+`booking` (จองรถ) · `purchase` (จัดซื้อ) · `finance` · `transfer` (รับ-ส่งระหว่างสาขา) ·
+`checkin` · `admin` · `content` · `hr` · `other`
+
+> `kind_auto = true` แปลว่า **ประเภทนั้นระบบเดาให้จากชื่อกลุ่ม ยังไม่มีคนยืนยัน** — เอาไปใช้ตัดสินใจ
+> ควรเช็กก่อน
+
+<details><summary>คอลัมน์ (11)</summary>
+
+| คอลัมน์ | ชนิด |
+|---|---|
+| `id` | เลขจำนวนเต็ม |
+| `group_id` | ข้อความ |
+| `name` | ข้อความ |
+| `kind` | ข้อความ |
+| `kind_auto` | จริง/เท็จ |
+| `channels` | JSON |
+| `source` | ข้อความ |
+| `note` | ข้อความ |
+| `active` | จริง/เท็จ |
+| `first_seen` | วันเวลา |
+| `last_seen` | วันเวลา |
+
+</details>
+
 #### `checkout_lineprofile`  —  โปรไฟล์คนที่คุยกับบอท LINE
 
 378 แถว  ·  🔒 ข้อมูลส่วนบุคคล
@@ -1375,6 +1411,21 @@ SELECT id, plate_text AS ทะเบียน, purpose AS งาน, borrower_n
 FROM checkout_carmovement
 WHERE returned_at IS NULL
 ORDER BY checked_out_at;
+
+-- มีกลุ่ม LINE อะไรบ้าง แต่ละกลุ่มทำงานอะไร คุยกันเยอะแค่ไหน
+SELECT * FROM v_line_group;
+
+-- แชทเฉพาะห้องโค้ชเซลล์ (Senior/Junior) — แยกกลุ่มด้วย "ประเภทกลุ่ม"
+SELECT "เมื่อไหร่", "ผู้พูด", "ข้อความ"
+FROM v_group_chat
+WHERE "ประเภทกลุ่ม" = 'coaching'
+ORDER BY "เมื่อไหร่" DESC LIMIT 50;
+
+-- ข้อความรายวัน แยกตามประเภทกลุ่ม (กลุ่มไหนคึกคัก)
+SELECT date("เมื่อไหร่") AS วัน, "ประเภทกลุ่ม", count(*) AS ข้อความ
+FROM v_group_chat
+WHERE "เมื่อไหร่" >= now() - interval '14 days'
+GROUP BY 1, 2 ORDER BY 1 DESC, 3 DESC;
 
 -- งานส่งข้อความอัตโนมัติที่ล้ม 7 วันล่าสุด
 SELECT date(at) AS วัน, name AS งาน, count(*) AS ครั้ง
