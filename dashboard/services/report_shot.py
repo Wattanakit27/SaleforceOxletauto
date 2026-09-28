@@ -64,6 +64,43 @@ _TAB_ID = {
 }
 
 
+def _hide_chrome(page, keep_sel: str = "") -> None:
+    """ซ่อนของประดับหน้าเว็บก่อนแคป — **แถบเมนูซ้ายสีม่วง / ป้ายเวอร์ชัน / ปุ่มส่งไลน์ / ไอคอน ?**
+
+    ★ 28 ก.ย.69 (เจ้าของแจ้ง *"แถบสีม่วงมันโผล่ออกมาด้วย"*): ตั้งแต่ 19 ก.ย. แถบเมนูซ้าย
+      กลายเป็น **แถบถาวรบนจอ ≥1100px** (`body.has-sidebar`) และเป็น `position:fixed`
+      · Playwright แคปแบบ **ครอปตามกรอบ element** ซึ่ง **ยังเรนเดอร์ของที่ลอยทับด้วย**
+      → viewport ที่ใช้แคปคือ 1680–1780px = แถบม่วงติดเข้าไปในรูปทุกใบ
+      (ไม่มีใครเห็นก่อนหน้านี้เพราะการ์ดส่งไม่ออกมาตั้งแต่ 15 ก.ย.)
+
+    **ซ่อน `position:fixed` ทั้งหมด** แทนการไล่ระบุทีละคลาส → ของลอยที่จะเพิ่มในอนาคต
+    (toast / drawer / ป้ายใหม่) หายจากรูปเองโดยไม่ต้องมาแก้ที่นี่อีก
+    · `keep_sel` = element ที่กำลังจะแคป (คั่นด้วย , ได้) — **ตัวมันเอง ลูก และบรรพบุรุษ ห้ามซ่อน**
+      ไม่งั้นถ้าวันหนึ่งกรอบครอบของการ์ดเป็น fixed ขึ้นมา จะแคปได้รูปเปล่า
+    · ไม่แตะ `sticky` — หัวตารางที่ตรึงไว้ในการ์ดเป็นของที่ต้องเห็นจริง
+    """
+    try:
+        page.evaluate(
+            "(sel) => {"
+            "  document.body.classList.remove('has-sidebar', 'nav-open');"
+            "  var keeps = sel ? Array.prototype.slice.call(document.querySelectorAll(sel)) : [];"
+            "  document.querySelectorAll('.linesend-btn,.info-tip,.no-capture').forEach("
+            "    function(e){ e.style.display='none'; });"
+            "  document.querySelectorAll('body *').forEach(function(e){"
+            "    for (var i=0;i<keeps.length;i++){"
+            "      var k=keeps[i];"
+            "      if (e===k || k.contains(e) || e.contains(k)) return;"
+            "    }"
+            "    if (getComputedStyle(e).position === 'fixed') e.style.display='none';"
+            "  });"
+            "}",
+            keep_sel,
+        )
+        page.wait_for_timeout(120)
+    except Exception:
+        pass          # best-effort — ซ่อนไม่ได้ก็ยังต้องได้รูป (รูปมีแถบม่วง ดีกว่าไม่มีรูป)
+
+
 def _goto_tab(page, tab_label: str, timeout: int = 15000) -> bool:
     """สลับไปแท็บที่ต้องการ — **เรียก switchTab() ตรง ไม่ใช่กดปุ่ม**
     ★ ส.ค.69: ปุ่มแท็บย้ายเข้าเมนูสามขีด (drawer ปิด = อยู่นอกจอด้วย transform) → Playwright กดไม่โดน
@@ -229,6 +266,8 @@ def capture_report_images(cfg: dict | None = None) -> list[str]:
                 page.wait_for_timeout(2200)   # ให้ตาราง + ฟอนต์ render ครบ
             except Exception:
                 pass
+            # ★ ซ่อนแถบเมนูซ้าย/ป้ายเวอร์ชัน ก่อนแคป ไม่งั้นแถบม่วงติดมาในรูป (28 ก.ย.69)
+            _hide_chrome(page, "#rpt-shot,#rpt-shot-teams")
             for el_id, wrap_id in _SHOT_TARGETS:
                 try:
                     # ต้องเป็น arrow function ถึงจะรับ arg ได้ (Playwright ไม่ให้ arguments[0] ใน expression ธรรมดา)
@@ -420,6 +459,7 @@ def capture_leadsummary() -> str | None:
             _goto_tab(page, _CARD_TAB.get("leadsummary-card", "LEAD"))
             page.wait_for_selector("#leadsummary-card", state="visible", timeout=35000)   # cold start เผื่อ ~8-20s
             page.wait_for_timeout(1800)
+            _hide_chrome(page, "#leadsummary-card")   # กันแถบเมนูซ้ายสีม่วงติดมาในรูป (28 ก.ย.69)
             el = page.query_selector("#leadsummary-card")
             if el:
                 el.screenshot(path=out)
@@ -582,11 +622,8 @@ def _capture_element(card_id: str, cfg: dict | None = None) -> str | None:
                 _goto_tab(page, _tab)
             page.wait_for_selector("#" + card_id, state="attached", timeout=35000)
             page.wait_for_timeout(1800)
-            # ซ่อนปุ่ม "ส่งไลน์" + ไอคอน "?" (ตัวช่วย UI · ไม่ใช่ข้อมูล) ก่อนแคป — รูปสะอาดขึ้น
-            try:
-                page.evaluate("document.querySelectorAll('.linesend-btn,.info-tip,.no-capture').forEach(function(e){e.style.display='none'})")
-            except Exception:
-                pass
+            # ซ่อนของประดับ UI ก่อนแคป — ปุ่ม "ส่งไลน์" · ไอคอน "?" · **แถบเมนูซ้ายสีม่วง** · ป้ายเวอร์ชัน
+            _hide_chrome(page, "#%s,#%s-shot" % (card_id, card_id))
             # 1) เวอร์ชันอ่านง่าย #<id>-shot (ซ่อนใน wrapper height:0 · เปิดก่อนแคป) — ถ้ามี
             try:
                 page.evaluate(
