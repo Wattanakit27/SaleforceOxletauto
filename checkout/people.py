@@ -164,6 +164,28 @@ def id_for_channel(user_id="", channel="") -> str:
         return ""
 
 
+def channel_of_id(user_id="") -> tuple:
+    """ไอดีนี้เป็นของบัญชีไหน — คืน `(channel, เป็นพนักงานไหม)` · ไม่รู้จักไอดี = `("", False)`
+
+    คู่กับ `id_for_channel()`: ตัวนั้นตอบ "คนนี้มีไอดีฝั่งที่ขอไหม" · ตัวนี้ตอบ
+    "ไอดีที่ถืออยู่นี้ใช้กับบัญชีไหนได้" → เอาไปเลือก token ที่ส่งถึงจริง (ดู `line_notify.dm_route`)
+
+    ⚠️ `channel` เป็นค่าว่างได้ = **ไม่รู้ที่มา** (แถวที่นำเข้าจากชีตพนักงานเป็นแบบนี้ทั้งหมด)
+       ห้ามตีความว่า "ฝั่งไหนก็ได้" — คนเรียกต้องตัดสินใจเองว่าจะเดาหรือไม่เดา
+    """
+    uid = (user_id or "").strip()
+    if not uid:
+        return "", False
+    try:
+        from .models import LineProfile
+        row = LineProfile.objects.filter(user_id=uid).values("channel", "employee_id").first()
+        if not row:
+            return "", False
+        return (row["channel"] or "").strip().lower(), bool(row["employee_id"])
+    except Exception:                               # ยังไม่ migrate / DB ล่ม = ไม่รู้
+        return "", False
+
+
 def safe_name(name="") -> str:
     """กันพลาด: ถ้าค่าที่จะโชว์เป็น userId ดิบ (หรือ username `line_<uid>`) → แปลงเป็นชื่อเล่น"""
     n = (name or "").strip()

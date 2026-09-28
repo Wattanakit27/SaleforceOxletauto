@@ -269,8 +269,60 @@ def push_line_message(user_id: str, messages: list[dict], channel_token: str, ti
       เพราะ "แอดบอทเป็นเพื่อนแล้ว" ไม่พอ — **ไอดีต้องเป็นของ provider เดียวกันด้วย**
       (ไอดีจากชีตเป็นของบอทเดิม → ส่งด้วยบอทตัวส่ง = 400 ทุกคน · ทำตามด่วนตาย 3 วัน)
     """
-    to, extra = _dm_target(user_id, channel_token)
-    return _push_once(to, messages, channel_token, timeout, what, **extra)
+    to, token, extra = dm_route(user_id, channel_token)
+    return _push_once(to, messages, token, timeout, what, **extra)
+
+
+#: ไอดีพนักงานที่ `channel` ว่าง = แถวที่นำเข้าจากชีตพนักงาน ซึ่งเป็นไอดีของ **บอทตัวรับ (ตัวเดิม)**
+#: ทั้งหมด (วัดจริง ก.ย.69) — ใช้เป็นค่าเดาเมื่อต้องเลือกบัญชีที่ "ส่งถึงได้จริง"
+_UNKNOWN_ID_CHANNEL = "crm"
+
+
+def dm_route(user_id: str, channel_token: str) -> tuple[str, str, dict]:
+    """เลือก **(ไอดีผู้รับ, token ที่ใช้ส่ง)** ให้ข้อความถึงคนนั้นจริง — เฉพาะแชท 1:1
+
+    ★★ 29 ก.ย.69 — เจ้าของทักว่า *"มันส่งบัญชีส่วนตัวเป็นบอทตัวเก่าหรือตัวใหม่ก็น่าจะส่งได้นี่"*
+      **ถูกต้อง** — ไอดีที่เรามีใช้กับบอทตัวเดิมได้อยู่แล้ว ระบบแค่ไม่ยอมสลับ token ให้
+      (วัดจริง: เจ้าของมีไอดีแถวเดียว `channel=''` = ของบอทเดิม → ส่งด้วยบอทตัวส่ง = 400 ตลอด
+      ทั้งปุ่มทดสอบ **และตามด่วนสรุปทีมวันละ 2 รอบ**)
+
+    ลำดับการตัดสินใจ:
+      1. คนนี้มีไอดีฝั่งบัญชีที่กำลังส่งอยู่ไหม → **ใช้บัญชีนั้น** (ทางหลัก · ตรงตามนโยบาย)
+      2. ไม่มีเลย แต่ไอดีที่ถืออยู่เป็นของอีกบัญชี → **ส่งด้วยบัญชีนั้นแทน** (จด `viaChannel`)
+      3. ไม่รู้อะไรเลย → ส่งด้วยของเดิม (ไม่กลืนงาน · ผลถูกจดใน `dash_event_log` ตามเดิม)
+
+    **ต่างจาก "ตัวรับสำรอง" ที่ถอดออกไป 24 ก.ย. ตรงไหน** (อันนั้นห้ามเอากลับมา):
+      ของเดิม = **ส่งล้มเมื่อไหร่ก็ลองซ้ำด้วยบัญชีเก่าทุกครั้ง** → ข้อความไปโผล่ในนามบัญชีที่
+      เลิกใช้แล้วทั้งที่บัญชีใหม่ส่งได้ และมันทำงานทุกวันจนกลบต้นเหตุจริง (บทเรียน 21 ก.ย.:
+      *ตัวสำรองที่ทำงานทุกวัน = ต้นเหตุที่ยังไม่ได้แก้*)
+      อันนี้ = **ไม่ใช่การลองซ้ำ** — เลือกบัญชีตั้งแต่ก่อนยิง เฉพาะตอนที่ตรวจแล้วว่าบัญชีที่ควรใช้
+      **ไม่มีไอดีของคนนั้นเลย** = ยังไงก็ส่งไม่ถึง · คนที่มีไอดีฝั่งใหม่แล้วไม่ถูกแตะเลยสักคน
+
+    ⚠️ **พนักงานเท่านั้น** — ลูกค้าไม่แตะ (การตอบแชทลูกค้าเลือกบัญชีตามที่เขาคุยอยู่แล้ว
+       ใน `chat._channel_for` · ถ้ามาสลับให้ด้วยจะส่งข้ามบัญชีที่ลูกค้าไม่ได้แอด)
+    ⚠️ กลุ่ม `C…` / ห้อง `R…` ไม่เกี่ยว — ไอดีกลุ่มก็เปลี่ยนตามบอท แต่แก้ที่ปลายทาง
+       ในหน้าตั้งค่า (`line_push_switch`) ไม่ใช่ตอนส่ง
+    """
+    uid = (user_id or "").strip()
+    if not uid.startswith("U"):
+        return uid, channel_token, {}
+    try:
+        from . import line_channels
+        from checkout.people import id_for_channel, channel_of_id
+        ch = line_channels.key_of_token(channel_token)
+        alt = id_for_channel(uid, ch)
+        if alt:                                     # 1) บัญชีที่กำลังส่งมีไอดีของคนนี้
+            return alt, channel_token, ({"remap": ch} if alt != uid else {})
+        own, is_emp = channel_of_id(uid)
+        if is_emp:                                  # 2) ไม่มี → ใช้บัญชีที่ไอดีนี้เป็นของมัน
+            own = own or _UNKNOWN_ID_CHANNEL
+            if own != ch:
+                tok = line_channels.token_of(own)
+                if tok and tok != channel_token:
+                    return uid, tok, {"viaChannel": own, "why": "บัญชีที่ควรใช้ไม่มีไอดีของคนนี้"}
+    except Exception:
+        pass
+    return uid, channel_token, {}                   # 3) ไม่รู้ = ของเดิม
 
 
 def _dm_target(user_id: str, channel_token: str) -> tuple[str, dict]:
@@ -287,20 +339,12 @@ def _dm_target(user_id: str, channel_token: str) -> tuple[str, dict]:
     · แปลงไม่ได้ = **ส่งด้วยไอดีเดิม** (ไม่กลืนงาน · ผลยังถูกจดใน `dash_event_log` ตามเดิม)
     · กลุ่ม `C…` / ห้อง `R…` ไม่เกี่ยว — ไอดีกลุ่มเปลี่ยนตามบอทเหมือนกัน แต่แก้ที่ปลายทาง
       ในหน้าตั้งค่า (`line_push_switch`) ไม่ใช่ตอนส่ง
+
+    ⚠️ 29 ก.ย.69 — ตัวจริงย้ายไป **`dm_route()`** ซึ่งเลือก "บัญชีที่ใช้ส่ง" ได้ด้วย
+       ตัวนี้เหลือไว้ให้ของเดิมเรียกได้ (คืนเฉพาะไอดี ไม่บอกว่าใช้ token ไหน)
     """
-    uid = (user_id or "").strip()
-    if not uid.startswith("U"):
-        return uid, {}
-    try:
-        from . import line_channels
-        from checkout.people import id_for_channel
-        ch = line_channels.key_of_token(channel_token)
-        alt = id_for_channel(uid, ch)
-        if alt and alt != uid:
-            return alt, {"remap": ch}               # จดไว้ว่าเปลี่ยนไอดีให้ ฝั่งไหน
-    except Exception:
-        pass
-    return uid, {}
+    to, _token, extra = dm_route(user_id, channel_token)
+    return to, extra
 
 
 def dm_hint(user_id: str) -> str:
@@ -317,13 +361,19 @@ def dm_hint(user_id: str) -> str:
     try:
         from . import line_channels
         from checkout.people import id_for_channel
+        from checkout.people import channel_of_id
         ch = line_channels.key_of_token(line_channels.dm_token())
         if id_for_channel(uid, ch):
             return ("ไอดีถูกฝั่งบอทตัวส่งแล้ว แต่ LINE ยังปฏิเสธ — "
                     "แปลว่าคนนี้ยังไม่ได้ **แอดบอทตัวส่งเป็นเพื่อน** (LINE ส่งแชท 1:1 ให้เฉพาะคนที่แอดแล้ว)")
-        return ("ไอดีนี้เป็นของ **บอทตัวเก่า** บอทตัวส่งจึงไม่รู้จัก → "
-                "ให้เจ้าตัวแอดบอทตัวส่งเป็นเพื่อนแล้วทักไป 1 ข้อความ ระบบจะจำไอดีฝั่งใหม่ให้เอง "
-                "แล้วค่อยกดส่งทดสอบซ้ำ")
+        own, is_emp = channel_of_id(uid)
+        if is_emp:
+            # ระบบสลับไปใช้บัญชีที่ไอดีนี้เป็นของมันให้แล้ว (dm_route) — ยังไม่ผ่าน = ไม่ได้แอดบัญชีนั้น
+            return (f"ระบบส่งด้วยบัญชี **{own or _UNKNOWN_ID_CHANNEL}** (บัญชีที่ไอดีนี้เป็นของมัน) ให้แล้ว "
+                    "แต่ LINE ยังปฏิเสธ → เจ้าตัวยังไม่ได้แอดบัญชีนั้นเป็นเพื่อน หรือบล็อกไว้ · "
+                    "ทางที่ยั่งยืนกว่าคือแอด **บอทตัวส่ง** แล้วทักไป 1 ข้อความ ระบบจะจำไอดีฝั่งใหม่ให้เอง")
+        return ("ไม่รู้จักไอดีนี้ในระบบ (ยังไม่เคยคุยกับบอทตัวไหนเลย) → "
+                "ให้เจ้าตัวแอดบอทตัวส่งเป็นเพื่อนแล้วทักไป 1 ข้อความก่อน")
     except Exception:
         return ""
 

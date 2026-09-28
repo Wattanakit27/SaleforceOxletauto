@@ -90,8 +90,12 @@ with override_settings(LINE_CHANNEL_ACCESS_TOKEN=CRM_TOK,
     print("line_notify._dm_target()")
     ck("แชท 1:1 ไอดีผิดฝั่ง → แปลงให้ + จดว่า remap",
        LN._dm_target("Usheet_je", PUSH_TOK), ("Upush_je", {"remap": "push"}))
-    ck("แปลงไม่ได้ → ส่งด้วยไอดีเดิม ไม่กลืนงาน",
-       LN._dm_target("Usheet_beer", PUSH_TOK), ("Usheet_beer", {}))
+    # ★ 29 ก.ย.69 — เดิมข้อนี้คาดว่า "แปลงไม่ได้ = ส่งด้วยไอดีเดิม (แล้วก็ 400)"
+    #   ตอนนี้เปลี่ยนเจตนา: บัญชีที่ควรใช้ไม่มีไอดีของคนนี้เลย = ยังไงก็ส่งไม่ถึง
+    #   → ให้ **สลับไปใช้บัญชีที่ไอดีนี้เป็นของมัน** แทน (ดู dm_route)
+    to, extra = LN._dm_target("Usheet_beer", PUSH_TOK)
+    ck("คนที่ยังไม่มีไอดีฝั่งใหม่ → ไอดีไม่เปลี่ยน", to, "Usheet_beer")
+    ck("★ แต่สลับไปส่งด้วยบัญชีตัวรับ + จดเหตุผลไว้", extra.get("viaChannel"), "crm")
     ck("กลุ่ม C… → ไม่แตะเลย",
        LN._dm_target("C40b836d0390ba32994b17c2c0286643d", PUSH_TOK),
        ("C40b836d0390ba32994b17c2c0286643d", {}))
@@ -107,7 +111,9 @@ with override_settings(LINE_CHANNEL_ACCESS_TOKEN=CRM_TOK,
         status_code, text = 200, "{}"
 
     def fake_post(url, headers=None, json=None, timeout=None):
-        sent.append(json.get("to"))
+        # เก็บ token ที่ใช้ด้วย — ข้อสำคัญคือ "ส่งด้วยบัญชีไหน" ไม่ใช่แค่ "ส่งไปไอดีไหน"
+        sent.append((json.get("to"),
+                     (headers or {}).get("Authorization", "").replace("Bearer ", "")))
         return Res()
 
     real = LN.requests.post
@@ -119,11 +125,16 @@ with override_settings(LINE_CHANNEL_ACCESS_TOKEN=CRM_TOK,
                              [{"type": "text", "text": "การ์ด"}], PUSH_TOK, what="การ์ด (เทสต์)")
         LN.push_line_message("Ucust_1", [{"type": "text", "text": "ตอบลูกค้า"}],
                              CRM_TOK, what="ตอบแชทลูกค้า (เทสต์)")
+        LN.push_line_message("Usheet_beer", [{"type": "text", "text": "ตามด่วน"}],
+                             PUSH_TOK, what="ตามด่วน (เทสต์ คนที่ยังไม่มีไอดีใหม่)")
     finally:
         LN.requests.post = real
-    ck("ตามด่วน → ยิงไปไอดีฝั่ง push", sent[0], "Upush_je")
-    ck("การ์ดเข้ากลุ่ม → ไอดีกลุ่มเดิม", sent[1], "C40b836d0390ba32994b17c2c0286643d")
-    ck("ตอบแชทลูกค้าด้วยบัญชีตัวรับ → ไอดีเดิม", sent[2], "Ucust_1")
+    ck("ตามด่วน → ยิงไปไอดีฝั่ง push ด้วย token ตัวส่ง", sent[0], ("Upush_je", PUSH_TOK))
+    ck("การ์ดเข้ากลุ่ม → ไอดีกลุ่มเดิม ด้วย token ตัวส่ง",
+       sent[1], ("C40b836d0390ba32994b17c2c0286643d", PUSH_TOK))
+    ck("ตอบแชทลูกค้าด้วยบัญชีตัวรับ → ไอดีเดิม token ตัวรับ", sent[2], ("Ucust_1", CRM_TOK))
+    ck("★ คนที่ยังไม่มีไอดีฝั่งใหม่ → ยิงด้วย **token ตัวรับ** ไอดีเดิม (ส่งถึงจริง)",
+       sent[3], ("Usheet_beer", CRM_TOK))
 
 print()
 if fail:
