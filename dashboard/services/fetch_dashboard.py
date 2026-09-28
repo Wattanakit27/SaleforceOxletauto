@@ -651,6 +651,9 @@ def _be2(year=None) -> str:
 # ── ฝั่งจัดซื้อ (รับซื้อรถ) — spreadsheet แยก · tab "ขายรถจบออนไลน์ <เดือน><ปี พ.ศ.2 หลัก>" ──
 # คอลัมน์: A(0)=วันที่ · I(8)=ช่องทาง · K(10)=รับซื้อ/ไม่รับซื้อ · M(12)=จัดซื้อ · O(14)=คุณภาพ(HOT/VERY HOT/COOL/REJECT)
 PURCHASE_SID = "1u6A0uYbbY8GshZID1n379bKd5yHqNMoGT88bjFiSWNE"
+# แถวสูงสุดที่อ่านต่อแท็บ — **เผื่อไว้เยอะได้ ไม่เปลือง** (Sheets ตัดแถวว่างท้ายให้เอง)
+# วัดจริง 28 ก.ย.69: เดือนที่มากสุดคือ พ.ค. 680 แถว · ของเดิมตั้งไว้ 400 จึงตัดทิ้ง 18%
+_PURCHASE_MAX_ROW = 3000
 
 
 def _fetch_purchase_data() -> dict:
@@ -665,6 +668,7 @@ def _fetch_purchase_data() -> dict:
     from .google_sheets import _get_credentials, SHEETS_API
     leads: list = []
     bought: list = []
+    truncated: list = []        # เดือนที่อ่านชนเพดาน = อาจมีลีดตกหล่น (ดู `purchase_fetch_last`)
     try:
         creds = _get_credentials()
         creds.refresh(AuthRequest())
@@ -676,12 +680,21 @@ def _fetch_purchase_data() -> dict:
             tab = f"ขายรถจบออนไลน์ {MONTHS_FULL[m - 1]}{_be2()}"
             if tab not in titles:
                 continue
-            rng = urllib.parse.quote(f"{tab}!A3:AV400")   # A-O = lead · AS(44)/AT(45)/AU(46) = รถซื้อจริง
+            # ★★ 28 ก.ย.69 — เดิมอ่านแค่ `A3:AV400` (398 แถว/เดือน) แล้ว **ตัดลีดที่เกินทิ้งเงียบๆ**
+            #   วัดจริง: ทุกเดือนได้ 398 เท่ากันเป๊ะ = ชนเพดาน · เทียบกับการอ่านเต็มแล้วหาย
+            #   มิ.ย. 189 · ก.ค. 83 · ส.ค. 41 · ก.ย. 47 (**4 เดือนหาย 360 ลีด = 18%**) · พ.ค. มีถึง 680 แถว
+            #   → ตัวเลข "ฝั่งจัดซื้อ (รับซื้อรถ)" ต่ำกว่าความจริงมาตลอดโดยไม่มีใครรู้
+            #   ⚠️ ขยายเพดานแล้ว **ไม่เปลืองขึ้น** — Sheets ตัดแถวว่างท้ายให้เอง (ขอ 2000 แต่ได้กลับ ~445)
+            rng = urllib.parse.quote(f"{tab}!A3:AV{_PURCHASE_MAX_ROW}")   # A-O = lead · AS(44)/AT(45)/AU(46) = รถซื้อจริง
             r = requests.get(f"{SHEETS_API}/{PURCHASE_SID}/values/{rng}?valueRenderOption=FORMATTED_VALUE",
                              headers=headers, timeout=25)
             if r.status_code != 200:
                 continue
-            for row in r.json().get("values", []):
+            _vals = r.json().get("values", [])
+            # ชนเพดานอีก = เดือนนั้นโตเกินที่เผื่อไว้ → **จดไว้ให้คนเห็น** ไม่ปล่อยให้หายเงียบแบบเดิม
+            if len(_vals) >= _PURCHASE_MAX_ROW - 5:
+                truncated.append({"tab": tab, "rows": len(_vals), "cap": _PURCHASE_MAX_ROW})
+            for row in _vals:
                 def g(i):
                     return (row[i].strip() if i < len(row) and row[i] else "")
                 # ── ฝั่ง lead รับซื้อ (A-O) ──
@@ -706,6 +719,15 @@ def _fetch_purchase_data() -> dict:
                     bought.append([bmd[0], bmd[1], method, bbuyer, g(47), g(42), g(43)])
     except Exception:
         return {"leads": leads, "bought": bought}
+    # จดผลการอ่านไว้ให้หน้าสถานะระบบ/คนดูย้อนหลังได้ — best-effort ห้ามทำให้ dashboard ล่ม
+    try:
+        from . import cache_store
+        cache_store.set_kv("purchase_fetch_last", {
+            "at": bangkok_now().isoformat(), "leads": len(leads),
+            "bought": len(bought), "truncated": truncated,
+        })
+    except Exception:
+        pass
     return {"leads": leads, "bought": bought}
 
 
