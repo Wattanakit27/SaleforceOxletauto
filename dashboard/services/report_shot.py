@@ -125,20 +125,54 @@ def _goto_tab(page, tab_label: str, timeout: int = 15000) -> bool:
         return False
 
 
+#: ช่วงวันที่ที่การ์ดเลือกได้ — **เพิ่มตัวเลือกใหม่ = เติมที่นี่ที่เดียว**
+#: (หน้าเว็บอ่านรายการนี้ไปทำ dropdown ผ่าน `card_line_config` → ไม่ต้องไปแก้ HTML ให้ตรงกันเอง)
+DATE_MODES = [
+    ("month", "เดือนปัจจุบัน (1 – สิ้นเดือน)"),
+    ("today", "วันปัจจุบัน (วันนี้)"),
+    ("yesterday", "เมื่อวาน"),
+    ("last7", "7 วันย้อนหลัง (รวมวันนี้)"),
+    ("range", "ระหว่างวันที่ – ถึงวันที่ (ระบุเอง)"),
+]
+DATE_MODE_KEYS = {k for k, _ in DATE_MODES}
+
+
+def _date_range_for(mode, cfg) -> tuple:
+    """แปลง date_mode → (จากวันที่, ถึงวันที่) รูปแบบ YYYY-MM-DD ตามโซนไทย
+    คืน (None, None) = ใช้ "เดือนปัจจุบัน" (ให้หน้าเว็บจัดการเอง)
+
+    ⚠️ คิดวันที่ฝั่ง Python ไม่ใช่ฝั่ง JS — เบราว์เซอร์ที่ Playwright เปิดอาจอยู่คนละโซนเวลา
+       (เซิร์ฟเวอร์เป็น UTC) → ถ้าให้ JS คิด "เมื่อวาน" เอง จะเพี้ยนไป 1 วันช่วงหัวค่ำ
+    """
+    from datetime import timedelta
+    from .fetch_dashboard import bangkok_now
+    today = bangkok_now().date()
+    if mode == "today":
+        return today.isoformat(), today.isoformat()
+    if mode == "yesterday":
+        y = today - timedelta(days=1)
+        return y.isoformat(), y.isoformat()
+    if mode == "last7":
+        # นับวันนี้ด้วย (7 วัน = วันนี้ + ย้อนไป 6) — กติกาเดียวกับปุ่มลัดช่วงวันที่ในหน้าแดชบอร์ด
+        return (today - timedelta(days=6)).isoformat(), today.isoformat()
+    if mode == "range":
+        f = str((cfg or {}).get("date_from") or "").strip()
+        t = str((cfg or {}).get("date_to") or "").strip()
+        if f and t:
+            return f, t
+    return None, None
+
+
 def _apply_date_mode(page, cfg) -> None:
     """ตั้งตัวกรองวันที่ของแดชบอร์ดก่อนแคป ตาม config ของการ์ด (เรียกหลัง login/สลับแท็บ · best-effort)"""
     mode = (cfg or {}).get("date_mode") or "month"
+    if mode not in DATE_MODE_KEYS:      # ค่าแปลกปลอม = ถือว่าเดือนปัจจุบัน (ไม่เดาเป็นอย่างอื่น)
+        mode = "month"
     try:
         page.wait_for_function("typeof setDfRange === 'function' && typeof dfThisMonth === 'function'", timeout=30000)
-        if mode == "today":
-            page.evaluate("setDf(-1)")
-        elif mode == "range":
-            f = str((cfg or {}).get("date_from") or "").strip()
-            t = str((cfg or {}).get("date_to") or "").strip()
-            if f and t:
-                page.evaluate("(a) => setDfRange(a[0], a[1])", [f, t])
-            else:
-                page.evaluate("dfThisMonth()")
+        f, t = _date_range_for(mode, cfg)
+        if f and t:
+            page.evaluate("(a) => setDfRange(a[0], a[1])", [f, t])
         else:
             page.evaluate("dfThisMonth()")
         page.wait_for_timeout(1800)   # รอ render ใหม่ตามช่วงที่ตั้ง

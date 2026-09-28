@@ -3098,7 +3098,8 @@ def admin_card_line_config(request):
     user = _session_user(request)
     if not user or user.get("position") != "admin":
         return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
-    from .services.report_shot import get_card_config, save_card_config, _LINE_CARDS
+    from .services.report_shot import (get_card_config, save_card_config, _LINE_CARDS,
+                                       DATE_MODES, DATE_MODE_KEYS)
     if request.method == "POST":
         try:
             body = json.loads(request.body or "{}")
@@ -3114,6 +3115,11 @@ def admin_card_line_config(request):
         for k in ("enabled", "time", "mode", "test_id", "group_id", "date_mode", "date_from", "date_to"):
             if k in body:
                 cfg[k] = body[k]
+        # ค่าช่วงวันที่ที่ไม่รู้จัก = ปฏิเสธไปเลย ไม่เงียบๆ ตกไปเป็น "เดือนปัจจุบัน"
+        # (ถ้าปล่อยผ่าน คนตั้งจะเห็นว่าบันทึกสำเร็จ แต่รูปที่ส่งเป็นช่วงอื่น — หาสาเหตุยากมาก)
+        if str(cfg.get("date_mode") or "month") not in DATE_MODE_KEYS:
+            return JsonResponse({"ok": False, "error": "ช่วงวันที่ไม่รองรับ"}, status=400,
+                                json_dumps_params={"ensure_ascii": False})
         save_card_config(card, cfg)
         return JsonResponse({"ok": True, "config": get_card_config(card)}, json_dumps_params={"ensure_ascii": False})
     card = (request.GET.get("card") or "").strip()
@@ -3127,7 +3133,8 @@ def admin_card_line_config(request):
             last = {"at": _l.get("updated_at"), **(_l.get("data") or {})}
     except Exception:
         pass
-    return JsonResponse({"ok": True, "config": get_card_config(card), "last": last},
+    return JsonResponse({"ok": True, "config": get_card_config(card), "last": last,
+                         "date_modes": [list(x) for x in DATE_MODES]},
                         json_dumps_params={"ensure_ascii": False})
 
 
@@ -3152,6 +3159,12 @@ def admin_card_line_test(request):
         return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (ใส่ test id หรือเลือกกลุ่มก่อน)"}, status=400)
     mention_all = bool(target and target == cfg.get("group_id"))
     ok, info = send_card_to_line(card, target, mention_all=mention_all)
+    if not ok:
+        # LINE ตอบ 400 เหมือนกันทุกสาเหตุ → เติมคำอธิบายว่าต้องไปทำอะไรต่อ
+        from .services.line_notify import dm_hint
+        hint = dm_hint(target)
+        if hint:
+            info = f"{info} — {hint}"
     return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
 
 

@@ -6575,9 +6575,7 @@
         <div style="margin-bottom:12px"><label class="mut" style="font-size:var(--fs-body);display:block;margin-bottom:4px">เวลาส่ง (ทุกวัน)</label><input type="time" id="cl_time" value="${h(c.time||'09:00')}" step="60" style="${_inp}"></div>
         <div style="margin-bottom:12px"><label class="mut" style="font-size:var(--fs-body);display:block;margin-bottom:4px">ช่วงวันที่ของข้อมูลในรูป</label>
           <select id="cl_dmode" onchange="__clDateMode()" style="${_inp}">
-            <option value="month" ${(c.date_mode||'month')==='month'?'selected':''}>เดือนปัจจุบัน (1 – สิ้นเดือน)</option>
-            <option value="today" ${c.date_mode==='today'?'selected':''}>วันปัจจุบัน (วันนี้)</option>
-            <option value="range" ${c.date_mode==='range'?'selected':''}>ระหว่างวันที่ – ถึงวันที่ (ระบุเอง)</option>
+            ${(d.date_modes||CL_DATE_MODES_FB).map(m=>`<option value="${h(m[0])}" ${(c.date_mode||'month')===m[0]?'selected':''}>${h(m[1])}</option>`).join('')}
           </select>
           <div id="cl_drange" style="display:${c.date_mode==='range'?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
             <div><label class="mut" style="font-size:var(--fs-body);display:block;margin-bottom:3px">จากวันที่</label><input type="date" id="cl_dfrom" value="${h(c.date_from||'')}" style="${_inp}"></div>
@@ -6597,6 +6595,9 @@
         <div class="mut" style="font-size:var(--fs-body);margin-top:14px;line-height:1.7;background:var(--bg2);border-radius:9px;padding:10px 12px">⚠️ ส่งได้จริงเฉพาะบน prod — LINE ต้องดึงรูปจาก URL สาธารณะ (dev localhost ส่งไม่ได้) · บน prod ต้องลง Playwright + Chromium</div>`;
     }
     const _clV=id=>((document.getElementById(id)||{}).value||'');
+    // ตัวเลือกช่วงวันที่ = ฝั่งเซิร์ฟเวอร์ส่งมา (report_shot.DATE_MODES) — ลิสต์นี้เป็นแค่ตัวสำรอง
+    // เผื่อ API รุ่นเก่ายังไม่ส่ง `date_modes` มา · **เพิ่มตัวเลือกใหม่ให้แก้ที่ฝั่ง Python**
+    const CL_DATE_MODES_FB=[['month','เดือนปัจจุบัน (1 – สิ้นเดือน)'],['today','วันปัจจุบัน (วันนี้)'],['yesterday','เมื่อวาน'],['last7','7 วันย้อนหลัง (รวมวันนี้)'],['range','ระหว่างวันที่ – ถึงวันที่ (ระบุเอง)']];
     function __clDateMode(){ const el=document.getElementById('cl_drange'); if(el) el.style.display = (_clV('cl_dmode')==='range')?'grid':'none'; }
     function _clStatus(txt,col){ const s=document.getElementById('cl_status'); if(s){ s.textContent=txt; s.style.color=col||'var(--t3)'; } }
     async function saveCardLine(){
@@ -6604,11 +6605,15 @@
       const _grp=_clV('cl_group').trim();
       const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:(_grp?'group':'test'), test_id:_clV('cl_test').trim(), group_id:_grp,
         date_mode:_clV('cl_dmode')||'month', date_from:_clV('cl_dfrom'), date_to:_clV('cl_dto')};
-      if(body.date_mode==='range' && (!body.date_from||!body.date_to)){ _clStatus('เลือกช่วงวันที่ให้ครบก่อน','var(--red)'); return; }
+      if(body.date_mode==='range' && (!body.date_from||!body.date_to)){ _clStatus('เลือกช่วงวันที่ให้ครบก่อน','var(--red)'); return false; }
       try{ const r=await fetch('/api/admin/card_line_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});
-        const j=await r.json(); _clStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด','var(--red)'); }
+        const j=await r.json(); _clStatus(j.ok?'✓ บันทึกแล้ว':(j.error||'ไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); return !!j.ok; }catch(e){ _clStatus('ผิดพลาด','var(--red)'); return false; }
     }
     async function testCardLine(){
+      // ★ 29 ก.ย.69 — **บันทึกก่อนส่งเสมอ** · ฝั่งเซิร์ฟเวอร์อ่าน "ช่วงวันที่" จาก config ที่บันทึกไว้
+      //   เดิมกดทดสอบเลยโดยไม่บันทึก → ใช้ค่าเก่า (เจ้าของตั้ง 28/9 แต่ค่าที่บันทึกยังเป็น "วันนี้"
+      //   → ได้รูปของวันที่ 29 ที่ยังไม่มีข้อมูล) · เงียบและหลอกมาก เพราะหน้าจอโชว์ค่าที่ตั้งใหม่อยู่
+      if(!await saveCardLine()) return;   // บันทึกไม่ผ่าน (เช่นเลือกช่วงวันที่ไม่ครบ) = ไม่ต้องส่ง
       _clStatus('กำลังแคป + ส่ง… ใช้เวลา 30–60 วิ (เปิดเบราว์เซอร์ + ล็อกอิน + รอข้อมูลโหลด) อย่าเพิ่งปิดหน้าต่าง');
       try{ const r=await fetch('/api/admin/card_line_test',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({card:_clCard, target:_clV('cl_test').trim()})});
         const j=await r.json(); _clStatus(j.ok?'✓ ส่งแล้ว เช็คไลน์':(j.error||j.info||'ส่งไม่สำเร็จ'), j.ok?'var(--green)':'var(--red)'); }catch(e){ _clStatus('ผิดพลาด: '+e,'var(--red)'); }

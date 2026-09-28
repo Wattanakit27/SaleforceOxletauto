@@ -303,6 +303,31 @@ def _dm_target(user_id: str, channel_token: str) -> tuple[str, dict]:
     return uid, {}
 
 
+def dm_hint(user_id: str) -> str:
+    """อธิบายเป็นภาษาคนว่าทำไมส่งแชทส่วนตัวไปไอดีนี้ไม่ได้ — คืน '' ถ้าไม่มีอะไรน่าสงสัย
+
+    ★ 29 ก.ย.69 — LINE ตอบแค่ `400 Failed to send messages` เหมือนกันหมดทุกสาเหตุ
+      → คนตั้งค่าอ่านแล้วไม่รู้ว่าต้องทำอะไรต่อ (เจ้าของเจอเองตอนกดปุ่มส่งทดสอบ)
+      สาเหตุที่เจอจริงบ่อยสุด: **ไอดีเป็นของบอทตัวเก่า** คนนั้นยังไม่มีไอดีฝั่งบอทตัวส่ง
+      (วัดจริง: พนักงาน 49 คนมีไอดีฝั่งใหม่แล้ว · อีก 46 คนยังไม่มี — รวมเจ้าของ)
+    """
+    uid = (user_id or "").strip()
+    if not uid.startswith("U"):
+        return ""
+    try:
+        from . import line_channels
+        from checkout.people import id_for_channel
+        ch = line_channels.key_of_token(line_channels.dm_token())
+        if id_for_channel(uid, ch):
+            return ("ไอดีถูกฝั่งบอทตัวส่งแล้ว แต่ LINE ยังปฏิเสธ — "
+                    "แปลว่าคนนี้ยังไม่ได้ **แอดบอทตัวส่งเป็นเพื่อน** (LINE ส่งแชท 1:1 ให้เฉพาะคนที่แอดแล้ว)")
+        return ("ไอดีนี้เป็นของ **บอทตัวเก่า** บอทตัวส่งจึงไม่รู้จัก → "
+                "ให้เจ้าตัวแอดบอทตัวส่งเป็นเพื่อนแล้วทักไป 1 ข้อความ ระบบจะจำไอดีฝั่งใหม่ให้เอง "
+                "แล้วค่อยกดส่งทดสอบซ้ำ")
+    except Exception:
+        return ""
+
+
 def _push_once(user_id: str, messages: list[dict], channel_token: str, timeout: int = 10,
                what: str = "", **extra) -> tuple[int, str]:
     """ยิงจริง 1 ครั้ง + จดล็อก (ตัวเดิม — ตัวห่อข้างบนเป็นคนตัดสินใจว่าจะลองบัญชีสำรองไหม)
