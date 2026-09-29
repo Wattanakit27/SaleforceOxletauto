@@ -48,6 +48,13 @@ WHERE c.chat_type = 'group';
 
 
 -- ══ 3) สิทธิ์ ══════════════════════════════════════════════════════════
+--  ★★ 29 ก.ย.69 — ต้องให้ `oxlet` (user ที่เว็บใช้) ก่อนใครเลย
+--  view นี้เจ้าของเป็น `postgres` → ตัวเว็บที่รันด้วย `oxlet` เข้าไม่ได้โดยอัตโนมัติ
+--  ลืมบรรทัดนี้ = หน้า "ฐานข้อมูล (SQL)" ตอบ `permission denied for view v_group_chat`
+--  ทั้งที่ view มีอยู่จริง (เกิดขึ้นแล้ว — เจ้าของเจอตอนลองรันคำสั่งในหน้าเว็บ)
+GRANT SELECT ON v_group_chat TO oxlet;
+GRANT SELECT ON v_line_group TO oxlet;
+
 --  v_group_chat มี "เนื้อแชท" → ให้เฉพาะ ro_all เท่านั้น **ห้ามให้ ro_safe**
 GRANT SELECT ON v_group_chat TO ro_all;
 GRANT SELECT ON v_line_group TO ro_all;

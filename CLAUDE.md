@@ -1502,6 +1502,19 @@ dry-run · สวิตช์ปิด) · **ปลอมที่ `requests` + 
 `sudo -u postgres psql -d oxlet -f deploy/line_group_views.sql` (สร้าง view · รันหลัง migrate เท่านั้น)
 แล้วค่อย `manage.py line_groups_sync --apply` ครั้งแรกเพื่อย้ายของเดิมเข้าตาราง
 
+**⚠️★ 29 ก.ย.69 — `permission denied for view v_group_chat` ในหน้า "ฐานข้อมูล (SQL)"**
+- เจ้าของลองรัน `SELECT * FROM v_group_chat …` ในหน้าเว็บแล้วโดนปฏิเสธ **ทั้งที่ view มีอยู่จริง**
+- **ต้นเหตุ**: view เจ้าของเป็น `postgres` แต่ **เว็บรันด้วย user `oxlet`** ซึ่งไม่เคยถูก GRANT ·
+  วัดจริง: `v_group_chat`/`v_line_group` มี GRANT ให้ **`claude` ตัวเดียว** ·
+  บรรทัด `GRANT … TO ro_all` ในไฟล์ SQL **ก็ยังไม่ถูกรัน** (role `ro_all` มีอยู่แล้ว แต่ไม่มีสิทธิ์)
+  → แปลว่าตอน deploy มีการสร้าง view แยกมือ ไม่ได้รันไฟล์ทั้งไฟล์
+- **แก้ถาวร** (เติม `TO oxlet` ในไฟล์แล้ว · รันซ้ำได้): `sudo -u postgres psql -d oxlet -f deploy/line_group_views.sql`
+- **ระหว่างยังไม่ได้รัน ใช้ตารางดิบ join เองได้** — `oxlet` เข้าถึง `checkout_groupchat` +
+  `checkout_linegroup` ได้อยู่แล้ว (view เป็นแค่ความสะดวก ไม่ใช่ชั้นความปลอดภัยของหน้าเว็บ —
+  หน้านั้นปิด LINE id พนักงานด้วย `db_export._scrub` อยู่แล้วไม่ว่าจะ query จากอะไร)
+- **กฎ: สร้าง view ใหม่ = ต้อง GRANT ให้ `oxlet` ด้วยเสมอ** ไม่ใช่แค่ role ผู้อ่านภายนอก
+  ไม่งั้นของที่ทำเพื่อ "ให้ดูง่ายขึ้น" กลับใช้ในหน้าเว็บของเราเองไม่ได้
+
 ### Sheet column gotchas — ต้องระวัง
 
 **sales_reports** ([google_sheets.py](dashboard/services/google_sheets.py) `SALES_COL`):
