@@ -1907,6 +1907,13 @@ def _compute_dashboard_data() -> dict:
         _method_map = (cache_store.get_kv("purchase_method_map") or {}).get("data") or {}
     except Exception:
         _method_map = {}
+    # เป้ารับซื้อรถ รายคน×วิธี — แอดมินแก้เองได้ (`/api/admin/purchase_targets`)
+    # ยังไม่เคยแก้ = ว่าง → frontend ตกไปใช้ค่าตั้งต้นในโค้ด (ตัวเลขชุดแรกที่เจ้าของส่งมา)
+    try:
+        from . import cache_store as _cs0
+        _buy_targets = (_cs0.get_kv("purchase_targets") or {}).get("data") or {}
+    except Exception:
+        _buy_targets = {}
     try:
         from . import cache_store as _cs
         _lr_plan = (_cs.get_kv("leadreport_plan") or {}).get("data") or {}
@@ -1942,6 +1949,7 @@ def _compute_dashboard_data() -> dict:
         "purchaseLeads": _purchase_data["leads"],    # ฝั่งจัดซื้อ lead: [m,d,channel,buy,buyer,quality]
         "boughtCars": _purchase_data["bought"],       # รถซื้อจริง: [m,d,method,buyer,รถตามสูตร(AV),รุ่นรถ(AQ),ทะเบียน(AR)]
         "purchaseMethodMap": _method_map,             # map ค่า AT → หมวด (แอดมินตั้งเอง · ที่เหลือ→หาเอง)
+        "purchaseTargets": _buy_targets,              # เป้ารับซื้อ/เดือน รายคน×วิธี (ว่าง = ใช้ค่าตั้งต้นในโค้ด)
         "leadChannelByMonth": lead_channel_by_month,   # lead แยกช่องทางรายเดือน {m:{channel:count}}
         "leadNoChannelByMonth": lead_nochannel_by_month,   # lead ที่ไม่ได้กรอกช่องทาง {m:{d:count}}
         # ★ ส.ค.69 — จอง/จบ แยกช่องทาง จากแท็บ "จอง/จบ" (คอลัมน์ที่ชีตล้างไว้ให้สูตร: D=จอง · Y=จบ)

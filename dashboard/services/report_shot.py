@@ -11,6 +11,10 @@ import glob
 from django.conf import settings
 
 _DEFAULT_CFG = {"enabled": False, "time": "17:30", "mode": "test", "test_id": "", "group_id": "",
+                # ★ 30 ก.ย.69 — ส่งได้หลายกลุ่ม (เจ้าของขอ: การ์ดจัดซื้อต้องเข้าทั้งห้องพี่หมีและพี่ต๊าด)
+                #   `group_id` = กลุ่มหลัก (ของเดิม ห้ามถอด — config ที่บันทึกไว้แล้วใช้ช่องนี้)
+                #   `group_ids` = กลุ่มเพิ่มเติม · แคปรูป **ครั้งเดียว** แล้วส่งทุกปลายทาง
+                "group_ids": [],
                 # ช่วงวันที่ของข้อมูลในรูปที่ส่ง: month=เดือนปัจจุบัน · today=วันปัจจุบัน · range=ระบุเอง
                 "date_mode": "month", "date_from": "", "date_to": ""}
 
@@ -612,7 +616,36 @@ def save_card_config(card_id: str, cfg: dict) -> None:
     clean = dict(_DEFAULT_CFG)
     clean.update({k: cfg[k] for k in _DEFAULT_CFG if k in cfg})
     clean["enabled"] = bool(clean["enabled"])
+    clean["group_ids"] = _clean_gids(clean.get("group_ids"), clean.get("group_id"))
     cache_store.set_kv("cardline_" + card_id, clean)
+
+
+def _clean_gids(extra, main="") -> list:
+    """ล้างรายการกลุ่มเพิ่มเติม — เก็บเฉพาะ id กลุ่ม/ห้อง · ตัดตัวซ้ำและตัวที่ซ้ำกับกลุ่มหลัก
+
+    ต้องกรอง `U…` ทิ้งเพราะแท็ก @All ในแชท 1:1 ทำไม่ได้ (LINE ปฏิเสธทั้งข้อความ รูปก็ไม่ถึง)
+    ปลายทางแบบคนใช้ช่อง `test_id` ที่มีอยู่แล้ว
+    """
+    out, seen = [], {str(main or "").strip()}
+    for g in (extra or []):
+        g = str(g or "").strip()
+        if g and g not in seen and g[:1] in ("C", "R"):
+            out.append(g)
+            seen.add(g)
+    return out[:5]          # เพดานกันเผลอใส่ยาว = แคปรูปครั้งเดียวแต่ยิงยาวจนชน timeout
+
+
+def card_targets(cfg: dict) -> list:
+    """ปลายทางทั้งหมดของการ์ด → `[(id, เป็นกลุ่มไหม), ...]`
+
+    มีกลุ่ม = ส่งทุกกลุ่ม (แท็ก @All ได้) · ไม่มีกลุ่มเลย = ตกไป `test_id` (แชทส่วนตัว ไม่แท็ก)
+    """
+    main = str(cfg.get("group_id") or "").strip()
+    gids = ([main] if main else []) + _clean_gids(cfg.get("group_ids"), main)
+    if gids:
+        return [(g, True) for g in gids]
+    t = str(cfg.get("test_id") or "").strip()
+    return [(t, False)] if t else []
 
 
 def _capture_element(card_id: str, cfg: dict | None = None) -> str | None:
@@ -711,12 +744,33 @@ def _card_caption(card_id: str) -> str:
         return f"{name} (อัปเดตอัตโนมัติ) ค่ะ"
 
 
-def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_all: bool = False) -> tuple[bool, str]:
-    """แคปการ์ด #<card_id> → ส่ง caption + รูปเข้า LINE · คืน (ok, สถานะ/URL)"""
+def send_card_to_line(card_id, target_id, caption: str = "", mention_all: bool = False) -> tuple[bool, str]:
+    """แคปการ์ด #<card_id> → ส่ง caption + รูปเข้า LINE · คืน (ok, สถานะ/URL)
+
+    `target_id` รับได้ทั้ง **id เดียว** (str) และ **หลายปลายทาง** — `[(id, เป็นกลุ่มไหม), ...]`
+    หรือ `[id, id]` · **แคปรูปครั้งเดียวแล้วส่งซ้ำทุกปลายทาง** (ต่างจากเรียกฟังก์ชันนี้ 2 รอบ
+    ซึ่งจะเปิด Chromium 2 ครั้ง = กินแรม VPS เป็นเท่าตัวโดยได้รูปเหมือนกัน)
+
+    ★ `ok` = **ต้องถึงทุกปลายทาง** — ถึงบ้างไม่ถึงบ้างถือว่ายังไม่เรียบร้อย ไม่งั้น
+      ตัว self-heal จะเลิกลองทั้งที่มีกลุ่มไม่ได้รับ
+    """
     if card_id not in _LINE_CARDS:
         return False, "การ์ดไม่รองรับการส่งไลน์"
-    if not target_id:
+    # normalize → [(id, is_group)]
+    if isinstance(target_id, str):
+        tgts = [(target_id.strip(), bool(mention_all))] if target_id.strip() else []
+    else:
+        tgts = []
+        for t in (target_id or []):
+            if isinstance(t, (tuple, list)):
+                tid, grp = str(t[0] or "").strip(), bool(t[1]) if len(t) > 1 else False
+            else:
+                tid, grp = str(t or "").strip(), str(t or "")[:1] in ("C", "R")
+            if tid:
+                tgts.append((tid, grp))
+    if not tgts:
         return False, "ไม่มีปลายทาง (target_id)"
+
     paths = capture_card(card_id)
     if not paths:
         return False, _capture_fail_msg()
@@ -724,20 +778,30 @@ def send_card_to_line(card_id: str, target_id: str, caption: str = "", mention_a
     bad = [u for u in urls if not u.lower().startswith("https://")]
     if bad:
         return False, f"รูปยังไม่มี URL https สาธารณะ (SITE_URL={getattr(settings,'SITE_URL','')}) — ต้องรันบน prod · url={bad[0]}"
+
     try:
         from .line_notify import push_line_message
         # ★ เลือกบัญชีตามปลายทาง: กลุ่ม(C) = ตัวส่ง · คน(U, โหมดทดสอบ) = บัญชีที่เขาเพิ่มเป็นเพื่อน
         from .line_channels import token_for
-        token = token_for(target_id)
-        if not token:
-            return False, "ยังไม่ได้ตั้ง LINE token (ตัวส่ง)"
         cap = caption or _card_caption(card_id)
-        msgs = [_caption_message(cap, mention_all)]
-        for u in urls:
-            msgs.append({"type": "image", "originalContentUrl": u, "previewImageUrl": u})
-        sc, resp = push_line_message(target_id, msgs, token, what="สรุปลีดเข้าไลน์")
+        imgs = [{"type": "image", "originalContentUrl": u, "previewImageUrl": u} for u in urls]
+        okall, notes = True, []
+        for tid, is_grp in tgts:
+            token = token_for(tid)
+            if not token:
+                okall = False
+                notes.append("%s: ยังไม่ได้ตั้ง LINE token" % tid[:12])
+                continue
+            msgs = [_caption_message(cap, is_grp)] + imgs
+            sc, resp = push_line_message(tid, msgs, token, what="สรุปลีดเข้าไลน์")
+            if sc != 200:
+                okall = False
+                notes.append("%s → LINE %s: %s" % (tid[:12], sc, (resp or "")[:120]))
         _cleanup_old()
-        return (sc == 200), ("  ".join(urls) if sc == 200 else f"LINE {sc}: {(resp or '')[:250]}")
+        if okall:
+            n = len(tgts)
+            return True, ("  ".join(urls) + ("" if n == 1 else "  (ส่ง %d ปลายทาง)" % n))
+        return False, " | ".join(notes)[:250]
     except Exception as e:
         return False, f"ส่ง LINE ล้มเหลว: {str(e)[:200]}"
 
@@ -770,7 +834,7 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
             cfg = get_card_config(card_id)
             if not cfg["enabled"]:
                 continue
-            _tgt = cfg.get("group_id") or cfg.get("test_id")   # มี group id → ส่งกลุ่ม · ไม่งั้น test id (ไม่พึ่ง mode แล้ว)
+            _tgt = card_targets(cfg)   # มี group → ส่งทุกกลุ่ม · ไม่มีเลย → test id (ไม่พึ่ง mode แล้ว)
             _last = (cache_store.get_kv("cardline_last_" + card_id) or {}).get("data") or {}
             result["enabled"].append({"card": card_id, "time": cfg["time"], "mode": cfg["mode"],
                                       "target_set": bool(_tgt),
@@ -795,14 +859,13 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
                 result["cands"].append({"card": card_id, "skip": "ล้มถาวรวันนี้แล้ว: %s"
                                         % str(last.get("info") or "")[:80]})
                 continue
-            # ปลายทาง: มี group id → ส่งกลุ่ม (แท็ก @All) · ไม่งั้น → test id · ไม่ต้องเลือก mode แล้ว (กันบั๊ก mode=test แต่ test_id ว่าง)
-            target = cfg.get("group_id") or cfg.get("test_id")
-            is_group = bool(target and target == cfg.get("group_id"))
-            if not target:
-                result["cands"].append({"card": card_id, "skip": "ไม่มีปลายทาง (ใส่ group id หรือ test id)"})
+            # ปลายทาง: มีกลุ่ม → ส่งทุกกลุ่ม (แท็ก @All) · ไม่มีเลย → test id · ไม่พึ่ง mode (กันบั๊ก mode=test แต่ test_id ว่าง)
+            targets = card_targets(cfg)
+            if not targets:
+                result["cands"].append({"card": card_id, "skip": "ไม่มีปลายทาง (เลือกกลุ่ม หรือใส่ test id)"})
                 continue
             # prio 0 = ยังไม่เคยลองรอบเวลานี้วันนี้ (ได้คิวก่อน) · 1 = เคยลองแล้วพลาด (retry ท้ายคิว กันยึดช่อง 1/รอบ)
-            cands.append((1 if attempted else 0, tmin, card_id, cfg["time"], target, is_group))
+            cands.append((1 if attempted else 0, tmin, card_id, cfg["time"], targets, True))
             result["cands"].append({"card": card_id, "retry": bool(attempted)})
         except Exception as e:
             result["cands"].append({"card": card_id, "err": str(e)[:120]})
@@ -823,14 +886,14 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
     except Exception:
         pass
 
-    batch = [(c[2], c[3], c[4], c[5]) for c in cands]   # (card_id, ctime, target, is_group)
+    batch = [(c[2], c[3], c[4], c[5]) for c in cands]   # (card_id, ctime, targets, _)
     result["dispatched"] = [b[0] for b in batch]         # โชว์ใน cron log ว่ากำลังยิงใบไหนบ้าง (ผลจริงดูที่พาเนล/cardline_last)
 
     def _worker():
         import time as _t2
         import gc
         try:
-            for card_id, ctime, target, is_group in batch:
+            for card_id, ctime, targets, _grp in batch:
                 ok, info = False, ""
                 for _attempt in range(2):   # ลอง 2 ครั้ง — กันพลาดชั่วคราว (chromium OOM/แคป timeout) พอลองใหม่มักผ่าน
                     try:
@@ -838,7 +901,7 @@ def maybe_send_cards(now_hhmm: str, today_iso: str) -> None:
                     except Exception:
                         pass
                     try:
-                        ok, info = send_card_to_line(card_id, target, mention_all=is_group)   # แคป+ส่ง
+                        ok, info = send_card_to_line(card_id, targets)   # แคปครั้งเดียว → ส่งทุกปลายทาง
                     except Exception as e:
                         ok, info = False, str(e)[:200]
                     if ok:

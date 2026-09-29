@@ -1455,7 +1455,9 @@
           tip:'ไทม์ไลน์รถทุกคันรวมเป็น CSV ไฟล์เดียว (มีรหัสรถ/ทะเบียนทุกแถว) · อยากได้รูปด้วยให้เปิดป๊อปอัปรถแล้ว Export ทีละคัน' },
       ]},
       { g:'พื้นฐาน', d:'คนที่ใช้งาน · เป้า · แจ้งเตือนประจำวัน', items: [
-        { i:'lucide:target',      l:'ตั้งเป้า / ทีม',          fn:'openSellerConfigPanel()', tip:'ตั้งเป้าและจัดทีมเซลล์' },
+        { i:'lucide:target',      l:'ตั้งเป้า / ทีม (เซลล์)',   fn:'openSellerConfigPanel()', tip:'ตั้งเป้าและจัดทีมเซลล์' },
+        { i:'lucide:package',     l:'เป้ารับซื้อรถ (จัดซื้อ)',   fn:'openPurchaseTargets()',
+          tip:'เป้าต่อเดือนของทีมจัดซื้อ แยกตามวิธี (หาเอง/online/รถเทิร์น/ขายหน้าร้าน) — ใช้ในตาราง "รถซื้อเข้า รายคน"' },
         { i:'lucide:crown',       l:'จัดการแอดมิน',            fn:'openAdminIdsPanel()',     tip:'จัดการไอดีแอดมิน (ออฟฟิศ/คนที่ไม่ใช่เซลล์ — มีสิทธิ์แอดมิน)' },
         { i:'lucide:phone',       l:'จัดการเทเลเซลล์',         fn:'openTeleConfigPanel()',   tip:'ทีมโทร — เคสรวมเป็น ADMIN · ไม่ใช่สิทธิ์แอดมิน' },
         { i:'lucide:alarm-clock', l:'ตั้งค่าส่งเช็คชื่อเข้าไลน์', fn:'openCheckinConfig()',
@@ -2698,9 +2700,15 @@
         try {
           const BC = D.boughtCars || [];   // [m, d, method, buyer]
           const CATS = [['หาเอง','#ca8a04'],['online','#16a34a'],['รถเทิร์น','#2563eb'],['ขายหน้าร้าน','#dc2626']];
-          const PPL = ['พี่หมี','พี่ต๊าด','มิว'];
-          // เป้ารายคน×วิธี (ค่าตั้งต้นจากตารางที่ส่งมา · รายเดือน → สเกล × จำนวนเดือนในช่วง · แก้ค่าได้ที่นี่)
-          const B_TARGETS = {'หาเอง':{'พี่หมี':12,'พี่ต๊าด':12,'มิว':4},'online':{'พี่หมี':13,'พี่ต๊าด':13,'มิว':10},'รถเทิร์น':{'พี่หมี':6,'พี่ต๊าด':7,'มิว':3},'ขายหน้าร้าน':{'พี่หมี':15,'พี่ต๊าด':15,'มิว':10}};
+          // เป้ารายคน×วิธี (เป้า/เดือน → สเกล × จำนวนเดือนในช่วง)
+          // ★ 30 ก.ย.69 — แก้ได้จากเมนู "ตั้งค่า → เป้ารับซื้อรถ" แล้ว (เก็บใน purchase_targets)
+          //   ที่นี่เหลือเป็น "ค่าตั้งต้น" เผื่อยังไม่เคยตั้ง · window._ptOverride = ค่าที่เพิ่งกดบันทึก
+          //   (ไม่ต้องรอรอบ sync ถัดไป — แพทเทิร์นเดียวกับ _pmmOverride ของหมวดวิธีได้รถ)
+          const B_TARGETS = window._ptOverride
+            || (Object.keys(D.purchaseTargets || {}).length ? D.purchaseTargets
+                : {'หาเอง':{'พี่หมี':12,'พี่ต๊าด':12,'มิว':4},'online':{'พี่หมี':13,'พี่ต๊าด':13,'มิว':10},'รถเทิร์น':{'พี่หมี':6,'พี่ต๊าด':7,'มิว':3},'ขายหน้าร้าน':{'พี่หมี':15,'พี่ต๊าด':15,'มิว':10}});
+          // รายชื่อคนจัดซื้อ = เอาจากเป้าที่ตั้งไว้ (เพิ่มคนใหม่ในหน้าตั้งค่า แล้วโผล่ในตารางเอง)
+          const PPL = [...new Set(Object.values(B_TARGETS).flatMap(o => Object.keys(o || {})))];
           // หมวดของวิธี: map ที่แอดมินตั้ง (ชนะ) → keyword → หาเอง (ค่าใหม่ที่ยังไม่ตั้ง = ตกหาเองอัตโนมัติ กันพัง)
           const _mMap = window._pmmOverride || (D.purchaseMethodMap || {});
           const _catOf = mtd => { const s=(mtd||'').trim(); if(_mMap[s]) return _mMap[s]; if(s.toLowerCase().includes('online')) return 'online'; if(s.includes('เทิร์น')) return 'รถเทิร์น'; if(s.includes('หน้าร้าน')) return 'ขายหน้าร้าน'; return 'หาเอง'; };
@@ -2714,7 +2722,7 @@
           const _mc = rangeMonthCount();
           const _bTg = (cat,p) => Math.round(((B_TARGETS[cat]||{})[p]||0) * _mc);
           const _bCn = (cat,p) => ((cnt[cat]||{})[p]||0);
-          let MT = `<div class="card" id="bought-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:package',16)} รถซื้อเข้า รายคน (ตามวิธี) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รถที่ซื้อได้จริง (คอลัมน์ AS:AV) นับตามวันรับซื้อ\nวิธี: online · รถเทิร์น(เทิร์น) · ขายหน้าร้าน(หน้าร้าน) · หาเอง(นายหน้า/รถเช่า/อื่นๆ)\nเป้า = ค่าตั้งต้น แก้ได้ในโค้ด B_TARGETS">?</span></span>${_cardLineBtn('bought-card','รถซื้อเข้า รายคน')}</div>`;
+          let MT = `<div class="card" id="bought-card"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${ic('lucide:package',16)} รถซื้อเข้า รายคน (ตามวิธี) · ${h(rangeLabelTH())}<span class="info-tip" tabindex="0" data-tip="รถที่ซื้อได้จริง (คอลัมน์ AS:AV) นับตามวันรับซื้อ\nวิธี: online · รถเทิร์น(เทิร์น) · ขายหน้าร้าน(หน้าร้าน) · หาเอง(นายหน้า/รถเช่า/อื่นๆ)\nเป้า/เดือน แก้ได้ที่ เมนู → ตั้งค่า → เป้ารับซื้อรถ (สเกลตามจำนวนเดือนในช่วงที่ดู)">?</span></span>${_cardLineBtn('bought-card','รถซื้อเข้า รายคน')}</div>`;
           MT += `<div class="card-sub">ยอดรถเข้า = รถที่ซื้อได้จริง · เป้า = ค่าตั้งต้น (สเกลตามจำนวนเดือนในช่วง) · เลย์เอาต์ตามตารางที่ส่งมา</div>`;
           MT += `<div style="overflow-x:auto;border:.5px solid var(--bd);border-radius:10px;margin-top:8px;max-width:520px"><table style="border-collapse:collapse;font-size:var(--fs-body);width:100%;white-space:nowrap">`;
           MT += `<thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">วิธี</th><th style="padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);color:var(--t2)">จัดซื้อ</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">เป้า</th><th style="padding:7px 9px;text-align:center;border-bottom:1px solid var(--bd);color:var(--t2)">ยอดรถเข้า</th></tr></thead><tbody>`;
@@ -6355,6 +6363,69 @@
       }catch(e){ if(st){ st.textContent='บันทึกไม่สำเร็จ'; st.style.color='var(--red)'; } }
     }
 
+    // 🎯 เป้ารับซื้อรถ รายคน × วิธี — ★ 30 ก.ย.69 (เจ้าของสั่ง "ให้มันสามารถแก้เป้าได้")
+    //   เดิมฮาร์ดโค้ดใน B_TARGETS ต้องแก้โค้ด+deploy ทุกครั้งที่เป้าเปลี่ยน
+    //   ★ เก็บเป็น "เป้า/เดือน" — ตารางคูณจำนวนเดือนในช่วงที่ดูเอง (เหมือนเป้าของเซลล์)
+    async function openPurchaseTargets(){ const ov=_trkOverlay('buy-targets','<p class="mut">กำลังโหลด…</p>'); await renderPurchaseTargets(ov); }
+    async function renderPurchaseTargets(ov){
+      ov=ov||document.getElementById('buy-targets'); if(!ov) return;
+      let d; try{ d=await (await fetch('/api/admin/purchase_targets',{credentials:'same-origin'})).json(); }
+      catch(e){ ov.firstChild.innerHTML='<p style="color:var(--red)">โหลดไม่ได้</p>'; return; }
+      if(!d.ok){ ov.firstChild.innerHTML='<p style="color:var(--red)">'+h(String(d.error||'ไม่มีสิทธิ์'))+'</p>'; return; }
+      const CATS=d.cats||['หาเอง','online','รถเทิร์น','ขายหน้าร้าน'], TG=d.targets||{};
+      // คนที่โผล่ในเป้า + คนที่มีรถซื้อเข้าจริงแต่ยังไม่มีเป้า (จะได้ตั้งให้ได้ ไม่ตกหล่น)
+      const seen=new Set(d.people||[]); (D.boughtCars||[]).forEach(r=>{ if(r[3]) seen.add(r[3]); });
+      const ppl=[...seen];
+      const _inp='width:62px;padding:5px 6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-family:inherit;text-align:center';
+      const rows=ppl.map(p=>{
+        const tds=CATS.map(c=>`<td style="padding:5px 7px;text-align:center;border-bottom:.5px solid var(--bd)"><input type="number" min="0" max="9999" data-bt-cat="${h(c)}" data-bt-who="${h(p)}" value="${Number((TG[c]||{})[p]||0)}" oninput="btSum()" style="${_inp}"></td>`).join('');
+        return `<tr><td style="padding:5px 9px;border-bottom:.5px solid var(--bd);white-space:nowrap">${h(p)}</td>${tds}<td data-bt-total="${h(p)}" style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd);font-weight:800;color:var(--t2)">0</td></tr>`;
+      }).join('');
+      ov.firstChild.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:var(--fs-h);font-weight:800">${ic('lucide:target',18)} เป้ารับซื้อรถ (รายคน × วิธี)</div><button onclick="document.getElementById('buy-targets').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:var(--fs-body);margin:6px 0 12px">ใส่ <b>เป้าต่อเดือน</b> — ตาราง "รถซื้อเข้า รายคน" จะคูณจำนวนเดือนในช่วงที่ดูให้เอง${d.isDefault?' · <span style="color:var(--amber)">ตอนนี้ยังเป็นค่าตั้งต้น ยังไม่เคยบันทึก</span>':''}</div>
+        <div style="max-height:56vh;overflow:auto;border:.5px solid var(--bd);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:var(--fs-body);white-space:nowrap"><thead><tr style="background:var(--bg2)"><th style="padding:7px 9px;text-align:left;color:var(--t2)">จัดซื้อ</th>${CATS.map(c=>`<th style="padding:7px 7px;text-align:center;color:var(--t2)">${h(c)}</th>`).join('')}<th style="padding:7px 9px;text-align:center;color:var(--t2)">รวม/เดือน</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--t3)">ยังไม่มีรายชื่อ — กด "เพิ่มคน"</td></tr>'}</tbody></table></div>
+        <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
+          <button onclick="saveBuyTargets()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:var(--on-blue);font-weight:700;cursor:pointer;font-size:var(--fs-body)">${ic('lucide:save',15)} บันทึก</button>
+          <button onclick="btAddPerson()" style="padding:9px 14px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:var(--fs-body)">+ เพิ่มคน</button>
+          <span id="bt_status" style="font-size:var(--fs-body)"></span></div>`;
+      btSum();
+    }
+    function btSum(){
+      const by={}; document.querySelectorAll('#buy-targets input[data-bt-who]').forEach(i=>{
+        const w=i.getAttribute('data-bt-who'); by[w]=(by[w]||0)+(Number(i.value)||0); });
+      document.querySelectorAll('#buy-targets [data-bt-total]').forEach(td=>{
+        td.textContent=by[td.getAttribute('data-bt-total')]||0; });
+    }
+    function btAddPerson(){
+      const name=(prompt('ชื่อคนจัดซื้อ (ชื่อเล่น — ต้องตรงกับที่กรอกในชีต)')||'').trim();
+      if(!name) return;
+      if(document.querySelector('#buy-targets input[data-bt-who="'+name.replace(/"/g,'')+'"]')){ alert('มีชื่อนี้อยู่แล้ว'); return; }
+      const tb=document.querySelector('#buy-targets tbody'); if(!tb) return;
+      const cats=[...document.querySelectorAll('#buy-targets thead th')].slice(1,-1).map(t=>t.textContent.trim());
+      const _inp='width:62px;padding:5px 6px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-family:inherit;text-align:center';
+      if(tb.querySelector('td[colspan]')) tb.innerHTML='';
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td style="padding:5px 9px;border-bottom:.5px solid var(--bd);white-space:nowrap">${h(name)}</td>`
+        + cats.map(c=>`<td style="padding:5px 7px;text-align:center;border-bottom:.5px solid var(--bd)"><input type="number" min="0" max="9999" data-bt-cat="${h(c)}" data-bt-who="${h(name)}" value="0" oninput="btSum()" style="${_inp}"></td>`).join('')
+        + `<td data-bt-total="${h(name)}" style="padding:5px 9px;text-align:center;border-bottom:.5px solid var(--bd);font-weight:800;color:var(--t2)">0</td>`;
+      tb.appendChild(tr); btSum();
+    }
+    async function saveBuyTargets(){
+      const targets={};
+      document.querySelectorAll('#buy-targets input[data-bt-who]').forEach(i=>{
+        const c=i.getAttribute('data-bt-cat'), w=i.getAttribute('data-bt-who');
+        if(!c||!w) return; (targets[c]=targets[c]||{})[w]=Number(i.value)||0; });
+      const st=document.getElementById('bt_status'); if(st){ st.textContent='กำลังบันทึก…'; st.style.color=''; }
+      try{
+        const d=await (await fetch('/api/admin/purchase_targets',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({targets})})).json();
+        if(!d.ok){ if(st){ st.textContent=d.error||'ผิดพลาด'; st.style.color='var(--red)'; } return; }
+        window._ptOverride=d.targets||targets;   // ใช้ทันทีในเซสชันนี้ (ก่อน cron recompute)
+        if(st){ st.textContent='บันทึกแล้ว ✓'; st.style.color='var(--green)'; }
+        setTimeout(()=>{ const el=document.getElementById('buy-targets'); if(el) el.remove(); render(); }, 550);
+      }catch(e){ if(st){ st.textContent='บันทึกไม่สำเร็จ'; st.style.color='var(--red)'; } }
+    }
+
     // 📊 รายงานเข้าไลน์ (รายวัน) — ตั้งค่าเวลา/เปิด-ปิด/ปลายทาง + ส่งทดสอบ (แคปด้วย Playwright บน server)
     // ── 📘 Meta (Facebook): ดึงยอดโพสต์ + ผลโฆษณา — ★ ก.ย.69 ──
     //   ทุกเที่ยงคืนดึงเอง (cron) · ปุ่มนี้ = ดึงเดี๋ยวนี้ · มีด่านกันกดถี่ (token เดียวใช้ทุกงาน
@@ -6567,6 +6638,16 @@
       const groupDD = groups.length
         ? `<select onchange="if(this.value){document.getElementById('cl_group').value=this.value;document.getElementById('cl_gname').innerHTML='';}" style="${_inp};margin-bottom:6px"><option value="">— เลือกกลุ่มที่บอทรู้จัก (${groups.length}) —</option>${groups.map(g=>`<option value="${h(g.id)}" ${c.group_id===g.id?'selected':''}>${h(g.name||'(ไม่มีชื่อ)')} · ${h(String(g.id).slice(0,8))}…</option>`).join('')}</select>`
         : `<div class="mut" style="font-size:var(--fs-body);margin-bottom:6px;line-height:1.5">ยังไม่รู้จักกลุ่มไหน — เพิ่มบอทเข้ากลุ่ม + พิมพ์อะไรก็ได้ในกลุ่ม 1 ครั้ง (ต้องตั้ง webhook ใน LINE Console)</div>`;
+      // ★ 30 ก.ย.69 — ส่งเข้าหลายกลุ่ม (เจ้าของขอ: การ์ดจัดซื้อต้องเข้าทั้งห้องพี่หมีและพี่ต๊าด)
+      //   แคปรูปครั้งเดียวแล้วส่งซ้ำทุกกลุ่ม — ไม่ได้เปิด Chromium เพิ่มต่อกลุ่ม
+      const _xg = new Set((c.group_ids||[]).map(String));
+      const extraHtml = groups.length
+        ? `<div style="margin-bottom:16px"><label class="mut" style="font-size:var(--fs-body);display:block;margin-bottom:4px">ส่งเข้ากลุ่มอื่นด้วย (เลือกได้หลายกลุ่ม)</label>
+            <div id="cl_extra" style="max-height:150px;overflow:auto;border:.5px solid var(--bd);border-radius:9px;padding:7px 9px">
+              ${groups.map(g=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:var(--fs-body)"><input type="checkbox" class="cl-xg" value="${h(g.id)}" ${_xg.has(String(g.id))?'checked':''} style="width:16px;height:16px"> <span>${h(g.name||'(ไม่มีชื่อ)')}</span> <span class="mut">· ${h(String(g.id).slice(0,8))}…</span></label>`).join('')}
+            </div>
+            <div class="mut" style="font-size:var(--fs-body);margin-top:5px">กลุ่มหลักด้านบนถูกส่งอยู่แล้ว — ติ๊กที่นี่เฉพาะกลุ่มที่ต้องการ<b>เพิ่ม</b> · ส่งได้สูงสุด 5 กลุ่ม</div></div>`
+        : '';
       ov.firstChild.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:var(--fs-h);font-weight:800">${ic('lucide:send',18)} ส่ง "${h(_clName)}" เข้าไลน์</div><button onclick="document.getElementById('card-line').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
         ${lastHtml}
@@ -6587,6 +6668,7 @@
           ${groupDD}
           <div style="display:flex;gap:6px"><input id="cl_group" value="${h(c.group_id||'')}" placeholder="หรือวาง group id เอง (Cxxxx...)" style="${_inp}"><button onclick="checkGroupNameCL()" title="ดึงชื่อกลุ่มจาก id" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:var(--fs-body)">ตรวจชื่อ</button><button onclick="removeGroupCL()" title="ลบกลุ่มนี้ออกจากรายการ (บอทออกจากกลุ่มแล้ว)" style="white-space:nowrap;padding:8px 12px;border-radius:8px;border:.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-size:var(--fs-body)">🗑 ลบกลุ่ม</button></div>
           <div id="cl_gname" style="font-size:var(--fs-body);margin-top:5px"></div></div>
+        ${extraHtml}
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button onclick="saveCardLine()" style="padding:9px 16px;border-radius:9px;border:none;background:var(--blue);color:var(--on-blue);font-weight:700;cursor:pointer;font-size:var(--fs-body)">${ic('lucide:save',15)} บันทึก</button>
           <button onclick="testCardLine()" style="padding:9px 16px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:var(--fs-body)">${ic('lucide:send',15)} ส่งทดสอบเดี๋ยวนี้</button>
@@ -6603,7 +6685,9 @@
     async function saveCardLine(){
       _clStatus('กำลังบันทึก…');
       const _grp=_clV('cl_group').trim();
-      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:(_grp?'group':'test'), test_id:_clV('cl_test').trim(), group_id:_grp,
+      // กลุ่มเพิ่มเติม — ตัดตัวที่ซ้ำกับกลุ่มหลักออก (ฝั่งเซิร์ฟเวอร์ก็กรองอีกชั้น)
+      const _xtra=[...document.querySelectorAll('#cl_extra .cl-xg:checked')].map(i=>i.value).filter(v=>v&&v!==_grp);
+      const body={card:_clCard, enabled:document.getElementById('cl_enabled').checked, time:_clV('cl_time'), mode:(_grp?'group':'test'), test_id:_clV('cl_test').trim(), group_id:_grp, group_ids:_xtra,
         date_mode:_clV('cl_dmode')||'month', date_from:_clV('cl_dfrom'), date_to:_clV('cl_dto')};
       if(body.date_mode==='range' && (!body.date_from||!body.date_to)){ _clStatus('เลือกช่วงวันที่ให้ครบก่อน','var(--red)'); return false; }
       try{ const r=await fetch('/api/admin/card_line_config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify(body)});

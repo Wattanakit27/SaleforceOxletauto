@@ -2853,6 +2853,83 @@ def admin_purchase_method_config(request):
     return JsonResponse({"ok": True, "map": mp}, json_dumps_params={"ensure_ascii": False})
 
 
+#  หมวดวิธีได้รถที่ตารางเป้าใช้ — ต้องตรงกับ `CATS` ใน index.html (การ์ด bought-card)
+PURCHASE_CATS = ["หาเอง", "online", "รถเทิร์น", "ขายหน้าร้าน"]
+#  ค่าตั้งต้น = ตัวเลขที่เจ้าของส่งมาตอนทำการ์ด (30 ก.ย.69) — ใช้เมื่อยังไม่เคยแก้ในหน้าเว็บ
+PURCHASE_TARGETS_DEFAULT = {
+    "หาเอง": {"พี่หมี": 12, "พี่ต๊าด": 12, "มิว": 4},
+    "online": {"พี่หมี": 13, "พี่ต๊าด": 13, "มิว": 10},
+    "รถเทิร์น": {"พี่หมี": 6, "พี่ต๊าด": 7, "มิว": 3},
+    "ขายหน้าร้าน": {"พี่หมี": 15, "พี่ต๊าด": 15, "มิว": 10},
+}
+
+
+@csrf_exempt
+def admin_purchase_targets(request):
+    """Admin — เป้ารับซื้อรถ รายคน × วิธี (การ์ด "รถซื้อเข้า รายคน")
+
+    GET  → {targets:{วิธี:{คน:เลข}}, cats:[...], people:[...], isDefault:bool}
+    POST {targets:{...}} → บันทึกทั้งก้อน
+
+    **เดิมฮาร์ดโค้ดไว้ใน index.html (`B_TARGETS`)** — เจ้าของสั่ง 30 ก.ย.69 ให้แก้ได้เอง
+    เพราะเป้าเปลี่ยนทุกเดือน แต่ของเดิมต้องแก้โค้ดแล้ว deploy ทุกครั้ง
+
+    **เก็บเป็น "เป้าต่อเดือน"** — frontend คูณจำนวนเดือนในช่วงที่ดูเอง (`rangeMonthCount()`)
+    เหมือนเป้าของเซลล์ · ถ้าเก็บเป็นเป้าของช่วงที่ดู ค่าจะเพี้ยนทันทีที่เปลี่ยนตัวกรองวันที่
+    """
+    user = _session_user(request)
+    if not user or user.get("position") != "admin":
+        return JsonResponse({"error": "ต้อง login admin ก่อน"}, status=401)
+    from .services import cache_store
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body or "{}")
+        except Exception:
+            body = {}
+        src = body.get("targets") or {}
+        clean, bad = {}, []
+        for cat in PURCHASE_CATS:
+            row = src.get(cat) or {}
+            if not isinstance(row, dict):
+                continue
+            keep = {}
+            for who, val in row.items():
+                who = str(who).strip()[:40]
+                if not who:
+                    continue
+                try:
+                    n = int(float(val))
+                except Exception:
+                    bad.append("%s/%s" % (cat, who))
+                    continue
+                # กันพิมพ์พลาดจนกลายเป็นเป้าเพี้ยน (ติดลบ/หลักหมื่น) — ไม่เงียบ บอกกลับไปด้วย
+                if n < 0 or n > 9999:
+                    bad.append("%s/%s" % (cat, who))
+                    continue
+                keep[who] = n
+            if keep:
+                clean[cat] = keep
+        if bad:
+            return JsonResponse({"ok": False, "error": "ค่าเป้าต้องเป็นเลข 0–9999: %s"
+                                 % " · ".join(bad[:6])}, status=400,
+                                json_dumps_params={"ensure_ascii": False})
+        cache_store.set_kv("purchase_targets", clean)
+        return JsonResponse({"ok": True, "targets": clean},
+                            json_dumps_params={"ensure_ascii": False})
+
+    saved = (cache_store.get_kv("purchase_targets") or {}).get("data") or {}
+    tg = saved or PURCHASE_TARGETS_DEFAULT
+    people = []
+    for cat in PURCHASE_CATS:
+        for who in (tg.get(cat) or {}):
+            if who not in people:
+                people.append(who)
+    return JsonResponse({"ok": True, "targets": tg, "cats": PURCHASE_CATS,
+                         "people": people, "isDefault": not saved},
+                        json_dumps_params={"ensure_ascii": False})
+
+
 @csrf_exempt
 def admin_yod_stock(request):
     """Admin — สต๊อกรถเข้า รายรุ่น (แก้ได้ในแดชบอร์ด · เก็บ override ในสโตร์เราเอง ไม่แตะชีตเดิม)
@@ -3112,7 +3189,8 @@ def admin_card_line_config(request):
         err = _push_group_guard(body, cfg)
         if err:
             return JsonResponse({"ok": False, "error": err}, status=400, json_dumps_params={"ensure_ascii": False})
-        for k in ("enabled", "time", "mode", "test_id", "group_id", "date_mode", "date_from", "date_to"):
+        for k in ("enabled", "time", "mode", "test_id", "group_id", "group_ids",
+                  "date_mode", "date_from", "date_to"):
             if k in body:
                 cfg[k] = body[k]
         # ค่าช่วงวันที่ที่ไม่รู้จัก = ปฏิเสธไปเลย ไม่เงียบๆ ตกไปเป็น "เดือนปัจจุบัน"
@@ -3153,19 +3231,26 @@ def admin_card_line_test(request):
     if card not in _LINE_CARDS:
         return JsonResponse({"ok": False, "error": "การ์ดไม่รองรับ"}, status=400)
     cfg = get_card_config(card)
-    # ปุ่มทดสอบ: ระบุ target เอง > test id (แชทส่วนตัว) > group id · ไม่พึ่ง mode
-    target = (body.get("target") or "").strip() or cfg.get("test_id") or cfg.get("group_id")
-    if not target:
+    # ปุ่มทดสอบ: ระบุ target เอง (ปลายทางเดียว) > test id (แชทส่วนตัว) > ทุกกลุ่มที่ตั้งไว้
+    one = (body.get("target") or "").strip()
+    if one:
+        targets = [(one, one[:1] in ("C", "R"))]
+    elif str(cfg.get("test_id") or "").strip():
+        targets = [(str(cfg["test_id"]).strip(), False)]
+    else:
+        from .services.report_shot import card_targets
+        targets = card_targets(cfg)
+    if not targets:
         return JsonResponse({"ok": False, "error": "ยังไม่ได้ตั้งปลายทาง (ใส่ test id หรือเลือกกลุ่มก่อน)"}, status=400)
-    mention_all = bool(target and target == cfg.get("group_id"))
-    ok, info = send_card_to_line(card, target, mention_all=mention_all)
+    ok, info = send_card_to_line(card, targets)
     if not ok:
         # LINE ตอบ 400 เหมือนกันทุกสาเหตุ → เติมคำอธิบายว่าต้องไปทำอะไรต่อ
         from .services.line_notify import dm_hint
-        hint = dm_hint(target)
+        hint = dm_hint(targets[0][0])
         if hint:
             info = f"{info} — {hint}"
-    return JsonResponse({"ok": ok, "info": info}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": ok, "info": info, "targets": [t for t, _ in targets]},
+                        json_dumps_params={"ensure_ascii": False})
 
 
 def admin_line_group_name(request):
@@ -3413,13 +3498,26 @@ def _push_group_guard(body, cfg):
     ตรวจเฉพาะตอน **เปลี่ยน** group id (ค่าเดิมไม่แตะ — แก้ด้วย `manage.py line_push_switch`)
     ถาม LINE ไม่ได้ = ปล่อยผ่าน (ไม่ให้เน็ตสะดุดแล้วบันทึกอะไรไม่ได้เลย)
     """
-    if "group_id" not in (body or {}):
-        return ""
-    new = str(body.get("group_id") or "").strip()
-    if not new or new == str((cfg or {}).get("group_id") or "").strip():
-        return ""
     from .services.line_channels import push_group_error
-    return push_group_error(new)
+
+    body, cfg = body or {}, cfg or {}
+    if "group_id" in body:
+        new = str(body.get("group_id") or "").strip()
+        if new and new != str(cfg.get("group_id") or "").strip():
+            err = push_group_error(new)
+            if err:
+                return err
+    # ★ 30 ก.ย.69 — กลุ่มเพิ่มเติม (ส่งการ์ดหลายกลุ่ม) ต้องผ่านด่านเดียวกัน
+    #   ไม่งั้นกลุ่มที่บอทเข้าไม่ได้จะถูกบันทึกเงียบๆ แล้วการ์ด "ส่งไม่ครบ" ทุกวันโดยไม่มีใครรู้
+    if "group_ids" in body:
+        old = {str(g).strip() for g in (cfg.get("group_ids") or [])}
+        for g in (body.get("group_ids") or []):
+            g = str(g or "").strip()
+            if g and g not in old:
+                err = push_group_error(g)
+                if err:
+                    return err
+    return ""
 
 
 def _trim_event_log():
