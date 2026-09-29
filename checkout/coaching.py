@@ -436,6 +436,12 @@ def maybe_sync(now=None) -> str:
     """เรียกจาก `cron_tick` — ทำวันละครั้ง · **ปิดไว้ = ไม่ทำอะไร** · ล้มแล้วไม่ลากงานอื่น
 
     ทำไมต้องมี: แชทดิบถูกลบเมื่อครบ 90 วัน → ถ้าไม่ซิงก์ ข้อมูลโค้ชจะหายเองเงียบๆ
+
+    **★ 30 ก.ย.69 — เก็บเข้าฐานข้อมูลก่อน แล้วค่อยชีต**
+    prod เขียนไฟล์โค้ชไม่ได้ (service account ยังเป็น 403) → ถ้าทำแต่ชีตแบบเดิม
+    **ข้อมูลใหม่ไม่ถูกเก็บที่ไหนเลย แล้วโดนลบทิ้งเมื่อครบ 90 วัน**
+    · ตาราง `CoachLog` ไม่ต้องใช้สิทธิ์ Google → เก็บได้แน่นอนทุกวัน
+    · ชีตล้มไม่กระทบฐานข้อมูล (ทำคนละ try) — เก็บไว้เป็นช่องทางที่คนนอกเปิดอ่านง่าย
     """
     c = cfg()
     if not c["enabled"]:
@@ -448,16 +454,43 @@ def maybe_sync(now=None) -> str:
             return ""
     except Exception:
         pass
+
+    out, state = [], {"date": today}
+
+    # 1) ฐานข้อมูล — ต้องสำเร็จให้ได้ เพราะเป็นที่เก็บถาวรจริง
+    try:
+        from . import coach_db
+        r = coach_db.sync_chat(days=120)
+        state["db"] = {"ok": True, "added": r.get("added", 0), "total": r.get("total", 0)}
+        out.append("db+%s" % r.get("added", 0))
+    except Exception as e:
+        state["db"] = {"ok": False, "error": str(e)[:200]}
+        out.append("db error")
+        try:
+            from dashboard.services import eventlog
+            eventlog.log(eventlog.CRON, name="ซิงก์บันทึกโค้ชเข้าฐานข้อมูล",
+                         ok=False, error=str(e)[:200])
+        except Exception:
+            pass
+
+    # 2) ชีต — ล้มได้ (403 บน prod) ไม่ลากข้อ 1
     try:
         r = sync(days=120)
-        set_kv(SYNC_KEY, {"date": today, "new": r.get("new", 0), "ok": True})
-        return "written=%s" % r.get("written", 0)
+        state["sheet"] = {"ok": True, "written": r.get("written", 0)}
+        out.append("sheet+%s" % r.get("written", 0))
     except Exception as e:
         msg = str(e)[:200]
+        state["sheet"] = {"ok": False, "error": msg}
+        out.append("sheet error")
         try:
-            set_kv(SYNC_KEY, {"date": today, "ok": False, "error": msg})
             from dashboard.services import eventlog
             eventlog.log(eventlog.CRON, name="ซิงก์บันทึกโค้ชเข้าชีต", ok=False, error=msg)
         except Exception:
             pass
-        return "error: %s" % msg
+
+    try:
+        state["ok"] = bool(state.get("db", {}).get("ok"))
+        set_kv(SYNC_KEY, state)
+    except Exception:
+        pass
+    return " ".join(out)

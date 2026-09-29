@@ -773,3 +773,45 @@ class LineGroup(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.name or self.group_id, self.get_kind_display())
+
+
+class CoachLog(models.Model):
+    """บันทึกห้องโค้ชเซลล์ — **ที่รวมถาวรของเก่า+ใหม่** (30 ก.ย.69 · เจ้าของสั่ง)
+
+    ★ ทำไมไม่ใช้ `GroupChat` — ตารางนั้น **ลบข้อมูลเกิน 90 วันอัตโนมัติ**
+      (`CHAT_KEEP_DAYS`) ของ เม.ย.–ก.ค.69 จึงถูกลบไปแล้ว เหลือในฐานข้อมูลแค่ 20 ข้อความ
+      ส่วนฉบับเต็ม 1,695 แถวอยู่ในชีต · ยัดกลับเข้า `GroupChat` = โดนลบซ้ำรอบ cleanup ถัดไป
+      → ตารางนี้ **ไม่มีวันหมดอายุ** เพราะเป็นบันทึกการสอนงาน ไม่ใช่แชทดิบที่หมุนเวียน
+
+    ★ กันซ้ำด้วย `ref` (`line:<message_id>` / `old:<แถว>:<ช่อง>`) — คีย์ชุดเดียวกับที่ใช้ในชีต
+      → นำเข้าซ้ำกี่รอบก็ไม่เบิ้ล และข้อมูลใน 2 ที่อ้างอิงถึงกันได้
+    """
+    SENIOR, JUNIOR = "ซีเนียร์", "จูเนียร์"
+
+    ref = models.CharField("รหัสอ้างอิง", max_length=120, unique=True)
+    # มีค่าเมื่อแปลงวันที่+เวลาได้ — ใช้เรียง/กรองช่วงวันที่ในหน้า "ฐานข้อมูล (SQL)"
+    sent_at = models.DateTimeField("เมื่อไหร่", null=True, blank=True, db_index=True)
+    # ค่าดิบตามชีต — เก็บไว้ด้วยเพราะแถวเก่าบางแถวแปลงเป็นวันที่จริงไม่ได้ (ห้ามทิ้งข้อมูล)
+    date_text = models.CharField("วันที่", max_length=16, blank=True, db_index=True)
+    time_text = models.CharField("เวลา", max_length=8, blank=True)
+
+    case_code = models.CharField("รหัสเคส", max_length=64, blank=True, db_index=True)
+    who = models.CharField("ผู้พูด", max_length=80, blank=True, db_index=True)
+    role = models.CharField("บทบาท", max_length=32, blank=True, db_index=True)
+    team = models.CharField("ทีม", max_length=40, blank=True)
+    text = models.TextField("ข้อความ", blank=True)
+    case_status = models.CharField("สถานะเคส", max_length=80, blank=True)
+    kind = models.CharField("ชนิด", max_length=40, blank=True)
+    source = models.CharField("ที่มา", max_length=40, blank=True, db_index=True)
+    note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "บันทึกห้องโค้ช"
+        verbose_name_plural = "บันทึกห้องโค้ช"
+        ordering = ["sent_at", "id"]
+        indexes = [models.Index(fields=["role", "sent_at"])]
+
+    def __str__(self):
+        return "%s %s %s: %s" % (self.date_text, self.time_text, self.who, self.text[:40])
