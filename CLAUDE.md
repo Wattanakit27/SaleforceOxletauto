@@ -1514,6 +1514,12 @@ dry-run · สวิตช์ปิด) · **ปลอมที่ `requests` + 
   หน้านั้นปิด LINE id พนักงานด้วย `db_export._scrub` อยู่แล้วไม่ว่าจะ query จากอะไร)
 - **กฎ: สร้าง view ใหม่ = ต้อง GRANT ให้ `oxlet` ด้วยเสมอ** ไม่ใช่แค่ role ผู้อ่านภายนอก
   ไม่งั้นของที่ทำเพื่อ "ให้ดูง่ายขึ้น" กลับใช้ในหน้าเว็บของเราเองไม่ได้
+- **⚠️★ ตรวจสิทธิ์ต้องดู `pg_class.relacl` ไม่ใช่ `information_schema.role_table_grants`**
+  ตารางนั้น**โชว์เฉพาะสิทธิ์ที่บัญชีผู้ถามเกี่ยวข้อง** (เป็น grantor/grantee/สมาชิก) →
+  ถามด้วยบัญชี `claude` แล้วเห็นแค่ `claude=r` **ทั้งที่ `ro_all` มีสิทธิ์อยู่** ·
+  ผมสรุปผิดเพราะตรงนี้มาแล้ว 1 รอบ · คำสั่งที่เห็นครบ:
+  `select relname, array_to_string(relacl,' , ') from pg_class where relname='v_group_chat'`
+  (`oxlet=arwdDxt` = เจ้าของตาราง · `claude=r` = อ่านอย่างเดียว · ไม่มีชื่อ = เข้าไม่ได้)
 
 ### Sheet column gotchas — ต้องระวัง
 
