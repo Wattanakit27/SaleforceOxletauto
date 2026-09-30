@@ -4224,10 +4224,12 @@ def buy_dashboard(request):
     from .services import purchase_page
 
     me = (user.get("nickname") or user.get("seller_name") or "").strip()
+    boss = _can_view_all(user)
     who = me
-    #  แอดมิน/ผู้บริหารเปิดดูของคนอื่นได้ (ใช้ตอนตรวจสอบ) · คนอื่นดูได้เฉพาะตัวเอง
-    if _can_view_all(user):
-        who = (request.GET.get("owner") or "").strip() or me
+    if boss:
+        #  ★ แอดมินระบบ (break-glass) ไม่มีชื่อเล่นในทะเบียน → เปิดมาเห็น "รวมทุกคน"
+        #    ของเดิมตอบ 404 "ยังไม่ได้ผูกชื่อเล่น" ซึ่งอ่านเหมือนระบบพัง ทั้งที่เขามีสิทธิ์เต็ม
+        who = (request.GET.get("owner") or "").strip() or me or purchase_page.ALL
     elif not purchase_page.is_purchaser(me, user.get("position")):
         # ไม่ใช่ทีมจัดซื้อ → ส่งกลับหน้าที่ใช่ของเขา แทนที่จะโชว์หน้าว่าง
         return HttpResponseRedirect("/me/")
@@ -4238,10 +4240,42 @@ def buy_dashboard(request):
                        "data_json": "null", "me": ""}, status=404)
 
     data = purchase_page.summary(who)
+    if boss:
+        #  ปุ่มสลับคนดู — เฉพาะแอดมิน (ทีมจัดซื้อเห็นของตัวเองอย่างเดียวตามที่เจ้าของกำหนด)
+        data["people"] = purchase_page.owners()
     return render(request, "dashboard/purchase.html", {
-        "error": "", "me": who, "is_admin": _can_view_all(user),
+        "error": "", "me": who, "is_admin": boss,
         "data_json": json.dumps(data, ensure_ascii=False),
     })
+
+
+def api_purchase_work(request):
+    """JSON ของ "งานจัดซื้อวันนี้" — ใช้ทั้งหน้า /buy/ และการ์ดในแท็บ "จัดซื้อ"
+
+    **แหล่งเดียวกับที่ส่งเข้า LINE ทุกเช้า** (`purchase_page.summary`) →
+    เลขบนแท็บ · บนหน้า /buy/ · ในข้อความ LINE เป็นชุดเดียวกันเสมอ
+
+    แอดมิน/ผู้บริหาร: `?owner=` เลือกคน · ไม่ใส่ = รวมทุกคน
+    ทีมจัดซื้อ: เห็นของตัวเองเท่านั้น (ส่ง `owner` มาก็ไม่มีผล)
+    """
+    user = _session_user(request)
+    if not user:
+        return JsonResponse({"ok": False, "error": "ต้องเข้าสู่ระบบก่อน"}, status=401)
+
+    from .services import purchase_page
+
+    me = (user.get("nickname") or user.get("seller_name") or "").strip()
+    if _can_view_all(user):
+        who = (request.GET.get("owner") or "").strip() or purchase_page.ALL
+        data = purchase_page.summary(who)
+        data["people"] = purchase_page.owners()
+    elif purchase_page.is_purchaser(me, user.get("position")):
+        data = purchase_page.summary(me)
+    else:
+        return JsonResponse({"ok": False, "error": "หน้านี้สำหรับทีมจัดซื้อ"}, status=403)
+
+    data["ok"] = True
+    return JsonResponse(data, json_dumps_params={"ensure_ascii": False})
 
 
 def me_dashboard(request):

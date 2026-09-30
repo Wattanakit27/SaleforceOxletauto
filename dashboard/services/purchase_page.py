@@ -51,6 +51,27 @@ def is_purchaser(nickname: str, position: str = "") -> bool:
     return bool(OWNER_ALIAS.get(str(nickname or "").strip()))
 
 
+#  ค่าพิเศษของ `nickname` = "ดูของทุกคนรวมกัน" — แอดมิน/ผู้บริหารใช้
+ALL = "*"
+
+
+def owners(days: int = LOOKBACK_DAYS) -> list:
+    """ใครมีเคสค้างอยู่บ้าง (ชื่ออย่างที่ชีตเขียน) → เอาไปทำปุ่มสลับคนดู"""
+    from . import purchase_followup
+
+    try:
+        cases = purchase_followup.fetch_open_cases(days) or []
+    except Exception as e:
+        log.warning("อ่านเคสจัดซื้อไม่ได้: %s", e)
+        return []
+    seen = {}
+    for c in cases:
+        o = (c.get("owner") or "").strip()
+        if o:
+            seen[o] = seen.get(o, 0) + 1
+    return [{"owner": k, "cases": v} for k, v in sorted(seen.items(), key=lambda kv: -kv[1])]
+
+
 def my_cases(nickname: str, days: int = LOOKBACK_DAYS) -> tuple[list, list]:
     """เคสค้างของคนนี้ (เรียงว่าควรโทรใครก่อน) + รุ่นที่ขาดตลาด
 
@@ -70,8 +91,11 @@ def my_cases(nickname: str, days: int = LOOKBACK_DAYS) -> tuple[list, list]:
         log.warning("อ่านเคสจัดซื้อไม่ได้: %s", e)
         return [], gap
 
-    keys = [_norm(k) for k in owner_keys(nickname)]
-    mine = [c for c in cases if _norm(c.get("owner")) in keys] if keys else []
+    if str(nickname or "").strip() == ALL:
+        mine = list(cases)          # แอดมินดูรวมทุกคน
+    else:
+        keys = [_norm(k) for k in owner_keys(nickname)]
+        mine = [c for c in cases if _norm(c.get("owner")) in keys] if keys else []
     try:
         mine = purchase_report.rank_cases(mine, gap)
     except Exception as e:
@@ -95,6 +119,7 @@ def summary(nickname: str, days: int = LOOKBACK_DAYS) -> dict:
     stale = [c for c in cases if c.get("age", 0) >= stale_days]
     return {
         "owner": nickname,
+        "isAll": str(nickname or "").strip() == ALL,
         "days": days,
         "staleDays": stale_days,
         "cases": cases,

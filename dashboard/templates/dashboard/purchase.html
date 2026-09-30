@@ -104,7 +104,18 @@ function gapRow(g, i) {
 function render() {
   const root = document.getElementById('root');
   if (!DATA) return;                       // มี error — Django render ไว้ให้แล้ว
-  document.getElementById('who').textContent = DATA.owner || '';
+  document.getElementById('who').textContent = DATA.isAll ? 'ทุกคน' : (DATA.owner || '');
+
+  //  ปุ่มสลับคนดู — เซิร์ฟเวอร์ส่ง people มาให้เฉพาะแอดมิน (ทีมจัดซื้อเห็นของตัวเองเท่านั้น)
+  const people = DATA.people || [];
+  const chips = people.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">` +
+    [{owner:'', cases:0, all:1}].concat(people).map(p => {
+      const on = p.all ? DATA.isAll : (DATA.owner === p.owner);
+      return `<a href="/buy/${p.all ? '' : '?owner=' + encodeURIComponent(p.owner)}" class="pill"
+        style="text-decoration:none;padding:5px 11px;border:.5px solid ${on?'var(--purple)':'var(--bd)'};
+        background:${on?'var(--purple)':'var(--bg)'};color:${on?'#fff':'var(--t1)'}">${
+        p.all ? 'ทุกคน' : h(p.owner) + ' · ' + num(p.cases)}</a>`;
+    }).join('') + `</div>` : '';
 
   const kpi = [
     ['ต้องตามทั้งหมด', DATA.total, 'var(--t1)'],
@@ -120,6 +131,7 @@ function render() {
   const uncounted = (DATA.stockInfo || {}).uncounted || 0;
 
   root.innerHTML = `
+    ${chips}
     <div class="kpi">${kpi}</div>
 
     <div class="card">

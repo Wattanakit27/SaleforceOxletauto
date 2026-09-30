@@ -161,6 +161,41 @@ try:
     t("แอดมินดูของคนอื่นได้", r.status_code == 200 and "ลูกค้า D" in b3, r.status_code)
     t("แอดมินไม่ใส่ owner = ไม่พัง", c3.get("/buy/", secure=True).status_code in (200, 404))
 
+    # ── 9. แอดมินที่ไม่มีชื่อเล่น (break-glass) ต้องได้ "รวมทุกคน" ไม่ใช่ 404 ──
+    #    เจ้าของเจอจริงบน prod 30/09: หน้าขึ้น "ยังไม่ได้ผูกชื่อเล่น" ทั้งที่มีสิทธิ์เต็ม
+    c4 = Client()
+    login(c4, {"user_id": "admin", "nickname": "", "position": "admin"})
+    r = c4.get("/buy/", secure=True)
+    b4 = r.content.decode("utf-8")
+    t("แอดมินไม่มีชื่อเล่น เปิดได้ ไม่ 404", r.status_code == 200, r.status_code)
+    t("เห็นเคสของทุกคน", "ลูกค้า B" in b4 and "ลูกค้า D" in b4 and "ลูกค้า E" in b4)
+    t("บอกว่ากำลังดูรวมทุกคน", '"isAll": true' in b4)
+    t("มีปุ่มสลับคนดู", '"people"' in b4 and "พี่ต๊าด" in b4)
+
+    t("owners() นับเคสต่อคน",
+      {o["owner"]: o["cases"] for o in purchase_page.owners()}
+      == {"พี่ต๊าด": 3, "พี่หมี": 1, "(ไม่ระบุ)": 1})
+    t("owners() เรียงคนที่ค้างเยอะก่อน", purchase_page.owners()[0]["owner"] == "พี่ต๊าด")
+
+    # ── 10. API ที่การ์ดในแท็บ "จัดซื้อ" ใช้ — ต้องได้เลขชุดเดียวกับหน้า /buy/ ──
+    r = c4.get("/api/purchase/work", secure=True)
+    j = r.json()
+    t("API แอดมิน = รวมทุกคน", j.get("ok") and j.get("isAll") and j["total"] == 5, j.get("total"))
+    t("API เลขตรงกับ summary()",
+      j["notCalled"] == purchase_page.summary(purchase_page.ALL)["notCalled"])
+    j2 = c4.get("/api/purchase/work?owner=พี่หมี", secure=True).json()
+    t("API เลือกคนได้", j2["total"] == 1 and j2["cases"][0]["name"] == "ลูกค้า D")
+
+    r = c.get("/api/purchase/work?owner=พี่หมี", secure=True)   # c = ต๊าด (ทีมจัดซื้อ)
+    j3 = r.json()
+    t("ทีมจัดซื้อขอดูของคนอื่นไม่ได้ (ได้ของตัวเอง)",
+      j3["total"] == 3 and all(x["owner"] == "พี่ต๊าด" for x in j3["cases"]))
+
+    r = c2.get("/api/purchase/work", secure=True)               # c2 = เซลล์
+    t("เซลล์เรียก API ไม่ได้ (403)", r.status_code == 403, r.status_code)
+    t("ไม่ login เรียก API ไม่ได้ (401)",
+      Client().get("/api/purchase/work", secure=True).status_code == 401)
+
 finally:
     purchase_followup.fetch_open_cases = _real_fetch
     purchase_report.market_gap = _real_gap

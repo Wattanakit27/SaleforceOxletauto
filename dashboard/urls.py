@@ -55,6 +55,7 @@ urlpatterns = [
     path("api/admin/tiktok/sync", views.admin_tiktok_sync, name="admin_tiktok_sync"),
     path("api/admin/purchase_method_config", views.admin_purchase_method_config, name="admin_purchase_method_config"),
     path("api/admin/purchase_targets", views.admin_purchase_targets, name="admin_purchase_targets"),
+    path("api/purchase/work", views.api_purchase_work, name="api_purchase_work"),
     path("api/admin/yod_stock", views.admin_yod_stock, name="admin_yod_stock"),
     path("api/admin/leadreport_plan", views.admin_leadreport_plan, name="admin_leadreport_plan"),
     path("api/admin/clipweek", views.admin_clipweek, name="admin_clipweek"),

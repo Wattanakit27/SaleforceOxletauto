@@ -4919,7 +4919,102 @@
       }
     }
 
-    function renderPurchaseTab(){ return `<div id="purchase-inner">${renderPurchaseInner()}</div>`; }
+    function renderPurchaseTab(){
+      //  งานที่ต้องทำวันนี้ อยู่ "บนสุด" ของแท็บ — ของที่ต้องลงมือ ต้องเห็นก่อนตารางสรุป
+      //  (บทเรียนเดิม: ตารางแยกช่องในหน้าโซเชียลถูกวางใต้กราฟ เจ้าของเลยไม่เห็น = เท่ากับยังไม่ได้ทำ)
+      setTimeout(loadPurchaseWork, 0);
+      return `<div id="pw-slot"></div><div id="purchase-inner">${renderPurchaseInner()}</div>`;
+    }
+
+    // ── งานจัดซื้อวันนี้ (การ์ดหัวแท็บ · ข้อมูลชุดเดียวกับหน้า /buy/ และข้อความ LINE ทุกเช้า) ──
+    let _pwData = null, _pwOwner = '', _pwBusy = false;
+    async function loadPurchaseWork(owner){
+      const slot = document.getElementById('pw-slot');
+      if(!slot || _pwBusy) return;
+      if(owner !== undefined) _pwOwner = owner;
+      _pwBusy = true;
+      if(!_pwData) slot.innerHTML = `<div class="card"><div style="padding:18px;text-align:center;color:var(--t3);font-size:var(--fs-body)">กำลังโหลดงานจัดซื้อ…</div></div>`;
+      try{
+        const r = await fetch('/api/purchase/work' + (_pwOwner ? '?owner='+encodeURIComponent(_pwOwner) : ''));
+        const d = await r.json();
+        if(!d || d.ok === false) throw new Error((d&&d.error) || 'โหลดไม่ได้');
+        _pwData = d;
+        slot.innerHTML = pwCard(d);
+      }catch(e){
+        slot.innerHTML = `<div class="card"><div style="padding:14px;color:var(--t3);font-size:var(--fs-body)">เปิดงานจัดซื้อไม่ได้ — ${h(String(e.message||e))}</div></div>`;
+      }finally{ _pwBusy = false; }
+    }
+
+    function pwCard(d){
+      const n = v => (Number(v)||0).toLocaleString('th-TH');
+      //  "พร้อมขาย 0" ต้องมีคำกำกับ ไม่งั้นอ่านเป็น "ไม่มีรถรุ่นนี้เลย" (เจ้าของเคยทักเรื่องนี้เอง)
+      const notReady = g => { const x=(g.total||0)-(g.show||0); return x>0?` (มีอีก ${n(x)} คัน ยังไม่พร้อมขาย)`:''; };
+      const rank = {}; (d.gap||[]).forEach((g,i)=>{ rank[g.key]=i+1; });
+
+      const who = d.isAll ? 'ทุกคน' : (d.owner||'');
+      const chips = (d.people||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${[{owner:'',cases:d.isAll?d.total:0,_all:1}].concat(d.people).map(p=>{
+          const on = (p._all ? d.isAll : (d.owner===p.owner));
+          return `<button class="btn" onclick="loadPurchaseWork('${h(p.owner).replace(/'/g,"\\'")}')" style="padding:5px 11px;border-radius:7px;font-size:var(--fs-body);font-weight:700;border:.5px solid ${on?'var(--purple)':'var(--bd)'};background:${on?'var(--purple)':'var(--bg2)'};color:${on?'#fff':'var(--t1)'};cursor:pointer;font-family:inherit">${p._all?'ทุกคน':h(p.owner)}${p._all?'':' · '+n(p.cases)}</button>`;
+        }).join('')}</div>` : '';
+
+      const kpi = [
+        ['ต้องตามทั้งหมด', d.total, 'var(--t1)'],
+        ['ยังไม่ได้โทร', d.notCalled, d.notCalled?'#b91c1c':'#15803d'],
+        [`ค้างเกิน ${n(d.staleDays)} วัน`, d.stale, d.stale?'#b45309':'var(--t3)'],
+      ].map(x=>`<div style="flex:1;min-width:120px;background:var(--bg2);border:.5px solid var(--bd);border-radius:10px;padding:10px 12px">
+        <div style="color:var(--t3);font-size:var(--fs-body)">${x[0]}</div>
+        <b style="display:block;font-size:26px;line-height:1.2;color:${x[2]}">${n(x[1])}</b></div>`).join('');
+
+      const cases = (d.cases||[]).slice(0,10).map((c,i)=>{
+        const pills = [];
+        if(!c.talked) pills.push(`<span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:var(--fs-body);font-weight:700">ยังไม่ได้โทร</span>`);
+        const rk = c.gap ? rank[c.gap.key] : 0;
+        if(rk && rk <= (d.topGap||5)) pills.push(`<span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#fef3c7;color:#b45309;font-size:var(--fs-body);font-weight:700">ขาดหนัก อันดับ ${rk}</span>`);
+        const tel = c.phone ? `<a href="tel:${h(String(c.phone).replace(/[^0-9+]/g,''))}" style="color:var(--blue);font-weight:700;text-decoration:none">${h(c.phone)}</a>` : '<span style="color:var(--t3)">ไม่มีเบอร์</span>';
+        const gl = c.gap ? `<div style="color:var(--t3);font-size:var(--fs-body)">${h(c.gap.name)} — ตลาดถามหา ${n(c.gap.demand)} ครั้ง · เรามีพร้อมขาย ${n(c.gap.show)} คัน${notReady(c.gap)}</div>` : '';
+        return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:.5px solid var(--bd)">
+          <div style="flex:0 0 24px;height:24px;border-radius:7px;background:var(--bg2);color:var(--t2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-body)">${i+1}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700">${h(c.car)||'(ไม่ระบุรุ่น)'}</div>
+            <div style="color:var(--t2);font-size:var(--fs-body)">${h(c.name)||'(ไม่มีชื่อ)'} · ${tel}${d.isAll&&c.owner?' · '+h(c.owner):''}</div>
+            ${gl}${pills.length?`<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">${pills.join('')}</div>`:''}
+          </div>
+          <div style="color:var(--t3);font-size:var(--fs-body);white-space:nowrap">ค้าง ${n(c.age)} วัน</div>
+        </div>`;
+      }).join('');
+      const more = Math.max(0, (d.cases||[]).length - 10);
+
+      const gap = (d.gap||[]).slice(0,8).map((g,i)=>`<div style="display:flex;gap:10px;padding:9px 0;border-top:.5px solid var(--bd)">
+        <div style="flex:0 0 24px;height:24px;border-radius:7px;background:var(--bg2);color:var(--t2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-body)">${i+1}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700">${h(g.name)}</div>
+          <div style="color:var(--t3);font-size:var(--fs-body)">ตลาดถามหา ${n(g.demand)} ครั้ง · พร้อมขาย ${n(g.show)} คัน${notReady(g)}${g.recent?` · เพิ่งรับเข้า ${n(g.recent)}`:''}</div></div>
+      </div>`).join('');
+      const unc = (d.stockInfo||{}).uncounted || 0;
+
+      return `<div class="card" id="pwork-card">
+        <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${ic('lucide:phone',16)} งานจัดซื้อวันนี้ — ${h(who)}
+          <span class="info-tip" tabindex="0" onclick="event.stopPropagation()" data-tip="ชุดเดียวกับข้อความที่ส่งเข้า LINE ทุกเช้า\nเรียง: ยังไม่ได้โทรก่อน → รุ่นที่ขาดตลาด → ค้างนาน\nกรอก &quot;รับซื้อ/ไม่รับซื้อ&quot; ในชีต เคสจะหลุดจากรายการเอง">?</span>
+        </div>
+        ${chips}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${kpi}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px">
+          <div>
+            <div style="font-weight:800;margin-bottom:2px">ตามงานก่อน</div>
+            <div style="color:var(--t3);font-size:var(--fs-body)">เคสย้อนหลัง ${n(d.days)} วัน</div>
+            ${cases || '<div style="padding:14px 0;color:var(--t3);font-size:var(--fs-body)">ไม่มีเคสค้าง — ตามครบแล้ว</div>'}
+            ${more?`<div style="padding-top:8px;color:var(--t3);font-size:var(--fs-body)">อีก ${n(more)} เคส — เปิดหน้าเต็มที่ <a href="/buy/${d.isAll?'':'?owner='+encodeURIComponent(d.owner||'')}" style="color:var(--blue);font-weight:700">งานจัดซื้อ</a></div>`:''}
+          </div>
+          <div>
+            <div style="font-weight:800;margin-bottom:2px">รถที่ขาดตลาด — ควรหารุ่นนี้</div>
+            <div style="color:var(--t3);font-size:var(--fs-body)">ลูกค้าถามหา (${n(d.demandMonths)} เดือนล่าสุด) เทียบกับที่มีพร้อมขาย</div>
+            ${gap || '<div style="padding:14px 0;color:var(--t3);font-size:var(--fs-body)">ยังไม่มีข้อมูล</div>'}
+            ${unc?`<div style="padding-top:8px;color:var(--t3);font-size:var(--fs-body)">พร้อมขายอีก ${n(unc)} คันเป็นรุ่นที่ตลาดไม่ได้ถามหา ไม่ได้นับในตารางนี้</div>`:''}
+          </div>
+        </div>
+      </div>`;
+    }
 
     function renderPurchaseInner(){
       const Y = D.yodRotKao;
