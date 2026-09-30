@@ -276,9 +276,15 @@ def sync_pages(days: int = PAGE_LOOKBACK_DAYS) -> dict:
             out["errors"].append("เพจ %s: ขอ token ไม่ได้ (%s)" % (pid, str(e)[:80]))
             continue
         try:                                 # ชื่อเพจไม่ได้ = ไม่ใช่เรื่องใหญ่ ใช้ชื่อเดิม/รหัสแทน
-            nm = (meta.get("/%s" % pid, _token=pt, fields="name") or {}).get("name")
+            info = meta.get("/%s" % pid, _token=pt, fields="name,picture.width(200)") or {}
+            nm = info.get("name")
             if nm:
                 names[str(pid)] = nm
+            #  รูปเพจ — ลิงก์ของ Facebook เป็น signed URL หมดอายุ จึงโหลดไฟล์มาเก็บ
+            pic = ((info.get("picture") or {}).get("data") or {}).get("url")
+            if pic:
+                from . import avatars
+                avatars.save("meta", str(pid), pic)
         except Exception:
             pass
         by_day = {}

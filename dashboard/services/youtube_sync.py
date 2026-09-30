@@ -168,6 +168,10 @@ def resolve_channel(ref: str) -> dict:
         "channel_id": it.get("id") or "",
         "handle": ref if ref.startswith("@") else ((it.get("snippet") or {}).get("customUrl") or ""),
         "title": (it.get("snippet") or {}).get("title") or "",
+        #  `part=snippet` ดึงมาอยู่แล้ว — หยิบรูปโปรไฟล์ช่องออกมาเก็บด้วย (ไม่ยิง API เพิ่ม)
+        "avatar": ((((it.get("snippet") or {}).get("thumbnails") or {}).get("medium")
+                    or ((it.get("snippet") or {}).get("thumbnails") or {}).get("default")
+                    or {}).get("url") or ""),
         "uploads": (((it.get("contentDetails") or {}).get("relatedPlaylists") or {})
                     .get("uploads") or ""),
         # ซ่อนจำนวนผู้ติดตามได้ → hiddenSubscriberCount = true แล้วไม่ส่งตัวเลขมา
@@ -209,6 +213,13 @@ def sync_channel(ref: str, trigger: str, snap_date, taken_at) -> dict:
     ch = resolve_channel(ref)
     cid = ch["channel_id"]
     raws = [("channels", ch["raw"])]
+    # รูปโปรไฟล์ช่อง — best-effort ทำก่อนได้เพราะไม่ยิง API เพิ่ม (มากับ part=snippet แล้ว)
+    try:
+        from . import avatars
+        if ch.get("avatar"):
+            avatars.save("youtube", cid, ch["avatar"])
+    except Exception:
+        pass
     cutoff = taken_at - timedelta(days=VIDEO_WINDOW_DAYS)
 
     rows = []

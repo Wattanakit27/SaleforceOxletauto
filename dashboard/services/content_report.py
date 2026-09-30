@@ -158,26 +158,70 @@ def _rows(side: str, f, t) -> tuple[list, dict]:
 
 def _owner_names() -> dict:
     """{owner_id: ชื่อที่คนอ่านออก} — ครบทั้ง 3 แพลตฟอร์ม"""
-    names: dict = {}
+    return {k: v["name"] for k, v in _profiles().items()}
+
+
+def _profiles() -> dict:
+    """{owner_id: {name, handle, followers, avatar}} — **โปรไฟล์ช่อง** (30 ก.ย.69 · เจ้าของขอ)
+
+    *"อยากให้มันสามารถแสดงเป็นโปรไฟล์ของช่องทางนั้นดีกว่า ไม่ต้องมาทำแบบนี้"*
+    — ชื่อเพจยาวเต็มช่องอ่านยาก · โปรไฟล์ = รูป + ชื่อ + @username ซึ่งจำได้เร็วกว่า
+
+    รูปมาจาก [avatars.py](avatars.py) (โหลดเก็บไว้ตอน sync — ลิงก์ของ TikTok/FB หมดอายุ)
+    · ยังไม่มีรูป = คืน `avatar: ""` แล้วการ์ดใช้อักษรย่อบนวงกลมสีแทน **ไม่ใช่กล่องว่าง**
+    """
+    try:
+        from . import avatars
+        cache = {s: avatars.have(s) for s in avatars.SIDES}
+    except Exception:
+        avatars, cache = None, {}
+
+    def pic(side, cid):
+        if not avatars:
+            return ""
+        try:
+            return avatars.url_for(side, cid, cache.get(side))
+        except Exception:
+            return ""
+
+    out: dict = {}
     try:
         from dashboard.models import TikTokAccount
         for a in TikTokAccount.objects.all():
-            names[a.open_id] = (a.label or a.open_id)
+            pr = a.profile or {}
+            out[a.open_id] = {
+                "name": (a.label or a.display_name or a.open_id),
+                "handle": ("@" + a.username) if a.username else "",
+                "followers": pr.get("follower_count") or 0,
+                "avatar": pic("tiktok", a.open_id),
+            }
     except Exception:
         pass
     try:
-        names.update(S._page_names() or {})
+        for pid, nm in (S._page_names() or {}).items():
+            out[str(pid)] = {"name": nm, "handle": "", "followers": 0,
+                             "avatar": pic("meta", str(pid))}
     except Exception:
         pass
     try:
         from dashboard.models import YouTubeChannelSnapshot
-        for r in (YouTubeChannelSnapshot.objects.values("channel_id", "title")
-                  .order_by("channel_id").distinct()):
-            if r.get("title"):
-                names.setdefault(r["channel_id"], r["title"])
+        seen = {}
+        for r in (YouTubeChannelSnapshot.objects.values("channel_id", "title", "handle",
+                                                        "subscriber_count")
+                  .order_by("channel_id", "-snap_date")):
+            cid = r["channel_id"]
+            if cid in seen:
+                continue
+            seen[cid] = True
+            out.setdefault(cid, {
+                "name": r.get("title") or cid,
+                "handle": r.get("handle") or "",
+                "followers": r.get("subscriber_count") or 0,
+                "avatar": pic("youtube", cid),
+            })
     except Exception:
         pass
-    return names
+    return out
 
 
 def weekly(frm=None, to=None, new_days: int = NEW_DAYS, top: int = TOP_N) -> dict:
@@ -194,7 +238,8 @@ def weekly(frm=None, to=None, new_days: int = NEW_DAYS, top: int = TOP_N) -> dic
     f, t = S._range(frm, to)
     cutoff = (t - timedelta(days=max(1, new_days) - 1)).isoformat()   # ลงวันนี้ก็ถือว่าใหม่
     lead_ch, lead_group = _lead_by_channel(f, t)
-    names = _owner_names()
+    prof = _profiles()
+    names = {k: v["name"] for k, v in prof.items()}
 
     all_rows: list = []
     totals: dict = {}
@@ -210,8 +255,10 @@ def weekly(frm=None, to=None, new_days: int = NEW_DAYS, top: int = TOP_N) -> dic
         }
 
     def pack(r):
+        pf = prof.get(r["owner"]) or {}
         return {"side": r["side"], "text": r["text"] or "(ไม่มีชื่อ)", "link": r["link"],
                 "date": r["date"], "owner": names.get(r["owner"], r["owner"]),
+                "handle": pf.get("handle") or "", "avatar": pf.get("avatar") or "",
                 **{m: r["inc"].get(m, 0) for m in S.METRICS},
                 "cumViews": r.get("views", 0)}
 
@@ -243,6 +290,10 @@ def weekly(frm=None, to=None, new_days: int = NEW_DAYS, top: int = TOP_N) -> dic
     for o in by_owner.values():
         o["leads"] = _lead_for(o["name"], lead_ch) if o["side"] == "tiktok" else 0
         o["leadKnown"] = bool(LEAD_ALIAS.get(o["name"])) if o["side"] == "tiktok" else False
+        pf = prof.get(o["id"]) or {}
+        o["handle"] = pf.get("handle") or ""
+        o["followers"] = pf.get("followers") or 0
+        o["avatar"] = pf.get("avatar") or ""
         chans.append(o)
     chans.sort(key=lambda c: -c["views"])
 

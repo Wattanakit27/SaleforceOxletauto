@@ -5659,6 +5659,30 @@
     const _CR_SIDE = { meta: ['Facebook', '#1877f2'], tiktok: ['TikTok', '#0f766e'], youtube: ['YouTube', '#FF0000'] };
     const _crNum = n => (Number(n) || 0).toLocaleString('th-TH');
 
+    //  ★ โปรไฟล์ช่อง = รูปกลม + ชื่อ + @username (30 ก.ย.69 · เจ้าของขอ)
+    //    *"อยากให้มันสามารถแสดงเป็นโปรไฟล์ของช่องทางนั้นดีกว่า ไม่ต้องมาทำแบบนี้"*
+    //    — ชื่อเพจยาวเต็มช่องอ่านยาก ("อ๊อกเล็ตธ์ออโต้ โชว์รูมรถมือสอง สาขาชลบุรี")
+    //    ★ ยังไม่มีรูป = **อักษรย่อบนวงกลมสีของแพลตฟอร์ม** ไม่ใช่กล่องว่าง
+    //      (รูปโหลดเก็บตอน sync เที่ยงคืน · ช่องที่เพิ่งเชื่อมจะยังไม่มี)
+    function _crFace(o, S, big) {
+      const c = (_CR_SIDE[o.side] || ['?', '#888'])[1];
+      const sz = big ? 38 : 30, name = String(o.name || o.owner || '-');
+      const img = o.avatar
+        ? '<img src="' + h(o.avatar) + '" alt="" style="width:' + sz + 'px;height:' + sz +
+          'px;border-radius:50%;object-fit:cover;flex:0 0 auto;background:' + c + '1a" onerror="this.remove()">'
+        : '<span style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;flex:0 0 auto;background:' + c +
+          '1a;color:' + c + ';display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:' +
+          (big ? 16 : 13) + 'px">' + h(name.slice(0, 1)) + '</span>';
+      const sub = [o.handle || '', o.followers ? 'ผู้ติดตาม ' + _crNum(o.followers) : '']
+        .filter(Boolean).join(' · ');
+      return '<div style="display:flex;align-items:center;gap:9px;min-width:0">' + img +
+        '<div style="min-width:0">' +
+        '<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:' +
+        (big ? 340 : 260) + 'px" title="' + h(name) + '">' + h(name) + '</div>' +
+        (sub ? '<div style="color:' + S.mut + ';font-size:' + S.fb + ';white-space:nowrap">' + h(sub) + '</div>' : '') +
+        '</div></div>';
+    }
+
     //  ★ ฟังก์ชันเดียวสร้างทั้ง 2 เวอร์ชัน — เว็บ (shot=false) และรูปที่ส่งไลน์ (shot=true)
     //    เขียนแยก 2 ชุดเมื่อไหร่ ตัวเลขในรูปกับบนเว็บจะไม่ตรงกันแล้วไม่มีใครรู้ว่าอันไหนถูก
     function _crCard(shot) {
@@ -5697,7 +5721,8 @@
 
       // ── 2. ตารางคลิป ──
       const rowClip = (c, i) => '<tr>' + td(String(i + 1), 'center') + td(tag(c.side) + ' ' + clip(c.text)) +
-        td(h(c.owner || '-')) + td(dmy(c.date), 'center') + td(_crNum(c.views), 'right', 800) +
+        td(_crFace({ side: c.side, name: c.owner, handle: c.handle, avatar: c.avatar }, S, false)) +
+        td(dmy(c.date), 'center') + td(_crNum(c.views), 'right', 800) +
         td(_crNum(c.likes), 'right') + td(_crNum(c.comments), 'right') + td(_crNum(c.shares), 'right') + '</tr>';
       const clipTable = (rows, empty) => (rows && rows.length)
         ? '<div style="overflow-x:auto;border:.5px solid ' + S.bd + ';border-radius:10px;margin-top:8px">' +
@@ -5712,7 +5737,8 @@
         const lead = c.side !== 'tiktok' ? '<span style="color:' + S.mut + '">–</span>'
           : (c.leadKnown ? '<b>' + _crNum(c.leads) + '</b>'
              : '<span style="color:' + S.mut + '" title="ยังไม่ได้จับคู่ชื่อช่องนี้กับชื่อช่องทางในชีตลีด">ยังไม่จับคู่</span>');
-        return '<tr>' + td(String(i + 1), 'center') + td(tag(c.side) + ' ' + h(c.name)) +
+        return '<tr>' + td(String(i + 1), 'center') +
+          td('<div style="display:flex;align-items:center;gap:8px">' + tag(c.side) + _crFace(c, S, true) + '</div>') +
           td(String(c.clips), 'center') + td(String(c.newClips), 'center') +
           td(_crNum(c.views), 'right', 800) + td(_crNum(c.likes), 'right') +
           td(_crNum(c.comments), 'right') + td(_crNum(c.shares), 'right') + td(lead, 'right') + '</tr>';

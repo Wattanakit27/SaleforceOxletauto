@@ -44,7 +44,8 @@ LOCK_TTL_MIN = 20
 #   แต่โหลด "ตัวไฟล์" มาเก็บเองท้ายรอบผ่าน covers.save_many() (ดู covers.py)
 _VIDEO_FIELDS = ("id,create_time,title,video_description,duration,share_url,cover_image_url,"
                  "view_count,like_count,comment_count,share_count")
-_STAT_FIELDS = "open_id,follower_count,following_count,likes_count,video_count"
+_STAT_FIELDS = ("open_id,follower_count,following_count,likes_count,video_count,"
+                "avatar_url_100,display_name,username")
 
 STATUS_KEY = "tiktok_sync_last"
 LOCK_KEY = "tiktok_sync_lock"
@@ -139,6 +140,29 @@ def sync_account(acc, trigger: str, snap_date, taken_at) -> dict:
             taken_at=taken_at, snap_date=snap_date, trigger=trigger, open_id=acc.open_id,
             follower_count=u.get("follower_count"), following_count=u.get("following_count"),
             likes_count=u.get("likes_count"), video_count=u.get("video_count"))
+        # จำยอดผู้ติดตาม/ชื่อล่าสุดไว้ในทะเบียนช่อง — รายงานคอนเทนต์อ่านจากที่นี่
+        # (ไม่ต้องไปไล่หา snapshot ล่าสุดทุกครั้งที่เปิดหน้า)
+        try:
+            prof = dict(acc.profile or {})
+            for k in ("follower_count", "likes_count", "video_count", "display_name",
+                      "username", "avatar_url_100"):
+                if u.get(k) is not None:
+                    prof[k] = u[k]
+            acc.profile = prof
+            if u.get("display_name"):
+                acc.display_name = str(u["display_name"])[:200]
+            if u.get("username"):
+                acc.username = str(u["username"])[:120]
+            acc.save(update_fields=["profile", "display_name", "username"])
+        except Exception:
+            pass
+        # รูปโปรไฟล์ — ลิงก์ของ TikTok หมดอายุ ต้องโหลดไฟล์มาเก็บเอง (ดู avatars.py)
+        try:
+            from . import avatars
+            if u.get("avatar_url_100"):
+                avatars.save("tiktok", acc.open_id, u["avatar_url_100"])
+        except Exception:
+            pass
 
     rows, cursor = [], None
     covers_todo = []            # (video_id, ลิงก์รูปปก) — โหลดท้ายรอบ ไม่ขวางการเก็บตัวเลข

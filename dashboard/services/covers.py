@@ -75,30 +75,44 @@ def save(side: str, item_id: str, url: str, overwrite: bool = False) -> bool:
     p = path_for(side, item_id)
     if not overwrite and os.path.exists(p):
         return False
+    buf = _fetch(url, MAX_BYTES)
+    if not buf:
+        return False
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + ".part"                 # เขียนไฟล์ชั่วคราวก่อนแล้วค่อยย้าย
+        with open(tmp, "wb") as f:        # กันไฟล์ครึ่งๆ ถ้าโดนตัดกลางทาง
+            f.write(buf)
+        os.replace(tmp, p)
+        return True
+    except Exception as e:
+        log.debug("เขียนรูปปก %s/%s ไม่ได้: %s", side, k, e)
+        return False
+
+
+def _fetch(url: str, max_bytes: int) -> bytes:
+    """โหลดรูปมาเป็น bytes · ไม่ผ่านเกณฑ์ = คืน `b""`
+
+    ★ ใช้ร่วมกับ [avatars.py](avatars.py) — กติกาการรับรูปต้องเป็นชุดเดียวกัน
+      (ชนิดไฟล์ · เพดานขนาด · เล็กเกินไป = ไม่ใช่รูป) ไม่งั้นวันหนึ่งจะคนละมาตรฐาน
+    """
     try:
         import requests
         r = requests.get(url, timeout=TIMEOUT, stream=True)
         if r.status_code != 200:
-            return False
+            return b""
         ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
         if ctype and ctype not in _OK_TYPES:
-            return False
+            return b""
         buf = bytearray()
         for chunk in r.iter_content(65536):
             buf += chunk
-            if len(buf) > MAX_BYTES:      # ไม่ใช่รูปปกแน่ๆ — ทิ้ง
-                return False
-        if len(buf) < 500:
-            return False
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        tmp = p + ".part"                 # เขียนไฟล์ชั่วคราวก่อนแล้วค่อยย้าย
-        with open(tmp, "wb") as f:        # กันไฟล์ครึ่งๆ ถ้าโดนตัดกลางทาง
-            f.write(bytes(buf))
-        os.replace(tmp, p)
-        return True
+            if len(buf) > max_bytes:      # ใหญ่ผิดปกติ = ไม่ใช่รูปที่เราจะเก็บ
+                return b""
+        return bytes(buf) if len(buf) >= 500 else b""
     except Exception as e:
-        log.debug("โหลดรูปปก %s/%s ไม่ได้: %s", side, k, e)
-        return False
+        log.debug("โหลดรูปไม่ได้ (%s): %s", str(url)[:60], e)
+        return b""
 
 
 def save_many(side: str, pairs) -> int:
