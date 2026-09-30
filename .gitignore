@@ -62,3 +62,6 @@ test_render.html
 .coverage
 htmlcov/
 .tox/
+
+# ผลรันเทสต์ (เขียนไฟล์เพราะ console ไทยเพี้ยน cp874) — ไม่ต้อง commit
+scripts/_out_*.txt

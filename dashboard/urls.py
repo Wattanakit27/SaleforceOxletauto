@@ -20,6 +20,7 @@ urlpatterns = [
     path("u/<str:token>/", views.magic_link, name="magic_link"),
     path("s/<str:token>/", views.seller_dashboard, name="seller_dashboard"),
     path("me/", views.me_dashboard, name="me_dashboard"),
+    path("buy/", views.buy_dashboard, name="buy_dashboard"),
     path("login/", views.login_view, name="login"),
     path("auth/line/start", views.line_login_start, name="line_login_start"),
     path("auth/line/callback", views.line_login_callback, name="line_login_callback"),

@@ -563,6 +563,10 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
             load_tele_user_ids()
             if line_user_id in TELE_USER_IDS:
                 return f"/s/{line_user_id}/", None
+            # ทีมจัดซื้อ → หน้าของเขาเอง (/me/ เป็นหน้าเซลล์ ซึ่งไม่มีข้อมูลของคนจัดซื้อเลย)
+            from .services import purchase_page
+            if purchase_page.is_purchaser((nickname or "").strip(), position):
+                return "/buy/", None
             return "/me/", None   # เซลล์ทั่วไป → /me/ (อิง session ไม่ใช่ token ใน URL)
     # ไม่พบใน employees — ถ้าเป็นแอดมินสูงสุด (hardcode) ก็ให้ login ได้ทันทีในฐานะ admin
     if line_user_id in SUPER_ADMIN_IDS:
@@ -4205,6 +4209,41 @@ def seller_dashboard(request, token):
 
 @ensure_csrf_cookie
 @require_GET
+def buy_dashboard(request):
+    """/buy/ — หน้าส่วนตัวของทีมจัดซื้อ ("จัดซื้อ force" · 30 ก.ย.69 · เจ้าของสั่ง)
+
+    *"ช่วยทำ จัดซื้อ force ให้หน่อยคล้ายๆเซลล์"* — เซลล์มีหน้าที่บอกว่า "วันนี้ตามใครก่อน"
+    ทีมจัดซื้อยังไม่มี ต้องรอข้อความเข้า LINE อย่างเดียว
+
+    **เห็นเฉพาะเคสของตัวเอง** (กติกาเดียวกับเซลล์) — แอดมิน/ผู้บริหารดูของใครก็ได้ด้วย `?owner=`
+    """
+    user = _session_user(request)
+    if not user:
+        return HttpResponseRedirect("/login/?next=/buy/")
+
+    from .services import purchase_page
+
+    me = (user.get("nickname") or user.get("seller_name") or "").strip()
+    who = me
+    #  แอดมิน/ผู้บริหารเปิดดูของคนอื่นได้ (ใช้ตอนตรวจสอบ) · คนอื่นดูได้เฉพาะตัวเอง
+    if _can_view_all(user):
+        who = (request.GET.get("owner") or "").strip() or me
+    elif not purchase_page.is_purchaser(me, user.get("position")):
+        # ไม่ใช่ทีมจัดซื้อ → ส่งกลับหน้าที่ใช่ของเขา แทนที่จะโชว์หน้าว่าง
+        return HttpResponseRedirect("/me/")
+
+    if not who:
+        return render(request, "dashboard/purchase.html",
+                      {"error": "บัญชีนี้ยังไม่ได้ผูกชื่อเล่นในทะเบียนพนักงาน — แจ้งผู้ดูแลระบบ",
+                       "data_json": "null", "me": ""}, status=404)
+
+    data = purchase_page.summary(who)
+    return render(request, "dashboard/purchase.html", {
+        "error": "", "me": who, "is_admin": _can_view_all(user),
+        "data_json": json.dumps(data, ensure_ascii=False),
+    })
+
+
 def me_dashboard(request):
     """/me/ — หน้าส่วนตัวของเซลล์ที่ login (email+password) — ดึง seller_name จาก session.
     admin/ผู้บริหาร → redirect ไป /dashboard/ (ไม่มีข้อมูลรายเซลล์ของตัวเอง)."""
