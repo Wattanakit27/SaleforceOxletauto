@@ -5625,6 +5625,151 @@
         </div>`;
     }
 
+    // ══ 📋 รายงานทีมคอนเทนต์ (30 ก.ย.69 · เจ้าของเสนอโครงเอง) ══════════════════
+    //   *"คลิปลงใหม่ ผลเป็นยังไง · คลิป 7 วันจัดแรงค์วิวเยอะ · คลิป 7วัน+ ที่วิวน้อย/เยอะสุด
+    //     · รายงานทั้ง 10 ช่อง และยอดลีดที่ได้จากช่องทางนี้กี่คน"*
+    //
+    //   ★ `#content-card` ถูกสร้าง **หลังข้อมูลมาแล้วเท่านั้น** — Playwright รอ element นี้
+    //     (35 วิ) ก่อนแคป · ถ้าใส่กล่องเปล่าไว้ก่อน มันจะแคปการ์ดว่างแล้วส่งเข้ากลุ่มเลย
+    let _crData = null, _crRange = '', _crSeq = 0, _crAbort = null;
+
+    async function loadContentReport(force) {
+      const key = dfFrom + '_' + dfTo;
+      if (!force && _crData && _crRange === key) return;
+      if (_crAbort) { try { _crAbort.abort(); } catch (e) {} }
+      const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      _crAbort = ac;
+      const seq = ++_crSeq;
+      try {
+        const r = await fetch('/api/admin/content_report?from=' + encodeURIComponent(dfFrom) +
+                              '&to=' + encodeURIComponent(dfTo),
+                              { credentials: 'same-origin', signal: ac ? ac.signal : undefined });
+        const d = await r.json();
+        if (seq !== _crSeq) return;
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _crData = d; _crRange = key;
+      } catch (e) {
+        if (seq !== _crSeq || (e && e.name === 'AbortError')) return;
+        _crData = { error: String((e && e.message) || e) };
+      }
+      const slot = document.getElementById('content-slot');
+      if (slot) slot.innerHTML = _crCard(false) + _crShotWrap();
+    }
+
+    const _CR_SIDE = { meta: ['Facebook', '#1877f2'], tiktok: ['TikTok', '#0f766e'], youtube: ['YouTube', '#FF0000'] };
+    const _crNum = n => (Number(n) || 0).toLocaleString('th-TH');
+
+    //  ★ ฟังก์ชันเดียวสร้างทั้ง 2 เวอร์ชัน — เว็บ (shot=false) และรูปที่ส่งไลน์ (shot=true)
+    //    เขียนแยก 2 ชุดเมื่อไหร่ ตัวเลขในรูปกับบนเว็บจะไม่ตรงกันแล้วไม่มีใครรู้ว่าอันไหนถูก
+    function _crCard(shot) {
+      const d = _crData;
+      if (!d) return '';
+      if (d.error) return '<div class="card" style="color:var(--red)">รายงานคอนเทนต์เปิดไม่ได้: ' + h(d.error) + '</div>';
+      const S = shot
+        ? { bg: '#fff', fg: '#111', mut: '#666', bd: '#e5e7eb', bd2: '#d1d5db', soft: '#f8fafc',
+            fh: '27px', fs: '20px', fb: '17px', big: '34px', pad: '13px 15px' }
+        : { bg: 'var(--bg)', fg: 'var(--t1)', mut: 'var(--t3)', bd: 'var(--bd)', bd2: 'var(--bd2)', soft: 'var(--bg2)',
+            fh: 'var(--fs-h)', fs: 'var(--fs-sub)', fb: 'var(--fs-body)', big: '26px', pad: '9px 11px' };
+      const th = (t, al) => '<th style="padding:' + S.pad + ';text-align:' + (al || 'left') + ';color:' + S.mut +
+        ';font-size:' + S.fb + ';font-weight:700;border-bottom:1px solid ' + S.bd2 + ';white-space:nowrap">' + t + '</th>';
+      const td = (t, al, w) => '<td style="padding:' + S.pad + ';text-align:' + (al || 'left') +
+        ';font-size:' + S.fb + ';border-bottom:.5px solid ' + S.bd + ';' + (w ? 'font-weight:' + w + ';' : '') + '">' + t + '</td>';
+      const tag = s => { const c = _CR_SIDE[s] || ['?', '#888'];
+        return '<span style="display:inline-block;padding:1px 7px;border-radius:6px;font-size:' + S.fb +
+          ';font-weight:700;background:' + c[1] + '1a;color:' + c[1] + '">' + c[0] + '</span>'; };
+      const clip = t => h((t || '(ไม่มีชื่อ)').slice(0, shot ? 58 : 46));
+      const dmy = s => { if (!s) return '-'; const p = String(s).split('-'); return (+p[2]) + '/' + (+p[1]); };
+
+      // ── 1. ยอดรวมในช่วง ──
+      const g = d.grand || {};
+      const kpi = [['วิว', g.views, '#7c3aed'], ['ไลก์', g.likes, '#e11d48'],
+                   ['คอมเมนต์', g.comments, '#0891b2'], ['แชร์', g.shares, '#16a34a'],
+                   ['ลีดจากโซเชียล', (d.leads || {}).social, '#b45309']]
+        .map(x => '<div style="flex:1;min-width:' + (shot ? 200 : 130) + 'px;background:' + S.soft +
+          ';border:.5px solid ' + S.bd + ';border-radius:10px;padding:' + (shot ? '14px 16px' : '10px 12px') + '">' +
+          '<div style="color:' + S.mut + ';font-size:' + S.fb + '">' + x[0] + '</div>' +
+          '<div style="font-size:' + S.big + ';font-weight:800;color:' + x[2] + ';line-height:1.2">' + _crNum(x[1]) + '</div></div>').join('');
+
+      const perSide = Object.keys(_CR_SIDE).filter(s => (d.totals || {})[s])
+        .map(s => { const t = d.totals[s];
+          return '<span style="white-space:nowrap">' + tag(s) + ' <b>' + _crNum(t.views) + '</b> วิว · ลงใหม่ ' + t.newClips + ' คลิป</span>'; })
+        .join('<span style="color:' + S.mut + '"> | </span>');
+
+      // ── 2. ตารางคลิป ──
+      const rowClip = (c, i) => '<tr>' + td(String(i + 1), 'center') + td(tag(c.side) + ' ' + clip(c.text)) +
+        td(h(c.owner || '-')) + td(dmy(c.date), 'center') + td(_crNum(c.views), 'right', 800) +
+        td(_crNum(c.likes), 'right') + td(_crNum(c.comments), 'right') + td(_crNum(c.shares), 'right') + '</tr>';
+      const clipTable = (rows, empty) => (rows && rows.length)
+        ? '<div style="overflow-x:auto;border:.5px solid ' + S.bd + ';border-radius:10px;margin-top:8px">' +
+          '<table style="width:100%;border-collapse:collapse;background:' + S.bg + ';color:' + S.fg + '">' +
+          '<thead><tr style="background:' + S.soft + '">' + th('#', 'center') + th('คลิป / โพสต์') + th('ช่อง') +
+          th('ลงวันที่', 'center') + th('วิว', 'right') + th('ไลก์', 'right') + th('คอมเมนต์', 'right') + th('แชร์', 'right') +
+          '</tr></thead><tbody>' + rows.map(rowClip).join('') + '</tbody></table></div>'
+        : '<div style="color:' + S.mut + ';font-size:' + S.fb + ';padding:10px 2px">' + empty + '</div>';
+
+      // ── 3. ทุกช่อง + ลีด ──
+      const chRows = (d.channels || []).map((c, i) => {
+        const lead = c.side !== 'tiktok' ? '<span style="color:' + S.mut + '">–</span>'
+          : (c.leadKnown ? '<b>' + _crNum(c.leads) + '</b>'
+             : '<span style="color:' + S.mut + '" title="ยังไม่ได้จับคู่ชื่อช่องนี้กับชื่อช่องทางในชีตลีด">ยังไม่จับคู่</span>');
+        return '<tr>' + td(String(i + 1), 'center') + td(tag(c.side) + ' ' + h(c.name)) +
+          td(String(c.clips), 'center') + td(String(c.newClips), 'center') +
+          td(_crNum(c.views), 'right', 800) + td(_crNum(c.likes), 'right') +
+          td(_crNum(c.comments), 'right') + td(_crNum(c.shares), 'right') + td(lead, 'right') + '</tr>';
+      }).join('');
+
+      const note = '<div style="color:' + S.mut + ';font-size:' + S.fb + ';margin-top:10px;line-height:1.7">' +
+        'นับเฉพาะยอดที่ <b>เพิ่มขึ้นในช่วงนี้</b> ไม่ใช่ยอดสะสมตลอดกาล · คลิปเก่า ' + (d.oldCount || 0) +
+        ' ชิ้น คิดยอดรายวันได้ ' + (d.oldLive || 0) + ' ชิ้น (ที่เหลือเก็บข้อมูลยังไม่ถึง 2 คืน)<br>' +
+        '<b>ไม่มียอด "บันทึก"</b> — TikTok / YouTube / Facebook ไม่เปิดให้ดึงผ่าน API · YouTube ไม่มียอดแชร์ (ขึ้น 0)</div>';
+
+      const head = shot
+        ? '<div style="font-size:' + S.fh + ';font-weight:800;margin-bottom:2px">รายงานทีมคอนเทนต์</div>' +
+          '<div style="color:' + S.mut + ';font-size:' + S.fs + ';margin-bottom:12px">' + h(rangeLabelTH()) +
+          ' · คลิปลงใหม่นับ ' + d.newDays + ' วันล่าสุด</div>'
+        : '<div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+          '<span style="display:flex;align-items:center;min-width:0;overflow:hidden">' + ic('lucide:video', 16) +
+          ' รายงานทีมคอนเทนต์ · ' + h(rangeLabelTH()) +
+          '<span class="info-tip" tabindex="0" data-tip="คลิปลงใหม่ = ลงภายใน ' + d.newDays +
+          ' วันล่าสุด\nตัวเลขทั้งหมด = ยอดที่เพิ่มขึ้นในช่วงที่เลือก\nยอดบันทึก (saves) ไม่มีแพลตฟอร์มไหนเปิดให้ดึง">?</span></span>' +
+          _cardLineBtn('content-card', 'รายงานทีมคอนเทนต์') + '</div>';
+
+      const body = head +
+        '<div style="display:flex;gap:' + (shot ? 12 : 8) + 'px;flex-wrap:wrap;margin-bottom:10px">' + kpi + '</div>' +
+        '<div style="font-size:' + S.fb + ';color:' + S.fg + ';margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap">' + perSide + '</div>' +
+
+        '<div style="font-size:' + S.fs + ';font-weight:800;margin-top:6px">คลิปลงใหม่ใน ' + d.newDays + ' วัน — เรียงวิวมากสุด' +
+        '<span style="font-weight:500;color:' + S.mut + ';font-size:' + S.fb + '"> · ลงใหม่ทั้งหมด ' + (d.newCount || 0) + ' ชิ้น</span></div>' +
+        clipTable(d.newClips, 'ช่วงนี้ยังไม่มีคลิปลงใหม่') +
+
+        '<div style="font-size:' + S.fs + ';font-weight:800;margin-top:16px">คลิปเก่าที่ยังทำวิวได้มากสุด</div>' +
+        clipTable(d.oldTop, 'ยังไม่มีข้อมูล') +
+
+        '<div style="font-size:' + S.fs + ';font-weight:800;margin-top:16px">คลิปเก่าที่เงียบที่สุด' +
+        '<span style="font-weight:500;color:' + S.mut + ';font-size:' + S.fb + '"> · เอาไว้ดูว่าอะไรไม่เวิร์ค</span></div>' +
+        clipTable(d.oldLow, 'ยังไม่มีข้อมูล') +
+
+        '<div style="font-size:' + S.fs + ';font-weight:800;margin-top:16px">ทุกช่อง / เพจ' +
+        '<span style="font-weight:500;color:' + S.mut + ';font-size:' + S.fb + '"> · ลีด = คนที่ทักเข้ามาจากช่องนั้น (ตามที่ทีมกรอกในชีต)</span></div>' +
+        '<div style="overflow-x:auto;border:.5px solid ' + S.bd + ';border-radius:10px;margin-top:8px">' +
+        '<table style="width:100%;border-collapse:collapse;background:' + S.bg + ';color:' + S.fg + '">' +
+        '<thead><tr style="background:' + S.soft + '">' + th('#', 'center') + th('ช่อง / เพจ') + th('คลิป', 'center') +
+        th('ลงใหม่', 'center') + th('วิว', 'right') + th('ไลก์', 'right') + th('คอมเมนต์', 'right') +
+        th('แชร์', 'right') + th('ลีด', 'right') + '</tr></thead><tbody>' +
+        (chRows || '<tr><td colspan="9" style="padding:16px;text-align:center;color:' + S.mut + '">ยังไม่มีข้อมูลช่อง</td></tr>') +
+        '</tbody></table></div>' + note;
+
+      return shot
+        ? '<div id="content-card-shot" style="width:1500px;background:#fff;color:#111;padding:26px 28px;font-family:inherit">' + body + '</div>'
+        : '<div class="card" id="content-card" style="margin-bottom:12px">' + body + '</div>';
+    }
+
+    //  เวอร์ชันแคป: ซ่อนบนเว็บด้วย wrapper height:0 — Playwright เปิดให้เห็นก่อน screenshot
+    function _crShotWrap() {
+      if (!_crData || _crData.error) return '';
+      return '<div id="content-card-shot-wrap" style="height:0;overflow:hidden">' + _crCard(true) + '</div>';
+    }
+
     function drawSocial() {
       const box = document.getElementById('so-box');
       if (!box || !_soData) return;
@@ -5634,6 +5779,8 @@
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
                color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
 
+      // รายงานทีมคอนเทนต์อยู่ท้ายหน้ารวม — โหลดแยกคำขอ เพราะต้องคิดยอดรายวันของ ~2,000 ชิ้น
+      if (!_soOpen && !_soCh) loadContentReport();
       if (_soOpen) box.innerHTML = _soDetailHtml();
       else if (_soCh) box.innerHTML = _soChannelHtml();   // หน้าช่อง — ไม่มี canvas จึงข้ามส่วนกราฟไปเอง
       else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
@@ -5650,7 +5797,8 @@
           <div style="height:290px"><canvas id="so-chart"></canvas></div></div>
         <div class="card"><div class="card-title">โพสต์ / คลิป ที่คนมีส่วนร่วมมากที่สุด <span style="font-weight:500;color:var(--t3);font-size:var(--fs-body)">· ตัวเลขเป็นยอดสะสม — กดแถวเพื่อดูเฉพาะช่วงที่เลือก</span>
             <span class="info-tip" tabindex="0" data-tip="เรียงจาก ไลก์ + คอมเมนต์ + แชร์ (ยอดสะสมล่าสุด)\nกดที่ข้อความเพื่อเปิดโพสต์จริง">?</span></div>
-          ${_soTopRows()}</div>`;
+          ${_soTopRows()}</div>
+        <div id="content-slot" style="margin-top:12px"></div>`;
 
       const cv = document.getElementById('so-chart');
       if (!cv || typeof Chart === 'undefined') return;

@@ -2808,6 +2808,33 @@ def admin_social(request):
     return JsonResponse({"ok": True, **data}, json_dumps_params={"ensure_ascii": False})
 
 
+def admin_content_report(request):
+    """Admin — รายงานทีมคอนเทนต์ (โครงตามที่เจ้าของเสนอ 30 ก.ย.69)
+
+    GET `?from=&to=&days=7` — คลิปลงใหม่/คลิปเก่าที่ยังปัง/ที่เงียบ · ทุกช่อง + ลีดต่อช่อง
+
+    **แยก endpoint จาก `/api/admin/social`** เพราะต้องอ่าน snapshot ของทั้ง 3 แพลตฟอร์ม
+    แล้วคิดยอดรายวันรายชิ้นทั้งหมด (~2,000 ชิ้น) — ไม่ควรไปหน่วงทุกครั้งที่เปลี่ยนช่วงวันที่
+    ในแท็บโซเชียล
+    """
+    user = _session_user(request)
+    if not _is_admin(user):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin ก่อน"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from .services import content_report
+    try:
+        days = int(request.GET.get("days") or content_report.NEW_DAYS)
+    except (TypeError, ValueError):
+        days = content_report.NEW_DAYS
+    try:
+        data = content_report.weekly(request.GET.get("from"), request.GET.get("to"),
+                                     new_days=max(1, min(days, 90)))
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": "อ่านข้อมูลไม่ได้: %s" % e}, status=500,
+                            json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, **data}, json_dumps_params={"ensure_ascii": False})
+
+
 def admin_meta_sync(request):
     """Admin — ดึงข้อมูล Meta (Facebook) · GET = สถานะ · POST = กด sync เดี๋ยวนี้
 
