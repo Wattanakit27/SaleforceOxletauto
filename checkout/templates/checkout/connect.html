@@ -191,6 +191,12 @@
   .pf-slip pre { white-space: pre-wrap; word-break: break-word; background: var(--bg2); border-radius: 8px; padding: 8px 10px;
                  font-size: 12px; line-height: 1.6; margin: 6px 0; font-family: inherit; }
   .pf-src { font-size: 12px; color: var(--blue); background: var(--blue-bg); border-radius: 7px; padding: 5px 8px; margin-bottom: 6px; }
+  /* ปุ่มจ่ายเบอร์ (โหมดทดลอง) */
+  .pf-assign { border: 1px dashed var(--blue); border-radius: 10px; padding: 10px; margin: 10px 0; background: var(--bg); }
+  .pf-assign select { width: 100%; padding: 6px 8px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
+  .pf-assign label.ck { display: flex; gap: 6px; align-items: center; margin: 5px 0; font-size: 13px; }
+  .pf-code { font-size: var(--fs-sub); font-weight: 800; letter-spacing: .4px; color: var(--blue-dk); }
+  .pf-done { font-size: 12px; color: var(--green); background: var(--green-bg); border-radius: 7px; padding: 5px 8px; margin: 6px 0; }
   @media (max-width: 1180px) {
     .cn-chat { grid-template-columns: minmax(0,1fr); }
     .cn-side { display: none; }
@@ -707,6 +713,11 @@
       x += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
     }
     if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
+    if (L.assignedAt) {
+      x += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${L.codeDemo ? ' · ทดลอง (ยังไม่ลงชีต)' : ''}</div>`;
+    } else if (d.codeHelp && !L.code) {
+      x += assignBoxHtml(d, sfx);
+    }
     LEAD_UI.forEach(sec => {
       x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>`;
       sec.rows.forEach(row => {
@@ -735,6 +746,39 @@
     return x + dls;
   }
 
+  // ── ปุ่ม "จ่ายเบอร์" (แอดมิน · ทดลอง: เก็บในระบบเราอย่างเดียว ไม่ลงชีต/ไม่โพสต์กลุ่ม) ──
+  //   ตัวหน้าตาม type ในชีต: NLD=Moderate WLD=Hot HLD=Very Hot BLD=BLD TLD=TikTok · A=ลีดแอดมิน · R=รีเจ็ค
+  function assignBoxHtml(d, sfx) {
+    const ch = d.codeHelp, sg = ch.suggest || {}, r = d.row;
+    // ที่แอดมินเลือกค้างไว้ต้องไม่หาย ตอนแผงถูกวาดใหม่ (ข้อความใหม่เข้ามา/ระบบเติมข้อมูลลีด)
+    const dr = (S.assignDraft && S.assignDraft.id === r.id) ? S.assignDraft : null;
+    const vBase = dr ? dr.base : sg.base, vEmp = dr ? dr.emp : r.ownerId;
+    const vAdmin = dr ? dr.admin : sg.admin, vReject = dr ? dr.reject : sg.reject;
+    const bases = (ch.bases || []).map(b => `<option value="${h(b.key)}"${b.key === vBase ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
+    const sellers = S.sellers.map(s => `<option value="${s.id}"${s.id === vEmp ? ' selected' : ''}>${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
+    const sugCode = (sg.reject ? 'R' : '') + (sg.admin ? 'A' : '') + (sg.base || '');
+    return `<div class="pf-assign" data-box="assign">
+      <div class="pf-h" style="margin-bottom:6px">จ่ายเบอร์ <span class="pf-auto">ทดลอง</span></div>
+      <div class="pf-g2">
+        <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
+        <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
+      </div>
+      <label class="ck"><input type="checkbox" data-x="admin"${vAdmin ? ' checked' : ''}> A — ลีดของแอดมิน</label>
+      <label class="ck"><input type="checkbox" data-x="reject"${vReject ? ' checked' : ''}> R — เคสรีเจ็ค</label>
+      <div style="color:var(--t3);font-size:12px">ระบบแนะนำ <b>${h(sugCode)}</b> — ${h(sg.why || '')}</div>
+      <div style="margin:6px 0 2px;color:var(--t3);font-size:12px">เลขที่จะได้:</div>
+      <div class="pf-code" data-x="preview"></div>
+      <div class="pf-lock" style="font-size:12px;margin:6px 0">ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีตลีด ไม่โพสต์เข้ากลุ่มจ่ายเบอร์ · เลขจริงคำนวณใหม่ตอนกด (กันซ้ำ)</div>
+      <button class="btn pri" data-act="assign-lead" style="width:100%">จ่ายเบอร์</button>
+    </div>`;
+  }
+  function codePreview(box) {
+    const ch = (S.chat || {}).codeHelp; if (!ch || !box) return;
+    const q = k => box.querySelector(`[data-x="${k}"]`);
+    const pre = (q('reject').checked ? 'R' : '') + (q('admin').checked ? 'A' : '') + q('base').value;
+    q('preview').textContent = pre + ch.month + '-' + ch.next;
+  }
+
   // แผงโปรไฟล์ถูกเรียกวาดใหม่ทุก 6 วิ (ตามแชท) — **ห้ามวาดทับตอนกำลังพิมพ์ในฟอร์ม**
   //   และไม่วาดถ้าข้อมูลไม่เปลี่ยน (กันกระพริบ/เลื่อนกลับบนสุด)
   let _profSig = '';
@@ -742,7 +786,7 @@
     const d = S.chat; if (!d) return;
     const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team]);
     const act = document.activeElement;
-    const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA/.test(act.tagName);
+    const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA|SELECT/.test(act.tagName);
     if (!force && (sig === _profSig || typing)) return;
     _profSig = sig;
     ['cn-side', 'cn-prof-m-body'].forEach((id, i) => {
@@ -785,6 +829,28 @@
       ni.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) fin(true); if (e.key === 'Escape') fin(false); });
       ni.addEventListener('blur', () => fin(true));
     };
+    const box = el.querySelector('[data-box=assign]');
+    if (box) {
+      box.querySelectorAll('[data-x]').forEach(x => x.addEventListener('change', () => {
+        const q = k => box.querySelector(`[data-x="${k}"]`);
+        S.assignDraft = { id: S.chat.row.id, base: q('base').value, emp: +(q('emp').value || 0),
+                          admin: q('admin').checked, reject: q('reject').checked };
+        codePreview(box);
+      }));
+      codePreview(box);
+      box.querySelector('[data-act=assign-lead]').onclick = async (ev) => {
+        const q = k => box.querySelector(`[data-x="${k}"]`);
+        const emp = +(q('emp').value || 0);
+        if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
+        ev.target.disabled = true;
+        const id = S.chat.row.id;
+        const r = await api('/connect/api/assign_lead', { id, emp, base: q('base').value,
+          admin: q('admin').checked, reject: q('reject').checked });
+        ev.target.disabled = false;
+        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), 4500);
+        if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
+      };
+    }
     const cp = el.querySelector('[data-act=copy-slip]');
     if (cp) cp.onclick = () => {
       const t = (S.chat.lead || {}).slipText || '';

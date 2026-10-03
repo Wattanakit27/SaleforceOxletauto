@@ -726,6 +726,97 @@ try:
     C.sim_clear()
     ck("ล้างข้อมูลทดสอบ = ข้อมูลลีดของลูกค้าจำลองหายตาม", not ChatLead.objects.filter(pk=sl.pk).exists())
 
+    print("[18] เลขลีด + ปุ่มจ่ายเบอร์ (ทดลอง — เก็บใน Postgres อย่างเดียว)")
+    ck("★ อ่านเลขลีดเดือน 2 หลักได้ (ต.ค.-ธ.ค.)", (parse_leadsheet("Ac Lead No.   NLD10-8409") or {}).get("lead_code") == "NLD10-8409")
+    ck("ยังอ่านเลขแบบเดิมได้", (parse_leadsheet("Ac Lead No. TLD9-7376") or {}).get("lead_code") == "TLD9-7376"
+       and (parse_leadsheet("Ac Lead No. TLD-10187") or {}).get("lead_code") == "TLD-10187")
+
+    class _L:                                                     # ข้อมูลลีดจำลองสำหรับเดาตัวหน้า
+        def __init__(self, t="", ch=""):
+            self.lead_type, self.channel = t, ch
+    sp = lambda t="", ch="", team="": C.suggest_prefix(_L(t, ch), team)
+    ck("Moderate → NLD", sp("Moderate")["base"] == "NLD")
+    ck("Hot → WLD", sp("Hot")["base"] == "WLD")
+    ck("Very Hot → HLD", sp("Very Hot")["base"] == "HLD")
+    ck("BLD → BLD", sp("BLD")["base"] == "BLD")
+    ck("ไม่มี type + ช่องทาง TikTok → TLD", sp("", "LIVE Tiktok / ช่องขายบอส")["base"] == "TLD")
+    ck("TikTokAds → TALD", sp("", "TikTokAds")["base"] == "TALD")
+    ck("ไม่มีอะไรเลย → NLD", sp()["base"] == "NLD")
+    ck("type RJ → แนะนำ R", sp("RJ")["reject"] is True)
+    ck("จ่ายให้เทเลเซลล์ → แนะนำ A", sp("Moderate", team="ADMIN")["admin"] is True)
+    ck("ประกอบตัวหน้า R+A+ฐาน", C.build_prefix("NLD", True, True) == "RANLD" and C.build_prefix("xx") == "NLD")
+
+    GID = "C" + "8" * 32
+    for i, code in enumerate(("NLD10-8409", "TLD10-8410", "RNLD10-9999")):     # R = เคสเก่าส่งต่อ ไม่นับ
+        GroupChat.objects.create(chat_type="group", group_id=GID, group_name="ห้องจ่ายเบอร์ บ้านเก่า",
+                                 message_id="code-%d" % i, sender_id="U%032x" % 78, direction="in",
+                                 msg_type="text", text="Ac Lead No.   %s\nเบอร์โทร : 08%08d" % (code, i),
+                                 sent_at=timezone.now() - timedelta(minutes=5 - i))
+    ck("เลขรันล่าสุด = มากสุดของใบจ่ายลีด (ไม่นับ R)", C.last_running() == 8410, C.last_running())
+    MON = timezone.localdate().month
+    ck("เลขถัดไป = ตัวหน้า+เดือน+เลขรัน", C.next_code("NLD") == "NLD%d-8411" % MON, C.next_code("NLD"))
+
+    CALLS.clear()
+    C.assign(o4.id, None, by="เทสต์")
+    ChatLead.objects.filter(chat_id=o4.id).delete()
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % o4.id)
+    ch = d.get("codeHelp") or {}
+    ck("แอดมินได้ตัวช่วยออกเลข", ch.get("next") == 8411 and ch.get("month") == MON, ch)
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % o1.id)
+    ck("เซลล์ไม่ได้ปุ่มจ่ายเบอร์", "codeHelp" not in d)
+    s_, d = J(SA1, "/connect/api/assign_lead", {"id": o4.id, "emp": A1.id, "base": "NLD"})
+    ck("★ เซลล์จ่ายเบอร์ไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o4.id, "emp": 0, "base": "NLD"})
+    ck("ไม่เลือกเซลล์ = ปฏิเสธ", s_ == 400 and "เลือกเซลล์" in d.get("error", ""), d)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o4.id, "emp": A1.id, "base": "WLD"})
+    ld4 = ChatLead.objects.get(chat_id=o4.id)
+    ck("จ่ายเบอร์ได้ + ออกเลขตามกติกา", s_ == 200 and ld4.code == "WLD%d-8411" % MON, (s_, d, ld4.code))
+    ck("type ว่าง → เติมตามตัวหน้า (WLD = Hot)", ld4.lead_type == "Hot", ld4.lead_type)
+    ck("ติดป้ายทดลอง + จดคน/เวลาจ่าย", ld4.code_demo is True and ld4.assigned_at and ld4.assigned_by == "admin",
+       (ld4.code_demo, ld4.assigned_by))
+    ck("โอนลูกค้าให้เซลล์ที่เลือก", ChatOwner.objects.get(pk=o4.id).owner_id == A1.id)
+    ck("ประวัติบอกว่าจ่ายเบอร์อะไร", ChatOwnerLog.objects.filter(chat_id=o4.id, action="assign",
+                                                             note__contains="จ่ายเบอร์ WLD").exists())
+    ck("★ ไม่ลงชีต/ไม่โพสต์กลุ่ม (ไม่มีคำขอออกนอกระบบ)", not [c for c in CALLS if c[0] == "post"], CALLS)
+    st4 = C.slip_text(ChatOwner.objects.select_related("profile", "owner").get(pk=o4.id))
+    ck("ใบย่อขึ้นป้ายทดลองบรรทัดแรก", st4.startswith("⚠️ ทดลอง"), st4[:40])
+    ck("ใบย่อยังอ่านเลขกลับได้", (parse_leadsheet(st4) or {}).get("lead_code") == "WLD%d-8411" % MON)
+    # คนถัดไปได้เลขต่อ (นับเลขที่โหมดทดลองออกไปแล้วด้วย)
+    C.assign(o2.id, None, by="เทสต์"); ChatLead.objects.filter(chat_id=o2.id).update(code="", assigned_at=None)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o2.id, "emp": A2.id, "base": "NLD", "admin": True})
+    ck("คนถัดไปได้เลขต่อ + ตัวหน้า A", ChatLead.objects.get(chat_id=o2.id).code == "ANLD%d-8412" % MON,
+       ChatLead.objects.get(chat_id=o2.id).code)
+    ChatLead.objects.filter(chat_id=o2.id).update(code="", assigned_at=None)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o2.id, "emp": A2.id, "base": "NLD", "code": "WLD%d-8411" % MON})
+    ck("★ เลขซ้ำกับลูกค้าคนอื่น = ปฏิเสธ", s_ == 400 and "ถูกใช้" in d.get("error", ""), d)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o2.id, "emp": A2.id, "base": "NLD", "code": "abc"})
+    ck("เลขผิดรูปแบบ = ปฏิเสธ", s_ == 400 and "รูปแบบ" in d.get("error", ""), d)
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % o4.id)
+    ck("จ่ายแล้วหน้าเว็บได้ข้อมูลการจ่าย", (d.get("lead") or {}).get("assignedAt") and (d.get("lead") or {}).get("codeDemo") is True)
+    # ★ มีเลขอยู่แล้ว (เลขจริงจากใบจ่ายลีด/คนกรอก) = ห้ามออกเลขทดลองทับ — หน้าเว็บค้างของเก่าก็โดนกันที่เซิร์ฟเวอร์
+    ChatLead.objects.filter(chat_id=o2.id).update(code="NLD10-8000", code_demo=False, assigned_at=None)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o2.id, "emp": A2.id, "base": "NLD"})
+    ck("★ มีเลขลีดอยู่แล้ว = ไม่ออกเลขทับ", s_ == 400 and "มีเลขลีด" in d.get("error", "")
+       and ChatLead.objects.get(chat_id=o2.id).code == "NLD10-8000", (s_, d))
+    # เลขที่กรอกเอง → type ตามตัวหน้าของ "เลขนั้น" ไม่ใช่ตัวหน้าที่เลือกในกล่อง
+    ChatLead.objects.filter(chat_id=o2.id).update(code="", lead_type="", assigned_at=None)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": o2.id, "emp": A2.id, "base": "NLD", "code": "rahld%d-8500" % MON})
+    ld2 = ChatLead.objects.get(chat_id=o2.id)
+    ck("เลขที่กรอกเอง: type ตามตัวหน้าของเลข (RAHLD → Very Hot)",
+       s_ == 200 and ld2.code == "RAHLD%d-8500" % MON and ld2.lead_type == "Very Hot", (s_, d, ld2.code, ld2.lead_type))
+    # ★ โอนไม่สำเร็จ = เลขต้องไม่ค้างอยู่กับลูกค้าที่ไม่มีเซลล์ (ย้อนทั้งธุรกรรม)
+    ChatLead.objects.filter(chat_id=o2.id).update(code="", assigned_at=None)
+    C.assign(o2.id, None, by="เทสต์")
+    _real_assign = C.assign
+    C.assign = lambda *a, **k: (False, "โอนไม่ได้ (ทดสอบ)")
+    try:
+        ok_, msg_ = C.assign_lead(ChatOwner.objects.get(pk=o2.id), A2, "NLD", by="เทสต์")
+    finally:
+        C.assign = _real_assign
+    ld2 = ChatLead.objects.get(chat_id=o2.id)
+    ck("★ โอนไม่สำเร็จ = ไม่เก็บเลขค้าง", ok_ is False and ld2.code == "" and ld2.assigned_at is None,
+       (ok_, msg_, ld2.code))
+
 finally:
     _runner.teardown_databases(_old)
 

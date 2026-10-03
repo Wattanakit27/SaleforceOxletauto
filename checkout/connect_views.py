@@ -267,9 +267,37 @@ def api_chat(request):
             out["lead"] = C.lead_json(o, lead)
             out["leadEditable"] = bool(admin or mine)
             out["leadOptions"] = C.lead_options()
+            if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
+                out["codeHelp"] = C.code_help(o, lead)
         except Exception as e:                    # ส่วนลีดพัง ต้องไม่ทำให้เปิดแชทไม่ได้
             out["leadError"] = "โหลดข้อมูลลีดไม่ได้: %s" % str(e)[:120]
     return _j(out)
+
+
+def api_assign_lead(request):
+    """ปุ่ม **"จ่ายเบอร์"** (แอดมิน · โหมดทดลอง) — POST `{id, emp, base, admin, reject, code?}`
+
+    ออกเลขลีดตามกติกาจริง + โอนลูกค้าให้เซลล์ + จดว่าใครจ่ายเมื่อไหร่
+    **เก็บใน Postgres อย่างเดียว ไม่ลงชีต ไม่โพสต์กลุ่ม** (เจ้าของสั่ง 4 ต.ค.69: ยังเป็นเดโม)
+    """
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "จ่ายเบอร์ได้เฉพาะแอดมิน"}, 403)
+    o = _row(request, ctx, body.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    try:
+        eid = int(body.get("emp") or 0)
+    except Exception:
+        eid = 0
+    emp = Employee.objects.filter(pk=eid).first() if eid else None
+    ok, msg = C.assign_lead(o, emp, str(body.get("base") or ""), bool(body.get("admin")),
+                            bool(body.get("reject")), str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
+    if not ok:
+        return _j({"ok": False, "error": msg}, 400)
+    return _j({"ok": True, "message": msg})
 
 
 def api_lead(request):

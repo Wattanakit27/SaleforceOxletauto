@@ -955,6 +955,12 @@ class ChatLead(models.Model):
     more = models.TextField("เพิ่มเติม", blank=True)
     tags = models.JSONField("แท็ก", default=list, blank=True)
 
+    # ★ 4 ต.ค.69 — ปุ่ม "จ่ายเบอร์" (โหมดทดลอง: เก็บใน Postgres อย่างเดียว ไม่ลงชีต/ไม่โพสต์กลุ่ม — เจ้าของสั่ง)
+    #   `code_demo` = เลขนี้ระบบออกเองในโหมดทดลอง **ยังไม่ได้จองในชีตจริง** (แอดมินอาจใช้เลขเดียวกันในชีต)
+    assigned_at = models.DateTimeField("จ่ายเบอร์เมื่อ", null=True, blank=True)
+    assigned_by = models.CharField("จ่ายเบอร์โดย", max_length=80, blank=True)
+    code_demo = models.BooleanField("เลขลีดออกในโหมดทดลอง", default=False)
+
     auto = models.JSONField("ช่องที่ระบบเติมให้", default=dict, blank=True)
     updated_by = models.CharField("แก้ล่าสุดโดย", max_length=80, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

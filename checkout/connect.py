@@ -27,7 +27,7 @@ import re
 import statistics
 from datetime import date, timedelta
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -627,7 +627,7 @@ def claim(row_id, emp, admin: bool = False):
     return True, "รับลูกค้าแล้ว — อย่าลืมตอบก่อนเส้นตาย"
 
 
-def assign(row_id, emp=None, by: str = ""):
+def assign(row_id, emp=None, by: str = "", note: str = ""):
     """แอดมินโอนลูกค้าให้เซลล์ (`emp`) หรือปล่อยคืนคิว (`emp=None`) → (ok, ข้อความ)"""
     o = ChatOwner.objects.select_related("owner", "profile").filter(pk=row_id).first()
     if not o:
@@ -650,7 +650,7 @@ def assign(row_id, emp=None, by: str = ""):
     o.team = team_of(emp) or o.team
     o.save()
     _log(o, ChatOwnerLog.ASSIGN, emp=emp, by=by,
-         note=("โอนจาก %s" % old.nickname) if old else "โอนจากคิว")
+         note=note or (("โอนจาก %s" % old.nickname) if old else "โอนจากคิว"))
     return True, "โอนให้ %s แล้ว" % emp.nickname
 
 
@@ -1054,6 +1054,9 @@ def lead_json(o, lead=None) -> dict:
         "lastUpdate": _iso(o.last_out_at),
         "lineName": p.display_name or "",
         "updatedBy": lead.updated_by or "",
+        "codeDemo": bool(lead.code_demo),
+        "assignedAt": _iso(lead.assigned_at),
+        "assignedBy": lead.assigned_by or "",
     })
     out["slipText"] = slip_text(o, lead)
     return out
@@ -1079,6 +1082,9 @@ def slip_text(o, lead=None) -> str:
     ]
     if o.owner_id:
         lines.append("@%s" % o.owner.nickname)
+    if lead.code_demo:
+        # เลขจากโหมดทดลองยังไม่ได้จองในชีต — กันเผลอก๊อปไปวางในกลุ่มจริงแล้วเลขชนกับของแอดมิน
+        lines.insert(0, "⚠️ ทดลอง — เลขนี้ยังไม่ได้จองในชีตจริง")
     return "\n".join(lines)
 
 
@@ -1113,6 +1119,132 @@ def save_lead_field(o, field: str, value, by: str = ""):
     lead.updated_by = (by or "")[:80]
     lead.save(update_fields=[field, "auto", "updated_by", "updated_at"])
     return True, "บันทึกแล้ว"
+
+
+# ─────────────────────────────────────────────────────────────
+#  เลขลีด (Code) + ปุ่ม "จ่ายเบอร์" — โหมดทดลอง (4 ต.ค.69 · เจ้าของสั่ง: เก็บใน Postgres อย่างเดียว ไม่ลงชีต)
+#
+#  รูปแบบจริง (วัดจากใบจ่ายลีด + ชีตลีด 18,041 แถว): **<ตัวหน้า><เดือน>-<เลขรัน>** เช่น NLD10-8409
+#    · ตัวหน้าตาม type ในชีต: NLD=Moderate · WLD=Hot · HLD=Very Hot · BLD=BLD · TLD=TikTok (TALD=TikTokAds)
+#    · เติมหน้า **A** = ลีดของแอดมิน (ANLD/AWLD/AHLD) · **R** = เคสรีเจ็ค (RNLD/RTLD)
+#    · **เลขรันใช้ร่วมกันทุกตัวหน้า** (8395 TLD → 8396 NLD → 8397 NLD …) · เดือน = เดือนที่จ่าย
+# ─────────────────────────────────────────────────────────────
+CODE_BASES = [("NLD", "Moderate"), ("WLD", "Hot"), ("HLD", "Very Hot"), ("BLD", "BLD"),
+              ("TLD", "TLD"), ("TALD", "TLD")]
+_TYPE_BASE = {"moderate": "NLD", "merhot": "NLD", "hot": "WLD", "very hot": "HLD", "bld": "BLD",
+              "tld": "TLD", "tld / hot": "TLD"}
+_CODE_RE = re.compile(r"^(R?A?(?:NLD|WLD|HLD|BLD|TLD|TALD|LD))(\d{1,2})-(\d{3,6})$")
+_ANY_CODE = re.compile(r"^([A-Za-z]+)(\d{0,2})-?(\d{3,6})$")
+
+
+def suggest_prefix(lead, assignee_team: str = "") -> dict:
+    """ตัวหน้าที่ควรใช้ — ตาม type (ถ้ากรอกแล้ว) ไม่งั้นตามช่องทาง · คนเปลี่ยนเองได้ที่หน้าเว็บ"""
+    t = (lead.lead_type or "").strip().lower()
+    ch = (lead.channel or "").lower().replace(" ", "")
+    if t in _TYPE_BASE:
+        base, why = _TYPE_BASE[t], "ตาม type \"%s\"" % lead.lead_type
+    elif "tiktokads" in ch:
+        base, why = "TALD", "ช่องทาง TikTokAds"
+    elif "tiktok" in ch:
+        base, why = "TLD", "ช่องทาง TikTok"
+    else:
+        base, why = "NLD", "ค่าตั้งต้น (Moderate)"
+    reject = t in ("rj", "hot rj", "hot rb")
+    admin = assignee_team == "ADMIN"
+    return {"base": base, "admin": admin, "reject": reject, "why": why}
+
+
+def build_prefix(base: str, admin: bool = False, reject: bool = False) -> str:
+    base = (base or "").upper()
+    if base not in {b for b, _ in CODE_BASES}:
+        base = "NLD"
+    return ("R" if reject else "") + ("A" if admin else "") + base
+
+
+def last_running() -> int:
+    """เลขรันล่าสุดที่ใช้จริง — จากใบจ่ายลีด 20 ใบล่าสุดในกลุ่มจ่ายเบอร์ (ไม่นับ R = เคสเก่าที่ส่งต่อ)
+    รวมเลขที่โหมดทดลองออกไปแล้ว · ใช้ "มากสุดของ 20 ใบ" เพราะบางใบโพสต์สลับลำดับกัน"""
+    from .leadgroup import _LEAD_NO
+    nums = []
+    gids = _lead_group_ids()
+    if gids:
+        rows = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=gids, text__icontains="lead no")
+                .order_by("-sent_at").values_list("text", flat=True)[:120])
+        for t in rows:
+            m = _LEAD_NO.search(t or "")
+            mm = _ANY_CODE.match(m.group(1)) if m else None
+            if mm and not mm.group(1).upper().startswith("R"):
+                nums.append(int(mm.group(3)))
+            if len(nums) >= 20:
+                break
+    for c in ChatLead.objects.filter(code_demo=True).exclude(code="").values_list("code", flat=True)[:500]:
+        mm = _ANY_CODE.match(c or "")
+        if mm:
+            nums.append(int(mm.group(3)))
+    return max(nums) if nums else 0
+
+
+def next_code(prefix: str) -> str:
+    return "%s%d-%d" % (prefix, timezone.localdate().month, last_running() + 1)
+
+
+def code_help(o, lead) -> dict:
+    """ข้อมูลให้หน้าเว็บประกอบตัวอย่างเลขลีดก่อนกด "จ่ายเบอร์" (เลขจริงคำนวณใหม่ตอนกด กันซ้ำ)"""
+    sug = suggest_prefix(lead, team_of(o.owner) if o.owner_id else "")
+    return {"suggest": sug, "bases": [{"key": b, "type": t} for b, t in CODE_BASES],
+            "month": timezone.localdate().month, "next": last_running() + 1}
+
+
+class _Undo(Exception):
+    """ยกเลิกธุรกรรมของปุ่มจ่ายเบอร์ พร้อมข้อความที่จะบอกผู้ใช้"""
+
+
+def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, code: str = "", by: str = ""):
+    """ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) → (ok, ข้อความ)
+
+    ออกเลขลีด → ตั้ง type (ถ้ายังว่าง) → โอนลูกค้าให้เซลล์ → จดว่าใครจ่ายเมื่อไหร่
+    **ไม่ลงชีต ไม่โพสต์เข้ากลุ่มจ่ายเบอร์** (เจ้าของสั่ง: ยังเป็นเดโม) · เลขติดป้าย `code_demo`
+    """
+    if not emp or not emp.active:
+        return False, "เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน"
+    lead = lead_of(o)
+    if (lead.code or "").strip():
+        # มีเลขแล้ว (จากใบจ่ายลีดจริง/คนกรอก/จ่ายไปแล้ว) — ห้ามออกเลขทดลองทับ ไม่งั้นเลขจริงที่ผูกกับชีตหาย
+        # กรณีหน้าเว็บค้างของเก่าอยู่ (ระบบเพิ่งเติมเลขจากใบจ่ายลีดระหว่างที่แอดมินกำลังเลือก) ก็โดนกันที่นี่
+        return False, "ลูกค้ารายนี้มีเลขลีด %s แล้ว — ไม่ออกเลขใหม่ทับ (จะเปลี่ยนเซลล์ใช้ปุ่ม \"โอน\")" % lead.code
+    prefix = build_prefix(base, admin, reject)
+    code = (code or "").strip().upper()
+    if code:
+        m = _CODE_RE.match(code)
+        if not m:
+            return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ NLD10-8410 (ตัวหน้า + เดือน + เลขรัน)"
+    else:
+        code = next_code(prefix)
+    dup = ChatLead.objects.filter(code__iexact=code).exclude(pk=lead.pk).first()
+    if dup:
+        return False, "เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code
+    lead.code, lead.code_demo = code, True
+    if not lead.lead_type:                       # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)
+        core = _CODE_RE.match(code).group(1).lstrip("R").lstrip("A")
+        lead.lead_type = dict(CODE_BASES).get(core, "")
+    auto = dict(lead.auto or {})
+    auto["code"] = "จ่ายเบอร์(ทดลอง)"
+    lead.auto = auto
+    lead.assigned_at, lead.assigned_by = timezone.now(), (by or "")[:80]
+    lead.updated_by = (by or "")[:80]
+    note = "จ่ายเบอร์ %s (ทดลอง)" % code
+    try:
+        with transaction.atomic():               # โอนไม่สำเร็จ = เลขต้องไม่ค้างอยู่กับลูกค้าที่ไม่มีเซลล์
+            lead.save()
+            if o.owner_id == emp.id:             # เป็นของคนนี้อยู่แล้ว — ไม่ต้องโอน แค่จดว่าจ่ายเบอร์
+                _log(o, ChatOwnerLog.ASSIGN, emp=emp, by=by, note=note)
+            else:
+                ok, msg = assign(o.id, emp, by=by, note=note)
+                if not ok:
+                    raise _Undo(msg)
+    except _Undo as e:
+        return False, str(e)
+    return True, "จ่ายเบอร์ %s ให้ %s แล้ว (ทดลอง — ยังไม่ลงชีต)" % (code, emp.nickname)
 
 
 def lead_options() -> dict:
