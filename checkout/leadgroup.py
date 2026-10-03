@@ -157,7 +157,21 @@ _TH_MODEL = {
     "วีออส": "vios", "แจ๊ส": "jazz", "แอคคอร์ด": "accord", "มาร์ช": "march",
     "อัลติส": "altis", "รีโว่": "revo", "วีโก้": "vigo", "ดีแม็ก": "d-max",
     "ปาเจโร่": "pajero", "เทอร์ร่า": "terra", "ครอส": "cross", "ซิตี": "city",
+    # ★ 4 ต.ค.69 — ชื่อที่ลูกค้าพิมพ์ในแชท LINE OA (หน้า Connect เติมช่อง "CAR / สูตร" จากตรงนี้)
+    #   ฝั่งอังกฤษต้องเขียนให้ตรงตัวเลือกในชีตเมื่อตัดช่องว่าง/ขีดออก ("d-max" = "D Max" · "mu-x" = "MuX")
+    "ดีแม็ค": "d-max", "ดีแมค": "d-max", "ดีแมก": "d-max", "ดีแม๊ก": "d-max",
+    "มิวเอ็กซ์": "mu-x", "มิวเอ็ก": "mu-x", "มิวเซเว่น": "mu-7",
+    "ไทรทัน": "triton", "ไททัน": "triton", "เรนเจอร์": "ranger", "เอเวอเรสต์": "everest",
+    "เอ็กซ์แพนเดอร์": "xpander", "เวลอซ": "veloz", "อินโนว่า": "innova", "คอมมิวเตอร์": "commuter",
+    "เอชอาร์วี": "hrv", "ซีอาร์วี": "crv", "บีอาร์วี": "brv", "บริโอ้": "brio", "สวิฟ": "swift",
+    "ซิลฟี่": "sylphy", "เทียน่า": "teana", "มิราจ": "mirage", "อัลพาร์ด": "alphard", "เวลไฟร์": "vellfire",
+    "มาสด้า2": "mazda2", "มาสด้า 2": "mazda2", "มาสด้า3": "mazda3", "มาสด้า 3": "mazda3",
+    "ยาริสครอส": "yaris cross", "ยาริส ครอส": "yaris cross", "ยาริสเอทีฟ": "yaris ativ",
+    "ยาริส เอทีฟ": "yaris ativ", "เอทีฟ": "yaris ativ",
+    "โคโรล่าครอส": "corolla cross", "โคโรลล่าครอส": "corolla cross", "โคโรล่า ครอส": "corolla cross",
 }
+# ยาวก่อนเสมอ — "ยาริสครอส" ต้องชนะ "ยาริส"/"ครอส" (ไม่งั้นได้รุ่นกว้างกว่าที่ลูกค้าบอก)
+_TH_MODEL_KEYS = sorted(_TH_MODEL, key=len, reverse=True)
 
 
 def _year4(v: int) -> int:
@@ -195,9 +209,9 @@ def parse_specs(text: str) -> dict:
                 out["car_year_max"] = b
 
     low = t.lower()
-    for th, en in _TH_MODEL.items():
+    for th in _TH_MODEL_KEYS:
         if th in low:
-            out["car_model"] = en
+            out["car_model"] = _TH_MODEL[th]
             break
     return out
 

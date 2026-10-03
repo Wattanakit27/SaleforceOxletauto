@@ -996,6 +996,53 @@ try:
         _GS._get_credentials = _real_creds
         _GS.fetch_lead_dropdowns = _no_sheet
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[20] รถที่ลูกค้าถาม — ยี่ห้อ + ปีที่พิมพ์แยกข้อความ (4 ต.ค.69 · เจ้าของแจ้ง \"ลูกค้าก็บอกอยู่นะ อีซูซุ\")")
+    cache_store.set_kv(C.DD_KEY, {})                  # กลับไปใช้ชุดที่จำไว้ (มี D Max · MuX · Benz · Yaris Cross …)
+    C._DD.update(at=0.0, val=None)
+    ck("บอกแค่ยี่ห้อ = รู้ว่าถามรถ แต่ไม่เดารุ่น", C.car_in("อีซูซุ") == ("", "อีซูซุ"), C.car_in("อีซูซุ"))
+    ck("ยี่ห้อที่ชีตมีตัวเลือกระดับยี่ห้อ = ได้ CAR/สูตร", (C.car_in("สนใจเบนซ์ครับ") or ("",))[0] == "Benz",
+       C.car_in("สนใจเบนซ์ครับ"))
+    ck("ยี่ห้ออังกฤษก็จับได้", C.car_in("Isuzu มีไหม") == ("", "Isuzu มีไหม"), C.car_in("Isuzu มีไหม"))
+    ck("★ เกียร์ออโต้ ≠ Kia", C.car_in("เกียร์ออโต้ไหมครับ") is None, C.car_in("เกียร์ออโต้ไหมครับ"))
+    ck("ดีแม็ค (สะกดอีกแบบ) → D Max", (C.car_in("ดีแม็ค ปี 15") or ("",))[0] == "D Max", C.car_in("ดีแม็ค ปี 15"))
+    ck("★ ชื่อไทยยาวก่อน: ยาริสครอส → Yaris Cross (ไม่ใช่ยาริสเฉยๆ)",
+       (C.car_in("หายาริสครอสครับ") or ("",))[0] == "Yaris Cross", C.car_in("หายาริสครอสครับ"))
+    ck("มาสด้า 2 → Mazda2 (ไม่ใช่แค่ยี่ห้อ)", (C.car_in("มาสด้า 2 ปี 18") or ("",))[0] == "Mazda2",
+       C.car_in("มาสด้า 2 ปี 18"))
+    ck("ข้อความทั่วไปไม่นับเป็นรถ", C.car_in("มีคันไหนบ้าง") is None and C.car_in("โทรมา 0902483727") is None)
+    ck("ปีแบบไม่มีคำว่าปีก็นับ · เลขกลางเบอร์โทรไม่นับ", C._has_spec("2015-2017") and not C._has_spec("0902483727"))
+
+    o5id = o3.id
+
+    def _car(msgs, fresh=True):
+        if fresh:
+            ChatLead.objects.filter(chat_id=o5id).delete()
+        return C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o5id), msgs)
+
+    ld = _car(["สวัสดีครับ", "อีซูซุ", "ปี2015-2017", "มีคันไหนบ้าง"])
+    ck("★ เคสจริง: อีซูซุ + ปี2015-2017 (คนละข้อความ) → รถลูกค้าถามครบทั้งคู่",
+       ld.car_text == "อีซูซุ ปี2015-2017" and ld.auto.get("car_text") == "แชท", (ld.car_text, ld.auto))
+    ck("ไม่เดารุ่นให้ (อีซูซุ มีหลายรุ่นในชีต)", ld.car_model == "", ld.car_model)
+    ck("ใบจ่ายลีดขึ้นรถแล้ว (เดิม \"รถ : -\")",
+       "รถ : อีซูซุ ปี2015-2017" in C.slip_text(ChatOwner.objects.get(pk=o5id)), C.slip_text(ChatOwner.objects.get(pk=o5id)))
+    ld = _car(["อีซูซุ"])
+    ld = _car(["อีซูซุ", "ปี2015-2017"], fresh=False)
+    ck("★ ลูกค้าพิมพ์ปีตามมาทีหลัง → เติมต่อจากของเดิมที่ระบบใส่ไว้", ld.car_text == "อีซูซุ ปี2015-2017", ld.car_text)
+    C.save_lead_field(ChatOwner.objects.get(pk=o5id), "car_text", "หากระบะ", by="เอหนึ่ง")
+    ld = _car(["อีซูซุ", "ปี2015-2017", "งบ 4 แสน"], fresh=False)
+    ck("★ คนแก้แล้ว ระบบไม่เติมต่อทับ", ld.car_text == "หากระบะ" and ld.auto.get("car_text") == "คน", ld.car_text)
+    ld = _car(["อีซูซุ", "ดีแม็กซ์ ปี 2016", "ดาวน์ 0 ได้ไหม"])
+    ck("ยี่ห้อ + รุ่นชัดข้อความถัดไป → CAR/สูตร D Max + ข้อความรวมยี่ห้อ",
+       ld.car_model == "D Max" and ld.car_text == "อีซูซุ ดีแม็กซ์ ปี 2016", (ld.car_model, ld.car_text))
+    ld = _car(["แคมรี่ ปี 20", "หรือ civic fe ก็ได้"])
+    ck("รุ่นชัดคันอื่นในข้อความถัดไป = คนละคัน ไม่เอามาต่อ",
+       ld.car_model == "Camry" and ld.car_text == "แคมรี่ ปี 20", (ld.car_model, ld.car_text))
+    ld = _car(["งบ 3 แสน", "ฮอนด้า"])
+    ck("งบที่บอกก่อนชื่อรถ ก็ต่อเข้ามา", ld.car_text == "งบ 3 แสน ฮอนด้า", ld.car_text)
+    ld = _car(["อีซูซุ", "ปี 2015 " + "ก" * 100])
+    ck("ข้อความยาว (ไม่ใช่สเปกสั้นๆ) ไม่เอามาต่อ", ld.car_text == "อีซูซุ", ld.car_text)
+
 finally:
     _runner.teardown_databases(_old)
 

@@ -1050,35 +1050,108 @@ def _vocab() -> dict:
     return _VOCAB
 
 
+# ยี่ห้อที่ลูกค้าพิมพ์เป็นไทย (★ 4 ต.ค.69 — เจ้าของแจ้ง "ลูกค้าก็บอกอยู่นะ อีซูซุ" แต่ใบจ่ายลีดขึ้น "รถ : -")
+#   บอกแค่ยี่ห้อ = รู้ว่าลูกค้าถามรถ แต่ไม่รู้รุ่น (อีซูซุ = D Max / MuX / Mu7?) → ได้ "รถลูกค้าถาม" อย่างเดียว
+#   ยกเว้นยี่ห้อที่ชีตใช้ตัวเลือกระดับยี่ห้ออยู่แล้ว (Benz · BMW · MG · Hyundai · Kia) → ได้ "CAR / สูตร" ด้วย
+_TH_BRAND = {
+    "อีซูซุ": "isuzu", "อิซูซุ": "isuzu", "โตโยต้า": "toyota", "โตโยตา": "toyota", "ฮอนด้า": "honda",
+    "ฮอนดา": "honda", "นิสสัน": "nissan", "นิสัน": "nissan", "มาสด้า": "mazda", "มาสดา": "mazda",
+    "มิตซูบิชิ": "mitsubishi", "มิตซู": "mitsubishi", "ฟอร์ด": "ford", "เชฟโรเลต": "chevrolet",
+    "ซูซูกิ": "suzuki", "เบนซ์": "benz", "เบ๊นซ์": "benz", "บีเอ็ม": "bmw", "เอ็มจี": "mg",
+    "ฮุนได": "hyundai", "ซูบารุ": "subaru", "เล็กซัส": "lexus", "วอลโว่": "volvo", "ฮาวาล": "haval",
+}
+_KIA_TH = re.compile(r"เกีย(?!ร)")          # "เกียร์ออโต้" ไม่ใช่ Kia (คำนี้โผล่บ่อยในแชทซื้อรถ)
+_BRAND_EN = re.compile(r"(?<![a-z0-9])(isuzu|toyota|honda|nissan|mazda|mitsubishi|ford|chevrolet|chevy|suzuki|"
+                       r"benz|mercedes|bmw|mg|hyundai|kia|subaru|lexus|volvo|haval|byd|gwm|neta|peugeot)(?![a-z])")
+
+
+def brand_in(text: str) -> str:
+    """ยี่ห้อรถในข้อความ (ชื่อภาษาอังกฤษตัวเล็ก) · ไม่มี = ค่าว่าง"""
+    low = (text or "").lower()
+    for th, en in _TH_BRAND.items():
+        if th in low:
+            return en
+    if _KIA_TH.search(low):
+        return "kia"
+    m = _BRAND_EN.search(low)
+    return {"mercedes": "benz", "chevy": "chevrolet"}.get(m.group(1), m.group(1)) if m else ""
+
+
 def car_in(text: str):
     """รถที่ข้อความนี้พูดถึง → (ตัวเลือก "CAR / สูตร" ของชีต หรือ "" ถ้าบอกรุ่นไม่ชัด, ข้อความเดิม) · ไม่พูดถึงรถ = None
 
     "CAR / สูตร" ในชีตเป็น dropdown แบบ strict → เติมเฉพาะค่าที่อยู่ในลิสต์เท่านั้น
     · "สนใจ city" = 4 ประตูหรือ 5 ประตูก็ไม่รู้ → คืน "" (ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง ไม่เดา)
+    · บอกแค่ยี่ห้อ ("อีซูซุ") ก็เหมือนกัน — รู้ว่าถามรถ แต่ไม่รู้รุ่น
     """
     t = (text or "").strip()
     if not t:
         return None
     v = _vocab()
-    if v["cars"]:
-        try:
-            from dashboard.services.purchase_report import _compact, match_model
-            k = match_model(t, v["cars"])
-            if k:
-                return v["names"].get(k, ""), t
-            c = _compact(t)
-            if any(b in c for b in v.get("bases") or []):
-                return "", t
-        except Exception:
-            pass
+    try:
+        from dashboard.services.purchase_report import _compact, match_model
+    except Exception:
+        _compact = match_model = None
+    # 1) ชื่อรุ่นที่ตรงตัวเลือกในชีต ("civic fe" → "Civic FE")
+    if v["cars"] and match_model:
+        k = match_model(t, v["cars"])
+        if k:
+            return v["names"].get(k, ""), t
+    # 2) ชื่อรุ่นภาษาไทย ("แคมรี่" → camry → "Camry" · "ดีแม็ก" → d-max → "D Max")
     try:
         from .leadgroup import parse_specs
         m = parse_specs(t).get("car_model")
-        if m:
-            return dd_pick("car_model", m), t        # "แคมรี่" → camry → "Camry" (ตรงตัวเลือกในชีตเท่านั้น)
+    except Exception:
+        m = ""
+    if m:
+        k = match_model(m, v["cars"]) if (v["cars"] and match_model) else ""
+        return (v["names"].get(k, "") if k else dd_pick("car_model", m)), t
+    # 3) ชื่อรุ่นหลักที่มีหลายรุ่นย่อย ("city" = 4 หรือ 5 ประตู?) → ไม่เดารุ่น
+    if _compact and any(b in _compact(t) for b in v.get("bases") or []):
+        return "", t
+    # 4) บอกแค่ยี่ห้อ → ตัวเลือกระดับยี่ห้อถ้าชีตมี (Benz/BMW/MG/Hyundai/Kia) ไม่งั้น "" (รู้แค่ว่าถามรถ)
+    b = brand_in(t)
+    if b:
+        return dd_pick("car_model", b), t
+    return None
+
+
+_BARE_YEAR = re.compile(r"(?<!\d)(?:19[89]\d|20[0-4]\d)(?!\d)")   # "2015-2017" ไม่มีคำว่าปี · ไม่จับกลางเบอร์โทร
+
+
+def _has_spec(text: str) -> bool:
+    """ข้อความนี้บอกปี/งบ/ผ่อนของรถไหม ("ปี2015-2017" · "งบ 3 แสน" · "ผ่อน 8000")"""
+    try:
+        from .leadgroup import parse_specs
+        sp = parse_specs(text)
+        if sp.get("car_year_min") or sp.get("budget_max") or sp.get("monthly_max"):
+            return True
     except Exception:
         pass
-    return None
+    return bool(_BARE_YEAR.search(text or ""))
+
+
+def _car_context(msgs, hits, i) -> str:
+    """ข้อความที่พูดถึงรถ (msgs[i]) + ข้อความสั้นที่ติดกันซึ่งเป็นเรื่องเดียวกัน → ข้อความ "รถลูกค้าถาม"
+
+    ลูกค้ามักพิมพ์แยกทีละข้อความ ("อีซูซุ" / "ปี2015-2017") ถ้าเอาแค่ข้อความเดียวจะเสียปีที่ลูกค้าบอก
+    ต่อเฉพาะข้อความที่บอก ปี/งบ/ผ่อน หรือพูดถึงรถแบบไม่ชัด (ยี่ห้อ) · ข้อความที่บอกรุ่นชัดคันอื่น = คนละคัน ไม่ต่อ
+    """
+    model = hits[i][0] if hits[i] else ""
+
+    def joinable(j):
+        t = (msgs[j] or "").strip()
+        if not t or len(t) > 80:
+            return False
+        h = hits[j]
+        return (not h[0] or h[0] == model) if h else _has_spec(t)
+
+    lo = hi = i
+    while lo > 0 and i - lo < 2 and joinable(lo - 1):
+        lo -= 1
+    while hi + 1 < len(msgs) and hi - i < 3 and joinable(hi + 1):
+        hi += 1
+    return " ".join((msgs[j] or "").strip() for j in range(lo, hi + 1) if (msgs[j] or "").strip())
 
 
 def _line_channel() -> str:
@@ -1175,22 +1248,24 @@ def autofill(o, msgs=None) -> ChatLead:
     if ph:
         put("phone", ph[0], "แชท")
     # รถที่ลูกค้าถาม: ข้อความแรกที่บอกรุ่นชัด (ตรงตัวเลือก "CAR / สูตร") → ได้ทั้ง 2 ช่องจากข้อความเดียวกัน
-    #   ไม่มีข้อความไหนบอกรุ่นชัด ("สนใจ city" = 4 หรือ 5 ประตู?) → ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง
+    #   ไม่มีข้อความไหนบอกรุ่นชัด ("สนใจ city" · "อีซูซุ" = รุ่นไหน?) → ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง
     #   ★ 2 ช่องต้องมาจากข้อความเดียวกัน — ไม่งั้นได้ "รถลูกค้าถาม: Civic" คู่กับ "CAR/สูตร: Camry"
-    first_said, clear = "", None
-    for t in msgs:
-        hit = car_in(t)
-        if not hit:
-            continue
-        if hit[0]:
-            clear = hit
-            break
-        first_said = first_said or hit[1]
-    if clear:
-        put("car_model", clear[0], "แชท")
-        put("car_text", clear[1][:200], "แชท", over=("แชท",))     # แทนข้อความกำกวมที่ระบบเติมไว้ก่อนได้
-    elif first_said:
-        put("car_text", first_said[:200], "แชท")
+    #   ★ 4 ต.ค.69 — ต่อข้อความข้างเคียงที่เป็นเรื่องเดียวกันด้วย ("อีซูซุ" + "ปี2015-2017") ดู _car_context
+    hits = [car_in(t) for t in msgs]
+    clear_i = next((i for i, h in enumerate(hits) if h and h[0]), None)
+    first_i = next((i for i, h in enumerate(hits) if h), None)
+    if clear_i is not None:
+        put("car_model", hits[clear_i][0], "แชท")
+        put("car_text", _car_context(msgs, hits, clear_i), "แชท", over=("แชท",))   # แทนข้อความกำกวมที่ระบบเติมไว้ได้
+    elif first_i is not None:
+        said = _car_context(msgs, hits, first_i)[:LEAD_FIELDS["car_text"]]
+        cur = lead.car_text or ""
+        if auto.get("car_text") == "แชท" and cur and cur != said and cur in said:
+            # ลูกค้าพิมพ์ต่อ ("ปี2015-2017" มาทีหลัง "อีซูซุ") → เติมต่อจากข้อความเดิมที่ระบบใส่ไว้ (ไม่แตะที่คนแก้)
+            lead.car_text = said
+            changed.append("car_text")
+        else:
+            put("car_text", said, "แชท")
 
     # ใบจ่ายลีดที่แอดมินโพสต์ไว้แล้ว — หาซ้ำได้ทุก 30 นาที (ไม่ยิง query ทุกครั้งที่เปิดแชท)
     now = timezone.now()
