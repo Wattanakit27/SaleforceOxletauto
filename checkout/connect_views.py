@@ -36,23 +36,42 @@ def _body(request) -> dict:
         return {}
 
 
+TEST_AS_KEY = "connect_as"        # session: แอดมินกำลังใช้หน้าจอแบบบัญชีเซลล์จำลองคนไหน (Employee.id)
+
+
 def _ctx(request):
-    """คนที่เปิดหน้านี้ — None = ยังไม่ login"""
+    """คนที่เปิดหน้านี้ — None = ยังไม่ login
+
+    ★ โหมดทดสอบ: แอดมินสลับไปใช้หน้าจอแบบ **บัญชีเซลล์จำลอง** ได้ (`connect_as` ใน session)
+      → สิทธิ์ทุกอย่างคิดแบบเซลล์คนนั้นเป๊ะ (เช็คซ้ำทุกคำขอว่าคนจริงยังเป็นแอดมิน
+      และเป้าหมายเป็นบัญชีจำลองเท่านั้น — สลับเป็นเซลล์จริงไม่ได้)
+    """
     u = request.session.get("oxlet_user")
     if not (isinstance(u, dict) and u.get("position")):
         return None
     pos = (u.get("position") or "").strip().lower()
+    admin = pos in _ADMIN_POS
+    real_name = u.get("nickname") or u.get("display_name") or ""
+    as_id = request.session.get(TEST_AS_KEY) if admin else None
+    if as_id:
+        tester = Employee.objects.filter(pk=as_id, active=True).first()
+        if tester and C.is_test_seller(tester):
+            return {"user": {"nickname": tester.nickname, "position": "seller"},
+                    "admin": False, "worker": False, "emp": tester, "team": C.team_of(tester),
+                    "name": tester.nickname, "testAs": True, "realAdmin": True, "realName": real_name}
+        request.session.pop(TEST_AS_KEY, None)          # บัญชีจำลองถูกลบไปแล้ว → กลับเป็นแอดมิน
     try:
         emp = C.employee_of(u)
     except Exception:
         emp = None
     return {
         "user": u,
-        "admin": pos in _ADMIN_POS,
+        "admin": admin,
         "worker": pos == "worker",
         "emp": emp,
         "team": C.team_of(emp),
-        "name": (emp.nickname if emp else (u.get("nickname") or u.get("display_name") or "")),
+        "name": (emp.nickname if emp else real_name),
+        "testAs": False, "realAdmin": admin, "realName": real_name,
     }
 
 
@@ -131,6 +150,9 @@ def page(request):
                "empId": ctx["emp"].id if ctx["emp"] else 0},
         "openId": request.GET.get("id") or "",
         "embed": request.GET.get("embed") == "1",
+        # โหมดทดสอบ — หน้าเว็บขึ้นแถบบอกตลอดว่ากำลังใช้บัญชีจำลอง + ปุ่มกลับเป็นแอดมิน
+        "test": {"as": ctx["testAs"], "realName": ctx["realName"],
+                 "teams": C.cfg()["teams"]} if ctx["realAdmin"] else None,
     }
     # json_script (ไม่ใช่ |safe) — ชื่อเล่นเป็นข้อความที่คนพิมพ์เอง ห้ามให้ปิด <script> ได้
     return render(request, "checkout/connect.html", {"error": err, "boot": boot},
@@ -232,7 +254,8 @@ def api_chat(request):
         "canReply": acc == "full" and (admin or mine),
         "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or mine),
         "canAssign": admin,
-        "replyOn": reply_on(),
+        # ลูกค้าจำลองไม่ติดสวิตช์ล็อก (ตอบไปไม่ออกนอกระบบ) — ต้องตรงกับ chat.send_reply
+        "replyOn": reply_on() or C.is_sim(o.profile.user_id),
         "now": timezone.localtime().isoformat(timespec="seconds"),
     }
     if admin:
@@ -356,6 +379,54 @@ def api_config(request):
     return _j({"ok": True, "cfg": c, "roster": C.roster(14, c), "duty": _duty(c),
                "teamsAvail": teams, "groups": _alert_groups(), "status": _status(ctx),
                "sellers": C.seller_list()})
+
+
+def api_test(request):
+    """โหมดทดสอบ (แอดมินเท่านั้น) — GET = สถานะ · POST `{action}`:
+       `as` {team}  = ใช้หน้าจอแบบบัญชีเซลล์จำลองของทีมนั้น (สร้างให้ถ้ายังไม่มี)
+       `exit`       = กลับเป็นแอดมิน
+       `customer` {text?} = ลูกค้าจำลองทักเข้ามา 1 คน
+       `say` {id, text}   = ลูกค้าจำลองพิมพ์ต่อ (ทดสอบรอบรอ/เลยเวลา)
+       `clear`      = ล้างข้อมูลทดสอบทั้งหมด (ลูกค้าจริงที่บัญชีจำลองรับไว้ → คืนคิว)
+    """
+    ctx = _ctx(request)
+    if not ctx or not ctx["realAdmin"]:
+        return _j({"ok": False, "error": "โหมดทดสอบใช้ได้เฉพาะแอดมิน/ผู้บริหาร"}, 403)
+    if request.method != "POST":
+        return _j({"ok": True, "as": ctx["testAs"], "name": ctx["name"] if ctx["testAs"] else "",
+                   "counts": C.sim_counts(), "teams": C.cfg()["teams"]})
+    body = _body(request)
+    act = (body.get("action") or "").strip()
+    if act == "as":
+        team = str(body.get("team") or "").strip().upper()
+        if team not in C.cfg()["teams"]:
+            return _j({"ok": False, "error": "ทีม %s ไม่อยู่ในเวร" % (team or "?")}, 400)
+        emp = C.test_seller(team)
+        request.session[TEST_AS_KEY] = emp.id
+        return _j({"ok": True, "message": "ตอนนี้คุณใช้หน้าจอแบบ %s" % emp.nickname})
+    if act == "exit":
+        request.session.pop(TEST_AS_KEY, None)
+        return _j({"ok": True, "message": "กลับเป็นแอดมินแล้ว"})
+    if act == "customer":
+        o = C.sim_customer(body.get("text") or "")
+        return _j({"ok": True, "id": o.id if o else 0,
+                   "message": "ลูกค้าจำลองทักเข้ามาแล้ว — อยู่ในแท็บ \"รอรับ\" ของทีม %s" % (o.team if o else "-")})
+    if act == "say":
+        text = (body.get("text") or "").strip()
+        if not text:
+            return _j({"ok": False, "error": "ยังไม่ได้พิมพ์ข้อความ"}, 400)
+        o = C.sim_say(body.get("id"), text)
+        if not o:
+            return _j({"ok": False, "error": "พิมพ์แทนได้เฉพาะลูกค้าจำลอง"}, 400)
+        return _j({"ok": True, "message": "ลูกค้าจำลองส่งข้อความแล้ว"})
+    if act == "clear":
+        request.session.pop(TEST_AS_KEY, None)
+        r = C.sim_clear(by=ctx["realName"] or "แอดมิน")
+        return _j({"ok": True, "result": r,
+                   "message": "ล้างแล้ว — ลูกค้าจำลอง %d คน · บัญชีจำลอง %d บัญชี%s" % (
+                       r["customers"], r["sellers"],
+                       (" · คืนลูกค้าจริงเข้าคิว %d คน" % r["released"]) if r["released"] else "")})
+    return _j({"ok": False, "error": "ไม่รู้จักคำสั่ง %s" % act}, 400)
 
 
 @require_GET

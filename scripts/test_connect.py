@@ -531,6 +531,106 @@ try:
              if leak.search(SA1.get(pth, secure=True).content.decode("utf-8"))]
     ck("หลังเพิ่มโปรไฟล์ ยังไม่มี LINE user id หลุด", not leak2, leak2)
 
+    print("[16] โหมดทดสอบ — บัญชีเซลล์จำลอง + ลูกค้าจำลอง")
+    ck("ลูกค้าจำลองนับ 5 นาทีทันทีแม้ตอนกลางคืน",
+       C.due_for(at(2026, 10, 3, 23), dict(C.DEFAULTS), ignore_hours=True) == at(2026, 10, 3, 23, 5))
+    s_, d = J(SA1, "/connect/api/test")
+    ck("เซลล์ใช้โหมดทดสอบไม่ได้", s_ == 403, s_)
+    s_, d = J(SA1, "/connect/api/test", {"action": "as", "team": "A"})
+    ck("เซลล์สลับตัวตนไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/test")
+    ck("แอดมินเห็นสถานะโหมดทดสอบ", s_ == 200 and d.get("as") is False and "counts" in d, d)
+    _save_cfg(dict(line_cfg(), reply_customer=False))       # ล็อกการส่งไว้ — ลูกค้าจำลองต้องยังตอบได้
+
+    TST = client({"user_id": "admin", "nickname": "admin", "position": "admin"})
+    s_, d = J(TST, "/connect/api/test", {"action": "as", "team": "B"})
+    ck("แอดมินสลับเป็น ทดสอบเซลล์ B", s_ == 200 and d.get("ok"), d)
+    tB = Employee.objects.filter(nickname="ทดสอบเซลล์ B").first()
+    ck("สร้างบัญชีจำลองให้ (ทีม B · ไม่ต้องเช็คชื่อ)", tB is not None and C.team_of(tB) == "B"
+       and tB.track_checkin is False, tB and (tB.position, tB.track_checkin))
+    r = TST.get("/connect/", secure=True).content.decode("utf-8")
+    #  json_script หนีอักษรไทยเป็น \uXXXX — ต้องแกะ JSON ก่อนเทียบ (ค้นข้อความตรงๆ จะไม่เจอ)
+    mm = re.search(r'<script id="cn-boot" type="application/json">(.*?)</script>', r, re.S)
+    boot = json.loads(mm.group(1)) if mm else {}
+    ck("หน้าเว็บบอกว่ากำลังใช้บัญชีจำลอง", (boot.get("test") or {}).get("as") is True
+       and (boot.get("me") or {}).get("name") == "ทดสอบเซลล์ B" and (boot.get("me") or {}).get("admin") is False, boot)
+    s_, d = J(TST, "/connect/api/inbox?view=all")
+    ck("โหมดทดสอบ = ได้สิทธิ์แบบเซลล์ (ขอดูทั้งหมดไม่ได้)", d.get("view") in ("queue", "mine")
+       and "overdue" not in d.get("counts", {}), (d.get("view"), list(d.get("counts", {}))))
+    s_, d = J(TST, "/connect/api/config")
+    ck("โหมดทดสอบ = เปิดตั้งค่าไม่ได้ (เหมือนเซลล์)", s_ == 403, s_)
+    s_, d = J(TST, "/connect/api/test", {"action": "customer", "text": "มีกระบะไหมครับ"})
+    ck("สร้างลูกค้าจำลองได้", s_ == 200 and d.get("id"), d)
+    sim_id = d.get("id")
+    so = ChatOwner.objects.select_related("profile").get(pk=sim_id)
+    ck("ลูกค้าจำลอง id ไม่ใช่ LINE id", so.profile.user_id.startswith("TEST-")
+       and not leak.search(so.profile.user_id), so.profile.user_id)
+    ck("ลูกค้าจำลองเข้าคิว + เริ่มนับทันที", so.awaiting_since is not None and so.owner_id is None
+       and (so.due_at - so.awaiting_since) == timedelta(minutes=C.cfg()["sla_min"]))
+    s_, d = J(TST, "/connect/api/claim", {"id": sim_id})
+    ck("ทดสอบเซลล์ B วันนี้ไม่ใช่เวร = รับไม่ได้ (เหมือนเซลล์จริง)", s_ == 409, (s_, d))
+    s_, d = J(TST, "/connect/api/test", {"action": "as", "team": "A"})
+    s_, d = J(TST, "/connect/api/claim", {"id": sim_id})
+    ck("สลับเป็นทีม A แล้วรับได้", s_ == 200 and d.get("ok"), (s_, d))
+    s_, d = J(TST, "/connect/api/chat?id=%d" % sim_id)
+    ck("★ ลูกค้าจำลอง: ช่องตอบเปิดแม้ล็อกการส่งอยู่ (ตรงกับฝั่งส่ง)", d.get("replyOn") is True
+       and d.get("canReply") is True, (d.get("replyOn"), d.get("canReply")))
+    CALLS.clear()
+    s_, d = J(TST, "/connect/api/reply", {"id": sim_id, "text": "มีครับ Revo ปี 20"})
+    ck("ตอบลูกค้าจำลองได้แม้ล็อกการส่งอยู่", s_ == 200 and d.get("ok"), (s_, d))
+    ck("★ ตอบลูกค้าจำลอง = ไม่ยิง LINE เลย", not pushes(), pushes())
+    out = GroupChat.objects.filter(sender_id=so.profile.user_id, direction="out").first()
+    ck("บันทึกคำตอบในนามบัญชีจำลอง", out is not None and out.sent_by_name == "ทดสอบเซลล์ A", out and out.sent_by_name)
+    ck("ตอบแล้วรอบรอจบ", ChatOwner.objects.get(pk=sim_id).awaiting_since is None)
+    s_, d = J(TST, "/connect/api/test", {"action": "say", "id": sim_id, "text": "ราคาเท่าไหร่ครับ"})
+    ck("พิมพ์แทนลูกค้าจำลองได้ → เริ่มรอบรอใหม่", s_ == 200 and ChatOwner.objects.get(pk=sim_id).awaiting_since,
+       (s_, d))
+    s_, d = J(TST, "/connect/api/test", {"action": "say", "id": o1.id, "text": "แอบพิมพ์แทนลูกค้าจริง"})
+    ck("★ พิมพ์แทนลูกค้าจริงไม่ได้", s_ == 400, (s_, d))
+    # ลูกค้าจำลองเลยเวลา — ติดธงในระบบได้ แต่ห้ามส่ง LINE ไปปลุกกลุ่มแอดมิน
+    C.save_cfg(dict(C.cfg(), alert_on=True, alert_group="C" + "1" * 32))
+    ChatOwner.objects.filter(pk=sim_id).update(due_at=timezone.now() - timedelta(minutes=1), escalated_at=None)
+    ChatOwner.objects.exclude(pk=sim_id).update(awaiting_since=None, due_at=None)
+    CALLS.clear()
+    res = C.tick()
+    ck("ลูกค้าจำลองเลยเวลา = ติดธง", res.get("escalated") == 1, res)
+    ck("★ ลูกค้าจำลองเลยเวลา = ไม่ส่ง LINE เข้ากลุ่มแอดมิน", not pushes() and "alert" not in res, (res, pushes()))
+    C.save_cfg(dict(C.cfg(), alert_on=False, alert_group=""))
+    # บัญชีจำลองเผลอรับลูกค้าจริง → ล้างแล้วต้องคืนเข้าคิว
+    C.assign(o2.id, None, by="เทสต์")
+    C.note_customer_message(P2.user_id, timezone.now(), "ลูกค้าจริงทักมา")
+    s_, d = J(TST, "/connect/api/claim", {"id": o2.id})
+    ck("บัญชีจำลองรับลูกค้าจริงได้ (ระบบเตือนก่อนส่งที่หน้าเว็บ)", s_ == 200, (s_, d))
+    s_, d = J(TST, "/connect/api/test", {"action": "exit"})
+    s_, d = J(TST, "/connect/api/inbox?view=all")
+    ck("กลับเป็นแอดมินแล้วเห็นทั้งหมด", d.get("view") == "all", d.get("view"))
+    s_, d = J(TST, "/connect/api/test")
+    ck("นับว่าบัญชีจำลองถือลูกค้าจริงอยู่", (d.get("counts") or {}).get("realHeld") == 1, d.get("counts"))
+    # ★ แอดมินตั้ง connect_as ชี้ไปเซลล์จริง (ปลอม session) = ต้องไม่ได้เป็นเซลล์คนนั้น
+    HACK = client({"user_id": "admin", "nickname": "admin", "position": "admin"})
+    st = SessionStore(); st["oxlet_user"] = {"user_id": "admin", "nickname": "admin", "position": "admin"}
+    st["connect_as"] = A1.id; st.save()
+    HACK.cookies[settings.SESSION_COOKIE_NAME] = st.session_key
+    s_, d = J(HACK, "/connect/api/inbox?view=all")
+    ck("★ สลับเป็นเซลล์จริงไม่ได้ (เฉพาะบัญชีจำลอง)", d.get("view") == "all", d.get("view"))
+    SELLER_AS = client(None)
+    st = SessionStore(); st["oxlet_user"] = {"user_id": "Ux1", "nickname": "เอหนึ่ง", "position": "seller"}
+    st["connect_as"] = tB.id; st.save()
+    SELLER_AS.cookies[settings.SESSION_COOKIE_NAME] = st.session_key
+    s_, d = J(SELLER_AS, "/connect/api/test")
+    ck("★ เซลล์ที่มี connect_as ใน session ก็ยังเป็นตัวเอง", s_ == 403, s_)
+    s_, d = J(TST, "/connect/api/test", {"action": "clear"})
+    ck("ล้างข้อมูลทดสอบ", s_ == 200 and d.get("ok"), d)
+    rr = d.get("result") or {}
+    ck("ลบลูกค้าจำลอง + บัญชีจำลอง", rr.get("customers", 0) >= 1 and rr.get("sellers") == 2, rr)
+    ck("★ ลูกค้าจริงที่บัญชีจำลองถือไว้ กลับเข้าคิว", rr.get("released") == 1
+       and ChatOwner.objects.get(pk=o2.id).owner_id is None, rr)
+    ck("ไม่เหลือลูกค้าจำลองในระบบ", not LineProfile.objects.filter(user_id__startswith="TEST-").exists()
+       and not GroupChat.objects.filter(sender_id__startswith="TEST-").exists())
+    ck("ไม่เหลือบัญชีจำลองในทะเบียน", not Employee.objects.filter(nickname__startswith="ทดสอบเซลล์").exists())
+    ck("สถิติไม่เหลือชื่อบัญชีจำลอง", "ทดสอบเซลล์ A" not in {r["name"] for r in C.stats(30)["rows"]})
+    ck("ลูกค้าจริงยังอยู่ครบ", ChatOwner.objects.filter(pk__in=[o1.id, o2.id]).count() == 2)
+
 finally:
     _runner.teardown_databases(_old)
 

@@ -46,6 +46,14 @@
   .cn-banner.err { background: var(--red-bg); color: var(--red); }
   .cn-banner.warn { background: var(--amber-bg); color: var(--amber); }
   .cn-banner code { background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  /* โหมดทดสอบ — แถบบอกตลอดว่ากำลังใช้บัญชีจำลอง (กันลืมว่ากดอะไรไปในนามใคร) */
+  .cn-test { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: var(--blue-bg);
+             color: var(--blue); border-bottom: .5px solid var(--blue); }
+  .cn-test b { color: var(--blue-dk); }
+  .cn-sim { margin: 0 16px 8px; padding: 8px 10px; border: 1px dashed var(--amber-mid); border-radius: 8px; background: var(--amber-bg);
+            display: flex; gap: 6px; align-items: center; flex-wrap: wrap; color: var(--amber); }
+  .cn-sim input { flex: 1; min-width: 140px; padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg); }
+  .tag.sim { background: var(--amber-bg); color: var(--amber); }
 
   /* ── 2 ช่อง: รายชื่อ | แชท ── */
   .cn-main { display: grid; grid-template-columns: 360px minmax(0,1fr); height: calc(100% - 56px - var(--bh, 0px)); }
@@ -354,11 +362,22 @@
     } else {
       me.className = 'cn-chip' + (S.onDuty ? ' on' : '');
       me.innerHTML = `<b>${h(ME.name)}</b> · ทีม ${h(ME.team || '-')}${S.onDuty ? ' · วันนี้เวรคุณ' : ''}`;
-      $('cn-back').href = '/me/';
-      $('cn-back-t').textContent = 'หน้าของฉัน';
+      $('cn-back').href = (BOOT.test && BOOT.test.as) ? '/dashboard/' : '/me/';
+      $('cn-back-t').textContent = (BOOT.test && BOOT.test.as) ? 'แดชบอร์ด' : 'หน้าของฉัน';
     }
     const b = $('cn-banners');
-    b.innerHTML = (S.status || []).map(s => `<div class="cn-banner ${h(s.level)}">${ic('alert')}<div>${h(s.text)}${s.fix ? ` · เปิดด้วยคำสั่ง <code>${h(s.fix)}</code>` : ''}</div></div>`).join('');
+    const T = BOOT.test;
+    let testBar = '';
+    if (T && T.as) {
+      const others = (T.teams || []).filter(t => t !== ME.team);
+      testBar = `<div class="cn-test">🧪 <span><b>โหมดทดสอบ</b> — ${h(T.realName || 'แอดมิน')} กำลังใช้หน้าจอแบบ <b>${h(ME.name)}</b> (ทีม ${h(ME.team || '-')} · ${S.onDuty ? 'วันนี้เวร' : 'ไม่ใช่วันเวร'})</span>
+        <span class="cn-sp"></span>
+        <button class="btn sm" data-test="customer">+ ลูกค้าจำลองทักเข้ามา</button>
+        ${others.map(t => `<button class="btn sm" data-test="as" data-team="${h(t)}">สลับเป็นทีม ${h(t)}</button>`).join('')}
+        <button class="btn sm pri" data-test="exit">กลับเป็นแอดมิน</button></div>`;
+    }
+    b.innerHTML = testBar + (S.status || []).map(s => `<div class="cn-banner ${h(s.level)}">${ic('alert')}<div>${h(s.text)}${s.fix ? ` · เปิดด้วยคำสั่ง <code>${h(s.fix)}</code>` : ''}</div></div>`).join('');
+    b.querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
     document.documentElement.style.setProperty('--bh', b.offsetHeight + 'px');
     // ตัวเลขบนแท็บเบราว์เซอร์ — คนเปิดค้างไว้ข้างหลังจะเห็นว่ามีงาน
     const c = S.counts || {};
@@ -403,6 +422,7 @@
     const tags = [];
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
+    if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     if (ADMIN && r.team) tags.push(teamTag(r.team));
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
     const claimBtn = (!ADMIN && !r.owner && S.onDuty) ? `<button class="btn pri sm" data-claim="${r.id}">รับ</button>` : '';
@@ -501,10 +521,10 @@
     $('cn-pane').innerHTML = `
       <div class="cn-ph" id="cn-ph"></div>
       <div class="cn-chat">
-        <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-comp-wrap"></div></div>
+        <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-sim-wrap"></div><div id="cn-comp-wrap"></div></div>
         <aside class="cn-side" id="cn-side"></aside>
       </div>`;
-    paintHeader(); paintProfile(); paintMsgs(false); paintComposer(true);
+    paintHeader(); paintProfile(); paintMsgs(false); paintSim(); paintComposer(true);
   }
 
   function paintHeader() {
@@ -623,6 +643,38 @@
     if (!keepScroll || atBottom) el.scrollTop = el.scrollHeight;
   }
 
+  // ลูกค้าจำลอง: ให้คนทดสอบพิมพ์แทนลูกค้าได้ (ทดสอบรอบรอ 5 นาที / ข้อความใหม่จากลูกค้าของฉัน)
+  function paintSim() {
+    const w = $('cn-sim-wrap'); if (!w) return;
+    const d = S.chat;
+    if (!(BOOT.test && d && d.row.sim)) { w.innerHTML = ''; return; }
+    w.innerHTML = `<div class="cn-sim">🧪 <b>พิมพ์แทนลูกค้า</b>
+      <input id="cn-sim-text" placeholder="เช่น ยังว่างไหมครับ ผ่อนเดือนละเท่าไหร่" autocomplete="off">
+      <button class="btn sm" id="cn-sim-send">ส่งในฐานะลูกค้า</button></div>`;
+    const go = async () => {
+      const t = $('cn-sim-text'); const text = (t.value || '').trim(); if (!text) return;
+      const r = await api('/connect/api/test', { action: 'say', id: d.row.id, text });
+      if (!r.ok) { toast(r.error || 'ส่งไม่สำเร็จ'); return; }
+      t.value = ''; openChat(d.row.id, true); loadInbox(false);
+    };
+    $('cn-sim-send').onclick = go;
+    $('cn-sim-text').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); go(); } });
+  }
+
+  async function testAct(action, extra) {
+    const body = Object.assign({ action }, extra || {});
+    if (action === 'clear' && !confirm('ล้างข้อมูลทดสอบทั้งหมด? (ลูกค้าจำลอง + บัญชีเซลล์จำลอง · ลูกค้าจริงที่บัญชีจำลองรับไว้จะกลับเข้าคิว)')) return;
+    const r = await api('/connect/api/test', body);
+    if (!r.ok) { toast(r.error || 'ทำไม่สำเร็จ', 4500); return; }
+    toast(r.message || 'เรียบร้อย');
+    if (action === 'as' || action === 'exit' || action === 'clear') {
+      setTimeout(() => location.reload(), 500);       // สลับตัวตน = โหลดหน้าใหม่ทั้งหน้า (สิทธิ์เปลี่ยน)
+    } else {
+      loadInbox(false);
+      if (S.pane === 'cfg') openCfg();
+    }
+  }
+
   function paintComposer(fresh) {
     const w = $('cn-comp-wrap'); if (!w) return;
     const d = S.chat;
@@ -648,6 +700,8 @@
   async function send() {
     const ta = $('cn-text'); if (!ta || !S.chat) return;
     const text = ta.value.trim(); if (!text) return;
+    if (BOOT.test && BOOT.test.as && !S.chat.row.sim
+        && !confirm('ลูกค้าคนนี้เป็น "ลูกค้าจริง" — ข้อความจะถึงเขาจริงในนาม ' + ME.name + ' ส่งไหม?')) return;
     const btn = $('cn-send'); btn.disabled = true; $('cn-err').textContent = '';
     const id = S.chat.row.id;
     const d = await api('/connect/api/reply', { id, text });
@@ -723,10 +777,10 @@
   async function openCfg() {
     S.chat = null; S.openId = 0;
     $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>`;
-    const d = await api('/connect/api/config');
+    const [d, t] = await Promise.all([api('/connect/api/config'), api('/connect/api/test')]);
     if (S.pane !== 'cfg') return;
     if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    CFG = d; paintCfg();
+    CFG = d; CFG.test = (t && t.ok) ? t : null; paintCfg();
   }
   function _computed(dateIso) {      // ทีมตามสูตรวันเว้นวัน (ไม่นับการสลับเวร) — ใช้ตอนกดสลับในตาราง
     const c = CFG.cfg, teams = c.teams;
@@ -773,6 +827,7 @@
         <div class="fld"><label><input type="checkbox" id="cf-notify"${c.notify_sellers ? ' checked' : ''}> บอกเซลล์ทาง LINE เมื่อลูกค้าทักมา</label>
           <span style="color:var(--t3)">เจ้าของลูกค้า หรือทุกคนในทีมที่เวร (ถ้ายังไม่มีเจ้าของ) · ทีมละ ~9 คน = กินโควต้าเร็ว</span></div>
       </div>
+      ${testCardHtml()}
       <div style="display:flex;gap:10px;align-items:center;max-width:920px">
         <button class="btn pri" id="cf-save">บันทึก</button>
         <span id="cf-msg" style="color:${isErr ? 'var(--red)' : 'var(--green)'}">${h(msg || '')}</span>
@@ -792,6 +847,23 @@
       paintCfg('ยังไม่ได้บันทึก', false);
     };
     $('cf-save').onclick = saveCfg;
+    $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
+  }
+  function testCardHtml() {
+    const t = CFG.test; if (!t) return '';
+    const c = t.counts || {};
+    return `<div class="card">
+      <h3>🧪 ทดสอบระบบด้วยบัญชีจำลอง</h3>
+      <div class="d">สลับไปใช้หน้าจอแบบเซลล์ได้ทันที โดยไม่ต้องใช้บัญชีเซลล์จริง · กดรับ/ตอบในโหมดนี้เป็นชื่อ "ทดสอบเซลล์"
+        · <b>ลูกค้าจำลอง</b> ไม่มีตัวตนใน LINE ตอบไปไม่ออกนอกระบบ และนับ 5 นาทีทันทีทุกเวลา (ทดสอบกลางคืนได้)
+        · ถ้าบัญชีจำลองไปรับ/ตอบ "ลูกค้าจริง" ข้อความจะถึงลูกค้าจริง (ระบบถามยืนยันก่อนส่งทุกครั้ง)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${(t.teams || []).map(tm => `<button class="btn pri" data-test="as" data-team="${h(tm)}">ใช้หน้าจอแบบ ทดสอบเซลล์ ${h(tm)}</button>`).join('')}
+        <button class="btn" data-test="customer">+ ลูกค้าจำลองทักเข้ามา</button>
+        <button class="btn red" data-test="clear"${(c.customers || c.sellers) ? '' : ' disabled'}>ล้างข้อมูลทดสอบ (ลูกค้าจำลอง ${c.customers || 0} · บัญชีจำลอง ${c.sellers || 0})</button>
+      </div>
+      ${c.realHeld ? `<div class="d" style="margin:8px 0 0;color:var(--red)">บัญชีจำลองถือ "ลูกค้าจริง" อยู่ ${c.realHeld} คน — กดล้างเพื่อคืนเข้าคิว</div>` : ''}
+    </div>`;
   }
   async function saveCfg() {
     const c = CFG.cfg;

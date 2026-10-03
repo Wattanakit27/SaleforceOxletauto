@@ -250,18 +250,19 @@ def roster(days: int = 14, c: dict | None = None) -> list:
             for i in range(days)]
 
 
-def due_for(t, c: dict | None = None):
+def due_for(t, c: dict | None = None, ignore_hours: bool = False):
     """เส้นตายที่ต้องตอบ ถ้าลูกค้าทักมาตอน `t`
 
     นับเฉพาะเวลาทำการ: ทักก่อนเปิด = เริ่มนับตอนเปิด · ทักหลังปิด = เริ่มนับตอนเปิดวันรุ่งขึ้น
     ทักใกล้ปิด (19:58) เส้นตายเลยเวลาปิดไปได้ — ไม่ตัดทิ้ง (ลูกค้ารอจริง)
+    `ignore_hours` = นับทันทีทุกเวลา (ลูกค้าจำลอง — ให้ทดสอบตอนกลางคืนแล้วเห็นนาฬิกาเดินได้)
     """
     c = c or cfg()
     sla = timedelta(minutes=int(c["sla_min"]))
     lt = timezone.localtime(t)
     oh, om = _hm(c.get("open"), (8, 30))
     ch, cm = _hm(c.get("close"), (20, 0))
-    if (oh, om) == (ch, cm):                           # ตั้งเวลาเปิด=ปิด = นับ 24 ชม.
+    if ignore_hours or (oh, om) == (ch, cm):          # ตั้งเวลาเปิด=ปิด = นับ 24 ชม.
         return t + sla
     open_t = lt.replace(hour=oh, minute=om, second=0, microsecond=0)
     close_t = lt.replace(hour=ch, minute=cm, second=0, microsecond=0)
@@ -405,6 +406,7 @@ def fill_pictures(limit: int = 20) -> int:
     now = timezone.now()
     stale = now - timedelta(days=PIC_REFRESH_DAYS)
     rows = list(ChatOwner.objects.filter(Q(picture_at__isnull=True) | Q(picture_at__lt=stale))
+                .exclude(profile__user_id__startswith=SIM_PREFIX)
                 .order_by(F("awaiting_since").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
                 .values_list("id", "picture_at")[:limit])
     done = 0
@@ -538,10 +540,11 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
              note="เซลล์ไม่ได้ทำงานแล้ว — คืนคิวอัตโนมัติ")
         o.owner, o.claimed_at, o.first_reply_at = None, None, None
 
+    sim = is_sim(user_id)
     new_round = o.awaiting_since is None
     if new_round:
         o.awaiting_since = at
-        o.due_at = due_for(at, c)
+        o.due_at = due_for(at, c, ignore_hours=sim)
         o.escalated_at = None
         if not o.owner_id:
             o.team = duty_team(timezone.localtime(o.due_at).date(), c)
@@ -553,12 +556,12 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
         o.picture_url, o.picture_at = picture[:500], timezone.now()
     o.save()
     # รูปโปรไฟล์เก่าเกิน 7 วัน/ยังไม่มี → ดึงใหม่ตอนเริ่มรอบ (ทำใน thread ของ webhook อยู่แล้ว ไม่หน่วงใคร)
-    if new_round and not picture and _picture_stale(o):
+    if new_round and not picture and not sim and _picture_stale(o):
         try:
             refresh_profile(o)
         except Exception:
             pass
-    if new_round and c.get("notify_sellers"):
+    if new_round and not sim and c.get("notify_sellers"):
         try:
             _notify_new(o, c)
         except Exception:
@@ -690,8 +693,9 @@ def tick(now=None) -> dict:
     if not hit:
         return {}
     out = {"escalated": len(hit)}
-    if c.get("alert_on") and c.get("alert_group"):
-        out["alert"] = _alert_admins(hit, c, now)
+    real = [o for o in hit if not is_sim(o.profile.user_id)]       # ลูกค้าจำลองไม่ส่ง LINE
+    if real and c.get("alert_on") and c.get("alert_group"):
+        out["alert"] = _alert_admins(real, c, now)
     return out
 
 
@@ -802,7 +806,99 @@ def row_json(o, me=None, now=None) -> dict:
         "mine": bool(me and o.owner_id == me.id),
         "msgs": p.msg_count or 0,
         "pic": o.picture_url or "",
+        "sim": is_sim(p.user_id),
     }
+
+
+# ─────────────────────────────────────────────────────────────
+#  โหมดทดสอบ — บัญชีเซลล์จำลอง + ลูกค้าจำลอง (3 ต.ค.69 · เจ้าของขอ "จำลองบัญชีเซลล์มาทดสอบเอง")
+#
+#  ทำไมไม่ให้ "ดูในฐานะเซลล์จริง": กดรับ/ตอบในโหมดนั้นจะกลายเป็นการกระทำของเซลล์คนนั้นจริงๆ
+#  → ใช้บัญชีจำลองแยก (ทดสอบเซลล์ A/B) แล้วล้างทิ้งได้ทีเดียว
+#  ลูกค้าจำลอง (`TEST-…`) **ไม่มีตัวตนใน LINE** — ตอบไปไม่ออกนอกระบบ · ไม่ส่งแจ้งเตือน LINE ·
+#  นับ 5 นาทีทันทีทุกเวลา (ทดสอบกลางคืนได้)
+# ─────────────────────────────────────────────────────────────
+TEST_PREFIX = "ทดสอบเซลล์ "
+SIM_PREFIX = "TEST-"                 # ไม่ขึ้นต้นด้วย U = ไม่มีทางเป็น LINE user id จริง
+TEST_NOTE = "บัญชีทดสอบ Connect — ลบได้ที่ Connect → ตั้งค่า → ล้างข้อมูลทดสอบ"
+
+
+def is_test_seller(emp) -> bool:
+    return bool(emp) and (getattr(emp, "nickname", "") or "").startswith(TEST_PREFIX)
+
+
+def is_sim(user_id) -> bool:
+    return (user_id or "").startswith(SIM_PREFIX)
+
+
+def test_seller(team: str):
+    """บัญชีเซลล์จำลองของทีมนี้ (สร้างให้ถ้ายังไม่มี) — ไม่ต้องเช็คชื่อเข้างาน ไม่ถูกแท็กในกลุ่ม"""
+    team = (team or "").strip().upper()
+    if not _is_team_code(team):
+        return None
+    pos = "ทีม %s" % team
+    emp, made = Employee.objects.get_or_create(nickname=TEST_PREFIX + team, defaults={
+        "position": pos, "track_checkin": False, "notify_missing": False,
+        "note": TEST_NOTE, "note_sticky": True, "source": Employee.MANUAL})
+    if not made and (not emp.active or emp.position != pos):
+        emp.active, emp.position = True, pos
+        emp.save(update_fields=["active", "position", "updated_at"])
+    return emp
+
+
+def sim_say(row_id, text: str):
+    """ลูกค้าจำลองพิมพ์ข้อความเข้ามา (ผ่านเส้นทางเดียวกับของจริง: เก็บแชท → เริ่ม/ต่อรอบรอ)"""
+    import uuid
+    o = ChatOwner.objects.select_related("profile").filter(pk=row_id).first()
+    if not o or not is_sim(o.profile.user_id):
+        return None
+    now = timezone.now()
+    g = GroupChat.objects.create(
+        chat_type=GroupChat.USER, message_id="test:%s" % uuid.uuid4().hex,
+        sender_id=o.profile.user_id, sender_name=o.profile.show_name, direction=GroupChat.IN,
+        msg_type=GroupChat.TEXT, text=(text or "")[:2000], channel="test", sent_at=now)
+    LineProfile.objects.filter(pk=o.profile_id).update(msg_count=F("msg_count") + 1, last_seen=now)
+    return note_customer_message(o.profile.user_id, now, preview_of(g))
+
+
+def sim_customer(text: str = ""):
+    """สร้างลูกค้าจำลอง 1 คน + ข้อความแรก → เข้าคิวรอรับของทีมที่เวรวันนี้"""
+    import uuid
+    n = LineProfile.objects.filter(user_id__startswith=SIM_PREFIX).count() + 1
+    prof = LineProfile.objects.create(
+        user_id=SIM_PREFIX + uuid.uuid4().hex[:12], display_name="ลูกค้าทดสอบ %d" % n,
+        channel="test", source=LineProfile.USER, msg_count=0)
+    o = _row_for(prof)
+    return sim_say(o.id, text or "สวัสดีครับ สนใจรถครับ (ข้อความทดสอบ)")
+
+
+def sim_counts() -> dict:
+    return {"customers": LineProfile.objects.filter(user_id__startswith=SIM_PREFIX).count(),
+            "sellers": Employee.objects.filter(nickname__startswith=TEST_PREFIX).count(),
+            "realHeld": ChatOwner.objects.filter(owner__nickname__startswith=TEST_PREFIX)
+                                         .exclude(profile__user_id__startswith=SIM_PREFIX).count()}
+
+
+def sim_clear(by: str = "") -> dict:
+    """ล้างข้อมูลทดสอบทั้งหมด — ลูกค้าจำลอง + แชท + บัญชีเซลล์จำลอง
+
+    ลูกค้าจริงที่บัญชีจำลองเผลอรับไว้ → **คืนคิว** (ไม่งั้นลูกค้าจริงค้างอยู่กับบัญชีที่ไม่มีใครใช้)
+    ข้อความที่บัญชีจำลองเคยส่งหาลูกค้าจริงไม่ถูกลบ — มันถูกส่งออกไปจริงแล้ว ต้องอยู่ในประวัติ
+    """
+    released = 0
+    for o in ChatOwner.objects.filter(owner__nickname__startswith=TEST_PREFIX) \
+                              .exclude(profile__user_id__startswith=SIM_PREFIX):
+        if assign(o.id, None, by=by or "ล้างข้อมูลทดสอบ")[0]:
+            released += 1
+    msgs = GroupChat.objects.filter(sender_id__startswith=SIM_PREFIX).delete()[0]
+    sims = LineProfile.objects.filter(user_id__startswith=SIM_PREFIX)
+    n_c = sims.count()
+    sims.delete()                                   # ChatOwner + ประวัติ + CustomerNeed หายตาม (CASCADE)
+    ChatOwnerLog.objects.filter(emp_name__startswith=TEST_PREFIX).delete()
+    testers = Employee.objects.filter(nickname__startswith=TEST_PREFIX)
+    n_t = testers.count()
+    testers.delete()
+    return {"customers": n_c, "messages": msgs, "sellers": n_t, "released": released}
 
 
 VIEWS = ("overdue", "queue", "mine", "owned", "all")

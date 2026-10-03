@@ -14,4 +14,5 @@ urlpatterns = [
     path("api/dismiss", V.api_dismiss, name="connect_dismiss"),
     path("api/config", V.api_config, name="connect_config"),
     path("api/stats", V.api_stats, name="connect_stats"),
+    path("api/test", V.api_test, name="connect_test"),     # โหมดทดสอบ (แอดมิน): บัญชีเซลล์/ลูกค้าจำลอง
 ]

@@ -99,21 +99,27 @@ def send_reply(user_id: str, text: str, actor: dict | None = None) -> GroupChat:
     if not prof:
         raise ReplyError("ไม่รู้จักลูกค้าคนนี้ (ยังไม่เคยมีข้อความเข้ามา)")
 
-    # ★ ด่านสุดท้ายก่อนออกไปหาคนนอกบริษัท — เช็คหลังตรวจ input ครบแล้ว
-    #   เพื่อให้คนทดสอบเจอ error เรื่องข้อความผิดก่อน ไม่ใช่มาติดตรงนี้แล้วไม่รู้ว่าอย่างอื่นถูกไหม
-    if not reply_on():
-        raise ReplyError("ยังปิดการส่งหาลูกค้าอยู่ (ตั้งใจล็อกไว้) — "
-                         "เปิดด้วยคำสั่ง `manage.py checkout_config --reply on` บนเซิร์ฟเวอร์")
+    # ★ 3 ต.ค.69 — ลูกค้าจำลอง (โหมดทดสอบ Connect · id ขึ้นต้น TEST-) ไม่มีตัวตนใน LINE
+    #   → ไม่ยิง LINE · ไม่ติดสวิตช์ล็อก (ไม่มีอะไรออกนอกบริษัท) · บันทึกเหมือนของจริงทุกอย่าง
+    simulated = user_id.startswith("TEST-")
+    if simulated:
+        channel = "test"
+    else:
+        # ★ ด่านสุดท้ายก่อนออกไปหาคนนอกบริษัท — เช็คหลังตรวจ input ครบแล้ว
+        #   เพื่อให้คนทดสอบเจอ error เรื่องข้อความผิดก่อน ไม่ใช่มาติดตรงนี้แล้วไม่รู้ว่าอย่างอื่นถูกไหม
+        if not reply_on():
+            raise ReplyError("ยังปิดการส่งหาลูกค้าอยู่ (ตั้งใจล็อกไว้) — "
+                             "เปิดด้วยคำสั่ง `manage.py checkout_config --reply on` บนเซิร์ฟเวอร์")
 
-    channel = _channel_for(prof)
-    token = LC.token_of(channel) if channel else LC.dm_token()
-    if not token:
-        raise ReplyError("ยังไม่ได้ตั้ง LINE token ของบัญชีที่คุยกับลูกค้าคนนี้")
+        channel = _channel_for(prof)
+        token = LC.token_of(channel) if channel else LC.dm_token()
+        if not token:
+            raise ReplyError("ยังไม่ได้ตั้ง LINE token ของบัญชีที่คุยกับลูกค้าคนนี้")
 
-    code, body = push_line_message(user_id, [{"type": "text", "text": text}], token,
-                                   what="ตอบแชทลูกค้า")
-    if code != 200:
-        raise ReplyError(_explain(code, body))
+        code, body = push_line_message(user_id, [{"type": "text", "text": text}], token,
+                                       what="ตอบแชทลูกค้า")
+        if code != 200:
+            raise ReplyError(_explain(code, body))
 
     who = ""
     emp = None
