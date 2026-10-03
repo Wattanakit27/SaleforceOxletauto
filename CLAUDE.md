@@ -1199,6 +1199,27 @@ sender_id)` ≠ จำนวนคน**
 - **⚠️ `db_guide.md` ตกยุคแล้ว** (48 ตาราง · ขาด `checkout_chatowner`/`chatownerlog`/`coachlog`) — Excel ฉบับนี้ใหม่กว่า
 - **⚠️ `checkout_coachlog` บน prod ยังว่าง** (0 แถว) — ยังไม่ได้รัน `coach_db --import-sheet --sync` บนเซิร์ฟเวอร์
 
+### 🌍 เปิดฐานข้อมูลออนไลน์ให้คนนอกต่อตรง — [deploy/postgres_online.sh](deploy/postgres_online.sh) · 4 ต.ค.69 (เจ้าของสั่ง)
+*"เปิดทุกอย่างให้คนภายนอกอ่านได้ อ่านเท่านั้น · เปิดพอร์ต · ตั้งไม่ให้ยิงเยอะเกินไป · ทุกตาราง รวมข้อมูลส่วนบุคคล"*
+**★ เจ้าของตัดสินใจเองหลังเห็นทางเลือก** — ยกเลิกกฎเดิม "ห้ามเปิดพอร์ต 5432 ออกเน็ต" (ทางอุโมงค์ SSH ยังใช้ได้ตามเดิม)
+- `sudo bash deploy/postgres_online.sh setup | add <ชื่อ> | reset <ชื่อ> | remove <ชื่อ> | list | close`
+  · ต้องรันด้วย root บนเซิร์ฟเวอร์ (บัญชี `claude` ของผู้ช่วยอ่านอย่างเดียว ไม่มี sudo)
+  · ให้ Claude in Chrome รันผ่าน Browser terminal ของ hPanel ได้ — คำสั่งอยู่ใน [deploy/claude_chrome_db_online.md](deploy/claude_chrome_db_online.md)
+- **กลุ่ม `ext_online`** (แยกจาก `ro_all` — รัน `postgres_readonly.sql` ซ้ำแล้วจะไม่เปิดคอลัมน์รหัสกลับ)
+  อ่านได้ทุกตาราง/view + ตารางใหม่ในอนาคต (`ALTER DEFAULT PRIVILEGES` ทั้ง oxlet และ postgres)
+- **ซ่อน 4 คอลัมน์ที่เป็นกุญแจเข้าระบบ ไม่ใช่ข้อมูล**: `auth_user.password` (มีพนักงาน 11 คนตั้งรหัสไว้ —
+  แฮชหลุด = แกะรหัสแล้ว login เข้าระบบเราได้) · `dash_tiktok_account.access_token/refresh_token` ·
+  `django_session.session_data` → ตาราง 3 ตัวนี้ **`SELECT *` ไม่ได้ ต้องระบุคอลัมน์**
+- pg_hba: เฉพาะ `+ext_online` ต่อจากข้างนอกได้ (`hostssl` + scram) · บัญชีอื่นทุกตัวจากข้างนอก = `reject`
+  · ตรวจไฟล์ด้วย `pg_hba_file_rules` ก่อนรีสตาร์ต พังแล้วคืนไฟล์เดิมเอง
+- **จำกัดความถี่**: `ufw limit 5432/tcp` (IP เดียวกันต่อใหม่ ≤6 ครั้ง/30 วิ) · บัญชีละ 3 สาย ·
+  `statement_timeout 30s` · `temp_file_limit 1GB` · `idle_session_timeout 15min` · timezone ไทย
+  · **ไม่ได้จำกัดเป็น Mbps** — ฐานข้อมูลทั้งก้อน ~300 MB ที่ทำให้เครื่องหนักคือคำสั่งหนัก ซึ่งตัดที่ 30 วิแล้ว
+- SSL ใช้ใบ Let's Encrypt ตัวเดียวกับเว็บ + deploy hook ก๊อปให้ Postgres ตอนต่ออายุ
+- **⚠️ ทดสอบได้แค่บางส่วน**: ไวยากรณ์ bash + ตัวเช็คพอร์ต/ufw + คำสั่ง SELECT ที่ใช้ตรวจหลัง setup
+  (รันกับ prod ผ่านบัญชีอ่านอย่างเดียว) · ส่วนสร้าง role/แก้ pg_hba ยังไม่เคยรันจริง → **ดูผล setup ครั้งแรกให้ดี**
+- **⚠️ หลังเปิดแล้ว psql ตรง = เห็นข้อมูลดิบทั้งหมด** (LINE id · เบอร์ · แชทลูกค้า) ไม่มีการปิดบังแบบหน้าเว็บ SQL
+
 ### 🧾 ล็อกเหตุการณ์ระบบ — [eventlog.py](dashboard/services/eventlog.py) · 16 ก.ย.69 (เจ้าของสั่ง)
 *"ล็อกอะไรต่างๆ ก็ควรเก็บไว้ในนี้นะ"*
 
