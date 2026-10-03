@@ -181,6 +181,10 @@ def api_inbox(request):
             C.sync_rows()                        # ลูกค้าเก่าที่ทักมาก่อนมี Connect (ทุก 2 นาทีพอ)
         except Exception:
             pass
+    try:
+        C.fill_pictures_bg()                     # ทยอยเติมรูปโปรไฟล์ลูกค้า (thread แยก · นาทีละครั้ง)
+    except Exception:
+        pass
     if view == "queue" and not admin and not on_duty:
         rows = []
         note = C.off_duty_reason(ctx["team"], c)
@@ -222,6 +226,8 @@ def api_chat(request):
         "row": C.row_json(o, emp),
         "access": acc,
         "messages": msgs,
+        # โปรไฟล์ลูกค้า — เบอร์โทรดึงจากข้อความที่ลูกค้าพิมพ์ (เฉพาะคนที่เห็นแชทเต็ม)
+        "profile": C.profile_json(o, acc, [m["text"] for m in msgs if m["dir"] == "in"]),
         "canClaim": not o.owner_id and bool(emp) and (admin or acc == "preview"),
         "canReply": acc == "full" and (admin or mine),
         "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or mine),
@@ -231,8 +237,6 @@ def api_chat(request):
     }
     if admin:
         out["history"] = C.history(o)
-        out["status"] = o.profile.status_message or ""
-        out["firstSeen"] = C._iso(o.profile.first_seen)
     return _j(out)
 
 

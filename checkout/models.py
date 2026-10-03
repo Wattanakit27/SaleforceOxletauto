@@ -853,6 +853,14 @@ class ChatOwner(models.Model):
     last_preview = models.CharField("ข้อความล่าสุด", max_length=200, blank=True)
     last_dir = models.CharField("ข้อความล่าสุดเป็นของ", max_length=4, blank=True)   # in / out
 
+    # ★ 3 ต.ค.69 เจ้าของสั่ง "เอา Profile ลูกค้าเข้ามาด้วย" — รูปโปรไฟล์ LINE ของ **ลูกค้าใน Connect เท่านั้น**
+    #   ก.ย.69 เคยถอด `LineProfile.picture_url` ออกเพราะไม่มีใครใช้ (เก็บน้อยที่สุด · PDPA)
+    #   → ตอนนี้มีที่ใช้แล้ว แต่เก็บไว้ "ที่ตารางนี้" ไม่ใช่ที่ LineProfile โดยตั้งใจ:
+    #     พนักงานไม่มีวันมีแถวในตารางนี้ = **ไม่เก็บรูปพนักงาน** และรูปหายไปพร้อมลูกค้า (60 วัน)
+    #   เก็บแค่ "ลิงก์" ของ LINE (ไม่ได้โหลดไฟล์มาเก็บ) · ลิงก์ตายเมื่อลูกค้าเปลี่ยนรูป → ดึงใหม่ทุก 7 วัน
+    picture_url = models.CharField("รูปโปรไฟล์ LINE (ลิงก์)", max_length=500, blank=True)
+    picture_at = models.DateTimeField("ดึงโปรไฟล์ล่าสุด", null=True, blank=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

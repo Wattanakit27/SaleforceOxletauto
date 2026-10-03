@@ -67,7 +67,10 @@
   .cn-row.sel { background: var(--blue-bg); }
   .cn-row.late { box-shadow: inset 3px 0 0 var(--red); }
   .cn-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-           font-weight: 800; color: #fff; background: var(--blue); }
+           font-weight: 800; color: #fff; background: var(--blue); position: relative; overflow: hidden; }
+  /* รูปโปรไฟล์ LINE วางทับตัวอักษร — โหลดไม่ขึ้น (ลิงก์ตาย) = this.remove() แล้วเห็นตัวอักษรที่รออยู่ข้างหลัง */
+  .cn-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cn-av.lg { width: 76px; height: 76px; font-size: 28px; }
   .cn-rb { flex: 1; min-width: 0; }
   .cn-rh { display: flex; gap: 6px; align-items: baseline; }
   .cn-rn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
@@ -90,6 +93,7 @@
   .btn.pri { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
   .btn.red { background: var(--red-bg); color: var(--red); border-color: var(--red); }
   .btn.sm { padding: 4px 10px; font-size: 12px; }
+  a.btn { text-decoration: none; }
 
   /* ── ช่องขวา ── */
   .cn-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -120,6 +124,34 @@
   .cn-comp-why { padding: 12px 16px; background: var(--bg); border-top: .5px solid var(--bd2); color: var(--t3); }
   .cn-err { color: var(--red); padding: 0 16px 8px; background: var(--bg); }
   .cn-blank { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--t3); padding: 30px; line-height: 1.8; }
+
+  /* ── แชท | โปรไฟล์ลูกค้า ── */
+  .cn-chat { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 290px; }
+  .cn-cmain { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .cn-side { border-left: .5px solid var(--bd2); background: var(--bg); overflow-y: auto; padding: 16px; }
+  .cn-prof-m { display: none; margin-top: 10px; }
+  .cn-prof-m > summary { cursor: pointer; color: var(--blue); font-weight: 700; }
+  .pf-top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding-bottom: 12px;
+            border-bottom: .5px solid var(--bd); }
+  .pf-name { font-size: var(--fs-sub); font-weight: 800; word-break: break-word; }
+  .pf-line { color: var(--t3); font-size: 12px; }
+  .pf-status { color: var(--t2); font-style: italic; line-height: 1.5; word-break: break-word; }
+  .pf-sec { padding: 12px 0; border-bottom: .5px solid var(--bd); }
+  .pf-sec:last-child { border-bottom: 0; }
+  .pf-h { color: var(--t3); font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .pf-kv { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .pf-kv span:first-child { color: var(--t3); }
+  .pf-kv span:last-child { text-align: right; }
+  .pf-ph { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .pf-ph a.num { font-weight: 800; color: var(--t1); text-decoration: none; letter-spacing: .3px; flex: 1; }
+  .pf-need { padding: 7px 9px; border-radius: 8px; background: var(--bg2); margin-bottom: 6px; line-height: 1.5; }
+  .pf-need b { display: block; }
+  .pf-lock { color: var(--t3); line-height: 1.6; }
+  @media (max-width: 1180px) {
+    .cn-chat { grid-template-columns: minmax(0,1fr); }
+    .cn-side { display: none; }
+    .cn-prof-m { display: block; }
+  }
 
   /* ── ตั้งค่า / สถิติ ── */
   .cn-page { flex: 1; overflow-y: auto; padding: 16px; }
@@ -232,6 +264,11 @@
   const AV_C = ['#7c3aed', '#0d9488', '#db2777', '#2563eb', '#d97706', '#059669', '#9333ea', '#dc2626'];
   const avColor = name => { let s = 2166136261; for (const ch of String(name || '')) { s ^= ch.codePointAt(0); s = Math.imul(s, 16777619) >>> 0; } return AV_C[s % AV_C.length]; };
   const initial = name => (Array.from(String(name || '?').trim())[0] || '?').toUpperCase();
+  // รูปโปรไฟล์ LINE ทับตัวอักษร — ไม่มีรูป/โหลดไม่ขึ้น = เห็นตัวอักษรบนวงกลมสีแทน (ไม่ใช่กล่องว่าง)
+  const avHtml = (name, pic, cls) => `<div class="cn-av${cls ? ' ' + cls : ''}" style="background:${avColor(name)}">${h(initial(name))}`
+    + (pic ? `<img src="${h(pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '') + `</div>`;
+  const LANG = { th: 'ไทย', en: 'อังกฤษ', ja: 'ญี่ปุ่น', zh: 'จีน', 'zh-TW': 'จีน', 'zh-Hant': 'จีน', ko: 'เกาหลี', my: 'พม่า', km: 'เขมร', lo: 'ลาว' };
+  const fmtPhone = d => d.length === 10 ? d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6) : (d.length === 9 ? d.slice(0, 2) + '-' + d.slice(2, 5) + '-' + d.slice(5) : d);
 
   function toast(msg, ms) {
     const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
@@ -260,6 +297,13 @@
     const d = new Date(iso), n = new Date(nowMs());
     const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
     return d.toDateString() === n.toDateString() ? hm : (d.getDate() + '/' + (d.getMonth() + 1) + ' ' + hm);
+  }
+  // วันที่เต็ม (ไม่ตัดเหลือแค่เวลาแม้เป็นวันนี้) — ใช้กับ "ทักครั้งแรก" ที่ต้องรู้ว่าลูกค้าเก่าแค่ไหน
+  const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  function fmtFull(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.getDate() + ' ' + TH_MON[d.getMonth()] + ' ' + String(d.getFullYear() + 543).slice(-2) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
   function fmtLeft(ms) {
     const s = Math.max(0, Math.round(ms / 1000));
@@ -363,7 +407,7 @@
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
     const claimBtn = (!ADMIN && !r.owner && S.onDuty) ? `<button class="btn pri sm" data-claim="${r.id}">รับ</button>` : '';
     return `<div class="cn-row${r.id === S.openId ? ' sel' : ''}${r.overdue ? ' late' : ''}" data-id="${r.id}">
-      <div class="cn-av" style="background:${avColor(r.name)}">${h(initial(r.name))}</div>
+      ${avHtml(r.name, r.pic)}
       <div class="cn-rb">
         <div class="cn-rh"><span class="cn-rn">${h(r.name)}</span><span class="cn-rt">${h(fmtWhen(r.lastAt))}</span></div>
         <div class="cn-rp${r.lastDir === 'out' ? ' out' : ''}">${r.lastDir === 'out' ? 'เรา: ' : ''}${h(r.preview || '—')}</div>
@@ -449,23 +493,26 @@
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
     const same = S.chat && S.chat.row.id === id;
     S.chat = d;
-    if (same) { paintHeader(); paintMsgs(true); paintComposer(false); }
+    if (same) { paintHeader(); paintProfile(); paintMsgs(true); paintComposer(false); }
     else paintChat();
   }
 
   function paintChat() {
     $('cn-pane').innerHTML = `
       <div class="cn-ph" id="cn-ph"></div>
-      <div class="cn-msgs" id="cn-msgs"></div>
-      <div id="cn-comp-wrap"></div>`;
-    paintHeader(); paintMsgs(false); paintComposer(true);
+      <div class="cn-chat">
+        <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-comp-wrap"></div></div>
+        <aside class="cn-side" id="cn-side"></aside>
+      </div>`;
+    paintHeader(); paintProfile(); paintMsgs(false); paintComposer(true);
   }
 
   function paintHeader() {
     const d = S.chat, r = d.row;
     // หัวแชทถูกวาดใหม่ทุก 6 วิ — เก็บสิ่งที่ผู้ใช้กำลังทำค้างไว้ (เลือกเซลล์ค้าง / กางประวัติ)
     const _prevTo = $('cn-to') ? $('cn-to').value : '';
-    const _histOpen = !!document.querySelector('#cn-ph details[open]');
+    const _histOpen = !!document.querySelector('#cn-ph details.cn-hist[open]');
+    const _profOpen = !!document.querySelector('#cn-ph details.cn-prof-m[open]');
     const own = r.owner ? `เจ้าของ <b>${h(r.owner)}</b>` : `<b>ยังไม่มีเซลล์รับ</b>`;
     const acts = [];
     if (d.canClaim) acts.push(`<button class="btn pri" id="cn-claim">${ic('user-check')} รับลูกค้าคนนี้</button>`);
@@ -490,22 +537,68 @@
     $('cn-ph').innerHTML = `
       <div class="cn-ph-row">
         <button class="btn sm cn-mback" id="cn-mback">${ic('arrow-left')}</button>
-        <div class="cn-av" style="background:${avColor(r.name)}">${h(initial(r.name))}</div>
+        ${avHtml(r.name, r.pic)}
         <div style="min-width:0;flex:1">
           <h2>${h(r.name)}</h2>
-          <div class="cn-sub">${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ทักมา ${r.msgs} ข้อความ${d.firstSeen ? ' · ทักครั้งแรก ' + h(fmtWhen(d.firstSeen)) : ''}</div>
+          <div class="cn-sub">${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ทักมา ${r.msgs} ข้อความ</div>
         </div>
       </div>
       ${acts.length ? `<div class="cn-acts">${acts.join('')}</div>` : ''}
-      ${clock}${hist}`;
+      ${clock}
+      <details class="cn-prof-m"><summary>ข้อมูลลูกค้า</summary><div id="cn-prof-m-body"></div></details>
+      ${hist}`;
     $('cn-mback').onclick = window.__cnBack;
     if (_prevTo && $('cn-to')) $('cn-to').value = _prevTo;
-    if (_histOpen) { const dt = document.querySelector('#cn-ph details'); if (dt) dt.open = true; }
+    if (_histOpen) { const dt = document.querySelector('#cn-ph details.cn-hist'); if (dt) dt.open = true; }
+    if (_profOpen) { const dt = document.querySelector('#cn-ph details.cn-prof-m'); if (dt) dt.open = true; }
     const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
     on('cn-claim', () => claim(r.id));
     on('cn-dismiss', () => dismiss(r.id));
     on('cn-assign', () => assign(r.id, +($('cn-to').value || 0), false));
     on('cn-release', () => assign(r.id, 0, true));
+  }
+
+  function profileHtml(p, r) {
+    if (!p) return '';
+    let x = `<div class="pf-top">${avHtml(p.name, p.pic, 'lg')}
+      <div class="pf-name">${h(p.name)}</div>
+      ${p.lineName && p.lineName !== p.name ? `<div class="pf-line">ชื่อใน LINE: ${h(p.lineName)}</div>` : ''}
+      ${p.status ? `<div class="pf-status">“${h(p.status)}”</div>` : ''}
+    </div>`;
+    x += `<div class="pf-sec">
+      <div class="pf-kv"><span>ทักครั้งแรก</span><span>${h(fmtFull(p.firstSeen)) || '–'}</span></div>
+      <div class="pf-kv"><span>ล่าสุด</span><span>${h(fmtWhen(p.lastSeen)) || '–'}</span></div>
+      <div class="pf-kv"><span>ข้อความทั้งหมด</span><span>${p.msgs}</span></div>
+      ${p.language ? `<div class="pf-kv"><span>ภาษา</span><span>${h(LANG[p.language] || p.language)}</span></div>` : ''}
+      <div class="pf-kv"><span>ดูแลโดย</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>
+      ${p.claimedAt ? `<div class="pf-kv"><span>รับเมื่อ</span><span>${h(fmtFull(p.claimedAt))}</span></div>` : ''}
+    </div>`;
+    if (!p.full) {
+      return x + `<div class="pf-sec pf-lock">เบอร์โทรและรถที่ลูกค้าหา เห็นได้หลังกด "รับลูกค้าคนนี้"</div>`;
+    }
+    const phones = p.phones || [];
+    x += `<div class="pf-sec"><div class="pf-h">เบอร์ที่ลูกค้าพิมพ์มาในแชท</div>${phones.length ? phones.map(d =>
+      `<div class="pf-ph"><a class="num" href="tel:${h(d)}">${h(fmtPhone(d))}</a>
+        <a class="btn sm" href="tel:${h(d)}">โทร</a><button class="btn sm" data-copy="${h(d)}">คัดลอก</button></div>`).join('')
+      : '<div class="pf-lock">ยังไม่เจอเบอร์ในแชท</div>'}</div>`;
+    const needs = p.needs || [];
+    x += `<div class="pf-sec"><div class="pf-h">รถที่ลูกค้าหา</div>${needs.length ? needs.map(n =>
+      `<div class="pf-need"><b>${h(n.car)}</b>${n.detail ? h(n.detail) + '<br>' : ''}<span style="color:var(--t3)">${h(n.status)}${n.waiting ? ' · รอรถที่ตรงสเปก' : ''}</span></div>`).join('')
+      : '<div class="pf-lock">ยังไม่มีบันทึก</div>'}</div>`;
+    return x;
+  }
+
+  function paintProfile() {
+    const d = S.chat; if (!d) return;
+    const html = profileHtml(d.profile, d.row);
+    ['cn-side', 'cn-prof-m-body'].forEach(id => {
+      const el = $(id); if (!el) return;
+      el.innerHTML = html;
+      el.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
+        try { navigator.clipboard.writeText(b.dataset.copy); toast('คัดลอกเบอร์แล้ว'); }
+        catch (e) { toast(b.dataset.copy); }
+      });
+    });
   }
 
   function paintMsgs(keepScroll) {

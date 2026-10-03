@@ -23,6 +23,7 @@
 """
 from __future__ import annotations
 
+import re
 import statistics
 from datetime import date, timedelta
 
@@ -353,6 +354,147 @@ def preview_of(g) -> str:
     return "[%s]" % (g.msg_type or "ข้อความ")
 
 
+# ─────────────────────────────────────────────────────────────
+#  โปรไฟล์ลูกค้า — รูป LINE + ข้อมูลจาก LINE + เบอร์ที่พิมพ์มา + รถที่หา
+#  (3 ต.ค.69 เจ้าของสั่ง "เอา Profile ลูกค้าเข้ามาด้วย")
+# ─────────────────────────────────────────────────────────────
+PIC_REFRESH_DAYS = 7          # ลิงก์รูปตายเมื่อลูกค้าเปลี่ยนรูป → ดึงใหม่ทุกสัปดาห์
+PIC_RETRY_HOURS = 24          # ดึงไม่ได้ (บล็อกบอท/เน็ตสะดุด) → ลองใหม่พรุ่งนี้ ไม่ใช่ทุกครั้งที่เปิดหน้า
+BG_FILL = True                # เทสต์ปิดไว้ (ไม่ให้มี thread วิ่งชนฐานข้อมูลทดสอบ)
+_FILL = {"at": 0.0}
+
+
+def _picture_stale(o) -> bool:
+    return (not o.picture_at) or (timezone.now() - o.picture_at) > timedelta(days=PIC_REFRESH_DAYS)
+
+
+def refresh_profile(o) -> bool:
+    """ดึงโปรไฟล์จาก LINE ใหม่ — รูป (เก็บที่ ChatOwner) + ชื่อ/สเตตัส/ภาษา (อัปเดต LineProfile)
+
+    ใช้บัญชี OA ที่ลูกค้าคุยอยู่ (`chat._channel_for`) — โปรไฟล์ดึงได้เฉพาะบัญชีที่เขาเพิ่มเป็นเพื่อน
+    """
+    from . import people
+    prof = o.profile
+    try:
+        from .chat import _channel_for
+        chan = _channel_for(prof)
+    except Exception:
+        chan = prof.channel or ""
+    data = people.fetch_profile(prof.user_id, channel=chan) or {}
+    now = timezone.now()
+    if data.get("displayName"):
+        o.picture_url, o.picture_at = (data.get("pictureUrl") or "")[:500], now
+        ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=now)
+        LineProfile.objects.filter(pk=prof.pk).update(
+            display_name=(data.get("displayName") or "")[:120],
+            status_message=data.get("statusMessage") or "",
+            language=(data.get("language") or "")[:16],
+            fetched_at=now)
+        return True
+    o.picture_at = now - timedelta(days=PIC_REFRESH_DAYS) + timedelta(hours=PIC_RETRY_HOURS)
+    ChatOwner.objects.filter(pk=o.pk).update(picture_at=o.picture_at)
+    return False
+
+
+def fill_pictures(limit: int = 20) -> int:
+    """เติมรูป/โปรไฟล์ให้ลูกค้าที่ยังไม่มี/เก่าแล้ว ทีละชุด — ลูกค้าที่กำลังรอก่อน แล้วค่อยคนที่คุยล่าสุด
+
+    ลูกค้าเก่าที่ทักมาก่อนมีฟีเจอร์นี้ (~380 คนตอนเปิด) ไม่มีรูปเลย · ทยอยเติมเองตอนมีคนเปิดหน้า Connect
+    **จองแถวก่อนดึง** (UPDATE … WHERE picture_at = ค่าเดิม) — gunicorn หลาย worker จะไม่ดึงคนเดียวกันซ้ำ
+    """
+    now = timezone.now()
+    stale = now - timedelta(days=PIC_REFRESH_DAYS)
+    rows = list(ChatOwner.objects.filter(Q(picture_at__isnull=True) | Q(picture_at__lt=stale))
+                .order_by(F("awaiting_since").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
+                .values_list("id", "picture_at")[:limit])
+    done = 0
+    hold = now - timedelta(days=PIC_REFRESH_DAYS) + timedelta(minutes=10)   # ตายกลางทาง = ว่างให้คนอื่นใน 10 นาที
+    for oid, pat in rows:
+        q = ChatOwner.objects.filter(pk=oid)
+        q = q.filter(picture_at__isnull=True) if pat is None else q.filter(picture_at=pat)
+        if not q.update(picture_at=hold):
+            continue                                   # worker อื่นจองไปแล้ว
+        o = ChatOwner.objects.select_related("profile").filter(pk=oid).first()
+        if o and refresh_profile(o):
+            done += 1
+    return done
+
+
+def fill_pictures_bg(limit: int = 20, every: int = 60) -> bool:
+    """เรียก `fill_pictures` ใน thread แยก (ห้ามหน่วงหน้าเว็บ — ยิง LINE ทีละคน) · มากสุดนาทีละครั้งต่อ worker"""
+    import threading
+    import time
+    if not BG_FILL or time.time() - _FILL["at"] < every:
+        return False
+    _FILL["at"] = time.time()
+
+    def _work():
+        try:
+            fill_pictures(limit)
+        except Exception:
+            pass
+        finally:
+            try:
+                from django.db import connection
+                connection.close()            # thread แยกมี connection ของตัวเอง ต้องปิดเอง
+            except Exception:
+                pass
+
+    threading.Thread(target=_work, daemon=True).start()
+    return True
+
+
+_PHONE_RE = re.compile(r"(?<!\d)(?:\+?66[\s.-]?|0)(?:\d[\s.-]?){8}\d?(?!\d)")
+
+
+def phones_in(texts) -> list:
+    """เบอร์โทรที่ลูกค้าพิมพ์มาในแชท (มือถือ/บ้าน · รองรับขีด/เว้นวรรค/+66) — ไม่เกิน 5 เบอร์"""
+    out = []
+    for t in texts or []:
+        for m in _PHONE_RE.finditer(t or ""):
+            d = re.sub(r"\D", "", m.group(0))
+            if d.startswith("66"):
+                d = "0" + d[2:]
+            ok = (len(d) == 10 and d[:2] in ("06", "08", "09")) or (len(d) == 9 and d[1] in "234567")
+            if ok and d not in out:
+                out.append(d)
+    return out[:5]
+
+
+def _money(n) -> str:
+    return "{:,}".format(int(n)) if n else ""
+
+
+def profile_json(o, access: str = "full", texts=None) -> dict:
+    """การ์ดโปรไฟล์ลูกค้าในหน้าแชท — คิวรอรับ (`preview`) ได้แค่รูป+ชื่อ ข้อมูลที่เหลือต้องกดรับก่อน"""
+    p = o.profile
+    out = {"pic": o.picture_url or "", "name": p.show_name, "lineName": p.display_name or "",
+           "firstSeen": _iso(p.first_seen), "lastSeen": _iso(p.last_seen), "msgs": p.msg_count or 0,
+           "claimedAt": _iso(o.claimed_at), "full": access == "full"}
+    if access != "full":
+        return out
+    needs = []
+    try:
+        for n in p.needs.order_by("-updated_at")[:3]:
+            bits = []
+            if n.car_year_min or n.car_year_max:
+                bits.append("ปี %s" % "–".join(str(x) for x in (n.car_year_min, n.car_year_max) if x))
+            if n.budget_max:
+                bits.append("งบไม่เกิน %s" % _money(n.budget_max))
+            if n.monthly_max:
+                bits.append("ผ่อนไหว %s/เดือน" % _money(n.monthly_max))
+            if n.down_max:
+                bits.append("ดาวน์ %s" % _money(n.down_max))
+            needs.append({"car": n.car_model or (n.car_text or "")[:60] or "(ไม่ระบุรุ่น)",
+                          "detail": " · ".join(bits), "status": n.get_status_display(),
+                          "waiting": bool(n.waiting), "at": _iso(n.updated_at)})
+    except Exception:
+        needs = []
+    out.update({"status": p.status_message or "", "language": p.language or "",
+                "phones": phones_in(texts), "needs": needs})
+    return out
+
+
 def _row_for(prof):
     o = ChatOwner.objects.filter(profile=prof).select_related("owner").first()
     if o:
@@ -375,10 +517,11 @@ def _log(o, action, emp=None, by="", **kw):
         pass                       # ประวัติเขียนไม่ได้ ต้องไม่ทำให้งานหลัก (รับ/ตอบลูกค้า) พัง
 
 
-def note_customer_message(user_id: str, at=None, preview: str = ""):
+def note_customer_message(user_id: str, at=None, preview: str = "", picture: str = ""):
     """ลูกค้าส่งข้อความเข้ามา — เรียกจาก `store_chat` (แชท 1:1 เท่านั้น)
 
     เริ่ม "รอบรอคำตอบ" ถ้ายังไม่มี · ลูกค้าส่งรัวๆ หลายข้อความ = รอบเดิม (เส้นตายไม่เลื่อน)
+    `picture` = ลิงก์รูปโปรไฟล์ที่ `touch_profile` เพิ่งดึงมา (ว่าง = ไม่ได้ดึงรอบนี้)
     """
     if not user_id:
         return None
@@ -406,7 +549,15 @@ def note_customer_message(user_id: str, at=None, preview: str = ""):
         o.last_in_at = at
     if not o.last_at or at >= o.last_at:
         o.last_at, o.last_preview, o.last_dir = at, (preview or "")[:200], "in"
+    if picture:
+        o.picture_url, o.picture_at = picture[:500], timezone.now()
     o.save()
+    # รูปโปรไฟล์เก่าเกิน 7 วัน/ยังไม่มี → ดึงใหม่ตอนเริ่มรอบ (ทำใน thread ของ webhook อยู่แล้ว ไม่หน่วงใคร)
+    if new_round and not picture and _picture_stale(o):
+        try:
+            refresh_profile(o)
+        except Exception:
+            pass
     if new_round and c.get("notify_sellers"):
         try:
             _notify_new(o, c)
@@ -650,6 +801,7 @@ def row_json(o, me=None, now=None) -> dict:
         "escalated": bool(o.escalated_at),
         "mine": bool(me and o.owner_id == me.id),
         "msgs": p.msg_count or 0,
+        "pic": o.picture_url or "",
     }
 
 

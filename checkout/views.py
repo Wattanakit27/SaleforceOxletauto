@@ -740,11 +740,12 @@ def store_chat(data) -> int:
             # ★ ก.ย.69 — เก็บ user id + โปรไฟล์ลงตาราง `LineProfile` ไปในตัว (เจ้าของสั่ง)
             #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"
             #   ไว้ที่เดียว · เดิมเรียก display_name_for() ซึ่งได้แค่ชื่อ ไม่ได้เก็บอะไรไว้เลย
-            who = people.touch_profile(uid, group_id=gid, room_id=(src.get("roomId") or ""),
-                                       chat_type=ctype, channel=chan,
-                                       auto_employee=auto_emp).get("name") if uid else ""
+            tp = people.touch_profile(uid, group_id=gid, room_id=(src.get("roomId") or ""),
+                                      chat_type=ctype, channel=chan,
+                                      auto_employee=auto_emp) if uid else {}
+            who, pic = tp.get("name") or "", tp.get("picture") or ""
         except Exception:
-            who = ""
+            who, pic = "", ""
         try:
             row = GroupChat.objects.create(
                 chat_type=ctype, channel=chan,
@@ -771,7 +772,7 @@ def store_chat(data) -> int:
         if ctype == GroupChat.USER and uid:
             try:
                 from . import connect
-                connect.note_customer_message(uid, row.sent_at, connect.preview_of(row))
+                connect.note_customer_message(uid, row.sent_at, connect.preview_of(row), picture=pic)
             except Exception as e:
                 err = err or ("connect: %s: %s" % (type(e).__name__, e))[:200]
     _chat_log(saved=made, skipped=skipped, events=len(events), error=err)

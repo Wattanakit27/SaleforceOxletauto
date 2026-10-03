@@ -41,6 +41,7 @@ from django.test import Client  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from checkout import connect as C  # noqa: E402
+C.BG_FILL = False            # ไม่ให้ thread เติมรูปวิ่งชนฐานข้อมูลทดสอบ (เรียก fill_pictures ตรงๆ แทน)
 from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
 from dashboard.services import cache_store  # noqa: E402
 
@@ -66,8 +67,15 @@ def _post(url, *a, **k):
     return _R(POST_CODE[0], {} if POST_CODE[0] == 200 else {"message": "Invalid to"})
 
 
+PROFILE_OK = [False]          # True = LINE ตอบโปรไฟล์ลูกค้า (มีรูป) · False = 404 (เช่นลูกค้าบล็อกบอท)
+FAKE_PIC = "https://profile.line-scdn.net/0hFAKEPICTURE"
+
+
 def _get(url, *a, **k):
     CALLS.append(("get", url, None))
+    if PROFILE_OK[0] and "/v2/bot/profile/" in url:
+        return _R(200, {"displayName": "ชื่อใหม่ใน LINE", "pictureUrl": FAKE_PIC,
+                        "statusMessage": "หารถให้ครอบครัว", "language": "th"})
     return _R(404, {"message": "Not found"})
 
 
@@ -447,6 +455,81 @@ try:
             dumps.append((pth, cl.get(pth, secure=True).content.decode("utf-8")))
     bad = [p for p, txt in dumps if leak.search(txt)]
     ck("ทุก endpoint ไม่มี LINE user id", not bad, bad)
+
+    print("[15] โปรไฟล์ลูกค้า — รูป LINE + เบอร์ที่พิมพ์มา + รถที่หา")
+    ck("เบอร์มือถือติดกัน", C.phones_in(["โทรมา 0902483727 นะครับ"]) == ["0902483727"])
+    ck("เบอร์มีขีด/เว้นวรรค", C.phones_in(["090-248-3727", "081 234 5678"]) == ["0902483727", "0812345678"])
+    ck("เบอร์ +66", C.phones_in(["+66 90 248 3727"]) == ["0902483727"])
+    ck("เบอร์บ้าน 02", C.phones_in(["02-123-4567"]) == ["021234567"])
+    ck("ไม่จับราคา/ปี/รหัสลีด", C.phones_in(["งบ 450000 ปี 2021 รหัส TLD9-7376 ผ่อน 9000"]) == [])
+    ck("เบอร์ซ้ำนับครั้งเดียว", C.phones_in(["0902483727", "090-248-3727"]) == ["0902483727"])
+    ck("ไม่จับเลขยาวเกิน (เลขบัญชี 12 หลัก)", C.phones_in(["012345678901"]) == [])
+
+    # touch_profile ส่งรูปที่เพิ่งดึงมาต่อ — แต่ไม่เก็บลง LineProfile (กติกาเดิม)
+    from checkout import people
+    PROFILE_OK[0] = True
+    tp = people.touch_profile("U%032x" % 6, chat_type="user")
+    ck("ลูกค้าใหม่: touch_profile คืนรูปมาด้วย", tp.get("picture") == FAKE_PIC, tp)
+    lp6 = LineProfile.objects.get(user_id="U%032x" % 6)
+    ck("★ ไม่เก็บรูปลง LineProfile (ไม่มีช่องนี้แล้ว)", not hasattr(lp6, "picture_url"))
+    ck("★ raw ของ LineProfile ไม่มี pictureUrl", "pictureUrl" not in (lp6.raw or {}), lp6.raw)
+    o6 = C.note_customer_message("U%032x" % 6, timezone.now(), "สวัสดี", picture=tp.get("picture"))
+    ck("รูปที่ส่งต่อมา เก็บที่แถว Connect", o6.picture_url == FAKE_PIC and o6.picture_at is not None)
+    n_get = len([c for c in CALLS if c[0] == "get"])
+    C.note_customer_message("U%032x" % 6, timezone.now(), "อีกข้อความ")
+    ck("รูปยังใหม่ = ไม่ยิง LINE ซ้ำ", len([c for c in CALLS if c[0] == "get"]) == n_get)
+    tp_emp = people.touch_profile(STAFF.user_id, chat_type="user")
+    ck("★ พนักงาน = ไม่ส่งรูปออกมา", not tp_emp.get("picture"), tp_emp)
+
+    # ลูกค้าเก่าที่ยังไม่มีรูป → เติมเอง (จองแถวก่อน กันหลาย worker ดึงซ้ำ)
+    ChatOwner.objects.update(picture_url="", picture_at=None)
+    n = C.fill_pictures(limit=50)
+    ck("เติมรูปให้ลูกค้าเก่าทุกคนที่ดึงได้", n == ChatOwner.objects.count() and n >= 4,
+       (n, ChatOwner.objects.count()))
+    ck("ทุกแถวได้รูป", not ChatOwner.objects.filter(picture_url="").exists())
+    lp1 = LineProfile.objects.get(pk=P1.pk)
+    ck("ดึงโปรไฟล์แล้วอัปเดตชื่อ/สเตตัส/ภาษาใน LineProfile", lp1.display_name == "ชื่อใหม่ใน LINE"
+       and lp1.status_message == "หารถให้ครอบครัว" and lp1.language == "th", (lp1.display_name, lp1.status_message))
+    ck("เรียกซ้ำทันที = ไม่มีอะไรต้องเติม", C.fill_pictures(limit=50) == 0)
+    PROFILE_OK[0] = False
+    ChatOwner.objects.filter(pk=o1.id).update(picture_url="", picture_at=None)
+    ck("ดึงไม่ได้ (ลูกค้าบล็อกบอท) = ไม่ล้ม", C.fill_pictures(limit=50) == 0)
+    o1p = ChatOwner.objects.get(pk=o1.id)
+    left = (o1p.picture_at + timedelta(days=C.PIC_REFRESH_DAYS)) - timezone.now()
+    ck("ดึงไม่ได้ = เว้นราว 1 วันค่อยลองใหม่ (ไม่ยิงทุกครั้งที่เปิดหน้า)",
+       timedelta(hours=23) < left <= timedelta(hours=24), left)
+    ck("ดึงไม่ได้ = ไม่ถือว่าได้รูป", o1p.picture_url == "")
+    ChatOwner.objects.filter(pk=o1.id).update(picture_url=FAKE_PIC)
+
+    # การ์ดโปรไฟล์ในหน้าแชท
+    from checkout.models import CustomerNeed
+    GroupChat.objects.create(chat_type="user", message_id="seed-phone", sender_id=P1.user_id, direction="in",
+                             msg_type="text", text="เบอร์ผม 090-248-3727 ครับ", sent_at=timezone.now())
+    CustomerNeed.objects.create(profile=P1, car_model="Civic", budget_max=450000, monthly_max=9000,
+                                status="lead", waiting=True)
+    C.assign(o1.id, A1, by="แอดมิน")
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % o1.id)
+    pf = d.get("profile") or {}
+    ck("เจ้าของเห็นการ์ดโปรไฟล์เต็ม", s_ == 200 and pf.get("full") is True, (s_, pf.get("full")))
+    ck("การ์ดมีรูป", pf.get("pic") == FAKE_PIC, pf.get("pic"))
+    ck("การ์ดมีเบอร์ที่ลูกค้าพิมพ์", pf.get("phones") == ["0902483727"], pf.get("phones"))
+    ck("การ์ดมีรถที่ลูกค้าหา + งบ", pf.get("needs") and pf["needs"][0]["car"] == "Civic"
+       and "450,000" in pf["needs"][0]["detail"] and pf["needs"][0]["waiting"] is True, pf.get("needs"))
+    ck("การ์ดมีสเตตัส LINE", pf.get("status") == "หารถให้ครอบครัว", pf.get("status"))
+    ck("แถวในลิสต์มีรูป", any(r.get("pic") == FAKE_PIC for r in J(SA1, "/connect/api/inbox?view=mine")[1].get("rows", [])))
+    # คิวรอรับ (preview) — เห็นแค่รูป+ชื่อ ไม่เห็นเบอร์/รถที่หา
+    C.assign(o4.id, None, by="แอดมิน")
+    C.note_customer_message("U%032x" % 4, timezone.now(), "โทรหาผม 0811111111")
+    GroupChat.objects.create(chat_type="user", message_id="seed-phone-4", sender_id="U%032x" % 4, direction="in",
+                             msg_type="text", text="โทรหาผม 0811111111", sent_at=timezone.now())
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % o4.id)
+    pf = d.get("profile") or {}
+    ck("คิวรอรับ: การ์ดแบบย่อ", s_ == 200 and pf.get("full") is False, (s_, pf))
+    ck("★ คิวรอรับ: ไม่ส่งเบอร์/รถที่หา/สเตตัส ออกไป", "phones" not in pf and "needs" not in pf and "status" not in pf, pf)
+
+    leak2 = [pth for pth in ("/connect/api/chat?id=%d" % o1.id, "/connect/api/inbox?view=mine")
+             if leak.search(SA1.get(pth, secure=True).content.decode("utf-8"))]
+    ck("หลังเพิ่มโปรไฟล์ ยังไม่มี LINE user id หลุด", not leak2, leak2)
 
 finally:
     _runner.teardown_databases(_old)

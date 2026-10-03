@@ -491,4 +491,7 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
         return {"name": nick or (prof.get("displayName") or ""), "is_employee": bool(nick)}
 
     return {"name": row.show_name if row.show_name != "ไม่ทราบชื่อ" else "",
-            "is_employee": bool(row.is_employee)}
+            "is_employee": bool(row.is_employee),
+            # ★ 3 ต.ค.69 — ส่งรูปโปรไฟล์ที่เพิ่งดึงมาต่อให้ Connect (ไม่ต้องยิง LINE ซ้ำ)
+            #   **ไม่เก็บลง LineProfile** (กติกาเดิม) · ของพนักงานไม่ส่งออกเลย
+            "picture": "" if row.is_employee else (prof.get("pictureUrl") or "")}
