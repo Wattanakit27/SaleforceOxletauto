@@ -183,8 +183,7 @@ def api_inbox(request):
             pass
     if view == "queue" and not admin and not on_duty:
         rows = []
-        note = ("วันนี้เป็นเวรทีม %s — ทีม %s รับลูกค้าใหม่ได้วันเวรของทีม (พรุ่งนี้เวรทีม %s)"
-                % (duty["today"], ctx["team"] or "ของคุณ", duty["tomorrow"]))
+        note = C.off_duty_reason(ctx["team"], c)
     else:
         rows = C.inbox(view, me=emp, admin=admin, q=request.GET.get("q", ""), seller_id=seller)
 

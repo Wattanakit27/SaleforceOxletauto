@@ -211,6 +211,34 @@ def today_team(c: dict | None = None) -> str:
     return duty_team(timezone.localdate(), c)
 
 
+_TH_DOW = ["จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์", "อาทิตย์"]
+
+
+def off_duty_reason(team: str, c: dict | None = None) -> str:
+    """ทำไมวันนี้คนทีมนี้รับลูกค้าใหม่ไม่ได้ ('' = วันนี้เวรทีมนี้ รับได้)
+
+    ★ แยก 3 กรณี — เดิมตอบแบบเดียวว่า "รอวันเวรของทีม" ซึ่ง **ผิดสำหรับทีมที่ไม่อยู่ในเวรเลย**
+      (ทีม C / เทเลเซลล์) → เขาจะรอวันที่ไม่มีวันมาถึง (วัดจริง 3 ต.ค.69: ทีม C มี 3 คนในทะเบียน)
+    """
+    c = c or cfg()
+    d0 = timezone.localdate()
+    if not team:
+        return ("บัญชีนี้ยังไม่ได้ตั้งทีมในทะเบียนพนักงาน (หน้า \"พนักงาน\" → ตำแหน่ง เช่น ทีม A) — "
+                "รับลูกค้าใหม่เองไม่ได้ แต่แอดมินโอนลูกค้าให้ได้")
+    if team not in c["teams"]:
+        return ("ทีม %s ไม่ได้อยู่ในเวรรับลูกค้าใหม่ (เวรมีทีม %s) — แอดมินโอนลูกค้าให้ได้"
+                % (team, ", ".join(c["teams"])))
+    today = duty_team(d0, c)
+    if today == team:
+        return ""
+    for i in range(1, 31):                      # วันเวรถัดไปของทีมนี้ (นับสลับเวรด้วย)
+        d = d0 + timedelta(days=i)
+        if duty_team(d, c) == team:
+            when = "พรุ่งนี้" if i == 1 else "%s %d/%d" % (_TH_DOW[d.weekday()], d.day, d.month)
+            return "วันนี้เป็นเวรทีม %s — ทีม %s รับลูกค้าใหม่ได้อีกทีวันเวรถัดไป (%s)" % (today, team, when)
+    return "วันนี้เป็นเวรทีม %s — ทีม %s ไม่มีวันเวรใน 30 วันข้างหน้า (เช็คตารางเวรในหน้าตั้งค่า)" % (today, team)
+
+
 def roster(days: int = 14, c: dict | None = None) -> list:
     c = c or cfg()
     d0 = timezone.localdate()
@@ -427,10 +455,9 @@ def claim(row_id, emp, admin: bool = False):
         return False, "%s รับลูกค้าคนนี้ไปแล้ว" % o.owner.nickname
     my = team_of(emp)
     if not admin:
-        today = today_team()
-        if my != today:
-            return False, ("วันนี้เป็นเวรทีม %s — ทีม %s รับลูกค้าใหม่ได้เฉพาะวันเวรของทีม"
-                           % (today, my or "ของคุณ (ยังไม่ได้ตั้งทีมในทะเบียน)"))
+        why = off_duty_reason(my)
+        if why:
+            return False, why
         if not o.awaiting_since:
             return False, "ลูกค้าคนนี้ไม่ได้รออยู่ในคิวแล้ว — ถ้าต้องการดูแล ให้แอดมินโอนให้"
     now = timezone.now()
