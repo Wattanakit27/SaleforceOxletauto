@@ -1341,7 +1341,7 @@
       html += `</div></header>`;
 
       // Last fetch
-      if(D.meta?.generatedAt) {
+      if(D.meta?.generatedAt && tab !== 'cn') {     // แท็บ Connect ไม่เกี่ยวกับข้อมูลชีต — เอาที่ไปให้แชท
         const d = new Date(D.meta.generatedAt);
         html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px;text-align:right">ดึงข้อมูลล่าสุด: ${d.toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})}</div>`;
       }
@@ -1409,7 +1409,7 @@
               + `<button class="nav-foot-out" onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" aria-label="ออกจากระบบ">${ic('lucide:log-out',16)}</button></div>`;
       }
       html += `</div>`;
-      html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
+      if(tab !== 'cn') html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
       // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ"/"จัดซื้อ" — มี UI/รอบเดือนของตัวเอง)
       if(tab!=='s' && tab!=='t' && tab!=='ck' && tab!=='p' && tab!=='cn') html += renderDateFilterBar();
@@ -1433,6 +1433,7 @@
       if(tab==='o') initCharts();
       if(SO_TAB_SIDE[tab]) loadSocial();   // 3 แพลตฟอร์มใช้ข้อมูลก้อนเดียว (แคชร่วม) — สลับแท็บไม่โหลดใหม่
       if(tab==='ct') loadContentReport();  // "คอนเทนต์" — รายงานทีมคอนเทนต์ (ข้ามแพลตฟอร์ม)
+      if(tab==='cn') requestAnimationFrame(fitConnectFrame);   // Connect — กรอบแชทสูงเต็มจอพอดี
       if(tab==='ad') loadAds();      // "โฆษณา" — ค่าโฆษณา/ต้นทุนต่อแชท ตามช่วงวันที่ของหน้า
       if(tab==='t') loadTracking();   // "สถานะรถ" เรนเดอร์ native (fetch /track/api/cars) ธีมเดียวกับ sales
       if(tab==='p') loadYodStock();   // "จัดซื้อ" — ดึง override สต๊อกที่แก้ไว้ แล้ว refresh ตาราง
@@ -6208,8 +6209,17 @@
       <iframe id="trkFrame" src="/track/" title="สถานะรถ" style="display:block;width:100vw;position:relative;left:50%;margin-left:-50vw;height:calc(100vh - 172px);min-height:560px;border:0;border-top:.5px solid var(--bd);background:var(--bg2)"></iframe>`; }
 
     // แท็บ "Connect" — ฝังหน้า /connect/ (หน้าเดียวกับที่เซลล์เปิดจากมือถือ · สิทธิ์เช็คที่เซิร์ฟเวอร์)
-    function renderConnect(){ return `<div style="display:flex;justify-content:flex-end;margin:-4px 0 6px"><a href="/connect/" target="_blank" style="font-size:var(--fs-body);color:var(--t3);text-decoration:none">เปิดเต็มจอ ↗</a></div>`
-      + `<iframe src="/connect/?embed=1" title="Connect" style="width:100%;height:calc(100vh - 190px);min-height:560px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`; }
+    //   ★ 3 ต.ค.69 เจ้าของแจ้ง "หน้าจอแชทเล็กมาก" — เดิมสูงตายตัว 100vh-190px แล้วยังมีบรรทัดอธิบาย/เวลาดึงข้อมูลกินที่
+    //     ตอนนี้วัดตำแหน่งจริงแล้วให้กรอบยาวถึงขอบล่างจอพอดี (fitConnectFrame) · ปุ่ม "เต็มจอ" อยู่ในแถบบนของ Connect เอง
+    function renderConnect(){
+      return `<iframe id="cnFrame" src="/connect/?embed=1" title="Connect" style="display:block;width:100%;height:calc(100vh - 130px);min-height:520px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`;
+    }
+    function fitConnectFrame(){
+      const f = document.getElementById('cnFrame'); if(!f) return;
+      const top = f.getBoundingClientRect().top + window.scrollY;
+      f.style.height = Math.max(520, window.innerHeight - top - 12) + 'px';
+    }
+    window.addEventListener('resize', fitConnectFrame);
 
     // แท็บ "เบิก-คืนรถ" — ฝังหน้า supervisor (checkout/) ผ่าน iframe (same-origin · ใช้ session sales admin)
     function renderCheckout(){ return `<iframe src="${_ckSrc}" title="เบิก-คืนรถ" style="width:100%;height:calc(100vh - 170px);min-height:560px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`; }
