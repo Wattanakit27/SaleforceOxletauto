@@ -5240,6 +5240,18 @@
     const SO_TAB_SIDE = { so: 'meta', tt: 'tiktok', yt: 'youtube' };
     let _soSide = 'meta';            // ฝั่งที่หน้านี้กำลังดู — ตั้งจาก renderSocial(side)
 
+    //  ★ เมตริกที่แพลตฟอร์มนั้น "ไม่มีให้" ต้องขึ้น "–" ไม่ใช่ 0
+    //    0 อ่านเป็น "ไม่มีใครแชร์" ซึ่งไม่จริง — YouTube Data API ไม่เปิดยอดแชร์เลยสักทาง
+    //    ตารางแยกช่องใช้ "–" อยู่แล้ว แต่ที่อื่น (KPI / ตารางคลิป / การ์ดช่อง) ยังโชว์ 0
+    //    · พอแยกเป็น "หน้าของ YouTube" เอง เลข 0 ไปโผล่ทั้งหน้า ยิ่งอ่านผิดง่าย
+    //    เพิ่มเมตริกที่ฝั่งไหนไม่มี = เติมที่ SO_NO_METRIC ที่เดียว (ทุกจุดตามเอง)
+    const SO_NO_METRIC = { youtube: ['shares'] };
+    const SO_NO_WHY = { youtube: 'YouTube API ไม่ให้ยอดแชร์' };
+    const soHas = (side, m) => !((SO_NO_METRIC[side] || []).includes(m));
+    const soMetrics = side => ((_soData || {}).metrics || []).filter(m => soHas(side, m));
+    const soDash = side => `<span style="color:var(--t3)" title="${h(SO_NO_WHY[side] || '')}">–</span>`;
+    const soNum = (side, m, v) => soHas(side, m) ? (Number(v) || 0).toLocaleString() : soDash(side);
+
     function renderSocial(side) {
       if (side) _soSide = side;
       //  ย้ายแพลตฟอร์ม = กลับหน้ารวมของฝั่งใหม่ — หน้าช่อง/หน้าคลิปที่เปิดค้างไว้เป็นของฝั่งก่อนหน้า
@@ -5280,7 +5292,9 @@
         const d = await r.json();
         if (seq !== _soSeq) return;                              // มีคำขอใหม่แซงแล้ว ทิ้งผลนี้
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
-        _soData = d; _soRange = key; _soOpen = null;   // เปลี่ยนช่วงวัน = กลับหน้ารวม
+        //  เปลี่ยนช่วงวัน = กลับหน้ารวม · ต้องล้าง **ทั้ง** หน้าคลิปและหน้าช่อง
+        //  (แถวในหน้าช่องถูกดึงมาด้วยช่วงวันที่เดิม ถ้าไม่ล้างจะค้างเลขของช่วงเก่า)
+        _soData = d; _soRange = key; _soOpen = null; _soCh = null;
       } catch (e) {
         if (seq !== _soSeq || (e && e.name === 'AbortError')) return;   // โดนแทนที่คำขอใหม่ = ไม่ใช่ error
         const box = document.getElementById('so-box');
@@ -5381,7 +5395,7 @@
       //   2×2 กว้างช่องละครึ่งการ์ดเสมอ ไม่ว่าจอกว้างแค่ไหนก็ไม่ชน
       const cells = _soData.metrics.map(m => `<div style="min-width:0;overflow:hidden">
         <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
-        <div style="font-size:21px;font-weight:800;color:var(--t1);white-space:nowrap">${(show[m] || 0).toLocaleString()}</div></div>`).join('');
+        <div style="font-size:21px;font-weight:800;color:var(--t1);white-space:nowrap">${soNum(side, m, show[m])}</div></div>`).join('');
       const piece = side === 'meta' ? 'โพสต์' : 'คลิป';   // ชื่อเรียกชิ้นงานของฝั่งนั้น
       // ฝั่งไหนยังไม่มีข้อมูลรายวัน = บอกสาเหตุ + ทางแก้ แทนที่จะโชว์ 0 เฉยๆ ให้คนเดาเอง
       let note = '';
@@ -5453,7 +5467,7 @@
           <td style="${_n}">${(p.views || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.likes || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.comments || 0).toLocaleString()}</td>
-          <td style="${_n}">${(p.shares || 0).toLocaleString()}</td></tr>`).join('') + `</tbody></table></div>`;
+          <td style="${_n}">${soNum(side, 'shares', p.shares)}</td></tr>`).join('') + `</tbody></table></div>`;
     }
 
     // ── กดดูรายชิ้น: กราฟหน้าตาเดียวกับหน้ารวม แค่เป็นของโพสต์/คลิปนั้นอันเดียว ──
@@ -5474,7 +5488,7 @@
       const p = (d.posts || []).find(x => x.id === o.id) || {};
       const daily = (d.postDaily || {})[o.id] || {};
       const nDay = Object.keys(daily).length;
-      const chips = _soData.metrics.map(m => `<button onclick="soSetMetric('${m}')"
+      const chips = soMetrics(o.side).map(m => `<button onclick="soSetMetric('${m}')"
         style="padding:5px 13px;border-radius:7px;font-size:var(--fs-body);font-weight:700;cursor:pointer;font-family:inherit;
                border:.5px solid ${_soMetric === m ? 'transparent' : 'var(--bd2)'};
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
@@ -5487,8 +5501,8 @@
       const kpi = _soData.metrics.map(m => `<div style="min-width:104px">
           <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
           <div style="font-size:23px;font-weight:800;color:${nDay ? 'var(--t1)' : 'var(--t3)'}">${
-            nDay ? (inRange[m] || 0).toLocaleString() : '—'}</div>
-          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${(p[m] || 0).toLocaleString()}</div></div>`).join('');
+            !soHas(o.side, m) ? soDash(o.side) : (nDay ? (inRange[m] || 0).toLocaleString() : '—')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${soNum(o.side, m, p[m])}</div></div>`).join('');
 
       return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
           <button onclick="soBackToList()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
@@ -5670,7 +5684,8 @@
           ${p.thumb ? `<img src="${h(p.thumb)}" alt="" loading="lazy" onerror="this.remove()"
             style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : ''}</div>`;
       const small = ['likes', 'comments', 'shares'].map(m => `<span style="white-space:nowrap">
-          ${h(_soData.metricTh[m] || m)} <b style="color:var(--t1)">${p.live ? _n(inc[m]) : '–'}</b></span>`).join('');
+          ${h(_soData.metricTh[m] || m)} <b style="color:var(--t1)">${
+            !soHas(side, m) ? soDash(side) : (p.live ? _n(inc[m]) : '–')}</b></span>`).join('');
       return `<div style="border:.5px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--bg1);
           display:flex;flex-direction:column">
         <div style="background:var(--bg2)">${cover}</div>
@@ -5707,8 +5722,8 @@
       const kpi = _soData.metrics.map(m => `<div style="min-width:96px">
           <div style="font-size:var(--fs-body);color:var(--t3)">${h(_soData.metricTh[m] || m)}</div>
           <div style="font-size:23px;font-weight:800;color:${row.live ? 'var(--t1)' : 'var(--t3)'}">${
-            row.live ? _n(row[m]) : '–'}</div>
-          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${_n((row.cum || {})[m])}</div></div>`).join('');
+            !soHas(c.side, m) ? soDash(c.side) : (row.live ? _n(row[m]) : '–')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${soNum(c.side, m, (row.cum || {})[m])}</div></div>`).join('');
       const shown = c.rows.length;
       return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
           <button onclick="soChBack()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
@@ -5786,7 +5801,10 @@
         _crData = d; _crRange = key;
       } catch (e) {
         if (seq !== _crSeq || (e && e.name === 'AbortError')) return;
+        //  ★ ล้าง `_crRange` ด้วย — ไม่งั้นการ์ด error ของช่วงที่ล้ม จะถูกแคชไว้
+        //    แล้วกลับมาโชว์ซ้ำตอนสลับกลับไปช่วงที่เคยโหลดสำเร็จ โดยไม่ลองใหม่อีกเลย
         _crData = { error: String((e && e.message) || e) };
+        _crRange = '';
       }
       _crPaint();
     }
@@ -5934,7 +5952,9 @@
     function drawSocial() {
       const box = document.getElementById('so-box');
       if (!box || !_soData) return;
-      const chips = _soData.metrics.map(m => `<button onclick="soSetMetric('${m}')"
+      //  ย้ายข้ามแพลตฟอร์มมาโดยเลือก "แชร์" ค้างไว้ → ฝั่งที่ไม่มีเมตริกนั้นจะได้กราฟแบนติดศูนย์
+      if (!soHas(_soSide, _soMetric)) _soMetric = 'views';
+      const chips = soMetrics(_soSide).map(m => `<button onclick="soSetMetric('${m}')"
         style="padding:5px 13px;border-radius:7px;font-size:var(--fs-body);font-weight:700;cursor:pointer;font-family:inherit;
                border:.5px solid ${_soMetric === m ? 'transparent' : 'var(--bd2)'};
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
