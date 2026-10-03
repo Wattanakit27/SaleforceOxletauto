@@ -1237,13 +1237,16 @@ def autofill(o, msgs=None) -> ChatLead:
     # Admin = คนที่โอนลูกค้าให้เซลล์ล่าสุด (ไม่มี = คนแรกที่ตอบลูกค้าที่ไม่ใช่เจ้าของ)
     #   ต้องเป็นชื่อในตัวเลือก "Admin" ของชีตเท่านั้น (กวาง/หมิว/เฟิร์น/…) — เจ้าของ/เซลล์ที่ตอบเองไม่ใช่ Admin ของลีด
     adm = (ChatOwnerLog.objects.filter(chat=o, action=ChatOwnerLog.ASSIGN).exclude(by_name="")
-           .order_by("-at").values_list("by_name", flat=True).first())
+           .order_by("-at", "-id").values_list("by_name", flat=True).first())
     if not adm:
         qs = GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.OUT).exclude(sent_by_name="")
         if o.owner_id:
             qs = qs.exclude(sent_by_name=o.owner.nickname)
         adm = qs.order_by("sent_at", "id").values_list("sent_by_name", flat=True).first()
-    adm = dd_pick("admin_name", adm) if adm and not adm.startswith(TEST_PREFIX) else ""
+    #   ★ ตรงตัวเลือกเป๊ะ (ตัวพิมพ์ด้วย) ไม่ใช้ dd_pick — บัญชีแอดมินระบบ (ชื่อเล่น "admin") ต้องไม่กลายเป็นตัวเลือก
+    #     "ADMIN" ของชีต ซึ่งเป็นคนละความหมาย · ชื่อเล่นคนจริงเป็นภาษาไทย ตรงเป๊ะอยู่แล้ว ไม่เสียอะไร
+    adm = (adm or "").strip()
+    adm = adm if adm and not adm.startswith(TEST_PREFIX) and adm in dd_options("admin_name") else ""
     if adm:
         put("admin_name", adm, SYSTEM, over=stale_sys("admin_name"))
 

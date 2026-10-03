@@ -669,6 +669,15 @@ try:
     C.assign(o3x.id, A2, by="Wattanakit")
     ld3 = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o3x.id))
     ck("★ คนโอนไม่อยู่ในตัวเลือก Admin ของชีต = ไม่เติม", ld3.admin_name == "", ld3.admin_name)
+    # บัญชีแอดมินระบบ (ชื่อเล่น "admin") ≠ ตัวเลือก "ADMIN" ของชีต — ต่างแค่ตัวพิมพ์ แต่คนละความหมาย
+    ChatLead.objects.filter(chat=o3x).delete()
+    C.assign(o3x.id, None, by="admin")              # ปล่อยก่อน — โอนให้คนเดิมซ้ำ = ไม่จดประวัติ (เทสต์จะผ่านหลอก)
+    C.assign(o3x.id, A2, by="admin")
+    last_by = (ChatOwnerLog.objects.filter(chat_id=o3x.id, action=ChatOwnerLog.ASSIGN)
+               .order_by("-at", "-id").values_list("by_name", flat=True).first())
+    ld3 = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o3x.id))
+    ck("★ แอดมินระบบ (admin) ไม่ถูกเติมเป็น ADMIN ของชีต", last_by == "admin" and "ADMIN" in C.dd_options("admin_name")
+       and ld3.admin_name == "", (last_by, ld3.admin_name))
     # ใบจ่ายลีดในกลุ่มจ่ายเบอร์ — โพสต์หลังจากเติมรอบแรกแล้ว
     slip = ("Ac Lead No. TLD9-7376\nAds : รถครอบครัว 7 ที่นั่ง\nชื่อ Account: Oxlet ช่องหลัก\n"
             "ชื่อลูกค้า : คุณสมชาย\nID LINE : somchai99\nชื่อไลน์ : อะไรก็ได้\nเบอร์โทร : 090-248-3727\n"
