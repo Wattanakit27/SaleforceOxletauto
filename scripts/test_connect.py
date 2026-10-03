@@ -1,0 +1,448 @@
+# -*- coding: utf-8 -*-
+"""เทสต์ Connect — ห้องแชทลูกค้ารวม (3 ต.ค.69)
+
+    python scripts/test_connect.py
+
+ใช้ฐานข้อมูลทดสอบแยก (สร้างใหม่ทุกครั้ง) · **ปลอมที่ขอบระบบ** (`requests` = LINE/Google)
+ไม่ปลอมฟังก์ชันของเราเอง — บทเรียนเดิม: ปลอมทั้งฟังก์ชัน = ไม่ได้ทดสอบฟังก์ชันนั้นเลย
+"""
+import io
+import json
+import os
+import re
+import sys
+from datetime import date, datetime, timedelta
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "oxlet.settings")
+os.environ.setdefault("DB_HOST", "")
+os.environ.setdefault("DEBUG", "True")
+
+import django  # noqa: E402
+
+django.setup()
+
+from django.conf import settings  # noqa: E402
+from django.test.runner import DiscoverRunner  # noqa: E402
+from django.test.utils import setup_test_environment  # noqa: E402
+
+setup_test_environment()
+_runner = DiscoverRunner(verbosity=0, interactive=False)
+_old = _runner.setup_databases()
+if "testserver" not in settings.ALLOWED_HOSTS:
+    settings.ALLOWED_HOSTS = list(settings.ALLOWED_HOSTS) + ["testserver"]
+settings.LINE_CHANNEL_ACCESS_TOKEN = "tok-crm"
+settings.LINE_PUSH_CHANNEL_ACCESS_TOKEN = "tok-push"
+
+import requests  # noqa: E402
+from django.contrib.sessions.backends.signed_cookies import SessionStore  # noqa: E402
+from django.test import Client  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+from checkout import connect as C  # noqa: E402
+from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
+from dashboard.services import cache_store  # noqa: E402
+
+# ── ขอบระบบ: LINE + Google (ห้ามออกเน็ตจริงในเทสต์) ──────────────────────
+CALLS = []
+
+
+class _R:
+    def __init__(self, code=200, js=None):
+        self.status_code, self._js = code, (js or {})
+        self.text = json.dumps(self._js)
+        self.headers = {}
+
+    def json(self):
+        return self._js
+
+
+POST_CODE = [200]
+
+
+def _post(url, *a, **k):
+    CALLS.append(("post", url, k.get("json")))
+    return _R(POST_CODE[0], {} if POST_CODE[0] == 200 else {"message": "Invalid to"})
+
+
+def _get(url, *a, **k):
+    CALLS.append(("get", url, None))
+    return _R(404, {"message": "Not found"})
+
+
+requests.post, requests.get = _post, _get
+import dashboard.services.google_sheets as _GS  # noqa: E402
+
+
+def _no_sheet(*a, **k):
+    raise RuntimeError("ไม่ต่อ Google Sheets ในเทสต์")
+
+
+_GS.fetch_sheet = _no_sheet
+
+OK, BAD = [], []
+
+
+def ck(name, cond, got=""):
+    (OK if cond else BAD).append(name)
+    print(("  ok   " if cond else "  FAIL ") + name + ("" if cond else "   ได้: %r" % (got,)))
+
+
+TZ = timezone.get_current_timezone()
+
+
+def at(y, mo, d, hh, mm=0):
+    return timezone.make_aware(datetime(y, mo, d, hh, mm), TZ)
+
+
+def pushes():
+    return [c for c in CALLS if c[0] == "post" and "/message/push" in c[1]]
+
+
+try:
+    # ═════════════════════════════════════════════════════════════════════
+    print("[1] เวรวันเว้นวัน")
+    c = dict(C.DEFAULTS, anchor_date="2026-10-01", anchor_team="A", overrides={})
+    ck("1 ต.ค. = A (วันตั้งต้น)", C.duty_team(date(2026, 10, 1), c) == "A")
+    ck("2 ต.ค. = B", C.duty_team(date(2026, 10, 2), c) == "B")
+    ck("3 ต.ค. = A", C.duty_team(date(2026, 10, 3), c) == "A")
+    ck("30 ก.ย. (ก่อนวันตั้งต้น) = B", C.duty_team(date(2026, 9, 30), c) == "B")
+    ck("ข้ามเดือน 1 พ.ย. (31 วันถัดมา) = B", C.duty_team(date(2026, 11, 1), c) == "B")
+    c2 = dict(c, overrides={"2026-10-04": "A"})
+    ck("สลับเวรเฉพาะวัน 4 ต.ค. → A", C.duty_team(date(2026, 10, 4), c2) == "A")
+    ck("สลับเวรไม่ลามไปวันถัดไป (5 ต.ค. = A ตามสูตร)", C.duty_team(date(2026, 10, 5), c2) == "A")
+    ck("วันถัดจากวันสลับยังเดินตามสูตร (6 ต.ค. = B)", C.duty_team(date(2026, 10, 6), c2) == "B")
+    c3 = dict(c, teams=["A", "B", "C"])
+    ck("3 ทีมหมุนเวียน", [C.duty_team(date(2026, 10, d), c3) for d in (1, 2, 3, 4)] == ["A", "B", "C", "A"])
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[2] เส้นตาย 5 นาที (นับเฉพาะเวลาทำการ)")
+    c = dict(C.DEFAULTS, sla_min=5, open="08:30", close="20:00")
+    ck("10:00 → 10:05", C.due_for(at(2026, 10, 3, 10), c) == at(2026, 10, 3, 10, 5))
+    ck("ทักก่อนเปิด 07:00 → 08:35", C.due_for(at(2026, 10, 3, 7), c) == at(2026, 10, 3, 8, 35))
+    ck("ทักหลังปิด 21:00 → พรุ่งนี้ 08:35", C.due_for(at(2026, 10, 3, 21), c) == at(2026, 10, 4, 8, 35))
+    ck("ตี 2 → 08:35 วันเดียวกัน", C.due_for(at(2026, 10, 4, 2), c) == at(2026, 10, 4, 8, 35))
+    ck("19:58 → 20:03 (เลยเวลาปิดได้ ไม่ตัดทิ้ง)", C.due_for(at(2026, 10, 3, 19, 58), c) == at(2026, 10, 3, 20, 3))
+    c24 = dict(c, open="00:00", close="00:00")
+    ck("ตั้งเปิด=ปิด = นับ 24 ชม. (ตี 3 → 03:05)", C.due_for(at(2026, 10, 3, 3), c24) == at(2026, 10, 3, 3, 5))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[3] ตรวจค่าตั้ง — ผิดต้องฟ้อง ไม่เงียบ")
+    _, e = C.clean_cfg({"teams": ["A", "ทีมโปรดักชัน"]})
+    ck("รหัสทีมยาว/ไทย = ฟ้อง", bool(e), e)
+    _, e = C.clean_cfg({"teams": ["A", "B"], "anchor_team": "C"})
+    ck("ทีมของวันตั้งต้นไม่อยู่ในรายการ = ฟ้อง", bool(e), e)
+    _, e = C.clean_cfg({"sla_min": 0})
+    ck("เส้นตาย 0 นาที = ฟ้อง", bool(e), e)
+    _, e = C.clean_cfg({"open": "25:00"})
+    ck("เวลา 25:00 = ฟ้อง", bool(e), e)
+    _, e = C.clean_cfg({"alert_on": True, "alert_group": ""})
+    ck("เปิดแจ้งเตือนแต่ไม่เลือกกลุ่ม = ฟ้อง", bool(e), e)
+    _, e = C.clean_cfg({"alert_group": "U" + "a" * 32})
+    ck("กลุ่มแจ้งเตือนเป็นไอดีคน (U…) = ฟ้อง", bool(e), e)
+    good, e = C.clean_cfg({"teams": ["a", "b"], "anchor_team": "b", "sla_min": "7", "open": "9:00"})
+    ck("ค่าถูก = ผ่าน + ทำให้เป็นรูปแบบเดียวกัน",
+       not e and good["teams"] == ["A", "B"] and good["anchor_team"] == "B"
+       and good["sla_min"] == 7 and good["open"] == "09:00", (e, good))
+    old_day = (timezone.localdate() - timedelta(days=60)).isoformat()
+    good, e = C.clean_cfg({"overrides": {old_day: "A", "2099-01-01": "B"}})
+    ck("สลับเวรที่ผ่านมานานแล้วถูกทิ้งตอนบันทึก", not e and old_day not in good["overrides"]
+       and "2099-01-01" in good["overrides"], good["overrides"])
+
+    # ── ข้อมูลตั้งต้น: วันนี้ = เวรทีม A · นับ 24 ชม. (เทสต์ไม่ขึ้นกับเวลาที่รัน) ──
+    TODAY = timezone.localdate()
+    ck("บันทึกค่าตั้งได้", C.save_cfg(dict(C.DEFAULTS, anchor_date=TODAY.isoformat(), anchor_team="A",
+                                            open="00:00", close="00:00")))
+    ck("วันนี้เวรทีม A ตามที่ตั้ง", C.today_team() == "A", C.today_team())
+
+    A1 = Employee.objects.create(nickname="เอหนึ่ง", position="ทีม A")
+    A2 = Employee.objects.create(nickname="เอสอง", position="ทีม A")
+    B1 = Employee.objects.create(nickname="บีหนึ่ง", position="ทีม B")
+    OFFICE = Employee.objects.create(nickname="ออฟฟิศ", position="ออฟฟิศ บ้านเก่า")
+    ck("ทีมจากทะเบียน: ทีม A → A", C.team_of(A1) == "A")
+    ck("ตำแหน่งที่ไม่ใช่ทีมขาย = ไม่มีทีม", C.team_of(OFFICE) == "", C.team_of(OFFICE))
+    ck("รายชื่อโอนได้มีแต่ทีมขาย", {s["name"] for s in C.seller_list()} == {"เอหนึ่ง", "เอสอง", "บีหนึ่ง"},
+       C.seller_list())
+
+    def cust(n, name):
+        return LineProfile.objects.create(user_id="U%032x" % n, display_name=name)
+
+    P1, P2, P3 = cust(1, "ลูกค้าหนึ่ง"), cust(2, "ลูกค้าสอง"), cust(3, "ลูกค้าสาม")
+    STAFF = LineProfile.objects.create(user_id="U%032x" % 99, display_name="พนักงาน",
+                                       is_employee=True, nickname="เอหนึ่ง", employee=A1)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[4] ลูกค้าทักเข้ามา → เข้าคิว + เริ่มนับ")
+    t0 = timezone.now() - timedelta(minutes=2)
+    o1 = C.note_customer_message(P1.user_id, t0, "สนใจ Civic ปี 20")
+    ck("สร้างแถวให้ลูกค้า", o1 is not None and ChatOwner.objects.count() == 1)
+    ck("ยังไม่มีเจ้าของ", o1.owner_id is None)
+    ck("เริ่มรอบรอ + เส้นตาย = +5 นาที", o1.awaiting_since == t0 and o1.due_at == t0 + timedelta(minutes=5),
+       (o1.awaiting_since, o1.due_at))
+    ck("ทีมของรอบนี้ = เวรวันนี้ (A)", o1.team == "A", o1.team)
+    o1b = C.note_customer_message(P1.user_id, t0 + timedelta(minutes=1), "ผ่อนเดือนละเท่าไหร่")
+    ck("ส่งรัวๆ = รอบเดิม เส้นตายไม่เลื่อน", o1b.due_at == t0 + timedelta(minutes=5))
+    ck("ข้อความล่าสุดอัปเดต", o1b.last_preview == "ผ่อนเดือนละเท่าไหร่" and o1b.last_dir == "in")
+    ck("พนักงานทักเข้า OA = ไม่เข้าคิว", C.note_customer_message(STAFF.user_id, t0, "x") is None)
+    ck("ไม่รู้จักคนนี้ = ไม่พัง", C.note_customer_message("U" + "f" * 32, t0, "x") is None)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[5] รับลูกค้า — ใครกดก่อนได้ไป · เฉพาะวันเวร")
+    ok, msg = C.claim(o1.id, B1)
+    ck("ทีม B (ไม่ใช่วันเวร) รับไม่ได้", not ok and "เวรทีม A" in msg, msg)
+    ok, msg = C.claim(o1.id, A1)
+    ck("ทีม A (วันเวร) รับได้", ok, msg)
+    ok, msg = C.claim(o1.id, A2)
+    ck("คนที่สองกดทีหลัง = ไม่ได้ + บอกว่าใครได้ไป", not ok and "เอหนึ่ง" in msg, msg)
+    ck("เจ้าของคือคนแรก", ChatOwner.objects.get(pk=o1.id).owner_id == A1.id)
+    ok, msg = C.claim(o1.id, A1)
+    ck("กดซ้ำ (ของตัวเองอยู่แล้ว) = ไม่ error", ok, msg)
+    ck("ประวัติจด 'รับลูกค้า' ครั้งเดียว", ChatOwnerLog.objects.filter(chat_id=o1.id, action="claim").count() == 1)
+    ok, msg = C.claim(o1.id, None)
+    ck("บัญชีไม่ผูกทะเบียน = บอกเหตุผล", not ok and "ทะเบียนพนักงาน" in msg, msg)
+    # ลูกค้าที่ไม่ได้รออยู่ในคิว — เซลล์รับเองไม่ได้ (ต้องให้แอดมินโอน) · แอดมินรับได้
+    o3 = C._row_for(P3)
+    ok, msg = C.claim(o3.id, A2)
+    ck("ลูกค้าที่ไม่ได้รอในคิว = เซลล์รับเองไม่ได้", not ok, msg)
+    ok, msg = C.claim(o3.id, B1, admin=True)
+    ck("แอดมินรับได้ทุกวัน (ไม่ติดเวร)", ok, msg)
+    C.assign(o3.id, None, by="เทสต์")
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[6] ลูกค้าของเราตลอด — ไม่ขึ้นกับวันเวร")
+    C.save_cfg(dict(C.cfg(), anchor_team="B"))              # พรุ่งนี้สมมติ: วันนี้กลายเป็นเวร B
+    o1c = C.note_customer_message(P1.user_id, timezone.now(), "ยังอยู่ไหมครับ")
+    ck("วันที่ไม่ใช่เวรทีม A ลูกค้าก็ยังเป็นของ เอหนึ่ง", o1c.owner_id == A1.id)
+    C.save_cfg(dict(C.cfg(), anchor_team="A"))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[7] ตอบแล้ว = จบรอบรอ + จดเวลาเป็นสถิติ")
+    r = C.note_reply(P1.user_id, A1, timezone.now(), "สวัสดีครับ")
+    ck("ตอบแล้วไม่รอแล้ว", r.awaiting_since is None and r.due_at is None)
+    ck("จดตอบครั้งแรกของเจ้าของ", r.first_reply_at is not None)
+    lg = ChatOwnerLog.objects.filter(chat_id=o1.id, action="reply").first()
+    ck("ประวัติตอบมีเวลาที่ลูกค้ารอ", lg is not None and lg.wait_sec is not None and lg.wait_sec >= 100,
+       lg and lg.wait_sec)
+    ck("ตอบทันเวลา = on_time จริง", lg is not None and lg.on_time is True)
+    C.note_reply(P1.user_id, A1, timezone.now(), "ตามมาอีกข้อความ")
+    ck("ตอบเพิ่มตอนไม่มีรอบรอ = ไม่นับซ้ำในสถิติ",
+       ChatOwnerLog.objects.filter(chat_id=o1.id, action="reply").count() == 1)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[8] เลยเวลา → แจ้งแอดมินครั้งเดียวต่อรอบ")
+    CALLS.clear()
+    o2 = C.note_customer_message(P2.user_id, timezone.now() - timedelta(minutes=9), "มีรถเก๋งไหม")
+    res = C.tick()
+    ck("ติดธงเลยเวลา 1 คน", res.get("escalated") == 1, res)
+    ck("ไม่ได้เปิดแจ้ง LINE = ไม่ยิง LINE", not pushes(), pushes())
+    ck("เรียกซ้ำ = ไม่แจ้งซ้ำ", C.tick() == {})
+    ck("ประวัติเลยเวลา (ยังไม่มีเจ้าของ)", ChatOwnerLog.objects.filter(
+        chat_id=o2.id, action="escalate", note__contains="ยังไม่มีเซลล์").count() == 1)
+    C.note_reply(P2.user_id, None, timezone.now(), "มีครับ", by="admin")
+    o2r = ChatOwner.objects.get(pk=o2.id)
+    ck("ตอบแล้วล้างธงเลยเวลา", o2r.escalated_at is None and o2r.awaiting_since is None)
+    lg2 = ChatOwnerLog.objects.filter(chat_id=o2.id, action="reply").first()
+    ck("ตอบหลังเส้นตาย = on_time เป็นเท็จ", lg2 is not None and lg2.on_time is False)
+    # เปิดแจ้งเตือน LINE เข้ากลุ่ม
+    C.save_cfg(dict(C.cfg(), alert_on=True, alert_group="C" + "1" * 32))
+    CALLS.clear()
+    C.note_customer_message(P2.user_id, timezone.now() - timedelta(minutes=8), "ยังไม่มีใครตอบเลย")
+    res = C.tick()
+    p = pushes()
+    ck("เปิดแจ้ง LINE = ส่ง 1 ข้อความ", res.get("alert") == "ok" and len(p) == 1, (res, p))
+    body = json.dumps(p[0][2] if p else {}, ensure_ascii=False)
+    ck("ส่งเข้ากลุ่มที่ตั้งไว้", ('"to": "C' + "1" * 32) in body, body[:120])
+    ck("ข้อความมีชื่อลูกค้า + ลิงก์ Connect", "ลูกค้าสอง" in body and "/connect/" in body, body[:300])
+    C.save_cfg(dict(C.cfg(), alert_on=False, alert_group=""))
+    C.note_reply(P2.user_id, None, timezone.now(), "ขอโทษครับ", by="admin")
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[9] โอน / ปล่อยคืนคิว / ไม่ต้องตอบ / เซลล์ลาออก")
+    ok, msg = C.assign(o2.id, B1, by="แอดมิน")
+    ck("แอดมินโอนให้ทีม B ได้ (ไม่ติดเวร)", ok and ChatOwner.objects.get(pk=o2.id).owner_id == B1.id, msg)
+    ck("ทีมของแถวเปลี่ยนตามเจ้าของ", ChatOwner.objects.get(pk=o2.id).team == "B")
+    ok, msg = C.assign(o2.id, None, by="แอดมิน")
+    ck("ปล่อยคืนคิว", ok and ChatOwner.objects.get(pk=o2.id).owner_id is None, msg)
+    ck("ประวัติมีทั้งโอนและปล่อย", set(ChatOwnerLog.objects.filter(chat_id=o2.id)
+                                     .values_list("action", flat=True)) >= {"assign", "release"})
+    C.note_customer_message(P2.user_id, timezone.now(), "ขอบคุณครับ")
+    ok, msg = C.dismiss(o2.id, by="แอดมิน")
+    ck("ไม่ต้องตอบ = ปิดรอบรอ", ok and ChatOwner.objects.get(pk=o2.id).awaiting_since is None, msg)
+    C.assign(o2.id, A2, by="แอดมิน")
+    A2.active = False
+    A2.save()
+    o2x = C.note_customer_message(P2.user_id, timezone.now(), "สวัสดี")
+    ck("เจ้าของถูกปิดใช้งาน → ลูกค้ากลับเข้าคิวเอง", o2x.owner_id is None)
+    ck("ปิดใช้งานแล้วถูกโอนให้ไม่ได้", not C.assign(o2.id, A2, by="แอดมิน")[0])
+    A2.active = True
+    A2.save()
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[10] เก็บแชทจาก webhook → เข้า Connect เอง")
+    from checkout.views import store_chat, line_cfg, _save_cfg
+    cfg0 = line_cfg()
+    _save_cfg(dict(cfg0, store_customer_chat=True))
+    n = store_chat({"events": [{
+        "type": "message", "timestamp": int(timezone.now().timestamp() * 1000),
+        "source": {"type": "user", "userId": "U%032x" % 4},
+        "message": {"id": "m-new-1", "type": "text", "text": "มี Yaris ไหมครับ"}}]})
+    ck("เก็บข้อความ 1 ข้อความ", n == 1, n)
+    o4 = ChatOwner.objects.filter(profile__user_id="U%032x" % 4).first()
+    ck("ลูกค้าใหม่โผล่ในคิว Connect พร้อมนาฬิกา", o4 is not None and o4.awaiting_since is not None
+       and o4.owner_id is None, o4)
+    ck("ข้อความล่าสุดถูกต้อง", o4 is not None and o4.last_preview == "มี Yaris ไหมครับ")
+    store_chat({"events": [{
+        "type": "message", "source": {"type": "user", "userId": "U%032x" % 4},
+        "message": {"id": "m-new-2", "type": "sticker", "stickerId": "1", "packageId": "2"}}]})
+    ck("สติกเกอร์ = ป้ายอ่านออก", ChatOwner.objects.get(pk=o4.id).last_preview == "[สติกเกอร์]")
+    store_chat({"events": [{
+        "type": "message", "source": {"type": "group", "groupId": "C" + "2" * 32, "userId": "U%032x" % 5},
+        "message": {"id": "m-grp-1", "type": "text", "text": "แชทกลุ่มงาน"}}]})
+    ck("แชทกลุ่มงาน = ไม่เข้า Connect", not ChatOwner.objects.filter(profile__user_id="U%032x" % 5).exists())
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[11] สิทธิ์หน้าเว็บ — เซลล์เห็นเฉพาะลูกค้าของตัวเอง")
+    for i, g in enumerate(((P1, "in", "สนใจ Civic ปี 20"), (P1, "out", "สวัสดีครับ"), (P2, "in", "มีรถเก๋งไหม"))):
+        GroupChat.objects.create(chat_type="user", message_id="seed-%d" % i,
+                                 sender_id=g[0].user_id, direction=g[1], msg_type="text", text=g[2],
+                                 sent_at=timezone.now() - timedelta(minutes=30))
+    # ลูกค้า 2 กลับมาอยู่กับ เอสอง (ทีม A) — ใช้ทดสอบว่า เอหนึ่ง เห็นไม่ได้
+    C.assign(o2.id, A2, by="แอดมิน")
+
+    def client(user):
+        cl = Client()
+        if user:
+            st = SessionStore()
+            st["oxlet_user"] = user
+            st.save()
+            cl.cookies[settings.SESSION_COOKIE_NAME] = st.session_key
+        return cl
+
+    SA1 = client({"user_id": "Ux1", "nickname": "เอหนึ่ง", "position": "seller"})
+    SB1 = client({"user_id": "Ux2", "nickname": "บีหนึ่ง", "position": "seller"})
+    ADM = client({"user_id": "admin", "nickname": "admin", "position": "admin"})
+    WRK = client({"user_id": "django_w", "nickname": "ช่าง", "position": "worker"})
+    NOB = client(None)
+    GHOST = client({"user_id": "Ux9", "nickname": "ไม่มีในทะเบียน", "position": "seller"})
+
+    def J(cl, path, body=None):
+        r = cl.post(path, json.dumps(body), content_type="application/json", secure=True) if body is not None \
+            else cl.get(path, secure=True)
+        try:
+            return r.status_code, json.loads(r.content.decode("utf-8"))
+        except Exception:
+            return r.status_code, {}
+
+    r = NOB.get("/connect/", secure=True)
+    ck("ไม่ login → ไปหน้า login พร้อม next", r.status_code == 302 and "/login/?next=" in r["Location"],
+       r.status_code)
+    r = WRK.get("/connect/", secure=True)
+    ck("คนงาน (worker) เข้าไม่ได้", r.status_code == 403, r.status_code)
+    r = GHOST.get("/connect/", secure=True)
+    ck("เซลล์ที่ไม่มีในทะเบียน = บอกเหตุผล", r.status_code == 403 and "ทะเบียนพนักงาน" in r.content.decode(),
+       r.status_code)
+    r = SA1.get("/connect/", secure=True)
+    ck("เซลล์เปิดหน้าได้", r.status_code == 200, r.status_code)
+    r = ADM.get("/connect/", secure=True)
+    ck("แอดมินเปิดหน้าได้", r.status_code == 200, r.status_code)
+
+    s, d = J(SA1, "/connect/api/inbox?view=all")
+    ck("เซลล์ขอดู 'ทั้งหมด' → ถูกบังคับเป็นมุมมองของตัวเอง", s == 200 and d.get("view") in ("queue", "mine"),
+       (s, d.get("view")))
+    s, d = J(SA1, "/connect/api/inbox?view=mine")
+    names = {x["name"] for x in d.get("rows", [])}
+    ck("ลูกค้าของฉัน = เฉพาะของตัวเอง", names == {"ลูกค้าหนึ่ง"}, names)
+    s, d = J(SA1, "/connect/api/inbox?view=queue")
+    ck("วันเวร: เห็นคิวรอรับ", "ลูกค้า" in json.dumps(d, ensure_ascii=False) and d.get("onDuty") is True,
+       (d.get("onDuty"), [x["name"] for x in d.get("rows", [])]))
+    s, d = J(SB1, "/connect/api/inbox?view=queue")
+    ck("ไม่ใช่วันเวร: คิวว่าง + บอกว่าเวรทีมไหน", d.get("rows") == [] and "เวรทีม A" in (d.get("note") or ""),
+       d.get("note"))
+    s, d = J(SA1, "/connect/api/chat?id=%d" % o2.id)
+    ck("เปิดแชทลูกค้าของคนอื่น = 403", s == 403, s)
+    s, d = J(SA1, "/connect/api/chat?id=%d" % o1.id)
+    ck("เปิดแชทลูกค้าของตัวเอง = เห็นเต็ม", s == 200 and d.get("access") == "full"
+       and len(d.get("messages", [])) >= 2, (s, d.get("access")))
+    ck("ลูกค้าของตัวเอง = ตอบได้", d.get("canReply") is True)
+    s, d = J(SA1, "/connect/api/chat?id=%d" % o4.id)
+    ck("คิวรอรับ = เห็นแค่ข้อความที่เพิ่งส่ง (preview)", s == 200 and d.get("access") == "preview"
+       and all(m["dir"] == "in" for m in d.get("messages", [])), (s, d.get("access")))
+    ck("คิวรอรับ = ยังตอบไม่ได้ แต่กดรับได้", d.get("canReply") is False and d.get("canClaim") is True)
+    s, d = J(SB1, "/connect/api/chat?id=%d" % o4.id)
+    ck("คิวรอรับ วันไม่ใช่เวร = เปิดไม่ได้", s == 403, s)
+    s, d = J(SA1, "/connect/api/reply", {"id": o4.id, "text": "สวัสดีครับ"})
+    ck("ตอบลูกค้าที่ยังไม่ได้รับ = 403", s == 403, s)
+    s, d = J(SA1, "/connect/api/assign", {"id": o4.id, "emp": A1.id})
+    ck("เซลล์โอนลูกค้าเองไม่ได้", s == 403, s)
+    s, d = J(SA1, "/connect/api/config")
+    ck("เซลล์เปิดตั้งค่าไม่ได้", s == 403, s)
+    s, d = J(SA1, "/connect/api/stats")
+    ck("เซลล์ดูสถิติไม่ได้", s == 403, s)
+    s, d = J(SB1, "/connect/api/claim", {"id": o4.id})
+    ck("รับลูกค้าตอนไม่ใช่วันเวร (ยิง API ตรง) = ปฏิเสธ", s == 409 and "เวร" in d.get("error", ""), (s, d))
+    s, d = J(SA1, "/connect/api/claim", {"id": o4.id})
+    ck("รับลูกค้าในวันเวรผ่าน API ได้", s == 200 and d.get("ok"), (s, d))
+    s, d = J(SA1, "/connect/api/chat?id=%d" % o4.id)
+    ck("รับแล้ว = เห็นเต็ม", d.get("access") == "full", d.get("access"))
+
+    print("[12] ตอบผ่าน Connect")
+    s, d = J(SA1, "/connect/api/reply", {"id": o4.id, "text": "มีครับ"})
+    ck("ยังล็อกการส่ง = ส่งไม่ได้ + บอกวิธีเปิด", s == 400 and "--reply on" in d.get("error", ""), (s, d))
+    _save_cfg(dict(line_cfg(), reply_customer=True))
+    CALLS.clear()
+    s, d = J(SA1, "/connect/api/reply", {"id": o4.id, "text": "มี Yaris 2 คันครับ"})
+    ck("เจ้าของตอบได้", s == 200 and d.get("ok"), (s, d))
+    ck("ยิง LINE ไปหาลูกค้าคนนั้นจริง", any(("U%032x" % 4) in json.dumps(c[2] or {}) for c in pushes()), pushes())
+    out = GroupChat.objects.filter(sender_id="U%032x" % 4, direction="out").first()
+    ck("เก็บข้อความขาออก + ชื่อคนตอบ", out is not None and out.sent_by_id == A1.id and out.sent_by_name == "เอหนึ่ง",
+       out and (out.sent_by_id, out.sent_by_name))
+    ck("ตอบแล้วรอบรอจบ", ChatOwner.objects.get(pk=o4.id).awaiting_since is None)
+    POST_CODE[0] = 400
+    s, d = J(SA1, "/connect/api/reply", {"id": o4.id, "text": "ส่งไม่ถึง"})
+    ck("LINE ปฏิเสธ = แจ้งเป็นภาษาคน", s == 400 and "บล็อก" in d.get("error", ""), (s, d))
+    ck("ส่งไม่สำเร็จ = ไม่บันทึกลงบทสนทนา", not GroupChat.objects.filter(text="ส่งไม่ถึง").exists())
+    POST_CODE[0] = 200
+    s, d = J(ADM, "/connect/api/reply", {"id": o2.id, "text": "แอดมินตอบแทนครับ"})
+    ck("แอดมินตอบลูกค้าของใครก็ได้", s == 200 and d.get("ok"), (s, d))
+
+    print("[13] แอดมิน")
+    s, d = J(ADM, "/connect/api/inbox?view=all")
+    ck("แอดมินเห็นทุกคน", s == 200 and len(d.get("rows", [])) >= 4, len(d.get("rows", [])))
+    ck("แอดมินได้รายชื่อเซลล์ไว้โอน", len(d.get("sellers", [])) == 3)
+    s, d = J(ADM, "/connect/api/chat?id=%d" % o2.id)
+    ck("แอดมินเห็นประวัติ", s == 200 and len(d.get("history", [])) >= 2, (s, len(d.get("history", []))))
+    s, d = J(ADM, "/connect/api/assign", {"id": o4.id, "emp": B1.id})
+    ck("แอดมินโอนผ่าน API", s == 200 and ChatOwner.objects.get(pk=o4.id).owner_id == B1.id, (s, d))
+    s, d = J(SA1, "/connect/api/chat?id=%d" % o4.id)
+    ck("โอนออกไปแล้ว เจ้าของเดิมเปิดไม่ได้", s == 403, s)
+    s, d = J(ADM, "/connect/api/config", {"sla_min": 0})
+    ck("ตั้งค่าผิด = 400 + บอกช่อง", s == 400 and "1–120" in d.get("error", ""), (s, d))
+    s, d = J(ADM, "/connect/api/config", {"sla_min": 7})
+    ck("ตั้งค่าถูก = บันทึก", s == 200 and C.cfg()["sla_min"] == 7, (s, C.cfg()["sla_min"]))
+    ck("ตั้งค่าคืนตารางเวร 14 วัน", len(d.get("roster", [])) == 14)
+    s, d = J(ADM, "/connect/api/stats?days=7")
+    names = {r["name"] for r in d.get("rows", [])}
+    ck("สถิติมีคนที่ตอบ/รับลูกค้า", s == 200 and "เอหนึ่ง" in names, names)
+    s, d = J(SA1, "/connect/api/summary")
+    ck("ป้ายตัวเลขของเซลล์", s == 200 and d.get("ok") and "mineWaiting" in d.get("counts", {}), d)
+
+    print("[14] ไม่มี LINE user id หลุดออกหน้า Connect")
+    leak = re.compile(r"U[0-9a-f]{32}")
+    dumps = []
+    for cl, paths in ((SA1, ["/connect/api/inbox?view=mine", "/connect/api/inbox?view=queue",
+                             "/connect/api/chat?id=%d" % o1.id, "/connect/api/summary", "/connect/"]),
+                      (ADM, ["/connect/api/inbox?view=all", "/connect/api/chat?id=%d" % o1.id,
+                             "/connect/api/config", "/connect/api/stats", "/connect/"])):
+        for pth in paths:
+            dumps.append((pth, cl.get(pth, secure=True).content.decode("utf-8")))
+    bad = [p for p, txt in dumps if leak.search(txt)]
+    ck("ทุก endpoint ไม่มี LINE user id", not bad, bad)
+
+finally:
+    _runner.teardown_databases(_old)
+
+print("\nผ่าน %d / %d" % (len(OK), len(OK) + len(BAD)))
+if BAD:
+    print("ไม่ผ่าน:\n  - " + "\n  - ".join(BAD))
+    sys.exit(1)

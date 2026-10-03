@@ -139,6 +139,13 @@ def send_reply(user_id: str, text: str, actor: dict | None = None) -> GroupChat:
         sent_at=now,
     )
     LineProfile.objects.filter(pk=prof.pk).update(last_seen=now)
+    # ★ 3 ต.ค.69 — Connect: ตอบแล้ว = จบรอบรอ 5 นาที + จดเวลาตอบเป็นสถิติ
+    #   ครอบทั้งหน้า Connect และพาเนลแชทเดิมของแอดมิน · พังต้องไม่ทำให้ "ส่งสำเร็จ" กลายเป็นล้ม
+    try:
+        from . import connect
+        connect.note_reply(user_id, emp, now, text, by=who)
+    except Exception:
+        pass
     return row
 
 

@@ -120,6 +120,26 @@
   const ic = (name, size=16) => { size = size <= 16 ? size + 2 : size; return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;flex-shrink:0">${LUCIDE[name.replace('lucide:','')]||''}</svg>`; };
   // 🟢 heartbeat — ให้เซลล์ที่กำลังใช้งานถูกนับใน "คนเข้าเว็บตอนนี้" (แอดมินเห็นในหน้าหลัก)
   (function(){ function ping(){ fetch('/api/presence?p=seller',{credentials:'same-origin'}).catch(function(){}); } ping(); setInterval(ping, 45000); })();
+  // 💬 Connect — ตัวเลขบนปุ่ม "แชทลูกค้า": ลูกค้าของฉันที่รอคำตอบ + คิวรอรับ (นับเฉพาะวันเวรของทีม)
+  //   var (ไม่ใช่ let) — modeBar() อาจถูกวาดก่อนบรรทัดนี้ทำงาน
+  var _cnS = null;
+  function cnSellerBadge(){
+    const b = _cnS || {}, n = (b.mine || 0) + (b.queue || 0);
+    if (!n) return '<span id="cn-sbadge"></span>';
+    const bg = b.late ? 'var(--red)' : 'var(--blue)';
+    return `<span id="cn-sbadge" style="position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:5px;background:${bg};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center">${n > 99 ? '99+' : n}</span>`;
+  }
+  (function(){
+    function poll(){
+      fetch('/connect/api/summary',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(j=>{
+        if (!j || !j.ok) return;
+        const c = j.counts || {};
+        _cnS = {mine: c.mineWaiting || 0, queue: c.queue || 0, late: c.mineOverdue || 0};
+        const el = document.getElementById('cn-sbadge'); if (el) el.outerHTML = cnSellerBadge();
+      }).catch(function(){});
+    }
+    poll(); setInterval(poll, 30000);
+  })();
   const pct = (a,b) => b > 0 ? Math.round((a/b)*100) : 0;
   const nc = (u) => Math.max(0, C.UPD_TGT - u);
 
@@ -1853,6 +1873,7 @@
           <option value="cars" ${pageMode==='cars'?'selected':''}>🚗 สถานะรถ</option>
           <option value="loan" ${(pageMode==='loan'||pageMode==='finance')?'selected':''}>📄 ยื่นสินเชื่อ / เช็คไฟแนนซ์</option>
         </select>
+        <a href="/connect/" title="Connect — แชทลูกค้า: รับลูกค้าในวันเวรของทีม + ตอบลูกค้าของคุณ" style="position:relative;display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;text-decoration:none;white-space:nowrap">${ic('lucide:inbox',16)} แชทลูกค้า${cnSellerBadge()}</a>
         ${sellerBellHtml()}
         <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:var(--fs-sub);padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
         <a href="/logout/" title="ออกจากระบบ" onclick="return confirm('ออกจากระบบ?')" style="font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;text-decoration:none;white-space:nowrap;font-weight:600">ออกจากระบบ</a>

@@ -1,0 +1,741 @@
+{% load static %}<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connect · Oxlet</title>
+<link rel="icon" type="image/png" href="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'dashboard/css/globals.css' %}?v=20260920b">
+<script>
+  // ธีมเดียวกับแดชบอร์ด (คีย์ oxlet_theme) — ตั้งก่อน paint กันจอกระพริบ
+  (function(){
+    try {
+      var t = localStorage.getItem('oxlet_theme');
+      if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    } catch(e) { document.documentElement.setAttribute('data-theme','light'); }
+  })();
+</script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: 'Noto Sans Thai', sans-serif; background: var(--bg2); color: var(--t1);
+         font-size: var(--fs-body); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .ic { width: 16px; height: 16px; flex-shrink: 0; vertical-align: -3px; }
+
+  /* ── หัวหน้า ── */
+  .cn-top { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+            background: var(--bg); border-bottom: .5px solid var(--bd2); }
+  .cn-back { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 8px;
+             border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); text-decoration: none; }
+  .cn-title { font-size: var(--fs-h); font-weight: 800; display: flex; align-items: center; gap: 7px; }
+  .cn-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 7px;
+             border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); white-space: nowrap; }
+  .cn-chip b { color: var(--t1); }
+  .cn-chip.on { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+  .cn-chip.on b { color: var(--green); }
+  .cn-sp { flex: 1; }
+  html.embed .cn-back { display: none; }
+
+  .cn-banners:empty { display: none; }
+  .cn-banner { display: flex; gap: 8px; align-items: flex-start; padding: 8px 16px; border-bottom: .5px solid var(--bd); }
+  .cn-banner.err { background: var(--red-bg); color: var(--red); }
+  .cn-banner.warn { background: var(--amber-bg); color: var(--amber); }
+  .cn-banner code { background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+
+  /* ── 2 ช่อง: รายชื่อ | แชท ── */
+  .cn-main { display: grid; grid-template-columns: 360px minmax(0,1fr); height: calc(100% - 56px - var(--bh, 0px)); }
+  .cn-list { display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-right: .5px solid var(--bd2); }
+  .cn-tabs { display: flex; gap: 4px; padding: 10px 10px 6px; flex-wrap: wrap; }
+  .cn-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 8px; border: .5px solid var(--bd2);
+            background: var(--bg2); color: var(--t2); cursor: pointer; font-weight: 600; }
+  .cn-tab.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .cn-tab .n { min-width: 18px; padding: 0 5px; border-radius: 5px; background: var(--bg3); color: var(--t2); font-size: 12px; text-align: center; }
+  .cn-tab.on .n { background: rgba(255,255,255,.25); color: var(--on-blue); }
+  .cn-tab .n.hot { background: var(--red); color: #fff; }
+  .cn-tools { display: flex; gap: 6px; padding: 0 10px 8px; }
+  .cn-tools input, .cn-tools select { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2);
+                                      background: var(--bg2); }
+  .cn-note { margin: 4px 10px 8px; padding: 10px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); line-height: 1.6; }
+  .cn-rows { flex: 1; overflow-y: auto; border-top: .5px solid var(--bd); }
+  .cn-row { display: flex; gap: 10px; padding: 11px 12px; border-bottom: .5px solid var(--bd); cursor: pointer; align-items: flex-start; }
+  .cn-row:hover { background: var(--bg2); }
+  .cn-row.sel { background: var(--blue-bg); }
+  .cn-row.late { box-shadow: inset 3px 0 0 var(--red); }
+  .cn-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+           font-weight: 800; color: #fff; background: var(--blue); }
+  .cn-rb { flex: 1; min-width: 0; }
+  .cn-rh { display: flex; gap: 6px; align-items: baseline; }
+  .cn-rn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .cn-rt { color: var(--t3); font-size: 12px; white-space: nowrap; }
+  .cn-rp { color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  .cn-rp.out { color: var(--t3); }
+  .cn-rm { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 5px; font-size: 12px; font-weight: 700;
+         background: var(--bg3); color: var(--t2); white-space: nowrap; }
+  .tag.team { color: #fff; }
+  .tag.wait { background: var(--amber-bg); color: var(--amber); }
+  .tag.late { background: var(--red); color: #fff; }
+  .tag.ok { background: var(--green-bg); color: var(--green); }
+  .tag.q { background: var(--blue-bg); color: var(--blue); }
+  .cn-empty { text-align: center; color: var(--t3); padding: 40px 20px; line-height: 1.7; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 8px;
+         border: .5px solid var(--bd2); background: var(--bg2); color: var(--t1); cursor: pointer; font-weight: 700; white-space: nowrap; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.pri { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .btn.red { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+  .btn.sm { padding: 4px 10px; font-size: 12px; }
+
+  /* ── ช่องขวา ── */
+  .cn-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .cn-ph { padding: 12px 16px; background: var(--bg); border-bottom: .5px solid var(--bd2); }
+  .cn-ph-row { display: flex; gap: 10px; align-items: center; }
+  .cn-ph h2 { margin: 0; font-size: var(--fs-sub); font-weight: 800; }
+  .cn-sub { color: var(--t3); margin-top: 2px; }
+  .cn-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .cn-acts select { padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); max-width: 220px; }
+  .cn-clock { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+  .cn-clock.wait { background: var(--amber-bg); color: var(--amber); }
+  .cn-clock.late { background: var(--red-bg); color: var(--red); }
+  .cn-hist { margin-top: 8px; color: var(--t2); }
+  .cn-hist summary { cursor: pointer; color: var(--t3); }
+  .cn-hist div { padding: 3px 0; border-bottom: .5px dashed var(--bd); }
+  .cn-msgs { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .cn-day { align-self: center; color: var(--t3); font-size: 12px; padding: 2px 10px; border-radius: 6px; background: var(--bg3); margin: 8px 0 2px; }
+  .bub { max-width: min(560px, 82%); padding: 8px 12px; border-radius: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .bub.in { align-self: flex-start; background: var(--bg); border: .5px solid var(--bd2); border-bottom-left-radius: 4px; }
+  .bub.out { align-self: flex-end; background: var(--blue); color: var(--on-blue); border-bottom-right-radius: 4px; }
+  .bub .meta { font-size: 11px; opacity: .7; margin-top: 3px; }
+  .bub.out .meta { text-align: right; }
+  .bub.media { font-style: italic; opacity: .85; }
+  .cn-lock { margin: 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--blue-bg); color: var(--blue); line-height: 1.6; }
+  .cn-comp { display: flex; gap: 8px; padding: 10px 16px 12px; background: var(--bg); border-top: .5px solid var(--bd2); align-items: flex-end; }
+  .cn-comp textarea { flex: 1; resize: none; min-height: 42px; max-height: 160px; padding: 10px 12px; border-radius: 10px;
+                      border: .5px solid var(--bd2); background: var(--bg2); line-height: 1.5; }
+  .cn-comp-why { padding: 12px 16px; background: var(--bg); border-top: .5px solid var(--bd2); color: var(--t3); }
+  .cn-err { color: var(--red); padding: 0 16px 8px; background: var(--bg); }
+  .cn-blank { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--t3); padding: 30px; line-height: 1.8; }
+
+  /* ── ตั้งค่า / สถิติ ── */
+  .cn-page { flex: 1; overflow-y: auto; padding: 16px; }
+  .card { background: var(--bg); border: .5px solid var(--bd); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; max-width: 920px; }
+  .card h3 { margin: 0 0 4px; font-size: var(--fs-sub); }
+  .card .d { color: var(--t3); margin-bottom: 10px; line-height: 1.6; }
+  .fld { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+  .fld label { min-width: 150px; color: var(--t2); }
+  .fld input[type=number], .fld input[type=time], .fld select, .fld input[type=text] {
+    padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); }
+  .ros { display: flex; gap: 5px; flex-wrap: wrap; }
+  .ros button { width: 64px; padding: 6px 0; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2);
+                cursor: pointer; text-align: center; line-height: 1.3; position: relative; }
+  .ros button b { display: block; font-size: var(--fs-sub); }
+  .ros button.td { outline: 2px solid var(--blue); }
+  .ros button .ov { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber-mid); }
+  table.st { border-collapse: collapse; width: 100%; }
+  table.st th, table.st td { padding: 8px 10px; border-bottom: .5px solid var(--bd); text-align: right; white-space: nowrap; }
+  table.st th:first-child, table.st td:first-child { text-align: left; }
+  table.st th { color: var(--t3); font-weight: 600; }
+
+  .spin { width: 22px; height: 22px; border: 3px solid var(--bd2); border-top-color: var(--blue); border-radius: 50%;
+          animation: cnspin .8s linear infinite; margin: 0 auto 10px; }
+  @keyframes cnspin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--t1); color: var(--bg);
+           padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
+
+  /* มือถือ: ทีละช่อง — รายชื่อ → แตะ → แชทเต็มจอ (กดกลับ) */
+  .cn-mback { display: none; }
+  @media (max-width: 860px) {
+    .cn-main { grid-template-columns: minmax(0,1fr); }
+    .cn-pane { display: none; }
+    body.pane .cn-list { display: none; }
+    body.pane .cn-pane { display: flex; }
+    .cn-mback { display: inline-flex; }
+    .cn-top { padding: 0 12px; gap: 8px; }
+    .cn-top .hide-sm { display: none; }
+    .cn-ph, .cn-msgs, .cn-comp { padding-left: 12px; padding-right: 12px; }
+    .fld label { min-width: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+{% if error %}
+  <div style="max-width:520px;margin:12vh auto;padding:0 16px">
+    <div class="card" style="text-align:center">
+      <div style="font-size:var(--fs-h);font-weight:800;margin-bottom:8px">Connect</div>
+      <div style="color:var(--t2);line-height:1.7;margin-bottom:14px">{{ error }}</div>
+      <a class="btn" href="/dashboard/">กลับหน้าหลัก</a>
+      <a class="btn" href="/logout/">ออกจากระบบ</a>
+    </div>
+  </div>
+{% else %}
+  <div class="cn-top">
+    <a class="cn-back" id="cn-back" href="/dashboard/"><span data-ic="arrow-left"></span><span class="hide-sm" id="cn-back-t">แดชบอร์ด</span></a>
+    <div class="cn-title"><span data-ic="message-circle"></span> Connect</div>
+    <span class="cn-chip hide-sm" id="cn-duty">เวรวันนี้ …</span>
+    <span class="cn-sp"></span>
+    <span class="cn-chip" id="cn-me"></span>
+  </div>
+  <div class="cn-banners" id="cn-banners"></div>
+  <div class="cn-main" id="cn-main">
+    <aside class="cn-list">
+      <div class="cn-tabs" id="cn-tabs"></div>
+      <div class="cn-tools" id="cn-tools">
+        <input id="cn-q" type="search" placeholder="ค้นหาชื่อลูกค้า / ข้อความ" autocomplete="off">
+        <select id="cn-seller" style="display:none"></select>
+      </div>
+      <div id="cn-note"></div>
+      <div class="cn-rows" id="cn-rows"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>
+    </aside>
+    <section class="cn-pane" id="cn-pane">
+      <div class="cn-blank" id="cn-blank">เลือกลูกค้าทางซ้ายเพื่อเปิดแชท</div>
+    </section>
+  </div>
+{% endif %}
+{{ boot|json_script:"cn-boot" }}
+<script>
+(function () {
+  const BOOT = JSON.parse((document.getElementById('cn-boot') || {}).textContent || '{}');
+  if (!document.getElementById('cn-main')) return;          // หน้าแจ้ง error
+  const ME = BOOT.me || {};
+  const ADMIN = !!ME.admin;
+  if (BOOT.embed) document.documentElement.classList.add('embed');
+
+  // ── ตัวช่วย ──
+  const h = s => (s === null || s === undefined) ? '' : String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const ICONS = {
+    'message-circle': '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+    'send': '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
+    'clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    'alert': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    'user-check': '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>',
+    'users': '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    'inbox': '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    'chart': '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
+    'sliders': '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+    'repeat': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+    'check': '<path d="M20 6 9 17l-5-5"/>',
+    'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
+  };
+  const ic = (n, sz) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${sz ? ` style="width:${sz}px;height:${sz}px"` : ''}>${ICONS[n] || ''}</svg>`;
+  document.querySelectorAll('[data-ic]').forEach(el => { el.innerHTML = ic(el.dataset.ic, 17); });
+  const $ = id => document.getElementById(id);
+  const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; };
+  const TEAM_C = { A: 'var(--tA)', B: 'var(--tB)', C: 'var(--tC)', ADMIN: 'var(--amber-mid)' };
+  const teamTag = t => t ? `<span class="tag team" style="background:${TEAM_C[t] || 'var(--t3)'}">ทีม ${h(t)}</span>` : '';
+  const AV_C = ['#7c3aed', '#0d9488', '#db2777', '#2563eb', '#d97706', '#059669', '#9333ea', '#dc2626'];
+  const avColor = name => { let s = 2166136261; for (const ch of String(name || '')) { s ^= ch.codePointAt(0); s = Math.imul(s, 16777619) >>> 0; } return AV_C[s % AV_C.length]; };
+  const initial = name => (Array.from(String(name || '?').trim())[0] || '?').toUpperCase();
+
+  function toast(msg, ms) {
+    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), ms || 3200);
+  }
+
+  async function api(path, body, signal) {
+    const opt = { credentials: 'same-origin', headers: {}, signal };
+    if (body !== undefined) {
+      opt.method = 'POST'; opt.body = JSON.stringify(body);
+      opt.headers['Content-Type'] = 'application/json'; opt.headers['X-CSRFToken'] = csrf();
+    }
+    const r = await fetch(path, opt);
+    let d;
+    try { d = await r.json(); } catch (e) { d = { ok: false, error: 'เซิร์ฟเวอร์ตอบผิดรูปแบบ (' + r.status + ')' }; }
+    if (r.status === 401) { location.href = '/login/?next=' + encodeURIComponent('/connect/'); }
+    return d;
+  }
+
+  // ── เวลา ──
+  let SKEW = 0;                                   // นาฬิกาเซิร์ฟเวอร์ − นาฬิกาเครื่องนี้
+  const nowMs = () => Date.now() + SKEW;
+  const pad = n => String(n).padStart(2, '0');
+  function fmtWhen(iso) {
+    if (!iso) return '';
+    const d = new Date(iso), n = new Date(nowMs());
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return d.toDateString() === n.toDateString() ? hm : (d.getDate() + '/' + (d.getMonth() + 1) + ' ' + hm);
+  }
+  function fmtLeft(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(s / 60) + ':' + pad(s % 60);
+  }
+  // ป้ายนาฬิกาของรอบรอ — อัปเดตทุกวินาทีจาก data-due (ไม่ต้องยิงเซิร์ฟเวอร์)
+  function clockText(dueIso, sinceIso) {
+    if (!dueIso) return { cls: '', text: '' };
+    const left = Date.parse(dueIso) - nowMs();
+    if (left <= 0) return { cls: 'late', text: 'เลยเวลา ' + Math.max(1, Math.round(-left / 60000)) + ' นาที' };
+    const sla = (S.duty ? S.duty.slaMin : 5) * 60000;
+    if (left > sla + 30000) {                      // ทักนอกเวลาทำการ — ยังไม่เริ่มนับ
+      const st = new Date(Date.parse(dueIso) - sla);
+      return { cls: 'wait', text: 'เริ่มนับ ' + pad(st.getHours()) + ':' + pad(st.getMinutes()) };
+    }
+    return { cls: 'wait', text: 'เหลือ ' + fmtLeft(left) };
+  }
+
+  // ── สถานะ ──
+  const S = {
+    view: '', q: '', seller: 0, rows: [], counts: {}, duty: null, onDuty: false, sellers: [], status: [], note: '',
+    openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
+  };
+  const TABS_ADMIN = [
+    { v: 'overdue', l: 'เลยเวลา', i: 'alert', c: 'overdue', hot: true },
+    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue' },
+    { v: 'mine', l: 'ของฉัน', i: 'user-check', c: 'mine', needEmp: true },
+    { v: 'owned', l: 'มีเจ้าของ', i: 'users', c: 'owned' },
+    { v: 'all', l: 'ทั้งหมด', i: 'list', c: 'all' },
+    { v: '_stats', l: 'สถิติ', i: 'chart' },
+    { v: '_cfg', l: 'ตั้งค่า', i: 'sliders' },
+  ];
+  const TABS_SELLER = [
+    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
+    { v: 'mine', l: 'ลูกค้าของฉัน', i: 'user-check', c: 'mine', hotKey: 'mineWaiting' },
+  ];
+
+  function renderTop() {
+    const d = S.duty;
+    if (d) {
+      $('cn-duty').innerHTML = `เวรวันนี้ <b>ทีม ${h(d.today)}</b> · พรุ่งนี้ทีม ${h(d.tomorrow)}`;
+    }
+    const me = $('cn-me');
+    if (ADMIN) {
+      me.className = 'cn-chip';
+      me.innerHTML = `<b>${h(ME.name || 'แอดมิน')}</b> · แอดมิน`;
+      $('cn-back').href = '/dashboard/';
+    } else {
+      me.className = 'cn-chip' + (S.onDuty ? ' on' : '');
+      me.innerHTML = `<b>${h(ME.name)}</b> · ทีม ${h(ME.team || '-')}${S.onDuty ? ' · วันนี้เวรคุณ' : ''}`;
+      $('cn-back').href = '/me/';
+      $('cn-back-t').textContent = 'หน้าของฉัน';
+    }
+    const b = $('cn-banners');
+    b.innerHTML = (S.status || []).map(s => `<div class="cn-banner ${h(s.level)}">${ic('alert')}<div>${h(s.text)}${s.fix ? ` · เปิดด้วยคำสั่ง <code>${h(s.fix)}</code>` : ''}</div></div>`).join('');
+    document.documentElement.style.setProperty('--bh', b.offsetHeight + 'px');
+    // ตัวเลขบนแท็บเบราว์เซอร์ — คนเปิดค้างไว้ข้างหลังจะเห็นว่ามีงาน
+    const c = S.counts || {};
+    const hot = ADMIN ? (c.overdue || 0) : ((c.queue || 0) + (c.mineWaiting || 0));
+    document.title = (hot ? '(' + hot + ') ' : '') + 'Connect · Oxlet';
+  }
+
+  function renderTabs() {
+    const tabs = (ADMIN ? TABS_ADMIN : TABS_SELLER).filter(t => !t.needEmp || ME.empId);
+    const cur = S.pane === 'stats' ? '_stats' : (S.pane === 'cfg' ? '_cfg' : S.view);
+    $('cn-tabs').innerHTML = tabs.map(t => {
+      let n = '';
+      if (t.c) {
+        const v = (S.counts || {})[t.c] || 0;
+        const hv = t.hotKey ? (S.counts || {})[t.hotKey] || 0 : v;
+        n = `<span class="n${t.hot || t.hotKey ? (hv ? ' hot' : '') : ''}">${t.hotKey && hv ? hv + '/' + v : v}</span>`;
+      }
+      return `<button class="cn-tab${cur === t.v ? ' on' : ''}" data-v="${t.v}">${ic(t.i)} ${h(t.l)} ${n}</button>`;
+    }).join('');
+    $('cn-tabs').querySelectorAll('.cn-tab').forEach(b => b.onclick = () => pickTab(b.dataset.v));
+    const sel = $('cn-seller');
+    const showSel = ADMIN && (S.view === 'owned' || S.view === 'all') && S.pane === 'chat';
+    sel.style.display = showSel ? '' : 'none';
+    if (showSel && sel.dataset.n !== String(S.sellers.length)) {
+      sel.dataset.n = String(S.sellers.length);
+      sel.innerHTML = '<option value="0">เซลล์ทุกคน</option>' + S.sellers.map(s =>
+        `<option value="${s.id}">${h(s.name)} (ทีม ${h(s.team)})</option>`).join('');
+      sel.value = String(S.seller || 0);
+    }
+  }
+
+  function pickTab(v) {
+    if (v === '_stats') { S.pane = 'stats'; renderTabs(); openStats(); showPane(); return; }
+    if (v === '_cfg') { S.pane = 'cfg'; renderTabs(); openCfg(); showPane(); return; }
+    S.view = v; S.pane = 'chat';
+    if (!S.openId) renderBlank();
+    loadInbox(true);
+  }
+
+  function rowHtml(r) {
+    const ck = r.awaiting ? clockText(r.due, r.since) : null;
+    const tags = [];
+    if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
+    else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
+    if (ADMIN && r.team) tags.push(teamTag(r.team));
+    if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
+    const claimBtn = (!ADMIN && !r.owner && S.onDuty) ? `<button class="btn pri sm" data-claim="${r.id}">รับ</button>` : '';
+    return `<div class="cn-row${r.id === S.openId ? ' sel' : ''}${r.overdue ? ' late' : ''}" data-id="${r.id}">
+      <div class="cn-av" style="background:${avColor(r.name)}">${h(initial(r.name))}</div>
+      <div class="cn-rb">
+        <div class="cn-rh"><span class="cn-rn">${h(r.name)}</span><span class="cn-rt">${h(fmtWhen(r.lastAt))}</span></div>
+        <div class="cn-rp${r.lastDir === 'out' ? ' out' : ''}">${r.lastDir === 'out' ? 'เรา: ' : ''}${h(r.preview || '—')}</div>
+        <div class="cn-rm">${tags.join('')}${claimBtn}</div>
+      </div>
+    </div>`;
+  }
+
+  function renderList() {
+    $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';
+    const el = $('cn-rows');
+    if (!S.rows.length) {
+      const empty = {
+        overdue: 'ไม่มีลูกค้ารอเกินเวลา 👍', queue: 'ไม่มีลูกค้ารอรับตอนนี้',
+        mine: ADMIN ? 'ยังไม่มีลูกค้าที่คุณดูแล' : 'ยังไม่มีลูกค้าของคุณ — กดรับจากแท็บ "รอรับ" ในวันเวรของทีม',
+        owned: 'ยังไม่มีลูกค้าที่มีเจ้าของ', all: 'ยังไม่มีลูกค้าทักเข้ามา',
+      }[S.view] || 'ไม่มีรายการ';
+      el.innerHTML = S.note ? '' : `<div class="cn-empty">${h(empty)}</div>`;
+      return;
+    }
+    const top = el.scrollTop;
+    el.innerHTML = S.rows.map(rowHtml).join('');
+    el.scrollTop = top;
+    el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
+    el.querySelectorAll('[data-claim]').forEach(b => b.onclick = (e) => { e.stopPropagation(); claim(+b.dataset.claim); });
+  }
+
+  // ── โหลดรายชื่อ (ยกเลิกคำขอเก่าเมื่อมีคำขอใหม่ — บทเรียนเดิม "ตัวกรองค้าง") ──
+  let _inAbort = null, _inSeq = 0;
+  async function loadInbox(reset) {
+    if (_inAbort) _inAbort.abort();
+    const ac = new AbortController(); _inAbort = ac;
+    const seq = ++_inSeq;
+    const qs = new URLSearchParams();
+    if (S.view) qs.set('view', S.view);
+    if (S.q) qs.set('q', S.q);
+    if (S.seller) qs.set('seller', S.seller);
+    if (reset) $('cn-rows').innerHTML = '<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>';
+    let d;
+    try { d = await api('/connect/api/inbox?' + qs.toString(), undefined, ac.signal); }
+    catch (e) { if (e.name === 'AbortError') return; d = { ok: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้' }; }
+    if (seq !== _inSeq) return;
+    if (!d.ok) { $('cn-rows').innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    if (d.now) SKEW = Date.parse(d.now) - Date.now();
+    Object.assign(S, { view: d.view, rows: d.rows || [], counts: d.counts || {}, duty: d.duty, onDuty: !!d.onDuty,
+                       status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true });
+    renderTop(); renderTabs(); renderList();
+    if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
+  }
+
+  // ── แชท ──
+  let _chAbort = null, _chSeq = 0;
+  function showPane() { document.body.classList.add('pane'); }
+  function hidePane() { document.body.classList.remove('pane'); }
+  function renderBlank(msg) {
+    $('cn-pane').innerHTML = `<div class="cn-blank">${h(msg || 'เลือกลูกค้าทางซ้ายเพื่อเปิดแชท')}</div>`;
+  }
+
+  async function openChat(id, keep) {
+    if (!id) return;
+    S.pane = 'chat';
+    const switching = !S.chat || S.chat.row.id !== id;
+    S.openId = id;
+    if (switching && !keep) {
+      $('cn-pane').innerHTML = `<div class="cn-blank"><div><div class="spin"></div>กำลังเปิดแชท…</div></div>`;
+      S.chat = null;
+    }
+    document.querySelectorAll('.cn-row').forEach(r => r.classList.toggle('sel', +r.dataset.id === id));
+    showPane();
+    try { history.replaceState(null, '', '/connect/?id=' + id + (BOOT.embed ? '&embed=1' : '')); } catch (e) {}
+    if (_chAbort) _chAbort.abort();
+    const ac = new AbortController(); _chAbort = ac;
+    const seq = ++_chSeq;
+    let d;
+    try { d = await api('/connect/api/chat?id=' + id, undefined, ac.signal); }
+    catch (e) { if (e.name === 'AbortError') return; d = { ok: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้' }; }
+    if (seq !== _chSeq || S.openId !== id) return;
+    if (!d.ok) {
+      S.chat = null;
+      $('cn-pane').innerHTML = `<div class="cn-ph"><button class="btn sm cn-mback" onclick="window.__cnBack()">${ic('arrow-left')} กลับ</button></div><div class="cn-blank" style="color:var(--red)">${h(d.error || 'เปิดแชทไม่ได้')}</div>`;
+      return;
+    }
+    if (d.now) SKEW = Date.parse(d.now) - Date.now();
+    const same = S.chat && S.chat.row.id === id;
+    S.chat = d;
+    if (same) { paintHeader(); paintMsgs(true); paintComposer(false); }
+    else paintChat();
+  }
+
+  function paintChat() {
+    $('cn-pane').innerHTML = `
+      <div class="cn-ph" id="cn-ph"></div>
+      <div class="cn-msgs" id="cn-msgs"></div>
+      <div id="cn-comp-wrap"></div>`;
+    paintHeader(); paintMsgs(false); paintComposer(true);
+  }
+
+  function paintHeader() {
+    const d = S.chat, r = d.row;
+    // หัวแชทถูกวาดใหม่ทุก 6 วิ — เก็บสิ่งที่ผู้ใช้กำลังทำค้างไว้ (เลือกเซลล์ค้าง / กางประวัติ)
+    const _prevTo = $('cn-to') ? $('cn-to').value : '';
+    const _histOpen = !!document.querySelector('#cn-ph details[open]');
+    const own = r.owner ? `เจ้าของ <b>${h(r.owner)}</b>` : `<b>ยังไม่มีเซลล์รับ</b>`;
+    const acts = [];
+    if (d.canClaim) acts.push(`<button class="btn pri" id="cn-claim">${ic('user-check')} รับลูกค้าคนนี้</button>`);
+    if (d.canDismiss) acts.push(`<button class="btn" id="cn-dismiss" title="ลูกค้าส่งมาแค่ขอบคุณ/สติกเกอร์ หรือตอบนอกระบบไปแล้ว — ปิดรอบนี้โดยไม่ต้องตอบ">${ic('check')} ไม่ต้องตอบ</button>`);
+    if (d.canAssign) {
+      acts.push(`<select id="cn-to"><option value="">โอนให้เซลล์…</option>${S.sellers.filter(s => s.id !== r.ownerId).map(s =>
+        `<option value="${s.id}">${h(s.name)} · ทีม ${h(s.team)}</option>`).join('')}</select>`);
+      acts.push(`<button class="btn" id="cn-assign">${ic('repeat')} โอน</button>`);
+      if (r.owner) acts.push(`<button class="btn red" id="cn-release">ปล่อยคืนคิว</button>`);
+    }
+    let clock = '';
+    if (r.awaiting) {
+      const ck = clockText(r.due, r.since);
+      const late = ck.cls === 'late';
+      clock = `<div class="cn-clock ${ck.cls}" data-due="${h(r.due)}">${ic(late ? 'alert' : 'clock')} <span>ลูกค้ารอคำตอบ — <span class="ck">${h(ck.text)}</span>${late ? (ADMIN ? '' : ' · แอดมินได้รับแจ้งแล้ว') : ''}</span></div>`;
+    }
+    let hist = '';
+    if (ADMIN && (d.history || []).length) {
+      hist = `<details class="cn-hist"><summary>ประวัติ (${d.history.length})</summary>${d.history.map(x =>
+        `<div>${h(fmtWhen(x.at))} · <b>${h(x.label)}</b>${x.emp ? ' · ' + h(x.emp) : ''}${x.by && x.by !== x.emp ? ' (โดย ' + h(x.by) + ')' : ''}${x.waitSec != null ? ' · ลูกค้ารอ ' + Math.round(x.waitSec / 60) + ' นาที' : ''}${x.onTime === false ? ' · เกินเวลา' : ''}${x.note ? ' · ' + h(x.note) : ''}</div>`).join('')}</details>`;
+    }
+    $('cn-ph').innerHTML = `
+      <div class="cn-ph-row">
+        <button class="btn sm cn-mback" id="cn-mback">${ic('arrow-left')}</button>
+        <div class="cn-av" style="background:${avColor(r.name)}">${h(initial(r.name))}</div>
+        <div style="min-width:0;flex:1">
+          <h2>${h(r.name)}</h2>
+          <div class="cn-sub">${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ทักมา ${r.msgs} ข้อความ${d.firstSeen ? ' · ทักครั้งแรก ' + h(fmtWhen(d.firstSeen)) : ''}</div>
+        </div>
+      </div>
+      ${acts.length ? `<div class="cn-acts">${acts.join('')}</div>` : ''}
+      ${clock}${hist}`;
+    $('cn-mback').onclick = window.__cnBack;
+    if (_prevTo && $('cn-to')) $('cn-to').value = _prevTo;
+    if (_histOpen) { const dt = document.querySelector('#cn-ph details'); if (dt) dt.open = true; }
+    const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+    on('cn-claim', () => claim(r.id));
+    on('cn-dismiss', () => dismiss(r.id));
+    on('cn-assign', () => assign(r.id, +($('cn-to').value || 0), false));
+    on('cn-release', () => assign(r.id, 0, true));
+  }
+
+  function paintMsgs(keepScroll) {
+    const el = $('cn-msgs'); if (!el) return;
+    const d = S.chat;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    let html = '';
+    if (d.access === 'preview') {
+      html += `<div class="cn-lock">เห็นเฉพาะข้อความที่ลูกค้าเพิ่งส่ง — กด "รับลูกค้าคนนี้" ก่อน ถึงจะเห็นแชทย้อนหลังและตอบได้</div>`;
+    }
+    if (!(d.messages || []).length) html += `<div class="cn-blank">ยังไม่มีข้อความ</div>`;
+    let lastDay = '';
+    (d.messages || []).forEach(m => {
+      const dt = m.at ? new Date(m.at) : null;
+      const day = dt ? dt.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+      if (day && day !== lastDay) { html += `<div class="cn-day">${h(day)}</div>`; lastDay = day; }
+      const t = dt ? pad(dt.getHours()) + ':' + pad(dt.getMinutes()) : '';
+      const out = m.dir === 'out';
+      html += `<div class="bub ${out ? 'out' : 'in'}${m.media ? ' media' : ''}">${h(m.text)}${m.media ? '<br><small>(รูป/ไฟล์ยังเปิดในระบบไม่ได้)</small>' : ''}<div class="meta">${out && m.by ? h(m.by) + ' · ' : ''}${t}</div></div>`;
+    });
+    el.innerHTML = html;
+    if (!keepScroll || atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  function paintComposer(fresh) {
+    const w = $('cn-comp-wrap'); if (!w) return;
+    const d = S.chat;
+    let why = '';
+    if (!d.canReply) why = d.access === 'preview' ? 'กด "รับลูกค้าคนนี้" ก่อนถึงจะตอบได้' : 'ตอบได้เฉพาะเจ้าของลูกค้าและแอดมิน';
+    else if (!d.replyOn) why = 'ยังล็อกการส่งข้อความหาลูกค้าอยู่ (ช่วงทดสอบ) — ' + (ADMIN ? 'เปิดด้วยคำสั่ง manage.py checkout_config --reply on' : 'รอแอดมินเปิดระบบ');
+    const want = why ? 'why:' + why : 'comp';
+    if (!fresh && w.dataset.k === want) return;          // ไม่วาดซ้ำ = ข้อความที่กำลังพิมพ์ไม่หาย
+    w.dataset.k = want;
+    if (why) { w.innerHTML = `<div class="cn-comp-why">${h(why)}</div>`; return; }
+    w.innerHTML = `<div class="cn-err" id="cn-err"></div>
+      <div class="cn-comp"><textarea id="cn-text" rows="1" placeholder="พิมพ์ข้อความถึงลูกค้า… (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)"></textarea>
+      <button class="btn pri" id="cn-send">${ic('send')} ส่ง</button></div>`;
+    const ta = $('cn-text');
+    const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; });
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.isComposing) { e.preventDefault(); send(); }
+    });
+    $('cn-send').onclick = send;
+  }
+
+  async function send() {
+    const ta = $('cn-text'); if (!ta || !S.chat) return;
+    const text = ta.value.trim(); if (!text) return;
+    const btn = $('cn-send'); btn.disabled = true; $('cn-err').textContent = '';
+    const id = S.chat.row.id;
+    const d = await api('/connect/api/reply', { id, text });
+    btn.disabled = false;
+    if (!d.ok) { $('cn-err').textContent = d.error || 'ส่งไม่สำเร็จ'; return; }   // คงข้อความไว้ ไม่ต้องพิมพ์ใหม่
+    ta.value = ''; ta.style.height = 'auto';
+    if (S.chat && S.chat.row.id === id) {
+      S.chat.messages.push(d.message);
+      S.chat.row.awaiting = false;
+      paintHeader(); paintMsgs(false);
+    }
+    loadInbox(false);
+  }
+
+  async function claim(id) {
+    const d = await api('/connect/api/claim', { id });
+    if (!d.ok) { toast(d.error || 'รับลูกค้าไม่สำเร็จ', 4500); loadInbox(false); return; }
+    toast(d.message || 'รับลูกค้าแล้ว');
+    S.chat = null;
+    if (!ADMIN) S.view = 'mine';
+    await loadInbox(false);
+    openChat(id);
+  }
+  async function dismiss(id) {
+    const d = await api('/connect/api/dismiss', { id });
+    toast(d.ok ? d.message : (d.error || 'ทำไม่สำเร็จ'));
+    if (d.ok) { openChat(id, true); loadInbox(false); }
+  }
+  async function assign(id, emp, release) {
+    if (!release && !emp) { toast('เลือกเซลล์ที่จะโอนให้ก่อน'); return; }
+    if (release && !confirm('ปล่อยลูกค้าคนนี้คืนคิว? เซลล์ทีมที่เวรวันนี้จะกดรับได้')) return;
+    const d = await api('/connect/api/assign', { id, emp: release ? 0 : emp });
+    toast(d.ok ? d.message : (d.error || 'โอนไม่สำเร็จ'));
+    if (d.ok) { openChat(id, true); loadInbox(false); }
+  }
+
+  window.__cnBack = () => {
+    hidePane();
+    if (S.pane !== 'chat') { S.pane = 'chat'; renderTabs(); }
+    S.openId = 0; S.chat = null;
+    document.querySelectorAll('.cn-row.sel').forEach(r => r.classList.remove('sel'));
+    try { history.replaceState(null, '', '/connect/' + (BOOT.embed ? '?embed=1' : '')); } catch (e) {}
+    renderBlank();
+  };
+
+  // ── สถิติ (แอดมิน) ──
+  async function openStats(days) {
+    days = days || 7;
+    S.chat = null; S.openId = 0;
+    $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังคำนวณ…</div></div>`;
+    const d = await api('/connect/api/stats?days=' + days);
+    if (S.pane !== 'stats') return;
+    if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    const rows = d.rows || [];
+    $('cn-pane').innerHTML = `<div class="cn-page">
+      <div style="margin-bottom:10px"><button class="btn sm cn-mback" onclick="window.__cnBack()">${ic('arrow-left')} กลับ</button></div>
+      <div class="card">
+        <h3>เวลาตอบลูกค้า รายคน</h3>
+        <div class="d">นับเฉพาะ "คำตอบที่ปิดรอบรอ" (ลูกค้าส่งมา → เราตอบ) · ทันเวลา = ตอบภายใน ${d.slaMin} นาที (นับเฉพาะเวลาทำการ) · รอ = ค่ากลาง (มัธยฐาน)</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">${[7, 30].map(n => `<button class="btn sm${n === days ? ' pri' : ''}" data-d="${n}">${n} วันล่าสุด</button>`).join('')}</div>
+        ${rows.length ? `<div style="overflow-x:auto"><table class="st"><thead><tr><th>คนตอบ</th><th>ทีม</th><th>รับลูกค้า</th><th>ตอบ</th><th>ทันเวลา</th><th>ลูกค้ารอ (นาที)</th><th>เลยเวลา</th></tr></thead><tbody>
+          ${rows.map(r => `<tr><td><b>${h(r.name)}</b></td><td>${r.team ? teamTag(r.team) : '–'}</td><td>${r.claims}</td><td>${r.replies}</td>
+            <td style="color:${r.onTimePct == null ? 'var(--t3)' : (r.onTimePct >= 80 ? 'var(--green)' : (r.onTimePct >= 50 ? 'var(--amber)' : 'var(--red)'))}">${r.onTimePct == null ? '–' : r.onTimePct + '%'}</td>
+            <td>${r.medianMin == null ? '–' : r.medianMin}</td><td style="color:${r.late ? 'var(--red)' : 'var(--t3)'}">${r.late}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="cn-empty">ยังไม่มีข้อมูลในช่วงนี้ — ตัวเลขจะขึ้นเมื่อเริ่มรับ/ตอบลูกค้าผ่าน Connect</div>`}
+        ${d.unownedLate ? `<div class="d" style="margin-top:10px;color:var(--red)">ลูกค้าที่ <b>ไม่มีเซลล์รับ</b> จนเลยเวลา: ${d.unownedLate} ครั้ง</div>` : ''}
+      </div></div>`;
+    $('cn-pane').querySelectorAll('[data-d]').forEach(b => b.onclick = () => openStats(+b.dataset.d));
+  }
+
+  // ── ตั้งค่า (แอดมิน) — เวร · เส้นตาย · แจ้งเตือน ──
+  let CFG = null;
+  async function openCfg() {
+    S.chat = null; S.openId = 0;
+    $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>`;
+    const d = await api('/connect/api/config');
+    if (S.pane !== 'cfg') return;
+    if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    CFG = d; paintCfg();
+  }
+  function _computed(dateIso) {      // ทีมตามสูตรวันเว้นวัน (ไม่นับการสลับเวร) — ใช้ตอนกดสลับในตาราง
+    const c = CFG.cfg, teams = c.teams;
+    const a = new Date(c.anchor_date + 'T00:00:00'), x = new Date(dateIso + 'T00:00:00');
+    const days = Math.round((x - a) / 86400000);
+    const base = Math.max(0, teams.indexOf(c.anchor_team));
+    return teams[(((base + days) % teams.length) + teams.length) % teams.length];
+  }
+  function paintCfg(msg, isErr) {
+    const d = CFG, c = d.cfg;
+    const todayIso = d.roster.length ? d.roster[0].date : '';
+    const ros = d.roster.map(x => {
+      const dt = new Date(x.date + 'T00:00:00');
+      const team = (c.overrides || {})[x.date] || _computed(x.date);
+      return `<button data-day="${x.date}" class="${x.date === todayIso ? 'td' : ''}" title="กดเพื่อสลับเวรเฉพาะวันนี้">
+        <span style="color:var(--t3);font-size:12px">${dt.toLocaleDateString('th-TH', { weekday: 'short' })} ${dt.getDate()}</span>
+        <b style="color:${TEAM_C[team] || 'var(--t1)'}">${h(team)}</b>${(c.overrides || {})[x.date] ? '<span class="ov"></span>' : ''}</button>`;
+    }).join('');
+    const teamBoxes = d.teamsAvail.map(t => `<label style="display:inline-flex;gap:5px;align-items:center;margin-right:12px"><input type="checkbox" data-team="${h(t)}"${c.teams.includes(t) ? ' checked' : ''}> ทีม ${h(t)}</label>`).join('');
+    const grpOpts = `<option value="">— เลือกกลุ่ม —</option>` + d.groups.map(g => `<option value="${h(g.id)}"${g.id === c.alert_group ? ' selected' : ''}>${h(g.name || g.id)}</option>`).join('')
+      + (c.alert_group && !d.groups.some(g => g.id === c.alert_group) ? `<option value="${h(c.alert_group)}" selected>${h(c.alert_group)} (ไม่อยู่ในรายชื่อ)</option>` : '');
+    $('cn-pane').innerHTML = `<div class="cn-page">
+      <div style="margin-bottom:10px"><button class="btn sm cn-mback" onclick="window.__cnBack()">${ic('arrow-left')} กลับ</button></div>
+      ${(d.status || []).map(s => `<div class="card" style="border-color:var(--${s.level === 'err' ? 'red' : 'amber'})"><b>${h(s.text)}</b>${s.fix ? `<div class="d" style="margin:6px 0 0">เปิดด้วยคำสั่งบนเซิร์ฟเวอร์: <code>${h(s.fix)}</code></div>` : ''}</div>`).join('')}
+      <div class="card">
+        <h3>เวรรับลูกค้าใหม่ (วันเว้นวัน)</h3>
+        <div class="d">ทีมที่เวร = กดรับลูกค้าใหม่ได้วันนั้น · ลูกค้าที่มีเจ้าของแล้วคุยกับเจ้าของเดิมได้ทุกวัน · ตัดวันตอนเที่ยงคืน<br>กดวันในตารางเพื่อสลับเวรเฉพาะวันนั้น (จุดส้ม = สลับเวร)</div>
+        <div class="fld"><label>ทีมที่ผลัดเวร</label><div>${teamBoxes}</div></div>
+        <div class="fld"><label>วันนี้เป็นเวรของ</label>
+          <select id="cf-today">${c.teams.map(t => `<option value="${h(t)}"${t === _computed(todayIso) ? ' selected' : ''}>ทีม ${h(t)}</option>`).join('')}</select>
+          <span style="color:var(--t3)">(วันต่อไปสลับให้เอง)</span></div>
+        <div class="ros" id="cf-ros">${ros}</div>
+      </div>
+      <div class="card">
+        <h3>เส้นตายการตอบ</h3>
+        <div class="d">ลูกค้าทักแล้วไม่มีใครตอบภายในเวลานี้ = ขึ้น "เลยเวลา" ให้แอดมิน · ทักนอกเวลาทำการ = เริ่มนับตอนเปิด</div>
+        <div class="fld"><label>ต้องตอบภายใน</label><input id="cf-sla" type="number" min="1" max="120" value="${c.sla_min}" style="width:90px"> นาที</div>
+        <div class="fld"><label>เวลาทำการ</label><input id="cf-open" type="time" value="${h(c.open)}"> ถึง <input id="cf-close" type="time" value="${h(c.close)}"><span style="color:var(--t3)">(ตั้งเท่ากัน = นับ 24 ชม.)</span></div>
+      </div>
+      <div class="card">
+        <h3>แจ้งเตือนทาง LINE</h3>
+        <div class="d">ในหน้า Connect ขึ้นเตือนเสมออยู่แล้ว — ข้างล่างนี้คือ "ส่ง LINE เพิ่ม" (ปิดไว้ก่อน · push นับโควต้าข้อความของ LINE OA)</div>
+        <div class="fld"><label><input type="checkbox" id="cf-alert"${c.alert_on ? ' checked' : ''}> ส่งเข้ากลุ่มแอดมินเมื่อลูกค้ารอเกินเวลา</label><select id="cf-group">${grpOpts}</select></div>
+        <div class="fld"><label><input type="checkbox" id="cf-notify"${c.notify_sellers ? ' checked' : ''}> บอกเซลล์ทาง LINE เมื่อลูกค้าทักมา</label>
+          <span style="color:var(--t3)">เจ้าของลูกค้า หรือทุกคนในทีมที่เวร (ถ้ายังไม่มีเจ้าของ) · ทีมละ ~9 คน = กินโควต้าเร็ว</span></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;max-width:920px">
+        <button class="btn pri" id="cf-save">บันทึก</button>
+        <span id="cf-msg" style="color:${isErr ? 'var(--red)' : 'var(--green)'}">${h(msg || '')}</span>
+      </div>
+    </div>`;
+    $('cf-ros').querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+      const day = b.dataset.day, teams = c.teams;
+      const cur = (c.overrides || {})[day] || _computed(day);
+      const nxt = teams[(teams.indexOf(cur) + 1) % teams.length];
+      c.overrides = Object.assign({}, c.overrides);
+      if (nxt === _computed(day)) delete c.overrides[day]; else c.overrides[day] = nxt;
+      paintCfg('ยังไม่ได้บันทึก', false);
+    });
+    $('cf-today').onchange = () => {
+      c.anchor_date = todayIso; c.anchor_team = $('cf-today').value;
+      const ov = Object.assign({}, c.overrides); delete ov[todayIso]; c.overrides = ov;
+      paintCfg('ยังไม่ได้บันทึก', false);
+    };
+    $('cf-save').onclick = saveCfg;
+  }
+  async function saveCfg() {
+    const c = CFG.cfg;
+    const teams = Array.from(document.querySelectorAll('[data-team]')).filter(x => x.checked).map(x => x.dataset.team);
+    const body = {
+      teams, anchor_date: c.anchor_date, anchor_team: teams.includes(c.anchor_team) ? c.anchor_team : (teams[0] || ''),
+      overrides: c.overrides || {}, sla_min: $('cf-sla').value, open: $('cf-open').value, close: $('cf-close').value,
+      alert_on: $('cf-alert').checked, alert_group: $('cf-group').value, notify_sellers: $('cf-notify').checked,
+    };
+    $('cf-save').disabled = true;
+    const d = await api('/connect/api/config', body);
+    if (!d.ok) { $('cf-save').disabled = false; $('cf-msg').style.color = 'var(--red)'; $('cf-msg').textContent = d.error || 'บันทึกไม่สำเร็จ'; return; }
+    CFG = d; paintCfg('บันทึกแล้ว', false);
+    loadInbox(false);
+  }
+
+  // ── ค้นหา / เลือกเซลล์ ──
+  let _qT = null;
+  $('cn-q').addEventListener('input', () => { clearTimeout(_qT); _qT = setTimeout(() => { S.q = $('cn-q').value.trim(); loadInbox(true); }, 350); });
+  $('cn-seller').addEventListener('change', () => { S.seller = +$('cn-seller').value || 0; loadInbox(true); });
+
+  // ── นาฬิกาทุกวินาที (ไม่ยิงเซิร์ฟเวอร์) ──
+  setInterval(() => {
+    document.querySelectorAll('[data-due]').forEach(el => {
+      const ck = clockText(el.dataset.due);
+      const t = el.querySelector('.ck'); if (t) t.textContent = ck.text;
+      el.classList.toggle('late', ck.cls === 'late'); el.classList.toggle('wait', ck.cls === 'wait');
+    });
+  }, 1000);
+  // ── รีเฟรช: รายชื่อทุก 8 วิ · แชทที่เปิดอยู่ทุก 6 วิ (หยุดตอนสลับไปแท็บอื่น) ──
+  setInterval(() => { if (!document.hidden && S.pane === 'chat') loadInbox(false); }, 8000);
+  setInterval(() => { if (!document.hidden && S.pane === 'chat' && S.chat) openChat(S.chat.row.id, true); }, 6000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadInbox(false); });
+
+  if (S.openId) showPane();
+  loadInbox(true);
+})();
+</script>
+</body>
+</html>

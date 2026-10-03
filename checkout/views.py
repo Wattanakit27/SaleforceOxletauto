@@ -746,7 +746,7 @@ def store_chat(data) -> int:
         except Exception:
             who = ""
         try:
-            GroupChat.objects.create(
+            row = GroupChat.objects.create(
                 chat_type=ctype, channel=chan,
                 group_id=gid, group_name=names.get(gid, ""), message_id=mid,
                 sender_id=uid, sender_name=("" if who == "ไม่ทราบชื่อ" else who),
@@ -766,6 +766,14 @@ def store_chat(data) -> int:
             skipped += 1
             err = err or ("%s: %s" % (type(e).__name__, e))[:200]
             continue                     # ชนกันเพราะ webhook ซ้ำ = ข้าม ไม่ล้มทั้งก้อน
+        # ★ 3 ต.ค.69 — Connect: ลูกค้าทักเข้า OA = เริ่มนับ 5 นาที / เข้าคิวให้เซลล์ทีมที่เวรกดรับ
+        #   แยก try จากการเก็บข้อความ — Connect พังต้องไม่ทำให้แชทหายจากคลัง
+        if ctype == GroupChat.USER and uid:
+            try:
+                from . import connect
+                connect.note_customer_message(uid, row.sent_at, connect.preview_of(row))
+            except Exception as e:
+                err = err or ("connect: %s: %s" % (type(e).__name__, e))[:200]
     _chat_log(saved=made, skipped=skipped, events=len(events), error=err)
     if made:
         _cleanup_chat()

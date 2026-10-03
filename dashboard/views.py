@@ -558,6 +558,10 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
             request.session.set_expiry(60 * 60 * 24 * 14)   # 14 วัน — session หมดอายุ (PDPA)
             if position in ("executive", "ผู้บริหาร", "manager", "exec", "admin"):
                 return (next_url or "/dashboard/"), None   # แอดมิน/ผู้บริหารชนะเสมอ → หน้ารวม
+            # ★ 3 ต.ค.69 — เซลล์กดลิงก์ Connect (จากแจ้งเตือน LINE) แล้วต้อง login → กลับมาที่แชทเดิม
+            #   หน้า Connect เช็คสิทธิ์รายลูกค้าเองอยู่แล้ว (เห็นเฉพาะลูกค้าของตัวเอง)
+            if (next_url or "").startswith("/connect/"):
+                return next_url, None
             # เทเลเซลล์ (ไม่ใช่แอดมิน) → หน้ารวมเทเลเซลล์ (seller_from_token map ไอดี → "ADMIN")
             from .services.constants import TELE_USER_IDS, load_tele_user_ids
             load_tele_user_ids()
@@ -1466,6 +1470,16 @@ def cron_tick(request):
     except Exception:
         pass
 
+    # ── 💬 Connect: ลูกค้ารอเกิน 5 นาที → ติดธง "เลยเวลา" + แจ้งกลุ่มแอดมิน (ถ้าเปิดไว้) ──
+    #    เร็ว (query เดียว) จึงอยู่ก่อนงานส่ง LINE ที่ช้า · หน้า Connect คำนวณ "เลยเวลา" เองอยู่แล้ว
+    #    ตัวนี้มีไว้จดประวัติ + ส่งแจ้งเตือนครั้งเดียวต่อรอบ
+    connect_result = {}
+    try:
+        from checkout.connect import tick as _connect_tick
+        connect_result = _connect_tick()
+    except Exception as e:
+        connect_result = {"error": str(e)[:200]}
+
     # ── 🔔 แจ้งเตือน "ตามด่วน" รายเซลล์ — เวลา/ผู้รับ/test ตั้งได้ในหน้า "ตารางเวลา (Auto)" ──
     # อ่านตารางจากชีต "ตั้งเวลาส่ง" (แทน hardcode) → แอดมินแก้เวลา/ผู้รับ/test ได้เองในแดชบอร์ด
     # test_target ว่าง = ส่งเซลล์จริงแต่ละคน · ใส่ user_id = ส่งเข้า user นั้นแทน (ทดสอบ)
@@ -1602,6 +1616,7 @@ def cron_tick(request):
         "line_token": bool(channel_token),
         "cards": cards_result,   # ผลส่งการ์ดเข้าไลน์ (enabled/cands/sent+เหตุผล) — ดูจาก cron log
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
+        "connect": connect_result,   # Connect: ลูกค้ารอเกินเวลากี่คน ({} = ไม่มี)
         "coach": coach_result,       # ซิงก์บันทึกห้องโค้ชลงชีต ('' = ทำแล้ววันนี้ / ปิดอยู่)
         "meta": meta_result,
         "youtube": youtube_result,

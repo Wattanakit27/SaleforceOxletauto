@@ -10,6 +10,8 @@ urlpatterns = [
     path("track/", include("cars.urls")),
     # ระบบเบิก-คืนรถส่วนกลาง — แยก prefix /checkout/ (หน้า supervisor ฝังเป็นแท็บใน /dashboard/)
     path("checkout/", include("checkout.urls")),
+    # Connect — ห้องแชทลูกค้ารวม: แอดมินเห็นทุกแชท · เซลล์รับลูกค้าเอง (3 ต.ค.69)
+    path("connect/", include("checkout.connect_urls")),
     # sales dashboard (เดิม) — อ่าน Google Sheets, ไม่ใช้ DB
     path("", include("dashboard.urls")),
 ]

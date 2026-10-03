@@ -1,0 +1,17 @@
+"""/connect/ — ห้องแชทลูกค้ารวม (แอดมิน + เซลล์) · ดู connect.py / connect_views.py"""
+from django.urls import path
+
+from . import connect_views as V
+
+urlpatterns = [
+    path("", V.page, name="connect"),
+    path("api/summary", V.api_summary, name="connect_summary"),
+    path("api/inbox", V.api_inbox, name="connect_inbox"),
+    path("api/chat", V.api_chat, name="connect_chat"),
+    path("api/claim", V.api_claim, name="connect_claim"),
+    path("api/reply", V.api_reply, name="connect_reply"),
+    path("api/assign", V.api_assign, name="connect_assign"),
+    path("api/dismiss", V.api_dismiss, name="connect_dismiss"),
+    path("api/config", V.api_config, name="connect_config"),
+    path("api/stats", V.api_stats, name="connect_stats"),
+]

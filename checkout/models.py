@@ -815,3 +815,87 @@ class CoachLog(models.Model):
 
     def __str__(self):
         return "%s %s %s: %s" % (self.date_text, self.time_text, self.who, self.text[:40])
+
+
+class ChatOwner(models.Model):
+    """**Connect** — ลูกค้า LINE 1 คน = 1 แถว: ตอนนี้ใครดูแล + ลูกค้ากำลังรอเราตอบไหม (3 ต.ค.69 · เจ้าของสั่ง)
+
+    *"เราจะไม่ให้เซลตอบลูกค้าในไลน์แล้ว เราจะให้มาตอบในระบบเรา … ถ้าเซลคนไหนเทคแอคชั่น
+      ลูกค้าคนนั้นไปก่อน ก็จะเป็นลูกค้าของคนคนนั้น แต่ถ้าไม่ตอบภายในห้านาที ระบบจะขึ้น
+      แจ้งเตือนให้แอดมินประสานงานต่อ"*
+
+    แยก 2 เรื่องออกจากกันโดยตั้งใจ:
+      - **ความเป็นเจ้าของ** (`owner`) — ว่าง = ยังไม่มีเซลล์รับ (อยู่ในคิว)
+      - **รอบรอคำตอบ** (`awaiting_since`/`due_at`) — ลูกค้าส่งมาแล้วยังไม่มีใครตอบ
+        ตัวนี้เท่านั้นที่ทำให้ "เลยเวลา" ได้ · กดรับลูกค้าเฉยๆ **ไม่หยุดนาฬิกา** ต้องตอบจริง
+        (กันการกดจองลูกค้าไว้แล้วไม่ตอบ)
+
+    ผูกกับ `LineProfile` แบบ CASCADE — โปรไฟล์ลูกค้าที่เงียบเกิน 60 วันถูกลบ (PDPA)
+    แถวนี้ก็หายตามไปด้วย ไม่มีข้อมูลค้าง
+    ⚠️ ห้ามส่ง LINE user id ออกหน้า Connect — ใช้ `id` ของแถวนี้เป็นตัวอ้างอิงแทน
+    """
+    profile = models.OneToOneField("LineProfile", verbose_name="ลูกค้า", on_delete=models.CASCADE,
+                                   related_name="owner_row")
+    owner = models.ForeignKey("Employee", verbose_name="เซลล์ที่ดูแล", null=True, blank=True,
+                              on_delete=models.SET_NULL, related_name="chat_customers")
+    # ทีมที่เวรตอนลูกค้าเริ่มรอบนี้ (ยังไม่มีเจ้าของ) หรือทีมของเจ้าของ — ใช้โชว์/นับสถิติ
+    team = models.CharField("ทีม", max_length=8, blank=True, db_index=True)
+    claimed_at = models.DateTimeField("รับลูกค้าเมื่อ", null=True, blank=True)
+    first_reply_at = models.DateTimeField("เจ้าของปัจจุบันตอบครั้งแรก", null=True, blank=True)
+
+    awaiting_since = models.DateTimeField("ลูกค้ารอคำตอบตั้งแต่", null=True, blank=True, db_index=True)
+    due_at = models.DateTimeField("ต้องตอบภายใน", null=True, blank=True, db_index=True)
+    escalated_at = models.DateTimeField("แจ้งแอดมินว่าเลยเวลาเมื่อ", null=True, blank=True)
+
+    last_in_at = models.DateTimeField("ลูกค้าส่งล่าสุด", null=True, blank=True)
+    last_out_at = models.DateTimeField("เราตอบล่าสุด", null=True, blank=True)
+    last_at = models.DateTimeField("ขยับล่าสุด", null=True, blank=True, db_index=True)
+    last_preview = models.CharField("ข้อความล่าสุด", max_length=200, blank=True)
+    last_dir = models.CharField("ข้อความล่าสุดเป็นของ", max_length=4, blank=True)   # in / out
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Connect — เจ้าของลูกค้า"
+        verbose_name_plural = "Connect — เจ้าของลูกค้า"
+        ordering = ["-last_at", "-id"]
+
+    def __str__(self):
+        return "%s → %s" % (self.profile.show_name if self.profile_id else "-",
+                            self.owner.nickname if self.owner_id else "(คิว)")
+
+
+class ChatOwnerLog(models.Model):
+    """ประวัติของ Connect — รับลูกค้า · โอน · ปล่อยคืนคิว · เลยเวลา · ตอบ · ไม่ต้องตอบ
+
+    ตอบคำถาม "ทำไมลูกค้าคนนี้ไปอยู่กับเขา" และเป็นที่มาของ **สถิติเวลาตอบรายเซลล์**
+    (`wait_sec` = ลูกค้ารอกี่วินาทีกว่าจะได้คำตอบ · `on_time` = ทันเส้นตายไหม)
+    """
+    CLAIM, ASSIGN, RELEASE, ESCALATE, REPLY, DISMISS = (
+        "claim", "assign", "release", "escalate", "reply", "dismiss")
+    ACTION_CHOICES = [(CLAIM, "รับลูกค้า"), (ASSIGN, "แอดมินโอนให้"), (RELEASE, "ปล่อยคืนคิว"),
+                      (ESCALATE, "เลยเวลา แจ้งแอดมิน"), (REPLY, "ตอบลูกค้า"),
+                      (DISMISS, "ไม่ต้องตอบ")]
+
+    chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE,
+                             related_name="logs")
+    action = models.CharField("เหตุการณ์", max_length=12, choices=ACTION_CHOICES, db_index=True)
+    employee = models.ForeignKey("Employee", verbose_name="เซลล์ที่เกี่ยวข้อง", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="chat_logs")
+    emp_name = models.CharField("ชื่อเซลล์", max_length=80, blank=True)
+    by_name = models.CharField("คนสั่ง", max_length=80, blank=True)
+    team = models.CharField("ทีม", max_length=8, blank=True)
+    wait_sec = models.IntegerField("ลูกค้ารอ (วินาที)", null=True, blank=True)
+    on_time = models.BooleanField("ทันเวลา", null=True, blank=True)
+    note = models.CharField("หมายเหตุ", max_length=200, blank=True)
+    at = models.DateTimeField("เมื่อ", default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "Connect — ประวัติ"
+        verbose_name_plural = "Connect — ประวัติ"
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["action", "-at"])]
+
+    def __str__(self):
+        return "%s %s %s" % (self.at, self.get_action_display(), self.emp_name)

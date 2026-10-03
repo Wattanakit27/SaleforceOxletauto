@@ -273,6 +273,27 @@
       }
       ping(); setInterval(ping, 30000);
     })();
+    // 💬 Connect — ตัวเลขบนเมนู: ลูกค้ารอเกินเวลา (แดง) ไม่งั้นลูกค้ารอเซลล์รับ (ม่วง) · เบา (นับแถวอย่างเดียว)
+    //    เก็บค่าไว้ใน _cnBadge ให้ render() วาดเลขเดิมได้ทันที (กันเลขหายทุกครั้งที่หน้าวาดใหม่)
+    var _cnBadge = null;   // var (ไม่ใช่ let) — render() อาจถูกเรียกก่อนบรรทัดนี้ (บทเรียน TDZ เดิม)
+    function _cnBadgeHtml(){
+      const b = _cnBadge || {}, n = b.late || b.queue || 0;
+      if(!n) return '<span id="cn-badge"></span>';
+      const bg = b.late ? 'var(--red)' : 'var(--blue)';
+      const tip = b.late ? ('ลูกค้ารอเกินเวลา ' + b.late + ' คน') : ('ลูกค้ารอเซลล์รับ ' + b.queue + ' คน');
+      return `<span id="cn-badge" title="${tip}" style="margin-left:auto;min-width:18px;padding:0 5px;border-radius:5px;background:${bg};color:#fff;font-size:11px;font-weight:800;text-align:center;line-height:17px">${n > 99 ? '99+' : n}</span>`;
+    }
+    (function(){
+      function poll(){
+        fetch('/connect/api/summary',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(j=>{
+          if(!j || !j.ok) return;
+          const c = j.counts || {};
+          _cnBadge = {late: c.overdue || 0, queue: c.queue || 0};
+          const el = document.getElementById('cn-badge'); if(el) el.outerHTML = _cnBadgeHtml();
+        }).catch(function(){});
+      }
+      poll(); setInterval(poll, 30000);
+    })();
     const passMonth = (ds, m) => {
       if(m===0) return true;
       if(!ds) return true;
@@ -1266,7 +1287,7 @@
       let html = '';
       // ★ 19 ก.ย.69 — จอกว้าง = แถบเมนูซ้ายถาวร (ดู .has-sidebar ใน globals.css) · มือถือยังเป็น ☰ drawer
       document.body.classList.add('has-sidebar');
-      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'Facebook',img:FB_ICON},{id:'tt',i:'lucide:trending-up',l:'TikTok',img:TT_ICON},{id:'yt',i:'lucide:trending-up',l:'YouTube',img:YT_ICON},{id:'ct',i:'lucide:clapperboard',l:'คอนเทนต์'},{id:'ad',i:'lucide:wallet',l:'โฆษณา'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
+      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'cn',i:'lucide:message-circle',l:'Connect (แชทลูกค้า)'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'Facebook',img:FB_ICON},{id:'tt',i:'lucide:trending-up',l:'TikTok',img:TT_ICON},{id:'yt',i:'lucide:trending-up',l:'YouTube',img:YT_ICON},{id:'ct',i:'lucide:clapperboard',l:'คอนเทนต์'},{id:'ad',i:'lucide:wallet',l:'โฆษณา'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
       const _curTab = NAV_TABS.find(t => t.id === tab) || NAV_TABS[0];
 
       // Header
@@ -1344,6 +1365,7 @@
         'p': 'จัดซื้อ — ยอดรถเข้า รายรุ่น: จอง/จบ ย้อนหลัง + สต๊อก(แก้ได้) + เหลือ/ต้องเติม + ผลงานซื้อ',
         't': 'สถานะรถ — ระบบติดตามรถเข้า→ทำสภาพ→ทะเบียน→ขาย + QR สแกนเปลี่ยนสเตป',
         'ck': 'เบิก-คืนรถส่วนกลาง — ดูสถานะรถทุกคัน อนุมัติ/ปิดเคส (หัวหน้า/ออฟฟิศ)',
+        'cn': 'Connect — แชทลูกค้า LINE OA ทั้งหมด · เซลล์รับลูกค้าตามวันเวรทีม · ลูกค้ารอเกิน 5 นาทีขึ้นเตือนที่นี่',
       };
       // ★ 20 ก.ย.69 — เจ้าของสั่ง "ล็อกเมนูตามนี้ ไม่ต้องมีติ๊ก ให้เลื่อนลงเอา"
       //   = **ไม่มีลูกศรพับ/กางแล้ว** · หัวข้อเป็นป้ายเฉยๆ · แท็บโชว์ครบตลอด (ยาวเกินจอก็เลื่อนเอา)
@@ -1353,7 +1375,7 @@
         const go = t.id==='ck' ? 'gotoCheckout()' : `switchTab('${t.id}')`;
         //  t.img = โลโก้จริงของแพลตฟอร์ม (dict LUCIDE ไม่มีไอคอน facebook/tiktok/youtube)
         const tIc = t.img ? `<img src="${t.img}" alt="" style="width:15px;height:15px;border-radius:4px;object-fit:cover;flex-shrink:0">` : ic(t.i,15);
-        html += `<button class="ntab${tab===t.id?' on':''}" data-sec="main" onclick="${go}">${tIc} ${t.l}</button>`;
+        html += `<button class="ntab${tab===t.id?' on':''}" data-sec="main" onclick="${go}">${tIc} ${t.l}${t.id==='cn'?_cnBadgeHtml():''}</button>`;
       });
       // เมนูจัดการ (แอดมิน) — แบ่ง 3 หมวดต่อท้ายแท็บใน drawer เดียวกัน · กดแล้วปิด drawer ก่อนเปิด modal
       // (ไม่งั้น drawer z-index 1260 บังตัว modal ที่ 1000-1200)
@@ -1390,7 +1412,7 @@
       html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
       // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ"/"จัดซื้อ" — มี UI/รอบเดือนของตัวเอง)
-      if(tab!=='s' && tab!=='t' && tab!=='ck' && tab!=='p') html += renderDateFilterBar();
+      if(tab!=='s' && tab!=='t' && tab!=='ck' && tab!=='p' && tab!=='cn') html += renderDateFilterBar();
 
       // Tab content
       if(tab==='o') html += renderOverview(sellers, dilMap, sellerNames);
@@ -1404,6 +1426,7 @@
       else if(tab==='ad') html += renderAds();
       else if(tab==='t') html += renderTracking();
       else if(tab==='ck') html += renderCheckout();
+      else if(tab==='cn') html += renderConnect();
 
       root.innerHTML = html;
       makeTablesScrollable(root);   // มือถือ: ห่อทุกตาราง .shdr ให้เลื่อนแนวนอนเห็นครบ (ก่อน flash)
@@ -6183,6 +6206,10 @@
         <button onclick="openTrkUsers()" style="font-size:var(--fs-body);padding:7px 13px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">ผู้ใช้/บทบาท</button>
       </div>
       <iframe id="trkFrame" src="/track/" title="สถานะรถ" style="display:block;width:100vw;position:relative;left:50%;margin-left:-50vw;height:calc(100vh - 172px);min-height:560px;border:0;border-top:.5px solid var(--bd);background:var(--bg2)"></iframe>`; }
+
+    // แท็บ "Connect" — ฝังหน้า /connect/ (หน้าเดียวกับที่เซลล์เปิดจากมือถือ · สิทธิ์เช็คที่เซิร์ฟเวอร์)
+    function renderConnect(){ return `<div style="display:flex;justify-content:flex-end;margin:-4px 0 6px"><a href="/connect/" target="_blank" style="font-size:var(--fs-body);color:var(--t3);text-decoration:none">เปิดเต็มจอ ↗</a></div>`
+      + `<iframe src="/connect/?embed=1" title="Connect" style="width:100%;height:calc(100vh - 190px);min-height:560px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`; }
 
     // แท็บ "เบิก-คืนรถ" — ฝังหน้า supervisor (checkout/) ผ่าน iframe (same-origin · ใช้ session sales admin)
     function renderCheckout(){ return `<iframe src="${_ckSrc}" title="เบิก-คืนรถ" style="width:100%;height:calc(100vh - 170px);min-height:560px;border:.5px solid var(--bd);border-radius:14px;background:var(--bg2)"></iframe>`; }
