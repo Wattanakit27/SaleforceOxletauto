@@ -808,6 +808,141 @@ def fetch_leads_dedup() -> list[list[str]]:
     return _dedupe_leads_by_code(ordered_rows)
 
 
+def _col_letter(i: int) -> str:
+    """0 → A · 25 → Z · 26 → AA (ใช้ประกอบช่วงเซลล์แบบ A1)"""
+    s, i = "", int(i) + 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def fetch_lead_dropdowns(timeout: int = 8) -> dict:
+    """ตัวเลือก dropdown (data validation) ของชีตลีด **แท็บเดือนล่าสุด** — ให้ฟอร์มลีดในหน้า Connect ใช้ชุดเดียวกับชีต
+
+    ★ 4 ต.ค.69 (เจ้าของสั่ง "ไปดูดรอปดาวต่างๆที่ใช้ในนี้")
+    · **รายการเปลี่ยนทุกเดือน** (วัดจริง: ต.ค. เพิ่มเซลล์ 3 คน · ช่องทาง 5 · ตัดรุ่นรถออก 14 จาก ก.ค.)
+      → อ่านแท็บเดือนล่าสุดที่ไม่ใช่อนาคตเสมอ ไม่ฮาร์ดโค้ด
+    · จับคอลัมน์ด้วย **ชื่อหัวตาราง** (`_resolve_lead_colmap`) ไม่ใช่ตำแหน่ง — ชีตย้ายคอลัมน์ได้
+    · อ่านแค่ **หัวตารางแถว 1 + กฎ dropdown + คอลัมน์ เซลล์/สาขา** (หาสาขาที่ใช้จริง) — ไม่ดึงข้อมูลลูกค้า
+    คืน `{"tab", "columns": {canonical(str): [ตัวเลือก]}, "branchBySeller": {เซลล์: สาขา}, "branchTop": สาขา}`
+    อ่านไม่ได้ = โยน exception (ผู้เรียกเก็บของเดิมไว้)
+    """
+    import urllib.parse
+    from collections import Counter, defaultdict
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        load_sheet_config_overrides()
+    except Exception:
+        pass
+    sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+    hdrs = {"Authorization": f"Bearer {_get_credentials().token}"}
+    r = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title", headers=hdrs, timeout=timeout)
+    r.raise_for_status()
+    titles = [s["properties"]["title"] for s in r.json().get("sheets", [])]
+    now = datetime.now(ZoneInfo("Asia/Bangkok"))
+    cur = ((now.year + 543) % 100, now.month)
+    best = None
+    for t in titles:
+        name = t.strip()
+        for idx, m in enumerate(_THAI_MONTHS):
+            if name.startswith(m + " "):
+                try:
+                    key = (int(name[len(m) + 1:].strip()), idx + 1)
+                except ValueError:
+                    break
+                if key <= cur and (best is None or key > best[0]):
+                    best = (key, t)
+                break
+    if not best:
+        raise ValueError("ไม่เจอแท็บรายเดือนในชีตลีด")
+    tab = best[1]
+    q = lambda a1: urllib.parse.quote("'%s'!%s" % (tab, a1), safe="")
+
+    r = requests.get(f"{SHEETS_API}/{sid}/values/{q('1:1')}", headers=hdrs, timeout=timeout)
+    r.raise_for_status()
+    header = (r.json().get("values") or [[]])[0]
+    colmap = _resolve_lead_colmap(header)                     # {canonical: คอลัมน์จริง}
+    by_src = {src: canon for canon, src in colmap.items()}
+
+    # กฎ dropdown — ขอเฉพาะ dataValidation (ไม่ขอค่าในช่อง) · ดูหลายแถวเผื่อบางแถวไม่ได้ลากกฎลงมา
+    r = requests.get(f"{SHEETS_API}/{sid}?ranges={q('A3:%s8' % _col_letter(max(len(header), 30)))}"
+                     f"&includeGridData=true&fields=sheets(data(rowData(values(dataValidation))))",
+                     headers=hdrs, timeout=timeout)
+    r.raise_for_status()
+    rules = {}
+    for sh in r.json().get("sheets", []):
+        for blk in sh.get("data", []):
+            for row in blk.get("rowData", []) or []:
+                for ci, v in enumerate(row.get("values", []) or []):
+                    dv = (v or {}).get("dataValidation")
+                    if dv and ci not in rules:
+                        rules[ci] = dv.get("condition") or {}
+
+    def _clean(vals):
+        out = []
+        for x in vals:
+            x = str(x or "").strip()
+            if x and x not in out:
+                out.append(x)
+        return out
+
+    columns = {}
+    for ci, cond in rules.items():
+        canon = by_src.get(ci)
+        if canon is None:
+            continue
+        vals = [(x or {}).get("userEnteredValue", "") for x in cond.get("values", [])]
+        if cond.get("type") == "ONE_OF_RANGE" and vals:
+            # dropdown ที่อ้างช่วงเซลล์ (เช่น ='ตั้งค่า'!A2:A30) — อ่านช่วงนั้นมาแทน
+            ref = vals[0].lstrip("=")
+            if "!" not in ref:
+                ref = "'%s'!%s" % (tab, ref)
+            try:
+                rr = requests.get(f"{SHEETS_API}/{sid}/values/{urllib.parse.quote(ref, safe='')}",
+                                  headers=hdrs, timeout=timeout)
+                vals = [c for row in (rr.json().get("values") or []) for c in row] if rr.status_code == 200 else []
+            except requests.RequestException:
+                vals = []
+        elif cond.get("type") != "ONE_OF_LIST":
+            continue
+        vals = _clean(vals)
+        if vals:
+            columns[str(canon)] = vals
+
+    # สาขาที่ใช้จริง — ต่อเซลล์ (เซลล์คนนี้ลีดไปสาขาไหน) + ภาพรวม · นับเฉพาะชื่อเซลล์กับชื่อสาขา
+    by_seller, top = {}, ""
+    s_src, b_src = colmap.get(LEADS_COL.sales_rep), colmap.get(LEADS_COL.branch)
+    if s_src is not None and b_src is not None:
+        rngs = "&".join("ranges=" + q("%s2:%s" % (_col_letter(c), _col_letter(c))) for c in (s_src, b_src))
+        rr = requests.get(f"{SHEETS_API}/{sid}/values:batchGet?{rngs}", headers=hdrs, timeout=timeout)
+        if rr.status_code == 200:
+            cols = [[(row[0] if row else "") for row in (vr.get("values") or [])]
+                    for vr in rr.json().get("valueRanges", [])]
+            if len(cols) == 2:
+                n = max(len(cols[0]), len(cols[1]))
+                per, allc = defaultdict(Counter), Counter()
+                for s, b in zip(cols[0] + [""] * (n - len(cols[0])), cols[1] + [""] * (n - len(cols[1]))):
+                    s, b = str(s).strip(), str(b).strip()
+                    if not b:
+                        continue
+                    allc[b] += 1
+                    if s:
+                        per[s][b] += 1
+                # เชื่อเฉพาะตอนที่ "ชัด" — สาขาเดียว ≥ 90% และมีข้อมูลพอ ไม่งั้นปล่อยว่างให้คนเลือก
+                for s, c in per.items():
+                    b, k = c.most_common(1)[0]
+                    if k >= 10 and k >= 0.9 * sum(c.values()):
+                        by_seller[s] = b
+                if allc:
+                    b, k = allc.most_common(1)[0]
+                    if k >= 20 and k >= 0.9 * sum(allc.values()):
+                        top = b
+    # ชื่อแท็บจริงบางอันมีช่องว่างนำหน้า — ประกอบช่วงเซลล์ใช้ชื่อดิบ (ข้างบน) · ส่งออกไปโชว์ใช้ชื่อที่ตัดแล้ว
+    return {"tab": tab.strip(), "columns": columns, "branchBySeller": by_seller, "branchTop": top}
+
+
 def fetch_leads_by_month_tabs() -> list[list[str]]:
     """อ่าน leads จาก monthly tabs (มกราคม-ธันวาคม 69) แต่ละแถวเก็บเฉพาะ
     ที่ "วันที่ใน column ตรงกับเดือนของ tab" — ตัดเคสที่ admin เอามาใส่ผิด tab ออก.

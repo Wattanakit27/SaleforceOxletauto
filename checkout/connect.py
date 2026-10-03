@@ -679,6 +679,11 @@ def tick(now=None) -> dict:
     กันส่งซ้ำเวลา cron ยิงซ้อนจากหลาย worker
     """
     now = now or timezone.now()
+    out = {}
+    try:                                     # dropdown ของฟอร์มลีด ตามชีตลีด — ทุกชั่วโมง (แยก try: พังไม่ลากงานเตือน)
+        out.update(_dd_tick() or {})
+    except Exception as e:
+        out["dropdownsError"] = str(e)[:120]
     c = cfg()
     rows = list(ChatOwner.objects.select_related("owner", "profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
@@ -691,8 +696,8 @@ def tick(now=None) -> dict:
                  note="" if o.owner_id else "ยังไม่มีเซลล์รับ")
             hit.append(o)
     if not hit:
-        return {}
-    out = {"escalated": len(hit)}
+        return out
+    out["escalated"] = len(hit)
     real = [o for o in hit if not is_sim(o.profile.user_id)]       # ลูกค้าจำลองไม่ส่ง LINE
     if real and c.get("alert_on") and c.get("alert_group"):
         out["alert"] = _alert_admins(real, c, now)
@@ -826,12 +831,180 @@ LEAD_FIELDS = {
     "occupation": 80, "income": 60, "job_tenure": 60, "pay_history": 120, "customer_type": 60,
     "live": 60, "more": 500,
 }
-LEAD_TYPES = ["Very Hot", "Hot", "TLD / Hot", "MerHot", "TLD", "Moderate", "BLD", "Hot RB", "Hot RJ", "RJ"]
-CUSTOMER_TYPES = ["พนักงานบริษัท", "เจ้าของธุรกิจส่วนตัว", "ข้าราชการ/รัฐวิสาหกิจ", "ค้าขาย", "เกษตกร/ปศุสัตว์",
-                  "Rider/driver", "ฟรีแลนด์", "อาชีพอื่นๆ", "ไม่แจ้งอาชีพ", "ไม่มีอาชีพ"]
 HUMAN = "คน"                      # ค่าใน `auto` = คนแก้ช่องนี้แล้ว → ระบบห้ามเติมทับ
+SYSTEM = "ระบบ"                   # ค่าตั้งต้นที่ระบบใส่ให้ (ช่องทาง/สาขา/Admin) — ข้อมูลที่ชัดกว่าแทนได้
 _SLIP_EVERY_MIN = 30              # หาใบจ่ายลีดในกลุ่มซ้ำได้ทุกกี่นาที (ต่อลูกค้า)
-_VOCAB = {"at": 0.0, "cars": [], "names": {}, "channels": []}
+_VOCAB = {"at": 0.0, "src": None, "cars": [], "names": {}, "bases": []}
+
+# ── ตัวเลือก dropdown = ชุดเดียวกับชีตลีด (4 ต.ค.69 · เจ้าของสั่ง "ไปดูดรอปดาวต่างๆที่ใช้ในนี้") ──
+# อ่านกฎ dropdown ของแท็บเดือนล่าสุดทุกชั่วโมง (`refresh_dropdowns` ← `tick`) เก็บ KV `connect_lead_dropdowns`
+# รายการเปลี่ยนทุกเดือน (ต.ค. มีเซลล์ใหม่ 3 · ช่องทางใหม่ 5 · รุ่นรถหาย 14) → **ห้ามฮาร์ดโค้ดเป็นของจริง**
+# ช่องในฟอร์ม → ชื่อคอลัมน์ใน `LEADS_COL` (จับคอลัมน์ในชีตด้วยชื่อหัวตาราง ไม่ใช่ตำแหน่ง)
+DD_COLS = {
+    "live_team": "live_team", "admin_name": "admin", "channel": "channel", "branch": "branch",
+    "lead_type": "type", "car_model": "car_formula", "call_proof": "call_proof", "focus": "focus",
+    "occupation": "occupation", "income": "income", "job_tenure": "job_tenure",
+    "pay_history": "payment_history", "customer_type": "customer_type",
+}
+DD_KEY = "connect_lead_dropdowns"
+DD_EVERY_MIN = 60                 # อ่านชีตใหม่ทุกชั่วโมง — แอดมินเพิ่มตัวเลือกในชีตแล้วเห็นในหน้า Connect ไม่เกิน 1 ชม.
+DD_RETRY_MIN = 15                 # อ่านไม่ได้ = เว้น 15 นาทีค่อยลองใหม่ (ไม่ยิงทุกนาที)
+# ชุดที่จดจากแท็บ "ตุลาคม 69" (4 ต.ค.69) — ใช้เฉพาะตอนยังไม่เคยอ่านชีตได้เลย (เครื่อง dev / deploy ใหม่ก่อน cron รอบแรก)
+DD_FALLBACK = {
+    "live_team": ["Live Infu", "Live Productions", "Live Sale", "Live boss"],
+    "admin_name": ["กวาง", "หมิว", "เนเน่", "ADMIN", "เฟิร์น", "ฟิล์ม"],
+    "channel": ["เพจบ้านเก่า", "เพจอ่อนนุช", "เพจ Guru", "LINE@", "เบอร์กลาง / เพจ", "เบอร์กลาง / Tiktok",
+                "TIKTOK ช่องขายบอส", "Tiktok Guru", "Tiktok  ช่องหลัก", "TIKTOK โอ๊ต", "Tiktok นวล", "Tiktok มัท",
+                "TIKTOK อุ้ม", "12car", "web oxlet", "Youtube", "TIKTOK เฟิร์ส", "Line@ / TIKTOK", "Broker oxlet",
+                "LIVE Facebook", "LIVE Tiktok / ช่องขายบอส", "LIVE Tiktok / ช่องหลัก", "Market Place",
+                "ส่วนตัวแอดมิน", "LIVE Tiktok / ช่อง888", "Roddonjai", "TIKTOK ช่องบอสเจมส์ทะเบียนเทพ",
+                "LIVE Tiktok / ช่อง Guru", "TIKTOK ช่อง888", "TikTokAds", "Tiktok มด", "Tiktok ช่องแซน",
+                "tiktok บิว", "TIKTOK รถเข้าใหม่อ๊อกเล็ตธ์"],
+    "branch": ["ชลบุรี", "เทพารักษ์"],
+    "lead_type": ["Very Hot", "Hot", "Moderate", "Hot RB", "Hot RJ", "RJ", "MerHot", "TLD", "TLD / Hot", "BLD"],
+    "car_model": ["รถที่ไม่ได้ทำการตลาด", "ลูกค้าไม่ตอบ", "ไม่ระบุรุ่นรถ", "Accord", "Almera", "Almera Turbo",
+                  "Alphard", "Altis", "Benz", "BMW", "Brio", "BRV", "Camry", "CHR", "City 4 ประตู", "City 5 ประตู",
+                  "Civic FC", "Civic FE", "Civic FK", "Commuter", "Corolla Cross", "CRV", "CX-3", "CX-30", "D Max",
+                  "Everest", "Fortuner", "HRV", "Innova", "Jazz", "Majesty", "Mazda2", "Mazda3", "MG", "Mirage",
+                  "MuX", "New Commuter", "Pajero", "Revo", "Swift", "Sylphy", "Teana", "Terra", "Vellfire", "Veloz",
+                  "Ventury", "Vigo", "Vigo LPG", "Vios", "Xpander", "Hyundai", "Mu7", "Yaris Cross", "Yaris Ativ",
+                  "New Yaris 5 ประตู", "Yaris 5 ประตูตัวเก่า", "Ford Ranger", "x-trail", "XL7", "Kia", "Triton"],
+    "call_proof": ["ส่งแล้ว", "ยังไม่ส่ง", "รอหลักฐาน"],
+    "focus": ["FOCUS", "Concentrate"],
+    "customer_type": ["พนักงานบริษัท", "เจ้าของธุรกิจส่วนตัว", "อาชีพอื่นๆ", "ไม่แจ้งอาชีพ", "ข้าราชการ/รัฐวิสาหากิจ",
+                      "เกษตกร/ปศุสัตว์", "ไม่มีอาชีพ", "ค้าขาย", "Rider/driver", "ฟลีแลนด์", "ข้อมูลติดต่อผิด",
+                      "ลูกจ้างรับสด"],
+}
+DD_FALLBACK_BRANCH = "ชลบุรี"     # วัดจริง ส.ค.–ต.ค.69: ลีด 6,945 แถว สาขา = ชลบุรี ทั้งหมด
+_DD = {"at": 0.0, "val": None}
+
+
+def dropdowns() -> dict:
+    """ตัวเลือก dropdown ของฟอร์มลีด (ชุดเดียวกับชีตลีด) — **ไม่ยิงเน็ตในคำขอหน้าเว็บ** อ่านจาก KV ที่ `tick` เติมให้
+
+    คืน `{"fields": {ช่อง: [ตัวเลือก]}, "tab", "at", "branchBySeller", "branchTop", "fallback"}`
+    ยังไม่เคยอ่านชีตได้ = `DD_FALLBACK` (`fallback: True`)
+    """
+    import time
+    if _DD["val"] is not None and time.time() - _DD["at"] < 60:
+        return _DD["val"]
+    val = None
+    try:
+        from dashboard.services.cache_store import get_kv
+        raw = get_kv(DD_KEY) or {}
+        d = raw.get("data", raw) if isinstance(raw, dict) else {}
+        if isinstance(d, dict) and isinstance(d.get("fields"), dict) and d["fields"]:
+            val = dict(d, fallback=False)
+    except Exception:
+        val = None
+    if val is None:
+        val = {"fields": DD_FALLBACK, "tab": "", "at": "", "branchBySeller": {},
+               "branchTop": DD_FALLBACK_BRANCH, "fallback": True}
+    _DD.update(at=time.time(), val=val)
+    return val
+
+
+def dd_options(field: str) -> list:
+    return list((dropdowns().get("fields") or {}).get(field) or [])
+
+
+def dd_pick(field: str, value) -> str:
+    """ค่าใน dropdown ที่ตรงกับ `value` (ไม่สนตัวพิมพ์/ช่องว่าง) — ไม่ตรงสักตัว = "" (ไม่เดา)"""
+    want = re.sub(r"\s+", "", str(value or "")).lower()
+    if not want:
+        return ""
+    for opt in dd_options(field):
+        if re.sub(r"\s+", "", opt).lower() == want:
+            return opt
+    return ""
+
+
+def _dd_state() -> dict:
+    try:
+        from dashboard.services.cache_store import get_kv
+        raw = get_kv(DD_KEY) or {}
+        cur = raw.get("data", raw) if isinstance(raw, dict) else {}
+        return cur if isinstance(cur, dict) else {}
+    except Exception:
+        return {}
+
+
+def _dd_due(cur=None, now=None) -> bool:
+    """ถึงเวลาอ่านชีตใหม่ไหม — อ่านสำเร็จล่าสุดเกิน 1 ชม. และไม่ได้เพิ่งล้มใน 15 นาที"""
+    from django.utils.dateparse import parse_datetime
+    cur = _dd_state() if cur is None else cur
+    now = now or timezone.now()
+    last, fail = parse_datetime(cur.get("at") or ""), parse_datetime(cur.get("failAt") or "")
+    if last and now - last < timedelta(minutes=DD_EVERY_MIN):
+        return False
+    if fail and now - fail < timedelta(minutes=DD_RETRY_MIN):
+        return False
+    return True
+
+
+def refresh_dropdowns(force: bool = False) -> dict:
+    """อ่าน dropdown จากชีตลีดเดือนล่าสุด → KV · เรียกจาก `tick` (ทุกชั่วโมง)
+
+    **อ่านไม่ได้ = ไม่ทับของเดิม** (จดแค่ `failAt` แล้วเว้น 15 นาที) — ชีตล่มชั่วคราวต้องไม่ทำให้ฟอร์มกลายเป็นช่องพิมพ์เปล่า
+    """
+    from dashboard.services.cache_store import set_kv
+    now = timezone.now()
+    cur = _dd_state()
+    if not force and not _dd_due(cur, now):
+        return {}
+    err = ""
+    try:
+        from dashboard.services.google_sheets import LEADS_COL, fetch_lead_dropdowns
+        got = fetch_lead_dropdowns()
+    except Exception as e:
+        got, err = {}, str(e)[:200]
+        LEADS_COL = None
+    fields = {}
+    if LEADS_COL is not None:
+        cols = got.get("columns") or {}
+        for f, attr in DD_COLS.items():
+            vals = cols.get(str(getattr(LEADS_COL, attr)))
+            if vals:
+                fields[f] = list(vals)
+    if not fields:
+        set_kv(DD_KEY, dict(cur, failAt=now.isoformat(), error=err or "ไม่เจอ dropdown ในชีตลีด"))
+        _DD.update(at=0.0, val=None)
+        return {"dropdowns": "fail", "error": err or "ไม่เจอ dropdown"}
+    val = {"fields": fields, "tab": got.get("tab") or "", "at": now.isoformat(),
+           "branchBySeller": got.get("branchBySeller") or {}, "branchTop": got.get("branchTop") or ""}
+    set_kv(DD_KEY, val)
+    _DD.update(at=0.0, val=None)
+    return {"dropdowns": val["tab"], "fields": len(fields)}
+
+
+_DD_RUN = {"busy": False}
+
+
+def _dd_tick():
+    """ถึงเวลาอ่านชีตใหม่ไหม (เช็คถูกๆ ใน KV) → อ่านใน thread แยก
+    ใช้ ~5 วิ — ห้ามหน่วง cron_tick ที่ต้องส่งตามด่วนให้ตรงนาที"""
+    import threading
+    if _DD_RUN["busy"] or not _dd_due():
+        return {}
+    if not BG_FILL:                      # เทสต์: ทำตรงๆ ไม่แตก thread
+        return refresh_dropdowns(force=True)
+
+    def _work():
+        try:
+            refresh_dropdowns(force=True)
+        except Exception:
+            pass
+        finally:
+            _DD_RUN["busy"] = False
+            try:
+                from django.db import connection
+                connection.close()
+            except Exception:
+                pass
+
+    _DD_RUN["busy"] = True
+    threading.Thread(target=_work, daemon=True).start()
+    return {}
 
 
 def lead_of(o, create: bool = True):
@@ -849,58 +1022,73 @@ def lead_of(o, create: bool = True):
 
 
 def _vocab() -> dict:
-    """ชื่อรุ่นรถ + ช่องทาง จากผลสรุปแดชบอร์ด (dropdown ของชีตลีด = ชุดที่สะอาดที่สุด) · แคช 1 ชม.
+    """คีย์รุ่นรถสำหรับ `match_model` — สร้างจาก dropdown "CAR / สูตร" ของชีตลีด (ชุดเดียวกับที่แอดมินเลือกในชีต)
 
-    อ่านไม่ได้/ยังไม่มีผลสรุป (เครื่อง dev) = ลิสต์ว่าง → ระบบใช้แค่ชื่อรุ่นภาษาไทยของ `leadgroup.parse_specs`
+    เรียงยาวก่อน (`civicfc` ต้องชนะ `civic`) · ตัดตัวเลือกที่ไม่ใช่ชื่อรุ่น ("ลูกค้าไม่ตอบ"/"ไม่ระบุรุ่นรถ")
+    และชื่อยี่ห้อล้วน (Benz/BMW/MG — ตัดยี่ห้อแล้วเหลือว่าง) · สร้างใหม่เองเมื่อ dropdown เปลี่ยน
     """
-    import time
-    if _VOCAB["at"] and time.time() - _VOCAB["at"] < 3600:
+    dd = dropdowns()
+    if _VOCAB["src"] is dd:
         return _VOCAB
-    cars, names, channels = [], {}, []
+    names, bases = {}, set()
     try:
-        from dashboard.services.purchase_report import _demand_by_model
-        demand, names = _demand_by_model()
-        cars = sorted(demand, key=lambda k: (-len(k), k))           # ยาวก่อน (civicfc ต้องชนะ civic)
+        from dashboard.services.purchase_report import _BAD_MODEL, _BRANDS, _compact
+        for opt in (dd.get("fields") or {}).get("car_model") or []:
+            if any(b in opt for b in _BAD_MODEL) or not re.search(r"[A-Za-z]", opt):
+                continue
+            k = _compact(opt, drop_brand=True)
+            if 2 <= len(k) <= 22 and k not in names:
+                names[k] = opt
+            # ชื่อรุ่นหลักของตัวเลือกที่มีรุ่นย่อย ("City 4 ประตู" → city · "Civic FE" → civic)
+            #   ลูกค้าพิมพ์แค่ "city" = พูดถึงรถแน่ แต่ไม่รู้รุ่นย่อย → ได้ "รถลูกค้าถาม" อย่างเดียว
+            head = opt.split()[0].lower() if len(opt.split()) > 1 else ""
+            if re.fullmatch(r"[a-z]{3,}", head) and head not in _BRANDS and head != "new":
+                bases.add(head)
     except Exception:
-        cars, names = [], {}
-    try:
-        from dashboard.services.cache_store import get_kv
-        blob = get_kv("main") or {}
-        data = blob.get("data", blob) if isinstance(blob, dict) else {}
-        cnt = {}
-        for _m, chs in ((data or {}).get("leadChannelByMonth") or {}).items():
-            for ch, n in (chs or {}).items():
-                if ch:
-                    cnt[ch] = cnt.get(ch, 0) + int(n or 0)
-        channels = [c for c, _ in sorted(cnt.items(), key=lambda x: -x[1])][:40]
-    except Exception:
-        channels = []
-    _VOCAB.update({"at": time.time(), "cars": cars, "names": names, "channels": channels})
+        names, bases = {}, set()
+    _VOCAB.update(src=dd, names=names, cars=sorted(names, key=lambda k: (-len(k), k)), bases=sorted(bases))
     return _VOCAB
 
 
 def car_in(text: str):
-    """(รุ่นแบบชีต, ข้อความเดิม) ถ้าข้อความนี้พูดถึงรุ่นรถ — ไม่เจอ = None (ไม่เดา)"""
+    """รถที่ข้อความนี้พูดถึง → (ตัวเลือก "CAR / สูตร" ของชีต หรือ "" ถ้าบอกรุ่นไม่ชัด, ข้อความเดิม) · ไม่พูดถึงรถ = None
+
+    "CAR / สูตร" ในชีตเป็น dropdown แบบ strict → เติมเฉพาะค่าที่อยู่ในลิสต์เท่านั้น
+    · "สนใจ city" = 4 ประตูหรือ 5 ประตูก็ไม่รู้ → คืน "" (ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง ไม่เดา)
+    """
     t = (text or "").strip()
     if not t:
         return None
     v = _vocab()
     if v["cars"]:
         try:
-            from dashboard.services.purchase_report import match_model
+            from dashboard.services.purchase_report import _compact, match_model
             k = match_model(t, v["cars"])
             if k:
-                return v["names"].get(k, k), t
+                return v["names"].get(k, ""), t
+            c = _compact(t)
+            if any(b in c for b in v.get("bases") or []):
+                return "", t
         except Exception:
             pass
     try:
         from .leadgroup import parse_specs
         m = parse_specs(t).get("car_model")
         if m:
-            return m[:1].upper() + m[1:], t           # "camry" → "Camry" (หน้าตาเดียวกับชีต)
+            return dd_pick("car_model", m), t        # "แคมรี่" → camry → "Camry" (ตรงตัวเลือกในชีตเท่านั้น)
     except Exception:
         pass
     return None
+
+
+def _line_channel() -> str:
+    """ช่องทางของลูกค้าที่ทักเข้า LINE OA ตาม dropdown ของชีต
+    วัดจริง ส.ค.–ต.ค.69: ลีดจาก LINE 741 แถว = "LINE@" 740 · "Line@ / TIKTOK" 1"""
+    opts = dd_options("channel")
+    for opt in opts:
+        if re.sub(r"\s+", "", opt).lower() == "line@":
+            return opt
+    return next((opt for opt in opts if "line" in opt.lower() and "/" not in opt), "LINE@")
 
 
 def _norm_name(s) -> str:
@@ -956,27 +1144,27 @@ def find_slip(phone: str = "", line_name: str = ""):
 def autofill(o, msgs=None) -> ChatLead:
     """เติมข้อมูลลีดอัตโนมัติ — **เฉพาะช่องที่ว่างและยังไม่เคยเติม** ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด
 
-    ที่มา: แชท (เบอร์ · รุ่นรถที่ถาม) · ระบบ (ช่องทาง · Admin ที่โอน/ตอบ) ·
+    ที่มา: แชท (เบอร์ · รถที่ถาม · รุ่นแบบ "CAR / สูตร") · ระบบ (ช่องทาง LINE@ · สาขา · Admin ที่โอน/ตอบ) ·
     **ใบจ่ายลีดในกลุ่มจ่ายเบอร์** (Code/ADS/Account/ชื่อลูกค้า/ID LINE/ช่องทาง/รถ — ถ้าเบอร์หรือชื่อไลน์ตรง)
+    ช่องที่ชีตเป็น dropdown → เติมเฉพาะค่าที่อยู่ในตัวเลือกของชีต (`dd_pick`) ไม่ตรงสักตัว = ไม่เติม
     `msgs` = ข้อความลูกค้า (เก่า→ใหม่) ที่โหลดมาแล้วสำหรับหน้าแชท (ไม่ต้อง query ซ้ำ)
     """
     lead = lead_of(o)
-    if is_sim(o.profile.user_id):
-        return lead
+    # ★ 4 ต.ค.69 — ลูกค้าจำลองก็เติมให้ (เดิมข้ามทั้งหมด → เจ้าของทดสอบด้วยลูกค้าจำลองแล้วเห็นฟอร์มว่างทุกช่อง
+    #   นึกว่าระบบไม่เติมอะไรเลย) · เติมจากแชทของตัวเอง + ค่าตั้งต้นของระบบได้ · **ยกเว้นค้นใบจ่ายลีด** (ดูข้างล่าง)
     auto = dict(lead.auto or {})
     changed = []
 
-    def put(field, value, src):
-        value = (str(value or "")).strip()
-        if not value:
+    def put(field, value, src, over=()):
+        """`over` = ที่มาที่ข้อมูลนี้แทนได้ (ข้อมูลที่ชัดกว่าแทนค่าที่ระบบใส่ไว้ก่อน) · **ค่าที่คนพิมพ์ไม่มีวันถูกแทน**"""
+        value = str(value or "").strip()[:LEAD_FIELDS.get(field, 200)]
+        if not value or getattr(lead, field) == value:
             return
-        # ใบจ่ายลีดที่แอดมินโพสต์ = ข้อมูลจากคน → แทน "ค่าตั้งต้นของระบบ" ได้ (เช่น ช่องทาง LINE OA)
-        #   แต่ไม่แทนสิ่งที่คนพิมพ์ในหน้านี้ และไม่แทนสิ่งที่จับได้จากแชท
-        if auto.get(field) == "ระบบ" and src == "ใบจ่ายลีด":
+        if auto.get(field) in over and auto.get(field) != HUMAN:
             pass
         elif getattr(lead, field) or field in auto:
             return
-        setattr(lead, field, value[:LEAD_FIELDS.get(field, 200)])
+        setattr(lead, field, value)
         auto[field] = src
         changed.append(field)
 
@@ -986,12 +1174,23 @@ def autofill(o, msgs=None) -> ChatLead:
     ph = phones_in(msgs)
     if ph:
         put("phone", ph[0], "แชท")
+    # รถที่ลูกค้าถาม: ข้อความแรกที่บอกรุ่นชัด (ตรงตัวเลือก "CAR / สูตร") → ได้ทั้ง 2 ช่องจากข้อความเดียวกัน
+    #   ไม่มีข้อความไหนบอกรุ่นชัด ("สนใจ city" = 4 หรือ 5 ประตู?) → ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง
+    #   ★ 2 ช่องต้องมาจากข้อความเดียวกัน — ไม่งั้นได้ "รถลูกค้าถาม: Civic" คู่กับ "CAR/สูตร: Camry"
+    first_said, clear = "", None
     for t in msgs:
         hit = car_in(t)
-        if hit:
-            put("car_model", hit[0], "แชท")
-            put("car_text", hit[1][:200], "แชท")
+        if not hit:
+            continue
+        if hit[0]:
+            clear = hit
             break
+        first_said = first_said or hit[1]
+    if clear:
+        put("car_model", clear[0], "แชท")
+        put("car_text", clear[1][:200], "แชท", over=("แชท",))     # แทนข้อความกำกวมที่ระบบเติมไว้ก่อนได้
+    elif first_said:
+        put("car_text", first_said[:200], "แชท")
 
     # ใบจ่ายลีดที่แอดมินโพสต์ไว้แล้ว — หาซ้ำได้ทุก 30 นาที (ไม่ยิง query ทุกครั้งที่เปิดแชท)
     now = timezone.now()
@@ -1001,7 +1200,8 @@ def autofill(o, msgs=None) -> ChatLead:
         stale = (not last) or (now - _dt.fromisoformat(last)) > timedelta(minutes=_SLIP_EVERY_MIN)
     except Exception:
         stale = True
-    if not lead.code and stale:
+    # ลูกค้าจำลอง "ไม่ค้นใบจ่ายลีด" — เบอร์ที่พิมพ์ทดสอบอาจไปตรงใบของลูกค้าจริง แล้วดึงชื่อ/ID LINE ของจริงมาปนในข้อมูลทดสอบ
+    if not lead.code and stale and not is_sim(o.profile.user_id):
         auto["_slip_at"] = now.isoformat()
         changed.append("_slip_at")
         hit = find_slip(lead.phone or (ph[0] if ph else ""), o.profile.display_name)
@@ -1010,15 +1210,32 @@ def autofill(o, msgs=None) -> ChatLead:
             for f, k in (("code", "lead_code"), ("ads", "ads"), ("account", "account"),
                          ("customer_name", "name"), ("line_id", "line_id"), ("channel", "channel"),
                          ("car_text", "car"), ("live", "live"), ("more", "more")):
-                put(f, d.get(k, ""), "ใบจ่ายลีด")
+                v = d.get(k, "")
+                if f in DD_COLS:               # ช่องที่มี dropdown → ใช้ชื่อตามตัวเลือกในชีต ถ้าตรงกัน
+                    v = dd_pick(f, v) or v
+                # ใบจ่ายลีด = ข้อมูลจากคน → แทน "ค่าตั้งต้นของระบบ" ได้ (ช่องทาง LINE@ → TikTok ตามใบ)
+                #   แต่ไม่แทนสิ่งที่คนพิมพ์ในหน้านี้ และไม่แทนสิ่งที่จับได้จากแชท
+                put(f, v, "ใบจ่ายลีด", over=(SYSTEM,))
             if d.get("phone"):
                 put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบจ่ายลีด")
             auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or ""}
 
-    # ช่องทาง = บัญชี LINE ที่ลูกค้าทักเข้ามา — ใช้ชื่อตามชีต ("Line@"/"LINE OA") ถ้ามีในลิสต์
-    line_ch = next((c for c in _vocab()["channels"] if "line" in c.lower()), "LINE OA")
-    put("channel", line_ch, "ระบบ")
+    def stale_sys(field) -> tuple:
+        """ค่าที่ระบบเคยใส่ไว้แต่ "ไม่อยู่ในตัวเลือกของชีต" (เช่น "LINE OA" ก่อนมี dropdown) → ยอมให้แก้ให้ตรงชีต"""
+        v = getattr(lead, field)
+        return (SYSTEM,) if auto.get(field) == SYSTEM and v and not dd_pick(field, v) else ()
+
+    # ช่องทาง = ลูกค้าทักเข้า LINE OA → "LINE@" ตาม dropdown ของชีต
+    put("channel", _line_channel(), SYSTEM, over=stale_sys("channel"))
+    # สาขา = สาขาที่ลีดของเซลล์คนนี้ไปจริงในชีตเดือนล่าสุด (ยังไม่มีเจ้าของ = สาขาที่ลีดเกือบทั้งหมดไป)
+    #   เชื่อเฉพาะตอนชัด (สาขาเดียว ≥ 90%) — ไม่ชัด = ปล่อยว่างให้คนเลือก · วัดจริง ส.ค.–ต.ค.69: ชลบุรี 100%
+    dd = dropdowns()
+    br = (dd.get("branchBySeller") or {}).get(o.owner.nickname, "") if o.owner_id else ""
+    br = dd_pick("branch", br or dd.get("branchTop") or "")
+    if br:
+        put("branch", br, SYSTEM, over=(SYSTEM,) if o.owner_id else stale_sys("branch"))
     # Admin = คนที่โอนลูกค้าให้เซลล์ล่าสุด (ไม่มี = คนแรกที่ตอบลูกค้าที่ไม่ใช่เจ้าของ)
+    #   ต้องเป็นชื่อในตัวเลือก "Admin" ของชีตเท่านั้น (กวาง/หมิว/เฟิร์น/…) — เจ้าของ/เซลล์ที่ตอบเองไม่ใช่ Admin ของลีด
     adm = (ChatOwnerLog.objects.filter(chat=o, action=ChatOwnerLog.ASSIGN).exclude(by_name="")
            .order_by("-at").values_list("by_name", flat=True).first())
     if not adm:
@@ -1026,8 +1243,9 @@ def autofill(o, msgs=None) -> ChatLead:
         if o.owner_id:
             qs = qs.exclude(sent_by_name=o.owner.nickname)
         adm = qs.order_by("sent_at", "id").values_list("sent_by_name", flat=True).first()
-    if adm and not adm.startswith(TEST_PREFIX):
-        put("admin_name", adm, "ระบบ")
+    adm = dd_pick("admin_name", adm) if adm and not adm.startswith(TEST_PREFIX) else ""
+    if adm:
+        put("admin_name", adm, SYSTEM, over=stale_sys("admin_name"))
 
     if changed:
         lead.auto = auto
@@ -1248,20 +1466,15 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
 
 
 def lead_options() -> dict:
-    """ตัวเลือกช่วยกรอก (datalist) — ช่องทางจากชีตลีดจริง · สาขา/แอดมินจากที่เคยกรอก"""
-    v = _vocab()
-    used = ChatLead.objects.exclude(branch="").values_list("branch", flat=True).distinct()[:30]
-    branches = sorted(set(used))
-    try:
-        from cars.models import Branch
-        branches = sorted(set(branches) | set(Branch.objects.filter(active=True).values_list("name", flat=True)))
-    except Exception:
-        pass
+    """ตัวเลือกของฟอร์มลีด: `dropdowns` = ชุดเดียวกับ dropdown ในชีตลีด (ช่องไหนมี = หน้าเว็บเป็นตัวเลือก ไม่ใช่ช่องพิมพ์)
+    + แท็กที่เคยใช้ (ช่วยพิมพ์) · `source` = อ่านมาจากแท็บไหน เมื่อไหร่ (ยังไม่เคยอ่านได้ = ชุดที่จดไว้ในโค้ด)"""
+    dd = dropdowns()
     tags = set()
     for ts in ChatLead.objects.exclude(tags=[]).values_list("tags", flat=True)[:300]:
         tags |= set(ts or [])
-    return {"types": LEAD_TYPES, "customerTypes": CUSTOMER_TYPES, "channels": v["channels"],
-            "branches": branches, "tags": sorted(tags)[:40]}
+    return {"dropdowns": dd.get("fields") or {},
+            "source": {"tab": dd.get("tab") or "", "at": dd.get("at") or "", "fallback": bool(dd.get("fallback"))},
+            "tags": sorted(tags)[:40]}
 
 
 # ─────────────────────────────────────────────────────────────

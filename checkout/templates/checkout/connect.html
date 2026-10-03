@@ -170,11 +170,14 @@
   .pf-lab { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--t3); font-size: 12px; margin-bottom: 3px; }
   .pf-lab > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .pf-auto { font-size: 10.5px; padding: 0 5px; border-radius: 5px; background: var(--blue-bg); color: var(--blue); white-space: nowrap; }
-  .pf-fld input[type=text], .pf-fld input[type=tel], .pf-fld textarea {
+  .pf-fld input[type=text], .pf-fld input[type=tel], .pf-fld textarea, .pf-fld select {
     width: 100%; padding: 6px 9px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
+  .pf-fld select { padding: 5px 6px; color: var(--t1); }
+  .pf-fld select.empty { color: var(--t3); }
   .pf-fld textarea { resize: vertical; min-height: 54px; line-height: 1.5; }
-  .pf-fld input:disabled, .pf-fld textarea:disabled { opacity: .75; }
-  .pf-fld.ok input, .pf-fld.ok textarea { border-color: var(--green); }
+  .pf-fld input:disabled, .pf-fld textarea:disabled, .pf-fld select:disabled { opacity: .75; }
+  .pf-fld.ok input, .pf-fld.ok textarea, .pf-fld.ok select { border-color: var(--green); }
+  .pf-note { font-size: 12px; color: var(--t3); margin: -2px 0 4px; }
   .pf-fld .bad { border-color: var(--red) !important; }
   .pf-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
   .pf-name-row { display: flex; align-items: center; gap: 4px; justify-content: center; }
@@ -641,37 +644,42 @@
   }
 
   // ช่องของฟอร์ม — ชื่อ/ลำดับตามชีตลีด (คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py)
-  //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด) · check · dl-xxx = มีตัวเลือกช่วยกรอก
+  //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด)
+  //   ★ ช่องไหนในชีตเป็น dropdown → เป็นตัวเลือกชุดเดียวกับชีตเอง (`leadOptions.dropdowns` อ่านจากชีตทุกชั่วโมง)
+  //     ไม่ต้องกำหนดในลิสต์นี้ — ชีตเพิ่ม dropdown ช่องไหน ฟอร์มเปลี่ยนตามเอง
   const LEAD_UI = [
     { sec: 'ลูกค้า', rows: [[['customer_name', 'ชื่อลูกค้า']], [['phone', 'เบอร์โทร', 'tel'], ['line_id', 'ID LINE']]] },
     { sec: 'ข้อมูลลีด', rows: [
-      [['code', 'Code (เลขลีด)'], ['lead_type', 'type', 'dl-type']],
-      [['channel', 'ช่องทาง', 'dl-ch'], ['branch', 'สาขา', 'dl-br']],
+      [['code', 'Code (เลขลีด)'], ['lead_type', 'type']],
+      [['channel', 'ช่องทาง'], ['branch', 'สาขา']],
       [['ads', 'ADS']], [['account', 'ชื่อ Account']],
       [['admin_name', 'Admin'], ['live_team', 'ทีมไลฟ์']],
-      [['focus', 'FOCUS'], ['call_proof', 'แจ้งหลักฐานการโทร', 'check']],
+      [['focus', 'FOCUS'], ['call_proof', 'แจ้งหลักฐานการโทร']],
       [['car_text', 'รถลูกค้าถาม']], [['car_model', 'CAR / สูตร']],
       [['fill_note', 'มากรอกชีตกันเถอะ', 'area']],
     ] },
     { sec: 'โปรไฟล์ลูกค้า', rows: [
       [['occupation', 'อาชีพ'], ['income', 'รายได้']],
       [['job_tenure', 'อายุงาน'], ['pay_history', 'ประวัติการผ่อน']],
-      [['customer_type', 'ประเภทลูกค้า', 'dl-ct']],
+      [['customer_type', 'ประเภทลูกค้า']],
       [['admin_profile', 'PROFILE ลูกค้า จาก ADMIN', 'area']],
     ] },
   ];
+  let _DDF = {};                       // ตัวเลือก dropdown ของแชทที่เปิดอยู่ (ตั้งใน profileHtml)
 
   function leadField(L, f, label, kind, ed, sfx) {
     const A = L.auto || {}, v = L[f] || '';
     const badge = (A[f] && A[f] !== 'คน') ? `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])} — แก้ได้">จาก${h(A[f])}</span>` : '';
     const dis = ed ? '' : ' disabled';
+    const opts = Array.isArray(_DDF[f]) && _DDF[f].length ? _DDF[f] : null;
     let inp;
-    if (kind === 'area') inp = `<textarea data-f="${f}" rows="2"${dis}>${h(v)}</textarea>`;
-    else if (kind === 'check') inp = `<label style="display:flex;gap:6px;align-items:center;padding:5px 0"><input type="checkbox" data-f="${f}"${v ? ' checked' : ''}${dis}> ส่งแล้ว</label>`;
-    else {
-      const dl = (kind || '').startsWith('dl-') ? ` list="${kind}-${sfx}"` : '';
-      inp = `<input type="${kind === 'tel' ? 'tel' : 'text'}" data-f="${f}" value="${h(v)}"${dl}${dis} autocomplete="off">`;
-    }
+    if (opts) {
+      // ค่าเดิมที่ไม่อยู่ในตัวเลือกของชีต (กรอกก่อนมี dropdown / มาจากใบจ่ายลีด) — โชว์ไว้ ไม่ทิ้งข้อมูล
+      const extra = v && !opts.includes(v) ? `<option value="${h(v)}" selected>${h(v)} (นอกตัวเลือกชีต)</option>` : '';
+      inp = `<select data-f="${f}" class="${v ? '' : 'empty'}"${dis}><option value="">— เลือก —</option>${
+        opts.map(o => `<option value="${h(o)}"${o === v ? ' selected' : ''}>${h(o)}</option>`).join('')}${extra}</select>`;
+    } else if (kind === 'area') inp = `<textarea data-f="${f}" rows="2"${dis}>${h(v)}</textarea>`;
+    else inp = `<input type="${kind === 'tel' ? 'tel' : 'text'}" data-f="${f}" value="${h(v)}"${dis} autocomplete="off">`;
     return `<div class="pf-fld"><div class="pf-lab"><span>${h(label)}</span>${badge}</div>${inp}</div>`;
   }
 
@@ -707,8 +715,11 @@
       return x + (d.leadError ? `<div class="pf-sec pf-lock" style="color:var(--red)">${h(d.leadError)}</div>` : '');
     }
     const O = d.leadOptions || {};
-    const dls = [['dl-type', O.types], ['dl-ch', O.channels], ['dl-br', O.branches], ['dl-ct', O.customerTypes], ['dl-tag', O.tags]]
-      .map(([id, arr]) => `<datalist id="${id}-${sfx}">${(arr || []).map(v => `<option value="${h(v)}">`).join('')}</datalist>`).join('');
+    _DDF = O.dropdowns || {};
+    const dls = `<datalist id="dl-tag-${sfx}">${(O.tags || []).map(v => `<option value="${h(v)}">`).join('')}</datalist>`;
+    const src = O.source || {};
+    const ddNote = `<div class="pf-note">ตัวเลือกตาม dropdown ของชีตลีด${src.tab ? ' แท็บ ' + h(src.tab) : ''}${
+      src.fallback ? ' (ชุดที่จำไว้ ยังอ่านชีตล่าสุดไม่ได้)' : ''}</div>`;
     if (L.slip) {
       x += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
     }
@@ -719,7 +730,7 @@
       x += assignBoxHtml(d, sfx);
     }
     LEAD_UI.forEach(sec => {
-      x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>`;
+      x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}`;
       sec.rows.forEach(row => {
         const cells = row.map(([f, lab, kind]) => leadField(L, f, lab, kind, ed, sfx));
         x += row.length > 1 ? `<div class="pf-g2">${cells.join('')}</div>` : cells[0];
@@ -800,8 +811,10 @@
 
   function bindProfile(el) {
     el.querySelectorAll('[data-f]').forEach(inp => {
-      inp.addEventListener('change', () => saveLead(inp.dataset.f,
-        inp.type === 'checkbox' ? (inp.checked ? 'ส่งแล้ว' : '') : inp.value, inp));
+      inp.addEventListener('change', () => {
+        if (inp.tagName === 'SELECT') inp.classList.toggle('empty', !inp.value);
+        saveLead(inp.dataset.f, inp.type === 'checkbox' ? (inp.checked ? 'ส่งแล้ว' : '') : inp.value, inp);
+      });
       if (inp.tagName === 'INPUT' && inp.type !== 'checkbox') {
         inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); inp.blur(); } });
       }

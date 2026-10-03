@@ -58,6 +58,10 @@ class _R:
     def json(self):
         return self._js
 
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError("HTTP %s" % self.status_code)
+
 
 POST_CODE = [200]
 
@@ -71,8 +75,13 @@ PROFILE_OK = [False]          # True = LINE ตอบโปรไฟล์ลู
 FAKE_PIC = "https://profile.line-scdn.net/0hFAKEPICTURE"
 
 
+SHEET_ROUTE = [None]          # ฟังก์ชันตอบ Google Sheets API ปลอม (ตั้งเฉพาะช่วงที่ทดสอบอ่าน dropdown ของชีตลีด)
+
+
 def _get(url, *a, **k):
     CALLS.append(("get", url, None))
+    if SHEET_ROUTE[0] and "sheets.googleapis.com" in url:
+        return SHEET_ROUTE[0](url)
     if PROFILE_OK[0] and "/v2/bot/profile/" in url:
         return _R(200, {"displayName": "ชื่อใหม่ใน LINE", "pictureUrl": FAKE_PIC,
                         "statusMessage": "หารถให้ครอบครัว", "language": "th"})
@@ -88,6 +97,9 @@ def _no_sheet(*a, **k):
 
 
 _GS.fetch_sheet = _no_sheet
+# dropdown ของชีตลีด: ปกติ "อ่านไม่ได้" (ฟอร์มใช้ชุดที่จำไว้ DD_FALLBACK) · ส่วน [19] ใช้ตัวจริงกับ Sheets API ปลอม
+_REAL_FLD = _GS.fetch_lead_dropdowns
+_GS.fetch_lead_dropdowns = _no_sheet
 
 OK, BAD = [], []
 
@@ -638,8 +650,8 @@ try:
     from checkout.leadgroup import parse_leadsheet
     o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
     ChatLead.objects.filter(chat=o1).delete()
-    C.assign(o1.id, A2, by="แอดมิน")                    # โอนจริง (มีประวัติ) แล้วโอนกลับ
-    C.assign(o1.id, A1, by="แอดมิน")
+    C.assign(o1.id, A2, by="เฟิร์น")                     # โอนจริง (มีประวัติ) แล้วโอนกลับ
+    C.assign(o1.id, A1, by="เฟิร์น")
     o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
     GroupChat.objects.create(chat_type="user", message_id="seed-car", sender_id=P1.user_id, direction="in",
                              msg_type="text", text="สนใจแคมรี่ปี 20 ครับ", sent_at=timezone.now())
@@ -647,8 +659,16 @@ try:
     ck("เติมเบอร์จากแชท", ld.phone == "0902483727" and ld.auto.get("phone") == "แชท", (ld.phone, ld.auto))
     ck("เติมรุ่นรถจากแชท (ชื่อไทย → ชื่อแบบชีต)", ld.car_model == "Camry" and "แคมรี่" in ld.car_text,
        (ld.car_model, ld.car_text))
-    ck("ช่องทาง = LINE (ค่าตั้งต้นของระบบ)", ld.channel == "LINE OA" and ld.auto.get("channel") == "ระบบ", ld.channel)
-    ck("Admin = คนที่โอนลูกค้าให้", ld.admin_name == "แอดมิน", ld.admin_name)
+    ck("ช่องทาง = LINE@ ตาม dropdown ของชีต (ค่าตั้งต้นของระบบ)", ld.channel == "LINE@" and ld.auto.get("channel") == "ระบบ",
+       ld.channel)
+    ck("สาขา = สาขาที่ลีดไปจริง (ชลบุรี)", ld.branch == "ชลบุรี" and ld.auto.get("branch") == "ระบบ", ld.branch)
+    ck("Admin = คนที่โอนลูกค้าให้ (ชื่ออยู่ในตัวเลือกของชีต)", ld.admin_name == "เฟิร์น", ld.admin_name)
+    # คนโอนที่ไม่ใช่ Admin ในตัวเลือกของชีต (เช่นเจ้าของบริษัท) → ไม่เติม ไม่เดา
+    o3x = ChatOwner.objects.select_related("profile", "owner").get(pk=o3.id)
+    ChatLead.objects.filter(chat=o3x).delete()
+    C.assign(o3x.id, A2, by="Wattanakit")
+    ld3 = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o3x.id))
+    ck("★ คนโอนไม่อยู่ในตัวเลือก Admin ของชีต = ไม่เติม", ld3.admin_name == "", ld3.admin_name)
     # ใบจ่ายลีดในกลุ่มจ่ายเบอร์ — โพสต์หลังจากเติมรอบแรกแล้ว
     slip = ("Ac Lead No. TLD9-7376\nAds : รถครอบครัว 7 ที่นั่ง\nชื่อ Account: Oxlet ช่องหลัก\n"
             "ชื่อลูกค้า : คุณสมชาย\nID LINE : somchai99\nชื่อไลน์ : อะไรก็ได้\nเบอร์โทร : 090-248-3727\n"
@@ -697,8 +717,11 @@ try:
     lj = d.get("lead") or {}
     ck("ช่องอัตโนมัติมีครบ (ว/ด/ป · เซลล์ · ติดต่อ · จำนวนอัพเดท · อัพเดทล่าสุด)",
        lj.get("leadAt") and lj.get("seller") == "เอหนึ่ง" and "updates" in lj and "lastUpdate" in lj, lj)
-    ck("มีตัวเลือกช่วยกรอก (type / ประเภทลูกค้า)", "Very Hot" in (d.get("leadOptions") or {}).get("types", [])
-       and "พนักงานบริษัท" in (d.get("leadOptions") or {}).get("customerTypes", []))
+    ddo = ((d.get("leadOptions") or {}).get("dropdowns") or {})
+    ck("ตัวเลือก dropdown ชุดเดียวกับชีต (type / ประเภทลูกค้า / แจ้งหลักฐาน 3 ค่า)",
+       "Very Hot" in ddo.get("lead_type", []) and "พนักงานบริษัท" in ddo.get("customer_type", [])
+       and ddo.get("call_proof") == ["ส่งแล้ว", "ยังไม่ส่ง", "รอหลักฐาน"], ddo.get("call_proof"))
+    ck("ยังอ่านชีตไม่ได้ = บอกว่าเป็นชุดที่จำไว้", ((d.get("leadOptions") or {}).get("source") or {}).get("fallback") is True)
     s_, d = J(SA1, "/connect/api/lead", {"id": o1.id, "field": "occupation", "value": "พนักงานบริษัท"})
     ck("เจ้าของบันทึกช่องได้", s_ == 200 and d.get("lead", {}).get("occupation") == "พนักงานบริษัท", (s_, d.get("error")))
     s_, d = J(SB1, "/connect/api/lead", {"id": o1.id, "field": "occupation", "value": "แอบแก้"})
@@ -719,10 +742,20 @@ try:
     ck("★ คิวรอรับ แก้ข้อมูลลีดไม่ได้", s_ == 403, s_)
     leak3 = [pth for pth in ("/connect/api/chat?id=%d" % o1.id,) if leak.search(SA1.get(pth, secure=True).content.decode())]
     ck("ข้อมูลลีดไม่มี LINE user id หลุด", not leak3, leak3)
-    # ลูกค้าจำลองไม่ไปค้นใบจ่ายลีด/ไม่เติมอะไร
+    # ลูกค้าจำลอง: เติมจากแชทของตัวเอง + ค่าตั้งต้นได้ (เจ้าของทดสอบระบบเติมอัตโนมัติด้วยลูกค้าจำลอง)
+    #   แต่ "ไม่ค้นใบจ่ายลีด" — เบอร์ทดสอบอาจไปตรงใบของลูกค้าจริงแล้วดึงข้อมูลจริงมาปน
+    GroupChat.objects.create(chat_type="group", group_id="C" + "9" * 32, group_name="ห้องจ่ายเบอร์ ทดสอบ",
+                             message_id="slip-real-9999", sender_id="U%032x" % 77, direction="in", msg_type="text",
+                             text="Ac Lead No. NLD10-9001\nชื่อลูกค้า : ลูกค้าจริงคนหนึ่ง\nเบอร์โทร : 0899999999\n@เอหนึ่ง",
+                             sent_at=timezone.now())
     so = C.sim_customer("โทร 0899999999 สนใจแคมรี่")
     sl = C.autofill(ChatOwner.objects.select_related("profile").get(pk=so.id))
-    ck("ลูกค้าจำลอง = ไม่เติมอัตโนมัติ (ไม่ปนข้อมูลจริง)", sl.phone == "" and sl.code == "", (sl.phone, sl.code))
+    ck("★ ลูกค้าจำลอง = เติมจากแชทของตัวเอง (เบอร์ · รุ่นรถ · ช่องทาง · สาขา)",
+       sl.phone == "0899999999" and sl.car_model == "Camry" and sl.channel == "LINE@" and sl.branch == "ชลบุรี",
+       (sl.phone, sl.car_model, sl.channel, sl.branch))
+    ck("★ ลูกค้าจำลอง = ไม่ดึงใบจ่ายลีดของลูกค้าจริงมาปน", sl.code == "" and sl.customer_name == "",
+       (sl.code, sl.customer_name))
+    GroupChat.objects.filter(message_id="slip-real-9999").delete()   # ไม่ให้เลข 9001 ไปปนเทสต์เลขรันข้างล่าง
     C.sim_clear()
     ck("ล้างข้อมูลทดสอบ = ข้อมูลลีดของลูกค้าจำลองหายตาม", not ChatLead.objects.filter(pk=sl.pk).exists())
 
@@ -816,6 +849,143 @@ try:
     ld2 = ChatLead.objects.get(chat_id=o2.id)
     ck("★ โอนไม่สำเร็จ = ไม่เก็บเลขค้าง", ok_ is False and ld2.code == "" and ld2.assigned_at is None,
        (ok_, msg_, ld2.code))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[19] dropdown ของฟอร์มลีด = ชุดเดียวกับชีตลีด (อ่านแท็บเดือนล่าสุด ทุกชั่วโมง)")
+    from urllib.parse import unquote
+    from dashboard.services.fetch_dashboard import bangkok_now
+    from dashboard.services.google_sheets import LEADS_COL, _THAI_MONTHS
+    nb = bangkok_now()
+    be2 = (nb.year + 543) % 100
+    CUR = "%s %d" % (_THAI_MONTHS[nb.month - 1], be2)
+    nm = nb.month % 12 + 1
+    NXT = "%s %d" % (_THAI_MONTHS[nm - 1], be2 + (1 if nm == 1 else 0))          # เดือนหน้า = อนาคต ห้ามเลือก
+    pm = (nb.month - 2) % 12 + 1
+    PRV = "%s %d" % (_THAI_MONTHS[pm - 1], be2 - (1 if pm == 12 else 0))
+    # หัวตาราง "สลับตำแหน่ง" จากของจริง (สาขาอยู่คอลัมน์ F) — ต้องจับด้วยชื่อหัวตาราง ไม่ใช่ตำแหน่ง
+    HDR = ["ว/ด/ป", "เบอร์โทร", "เวลา", "Code", "เซลล์", "สาขา", "Admin", "ช่องทาง", "ทีมไลฟ์", "type", "ADS",
+           "รถลูกค้าถาม", "CAR / สูตร", "แจ้งหลักฐาน\nการโทร", "FOCUS"]
+    LISTS = {4: ["เอหนึ่ง", "เอสอง"], 5: ["ชลบุรี", "เทพารักษ์ "], 6: ["เฟิร์น", "หมิว", "แอดมินใหม่"],
+             7: ["เพจบ้านเก่า", "LINE@", "Line@ / TIKTOK"], 8: ["Live Sale"], 9: ["Very Hot", "Hot", "Moderate"],
+             12: ["Camry", "City 5 ประตู", "Civic FE", "Civic FC", "ลูกค้าไม่ตอบ", "Benz"],
+             13: ["ส่งแล้ว", "ยังไม่ส่ง", "รอหลักฐาน"]}
+    SELL = ["เอหนึ่ง"] * 12 + ["เอสอง"] * 10 + ["บี"] * 200
+    BRAN = ["เทพารักษ์"] * 12 + ["ชลบุรี", "เทพารักษ์"] * 5 + ["ชลบุรี"] * 200
+    SEEN = []
+
+    def _route(url):
+        u = unquote(url)
+        SEEN.append(u)
+        if "fields=sheets.properties.title" in u:
+            return _R(200, {"sheets": [{"properties": {"title": t}} for t in ("รวม sheet", PRV, " " + CUR, NXT)]})
+        if "values:batchGet" in u:
+            return _R(200, {"valueRanges": [{"values": [[s] for s in SELL]}, {"values": [[b] for b in BRAN]}]})
+        if "includeGridData=true" in u:
+            vals = []
+            for ci in range(len(HDR)):
+                if ci in LISTS:
+                    vals.append({"dataValidation": {"condition": {"type": "ONE_OF_LIST", "values": [
+                        {"userEnteredValue": v} for v in LISTS[ci]]}, "showCustomUi": True}})
+                elif ci == 14:                                    # FOCUS = dropdown ที่อ้างช่วงเซลล์
+                    vals.append({"dataValidation": {"condition": {"type": "ONE_OF_RANGE", "values": [
+                        {"userEnteredValue": "='ตั้งค่า'!A1:A2"}]}}})
+                else:
+                    vals.append({})
+            return _R(200, {"sheets": [{"data": [{"rowData": [{"values": vals}]}]}]})
+        if "/values/" in u and u.endswith("!1:1"):
+            return _R(200, {"values": [HDR]})
+        if "/values/'ตั้งค่า'!A1:A2" in u:
+            return _R(200, {"values": [["FOCUS"], ["Concentrate "]]})
+        return _R(404, {"error": "unknown " + u[-60:]})
+
+    _real_creds = _GS._get_credentials
+    _GS._get_credentials = lambda: type("Cr", (), {"token": "fake-token"})()
+    SHEET_ROUTE[0] = _route
+    try:
+        got = _REAL_FLD()
+        cols = got.get("columns") or {}
+        ck("เลือกแท็บเดือนล่าสุด (ข้ามเดือนหน้า/เดือนก่อน · ตัดช่องว่างชื่อแท็บ)", got.get("tab") == CUR, got.get("tab"))
+        ck("★ จับคอลัมน์ด้วยชื่อหัวตาราง (สาขาอยู่ F ก็ยังได้) + ตัดช่องว่างท้ายตัวเลือก",
+           cols.get(str(LEADS_COL.branch)) == ["ชลบุรี", "เทพารักษ์"], cols.get(str(LEADS_COL.branch)))
+        ck("dropdown แบบอ้างช่วงเซลล์ (FOCUS) ก็อ่านได้", cols.get(str(LEADS_COL.focus)) == ["FOCUS", "Concentrate"],
+           cols.get(str(LEADS_COL.focus)))
+        ck("สาขาต่อเซลล์: ชัด (≥90%) เท่านั้น · ครึ่งๆ ไม่เดา",
+           got.get("branchBySeller") == {"เอหนึ่ง": "เทพารักษ์", "บี": "ชลบุรี"}, got.get("branchBySeller"))
+        ck("สาขาภาพรวม = สาขาที่ลีดเกือบทั้งหมดไป", got.get("branchTop") == "ชลบุรี", got.get("branchTop"))
+        grid = [u for u in SEEN if "includeGridData" in u]
+        bget = [u for u in SEEN if "values:batchGet" in u]
+        ck("★ ไม่ดึงข้อมูลลูกค้า: ขอแค่กฎ dropdown + หัวตาราง + คอลัมน์ เซลล์/สาขา",
+           grid and all("fields=sheets(data(rowData(values(dataValidation))))" in u for u in grid)
+           and bget and all(("!E2:E" in u and "!F2:F" in u) for u in bget)
+           and not any("formattedValue" in u for u in SEEN), SEEN[-3:])
+
+        # เก็บลง KV → ฟอร์มใช้ชุดใหม่
+        _GS.fetch_lead_dropdowns = _REAL_FLD
+        res = C.refresh_dropdowns(force=True)
+        ck("อ่านชีตแล้วเก็บไว้", res.get("dropdowns") == CUR, res)
+        dd = C.dropdowns()
+        ck("ฟอร์มใช้ตัวเลือกชุดใหม่จากชีต", dd["fields"].get("admin_name") == ["เฟิร์น", "หมิว", "แอดมินใหม่"]
+           and dd.get("fallback") is False, dd["fields"].get("admin_name"))
+        ck("คอลัมน์ที่ฟอร์มไม่มีช่อง (เซลล์) ไม่ถูกเอามาเป็นตัวเลือก", "sales_rep" not in dd["fields"]
+           and all(f in C.LEAD_FIELDS for f in dd["fields"]), list(dd["fields"]))
+        ck("เทียบค่าแบบไม่สนช่องว่าง/ตัวพิมพ์", C.dd_pick("admin_name", " แอดมินใหม่ ") == "แอดมินใหม่"
+           and C.dd_pick("admin_name", "ไม่มีคนนี้") == "")
+        ck("รุ่นรถตรงตัวเลือก → ได้ชื่อตามชีต", (C.car_in("มี civic fe ไหมครับ") or ("",))[0] == "Civic FE",
+           C.car_in("มี civic fe ไหมครับ"))
+        ck("★ รุ่นกำกวม (city เฉยๆ) → ได้แค่ข้อความ ไม่เดาว่า 4/5 ประตู",
+           (C.car_in("honda city ปี 20 ครับ") or ("x",))[0] == "", C.car_in("honda city ปี 20 ครับ"))
+        ck("ตัวเลือกที่ไม่ใช่ชื่อรุ่น (ลูกค้าไม่ตอบ) ไม่ถูกใช้จับรถ", "ลูกค้าไม่ตอบ" not in C._vocab()["names"].values())
+
+        # สาขาตามเซลล์เจ้าของ แทนค่าตั้งต้นของระบบ — แต่ไม่แทนที่คนเลือก
+        o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
+        ck("(ก่อนหน้า) สาขาเป็นค่าตั้งต้นของระบบ", C.lead_of(o1).auto.get("branch") == "ระบบ", C.lead_of(o1).auto)
+        ldb = C.autofill(o1)
+        ck("★ สาขา = สาขาของเซลล์ที่รับลูกค้า (แทนค่าตั้งต้นได้)", ldb.branch == "เทพารักษ์", ldb.branch)
+        C.save_lead_field(o1, "branch", "ชลบุรี", by="เอหนึ่ง")
+        ldb = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id))
+        ck("★ คนเลือกสาขาเองแล้ว ระบบไม่ทับ", ldb.branch == "ชลบุรี" and ldb.auto.get("branch") == "คน", ldb.branch)
+
+        s_, d = J(ADM, "/connect/api/chat?id=%d" % o1.id)
+        lo = d.get("leadOptions") or {}
+        ck("หน้าเว็บได้ตัวเลือกชุดใหม่ + บอกแท็บที่อ่าน", "แอดมินใหม่" in (lo.get("dropdowns") or {}).get("admin_name", [])
+           and (lo.get("source") or {}).get("tab") == CUR and (lo.get("source") or {}).get("fallback") is False, lo.get("source"))
+
+        # ค่าที่ระบบเคยใส่ไว้ก่อนมี dropdown ("LINE OA") → แก้ให้ตรงตัวเลือกของชีต · ค่าจากคน/ใบจ่ายลีด ไม่แตะ
+        def _set_ch(src):
+            l_ = C.lead_of(o1)
+            l_.channel = "LINE OA"
+            l_.auto = dict(l_.auto or {}, channel=src)
+            l_.save()
+            return C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id))
+        ldb = _set_ch("ระบบ")
+        ck("★ ค่าเก่าของระบบที่ไม่อยู่ในตัวเลือกชีต (LINE OA) → แก้เป็น LINE@",
+           ldb.channel == "LINE@" and ldb.auto.get("channel") == "ระบบ", (ldb.channel, ldb.auto.get("channel")))
+        for src_ in ("คน", "ใบจ่ายลีด"):
+            ldb = _set_ch(src_)
+            ck("ค่าที่มาจาก%s ไม่ถูกแก้ แม้ไม่อยู่ในตัวเลือกชีต" % src_, ldb.channel == "LINE OA", ldb.channel)
+
+        # ชีตอ่านไม่ได้ = ไม่ทับของเดิม + เว้น 15 นาที
+        _GS.fetch_lead_dropdowns = _no_sheet
+        res = C.refresh_dropdowns(force=True)
+        ck("อ่านไม่ได้ = แจ้งว่าล้ม", res.get("dropdowns") == "fail", res)
+        ck("★ อ่านไม่ได้ = ตัวเลือกเดิมยังอยู่ (ไม่กลายเป็นช่องพิมพ์เปล่า)",
+           C.dropdowns()["fields"].get("admin_name") == ["เฟิร์น", "หมิว", "แอดมินใหม่"])
+        ck("เพิ่งล้ม = ยังไม่ลองใหม่ (เว้น 15 นาที)", C._dd_due() is False)
+        st_ = C._dd_state()
+        old = (timezone.now() - timedelta(hours=2)).isoformat()
+        cache_store.set_kv(C.DD_KEY, dict(st_, at=old, failAt=(timezone.now() - timedelta(minutes=20)).isoformat()))
+        ck("อ่านครั้งล่าสุดเกิน 1 ชม. + ล้มเกิน 15 นาที = ถึงเวลาอ่านใหม่", C._dd_due() is True)
+        cache_store.set_kv(C.DD_KEY, dict(st_, at=old, failAt=(timezone.now() - timedelta(minutes=5)).isoformat()))
+        ck("ล้มไปไม่ถึง 15 นาที = ยังไม่อ่าน", C._dd_due() is False)
+        cache_store.set_kv(C.DD_KEY, dict(st_, at=old, failAt=""))
+        _GS.fetch_lead_dropdowns = _REAL_FLD
+        res = C.tick()
+        ck("cron tick อ่าน dropdown ใหม่เมื่อถึงเวลา", res.get("dropdowns") == CUR, res)
+        ck("tick รอบถัดไปไม่อ่านซ้ำ (ยังไม่ครบชั่วโมง)", "dropdowns" not in C.tick())
+    finally:
+        SHEET_ROUTE[0] = None
+        _GS._get_credentials = _real_creds
+        _GS.fetch_lead_dropdowns = _no_sheet
 
 finally:
     _runner.teardown_databases(_old)
