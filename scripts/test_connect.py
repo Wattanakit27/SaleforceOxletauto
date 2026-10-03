@@ -188,7 +188,9 @@ try:
     ck("ยังไม่มีเจ้าของ", o1.owner_id is None)
     ck("เริ่มรอบรอ + เส้นตาย = +5 นาที", o1.awaiting_since == t0 and o1.due_at == t0 + timedelta(minutes=5),
        (o1.awaiting_since, o1.due_at))
-    ck("ทีมของรอบนี้ = เวรวันนี้ (A)", o1.team == "A", o1.team)
+    #  ทีม = เวรของ "วันที่ของเส้นตาย" — รันเทสต์ตอน 23:58 เส้นตายข้ามเที่ยงคืนไปเป็นเวรวันรุ่งขึ้น (ถูกต้อง)
+    ck("ทีมของรอบนี้ = เวรของวันที่ครบเส้นตาย",
+       o1.team == C.duty_team(timezone.localtime(o1.due_at).date()), (o1.team, o1.due_at))
     o1b = C.note_customer_message(P1.user_id, t0 + timedelta(minutes=1), "ผ่อนเดือนละเท่าไหร่")
     ck("ส่งรัวๆ = รอบเดิม เส้นตายไม่เลื่อน", o1b.due_at == t0 + timedelta(minutes=5))
     ck("ข้อความล่าสุดอัปเดต", o1b.last_preview == "ผ่อนเดือนละเท่าไหร่" and o1b.last_dir == "in")
@@ -630,6 +632,99 @@ try:
     ck("ไม่เหลือบัญชีจำลองในทะเบียน", not Employee.objects.filter(nickname__startswith="ทดสอบเซลล์").exists())
     ck("สถิติไม่เหลือชื่อบัญชีจำลอง", "ทดสอบเซลล์ A" not in {r["name"] for r in C.stats(30)["rows"]})
     ck("ลูกค้าจริงยังอยู่ครบ", ChatOwner.objects.filter(pk__in=[o1.id, o2.id]).count() == 2)
+
+    print("[17] ข้อมูลลีดของลูกค้า — ช่องเดียวกับชีตลีด + เติมอัตโนมัติ + ใบจ่ายลีด")
+    from checkout.models import ChatLead
+    from checkout.leadgroup import parse_leadsheet
+    o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
+    ChatLead.objects.filter(chat=o1).delete()
+    C.assign(o1.id, A2, by="แอดมิน")                    # โอนจริง (มีประวัติ) แล้วโอนกลับ
+    C.assign(o1.id, A1, by="แอดมิน")
+    o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
+    GroupChat.objects.create(chat_type="user", message_id="seed-car", sender_id=P1.user_id, direction="in",
+                             msg_type="text", text="สนใจแคมรี่ปี 20 ครับ", sent_at=timezone.now())
+    ld = C.autofill(o1)
+    ck("เติมเบอร์จากแชท", ld.phone == "0902483727" and ld.auto.get("phone") == "แชท", (ld.phone, ld.auto))
+    ck("เติมรุ่นรถจากแชท (ชื่อไทย → ชื่อแบบชีต)", ld.car_model == "Camry" and "แคมรี่" in ld.car_text,
+       (ld.car_model, ld.car_text))
+    ck("ช่องทาง = LINE (ค่าตั้งต้นของระบบ)", ld.channel == "LINE OA" and ld.auto.get("channel") == "ระบบ", ld.channel)
+    ck("Admin = คนที่โอนลูกค้าให้", ld.admin_name == "แอดมิน", ld.admin_name)
+    # ใบจ่ายลีดในกลุ่มจ่ายเบอร์ — โพสต์หลังจากเติมรอบแรกแล้ว
+    slip = ("Ac Lead No. TLD9-7376\nAds : รถครอบครัว 7 ที่นั่ง\nชื่อ Account: Oxlet ช่องหลัก\n"
+            "ชื่อลูกค้า : คุณสมชาย\nID LINE : somchai99\nชื่อไลน์ : อะไรก็ได้\nเบอร์โทร : 090-248-3727\n"
+            "ช่องทาง : TikTok\nรถ : Fortuner\nไลฟ์ : -\nเพิ่มเติม : ผ่อนไม่เกิน 12000\n@เอหนึ่ง")
+    GroupChat.objects.create(chat_type="group", group_id="C" + "9" * 32, group_name="ห้องจ่ายเบอร์ ทดสอบ",
+                             message_id="slip-1", sender_id="U%032x" % 77, direction="in", msg_type="text",
+                             text=slip, sent_at=timezone.now())
+    ld = C.autofill(o1)
+    ck("หาใบจ่ายลีดซ้ำไม่ถี่ (เว้น 30 นาที)", ld.code == "", ld.code)
+    a = dict(ld.auto); a.pop("_slip_at", None); ChatLead.objects.filter(pk=ld.pk).update(auto=a)
+    o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
+    ld = C.autofill(o1)
+    ck("★ เบอร์ตรงใบจ่ายลีด → ได้ Code", ld.code == "TLD9-7376", ld.code)
+    ck("ได้ ADS / Account / ชื่อลูกค้า / ID LINE จากใบ", ld.ads == "รถครอบครัว 7 ที่นั่ง" and ld.account == "Oxlet ช่องหลัก"
+       and ld.customer_name == "คุณสมชาย" and ld.line_id == "somchai99", (ld.ads, ld.account, ld.customer_name, ld.line_id))
+    ck("★ ช่องทางจากใบแทนค่าตั้งต้นของระบบได้", ld.channel == "TikTok" and ld.auto.get("channel") == "ใบจ่ายลีด", ld.channel)
+    ck("★ รถที่จับได้จากแชทไม่ถูกใบทับ", ld.car_model == "Camry" and "แคมรี่" in ld.car_text, ld.car_text)
+    ck("จดว่ามาจากใบจ่ายลีดกลุ่มไหน", (ld.auto.get("_slip") or {}).get("group") == "ห้องจ่ายเบอร์ ทดสอบ", ld.auto)
+    # คนแก้แล้ว ระบบไม่ทับ
+    ok, msg = C.save_lead_field(o1, "phone", "081-111-2222", by="เอหนึ่ง")
+    ck("แก้เบอร์ → ปรับรูปแบบให้", ok and ChatLead.objects.get(pk=ld.pk).phone == "0811112222", (ok, msg))
+    ok, msg = C.save_lead_field(o1, "phone", "ไม่ใช่เบอร์")
+    ck("เบอร์ผิดรูปแบบ = ปฏิเสธ", not ok and "เบอร์" in msg, msg)
+    ok, msg = C.save_lead_field(o1, "sql_injection", "x")
+    ck("ช่องที่ไม่รู้จัก = ปฏิเสธ", not ok, msg)
+    ok, msg = C.save_lead_field(o1, "code", "X" * 40)
+    ck("ยาวเกิน = ปฏิเสธ", not ok and "ยาวเกิน" in msg, msg)
+    C.save_lead_field(o1, "channel", "", by="เอหนึ่ง")                  # คนลบช่องทางทิ้งเอง
+    o1 = ChatOwner.objects.select_related("profile", "owner").get(pk=o1.id)
+    ld = C.autofill(o1)
+    ck("★ คนลบช่องไหนทิ้ง ระบบไม่เติมกลับ", ld.channel == "" and ld.auto.get("channel") == "คน", ld.channel)
+    ck("★ คนแก้เบอร์แล้ว ระบบไม่ทับด้วยเบอร์จากแชท", ld.phone == "0811112222", ld.phone)
+    ok, _ = C.save_lead_field(o1, "tags", ["ผ่อนได้", "ผ่อนได้", " ด่วน ", ""])
+    ck("แท็ก: ตัดซ้ำ/ช่องว่าง", ok and ChatLead.objects.get(pk=ld.pk).tags == ["ผ่อนได้", "ด่วน"],
+       ChatLead.objects.get(pk=ld.pk).tags)
+    # ใบจ่ายลีดแบบย่อ — ระบบกลุ่มจ่ายเบอร์อ่านกลับได้
+    st = C.slip_text(o1)
+    back = parse_leadsheet(st) or {}
+    ck("ใบจ่ายลีดย่อ: อ่านกลับด้วยตัวแกะของกลุ่มจ่ายเบอร์ได้", back.get("lead_code") == "TLD9-7376"
+       and back.get("phone") == "0811112222" and back.get("assigned") == "เอหนึ่ง", back)
+    ck("ใบจ่ายลีดย่อ: ไลฟ์ว่าง = ขีด", "ไลฟ์ : -" in st, st)
+    # ผ่านหน้าเว็บ
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % o1.id)
+    ck("เจ้าของเปิดแชท = ได้ข้อมูลลีด + แก้ได้", s_ == 200 and d.get("lead", {}).get("code") == "TLD9-7376"
+       and d.get("leadEditable") is True, (s_, d.get("leadEditable")))
+    lj = d.get("lead") or {}
+    ck("ช่องอัตโนมัติมีครบ (ว/ด/ป · เซลล์ · ติดต่อ · จำนวนอัพเดท · อัพเดทล่าสุด)",
+       lj.get("leadAt") and lj.get("seller") == "เอหนึ่ง" and "updates" in lj and "lastUpdate" in lj, lj)
+    ck("มีตัวเลือกช่วยกรอก (type / ประเภทลูกค้า)", "Very Hot" in (d.get("leadOptions") or {}).get("types", [])
+       and "พนักงานบริษัท" in (d.get("leadOptions") or {}).get("customerTypes", []))
+    s_, d = J(SA1, "/connect/api/lead", {"id": o1.id, "field": "occupation", "value": "พนักงานบริษัท"})
+    ck("เจ้าของบันทึกช่องได้", s_ == 200 and d.get("lead", {}).get("occupation") == "พนักงานบริษัท", (s_, d.get("error")))
+    s_, d = J(SB1, "/connect/api/lead", {"id": o1.id, "field": "occupation", "value": "แอบแก้"})
+    ck("★ คนที่ไม่ใช่เจ้าของแก้ไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/lead", {"id": o1.id, "field": "customer_name", "value": "คุณสมชาย ใจดี"})
+    ck("แอดมินแก้ได้", s_ == 200, (s_, d.get("error")))
+    s_, d = J(ADM, "/connect/api/inbox?view=all")
+    ck("รายชื่อใช้ชื่อลูกค้าที่กรอก (แทนชื่อ LINE)", any(r["name"] == "คุณสมชาย ใจดี" for r in d.get("rows", [])))
+    s_, d = J(ADM, "/connect/api/inbox?view=all&q=0811112222")
+    ck("ค้นด้วยเบอร์ได้", [r["id"] for r in d.get("rows", [])] == [o1.id], [r["name"] for r in d.get("rows", [])])
+    s_, d = J(ADM, "/connect/api/inbox?view=all&q=TLD9-7376")
+    ck("ค้นด้วยเลขลีดได้", [r["id"] for r in d.get("rows", [])] == [o1.id], [r["name"] for r in d.get("rows", [])])
+    C.assign(o4.id, None, by="แอดมิน")
+    C.note_customer_message("U%032x" % 4, timezone.now(), "สวัสดีครับ")
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % o4.id)
+    ck("★ คิวรอรับ (preview) ไม่ได้ข้อมูลลีด", s_ == 200 and "lead" not in d, list(d))
+    s_, d = J(SA1, "/connect/api/lead", {"id": o4.id, "field": "phone", "value": "0812345678"})
+    ck("★ คิวรอรับ แก้ข้อมูลลีดไม่ได้", s_ == 403, s_)
+    leak3 = [pth for pth in ("/connect/api/chat?id=%d" % o1.id,) if leak.search(SA1.get(pth, secure=True).content.decode())]
+    ck("ข้อมูลลีดไม่มี LINE user id หลุด", not leak3, leak3)
+    # ลูกค้าจำลองไม่ไปค้นใบจ่ายลีด/ไม่เติมอะไร
+    so = C.sim_customer("โทร 0899999999 สนใจแคมรี่")
+    sl = C.autofill(ChatOwner.objects.select_related("profile").get(pk=so.id))
+    ck("ลูกค้าจำลอง = ไม่เติมอัตโนมัติ (ไม่ปนข้อมูลจริง)", sl.phone == "" and sl.code == "", (sl.phone, sl.code))
+    C.sim_clear()
+    ck("ล้างข้อมูลทดสอบ = ข้อมูลลีดของลูกค้าจำลองหายตาม", not ChatLead.objects.filter(pk=sl.pk).exists())
 
 finally:
     _runner.teardown_databases(_old)

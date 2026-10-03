@@ -142,7 +142,7 @@
   .cn-blank { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--t3); padding: 30px; line-height: 1.8; }
 
   /* ── แชท | โปรไฟล์ลูกค้า ── */
-  .cn-chat { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 270px; }
+  .cn-chat { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 300px; }
   .cn-chat.noside { grid-template-columns: minmax(0,1fr); }
   .cn-chat.noside .cn-side { display: none; }
   .cn-cmain { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -165,6 +165,32 @@
   .pf-need { padding: 7px 9px; border-radius: 8px; background: var(--bg2); margin-bottom: 6px; line-height: 1.5; }
   .pf-need b { display: block; }
   .pf-lock { color: var(--t3); line-height: 1.6; }
+  /* ฟอร์มข้อมูลลีด (ช่องเดียวกับชีตลีด) */
+  .pf-fld { margin: 7px 0; }
+  .pf-lab { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--t3); font-size: 12px; margin-bottom: 3px; }
+  .pf-lab > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .pf-auto { font-size: 10.5px; padding: 0 5px; border-radius: 5px; background: var(--blue-bg); color: var(--blue); white-space: nowrap; }
+  .pf-fld input[type=text], .pf-fld input[type=tel], .pf-fld textarea {
+    width: 100%; padding: 6px 9px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
+  .pf-fld textarea { resize: vertical; min-height: 54px; line-height: 1.5; }
+  .pf-fld input:disabled, .pf-fld textarea:disabled { opacity: .75; }
+  .pf-fld.ok input, .pf-fld.ok textarea { border-color: var(--green); }
+  .pf-fld .bad { border-color: var(--red) !important; }
+  .pf-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+  .pf-name-row { display: flex; align-items: center; gap: 4px; justify-content: center; }
+  .pf-pen { border: 0; background: none; color: var(--green); cursor: pointer; font-size: 15px; padding: 2px 4px; }
+  .pf-name-in { width: 100%; padding: 5px 8px; border-radius: 7px; border: .5px solid var(--blue); background: var(--bg); text-align: center; font-weight: 700; }
+  .pf-tags { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 4px; }
+  .pf-tag { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; border-radius: 6px; background: var(--green-bg);
+            color: var(--green); font-size: 12px; font-weight: 700; }
+  .pf-tag button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0; font-size: 13px; line-height: 1; }
+  .pf-tag-in { width: 110px; padding: 2px 8px; border-radius: 6px; border: .5px dashed var(--green); background: none; color: var(--green);
+               font-size: 12px; font-weight: 700; }
+  .pf-phs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .pf-phc { border: .5px solid var(--bd2); background: var(--bg); border-radius: 6px; padding: 1px 7px; font-size: 12px; cursor: pointer; color: var(--t2); }
+  .pf-slip pre { white-space: pre-wrap; word-break: break-word; background: var(--bg2); border-radius: 8px; padding: 8px 10px;
+                 font-size: 12px; line-height: 1.6; margin: 6px 0; font-family: inherit; }
+  .pf-src { font-size: 12px; color: var(--blue); background: var(--blue-bg); border-radius: 7px; padding: 5px 8px; margin-bottom: 6px; }
   @media (max-width: 1180px) {
     .cn-chat { grid-template-columns: minmax(0,1fr); }
     .cn-side { display: none; }
@@ -444,6 +470,7 @@
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
+    (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
     if (ADMIN && r.team) tags.push(teamTag(r.team));
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
     const claimBtn = (!ADMIN && !r.owner && S.onDuty) ? `<button class="btn pri sm" data-claim="${r.id}">รับ</button>` : '';
@@ -607,47 +634,190 @@
     const el = document.querySelector('.cn-chat'); if (el) el.classList.toggle('noside', !S.side);
   }
 
-  function profileHtml(p, r) {
-    if (!p) return '';
-    let x = `<div class="pf-top">${avHtml(p.name, p.pic, 'lg')}
-      <div class="pf-name">${h(p.name)}</div>
-      ${p.lineName && p.lineName !== p.name ? `<div class="pf-line">ชื่อใน LINE: ${h(p.lineName)}</div>` : ''}
-      ${p.status ? `<div class="pf-status">“${h(p.status)}”</div>` : ''}
-    </div>`;
-    x += `<div class="pf-sec">
-      <div class="pf-kv"><span>ทักครั้งแรก</span><span>${h(fmtFull(p.firstSeen)) || '–'}</span></div>
-      <div class="pf-kv"><span>ล่าสุด</span><span>${h(fmtWhen(p.lastSeen)) || '–'}</span></div>
-      <div class="pf-kv"><span>ข้อความทั้งหมด</span><span>${p.msgs}</span></div>
-      ${p.language ? `<div class="pf-kv"><span>ภาษา</span><span>${h(LANG[p.language] || p.language)}</span></div>` : ''}
-      <div class="pf-kv"><span>ดูแลโดย</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>
-      ${p.claimedAt ? `<div class="pf-kv"><span>รับเมื่อ</span><span>${h(fmtFull(p.claimedAt))}</span></div>` : ''}
-    </div>`;
-    if (!p.full) {
-      return x + `<div class="pf-sec pf-lock">เบอร์โทรและรถที่ลูกค้าหา เห็นได้หลังกด "รับลูกค้าคนนี้"</div>`;
+  // ช่องของฟอร์ม — ชื่อ/ลำดับตามชีตลีด (คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py)
+  //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด) · check · dl-xxx = มีตัวเลือกช่วยกรอก
+  const LEAD_UI = [
+    { sec: 'ลูกค้า', rows: [[['customer_name', 'ชื่อลูกค้า']], [['phone', 'เบอร์โทร', 'tel'], ['line_id', 'ID LINE']]] },
+    { sec: 'ข้อมูลลีด', rows: [
+      [['code', 'Code (เลขลีด)'], ['lead_type', 'type', 'dl-type']],
+      [['channel', 'ช่องทาง', 'dl-ch'], ['branch', 'สาขา', 'dl-br']],
+      [['ads', 'ADS']], [['account', 'ชื่อ Account']],
+      [['admin_name', 'Admin'], ['live_team', 'ทีมไลฟ์']],
+      [['focus', 'FOCUS'], ['call_proof', 'แจ้งหลักฐานการโทร', 'check']],
+      [['car_text', 'รถลูกค้าถาม']], [['car_model', 'CAR / สูตร']],
+      [['fill_note', 'มากรอกชีตกันเถอะ', 'area']],
+    ] },
+    { sec: 'โปรไฟล์ลูกค้า', rows: [
+      [['occupation', 'อาชีพ'], ['income', 'รายได้']],
+      [['job_tenure', 'อายุงาน'], ['pay_history', 'ประวัติการผ่อน']],
+      [['customer_type', 'ประเภทลูกค้า', 'dl-ct']],
+      [['admin_profile', 'PROFILE ลูกค้า จาก ADMIN', 'area']],
+    ] },
+  ];
+
+  function leadField(L, f, label, kind, ed, sfx) {
+    const A = L.auto || {}, v = L[f] || '';
+    const badge = (A[f] && A[f] !== 'คน') ? `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])} — แก้ได้">จาก${h(A[f])}</span>` : '';
+    const dis = ed ? '' : ' disabled';
+    let inp;
+    if (kind === 'area') inp = `<textarea data-f="${f}" rows="2"${dis}>${h(v)}</textarea>`;
+    else if (kind === 'check') inp = `<label style="display:flex;gap:6px;align-items:center;padding:5px 0"><input type="checkbox" data-f="${f}"${v ? ' checked' : ''}${dis}> ส่งแล้ว</label>`;
+    else {
+      const dl = (kind || '').startsWith('dl-') ? ` list="${kind}-${sfx}"` : '';
+      inp = `<input type="${kind === 'tel' ? 'tel' : 'text'}" data-f="${f}" value="${h(v)}"${dl}${dis} autocomplete="off">`;
     }
-    const phones = p.phones || [];
-    x += `<div class="pf-sec"><div class="pf-h">เบอร์ที่ลูกค้าพิมพ์มาในแชท</div>${phones.length ? phones.map(d =>
-      `<div class="pf-ph"><a class="num" href="tel:${h(d)}">${h(fmtPhone(d))}</a>
-        <a class="btn sm" href="tel:${h(d)}">โทร</a><button class="btn sm" data-copy="${h(d)}">คัดลอก</button></div>`).join('')
-      : '<div class="pf-lock">ยังไม่เจอเบอร์ในแชท</div>'}</div>`;
-    const needs = p.needs || [];
-    x += `<div class="pf-sec"><div class="pf-h">รถที่ลูกค้าหา</div>${needs.length ? needs.map(n =>
-      `<div class="pf-need"><b>${h(n.car)}</b>${n.detail ? h(n.detail) + '<br>' : ''}<span style="color:var(--t3)">${h(n.status)}${n.waiting ? ' · รอรถที่ตรงสเปก' : ''}</span></div>`).join('')
-      : '<div class="pf-lock">ยังไม่มีบันทึก</div>'}</div>`;
-    return x;
+    return `<div class="pf-fld"><div class="pf-lab"><span>${h(label)}</span>${badge}</div>${inp}</div>`;
   }
 
-  function paintProfile() {
-    const d = S.chat; if (!d) return;
-    const html = profileHtml(d.profile, d.row);
-    ['cn-side', 'cn-prof-m-body'].forEach(id => {
-      const el = $(id); if (!el) return;
-      el.innerHTML = html;
-      el.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
-        try { navigator.clipboard.writeText(b.dataset.copy); toast('คัดลอกเบอร์แล้ว'); }
-        catch (e) { toast(b.dataset.copy); }
+  function profileHtml(d, sfx) {
+    const p = d.profile, r = d.row, L = d.lead;
+    if (!p) return '';
+    const ed = !!d.leadEditable;
+    const shownName = (L && L.customer_name) || p.name;
+    let x = `<div class="pf-top">${avHtml(shownName, p.pic, 'lg')}
+      <div class="pf-name-row"><span class="pf-name">${h(shownName)}</span>${L && ed ? `<button class="pf-pen" data-act="name" title="แก้ชื่อลูกค้า">✎</button>` : ''}</div>
+      ${p.lineName && p.lineName !== shownName ? `<div class="pf-line">ชื่อใน LINE: ${h(p.lineName)}</div>` : ''}
+      ${p.status ? `<div class="pf-status">\u201c${h(p.status)}\u201d</div>` : ''}`;
+    if (L) {
+      x += `<div class="pf-tags">${(L.tags || []).map(t => `<span class="pf-tag">${h(t)}${ed ? `<button data-tag-del="${h(t)}" title="เอาแท็กออก">×</button>` : ''}</span>`).join('')}
+        ${ed ? `<input class="pf-tag-in" data-act="tag" placeholder="+ ใส่แท็ก" list="dl-tag-${sfx}">` : ''}</div>`;
+    }
+    x += `</div>`;
+    x += `<div class="pf-sec">
+      <div class="pf-kv"><span>ผู้รับผิดชอบ</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>`;
+    if (!p.full) {
+      return x + `<div class="pf-kv"><span>ทักครั้งแรก</span><span>${h(fmtFull(p.firstSeen)) || '–'}</span></div></div>
+        <div class="pf-sec pf-lock">ข้อมูลลีด เบอร์โทร และรถที่ลูกค้าหา เห็นได้หลังกด "รับลูกค้าคนนี้"</div>`;
+    }
+    // ช่องที่ระบบคำนวณเอง (ไม่ให้แก้ — แก้แล้วจะไม่ตรงกับของจริง)
+    x += `<div class="pf-kv"><span>ว/ด/ป · เวลา</span><span>${h(fmtFull(L ? L.leadAt : p.firstSeen)) || '–'}</span></div>
+      ${L ? `<div class="pf-kv"><span>วันเวลาที่ติดต่อ</span><span>${h(fmtFull(L.contactAt)) || 'ยังไม่ได้ตอบ'}</span></div>
+      <div class="pf-kv"><span>จำนวนอัพเดท</span><span>${L.updates}</span></div>
+      <div class="pf-kv"><span>อัพเดทล่าสุด</span><span>${h(fmtFull(L.lastUpdate)) || '–'}</span></div>` : ''}
+      <div class="pf-kv"><span>ข้อความทั้งหมด</span><span>${p.msgs}</span></div>
+      ${p.language ? `<div class="pf-kv"><span>ภาษา</span><span>${h(LANG[p.language] || p.language)}</span></div>` : ''}
+    </div>`;
+    if (!L) {
+      return x + (d.leadError ? `<div class="pf-sec pf-lock" style="color:var(--red)">${h(d.leadError)}</div>` : '');
+    }
+    const O = d.leadOptions || {};
+    const dls = [['dl-type', O.types], ['dl-ch', O.channels], ['dl-br', O.branches], ['dl-ct', O.customerTypes], ['dl-tag', O.tags]]
+      .map(([id, arr]) => `<datalist id="${id}-${sfx}">${(arr || []).map(v => `<option value="${h(v)}">`).join('')}</datalist>`).join('');
+    if (L.slip) {
+      x += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
+    }
+    if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
+    LEAD_UI.forEach(sec => {
+      x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>`;
+      sec.rows.forEach(row => {
+        const cells = row.map(([f, lab, kind]) => leadField(L, f, lab, kind, ed, sfx));
+        x += row.length > 1 ? `<div class="pf-g2">${cells.join('')}</div>` : cells[0];
+        // เบอร์ที่เจอในแชท — กดเพื่อใช้เป็นเบอร์หลัก
+        if (row.some(c => c[0] === 'phone')) {
+          const other = (p.phones || []).filter(n => n !== L.phone);
+          if (other.length && ed) x += `<div class="pf-phs"><span style="color:var(--t3);font-size:12px">ในแชท:</span>${other.map(n =>
+            `<button class="pf-phc" data-phone="${h(n)}" title="ใช้เบอร์นี้">${h(fmtPhone(n))}</button>`).join('')}</div>`;
+          if (L.phone) x += `<div class="pf-phs"><a class="btn sm" href="tel:${h(L.phone)}">โทร ${h(fmtPhone(L.phone))}</a></div>`;
+        }
       });
+      x += `</div>`;
     });
+    x += `<div class="pf-sec pf-slip"><div class="pf-h">ใบจ่ายลีด (ย่อ)</div>
+      <div class="pf-g2">${leadField(L, 'live', 'ไลฟ์', '', ed, sfx)}<div></div></div>
+      ${leadField(L, 'more', 'เพิ่มเติม', 'area', ed, sfx)}
+      <pre class="pf-slip-text">${h(L.slipText || '')}</pre>
+      <button class="btn sm" data-act="copy-slip">คัดลอกใบจ่ายลีด</button></div>`;
+    const needs = p.needs || [];
+    if (needs.length) {
+      x += `<div class="pf-sec"><div class="pf-h">รถที่ลูกค้าหา (จากระบบจับความต้องการ)</div>${needs.map(n =>
+        `<div class="pf-need"><b>${h(n.car)}</b>${n.detail ? h(n.detail) + '<br>' : ''}<span style="color:var(--t3)">${h(n.status)}${n.waiting ? ' · รอรถที่ตรงสเปก' : ''}</span></div>`).join('')}</div>`;
+    }
+    return x + dls;
+  }
+
+  // แผงโปรไฟล์ถูกเรียกวาดใหม่ทุก 6 วิ (ตามแชท) — **ห้ามวาดทับตอนกำลังพิมพ์ในฟอร์ม**
+  //   และไม่วาดถ้าข้อมูลไม่เปลี่ยน (กันกระพริบ/เลื่อนกลับบนสุด)
+  let _profSig = '';
+  function paintProfile(force) {
+    const d = S.chat; if (!d) return;
+    const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team]);
+    const act = document.activeElement;
+    const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA/.test(act.tagName);
+    if (!force && (sig === _profSig || typing)) return;
+    _profSig = sig;
+    ['cn-side', 'cn-prof-m-body'].forEach((id, i) => {
+      const el = $(id); if (!el) return;
+      const top = el.scrollTop;
+      el.innerHTML = profileHtml(d, i ? 'm' : 's');
+      el.scrollTop = top;
+      bindProfile(el);
+    });
+  }
+
+  function bindProfile(el) {
+    el.querySelectorAll('[data-f]').forEach(inp => {
+      inp.addEventListener('change', () => saveLead(inp.dataset.f,
+        inp.type === 'checkbox' ? (inp.checked ? 'ส่งแล้ว' : '') : inp.value, inp));
+      if (inp.tagName === 'INPUT' && inp.type !== 'checkbox') {
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); inp.blur(); } });
+      }
+    });
+    el.querySelectorAll('[data-phone]').forEach(b => b.onclick = () => saveLead('phone', b.dataset.phone, null, true));
+    el.querySelectorAll('[data-tag-del]').forEach(b => b.onclick = () => {
+      const L = S.chat.lead; saveLead('tags', (L.tags || []).filter(t => t !== b.dataset.tagDel), null, true);
+    });
+    const tg = el.querySelector('[data-act=tag]');
+    if (tg) tg.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      const t = tg.value.trim(); if (!t) return;
+      const L = S.chat.lead; saveLead('tags', (L.tags || []).concat([t]), null, true);
+    });
+    const nb = el.querySelector('[data-act=name]');
+    if (nb) nb.onclick = () => {
+      const row = nb.closest('.pf-name-row');
+      const cur = (S.chat.lead && S.chat.lead.customer_name) || S.chat.profile.name;
+      row.innerHTML = `<input class="pf-name-in" value="${h(cur)}" placeholder="ชื่อลูกค้า">`;
+      const ni = row.querySelector('input'); ni.focus(); ni.select();
+      let done = false;
+      const fin = (save) => { if (done) return; done = true;
+        if (save && ni.value.trim() !== cur) saveLead('customer_name', ni.value.trim(), null, true); else paintProfile(true); };
+      ni.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) fin(true); if (e.key === 'Escape') fin(false); });
+      ni.addEventListener('blur', () => fin(true));
+    };
+    const cp = el.querySelector('[data-act=copy-slip]');
+    if (cp) cp.onclick = () => {
+      const t = (S.chat.lead || {}).slipText || '';
+      try { navigator.clipboard.writeText(t); toast('คัดลอกใบจ่ายลีดแล้ว — วางในกลุ่มจ่ายเบอร์ได้เลย'); } catch (e) { toast('คัดลอกไม่ได้'); }
+    };
+  }
+
+  // บันทึกทีละช่อง (ไม่ใช่ทั้งฟอร์ม) — 2 คนแก้คนละช่องพร้อมกันไม่ทับกัน
+  async function saveLead(field, value, inp, repaint) {
+    const d = S.chat; if (!d) return;
+    const id = d.row.id;
+    const r = await api('/connect/api/lead', { id, field, value });
+    if (!S.chat || S.chat.row.id !== id) return;
+    if (!r.ok) {
+      toast(r.error || 'บันทึกไม่สำเร็จ', 4500);
+      if (inp) inp.classList.add('bad');
+      return;
+    }
+    d.lead = r.lead;
+    if (inp) {
+      inp.classList.remove('bad');
+      const box = inp.closest('.pf-fld'); if (box) { box.classList.add('ok'); setTimeout(() => box.classList.remove('ok'), 1500); }
+      const b = box && box.querySelector('.pf-auto'); if (b) b.remove();              // คนแก้แล้ว = ไม่ใช่ค่าอัตโนมัติ
+      // ช่องเดียวกันอีกฝั่ง (คอลัมน์ขวา/แบบพับบนมือถือ) + ใบจ่ายลีด อัปเดตตาม โดยไม่วาดทั้งแผง (คนอาจกำลังพิมพ์ช่องถัดไป)
+      document.querySelectorAll(`[data-f="${field}"]`).forEach(x => {
+        if (x === inp) return;
+        if (x.type === 'checkbox') x.checked = !!r.lead[field]; else x.value = r.lead[field] || '';
+      });
+      document.querySelectorAll('.pf-slip-text').forEach(x => { x.textContent = r.lead.slipText || ''; });
+      _profSig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team]);
+    }
+    if (repaint) paintProfile(true);
+    if (field === 'customer_name' || field === 'tags') loadInbox(false);   // ชื่อ/แท็กโชว์ในรายชื่อด้วย
   }
 
   function paintMsgs(keepScroll) {

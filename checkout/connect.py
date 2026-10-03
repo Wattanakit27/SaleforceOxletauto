@@ -31,7 +31,7 @@ from django.db import IntegrityError
 from django.db.models import F, Q
 from django.utils import timezone
 
-from .models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile
+from .models import ChatLead, ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile
 
 CFG_KEY = "connect_config"
 
@@ -789,9 +789,11 @@ def _iso(dt):
 def row_json(o, me=None, now=None) -> dict:
     now = now or timezone.now()
     p = o.profile
+    ld = lead_of(o, create=False)
     return {
         "id": o.id,
-        "name": p.show_name,
+        "name": (ld.customer_name if ld and ld.customer_name else p.show_name),
+        "tags": list(ld.tags or [])[:4] if ld else [],
         "preview": o.last_preview or "",
         "lastAt": _iso(o.last_at),
         "lastDir": o.last_dir or "",
@@ -808,6 +810,326 @@ def row_json(o, me=None, now=None) -> dict:
         "pic": o.picture_url or "",
         "sim": is_sim(p.user_id),
     }
+
+
+# ─────────────────────────────────────────────────────────────
+#  ข้อมูลลีดของลูกค้า — ช่องเดียวกับชีตลีด + ใบจ่ายลีด (3 ต.ค.69 · เจ้าของสั่ง)
+#  "เก็บข้อมูลตามนี้ และเก็บข้อมูลอัตโนมัติตามนี้"
+# ─────────────────────────────────────────────────────────────
+# ช่องที่คนแก้ได้ + ความยาวสูงสุด (ลำดับ = ลำดับในฟอร์ม) — แก้ช่องไหนต้องผ่านลิสต์นี้เท่านั้น
+LEAD_FIELDS = {
+    "customer_name": 120, "phone": 40, "line_id": 80,
+    "code": 32, "lead_type": 40, "ads": 120, "account": 120, "channel": 80, "branch": 60,
+    "live_team": 60, "admin_name": 60, "focus": 60,
+    "car_text": 300, "car_model": 80, "call_proof": 20,
+    "fill_note": 500, "admin_profile": 1000,
+    "occupation": 80, "income": 60, "job_tenure": 60, "pay_history": 120, "customer_type": 60,
+    "live": 60, "more": 500,
+}
+LEAD_TYPES = ["Very Hot", "Hot", "TLD / Hot", "MerHot", "TLD", "Moderate", "BLD", "Hot RB", "Hot RJ", "RJ"]
+CUSTOMER_TYPES = ["พนักงานบริษัท", "เจ้าของธุรกิจส่วนตัว", "ข้าราชการ/รัฐวิสาหกิจ", "ค้าขาย", "เกษตกร/ปศุสัตว์",
+                  "Rider/driver", "ฟรีแลนด์", "อาชีพอื่นๆ", "ไม่แจ้งอาชีพ", "ไม่มีอาชีพ"]
+HUMAN = "คน"                      # ค่าใน `auto` = คนแก้ช่องนี้แล้ว → ระบบห้ามเติมทับ
+_SLIP_EVERY_MIN = 30              # หาใบจ่ายลีดในกลุ่มซ้ำได้ทุกกี่นาที (ต่อลูกค้า)
+_VOCAB = {"at": 0.0, "cars": [], "names": {}, "channels": []}
+
+
+def lead_of(o, create: bool = True):
+    """แถวข้อมูลลีดของลูกค้า (สร้างให้ถ้ายังไม่มี) — None ถ้ายังไม่มีและ create=False"""
+    try:
+        return o.lead
+    except ChatLead.DoesNotExist:
+        pass
+    if not create:
+        return None
+    try:
+        return ChatLead.objects.create(chat=o)
+    except IntegrityError:
+        return ChatLead.objects.get(chat=o)
+
+
+def _vocab() -> dict:
+    """ชื่อรุ่นรถ + ช่องทาง จากผลสรุปแดชบอร์ด (dropdown ของชีตลีด = ชุดที่สะอาดที่สุด) · แคช 1 ชม.
+
+    อ่านไม่ได้/ยังไม่มีผลสรุป (เครื่อง dev) = ลิสต์ว่าง → ระบบใช้แค่ชื่อรุ่นภาษาไทยของ `leadgroup.parse_specs`
+    """
+    import time
+    if _VOCAB["at"] and time.time() - _VOCAB["at"] < 3600:
+        return _VOCAB
+    cars, names, channels = [], {}, []
+    try:
+        from dashboard.services.purchase_report import _demand_by_model
+        demand, names = _demand_by_model()
+        cars = sorted(demand, key=lambda k: (-len(k), k))           # ยาวก่อน (civicfc ต้องชนะ civic)
+    except Exception:
+        cars, names = [], {}
+    try:
+        from dashboard.services.cache_store import get_kv
+        blob = get_kv("main") or {}
+        data = blob.get("data", blob) if isinstance(blob, dict) else {}
+        cnt = {}
+        for _m, chs in ((data or {}).get("leadChannelByMonth") or {}).items():
+            for ch, n in (chs or {}).items():
+                if ch:
+                    cnt[ch] = cnt.get(ch, 0) + int(n or 0)
+        channels = [c for c, _ in sorted(cnt.items(), key=lambda x: -x[1])][:40]
+    except Exception:
+        channels = []
+    _VOCAB.update({"at": time.time(), "cars": cars, "names": names, "channels": channels})
+    return _VOCAB
+
+
+def car_in(text: str):
+    """(รุ่นแบบชีต, ข้อความเดิม) ถ้าข้อความนี้พูดถึงรุ่นรถ — ไม่เจอ = None (ไม่เดา)"""
+    t = (text or "").strip()
+    if not t:
+        return None
+    v = _vocab()
+    if v["cars"]:
+        try:
+            from dashboard.services.purchase_report import match_model
+            k = match_model(t, v["cars"])
+            if k:
+                return v["names"].get(k, k), t
+        except Exception:
+            pass
+    try:
+        from .leadgroup import parse_specs
+        m = parse_specs(t).get("car_model")
+        if m:
+            return m[:1].upper() + m[1:], t           # "camry" → "Camry" (หน้าตาเดียวกับชีต)
+    except Exception:
+        pass
+    return None
+
+
+def _norm_name(s) -> str:
+    return re.sub(r"[^0-9a-zก-๙]+", "", (s or "").lower())
+
+
+def _lead_group_ids() -> set:
+    """กลุ่มจ่ายเบอร์ (ใบจ่ายลีดถูกโพสต์ที่นี่) — จากทะเบียนกลุ่ม + ชื่อกลุ่มที่มีคำว่า จ่ายเบอร์"""
+    ids = set()
+    try:
+        from .models import LineGroup
+        ids |= set(LineGroup.objects.filter(kind=LineGroup.LEAD).values_list("group_id", flat=True))
+    except Exception:
+        pass
+    ids |= set(GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_name__icontains="จ่ายเบอร์")
+               .values_list("group_id", flat=True).distinct())
+    return {g for g in ids if g}
+
+
+def find_slip(phone: str = "", line_name: str = ""):
+    """หาใบจ่ายลีดที่แอดมินเคยโพสต์ในกลุ่มจ่ายเบอร์ ของลูกค้าคนนี้ → (ข้อมูลใบ, แถวแชท) หรือ None
+
+    จับคู่ด้วย **เบอร์โทรเต็ม** (ค้นด้วย 4 ตัวท้ายก่อนแล้วตรวจซ้ำ) หรือ **ชื่อไลน์ตรงกันทั้งชื่อ**
+    — ไม่ใช้ "ชื่อคล้ายกัน" (บทเรียนเดิม: substring จับคนผิดคน)
+    """
+    from .leadgroup import parse_leadsheet
+    gids = _lead_group_ids()
+    if not gids or not (phone or line_name):
+        return None
+    qs = GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=gids, text__icontains="lead no")
+    cands = []
+    if phone and len(phone) >= 9:
+        cands += list(qs.filter(text__contains=phone[-4:]).order_by("-sent_at")[:40])
+    nn = _norm_name(line_name)
+    if len(nn) >= 2:
+        cands += list(qs.filter(text__icontains=(line_name or "").strip()[:40]).order_by("-sent_at")[:40])
+    seen = set()
+    for g in sorted(cands, key=lambda x: x.sent_at or timezone.now(), reverse=True):
+        if g.pk in seen:
+            continue
+        seen.add(g.pk)
+        d = parse_leadsheet(g.text or "")
+        if not d:
+            continue
+        ph = phones_in([d.get("phone", "")])
+        if phone and ph and ph[0] == phone:
+            return d, g
+        if nn and _norm_name(d.get("line_name")) == nn:
+            return d, g
+    return None
+
+
+def autofill(o, msgs=None) -> ChatLead:
+    """เติมข้อมูลลีดอัตโนมัติ — **เฉพาะช่องที่ว่างและยังไม่เคยเติม** ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด
+
+    ที่มา: แชท (เบอร์ · รุ่นรถที่ถาม) · ระบบ (ช่องทาง · Admin ที่โอน/ตอบ) ·
+    **ใบจ่ายลีดในกลุ่มจ่ายเบอร์** (Code/ADS/Account/ชื่อลูกค้า/ID LINE/ช่องทาง/รถ — ถ้าเบอร์หรือชื่อไลน์ตรง)
+    `msgs` = ข้อความลูกค้า (เก่า→ใหม่) ที่โหลดมาแล้วสำหรับหน้าแชท (ไม่ต้อง query ซ้ำ)
+    """
+    lead = lead_of(o)
+    if is_sim(o.profile.user_id):
+        return lead
+    auto = dict(lead.auto or {})
+    changed = []
+
+    def put(field, value, src):
+        value = (str(value or "")).strip()
+        if not value:
+            return
+        # ใบจ่ายลีดที่แอดมินโพสต์ = ข้อมูลจากคน → แทน "ค่าตั้งต้นของระบบ" ได้ (เช่น ช่องทาง LINE OA)
+        #   แต่ไม่แทนสิ่งที่คนพิมพ์ในหน้านี้ และไม่แทนสิ่งที่จับได้จากแชท
+        if auto.get(field) == "ระบบ" and src == "ใบจ่ายลีด":
+            pass
+        elif getattr(lead, field) or field in auto:
+            return
+        setattr(lead, field, value[:LEAD_FIELDS.get(field, 200)])
+        auto[field] = src
+        changed.append(field)
+
+    if msgs is None:
+        msgs = [g.text for g in GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.IN)
+                .exclude(chat_type=GroupChat.GROUP).order_by("sent_at", "id")[:200] if g.text]
+    ph = phones_in(msgs)
+    if ph:
+        put("phone", ph[0], "แชท")
+    for t in msgs:
+        hit = car_in(t)
+        if hit:
+            put("car_model", hit[0], "แชท")
+            put("car_text", hit[1][:200], "แชท")
+            break
+
+    # ใบจ่ายลีดที่แอดมินโพสต์ไว้แล้ว — หาซ้ำได้ทุก 30 นาที (ไม่ยิง query ทุกครั้งที่เปิดแชท)
+    now = timezone.now()
+    last = auto.get("_slip_at") or ""
+    try:
+        from datetime import datetime as _dt
+        stale = (not last) or (now - _dt.fromisoformat(last)) > timedelta(minutes=_SLIP_EVERY_MIN)
+    except Exception:
+        stale = True
+    if not lead.code and stale:
+        auto["_slip_at"] = now.isoformat()
+        changed.append("_slip_at")
+        hit = find_slip(lead.phone or (ph[0] if ph else ""), o.profile.display_name)
+        if hit:
+            d, g = hit
+            for f, k in (("code", "lead_code"), ("ads", "ads"), ("account", "account"),
+                         ("customer_name", "name"), ("line_id", "line_id"), ("channel", "channel"),
+                         ("car_text", "car"), ("live", "live"), ("more", "more")):
+                put(f, d.get(k, ""), "ใบจ่ายลีด")
+            if d.get("phone"):
+                put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบจ่ายลีด")
+            auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or ""}
+
+    # ช่องทาง = บัญชี LINE ที่ลูกค้าทักเข้ามา — ใช้ชื่อตามชีต ("Line@"/"LINE OA") ถ้ามีในลิสต์
+    line_ch = next((c for c in _vocab()["channels"] if "line" in c.lower()), "LINE OA")
+    put("channel", line_ch, "ระบบ")
+    # Admin = คนที่โอนลูกค้าให้เซลล์ล่าสุด (ไม่มี = คนแรกที่ตอบลูกค้าที่ไม่ใช่เจ้าของ)
+    adm = (ChatOwnerLog.objects.filter(chat=o, action=ChatOwnerLog.ASSIGN).exclude(by_name="")
+           .order_by("-at").values_list("by_name", flat=True).first())
+    if not adm:
+        qs = GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.OUT).exclude(sent_by_name="")
+        if o.owner_id:
+            qs = qs.exclude(sent_by_name=o.owner.nickname)
+        adm = qs.order_by("sent_at", "id").values_list("sent_by_name", flat=True).first()
+    if adm and not adm.startswith(TEST_PREFIX):
+        put("admin_name", adm, "ระบบ")
+
+    if changed:
+        lead.auto = auto
+        lead.save()
+    return lead
+
+
+def lead_json(o, lead=None) -> dict:
+    """ข้อมูลลีดสำหรับฟอร์ม + ช่องที่ระบบคำนวณเอง (ไม่เก็บซ้ำ)"""
+    lead = lead or lead_of(o)
+    p = o.profile
+    contact = o.first_reply_at or (GroupChat.objects.filter(sender_id=p.user_id, direction=GroupChat.OUT)
+                                   .order_by("sent_at").values_list("sent_at", flat=True).first())
+    out = {k: getattr(lead, k) or "" for k in LEAD_FIELDS}
+    out.update({
+        "tags": list(lead.tags or []),
+        "auto": {k: v for k, v in (lead.auto or {}).items() if not k.startswith("_")},
+        "slip": (lead.auto or {}).get("_slip") or None,
+        # ช่องอัตโนมัติ (คำนวณจากระบบ ไม่ให้แก้มือ — แก้แล้วจะไม่ตรงกับของจริง)
+        "leadAt": _iso(p.first_seen),
+        "seller": o.owner.nickname if o.owner_id else "",
+        "contactAt": _iso(contact),
+        "updates": ChatOwnerLog.objects.filter(chat=o, action=ChatOwnerLog.REPLY).count(),
+        "lastUpdate": _iso(o.last_out_at),
+        "lineName": p.display_name or "",
+        "updatedBy": lead.updated_by or "",
+    })
+    out["slipText"] = slip_text(o, lead)
+    return out
+
+
+def slip_text(o, lead=None) -> str:
+    """ใบจ่ายลีดแบบย่อ — รูปแบบเดียวกับที่แอดมินโพสต์ในกลุ่มจ่ายเบอร์ (`leadgroup.parse_leadsheet` อ่านกลับได้)"""
+    lead = lead or lead_of(o)
+    p = o.profile
+    car = lead.car_text or lead.car_model
+    lines = [
+        "Ac Lead No. %s" % (lead.code or "-"),
+        "Ads : %s" % (lead.ads or "-"),
+        "ชื่อ Account: %s" % (lead.account or "-"),
+        "ชื่อลูกค้า : %s" % (lead.customer_name or "-"),
+        "ID LINE : %s" % (lead.line_id or "-"),
+        "ชื่อไลน์ : %s" % (p.display_name or "-"),
+        "เบอร์โทร : %s" % (lead.phone or "-"),
+        "ช่องทาง : %s" % (lead.channel or "-"),
+        "รถ : %s" % (car or "-"),
+        "ไลฟ์ : %s" % (lead.live or "-"),
+        "เพิ่มเติม : %s" % (lead.more or "-"),
+    ]
+    if o.owner_id:
+        lines.append("@%s" % o.owner.nickname)
+    return "\n".join(lines)
+
+
+def save_lead_field(o, field: str, value, by: str = ""):
+    """แก้ข้อมูลลีด 1 ช่อง → (ok, ข้อความ) · ช่องที่คนแก้แล้ว ระบบจะไม่เติมทับอีก"""
+    lead = lead_of(o)
+    if field == "tags":
+        vals = value if isinstance(value, list) else []
+        tags = []
+        for t in vals:
+            t = str(t or "").strip()[:30]
+            if t and t not in tags:
+                tags.append(t)
+        lead.tags = tags[:12]
+        lead.updated_by = (by or "")[:80]
+        lead.save(update_fields=["tags", "updated_by", "updated_at"])
+        return True, "บันทึกแท็กแล้ว"
+    if field not in LEAD_FIELDS:
+        return False, "ไม่รู้จักช่อง %s" % field
+    v = str(value if value is not None else "").strip()
+    if len(v) > LEAD_FIELDS[field]:
+        return False, "ยาวเกินไป (ไม่เกิน %d ตัวอักษร)" % LEAD_FIELDS[field]
+    if field == "phone" and v:
+        ph = phones_in([v])
+        if not ph:
+            return False, "เบอร์โทรไม่ถูกรูปแบบ (เช่น 0812345678)"
+        v = ph[0]
+    setattr(lead, field, v)
+    auto = dict(lead.auto or {})
+    auto[field] = HUMAN
+    lead.auto = auto
+    lead.updated_by = (by or "")[:80]
+    lead.save(update_fields=[field, "auto", "updated_by", "updated_at"])
+    return True, "บันทึกแล้ว"
+
+
+def lead_options() -> dict:
+    """ตัวเลือกช่วยกรอก (datalist) — ช่องทางจากชีตลีดจริง · สาขา/แอดมินจากที่เคยกรอก"""
+    v = _vocab()
+    used = ChatLead.objects.exclude(branch="").values_list("branch", flat=True).distinct()[:30]
+    branches = sorted(set(used))
+    try:
+        from cars.models import Branch
+        branches = sorted(set(branches) | set(Branch.objects.filter(active=True).values_list("name", flat=True)))
+    except Exception:
+        pass
+    tags = set()
+    for ts in ChatLead.objects.exclude(tags=[]).values_list("tags", flat=True)[:300]:
+        tags |= set(ts or [])
+    return {"types": LEAD_TYPES, "customerTypes": CUSTOMER_TYPES, "channels": v["channels"],
+            "branches": branches, "tags": sorted(tags)[:40]}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -908,7 +1230,7 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
           limit: int = 200) -> list:
     """แถวของลิสต์ด้านซ้าย — สิทธิ์ถูกเช็คที่ view ก่อนเรียก (เซลล์ได้แค่ queue/mine)"""
     now = timezone.now()
-    qs = ChatOwner.objects.select_related("profile", "owner")
+    qs = ChatOwner.objects.select_related("profile", "owner", "lead")
     if view == "overdue":
         qs = qs.filter(awaiting_since__isnull=False, due_at__lte=now).order_by("due_at")
     elif view == "queue":
@@ -925,7 +1247,9 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
     q = (q or "").strip()
     if q:
         qs = qs.filter(Q(profile__display_name__icontains=q) | Q(profile__nickname__icontains=q)
-                       | Q(last_preview__icontains=q))
+                       | Q(last_preview__icontains=q) | Q(lead__customer_name__icontains=q)
+                       | Q(lead__phone__contains=re.sub(r"\D", "", q) or q) | Q(lead__code__icontains=q)
+                       | Q(lead__tags__icontains=q))
     return [row_json(o, me, now) for o in qs[:limit]]
 
 

@@ -907,3 +907,62 @@ class ChatOwnerLog(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.at, self.get_action_display(), self.emp_name)
+
+
+class ChatLead(models.Model):
+    """**Connect — ข้อมูลลีดของลูกค้า** (1 แถว/ลูกค้า) · ช่องเดียวกับ **ชีตลีด** (3 ต.ค.69 · เจ้าของสั่ง)
+
+    *"ส่วนนี้เราจะเก็บข้อมูลตามนี้ และเก็บข้อมูลอัตโนมัติตามนี้"* — คอลัมน์ชีตลีด
+    (ว/ด/ป · เบอร์โทร · เวลา · Code · เซลล์ · ทีมไลฟ์ · Admin · ช่องทาง · สาขา · type · ADS · รถลูกค้าถาม ·
+    CAR/สูตร · แจ้งหลักฐานการโทร · FOCUS · วันเวลาที่ติดต่อ · จำนวนอัพเดท · อัพเดทล่าสุด · มากรอกชีตกันเถอะ ·
+    PROFILE จาก ADMIN · อาชีพ · รายได้ · อายุงาน · ประวัติการผ่อน · ประเภทลูกค้า) + ช่องของ **ใบจ่ายลีด** (ย่อ)
+
+    ช่องที่ "คำนวณได้เอง" **ไม่เก็บซ้ำ** (ว/ด/ป เวลา = ทักครั้งแรก · เซลล์ = เจ้าของ · วันเวลาที่ติดต่อ =
+    ตอบครั้งแรก · จำนวนอัพเดท = รอบที่ตอบ · อัพเดทล่าสุด = เราตอบล่าสุด) — เก็บซ้ำ = มี 2 ค่าที่ไม่ตรงกัน
+
+    `auto` = ช่องไหนระบบเติมให้ + มาจากไหน (`แชท`/`ใบจ่ายลีด`/`ระบบ`) · คนแก้เมื่อไหร่ = `คน`
+    → **ระบบเติมเฉพาะช่องที่ว่างและยังไม่เคยเติม ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด**
+    หายตามลูกค้า (CASCADE) — ลูกค้าเงียบเกิน 60 วันถูกลบ (PDPA เดียวกับแชท)
+    """
+    chat = models.OneToOneField(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE, related_name="lead")
+
+    # ── ข้อมูลลีด (ชีต) ──
+    code = models.CharField("Code (เลขลีด)", max_length=32, blank=True, db_index=True)
+    lead_type = models.CharField("type", max_length=40, blank=True)
+    ads = models.CharField("ADS", max_length=120, blank=True)
+    account = models.CharField("ชื่อ Account", max_length=120, blank=True)
+    channel = models.CharField("ช่องทาง", max_length=80, blank=True)
+    branch = models.CharField("สาขา", max_length=60, blank=True)
+    live_team = models.CharField("ทีมไลฟ์", max_length=60, blank=True)
+    admin_name = models.CharField("Admin", max_length=60, blank=True)
+    focus = models.CharField("FOCUS", max_length=60, blank=True)
+    car_text = models.CharField("รถลูกค้าถาม", max_length=300, blank=True)
+    car_model = models.CharField("CAR / สูตร", max_length=80, blank=True)
+    call_proof = models.CharField("แจ้งหลักฐานการโทร", max_length=20, blank=True)
+    fill_note = models.TextField("มากรอกชีตกันเถอะ", blank=True)
+    admin_profile = models.TextField("PROFILE ลูกค้า จาก ADMIN", blank=True)
+    # ── โปรไฟล์ลูกค้า ──
+    customer_name = models.CharField("ชื่อลูกค้า", max_length=120, blank=True)
+    line_id = models.CharField("ID LINE", max_length=80, blank=True)
+    phone = models.CharField("เบอร์โทร", max_length=40, blank=True, db_index=True)
+    occupation = models.CharField("อาชีพ", max_length=80, blank=True)
+    income = models.CharField("รายได้", max_length=60, blank=True)
+    job_tenure = models.CharField("อายุงาน", max_length=60, blank=True)
+    pay_history = models.CharField("ประวัติการผ่อน", max_length=120, blank=True)
+    customer_type = models.CharField("ประเภทลูกค้า", max_length=60, blank=True)
+    # ── ช่องของใบจ่ายลีด ──
+    live = models.CharField("ไลฟ์", max_length=60, blank=True)
+    more = models.TextField("เพิ่มเติม", blank=True)
+    tags = models.JSONField("แท็ก", default=list, blank=True)
+
+    auto = models.JSONField("ช่องที่ระบบเติมให้", default=dict, blank=True)
+    updated_by = models.CharField("แก้ล่าสุดโดย", max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Connect — ข้อมูลลีดของลูกค้า"
+        verbose_name_plural = "Connect — ข้อมูลลีดของลูกค้า"
+
+    def __str__(self):
+        return "%s %s" % (self.code or "-", self.customer_name or self.chat_id)

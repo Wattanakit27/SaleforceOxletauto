@@ -260,7 +260,37 @@ def api_chat(request):
     }
     if admin:
         out["history"] = C.history(o)
+    # ข้อมูลลีด (ช่องเดียวกับชีตลีด) — เฉพาะคนที่เห็นแชทเต็ม · เติมอัตโนมัติก่อนส่ง (ไม่ทับที่คนพิมพ์)
+    if acc == "full":
+        try:
+            lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"])
+            out["lead"] = C.lead_json(o, lead)
+            out["leadEditable"] = bool(admin or mine)
+            out["leadOptions"] = C.lead_options()
+        except Exception as e:                    # ส่วนลีดพัง ต้องไม่ทำให้เปิดแชทไม่ได้
+            out["leadError"] = "โหลดข้อมูลลีดไม่ได้: %s" % str(e)[:120]
     return _j(out)
+
+
+def api_lead(request):
+    """แก้ข้อมูลลีด 1 ช่อง — POST `{id, field, value}` · เจ้าของลูกค้าหรือแอดมินเท่านั้น
+
+    ทีละช่อง (ไม่ใช่ทั้งฟอร์ม) — 2 คนแก้คนละช่องพร้อมกันจะไม่ทับกัน
+    """
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    o = _row(request, ctx, body.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    emp = ctx["emp"]
+    if not (ctx["admin"] or (emp and o.owner_id == emp.id)):
+        return _j({"ok": False, "error": "แก้ได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
+    ok, msg = C.save_lead_field(o, str(body.get("field") or ""), body.get("value"), by=ctx["name"])
+    if not ok:
+        return _j({"ok": False, "error": msg}, 400)
+    o = _row(request, ctx, o.id)
+    return _j({"ok": True, "message": msg, "lead": C.lead_json(o)})
 
 
 def _post_guard(request):
