@@ -906,9 +906,9 @@
 
       <div class="filter-bar">
         <span class="lbl">${ic('lucide:calendar',16)} วันที่รับเคส</span>
-        <input type="date" value="${h(fDateFrom)}" onchange="setDateFrom(this.value)" title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
+        <input type="date" id="sf-from" value="${h(fDateFrom)}"${_dtOn('sfApplyFrom', 1)} title="ตั้งแต่วันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
         <span style="font-size:var(--fs-body);color:var(--t3)">ถึง</span>
-        <input type="date" value="${h(fDateTo)}" onchange="setDateTo(this.value)" title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
+        <input type="date" id="sf-to" value="${h(fDateTo)}"${_dtOn('sfApplyTo', 1)} title="ถึงวันที่" style="padding:6px 10px;border:.5px solid var(--bd2);border-radius:8px;background:var(--bg);color:var(--t1);font-size:var(--fs-body);font-family:inherit;cursor:pointer">
         <button class="f-btn" onclick="setRangeMonth()">เดือนนี้</button>
         <button class="f-btn" onclick="setRangeYear()">ทั้งปี</button>
         <button class="f-btn ${(fDateFrom&&fDateFrom===fDateTo)?'on':''}" onclick="setRangeToday()">วันนี้</button>
@@ -1787,6 +1787,59 @@
     if (d !== 0) { fDateFrom = ''; fDateTo = ''; }  // วันนี้ override range
     render();
   }
+  // ── ช่องวันที่ของตัวกรอง — ชุดเดียวกับ index.html (dateEvt) · แก้กติกาต้องแก้ทั้ง 2 ไฟล์ ──
+  //   Chrome เปลี่ยนค่าในช่องสดๆ ตอนเลื่อนเดือนในปฏิทิน (input · :open = true) → ห้ามใช้ค่านั้น
+  //   เลือกวัน = change หลังปฏิทินปิด → ใช้ทันที · คลิกที่อื่นบนหน้า = ปิดเฉยๆ → คืนค่าเดิม ·
+  //   พิมพ์ = Chrome ยิง change ทุกตัวอักษร (ปี "2" = 0002) → รอหยุดพิมพ์ 450ms แล้วคืนโฟกัสให้ช่อง
+  var _DT_TYPE_KEY = /^(?:[0-9]|ArrowUp|ArrowDown|Backspace|Delete)$/;
+  var _dtPicking = new Set();
+  function _dtOpen(el) { try { return el.matches(':open'); } catch (e) { return false; } }
+  function _dtOk(v, allowEmpty) {
+    if (!v) return !!allowEmpty;
+    const y = parseInt(String(v).slice(0, 4), 10);
+    return y >= 2000 && y <= 2100;
+  }
+  function dateEvt(e, apply, allowEmpty) {
+    const el = e.target, t = e.type, now = Date.now();
+    if (t === 'keydown') {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'Enter') { _dtCommit(el, apply, allowEmpty, true); return; }
+      if (_DT_TYPE_KEY.test(e.key)) { el._dtKey = now; _dtPicking.delete(el); }
+      return;
+    }
+    if (t === 'blur') {
+      if (!el._dtTimer && el.value !== el.defaultValue && !_dtOk(el.value, allowEmpty)) el.value = el.defaultValue;
+      return;
+    }
+    if (_dtOpen(el)) { if (t === 'input') _dtPicking.add(el); return; }
+    const typing = now - (el._dtKey || 0) < 300;
+    if (t === 'input') {
+      if (!typing) return;
+      clearTimeout(el._dtTimer);
+      el._dtTimer = setTimeout(function () { _dtCommit(el, apply, allowEmpty, true); }, 450);
+    } else if (t === 'change' && !typing) {
+      _dtPicking.delete(el);
+      _dtCommit(el, apply, allowEmpty, false);
+    }
+  }
+  function _dtCommit(el, apply, allowEmpty, typed) {
+    clearTimeout(el._dtTimer); el._dtTimer = null;
+    if (!el.isConnected || el.value === el.defaultValue) return;
+    const v = el.value, here = document.activeElement === el;
+    if (!_dtOk(v, allowEmpty)) { if (!typed || !here) el.value = el.defaultValue; return; }
+    apply(v, typed && here);
+  }
+  function _dtOn(fn, allowEmpty) {
+    const a = 'dateEvt(event,' + fn + (allowEmpty ? ',1' : '') + ')';
+    return ' onkeydown="' + a + '" oninput="' + a + '" onchange="' + a + '" onblur="' + a + '"';
+  }
+  document.addEventListener('pointerdown', function () {
+    _dtPicking.forEach(function (el) { el.value = el.defaultValue; });
+    _dtPicking.clear();
+  }, true);
+  // ช่องว่าง = ล้างช่วงวันที่ (เหมือนเดิม) · พิมพ์อยู่ = หน้าวาดใหม่แล้วคืนโฟกัสให้ช่องเดิม
+  function sfApplyFrom(v, refocus) { setDateFrom(v); if (refocus) { const n = document.getElementById('sf-from'); if (n) n.focus(); } }
+  function sfApplyTo(v, refocus) { setDateTo(v); if (refocus) { const n = document.getElementById('sf-to'); if (n) n.focus(); } }
   function setDateFrom(v) {
     fDateFrom = v || '';
     // เลือก date range → ล้าง month + day (mutually exclusive)

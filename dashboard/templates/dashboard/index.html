@@ -328,25 +328,70 @@
       }
     }
 
-    // ★ 24 ก.ย.69 — แก้บั๊ก "ตัวกรองวันที่ใช้งานไม่ได้เลย" (เจ้าของแจ้ง)
-    //   <input type=date> ยิง change **ตั้งแต่พิมพ์ตัวแรก**: พิมพ์ "2" ของปี 2026
-    //   → ค่ากลายเป็นปี 0002 ซึ่งเป็นวันที่ที่ "ครบ" แล้ว → onchange → render()
-    //   → ล้าง innerHTML ทั้งหน้า → ช่องที่กำลังพิมพ์หายไปพร้อมโฟกัส
-    //   → ตัวเลขที่เหลือ (0,2,6) ตกหมด ค้างที่ 0002 ตลอด = พิมพ์วันที่ไม่ได้เลย
-    //   แก้ 3 ชั้น: (1) ปีนอก 2000–2100 = ยังพิมพ์ไม่เสร็จ ไม่ต้องรีเฟรช
-    //              (2) หน่วง 450ms หลังหยุดพิมพ์ค่อยรีเฟรช (พิมพ์ "2" แล้ว "1" = รีเฟรชครั้งเดียว)
-    //              (3) รีเฟรชเสร็จคืนโฟกัสให้ช่องเดิม
-    let _dfTimer = null, _dfFocus = -1;
-    function dfType(which, value){
-      const y = parseInt(String(value || '').slice(0, 4), 10);
-      if(!(y >= 2000 && y <= 2100)) return;          // ยังพิมพ์ปีไม่เสร็จ — อย่าเพิ่งทำอะไร
-      clearTimeout(_dfTimer);
-      _dfFocus = which;
-      _dfTimer = setTimeout(function(){
-        _dfTimer = null;
-        setDfRange(which === 0 ? value : undefined, which === 1 ? value : undefined);
-      }, 450);
+    // ── ช่องวันที่ที่ "เลือกแล้วใช้ทันที" (ตัวกรองช่วงวันที่ · พาเนลเช็คชื่อ) — seller.html มีชุดเดียวกัน ──
+    // ★ 24 ก.ย.69 — พิมพ์วันที่ไม่ได้: Chrome ยิง change ตั้งแต่พิมพ์ตัวแรก (ปี "2" = 0002 ซึ่งเป็นวันที่ครบแล้ว)
+    //   → render() ล้างทั้งหน้า ช่องที่กำลังพิมพ์หายไปพร้อมโฟกัส → แก้ด้วยการรอหยุดพิมพ์ 450ms + คืนโฟกัส
+    // ★ 4 ต.ค.69 — "ยังไม่เลือกวัน แค่เลื่อนเดือน มันเลือกวันให้เอง" (เจ้าของแจ้ง): ตัวแก้รอบแรกเปลี่ยนไปฟัง input
+    //   แต่ Chrome เปลี่ยนค่าในช่องสดๆ ทุกครั้งที่เลื่อนเดือนในปฏิทิน (ยิง input) → 450ms ต่อมาก็รีเฟรชทั้งหน้า
+    //   = ปฏิทินถูกปิดทิ้ง และตัวกรองกลายเป็นวันที่ไม่ได้เลือก
+    //   วัดจาก Chrome 154 จริง: เลื่อนเดือน/ขยับวันในปฏิทิน → input อย่างเดียว ระหว่างนั้น :open = true ·
+    //   เลือกวัน (คลิก/Enter) → change หลังปฏิทินปิด · คลิกที่อื่นบนหน้า (ปิดเฉยๆ) → หน้าเว็บได้ pointerdown
+    //   ก่อนแล้วค่อย change ค่าค้างเป็นเดือนที่เลื่อนไป · Escape → Chrome คืนค่าเดิมเอง ·
+    //   พิมพ์ → keydown แล้ว input + change ทุกตัวอักษร
+    //   กติกา: ปฏิทินเปิดอยู่ = ไม่ทำอะไร · เลือกวัน = ใช้ทันที · ปิดเฉยๆ = คืนค่าเดิม · พิมพ์ = รอหยุดพิมพ์ 450ms
+    var _dfFocus = -1;
+    var _DT_TYPE_KEY = /^(?:[0-9]|ArrowUp|ArrowDown|Backspace|Delete)$/;
+    var _dtPicking = new Set();      // ช่องที่กำลังเลื่อนดูในปฏิทิน — ค่าในช่องตอนนี้ยังไม่ใช่ค่าที่เลือก
+    function _dtOpen(el){ try { return el.matches(':open'); } catch(e){ return false; } }  // ไม่รู้จัก :open = ถือว่าปิด
+    function _dtOk(v, allowEmpty){
+      if(!v) return !!allowEmpty;
+      const y = parseInt(String(v).slice(0, 4), 10);
+      return y >= 2000 && y <= 2100;                 // ปีนอกช่วง = ยังพิมพ์ปีไม่เสร็จ (0002 · 0020 · 0202)
     }
+    // ผูกกับช่องด้วย _dtOn('ชื่อฟังก์ชัน') · ฟังก์ชันนั้นรับ (ค่า YYYY-MM-DD, ควรคืนโฟกัสให้ช่องไหม)
+    // ค่าที่ "ใช้อยู่" = attribute value ของช่อง (el.defaultValue) → ทุกครั้งที่ใช้ค่าใหม่ หน้าต้องวาดช่องใหม่
+    function dateEvt(e, apply, allowEmpty){
+      const el = e.target, t = e.type, now = Date.now();
+      if(t === 'keydown'){
+        if(e.altKey || e.ctrlKey || e.metaKey) return;          // Alt+↓ = เปิดปฏิทิน ไม่ใช่พิมพ์
+        if(e.key === 'Enter'){ _dtCommit(el, apply, allowEmpty, true); return; }
+        if(_DT_TYPE_KEY.test(e.key)){ el._dtKey = now; _dtPicking.delete(el); }
+        return;
+      }
+      if(t === 'blur'){                              // พิมพ์ค้างไว้ไม่ครบแล้วออกจากช่อง = คืนค่าเดิม
+        if(!el._dtTimer && el.value !== el.defaultValue && !_dtOk(el.value, allowEmpty)) el.value = el.defaultValue;
+        return;
+      }
+      if(_dtOpen(el)){ if(t === 'input') _dtPicking.add(el); return; }   // ยังเลื่อนดูอยู่ในปฏิทิน
+      const typing = now - (el._dtKey || 0) < 300;   // พิมพ์: input/change ตามหลัง keydown ในจังหวะเดียวกัน
+      if(t === 'input'){
+        if(!typing) return;                          // มาจากปฏิทิน = รอ change (ตอนเลือกวันจริง)
+        clearTimeout(el._dtTimer);
+        el._dtTimer = setTimeout(function(){ _dtCommit(el, apply, allowEmpty, true); }, 450);
+      } else if(t === 'change' && !typing){
+        _dtPicking.delete(el);
+        _dtCommit(el, apply, allowEmpty, false);
+      }
+    }
+    function _dtCommit(el, apply, allowEmpty, typed){
+      clearTimeout(el._dtTimer); el._dtTimer = null;
+      if(!el.isConnected || el.value === el.defaultValue) return;   // หน้าถูกวาดใหม่ไปแล้ว / ไม่ได้เปลี่ยน
+      const v = el.value, here = document.activeElement === el;
+      if(!_dtOk(v, allowEmpty)){ if(!typed || !here) el.value = el.defaultValue; return; }
+      apply(v, typed && here);
+    }
+    function _dtOn(fn, allowEmpty){
+      const a = 'dateEvt(event,' + fn + (allowEmpty ? ',1' : '') + ')';
+      return ' onkeydown="' + a + '" oninput="' + a + '" onchange="' + a + '" onblur="' + a + '"';
+    }
+    // คลิกตรงไหนบนหน้าเว็บตอนปฏิทินเปิด = ปิดปฏิทินโดยไม่ได้เลือกวัน (คลิกในตัวปฏิทินไม่ถึงหน้าเว็บ)
+    // Chrome ค้างวันของเดือนที่เลื่อนไปไว้ในช่อง → คืนเป็นค่าที่ใช้อยู่ ไม่งั้นช่องโชว์คนละวันกับที่กรองจริง
+    document.addEventListener('pointerdown', function(){
+      _dtPicking.forEach(function(el){ el.value = el.defaultValue; });
+      _dtPicking.clear();
+    }, true);
+    function dfApplyFrom(v, refocus){ _dfFocus = refocus ? 0 : -1; setDfRange(v, undefined); }
+    function dfApplyTo(v, refocus){ _dfFocus = refocus ? 1 : -1; setDfRange(undefined, v); }
     // list ของ [month, day] ในช่วง (ปีนี้)
     function rangeDays(){
       const out = []; let cur = new Date(dfFrom + 'T00:00:00'); const end = new Date(dfTo + 'T00:00:00');
@@ -1948,10 +1993,10 @@
       const cnt = (FD.followCases||[]).filter(l=>ir(l.dateIn)).length;
       let html = `<div class="df-bar"><span class="df-label">${ic('lucide:calendar',16)} กรองวันที่รับเคส:</span>`;
       html += `<span style="font-size:var(--fs-body);color:var(--t3)">จาก</span>`;
-      // oninput (ไม่ใช่ onchange) + หน่วงใน dfType — ไม่งั้นพิมพ์ตัวแรกหน้าก็ render ทับจนพิมพ์ต่อไม่ได้
-      html += `<input type="date" value="${dfFrom}" oninput="dfType(0, this.value)" style="${_inp}">`;
+      // dateEvt: เลื่อนเดือนในปฏิทิน = ยังไม่ใช้ · เลือกวัน = ใช้ทันที · พิมพ์ = รอหยุดพิมพ์ (ดูหัวไฟล์)
+      html += `<input type="date" value="${dfFrom}"${_dtOn('dfApplyFrom')} style="${_inp}">`;
       html += `<span style="font-size:var(--fs-body);color:var(--t3)">ถึง</span>`;
-      html += `<input type="date" value="${dfTo}" oninput="dfType(1, this.value)" style="${_inp}">`;
+      html += `<input type="date" value="${dfTo}"${_dtOn('dfApplyTo')} style="${_inp}">`;
       _DF_PRESETS.forEach((p, i) => {
         const [f, t] = p.r();
         const on = (dfFrom === f && dfTo === t);      // ช่วงที่เลือกอยู่ตรงกับปุ่มไหน = ไฮไลต์ปุ่มนั้น
@@ -7516,7 +7561,7 @@
         <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">เช็คชื่อเข้างาน</div>
         <div style="display:flex;gap:6px;align-items:center">
           <button onclick="loadCheckins('${shift(-1)}')" title="วันก่อนหน้า" style="font-size:var(--fs-body);padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">‹</button>
-          <input type="date" value="${h(j.date)}" onchange="loadCheckins(this.value)" style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <input type="date" value="${h(j.date)}"${_dtOn('v=>loadCheckins(v)')} style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
           <button onclick="loadCheckins('${shift(1)}')" title="วันถัดไป" style="font-size:var(--fs-body);padding:4px 9px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">›</button>
           ${j.isToday ? '' : `<button onclick="loadCheckins('')" style="font-size:var(--fs-body);padding:5px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">วันนี้</button>`}
           <button onclick="loadCheckinRange()" style="font-size:var(--fs-body);padding:5px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">สรุปเดือน</button>
@@ -7619,9 +7664,9 @@
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
         <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">สรุปเช็คชื่อ</div>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="date" value="${h(j.from)}" onchange="loadCheckinRange(this.value, '${h(j.to)}')" style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <input type="date" value="${h(j.from)}"${_dtOn(`v=>loadCheckinRange(v,'${h(j.to)}')`)} style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
           <span style="color:var(--t3);font-size:var(--fs-body)">ถึง</span>
-          <input type="date" value="${h(j.to)}" onchange="loadCheckinRange('${h(j.from)}', this.value)" style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
+          <input type="date" value="${h(j.to)}"${_dtOn(`v=>loadCheckinRange('${h(j.from)}',v)`)} style="font-size:var(--fs-body);padding:5px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">
           <button onclick="loadCheckins('${h(j.to)}')" style="font-size:var(--fs-body);padding:5px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ดูรายวัน</button>
           <button onclick="document.getElementById('cki-overlay').remove()" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button>
         </div></div>`;
