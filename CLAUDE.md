@@ -1568,7 +1568,13 @@ sender_id)` ≠ จำนวนคน**
     - **ผูกเพจกับแอป** `POST /connect/api/fb_webhook` (แอดมิน) → `/<page>/subscribed_apps` fields `messages,message_echoes` ·
       GET = ตรวจว่าผูกแล้วหรือยัง
     - **ขั้นตอนฝั่งเจ้าของ (ยังไม่ได้ทำ ณ 4 ต.ค.69)**: [deploy/meta_webhook.md](deploy/meta_webhook.md) — env 2 ตัว ·
-      ลงทะเบียน Callback URL ในแอป Meta · กดผูกเพจ · ⚠️ แอปโหมด Development ส่งเฉพาะคนที่มีบทบาทในแอป
+      ลงทะเบียน Callback URL ในแอป Meta · กดผูกเพจ
+    - **★★ webhook จากลูกค้าจริงต้องมี Advanced Access ของ `pages_messaging` = ผ่าน App Review + ยืนยันธุรกิจ**
+      (เอกสาร Messenger webhook: *Standard Access = รับได้เฉพาะคนที่มีบทบาทในแอป · Advanced Access = รับจากลูกค้า
+      ต้องผ่าน App Review*) · เจ้าของทัก 4 ต.ค.69 ว่า "ต้อง Live ก่อนไม่ใช่หรอ" — ถูก และหนักกว่านั้นคือต้องผ่าน review ด้วย
+      · **ระหว่างยังไม่ผ่าน แชทลูกค้าจริงเข้าทางดึงสำรองอย่างเดียว** → ถ้าตั้ง 10 นาที แชทจะมาถึงช้าและขึ้น "เลยเวลา"
+      ทันที (เส้นตายนับจาก `sent_at` ของลูกค้า) · ช่วงนี้ควรตั้งทางสำรอง 2–5 นาที
+      (`sync_live` หยุดเองเมื่อโควต้าถึง `STOP_USAGE_PCT` อยู่แล้ว)
   - **ทางสำรอง = ดึงเอง** `fb_sync.sync_live()` ทุก **`fb_poll_min` นาที (ค่าตั้งต้น 10 · ตั้งได้ 2–60)** · เดิมทุก 1 นาที
     (เรียกจาก `connect.tick` → `fb_tick_bg()` ใน thread · ผล KV `fb_live_last`) ·
     **`fb_poll_due()` เช็คเวลาจาก KV ร่วมทุก worker** (จำแค่ใน process = 3 worker ดึงถี่ขึ้น 3 เท่า) + `fb_tick_bg` จองรอบใน KV ก่อนเริ่ม ·
