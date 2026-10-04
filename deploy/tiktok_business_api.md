@@ -34,8 +34,22 @@
 
 1. **เปลี่ยนช่องเป็นบัญชีธุรกิจ (Business Account)** — ในแอป TikTok: ตั้งค่า → บัญชี → เปลี่ยนเป็นบัญชีธุรกิจ
    (บัญชีส่วนตัว/ครีเอเตอร์ใช้ API กลุ่มนี้ไม่ได้) · **4 ต.ค.69 เป็นแล้ว 2 ช่อง: @oxletauto · @guru_jamesoxlet** ← เริ่มจาก 2 ช่องนี้
-2. **สมัครนักพัฒนาที่ TikTok API for Business** (business-api.tiktok.com) ด้วยบัญชี TikTok For Business ของบริษัท
-   → **สร้างแอปนักพัฒนา (developer app) ให้ผ่านการอนุมัติก่อน** — TikTok แนะนำให้ขอสิทธิ์
+2. **สมัครนักพัฒนาที่ TikTok API for Business** (business-api.tiktok.com/portal → My Apps → **Become a Developer**)
+   ด้วยบัญชี TikTok For Business ของบริษัท · ผลภายใน **3 วันทำการ**
+   - **⚠️ อีเมลติดต่อต้องเป็นโดเมนบริษัท (`@oxletauto.co.th`) — Gmail/อีเมลส่วนตัวโดนปฏิเสธ** ·
+     โดเมนเรามีเมลเซิร์ฟเวอร์อยู่แล้วที่ Hostatom (MX `mail.oxletauto.co.th`) → ให้คนดูแลเว็บ/โฮสติ้งสร้างกล่องเมล
+     เช่น `developers@oxletauto.co.th` ที่หลังบ้าน Hostatom (TikTok แนะนำกล่องกลางที่ทีมเปิดอ่านร่วมกัน)
+   - ประเภทผู้ใช้: **Direct Advertiser** (บริษัทที่ใช้กับบัญชีของตัวเอง) · ชื่อบริษัท = ชื่ออังกฤษตามหนังสือรับรอง ·
+     เว็บไซต์ `https://www.oxletauto.co.th/` (ต้องตรงกับโดเมนอีเมล) · Primary Developer Location = **Thailand**
+   - ช่องอธิบายการใช้งาน (ภาษาอังกฤษ · เขียนละเอียด ไม่งั้นโดนปฏิเสธ):
+     > Oxlet Auto is a used-car dealership headquartered in Thailand, operating the brand Oxlet Auto and the website
+     > oxletauto.co.th. We are the company's in-house development team. We are building an internal tool that connects
+     > our own TikTok Business Accounts (@oxletauto, @guru_jamesoxlet) so that customer direct messages and comments
+     > about cars for sale reach our sales staff quickly, and so we can report the performance of our own organic content.
+     > The tool is used only by our employees, only for accounts owned by our company, and is not offered to any third party.
+
+   → **สร้างแอปนักพัฒนา (developer app) ให้ผ่านการอนุมัติก่อน** (2–3 วันทำการ · ถ้าเลือกสิทธิ์ "TikTok Accounts"
+   ต้องกรอก **Accounts API Access Application Form** ก่อนกดส่ง) — TikTok แนะนำให้ขอสิทธิ์
    "Ad Account Management" · "CTX Events Management" · "Measurement" ในใบสมัครแอปใหม่
    (คนละแอปกับแอป Login Kit ที่ใช้ดึงยอดวิวอยู่) · **อัปโหลดโลโก้แอป** (≤512×512) ไม่งั้นหน้าขออนุญาตของช่องจะ error
 3. **ส่งฟอร์ม "Data security and privacy review intake form"** (ลิงก์อยู่ในหน้า Access to Business Messaging API)
