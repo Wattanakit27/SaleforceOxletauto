@@ -220,6 +220,24 @@
   .cn-prow .pv { margin-top: 6px; padding: 6px 8px; border-radius: 7px; background: var(--bg2); font-size: 12px; line-height: 1.6; }
   .cn-park-f { padding: 6px 12px 8px; color: var(--t3); font-size: 12px; }
   .cn-sep { padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--t3); background: var(--bg2); border-bottom: .5px solid var(--bd); }
+  /* ห้องพัก Lead เต็มจอ (4 ต.ค.69 · เจ้าของ "ห้องพักลีดเป็นหน้าจอใหญ่ๆ เต็มๆ") — ไม่มีช่องแชทขวา · ลีดเป็นการ์ดหลายคอลัมน์
+     กดลีดแชท = แชทเต็มจอแทนบอร์ด (ปุ่ม "← ห้องพัก Lead" กลับ) · class `hub` ใส่ที่ #cn-main ใน applyHub() */
+  .hub-only { display: none; }
+  .cn-main.hub .hub-only { display: inline; }
+  .cn-main.hub { grid-template-columns: minmax(0,1fr); }
+  .cn-main.hub .cn-pane { display: none; }
+  body.pane .cn-main.hub .cn-pane { display: flex; }
+  body.pane .cn-main.hub .cn-list { display: none; }
+  .cn-main.hub .cn-mback { display: inline-flex; }
+  .cn-main.hub .cn-list { border-right: 0; }
+  .cn-main.hub .cn-tools { max-width: 640px; }
+  .cn-main.hub .cn-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 10px;
+                          padding: 12px; align-content: start; align-items: start; background: var(--bg2); }
+  .cn-main.hub .cn-rows > .cn-park, .cn-main.hub .cn-rows > .cn-empty { grid-column: 1 / -1; border: .5px solid var(--bd2); border-radius: 10px; }
+  .cn-main.hub .cn-rows > .cn-empty { background: var(--bg); }
+  .cn-main.hub .cn-rows > .cn-row, .cn-main.hub .cn-rows > .cn-prow { border: .5px solid var(--bd2); border-radius: 10px; background: var(--bg); padding: 12px; }
+  .cn-main.hub .cn-rows > .cn-row:hover, .cn-main.hub .cn-rows > .cn-prow:hover { border-color: var(--blue); }
+  .cn-main.hub .cn-rows > .cn-prow[open] { border-color: var(--blue); box-shadow: var(--shadow); }
   @media (max-width: 1180px) {
     .cn-chat { grid-template-columns: minmax(0,1fr); }
     .cn-side { display: none; }
@@ -504,6 +522,12 @@
         `<option value="${s.id}">${h(s.name)} (ทีม ${h(s.team)})</option>`).join('');
       sel.value = String(S.seller || 0);
     }
+    applyHub();
+  }
+
+  // ห้องพัก Lead = บอร์ดเต็มจอ (แอดมิน · เฉพาะตอนดูรายชื่อ — สถิติ/ตั้งค่ายังเป็น 2 ช่องเหมือนเดิม)
+  function applyHub() {
+    $('cn-main').classList.toggle('hub', ADMIN && S.view === 'tocode' && S.pane === 'chat');
   }
 
   function pickTab(v) {
@@ -511,6 +535,12 @@
     if (v === '_cfg') { S.pane = 'cfg'; renderTabs(); openCfg(); showPane(); return; }
     S.view = v; S.pane = 'chat';
     if (v !== 'tocode' && (S.src === 'tiktok' || S.src === 'other')) S.src = '';   // TikTok/อื่นๆ มีแค่ในห้องพัก Lead
+    if (ADMIN && v === 'tocode') {
+      // เข้าห้องพัก Lead = เห็นบอร์ดก่อนเสมอ (แชทที่ค้างไว้ปิดไป — ไม่งั้นเปิดแท็บมาเจอแชทเต็มจอแทนบอร์ด)
+      S.openId = 0; S.chat = null; hidePane();
+      try { history.replaceState(null, '', '/connect/' + (BOOT.embed ? '?embed=1' : '')); } catch (e) {}
+    }
+    applyHub();
     if (!S.openId) renderBlank();
     loadInbox(true);
   }
@@ -820,7 +850,7 @@
         `<div>${h(fmtWhen(x.at))} · <b>${h(x.label)}</b>${x.emp ? ' · ' + h(x.emp) : ''}${x.by && x.by !== x.emp ? ' (โดย ' + h(x.by) + ')' : ''}${x.waitSec != null ? ' · ลูกค้ารอ ' + Math.round(x.waitSec / 60) + ' นาที' : ''}${x.onTime === false ? ' · เกินเวลา' : ''}${x.note ? ' · ' + h(x.note) : ''}</div>`).join('')}</div>` : '';
     $('cn-ph').innerHTML = `
       <div class="cn-ph-row">
-        <button class="btn sm cn-mback" id="cn-mback">${ic('arrow-left')}</button>
+        <button class="btn sm cn-mback" id="cn-mback">${ic('arrow-left')}<span class="hub-only">ห้องพัก Lead</span></button>
         ${avHtml(r.name, r.pic)}
         <div class="cn-ph-who">
           <h2>${h(r.name)}</h2>
@@ -1288,6 +1318,9 @@
     document.querySelectorAll('.cn-row.sel').forEach(r => r.classList.remove('sel'));
     try { history.replaceState(null, '', '/connect/' + (BOOT.embed ? '?embed=1' : '')); } catch (e) {}
     renderBlank();
+    applyHub();
+    // กลับมาที่บอร์ดห้องพัก Lead — โหลดใหม่เลย ลีดที่เพิ่งจ่ายเบอร์ในแชทจะได้หายจากบอร์ดทันที (ไม่ต้องรอรอบ 8 วิ)
+    if (ADMIN && S.view === 'tocode') loadInbox(false);
   };
 
   // ── สถิติ (แอดมิน) ──
