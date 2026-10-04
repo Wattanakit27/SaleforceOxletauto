@@ -615,7 +615,7 @@
     const room = P.room ? `"${h(P.room)}"` : '"ADMIN เก็บ Lead" (บอทยังไม่ได้ยินห้องนี้)';
     return `<div class="cn-park">
         <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอจ่ายเบอร์ ${items.length} <span style="font-weight:400">${chips}</span></div>
-        <div class="cn-park-f" style="padding-top:0">ศูนย์กระจายลีดทุกช่องทาง — แชท LINE / Facebook ที่ยังไม่มีเลข + ใบร่างที่พักไว้ในกลุ่ม ${room}
+        <div class="cn-park-f" style="padding-top:0">ศูนย์กระจายลีดทุกช่องทาง — แชท LINE / Facebook ที่<b>ให้เบอร์หรือไอดีไลน์แล้ว</b>แต่ยังไม่มีเลข + ใบร่างที่พักไว้ในกลุ่ม ${room}
           · รอนานสุดขึ้นก่อน · แชท: เปิดแล้วจ่ายเบอร์ในแผงขวา · ใบร่าง: กดกางแล้วจ่ายได้เลย</div>
       </div>
       ${items.map(x => x.html).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}

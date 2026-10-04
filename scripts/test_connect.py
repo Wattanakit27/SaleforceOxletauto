@@ -1045,7 +1045,7 @@ try:
 
     # ═════════════════════════════════════════════════════════════════════
     print("[21] แท็บ \"จ่ายเบอร์\" ของแอดมิน (4 ต.ค.69 · เจ้าของถาม \"ขาดหน้าแอดมินจ่ายเบอร์มั้ย\")")
-    NEW = C.note_customer_message(cust(201, "ลูกค้าใหม่ทักมา").user_id, timezone.now(), "มี civic ไหม")
+    NEW = C.note_customer_message(cust(201, "ลูกค้าใหม่ทักมา").user_id, timezone.now(), "มี civic ไหม 0833330001")
     # ลูกค้าเก่าที่ทักมาก่อนเปิด Connect (มีแชทเก่า ไม่ได้ทักกลับมา) → แถวจาก sync_rows ไม่มีรอบรอ/ประวัติ
     OLDP = cust(202, "ลูกค้าเก่าก่อนมี Connect")
     GroupChat.objects.create(chat_type="user", message_id="old-202", sender_id=OLDP.user_id, direction="in",
@@ -1053,7 +1053,7 @@ try:
     C.sync_rows(force=True)
     OLD = ChatOwner.objects.get(profile=OLDP)
     # แอดมินตอบไปแล้ว (ไม่มีรอบรอ ไม่มีเจ้าของ) แต่ยังไม่ได้จ่ายเบอร์ → ต้องยังอยู่ในแท็บ
-    REP = C.note_customer_message(cust(203, "แอดมินตอบแล้ว").user_id, timezone.now(), "ผ่อนเท่าไหร่")
+    REP = C.note_customer_message(cust(203, "แอดมินตอบแล้ว").user_id, timezone.now(), "ผ่อนเท่าไหร่ ไอดีไลน์ rep_line1")
     C.note_reply(REP.profile.user_id, None, timezone.now(), "เดือนละ 8 พันครับ", by="admin")
     REP.refresh_from_db()
     COD = C.note_customer_message(cust(204, "มีเลขแล้ว").user_id, timezone.now(), "สนใจครับ")
@@ -1103,7 +1103,7 @@ try:
     ck("จ่ายแล้วออกจากแท็บ", NEW.id not in tocode_ids())
     ck("★ จ่ายเบอร์ไม่มีคำขอออกนอกระบบ (ไม่ลงชีต/ไม่โพสต์กลุ่ม)", not [c for c in CALLS[n0:] if c[0] == "post"], CALLS[n0:])
     # ลูกค้าเก่าทักกลับมาใหม่ = เป็นลีดอีกรอบ → เข้าแท็บ
-    C.note_customer_message(OLDP.user_id, timezone.now(), "ยังมีรถไหมครับ")
+    C.note_customer_message(OLDP.user_id, timezone.now(), "ยังมีรถไหมครับ โทร 0833330002")
     ck("ลูกค้าเก่าทักกลับมา = เข้าแท็บจ่ายเบอร์", OLD.id in tocode_ids())
 
     # ═════════════════════════════════════════════════════════════════════
@@ -1441,6 +1441,36 @@ try:
     EMP3 = LineProfile.objects.create(user_id="U%032x" % 97, display_name="คุยกับบอทแจ้งเตือน", is_employee=True)
     ck("พนักงานที่ไม่มีแถว (คุยกับบอทแจ้งเตือน) ตอบแล้วไม่สร้างแถวใหม่",
        C.note_reply(EMP3.user_id, None, timezone.now(), "x") is None and not ChatOwner.objects.filter(profile=EMP3).exists())
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[26] ห้องพัก Lead = เฉพาะลูกค้าที่ให้เบอร์/ไอดีไลน์แล้ว (เจ้าของสั่ง 4 ต.ค.69)")
+    m_ = lambda d, t: {"dir": d, "text": t}
+    ck("เบอร์ในแชท = ช่องทางติดต่อ", C.contacts_in([m_("in", "โทร 081-234-5678 ครับ")]) == (["0812345678"], []))
+    ck("ไอดีไลน์แบบมีป้าย", C.contacts_in([m_("in", "ไอดีไลน์ tus_123 ครับ")])[1] == ["tus_123"])
+    ck("★ ไอดีคำเดียวหลังเราขอ (ขอเบอร์ หรือไอดี LINE)", C.contacts_in(
+        [m_("out", "ขอเบอร์ หรือไอดี LINE หน่อยครับ"), m_("in", "tus.neem")])[1] == ["tus.neem"])
+    ck("★ คำอังกฤษลอยๆ ที่เราไม่ได้ขอ ≠ ไอดี", C.contacts_in([m_("in", "civic"), m_("in", "ok55")]) == ([], []))
+    ck("online shop ≠ ไอดี (line ในคำอังกฤษ)", C.contacts_in([m_("in", "online shop ไหมครับ")]) == ([], []))
+    ck("ข้อความของเราไม่นับเป็นเบอร์ลูกค้า", C.contacts_in([m_("out", "โทร 0899999999 ได้เลยครับ")]) == ([], []))
+    NC = C.note_customer_message(cust(301, "แค่ถามรถ").user_id, timezone.now(), "มี civic fe ไหมครับ")
+    ck("★ ลูกค้าที่ยังแค่ถามรถ = อยู่คิวรอรับ แต่ไม่เข้าห้องพัก", NC.awaiting_since and NC.id not in tocode_ids())
+    C.note_customer_message(cust(301, "แค่ถามรถ").user_id if False else NC.profile.user_id, timezone.now(), "เบอร์ 0844440001 ครับ")
+    ck("★ ให้เบอร์แล้ว = เข้าห้องพักทันที (ไม่ต้องรอแอดมินเปิดแชท)", NC.id in tocode_ids()
+       and ChatLead.objects.get(chat=NC).phone == "0844440001")
+    C.save_lead_field(ChatOwner.objects.get(pk=NC.id), "phone", "", by="admin")
+    C.note_customer_message(NC.profile.user_id, timezone.now(), "อีกเบอร์ 0844440002")
+    ck("คนลบเบอร์เองแล้ว ระบบไม่เติมกลับ", ChatLead.objects.get(chat=NC).phone == "" and NC.id not in tocode_ids())
+    # แถวเดิมที่คุยไปแล้ว (ก่อนมีกติกานี้) — เก็บตกจากแชทที่เก็บไว้
+    OLDC = cust(302, "คุยไว้ก่อน")
+    GroupChat.objects.create(chat_type="user", message_id="oc-1", sender_id=OLDC.user_id, direction="in",
+                             msg_type="text", text="ไลน์ไอดี oldc_99 นะครับ", sent_at=timezone.now())
+    oc = C._row_for(OLDC)
+    ChatOwner.objects.filter(pk=oc.id).update(awaiting_since=timezone.now(), due_at=timezone.now())
+    ck("(ก่อนเก็บตก) ยังไม่อยู่ห้องพัก", oc.id not in tocode_ids())
+    C.scan_contacts()
+    ck("★ เก็บตกแชทเดิม: เจอไอดีไลน์ → เข้าห้องพัก", oc.id in tocode_ids()
+       and ChatLead.objects.get(chat=oc).line_id == "oldc_99")
+    ck("ตัวเลขแท็บตรงกับรายการ (หลังกติกาใหม่)", C.counts(admin=True)["tocode"] == len(tocode_ids()))
 
 finally:
     _runner.teardown_databases(_old)

@@ -636,6 +636,10 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
     o = _row_for(prof)
     sim = is_sim(user_id)
     new_round = _customer_in(o, at, preview, c, start_round=True, sim=sim)
+    try:                                       # ลูกค้าให้เบอร์/ไอดี = เข้าห้องพัก Lead ทันที
+        capture_contact(o, extra=[{"dir": "in", "text": preview or ""}])
+    except Exception:
+        pass
     if picture:
         o.picture_url, o.picture_at = picture[:500], timezone.now()
         ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=o.picture_at)
@@ -730,6 +734,10 @@ def note_fb_batch(fp, msgs):
         else:
             live = (now - m.sent_at) <= timedelta(minutes=FB_LIVE_MIN)
             new_round = _customer_in(o, m.sent_at, fb_preview(m), c, start_round=live) or new_round
+    try:                                       # ลูกค้าให้เบอร์/ไอดี = เข้าห้องพัก Lead ทันที
+        capture_contact(o)
+    except Exception:
+        pass
     if new_round and c.get("notify_sellers"):
         try:
             _notify_new(o, c)
@@ -966,6 +974,10 @@ def sync_rows(force: bool = False) -> int:
                               last_out_at=g.sent_at if g.direction == GroupChat.OUT else None))
     if made:
         ChatOwner.objects.bulk_create(made, ignore_conflicts=True)
+    try:
+        scan_contacts()
+    except Exception:
+        pass
     return len(made)
 
 
@@ -1644,11 +1656,108 @@ def to_code(qs):
     → ลูกค้าเก่าที่ทักมาก่อนเปิด Connect แล้วไม่ได้ทักกลับมาอีก **ไม่นับ** (จ่ายเบอร์นอกระบบไปแล้ว ·
     วัดจริงตอนเปิด: 381 จาก 391 คนเป็นแบบนี้ ถ้านับด้วยแท็บนี้จะใช้งานไม่ได้)
     ไม่นับคนที่แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (`NOCODE_KEY`)
+
+    ★ 4 ต.ค.69 เจ้าของสั่ง *"ลูกค้าทุกคนไม่ได้เข้าห้องพักลีด ต้องเป็นลูกค้าที่ให้เบอร์หรือช่องทางติดต่อแล้วเท่านั้น"*
+      → ต้องมี **เบอร์โทร หรือ ID LINE** ในข้อมูลลีด (ระบบจับจากแชทให้เอง `capture_contact` · หรือแอดมินพิมพ์เอง)
+      ลูกค้าที่ยังแค่ถามรถ (แอดมินยังขอเบอร์อยู่) อยู่ในคิว "รอรับ"/"ทั้งหมด" ตามเดิม แต่ยังไม่เข้าห้องพัก
     """
     engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
                | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
-    no_code = Q(lead__isnull=True) | (Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY))
-    return qs.filter(engaged).filter(no_code)
+    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY)
+    contact = Q(lead__phone__gt="") | Q(lead__line_id__gt="")
+    return qs.filter(engaged).filter(no_code).filter(contact)
+
+
+# ── ช่องทางติดต่อที่ลูกค้าให้มาในแชท (เบอร์ / ID LINE) — ตัวตัดสินว่าเข้าห้องพัก Lead หรือยัง ──
+#   ID LINE: ต้องมี "ป้าย" (ไอดีไลน์ xxx · line id: xxx) **หรือ** ส่งมาเป็นคำเดียวหลังเราขอไอดี/ไลน์
+#   ไม่เดาจากคำอังกฤษลอยๆ — ข้อความอย่าง "ok55" / "civic" จะกลายเป็นไอดีปลอมแล้วลีดเข้าห้องพักทั้งที่ยังไม่ได้ช่องทางติดต่อ
+_LINE_ID_LABEL = re.compile(r"(?<![A-Za-z])(?:ไอดี\s*ไลน์|ไอดีไลน|ไลน์\s*ไอดี|ไลน์ไอดี|line\s*id|id\s*line|lineid|ไอดี|line|ไลน์)"
+                            r"\s*(?:คือ|ครับ|ค่ะ|นะ)?\s*[:：=]?\s*(@?[A-Za-z0-9][A-Za-z0-9._-]{2,29})", re.I)
+_ASK_ID = re.compile(r"ไอดี|ไลน์|line|\bid\b", re.I)
+_BARE_ID = re.compile(r"^@?[A-Za-z0-9][A-Za-z0-9._-]{3,29}$")
+_NOT_ID = {"ok", "okay", "line", "id", "thanks", "thank", "yes", "no", "hello", "hi"}
+
+
+def _id_ok(tok: str) -> str:
+    t = (tok or "").strip().lstrip("@")
+    if not t or t.isdigit() or t.lower() in _NOT_ID or not re.search(r"[A-Za-z]", t):
+        return ""                                  # ตัวเลขล้วน = เบอร์ (จับอีกทาง) · ไม่มีตัวอักษรเลย = ไม่ใช่ไอดี
+    return t[:80]
+
+
+def contacts_in(msgs) -> tuple:
+    """แชท (เก่า→ใหม่ · dict ที่มี dir/text) → (เบอร์ที่ลูกค้าให้, ID LINE ที่ลูกค้าให้)"""
+    texts = [m.get("text") or "" for m in (msgs or []) if (m.get("dir") or "in") == "in"]
+    phones = phones_in(texts)
+    ids, asked = [], False
+    for m in (msgs or []):
+        t = (m.get("text") or "").strip()
+        if (m.get("dir") or "in") == "out":
+            asked = bool(_ASK_ID.search(t))          # เราเพิ่งขอไอดี/ไลน์ → ข้อความคำเดียวถัดไปคือไอดี
+            continue
+        for mm in _LINE_ID_LABEL.finditer(t):
+            v = _id_ok(mm.group(1))
+            if v and v not in ids:
+                ids.append(v)
+        if asked and _BARE_ID.match(t):
+            v = _id_ok(t)
+            if v and v not in ids:
+                ids.append(v)
+        asked = False
+    return phones, ids
+
+
+def capture_contact(o, msgs=None, extra=None) -> bool:
+    """เก็บเบอร์/ID LINE ที่ลูกค้าให้ในแชทลงข้อมูลลีด (ช่องที่ยังว่าง + คนยังไม่เคยแก้) → คืนว่าได้อะไรใหม่ไหม
+
+    เรียกตอนข้อความเข้า (LINE/FB) และตอนเปิดแชท — **ลีดเข้าห้องพักทันทีที่ลูกค้าให้ช่องทางติดต่อ**
+    ไม่ต้องรอแอดมินเปิดแชทก่อน · ไม่มีช่องทางติดต่อ = ไม่สร้างแถว ChatLead ให้เปล่าๆ
+    """
+    lead = lead_of(o, create=False)
+    if lead and lead.phone and lead.line_id:
+        return False
+    if msgs is None:
+        msgs = messages(o, limit=60)
+    ph, ids = contacts_in(list(msgs) + list(extra or []))
+    if not ph and not ids:
+        return False
+    lead = lead or lead_of(o)
+    auto = dict(lead.auto or {})
+    got = []
+    if ph and not lead.phone and auto.get("phone") != HUMAN:
+        lead.phone, auto["phone"] = ph[0], "แชท"
+        got.append("phone")
+    if ids and not lead.line_id and auto.get("line_id") != HUMAN:
+        lead.line_id, auto["line_id"] = ids[0], "แชท"
+        got.append("line_id")
+    if got:
+        lead.auto = auto
+        lead.save(update_fields=got + ["auto", "updated_at"])
+    return bool(got)
+
+
+_CSCAN: dict = {}
+
+
+def scan_contacts(limit: int = 150) -> int:
+    """เก็บตกครั้งเดียวต่อ process: แถวที่คุยในระบบแล้วแต่ข้อมูลลีดยังไม่มีเบอร์/ไอดี → อ่านแชทหาให้
+    (ลูกค้าที่คุยก่อนมีกติกานี้ · ของใหม่จับตอนข้อความเข้าอยู่แล้ว) · จำว่าสแกนแล้วถึงข้อความไหน ไม่สแกนซ้ำ"""
+    engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
+               | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
+    rows = (ChatOwner.objects.select_related("profile", "fb_profile", "lead").filter(engaged)
+            .filter(Q(lead__isnull=True) | (Q(lead__phone="") | Q(lead__line_id="")))
+            .order_by(F("last_in_at").desc(nulls_last=True))[:limit])
+    n = 0
+    for o in rows:
+        key = (o.last_in_at or o.last_at)
+        if o.id in _CSCAN and _CSCAN[o.id] == key:      # ★ เช็ค "มีในตาราง" ก่อน — แถวที่ไม่มีเวลาข้อความ (None)
+            continue                                    #   ต้องไม่ถูกนับว่าสแกนแล้ว
+        _CSCAN[o.id] = key
+        try:
+            n += 1 if capture_contact(o) else 0
+        except Exception:
+            pass
+    return n
 
 
 def suggest_prefix(lead, assignee_team: str = "") -> dict:

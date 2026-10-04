@@ -282,6 +282,7 @@ def api_chat(request):
     # ข้อมูลลีด (ช่องเดียวกับชีตลีด) — เฉพาะคนที่เห็นแชทเต็ม · เติมอัตโนมัติก่อนส่ง (ไม่ทับที่คนพิมพ์)
     if acc == "full":
         try:
+            C.capture_contact(o, msgs)                # เบอร์/ID LINE ที่ลูกค้าให้ (รวมไอดีที่ส่งหลังเราขอ)
             lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"])
             out["lead"] = C.lead_json(o, lead)
             out["leadEditable"] = bool(admin or mine)
