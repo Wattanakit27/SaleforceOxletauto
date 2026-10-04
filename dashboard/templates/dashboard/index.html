@@ -1332,14 +1332,21 @@
       let html = '';
       // ★ 19 ก.ย.69 — จอกว้าง = แถบเมนูซ้ายถาวร (ดู .has-sidebar ใน globals.css) · มือถือยังเป็น ☰ drawer
       document.body.classList.add('has-sidebar');
-      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'cn',i:'lucide:message-circle',l:'Connect (แชทลูกค้า)'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'Facebook',img:FB_ICON},{id:'tt',i:'lucide:trending-up',l:'TikTok',img:TT_ICON},{id:'yt',i:'lucide:trending-up',l:'YouTube',img:YT_ICON},{id:'ct',i:'lucide:clapperboard',l:'คอนเทนต์'},{id:'ad',i:'lucide:wallet',l:'โฆษณา'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
+      const NAV_TABS = [{id:'o',i:'lucide:bar-chart-3',l:'ภาพรวม'},{id:'cn',i:'lucide:message-circle',l:'Connect (แชทลูกค้า)'},{id:'s',i:'lucide:user',l:'เซลล์'},{id:'c',i:'lucide:megaphone',l:'LEAD'},{id:'a',i:'lucide:radio',l:'ไลฟ์'},{id:'b',i:'lucide:clipboard-list',l:'สถานะจองปล่อย'},{id:'p',i:'lucide:shopping-cart',l:'จัดซื้อ'},{id:'so',i:'lucide:trending-up',l:'Facebook',img:FB_ICON},{id:'tt',i:'lucide:trending-up',l:'TikTok',img:TT_ICON,sub:1},{id:'yt',i:'lucide:trending-up',l:'YouTube',img:YT_ICON,sub:1},{id:'ct',i:'lucide:clapperboard',l:'คอนเทนต์',sub:1},{id:'ad',i:'lucide:wallet',l:'โฆษณา'},{id:'t',i:'lucide:car-front',l:'สถานะรถ'},{id:'ck',i:'lucide:repeat',l:'เบิก-คืนรถ'}];
       const _curTab = NAV_TABS.find(t => t.id === tab) || NAV_TABS[0];
+      // ★ 4 ต.ค.69 เจ้าของ "เอาไปรวมกัน แยกออกมาทำไม" — Facebook/TikTok/YouTube/คอนเทนต์ เหลือ **ปุ่มเดียวในเมนู ("โซเชียล")**
+      //   แต่ละแพลตฟอร์มยังเป็นคนละหน้าเหมือนเดิม (2 ต.ค. "มันเทียบกันไม่ได้") · สลับด้วยแถบบนหน้า (`socialSubBar`)
+      //   id แท็บเดิม (so/tt/yt/ct) ไม่เปลี่ยน → ลิงก์ ?tab= · report_shot._TAB_ID · test_tab_map ใช้ได้ตามเดิม
+      //   แท็บที่ติด `sub:1` ใน NAV_TABS = ไม่วาดในเมนู (อยู่ใต้ปุ่ม "โซเชียล")
+      const SOCIAL_SUB = ['so', 'tt', 'yt', 'ct'];
+      const _inSocial = SOCIAL_SUB.includes(tab);
+      if (_inSocial) _soLastTab = tab;          // กดปุ่ม "โซเชียล" ครั้งถัดไป = กลับมาแพลตฟอร์มที่ดูล่าสุด
 
       // Header
       html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:13px 18px;background:var(--bg);border:.5px solid var(--bd);border-radius:16px;box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
       html += `<div style="display:flex;align-items:center;gap:13px">`;
       // display:none ตรงนี้ = ค่าปลอดภัยถ้า CSS ใหม่ยังไม่มา (หัวเว็บจะหน้าตาเหมือนเดิมทุกอย่าง)
-      html += `<div class="hdr-page" style="display:none"><div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div><div class="hdr-h1">${h(_curTab.l)}</div></div>`;
+      html += `<div class="hdr-page" style="display:none"><div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div><div class="hdr-h1">${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
       html += `<button class="nav-burger" onclick="toggleNav()" title="เมนู — แท็บทั้งหมด" aria-label="เปิดเมนู">${ic('lucide:menu',20)}</button>`;
       html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:42px;width:auto;display:block">`;
       html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:22px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span><span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span></div>`;
@@ -1417,6 +1424,11 @@
       //   ไม่ต้องจำสถานะเปิด/ปิดใน localStorage อีก (navSecOn/toggleNavSec ยังอยู่เผื่อของเดิมอ้างถึง)
       html += `<div class="nav-sec first"><span>หน้าหลัก</span></div>`;
       NAV_TABS.forEach(t => {
+        if (t.sub) return;                                   // อยู่ใต้ปุ่ม "โซเชียล" (สลับในหน้า)
+        if (t.id === 'so') {
+          html += `<button class="ntab${_inSocial?' on':''}" data-sec="main" onclick="switchTab('${_soLastTab || 'so'}')" title="Facebook · TikTok · YouTube · คอนเทนต์">${ic('lucide:trending-up',15)} โซเชียล</button>`;
+          return;
+        }
         const go = t.id==='ck' ? 'gotoCheckout()' : `switchTab('${t.id}')`;
         //  t.img = โลโก้จริงของแพลตฟอร์ม (dict LUCIDE ไม่มีไอคอน facebook/tiktok/youtube)
         const tIc = t.img ? `<img src="${t.img}" alt="" style="width:15px;height:15px;border-radius:4px;object-fit:cover;flex-shrink:0">` : ic(t.i,15);
@@ -1454,6 +1466,8 @@
               + `<button class="nav-foot-out" onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" aria-label="ออกจากระบบ">${ic('lucide:log-out',16)}</button></div>`;
       }
       html += `</div>`;
+      // หน้าโซเชียล: แถบสลับแพลตฟอร์มบนสุด (แทน 4 ปุ่มในเมนูเดิม)
+      if(_inSocial) html += socialSubBar(NAV_TABS.filter(t => SOCIAL_SUB.includes(t.id)));
       if(tab !== 'cn') html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
       // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ"/"จัดซื้อ" — มี UI/รอบเดือนของตัวเอง)
@@ -5308,6 +5322,20 @@
     //   เพิ่มแพลตฟอร์มใหม่ = เติม SO_TAB_SIDE + SO_NAME/SO_COLOR/SO_ICON + NAV_TABS + _TAB_ID (report_shot.py)
     const SO_TAB_SIDE = { so: 'meta', tt: 'tiktok', yt: 'youtube' };
     let _soSide = 'meta';            // ฝั่งที่หน้านี้กำลังดู — ตั้งจาก renderSocial(side)
+
+    // ★ 4 ต.ค.69 — เมนูซ้ายเหลือปุ่ม "โซเชียล" ปุ่มเดียว · สลับแพลตฟอร์มด้วยแถบนี้บนหน้า (เจ้าของ "เอาไปรวมกัน")
+    //   `var`/`function` ไม่ใช่ `let`/`const` — render() ถูกเรียกก่อนบรรทัดนี้ (บทเรียนเดิม: TDZ ทำหน้าพังทั้งหน้า)
+    var _soLastTab;                  // แพลตฟอร์มที่ดูล่าสุด — ปุ่ม "โซเชียล" ในเมนูพากลับมาที่นี่
+    function socialSubBar(tabs) {
+      const btn = t => {
+        const on = t.id === tab;
+        const tIc = t.img ? `<img src="${t.img}" alt="" style="width:16px;height:16px;border-radius:4px;object-fit:cover;flex-shrink:0">` : ic(t.i, 16);
+        return `<button class="so-subtab${on ? ' on' : ''}" onclick="switchTab('${t.id}')" aria-pressed="${on}"`
+          + ` style="display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:var(--fs-sub);font-weight:${on ? 700 : 600};`
+          + `border:.5px solid ${on ? 'var(--blue)' : 'var(--bd2)'};background:${on ? 'var(--blue)' : 'var(--bg)'};color:${on ? 'var(--on-blue)' : 'var(--t2)'}">${tIc} ${h(t.l)}</button>`;
+      };
+      return `<div class="so-subbar" role="tablist" aria-label="แพลตฟอร์มโซเชียล" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">${tabs.map(btn).join('')}</div>`;
+    }
 
     //  ★ เมตริกที่แพลตฟอร์มนั้น "ไม่มีให้" ต้องขึ้น "–" ไม่ใช่ 0
     //    0 อ่านเป็น "ไม่มีใครแชร์" ซึ่งไม่จริง — YouTube Data API ไม่เปิดยอดแชร์เลยสักทาง
