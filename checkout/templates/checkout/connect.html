@@ -562,6 +562,7 @@
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
+    else if (r.buyCode) tags.push(`<span class="tag" title="ลูกค้าอยากขายรถให้เรา — ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว">ส่งจัดซื้อ ${h(r.buyCode)}</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
     if (ADMIN && r.team) tags.push(teamTag(r.team));
@@ -636,7 +637,7 @@
   function doneItems(withSeller) {
     const P = S.parked || {};
     const out = (S.assigned || []).map(r => ({ kind: 'chat', id: r.id, name: r.name, src: SRC_KEY[r.src] || 'line', pic: r.pic,
-      code: r.code, seller: r.seller || '', by: r.by || '', at: r.at, how: r.how || '' }));
+      code: r.code, seller: r.seller || '', by: r.by || '', at: r.at, how: r.how || '', buy: r.kind === 'buy' }));
     (P.assigned || []).forEach(i => {
       const real = i.code, sys = i.sys || null;
       out.push({ kind: 'park', name: pWho(i), src: SRC_KEY[i.source] || 'other', pic: '',
@@ -662,7 +663,8 @@
       ${chat ? avHtml(x.name, x.pic) : ''}
       <div class="cn-rb">
         <div class="cn-rh"><span class="cn-rn">${h(x.name)}</span><span class="cn-rt">${h(fmtWhen(x.at))}</span></div>
-        <div class="hub-to">จ่ายให้ <b>${x.seller ? '@' + h(x.seller) : UNKNOWN_SELLER}</b></div>
+        <div class="hub-to">${x.buy ? 'ส่งจัดซื้อ' : 'จ่ายให้'} <b>${x.seller ? '@' + h(x.seller) : UNKNOWN_SELLER}</b>${
+          x.buy ? ' <span style="color:var(--t3);font-size:12px">· ลูกค้าอยากขายรถให้เรา</span>' : ''}</div>
         <div class="cn-rm">${chTag(x.src)}<span class="tag ok">${ic('hash', 12)} ${h(x.code)}</span>
           <span class="tag">${h(x.how)}${x.by ? ' · โดย ' + h(x.by) : ''}</span>${x.extra ? `<span class="tag">${h(x.extra)}</span>` : ''}
           ${x.slip ? `<button class="btn sm" data-slip="${h(x.slip)}">คัดลอกใบจ่ายลีด</button>` : ''}</div>
@@ -694,7 +696,7 @@
           <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead ${seg}
             <span class="hub-seg"><button class="btn sm${S.doneRange === 'today' ? ' pri' : ''}" data-hubr="today">วันนี้</button><button class="btn sm${S.doneRange === '7d' ? ' pri' : ''}" data-hubr="7d">7 วัน</button></span></div>
           <div class="cn-park-f" style="padding-top:0">จ่ายให้ใครบ้าง${S.doneSeller ? ` — กรองเฉพาะ <b>${h(S.doneSeller)}</b> (กดชื่อเดิมอีกครั้งเพื่อดูทั้งหมด)` : ' — กดชื่อเพื่อดูเฉพาะคนนั้น'}
-            · รวมทั้งที่จ่ายผ่านปุ่มในระบบ และที่แอดมินโพสต์ใบจ่ายเบอร์ในกลุ่ม (ระบบจับคู่ใบให้เองด้วยเบอร์/ชื่อไลน์)</div>
+            · รวมทั้งที่จ่ายผ่านปุ่มในระบบ · ใบจ่ายเบอร์ในห้องจ่ายเบอร์ · และลูกค้าที่อยากขายรถที่ส่งเข้ากลุ่มเคสHOT ของจัดซื้อ (ระบบจับคู่ใบให้เองด้วยเบอร์/ชื่อ)</div>
           ${sum ? `<div class="hub-sum">${sum}</div>` : ''}
         </div>
         ${shown.map(doneCardHtml).join('') || `<div class="cn-empty">ยังไม่มีลีดที่จ่ายเบอร์${h(rangeL === 'วันนี้' ? 'วันนี้' : 'ใน 7 วัน')}</div>`}`;
@@ -710,7 +712,7 @@
         <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead ${seg} <span style="font-weight:400">${chips}</span></div>
         <div class="cn-park-f" style="padding-top:0">ศูนย์กระจายลีดทุกช่องทาง — แชท LINE / Facebook ที่<b>ให้เบอร์หรือไอดีไลน์แล้ว</b>แต่ยังไม่มีเลข + ใบร่างที่พักไว้ในกลุ่ม ${room}
           · รอนานสุดขึ้นก่อน · แชท: เปิดแล้วจ่ายเบอร์ในแผงขวา · ใบร่าง: กดกางแล้วจ่ายได้เลย
-          · แอดมินโพสต์ใบจ่ายเบอร์ในกลุ่มแล้ว = ระบบจับคู่ให้เองภายในไม่กี่นาที แล้วย้ายไป "จ่ายแล้ว"</div>
+          · แอดมินโพสต์ใบในห้องจ่ายเบอร์ หรือใบเคสรับซื้อ (โค้ด OC-…) ในกลุ่มเคสHOT แล้ว = ระบบจับคู่ให้เองภายในไม่กี่นาที แล้วย้ายไป "จ่ายแล้ว"</div>
       </div>
       ${items.map(x => x.html).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}
       ${skipped ? `<div class="cn-park" style="border-top:.5px solid var(--bd2)">
@@ -892,7 +894,7 @@
     const acts = [];
     // ปุ่มลัดไปกล่อง "จ่ายเบอร์" — กล่องอยู่ในแผงข้อมูลลูกค้า (ด้านขวา/แบบพับ) ซึ่งอาจซ่อนอยู่
     const L = d.lead;
-    if (ADMIN && d.codeHelp && L && !L.code && !L.noCode) {
+    if (ADMIN && d.codeHelp && L && !L.code && !L.noCode && !L.buy) {
       acts.push(`<button class="btn pri" id="cn-code-btn" title="ออกเลขลีด + จ่ายลูกค้าคนนี้ให้เซลล์">${ic('hash')} จ่ายเบอร์</button>`);
     }
     if (d.canClaim) acts.push(`<button class="btn pri" id="cn-claim">${ic('user-check')} รับลูกค้าคนนี้</button>`);
@@ -1057,6 +1059,11 @@
       // แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (ไม่ใช่ลีดขาย) — ออกจากแท็บจ่ายเบอร์แล้ว · กดเอากลับได้
       x += `<div class="pf-skip"><span>ไม่ต้องจ่ายเบอร์${L.noCode.by ? ' · ' + h(L.noCode.by) : ''}${L.noCode.at ? ' ' + h(fmtFull(L.noCode.at)) : ''}</span>
         ${d.codeHelp ? `<button class="btn sm" data-act="nocode-undo">เอากลับมาจ่ายเบอร์</button>` : ''}</div>`;
+    } else if (L.buy && !L.code) {
+      // แอดมินส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว (ใบ "โค้ด : OC-…") — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย ไม่ต้องจ่ายเบอร์
+      const B = L.buy;
+      x += `<div class="pf-done">ส่งจัดซื้อแล้ว <b>${h(B.code)}</b>${B.seller ? ' → @' + h(B.seller) : ''}
+        · ${h(fmtFull(B.at))}${B.by ? ' โดย ' + h(B.by) : ''}<br><span style="color:var(--t2)">ใน "${h(B.group || 'เคสHOT')}" — ลูกค้าอยากขายรถให้เรา</span></div>`;
     } else if (d.codeHelp && !L.code) {
       x += assignBoxHtml(d, sfx);
     }

@@ -1054,6 +1054,8 @@ def row_json(o, me=None, now=None) -> dict:
         "src": "fb" if is_fb(o) else "line",            # ป้ายช่องทางในรายชื่อ (Facebook / LINE)
         "staff": bool(getattr(p, "is_employee", False)),  # พนักงานทักบัญชีลูกค้า (ทดสอบ/ส่งต่อลีด) — ป้าย "พนักงาน"
         "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
+        # เลขเคสรับซื้อ (OC-…) — ลูกค้าที่อยากขายรถให้เรา ถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว
+        "buyCode": ((ld.auto or {}).get(BUY_KEY) or {}).get("code", "") if ld else "",
     }
 
 
@@ -1454,6 +1456,88 @@ def find_slip(phone: str = "", line_name: str = ""):
     return None
 
 
+# ── ลูกค้าที่ "อยากขายรถให้เรา" — แอดมินส่งเข้ากลุ่มเคสHOT ของจัดซื้อ ไม่ใช่ห้องจ่ายเบอร์ (4 ต.ค.69) ──
+#   ใบหน้าตาคนละแบบ (`leadgroup.parse_buycase` · "โค้ด : OC-7436") · เลขเป็นของงานรับซื้อ **ไม่ใช่เลขลีดขาย**
+#   → ไม่ใส่ลงช่อง Code ของฟอร์ม · จดไว้ที่ `ChatLead.auto[BUY_KEY]` แล้วถือว่า "จ่ายแล้ว" (ออกจากห้องพัก)
+BUY_KEY = "_buy"
+BUY_GROUP_HINTS = ("ซื้อ-ขายรถ", "ซื้อขายรถ")
+
+
+def _buy_group_ids() -> set:
+    ids = set()
+    try:
+        from .models import LineGroup
+        ids |= set(LineGroup.objects.filter(kind=LineGroup.TRADEIN).values_list("group_id", flat=True))
+    except Exception:
+        pass
+    q = Q()
+    for hint in BUY_GROUP_HINTS:
+        q |= Q(group_name__icontains=hint)
+    ids |= set(GroupChat.objects.filter(q, chat_type=GroupChat.GROUP).values_list("group_id", flat=True).distinct())
+    return {g for g in ids if g}
+
+
+def _channel_fits(channel: str, fb: bool) -> bool:
+    """ช่องทางที่เขียนในใบ ไม่ขัดกับที่ลูกค้าทักมาจริง — ใช้ตอนจับคู่ด้วย "ชื่อ" เท่านั้น (เบอร์ตรง = เชื่อได้อยู่แล้ว)
+    ชื่อซ้ำกันได้ระหว่างคนทัก LINE กับคนทักเพจ · ใบเขียนว่า LINE@ แต่ลูกค้าคนนี้ทักเพจ = ไม่ใช่คนเดียวกัน"""
+    c = (channel or "").lower()
+    if not c:
+        return True
+    says_line = "line" in c or "ไลน์" in c
+    says_fb = any(k in c for k in ("เพจ", "page", "fb", "facebook", "เฟส"))
+    if fb:
+        return not says_line or says_fb
+    return not says_fb or says_line
+
+
+def find_buy_slip(phone: str = "", name: str = "", fb: bool = False):
+    """ใบเคสรับซื้อของลูกค้าคนนี้ในกลุ่มเคสHOT → (ข้อมูลใบ, แถวแชท) หรือ None
+    จับคู่ด้วย **เบอร์โทรเต็ม** หรือ **ชื่อตรงทั้งชื่อ + ช่องทางไม่ขัดกัน** (ไม่ fuzzy — บทเรียนเดิม)"""
+    from .leadgroup import parse_buycase
+    gids = _buy_group_ids()
+    if not gids or not (phone or name):
+        return None
+    qs = GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=gids, text__contains="โค้ด")
+    cands = []
+    if phone and len(phone) >= 9:
+        cands += list(qs.filter(text__contains=phone[-4:]).order_by("-sent_at")[:40])
+    nn = _norm_name(name)
+    if len(nn) >= 4:
+        cands += list(qs.filter(text__icontains=(name or "").strip()[:40]).order_by("-sent_at")[:40])
+    seen = set()
+    for g in sorted(cands, key=lambda x: x.sent_at or timezone.now(), reverse=True):
+        if g.pk in seen:
+            continue
+        seen.add(g.pk)
+        d = parse_buycase(g.text or "")
+        if not d:
+            continue
+        ph = phones_in([d.get("phone", "")])
+        if phone and ph and ph[0] == phone:
+            return d, g
+        if len(nn) >= 4 and _norm_name(d.get("name")) == nn and _channel_fits(d.get("channel", ""), fb):
+            return d, g
+    return None
+
+
+def _buy_owner(g, d) -> str:
+    """เคสนี้ส่งให้จัดซื้อคนไหน — แท็กท้ายใบก่อน · ไม่แท็ก (ครึ่งหนึ่งของใบจริง) = ชื่อในวงเล็บของกลุ่ม "เคสHOT (พี่หมี)" """
+    tag = d.get("assigned", "")
+    if tag:
+        return tag_nick(tag)
+    m = re.search(r"\(([^)]+)\)", g.group_name or "")
+    if not m:
+        return ""
+    who = m.group(1).strip()
+    # "พี่ต๊าด" ในชื่อกลุ่ม · ทะเบียนเขียน "ต๊าด" (ส่วน "พี่หมี" ทะเบียนเขียนเต็ม) → ลองทั้ง 2 แบบ ไม่เจอ = ชื่อตามกลุ่ม
+    return _tag_match(who) or (who.startswith("พี่") and _tag_match(who[3:])) or who
+
+
+def buy_mark(d, g) -> dict:
+    return {"code": d.get("case_code", ""), "at": _iso(g.sent_at), "group": g.group_name or "",
+            "tag": d.get("assigned", ""), "seller": _buy_owner(g, d), "by": _poster(g)}
+
+
 # ── "จ่ายให้ใคร" (4 ต.ค.69 · เจ้าของ: "หลีดบางตัวก็จ่ายไปแล้ว บางตัวก็ยังไม่จ่าย อยากรู้ว่าจ่ายให้ใครบ้าง") ──
 #   ใบจ่ายลีดแท็กเซลล์ท้ายใบ (@ + ชื่อ LINE คำแรก เช่น "@เซลมัท" "@First" "@Mai🐶OxletAuto")
 #   → แปลงเป็นชื่อเล่นในทะเบียน · ไม่ชัด (ไม่เจอ / ตรงหลายคน) = คืนแท็กเดิม ไม่เดา
@@ -1466,6 +1550,12 @@ def _tag_key(s) -> str:
 
 
 def tag_nick(tag) -> str:
+    t = (tag or "").strip().lstrip("@")
+    return _tag_match(t) or t
+
+
+def _tag_match(tag) -> str:
+    """ชื่อเล่นในทะเบียนของแท็กนี้ · ไม่เจอ/ตรงหลายคน = "" (แยก "ไม่เจอ" ออกจาก "เจอแล้วชื่อเดียวกับแท็ก")"""
     t = (tag or "").strip().lstrip("@")
     if not t:
         return ""
@@ -1484,7 +1574,7 @@ def tag_nick(tag) -> str:
             pass
         _TAGNICK.update(at=_t.time(), map=hits)
     s = _TAGNICK["map"].get(_tag_key(t)) or set()
-    return next(iter(s)) if len(s) == 1 else t
+    return next(iter(s)) if len(s) == 1 else ""
 
 
 def _poster(g) -> str:
@@ -1598,25 +1688,33 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
     since = now - timedelta(days=days)
     out = []
     qs = (ChatLead.objects.select_related("chat", "chat__profile", "chat__fb_profile", "chat__owner", "chat__lead")
-          .exclude(code="").filter(Q(assigned_at__gte=since) | Q(auto__has_key="_slip")))
+          .filter((~Q(code="") & (Q(assigned_at__gte=since) | Q(auto__has_key="_slip")))
+                  | Q(auto__has_key=BUY_KEY)))
     from datetime import datetime as _dt
     for lead in qs[:600]:
         o, auto = lead.chat, (lead.auto or {})
-        if lead.assigned_at:
+        kind, code = "sale", lead.code
+        if lead.code and lead.assigned_at:
             at, how = lead.assigned_at, ("ระบบ (ทดลอง)" if lead.code_demo else "ระบบ")
             seller = o.owner.nickname if o.owner_id else ""
             by = lead.assigned_by or ""
         else:
-            sl = auto.get("_slip") or {}
+            # ใบลีดขาย (`_slip`) ก่อน · ไม่มีเลขลีดขาย = ส่งเข้ากลุ่มเคสHOT ของจัดซื้อ (`BUY_KEY`)
+            sl = auto.get("_slip") if lead.code else None
+            if not sl:
+                sl, kind, code = auto.get(BUY_KEY) or {}, "buy", (auto.get(BUY_KEY) or {}).get("code", "")
             try:
                 at = _dt.fromisoformat(sl.get("at") or "")
             except Exception:
                 continue
-            how, seller, by = "ใบในห้องจ่ายเบอร์", sl.get("seller") or sl.get("tag") or "", sl.get("by") or ""
-        if at < since:
+            # "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์" → "เคสHOT (พี่หมี)" (การ์ดแคบ ชื่อเต็มยาวเกิน)
+            short = re.sub(r"\s*ซื้อ-?ขายรถ.*$", "", sl.get("group") or "") or "เคสHOT"
+            how = ("ส่งจัดซื้อ · " + short) if kind == "buy" else "ใบในห้องจ่ายเบอร์"
+            seller, by = sl.get("seller") or sl.get("tag") or "", sl.get("by") or ""
+        if at < since or not code:
             continue
         r = row_json(o, me, now)
-        r.update({"code": lead.code, "seller": seller, "by": by, "at": _iso(at), "how": how})
+        r.update({"code": code, "seller": seller, "by": by, "at": _iso(at), "how": how, "kind": kind})
         out.append(r)
     out.sort(key=lambda r: r["at"], reverse=True)
     return out[:limit]
@@ -1704,6 +1802,16 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
             # จ่ายให้ใคร = คนที่ถูกแท็กท้ายใบ (ชื่อ LINE คำแรก → ชื่อเล่นในทะเบียน) · ใครโพสต์ใบ = แอดมินที่จ่าย
             auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or "", "tag": d.get("assigned", ""),
                              "seller": tag_nick(d.get("assigned", "")), "by": _poster(g)}
+        elif BUY_KEY not in auto:
+            # ไม่มีใบจ่ายลีดขาย → ลูกค้าอาจ "อยากขายรถให้เรา" แล้วถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแทน
+            #   ข้อมูลในใบเป็นรถของลูกค้า (รุ่น/ทะเบียน/เลขไมล์) ไม่ใช่รถที่เขาจะซื้อ → ไม่เอามาเติมช่องรถของฟอร์ม
+            bh = find_buy_slip(lead.phone or (ph[0] if ph else ""), cust(o).display_name or "", fb=is_fb(o))
+            if bh:
+                auto[BUY_KEY] = buy_mark(*bh)
+                changed.append(BUY_KEY)
+                d = bh[0]
+                if d.get("phone"):
+                    put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบเคสรับซื้อ")
 
     def stale_sys(field) -> tuple:
         """ค่าที่ระบบเคยใส่ไว้แต่ "ไม่อยู่ในตัวเลือกของชีต" (เช่น "LINE OA" ก่อนมี dropdown) → ยอมให้แก้ให้ตรงชีต"""
@@ -1778,6 +1886,8 @@ def lead_json(o, lead=None) -> dict:
         "assignedBy": lead.assigned_by or "",
         # แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ ({by, at}) — ไม่ใช่ลีดขาย ออกจากแท็บจ่ายเบอร์
         "noCode": (lead.auto or {}).get(NOCODE_KEY) or None,
+        # ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว ({code, at, group, seller, by}) — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย
+        "buy": (lead.auto or {}).get(BUY_KEY) or None,
     })
     out["slipText"] = slip_text(o, lead)
     return out
@@ -1873,7 +1983,7 @@ def to_code(qs):
     """
     engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
                | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
-    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY)
+    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
     contact = Q(lead__phone__gt="") | Q(lead__line_id__gt="")
     return qs.filter(engaged).filter(no_code).filter(contact)
 

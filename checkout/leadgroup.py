@@ -104,6 +104,50 @@ def parse_fields(text: str) -> dict:
     return out
 
 
+# ── ใบเคสรับซื้อ / เทิร์น (กลุ่ม "เคสHOT (พี่หมี|พี่ต๊าด) ซื้อ-ขายรถช่องทางออนไลน์" · "เคสVERY HOT …") ──
+#   ★ 4 ต.ค.69 เจ้าของให้สังเกตกลุ่มจ่ายเบอร์ — ลูกค้าที่ "อยากขายรถให้เรา" ไม่ได้ถูกจ่ายในห้องจ่ายเบอร์
+#     แต่แอดมินโพสต์ใบหน้าตาคนละแบบในกลุ่มเคสHOT (วัดจริง 30 วัน: OC 268 ใบ · SC 4 ใบ · คนละรูปกับ "Ac Lead No.")
+#       โค้ด : OC-7436 / ADS / รุ่น / เลขไมล์ / ทะเบียน / เบอร์ติดต่อ / ชื่อลูกค้า : <ชื่อ> / <ช่องทาง> /
+#       เพิ่มเติม / ขายเพราะ / ราคากลางรับซื้อจากตาราง / @หมีน้อย (ครึ่งหนึ่งไม่แท็ก — ชื่อกลุ่มบอกว่าของใคร)
+#   ต้องขึ้นต้นข้อความด้วย "โค้ด" — ข้อความตามงาน ("OC-7436 ลูกค้าทักมาใน Line@ … @หมีน้อย") ไม่ใช่ใบ
+_BUY_CODE = re.compile(r"^\s*โค้ด\s*[:：]\s*([A-Za-z]{1,3})[ \t]*-?[ \t]*(\d{3,6})", re.I)
+_BUY_FIELDS = {
+    "phone": ["เบอร์ติดต่อ", "เบอร์"],
+    "customer": ["ชื่อลูกค้า"],
+    "car": ["รุ่น"],
+    "plate": ["ทะเบียน"],
+    "ads": ["ads"],
+    "reason": ["ขายเพราะ"],
+    "more": ["เพิ่มเติม"],
+}
+
+
+def parse_buycase(text: str) -> dict | None:
+    """แกะใบเคสรับซื้อ → {case_code, phone, name, channel, car, plate, …, assigned} · ไม่ใช่ใบ = None
+    `name`/`channel` แยกจากช่อง "ชื่อลูกค้า : New_matter / LINE@" (ไม่มี "/" = ทั้งช่องเป็นชื่อ)"""
+    m = _BUY_CODE.match(text or "")
+    if not m:
+        return None
+    out = {"case_code": "%s-%s" % (m.group(1).upper(), m.group(2)), "assigned": ""}
+    for raw in (text or "").splitlines()[1:]:
+        line = raw.strip()
+        if ":" not in line and "：" not in line:
+            continue
+        head, _, val = line.replace("：", ":").partition(":")
+        key, val = head.strip().strip("*").strip().lower(), val.strip()
+        for field, aliases in _BUY_FIELDS.items():
+            if any(key == a or key.startswith(a) for a in aliases):
+                if val and val != "-" and field not in out:
+                    out[field] = val
+                break
+    nm, _, ch = (out.pop("customer", "") or "").partition("/")
+    out["name"], out["channel"] = nm.strip(), ch.strip()
+    tags = re.findall(r"@([^\s@]+)", text or "")
+    if tags:
+        out["assigned"] = tags[-1]
+    return out
+
+
 def parse_update(text: str) -> tuple[str, str] | None:
     """`7364 รอตอบ` → ("7364", "รอตอบ") · คืน None ถ้าไม่ใช่รูปแบบนี้"""
     t = (text or "").strip()

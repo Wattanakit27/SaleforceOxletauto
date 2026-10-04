@@ -1720,6 +1720,85 @@ try:
     s_, d = J(SA1, "/connect/api/inbox?view=tocode")
     ck("เซลล์ไม่ได้รายการจ่ายแล้ว", "assigned" not in d, list(d))
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[29] ลูกค้าอยากขายรถให้เรา — แอดมินส่งเข้ากลุ่มเคสHOT ของจัดซื้อ (ใบ \"โค้ด : OC-…\" · เจ้าของให้สังเกตกลุ่ม)")
+    from checkout.leadgroup import parse_buycase
+    BUY_HOT_MEE, BUY_HOT_TARD = "C" + "7" * 32, "C" + "6" * 32
+
+    def buy_slip(gid, gname, mid, code, phone, name, chan, tag=""):
+        txt = ("โค้ด : %s\nADS  : -\nรุ่น : MAZDA 2 ปี20 เทา\nเลขไมล์ : 56464 กม\nทะเบียน : 1 ขน 691 กทม\n"
+               "เบอร์ติดต่อ  : %s\nชื่อลูกค้า : %s / %s \nเพิ่มเติม :  \nขายเพราะ :  \nราคากลางรับซื้อจากตาราง : \n%s"
+               % (code, phone, name, chan, ("@" + tag + "  ") if tag else ""))
+        return GroupChat.objects.create(chat_type="group", group_id=gid, group_name=gname, message_id=mid,
+                                        sender_id="U%032x" % 79, sender_name="โดนัท", direction="in",
+                                        msg_type="text", text=txt, sent_at=timezone.now())
+
+    pb = parse_buycase("โค้ด : OC-7436\nADS  : -\nรุ่น : MAZDA 2\nเบอร์ติดต่อ  : 087-532-6156\n"
+                       "ชื่อลูกค้า : New_matter / LINE@ \nเพิ่มเติม :  \n@หมีน้อย  \n") or {}
+    ck("แกะใบเคสรับซื้อ: โค้ด/เบอร์/ชื่อ/ช่องทาง/แท็ก", pb.get("case_code") == "OC-7436" and pb.get("phone") == "087-532-6156"
+       and pb.get("name") == "New_matter" and pb.get("channel") == "LINE@" and pb.get("assigned") == "หมีน้อย", pb)
+    ck("รถในใบเคสรับซื้อ = รถของลูกค้า (เก็บแยกช่อง ไม่ใช่รถที่จะซื้อ)", pb.get("car") == "MAZDA 2")
+    ck("ข้อความตามงาน (ไม่ได้ขึ้นต้นด้วยโค้ด) ≠ ใบ",
+       parse_buycase("OC-7436 ลูกค้าทักมาในLine@ ค่ะ ติดต่อหาลูกค้าหน่อยค่ะ @หมีน้อย") is None)
+    ck("ใบจ่ายลีดขาย ≠ ใบเคสรับซื้อ", parse_buycase("Ac Lead No. NLD10-8401\nเบอร์โทร : 0811111111") is None)
+    ck("โค้ด SC (เคสVERY HOT) ก็อ่านได้", (parse_buycase("โค้ด : SC-  7562\nเบอร์ติดต่อ : 0811111111") or {})
+       .get("case_code") == "SC-7562")
+    ck("ช่องทางขัดกับที่ลูกค้าทักมา = ไม่ใช่คนเดียวกัน (จับด้วยชื่อ)",
+       C._channel_fits("LINE@", fb=False) and not C._channel_fits("เพจguru", fb=False)
+       and C._channel_fits("เพจguru", fb=True) and not C._channel_fits("Line@ guru เจมส์", fb=True)
+       and C._channel_fits("", fb=True))
+
+    Employee.objects.create(nickname="พี่หมี", position="จัดซื้อ", display_name="หมีน้อย")
+    Employee.objects.create(nickname="ต๊าด", position="จัดซื้อ", display_name="•Tard'ANUPonG•")
+    C._TAGNICK["at"] = 0.0
+    B1 = C.note_customer_message(cust(501, "New_matter").user_id, timezone.now(), "อยากขายมาสด้า 2 ปี 2020 เบอร์ 0866660001")
+    B2 = C.note_customer_message(cust(502, "ขายรถไม่แท็ก").user_id, timezone.now(), "เบอร์ 0866660002 ครับ")
+    B3 = C.note_customer_message(cust(503, "Supamard").user_id, timezone.now(), "ไอดีไลน์ supa_m ค่ะ")
+    B4 = C.note_customer_message(cust(504, "ชื่อซ้ำเพจ").user_id, timezone.now(), "ไอดีไลน์ dup_pg ค่ะ")
+    B5 = C.note_customer_message(cust(505, "ทั้งขายทั้งซื้อ").user_id, timezone.now(), "เบอร์ 0866660005")
+    ck("(ก่อนส่ง) ทั้ง 5 คนอยู่ในห้องพัก", {B1.id, B2.id, B3.id, B4.id, B5.id} <= set(tocode_ids()), tocode_ids())
+    buy_slip(BUY_HOT_MEE, "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์", "buy-1", "OC-7436", "0866660001",
+             "New_matter", "LINE@", tag="หมีน้อย")
+    buy_slip(BUY_HOT_TARD, "เคสHOT (พี่ต๊าด) ซื้อ-ขายรถช่องทางออนไลน์", "buy-2", "OC-7440", "086-666-0002",
+             "คนอื่นชื่อไม่ตรง", "เพจguru")
+    buy_slip(BUY_HOT_MEE, "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์", "buy-3", "OC-7441", "-",
+             "Supamard", "Line@ guru เจมส์", tag="หมีน้อย")
+    buy_slip(BUY_HOT_MEE, "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์", "buy-4", "OC-7442", "-",
+             "ชื่อซ้ำเพจ", "เพจguru", tag="หมีน้อย")
+    buy_slip(BUY_HOT_TARD, "เคสHOT (พี่ต๊าด) ซื้อ-ขายรถช่องทางออนไลน์", "buy-5", "OC-7443", "0866660005",
+             "ทั้งขายทั้งซื้อ", "LINE@", tag="•Tard'ANUPonG•")
+    post_slip("buy-5-sale", "NLD10-9150", "0866660005", "เอหนึ่ง")            # มีใบลีดขายด้วย → ใบขายชนะ
+    C.slip_sweep(force=True)
+
+    def buy_of(o):
+        return (C.lead_of(ChatOwner.objects.get(pk=o.id)).auto or {}).get(C.BUY_KEY) or {}
+
+    l1 = C.lead_of(ChatOwner.objects.get(pk=B1.id))
+    b1 = buy_of(B1)
+    ck("★ ใบเคสรับซื้อ (เบอร์ตรง) → ออกจากห้องพัก", B1.id not in tocode_ids(), tocode_ids())
+    ck("★ จดเลขเคส + ส่งให้ใคร (แท็ก @หมีน้อย → พี่หมี) + ใครส่ง", b1.get("code") == "OC-7436"
+       and b1.get("seller") == "พี่หมี" and b1.get("by") == "โดนัท" and "พี่หมี" in b1.get("group", ""), b1)
+    ck("★ เลขเคสรับซื้อไม่ใส่ช่อง Code ของลีดขาย", l1.code == "", l1.code)
+    ck("★ ไม่แท็ก → ผู้รับจากชื่อกลุ่ม (พี่ต๊าด → ต๊าด ในทะเบียน)", buy_of(B2).get("seller") == "ต๊าด", buy_of(B2))
+    ck("★ ไม่มีเบอร์ → จับด้วยชื่อตรงทั้งชื่อ (LINE@ ตรงกับลูกค้า LINE)", buy_of(B3).get("code") == "OC-7441", buy_of(B3))
+    ck("★ ชื่อตรงแต่ใบเขียนว่ามาจากเพจ ลูกค้าทัก LINE = ไม่จับคู่ (ไม่เดา)", buy_of(B4) == {} and B4.id in tocode_ids(),
+       buy_of(B4))
+    l5 = C.lead_of(ChatOwner.objects.get(pk=B5.id))
+    ck("มีทั้งใบขายและใบรับซื้อ → ใบลีดขายชนะ (ได้เลขลีด)", l5.code == "NLD10-9150" and buy_of(B5) == {},
+       (l5.code, buy_of(B5)))
+    al = {r["id"]: r for r in C.assigned_list()}
+    r1 = al.get(B1.id) or {}
+    ck("รายการจ่ายแล้ว: เคสรับซื้อ → ส่งให้ใคร · ทางไหน · ป้ายรับซื้อ", r1.get("kind") == "buy" and r1.get("code") == "OC-7436"
+       and r1.get("seller") == "พี่หมี" and r1.get("how") == "ส่งจัดซื้อ · เคสHOT (พี่หมี)", r1)
+    ck("รายการจ่ายแล้ว: ใบขายยังเป็น kind=sale", (al.get(B5.id) or {}).get("kind") == "sale", al.get(B5.id))
+    rj = C.row_json(ChatOwner.objects.get(pk=B1.id))
+    ck("รายชื่อมีป้ายเลขเคสรับซื้อ (แยกจากเลขลีด)", rj.get("buyCode") == "OC-7436" and rj.get("code") == "", rj)
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % B1.id)
+    ck("แผงข้อมูลลูกค้าบอกว่าส่งจัดซื้อแล้ว", s_ == 200 and ((d.get("lead") or {}).get("buy") or {}).get("code") == "OC-7436",
+       (s_, (d.get("lead") or {}).get("buy")))
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    ck("★ API ห้องพัก (มีเคสรับซื้อ) ไม่มี LINE user id หลุด", r_.status_code == 200 and not leak.search(r_.content.decode()))
+
 finally:
     _runner.teardown_databases(_old)
 
