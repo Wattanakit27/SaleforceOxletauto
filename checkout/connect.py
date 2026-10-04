@@ -31,7 +31,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 
-from .models import ChatLead, ChatOwner, ChatOwnerLog, Employee, ExtLead, GroupChat, LineProfile
+from .models import (ChatLead, ChatOwner, ChatOwnerLog, Employee, ExtLead, FbChat, FbProfile, GroupChat,
+                     LineProfile)
 
 CFG_KEY = "connect_config"
 
@@ -54,7 +55,15 @@ DEFAULTS = {
     # ส่ง LINE หาเซลล์เมื่อมีลูกค้าทักเข้ามา (เจ้าของ หรือทั้งทีมที่เวร) — ปิดโดยปริยาย
     #   ⚠️ push นับโควต้าข้อความรายเดือนของ LINE OA · ทีมละ ~9 คน × ทุกลูกค้าใหม่ = เยอะเร็ว
     "notify_sellers": False,
+    # ── Facebook Messenger (4 ต.ค.69 · เจ้าของเลือก "รวมคิวเดียวกับ LINE") ──
+    # ดึงแชท FB เข้า Connect ทุกนาที — ปิด = แชท FB ยังซิงก์รอบเที่ยงคืนตามเดิม แต่ไม่ขึ้นคิว
+    "fb_on": True,
+    # ตอบลูกค้า FB จากหน้า Connect: off = ไม่ได้ · test = เฉพาะแชทที่แอดมินกดเป็น "แชททดสอบ" · on = ทุกแชท
+    #   เริ่มที่ test — เจ้าของสั่ง "ทดสอบกับบัญชี FB ของเจ้าของก่อน ไม่ส่งหาลูกค้าจริง"
+    "fb_reply": "test",
+    "fb_test_rows": [],
 }
+FB_REPLY_MODES = ("off", "test", "on")
 
 _OVERRIDE_KEEP_DAYS = 31      # สลับเวรที่ผ่านมาเกินนี้ทิ้งตอนบันทึก (กันโตไม่หยุด)
 
@@ -108,6 +117,16 @@ def cfg() -> dict:
         c["sla_min"] = max(1, min(120, int(c.get("sla_min") or 5)))
     except Exception:
         c["sla_min"] = DEFAULTS["sla_min"]
+    c["fb_on"] = bool(c.get("fb_on"))
+    if c.get("fb_reply") not in FB_REPLY_MODES:
+        c["fb_reply"] = DEFAULTS["fb_reply"]
+    rows = []
+    for x in (c.get("fb_test_rows") or []):
+        try:
+            rows.append(int(x))
+        except Exception:
+            pass
+    c["fb_test_rows"] = list(dict.fromkeys(rows))[:20]
     return c
 
 
@@ -176,6 +195,14 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
             out["alert_group"] = g
     if "notify_sellers" in body:
         out["notify_sellers"] = bool(body.get("notify_sellers"))
+    if "fb_on" in body:
+        out["fb_on"] = bool(body.get("fb_on"))
+    if "fb_reply" in body:
+        m = str(body.get("fb_reply") or "").strip()
+        if m not in FB_REPLY_MODES:
+            errs.append("การตอบแชท Facebook ต้องเป็น ปิด / ทดสอบ / เปิด")
+        else:
+            out["fb_reply"] = m
     if out.get("alert_on") and not out.get("alert_group"):
         errs.append("เปิดแจ้งเตือนเข้ากลุ่ม LINE แล้ว แต่ยังไม่ได้เลือกกลุ่ม")
     return out, errs
@@ -356,6 +383,65 @@ def preview_of(g) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
+#  ลูกค้า Facebook Messenger ในคิวเดียวกับ LINE (4 ต.ค.69 · เจ้าของเลือก "รวมคิวเดียวกับ LINE")
+#  แถว ChatOwner มี `profile` (LINE) หรือ `fb_profile` (FB) อย่างใดอย่างหนึ่ง — **ใช้ cust(o) เสมอ**
+# ─────────────────────────────────────────────────────────────
+FB_LIVE_MIN = 30      # ข้อความ FB ที่เพิ่งดึงมาแต่เก่ากว่านี้ ไม่เริ่มนับ 5 นาที (กันวันแรกขึ้น "เลยเวลา" ท่วม)
+FB_BACKFILL_DAYS = 7  # ลูกค้า FB ที่คุยภายใน 7 วันก่อนเปิดใช้ → มีแถวใน "ทั้งหมด" (ไม่เริ่มรอบรอ)
+
+
+def is_fb(o) -> bool:
+    return bool(getattr(o, "fb_profile_id", None))
+
+
+def cust(o):
+    """โปรไฟล์ลูกค้าของแถวนี้ — LineProfile หรือ FbProfile (มี show_name/display_name/msg_count/first_seen/user_id เหมือนกัน)"""
+    return o.fb_profile if is_fb(o) else o.profile
+
+
+def is_sim_row(o) -> bool:
+    return (not is_fb(o)) and bool(o.profile_id) and is_sim(o.profile.user_id)
+
+
+def fb_on() -> bool:
+    try:
+        return bool(cfg().get("fb_on"))
+    except Exception:
+        return False
+
+
+def fb_preview(m) -> str:
+    """ข้อความ 1 บรรทัดของแถว FbChat — ชนิดที่ไม่ใช่ตัวอักษรบอกเป็นคำ (แบบเดียวกับ preview_of ของ LINE)"""
+    if (m.text or "").strip():
+        return m.text
+    return {"sticker": "[สติกเกอร์]", "image": "[รูป]", "video": "[วิดีโอ]", "audio": "[เสียง]",
+            "file": "[ไฟล์]"}.get(m.msg_type or "", "[ข้อความ]")
+
+
+def fb_page_name(pid: str) -> str:
+    """ชื่อเพจ (KV meta_page_names ที่ meta_sync จดไว้) — ไม่รู้ = id เพจ"""
+    try:
+        from dashboard.services import cache_store
+        names = (cache_store.get_kv("meta_page_names") or {}).get("data") or {}
+        return names.get(str(pid)) or str(pid)
+    except Exception:
+        return str(pid)
+
+
+def fb_reply_state(o, c=None) -> tuple:
+    """ตอบลูกค้า FB คนนี้จาก Connect ได้ไหม → (ได้ไหม, เหตุผลเมื่อไม่ได้)"""
+    c = c or cfg()
+    mode = c.get("fb_reply")
+    if mode == "on":
+        return True, ""
+    if mode == "test" and o.id in (c.get("fb_test_rows") or []):
+        return True, ""
+    if mode == "test":
+        return False, "ช่วงทดสอบ: ตอบแชท Facebook จาก Connect ได้เฉพาะ \"แชททดสอบ\" ที่แอดมินกำหนด — ตอบลูกค้าใน Facebook (Business Suite) ไปก่อน"
+    return False, "ปิดการตอบแชท Facebook จาก Connect อยู่ — ตอบลูกค้าใน Facebook (Business Suite)"
+
+
+# ─────────────────────────────────────────────────────────────
 #  โปรไฟล์ลูกค้า — รูป LINE + ข้อมูลจาก LINE + เบอร์ที่พิมพ์มา + รถที่หา
 #  (3 ต.ค.69 เจ้าของสั่ง "เอา Profile ลูกค้าเข้ามาด้วย")
 # ─────────────────────────────────────────────────────────────
@@ -406,6 +492,7 @@ def fill_pictures(limit: int = 20) -> int:
     now = timezone.now()
     stale = now - timedelta(days=PIC_REFRESH_DAYS)
     rows = list(ChatOwner.objects.filter(Q(picture_at__isnull=True) | Q(picture_at__lt=stale))
+                .filter(profile__isnull=False)                 # ลูกค้า FB ไม่มีรูปจาก LINE ให้ดึง
                 .exclude(profile__user_id__startswith=SIM_PREFIX)
                 .order_by(F("awaiting_since").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
                 .values_list("id", "picture_at")[:limit])
@@ -469,12 +556,16 @@ def _money(n) -> str:
 
 def profile_json(o, access: str = "full", texts=None) -> dict:
     """การ์ดโปรไฟล์ลูกค้าในหน้าแชท — คิวรอรับ (`preview`) ได้แค่รูป+ชื่อ ข้อมูลที่เหลือต้องกดรับก่อน"""
-    p = o.profile
+    p = cust(o)
     out = {"pic": o.picture_url or "", "name": p.show_name, "lineName": p.display_name or "",
            "firstSeen": _iso(p.first_seen), "lastSeen": _iso(p.last_seen), "msgs": p.msg_count or 0,
-           "claimedAt": _iso(o.claimed_at), "full": access == "full"}
+           "claimedAt": _iso(o.claimed_at), "full": access == "full", "src": "fb" if is_fb(o) else "line"}
+    if is_fb(o):
+        out["page"] = fb_page_name(p.channel)
     if access != "full":
         return out
+    if is_fb(o):
+        out["inbox"] = p.inbox_link or ""               # เปิดห้องนี้ใน Facebook (Business Suite)
     needs = []
     try:
         for n in p.needs.order_by("-updated_at")[:3]:
@@ -492,7 +583,7 @@ def profile_json(o, access: str = "full", texts=None) -> dict:
                           "waiting": bool(n.waiting), "at": _iso(n.updated_at)})
     except Exception:
         needs = []
-    out.update({"status": p.status_message or "", "language": p.language or "",
+    out.update({"status": getattr(p, "status_message", "") or "", "language": getattr(p, "language", "") or "",
                 "phones": phones_in(texts), "needs": needs})
     return out
 
@@ -533,15 +624,36 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
     at = at or timezone.now()
     c = cfg()
     o = _row_for(prof)
+    sim = is_sim(user_id)
+    new_round = _customer_in(o, at, preview, c, start_round=True, sim=sim)
+    if picture:
+        o.picture_url, o.picture_at = picture[:500], timezone.now()
+        ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=o.picture_at)
+    # รูปโปรไฟล์เก่าเกิน 7 วัน/ยังไม่มี → ดึงใหม่ตอนเริ่มรอบ (ทำใน thread ของ webhook อยู่แล้ว ไม่หน่วงใคร)
+    if new_round and not picture and not sim and _picture_stale(o):
+        try:
+            refresh_profile(o)
+        except Exception:
+            pass
+    if new_round and not sim and c.get("notify_sellers"):
+        try:
+            _notify_new(o, c)
+        except Exception:
+            pass
+    return o
 
+
+def _customer_in(o, at, preview: str, c: dict, start_round: bool = True, sim: bool = False) -> bool:
+    """ลูกค้าส่งข้อความ (LINE หรือ FB) — ส่วนกลางของทั้ง 2 ช่องทาง → คืนว่า "เริ่มรอบรอใหม่" ไหม
+
+    `start_round=False` = ข้อความเก่าที่เพิ่งดึงมา (FB ย้อนหลัง) — อัปเดตข้อความล่าสุดแต่ไม่เริ่มนับ 5 นาที
+    """
     # เจ้าของถูกปิดใช้งานในทะเบียน (ลาออก) → คืนคิว ไม่งั้นลูกค้าค้างอยู่กับคนที่ไม่มีวันตอบ
     if o.owner_id and not o.owner.active:
         _log(o, ChatOwnerLog.RELEASE, emp=o.owner, by="ระบบ",
              note="เซลล์ไม่ได้ทำงานแล้ว — คืนคิวอัตโนมัติ")
         o.owner, o.claimed_at, o.first_reply_at = None, None, None
-
-    sim = is_sim(user_id)
-    new_round = o.awaiting_since is None
+    new_round = start_round and o.awaiting_since is None
     if new_round:
         o.awaiting_since = at
         o.due_at = due_for(at, c, ignore_hours=sim)
@@ -552,16 +664,63 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
         o.last_in_at = at
     if not o.last_at or at >= o.last_at:
         o.last_at, o.last_preview, o.last_dir = at, (preview or "")[:200], "in"
-    if picture:
-        o.picture_url, o.picture_at = picture[:500], timezone.now()
     o.save()
-    # รูปโปรไฟล์เก่าเกิน 7 วัน/ยังไม่มี → ดึงใหม่ตอนเริ่มรอบ (ทำใน thread ของ webhook อยู่แล้ว ไม่หน่วงใคร)
-    if new_round and not picture and not sim and _picture_stale(o):
-        try:
-            refresh_profile(o)
-        except Exception:
-            pass
-    if new_round and not sim and c.get("notify_sellers"):
+    return new_round
+
+
+def _reply_done(o, at, preview: str = "", emp=None, by: str = ""):
+    """เราตอบลูกค้าแล้ว (LINE หรือ FB) — จบรอบรอ + จดเวลาที่ลูกค้ารอ (เฉพาะคำตอบที่ปิดรอบ)"""
+    if o.awaiting_since and at >= o.awaiting_since:
+        _log(o, ChatOwnerLog.REPLY, emp=emp, by=by or (emp.nickname if emp else ""),
+             team=team_of(emp) or o.team,
+             wait_sec=max(0, int((at - o.awaiting_since).total_seconds())),
+             on_time=(at <= o.due_at) if o.due_at else None)
+        o.awaiting_since = o.due_at = o.escalated_at = None
+    elif o.awaiting_since:
+        pass                                  # คำตอบที่เก่ากว่ารอบนี้ (ดึงมาช้า) — ไม่ได้ตอบข้อความรอบนี้
+    if emp and o.owner_id == emp.id and not o.first_reply_at:
+        o.first_reply_at = at
+    if not o.last_out_at or at >= o.last_out_at:
+        o.last_out_at = at
+    if not o.last_at or at >= o.last_at:
+        o.last_at, o.last_preview, o.last_dir = at, (preview or "")[:200], "out"
+    o.save()
+    return o
+
+
+def _row_for_fb(fp):
+    o = ChatOwner.objects.filter(fb_profile=fp).select_related("owner").first()
+    if o:
+        return o
+    try:
+        return ChatOwner.objects.create(fb_profile=fp)
+    except IntegrityError:
+        return ChatOwner.objects.select_related("owner").get(fb_profile=fp)
+
+
+def note_fb_batch(fp, msgs):
+    """ข้อความ Messenger ที่เพิ่งดึงมา (ซิงก์ทุกนาที/เที่ยงคืน) → เริ่ม/ปิดรอบรอคำตอบใน Connect
+
+    ★ เพจตอบลูกค้าใน Facebook (Business Suite/แอป) ก็ปิดรอบให้ — Facebook ส่งข้อความขาออกมาด้วย
+      (ต่างจาก LINE OA Manager ที่ไม่ส่งมา) → นาฬิกา 5 นาทีหยุดถูกต้องไม่ว่าตอบจากที่ไหน
+    ★ ข้อความเก่ากว่า FB_LIVE_MIN นาทีไม่เริ่มรอบรอ — ไม่งั้นวันแรกที่เปิด ลูกค้าเมื่อวานขึ้น "เลยเวลา" ท่วม
+    """
+    if not fb_on() or fp is None or fp.is_employee:
+        return None
+    rows = sorted([m for m in (msgs or []) if m.sent_at], key=lambda m: m.sent_at)
+    if not rows:
+        return None
+    c, now = cfg(), timezone.now()
+    o = _row_for_fb(fp)
+    new_round = False
+    for m in rows:
+        if m.direction == FbChat.OUT:
+            _reply_done(o, m.sent_at, fb_preview(m), emp=m.sent_by,
+                        by=m.sent_by_name or "ตอบใน Facebook")
+        else:
+            live = (now - m.sent_at) <= timedelta(minutes=FB_LIVE_MIN)
+            new_round = _customer_in(o, m.sent_at, fb_preview(m), c, start_round=live) or new_round
+    if new_round and c.get("notify_sellers"):
         try:
             _notify_new(o, c)
         except Exception:
@@ -577,20 +736,7 @@ def note_reply(user_id: str, emp=None, at=None, preview: str = "", by: str = "")
     prof = LineProfile.objects.filter(user_id=user_id).first()
     if not prof or prof.is_employee:
         return None
-    at = at or timezone.now()
-    o = _row_for(prof)
-    if o.awaiting_since:
-        _log(o, ChatOwnerLog.REPLY, emp=emp, by=by or (emp.nickname if emp else ""),
-             team=team_of(emp) or o.team,
-             wait_sec=max(0, int((at - o.awaiting_since).total_seconds())),
-             on_time=(at <= o.due_at) if o.due_at else None)
-    if emp and o.owner_id == emp.id and not o.first_reply_at:
-        o.first_reply_at = at
-    o.awaiting_since = o.due_at = o.escalated_at = None
-    o.last_out_at = at
-    o.last_at, o.last_preview, o.last_dir = at, (preview or "")[:200], "out"
-    o.save()
-    return o
+    return _reply_done(_row_for(prof), at or timezone.now(), preview, emp=emp, by=by)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -600,7 +746,7 @@ def claim(row_id, emp, admin: bool = False):
     """เซลล์กด "รับลูกค้า" → (ok, ข้อความ)  · ใครกดก่อนได้ไป ล็อกที่ฐานข้อมูล"""
     if not emp:
         return False, "บัญชีนี้ยังไม่ได้ผูกกับทะเบียนพนักงาน — แจ้งแอดมินให้เพิ่มชื่อเล่นในหน้า \"พนักงาน\""
-    o = ChatOwner.objects.select_related("owner", "profile").filter(pk=row_id).first()
+    o = ChatOwner.objects.select_related("owner", "profile", "fb_profile").filter(pk=row_id).first()
     if not o:
         return False, "ไม่พบลูกค้ารายนี้ (อาจถูกลบไปแล้ว)"
     if o.owner_id == emp.id:
@@ -629,7 +775,7 @@ def claim(row_id, emp, admin: bool = False):
 
 def assign(row_id, emp=None, by: str = "", note: str = ""):
     """แอดมินโอนลูกค้าให้เซลล์ (`emp`) หรือปล่อยคืนคิว (`emp=None`) → (ok, ข้อความ)"""
-    o = ChatOwner.objects.select_related("owner", "profile").filter(pk=row_id).first()
+    o = ChatOwner.objects.select_related("owner", "profile", "fb_profile").filter(pk=row_id).first()
     if not o:
         return False, "ไม่พบลูกค้ารายนี้"
     now = timezone.now()
@@ -684,6 +830,12 @@ def tick(now=None) -> dict:
         out.update(_dd_tick() or {})
     except Exception as e:
         out["dropdownsError"] = str(e)[:120]
+    try:                                     # แชท Facebook Messenger → Connect ทุกนาที (thread แยก · ไม่หน่วง cron)
+        r = fb_tick_bg()
+        if r:
+            out["fb"] = r
+    except Exception as e:
+        out["fbError"] = str(e)[:120]
     try:                                     # ลีดภายนอก (ห้องพัก Lead) ที่เกิน 90 วัน — มีเบอร์/ID LINE ลูกค้า
         from .leadpark import cleanup
         n = cleanup(now)
@@ -692,7 +844,7 @@ def tick(now=None) -> dict:
     except Exception as e:
         out["extLeadError"] = str(e)[:120]
     c = cfg()
-    rows = list(ChatOwner.objects.select_related("owner", "profile")
+    rows = list(ChatOwner.objects.select_related("owner", "profile", "fb_profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
                 .order_by("due_at")[:100])
     hit = []
@@ -705,7 +857,7 @@ def tick(now=None) -> dict:
     if not hit:
         return out
     out["escalated"] = len(hit)
-    real = [o for o in hit if not is_sim(o.profile.user_id)]       # ลูกค้าจำลองไม่ส่ง LINE
+    real = [o for o in hit if not is_sim_row(o)]                   # ลูกค้าจำลองไม่ส่ง LINE
     if real and c.get("alert_on") and c.get("alert_group"):
         out["alert"] = _alert_admins(real, c, now)
     return out
@@ -727,7 +879,7 @@ def _alert_admins(rows, c, now) -> str:
     for o in rows[:10]:
         mins = int((now - o.awaiting_since).total_seconds() // 60)
         who = o.owner.nickname if o.owner_id else "ยังไม่มีเซลล์รับ (เวรทีม %s)" % (o.team or "-")
-        lines.append("• %s — %s · รอ %d นาที" % (o.profile.show_name, who, mins))
+        lines.append("• %s%s — %s · รอ %d นาที" % ("[FB] " if is_fb(o) else "", cust(o).show_name, who, mins))
     if len(rows) > 10:
         lines.append("… และอีก %d คน" % (len(rows) - 10))
     lines.append("เปิดดู: %s" % _link())
@@ -743,11 +895,11 @@ def _notify_new(o, c):
     from dashboard.services.line_notify import push_line_message
     if o.owner_id:
         people, text = [o.owner], "💬 ลูกค้าของคุณ (%s) ทักมาใน Connect — ตอบภายใน %d นาที\n%s" % (
-            o.profile.show_name, c["sla_min"], _link(o))
+            cust(o).show_name, c["sla_min"], _link(o))
     else:
         people = team_members(o.team)
         text = "💬 มีลูกค้าใหม่ทักมา (%s) — เวรทีม %s กดรับได้ที่\n%s" % (
-            o.profile.show_name, o.team, _link(o))
+            cust(o).show_name, o.team, _link(o))
     tok = dm_token()
     for e in people[:20]:
         uid = (LineProfile.objects.filter(employee=e).order_by("-last_seen")
@@ -773,10 +925,21 @@ def sync_rows(force: bool = False) -> int:
     if not force and time.time() - _SYNC["at"] < 120:
         return 0
     _SYNC["at"] = time.time()
-    profs = list(LineProfile.objects.filter(is_employee=False, owner_row__isnull=True)[:2000])
-    if not profs:
-        return 0
     made = []
+    if fb_on():
+        # ลูกค้า FB ที่คุยภายใน 7 วันก่อนเปิดใช้ (หรือก่อนเปิดสวิตช์) — มีแถวใน "ทั้งหมด" ไม่เริ่มรอบรอ
+        #   ไม่สร้างให้ทั้ง ~6,600 ห้องย้อนหลัง (คุยกันใน Facebook จบไปนานแล้ว)
+        cut = timezone.now() - timedelta(days=FB_BACKFILL_DAYS)
+        for fp in FbProfile.objects.filter(is_employee=False, owner_row__isnull=True, last_seen__gte=cut)[:1000]:
+            m = (FbChat.objects.filter(thread_id=fp.thread_id).order_by("-sent_at", "-id").first()
+                 if fp.thread_id else None)
+            if not m:
+                continue
+            made.append(ChatOwner(fb_profile=fp, last_at=m.sent_at, last_preview=fb_preview(m)[:200],
+                                  last_dir=m.direction or "in",
+                                  last_in_at=m.sent_at if m.direction != FbChat.OUT else None,
+                                  last_out_at=m.sent_at if m.direction == FbChat.OUT else None))
+    profs = list(LineProfile.objects.filter(is_employee=False, owner_row__isnull=True)[:2000])
     for p in profs:
         g = (GroupChat.objects.filter(sender_id=p.user_id).exclude(chat_type=GroupChat.GROUP)
              .order_by("-sent_at", "-id").first())
@@ -800,7 +963,7 @@ def _iso(dt):
 
 def row_json(o, me=None, now=None) -> dict:
     now = now or timezone.now()
-    p = o.profile
+    p = cust(o)
     ld = lead_of(o, create=False)
     return {
         "id": o.id,
@@ -820,7 +983,8 @@ def row_json(o, me=None, now=None) -> dict:
         "mine": bool(me and o.owner_id == me.id),
         "msgs": p.msg_count or 0,
         "pic": o.picture_url or "",
-        "sim": is_sim(p.user_id),
+        "sim": is_sim_row(o),
+        "src": "fb" if is_fb(o) else "line",            # ป้ายช่องทางในรายชื่อ (Facebook / LINE)
         "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
     }
 
@@ -1250,8 +1414,7 @@ def autofill(o, msgs=None) -> ChatLead:
         changed.append(field)
 
     if msgs is None:
-        msgs = [g.text for g in GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.IN)
-                .exclude(chat_type=GroupChat.GROUP).order_by("sent_at", "id")[:200] if g.text]
+        msgs = [m["text"] for m in messages(o) if m["dir"] == "in" and m["text"] and not m["text"].startswith("[")]
     ph = phones_in(msgs)
     if ph:
         put("phone", ph[0], "แชท")
@@ -1284,10 +1447,11 @@ def autofill(o, msgs=None) -> ChatLead:
     except Exception:
         stale = True
     # ลูกค้าจำลอง "ไม่ค้นใบจ่ายลีด" — เบอร์ที่พิมพ์ทดสอบอาจไปตรงใบของลูกค้าจริง แล้วดึงชื่อ/ID LINE ของจริงมาปนในข้อมูลทดสอบ
-    if not lead.code and stale and not is_sim(o.profile.user_id):
+    if not lead.code and stale and not is_sim_row(o):
         auto["_slip_at"] = now.isoformat()
         changed.append("_slip_at")
-        hit = find_slip(lead.phone or (ph[0] if ph else ""), o.profile.display_name)
+        # ชื่อไลน์ใช้หาใบจ่ายลีดได้เฉพาะลูกค้า LINE (ใบเขียน "ชื่อไลน์ :") · ลูกค้า FB หาด้วยเบอร์อย่างเดียว
+        hit = find_slip(lead.phone or (ph[0] if ph else ""), "" if is_fb(o) else o.profile.display_name)
         if hit:
             d, g = hit
             for f, k in (("code", "lead_code"), ("ads", "ads"), ("account", "account"),
@@ -1309,7 +1473,12 @@ def autofill(o, msgs=None) -> ChatLead:
         return (SYSTEM,) if auto.get(field) == SYSTEM and v and not dd_pick(field, v) else ()
 
     # ช่องทาง = ลูกค้าทักเข้า LINE OA → "LINE@" ตาม dropdown ของชีต
-    put("channel", _line_channel(), SYSTEM, over=stale_sys("channel"))
+    #   ★ ลูกค้า FB ไม่เดาช่องทาง — ชีตแยก "เพจบ้านเก่า"/"เพจอ่อนนุช" แต่ชื่อจริง 2 เพจต่างกันแค่คำท้าย ระบบบอกไม่ได้ว่าเพจไหนคือช่องไหน
+    #     → เติม "ชื่อ Account" = ชื่อใน Facebook แทน (ใบจ่ายลีดของลีด FB ใส่ชื่อบัญชีลูกค้าช่องนี้)
+    if is_fb(o):
+        put("account", o.fb_profile.display_name, SYSTEM)
+    else:
+        put("channel", _line_channel(), SYSTEM, over=stale_sys("channel"))
     # สาขา = สาขาที่ลีดของเซลล์คนนี้ไปจริงในชีตเดือนล่าสุด (ยังไม่มีเจ้าของ = สาขาที่ลีดเกือบทั้งหมดไป)
     #   เชื่อเฉพาะตอนชัด (สาขาเดียว ≥ 90%) — ไม่ชัด = ปล่อยว่างให้คนเลือก · วัดจริง ส.ค.–ต.ค.69: ชลบุรี 100%
     dd = dropdowns()
@@ -1322,7 +1491,10 @@ def autofill(o, msgs=None) -> ChatLead:
     adm = (ChatOwnerLog.objects.filter(chat=o, action=ChatOwnerLog.ASSIGN).exclude(by_name="")
            .order_by("-at", "-id").values_list("by_name", flat=True).first())
     if not adm:
-        qs = GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.OUT).exclude(sent_by_name="")
+        if is_fb(o):
+            qs = FbChat.objects.filter(thread_id=o.fb_profile.thread_id or "-", direction=FbChat.OUT).exclude(sent_by_name="")
+        else:
+            qs = GroupChat.objects.filter(sender_id=o.profile.user_id, direction=GroupChat.OUT).exclude(sent_by_name="")
         if o.owner_id:
             qs = qs.exclude(sent_by_name=o.owner.nickname)
         adm = qs.order_by("sent_at", "id").values_list("sent_by_name", flat=True).first()
@@ -1342,9 +1514,14 @@ def autofill(o, msgs=None) -> ChatLead:
 def lead_json(o, lead=None) -> dict:
     """ข้อมูลลีดสำหรับฟอร์ม + ช่องที่ระบบคำนวณเอง (ไม่เก็บซ้ำ)"""
     lead = lead or lead_of(o)
-    p = o.profile
-    contact = o.first_reply_at or (GroupChat.objects.filter(sender_id=p.user_id, direction=GroupChat.OUT)
-                                   .order_by("sent_at").values_list("sent_at", flat=True).first())
+    p = cust(o)
+    if is_fb(o):
+        first_out = (FbChat.objects.filter(thread_id=p.thread_id or "-", direction=FbChat.OUT)
+                     .order_by("sent_at").values_list("sent_at", flat=True).first())
+    else:
+        first_out = (GroupChat.objects.filter(sender_id=p.user_id, direction=GroupChat.OUT)
+                     .order_by("sent_at").values_list("sent_at", flat=True).first())
+    contact = o.first_reply_at or first_out
     out = {k: getattr(lead, k) or "" for k in LEAD_FIELDS}
     out.update({
         "tags": list(lead.tags or []),
@@ -1371,7 +1548,7 @@ def lead_json(o, lead=None) -> dict:
 def slip_text(o, lead=None) -> str:
     """ใบจ่ายลีดแบบย่อ — รูปแบบเดียวกับที่แอดมินโพสต์ในกลุ่มจ่ายเบอร์ (`leadgroup.parse_leadsheet` อ่านกลับได้)"""
     lead = lead or lead_of(o)
-    p = o.profile
+    p = cust(o)
     car = lead.car_text or lead.car_model
     lines = [
         "Ac Lead No. %s" % (lead.code or "-"),
@@ -1379,7 +1556,7 @@ def slip_text(o, lead=None) -> str:
         "ชื่อ Account: %s" % (lead.account or "-"),
         "ชื่อลูกค้า : %s" % (lead.customer_name or "-"),
         "ID LINE : %s" % (lead.line_id or "-"),
-        "ชื่อไลน์ : %s" % (p.display_name or "-"),
+        "ชื่อไลน์ : %s" % ("-" if is_fb(o) else (p.display_name or "-")),
         "เบอร์โทร : %s" % (lead.phone or "-"),
         "ช่องทาง : %s" % (lead.channel or "-"),
         "รถ : %s" % (car or "-"),
@@ -1657,7 +1834,7 @@ def sim_say(row_id, text: str):
     """ลูกค้าจำลองพิมพ์ข้อความเข้ามา (ผ่านเส้นทางเดียวกับของจริง: เก็บแชท → เริ่ม/ต่อรอบรอ)"""
     import uuid
     o = ChatOwner.objects.select_related("profile").filter(pk=row_id).first()
-    if not o or not is_sim(o.profile.user_id):
+    if not o or not is_sim_row(o):
         return None
     now = timezone.now()
     g = GroupChat.objects.create(
@@ -1712,10 +1889,10 @@ VIEWS = ("overdue", "queue", "tocode", "mine", "owned", "all")
 
 
 def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int = 0,
-          limit: int = 200) -> list:
+          limit: int = 200, src: str = "") -> list:
     """แถวของลิสต์ด้านซ้าย — สิทธิ์ถูกเช็คที่ view ก่อนเรียก (เซลล์ได้แค่ queue/mine)"""
     now = timezone.now()
-    qs = ChatOwner.objects.select_related("profile", "owner", "lead")
+    qs = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
     if view == "overdue":
         qs = qs.filter(awaiting_since__isnull=False, due_at__lte=now).order_by("due_at")
     elif view == "queue":
@@ -1731,9 +1908,16 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
         qs = qs.order_by(F("last_at").desc(nulls_last=True))
     if seller_id and admin:
         qs = qs.filter(owner_id=seller_id)
+    if src == "fb":                          # ตัวกรองช่องทาง (Facebook / LINE)
+        qs = qs.filter(fb_profile__isnull=False)
+    elif src == "line":
+        qs = qs.filter(profile__isnull=False)
+    elif src in ("tiktok", "other"):         # ไม่มีแชท TikTok/อื่นๆ ใน Connect — ลีดพวกนี้มาจากห้องพัก Lead เท่านั้น
+        qs = qs.none()
     q = (q or "").strip()
     if q:
         qs = qs.filter(Q(profile__display_name__icontains=q) | Q(profile__nickname__icontains=q)
+                       | Q(fb_profile__display_name__icontains=q)
                        | Q(last_preview__icontains=q) | Q(lead__customer_name__icontains=q)
                        | Q(lead__phone__contains=re.sub(r"\D", "", q) or q) | Q(lead__code__icontains=q)
                        | Q(lead__tags__icontains=q))
@@ -1762,6 +1946,19 @@ def counts(me=None, admin: bool = False) -> dict:
 
 def messages(o, limit: int = 200, since=None) -> list:
     """บทสนทนาทั้ง 2 ฝั่ง เก่า→ใหม่ · `since` = เฉพาะข้อความลูกค้าตั้งแต่เวลานั้น (คิวรอรับ)"""
+    if is_fb(o):
+        fp = o.fb_profile
+        fq = FbChat.objects.filter(thread_id=fp.thread_id) if fp.thread_id else FbChat.objects.none()
+        if since:
+            fq = fq.filter(sent_at__gte=since, direction=FbChat.IN)
+        frows = list(fq.order_by("-sent_at", "-id")[:limit])
+        frows.reverse()
+        return [{
+            "at": _iso(m.sent_at), "text": fb_preview(m), "type": m.msg_type or "", "media": bool(m.has_media),
+            "dir": m.direction or "in",
+            # ขาออกที่ตอบใน Facebook เอง ไม่บอกว่าใครตอบ (เป็นชื่อเพจ) — บอกว่ามาจากไหนแทน
+            "by": m.sent_by_name or ("ตอบใน Facebook" if m.direction == FbChat.OUT else ""),
+        } for m in frows]
     qs = GroupChat.objects.filter(sender_id=o.profile.user_id).exclude(chat_type=GroupChat.GROUP)
     if since:
         qs = qs.filter(sent_at__gte=since, direction=GroupChat.IN)
@@ -1822,3 +2019,43 @@ def stats(days: int = 7) -> dict:
         rows.append(r)
     rows.sort(key=lambda r: (-r["replies"], -r["claims"], r["name"]))
     return {"days": days, "rows": rows, "unownedLate": unowned_late}
+
+
+
+# ─────────────────────────────────────────────────────────────
+#  แชท Facebook → Connect ทุกนาที (เรียกจาก tick ใน thread แยก — ยิง Graph API ห้ามหน่วง cron_tick)
+# ─────────────────────────────────────────────────────────────
+_FB_RUN = {"busy": False, "at": 0.0}
+FB_EVERY_SEC = 50          # cron ยิงทุกนาที — กันซ้อนถ้ามีคนยิง tick ถี่กว่านั้น
+
+
+def fb_tick_bg() -> dict:
+    """เริ่มซิงก์แชท FB รอบเบาใน thread แยก (ปิดสวิตช์/กำลังทำอยู่/เพิ่งทำ = ข้าม) · ผลรอบล่าสุดอยู่ KV fb_live_last"""
+    import threading
+    import time as _t
+    if not BG_FILL or not fb_on() or _FB_RUN["busy"] or _t.time() - _FB_RUN["at"] < FB_EVERY_SEC:
+        return {}
+    _FB_RUN.update(busy=True, at=_t.time())
+
+    def _work():
+        res = {}
+        try:
+            from .fb_sync import sync_live
+            res = sync_live()
+        except Exception as e:
+            res = {"error": str(e)[:200]}
+        finally:
+            _FB_RUN["busy"] = False
+            try:
+                from dashboard.services import cache_store
+                cache_store.set_kv("fb_live_last", dict(res, at=timezone.now().isoformat()))
+            except Exception:
+                pass
+            try:
+                from django.db import connection
+                connection.close()
+            except Exception:
+                pass
+
+    threading.Thread(target=_work, daemon=True).start()
+    return {"started": True}

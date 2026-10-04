@@ -99,6 +99,11 @@
   .tag.late { background: var(--red); color: #fff; }
   .tag.ok { background: var(--green-bg); color: var(--green); }
   .tag.q { background: var(--blue-bg); color: var(--blue); }
+  /* ช่องทางที่ลูกค้าทักมา — LINE / Facebook (4 ต.ค.69 · รวมคิวเดียวกัน) */
+  .tag.ch-line { background: #06c755; color: #fff; }
+  .tag.ch-fb { background: #1877f2; color: #fff; }
+  .tag.ch-tt { background: #111; color: #fff; }
+  .tag.ch-ot { background: var(--t3); color: #fff; }
   .cn-empty { text-align: center; color: var(--t3); padding: 40px 20px; line-height: 1.7; }
 
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 8px;
@@ -292,6 +297,9 @@
       <div class="cn-tabs" id="cn-tabs"></div>
       <div class="cn-tools" id="cn-tools">
         <input id="cn-q" type="search" placeholder="ค้นหาชื่อลูกค้า / ข้อความ" autocomplete="off">
+        <select id="cn-src" title="ช่องทางที่ลูกค้าทักมา" style="flex:0 0 auto;width:auto">
+          <option value="">ทุกช่องทาง</option><option value="line">LINE</option><option value="fb">Facebook</option>
+        </select>
         <select id="cn-seller" style="display:none"></select>
       </div>
       <div id="cn-note"></div>
@@ -335,6 +343,10 @@
   const $ = id => document.getElementById(id);
   const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; };
   const TEAM_C = { A: 'var(--tA)', B: 'var(--tB)', C: 'var(--tC)', ADMIN: 'var(--amber-mid)' };
+  // ป้ายช่องทางชุดเดียวทั้งหน้า (รายชื่อ · หัวแชท · ห้องพัก Lead) — `n` = ตัวเลขต่อท้าย (นับในห้องพัก)
+  const CH_CLS = { line: ['ch-line', 'LINE'], fb: ['ch-fb', 'Facebook'], facebook: ['ch-fb', 'Facebook'],
+                   tiktok: ['ch-tt', 'TikTok'], other: ['ch-ot', 'อื่นๆ'] };
+  const chTag = (s, n) => { const x = CH_CLS[s] || CH_CLS.line; return `<span class="tag ${x[0]}">${x[1]}${n != null ? ' ' + n : ''}</span>`; };
   const teamTag = t => t ? `<span class="tag team" style="background:${TEAM_C[t] || 'var(--t3)'}">ทีม ${h(t)}</span>` : '';
   const AV_C = ['#7c3aed', '#0d9488', '#db2777', '#2563eb', '#d97706', '#059669', '#9333ea', '#dc2626'];
   const avColor = name => { let s = 2166136261; for (const ch of String(name || '')) { s ^= ch.codePointAt(0); s = Math.imul(s, 16777619) >>> 0; } return AV_C[s % AV_C.length]; };
@@ -399,7 +411,7 @@
 
   // ── สถานะ ──
   const S = {
-    view: '', q: '', seller: 0, rows: [], counts: {}, duty: null, onDuty: false, sellers: [], status: [], note: '',
+    view: '', q: '', seller: 0, src: '', rows: [], counts: {}, duty: null, onDuty: false, sellers: [], status: [], note: '',
     openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
     histOpen: false, side: true,
   };
@@ -408,7 +420,7 @@
     { v: 'overdue', l: 'เลยเวลา', i: 'alert', c: 'overdue', hot: true },
     { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue' },
     // ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — งานจ่ายเบอร์ของแอดมิน (connect.to_code)
-    { v: 'tocode', l: 'จ่ายเบอร์', i: 'hash', c: 'tocode' },
+    { v: 'tocode', l: 'ห้องพัก Lead', i: 'hash', c: 'tocode' },
     { v: 'mine', l: 'ของฉัน', i: 'user-check', c: 'mine', needEmp: true },
     { v: 'owned', l: 'มีเจ้าของ', i: 'users', c: 'owned' },
     { v: 'all', l: 'ทั้งหมด', i: 'list', c: 'all' },
@@ -475,6 +487,14 @@
       return `<button class="cn-tab${cur === t.v ? ' on' : ''}" data-v="${t.v}">${ic(t.i)} ${h(t.l)} ${n}</button>`;
     }).join('');
     $('cn-tabs').querySelectorAll('.cn-tab').forEach(b => b.onclick = () => pickTab(b.dataset.v));
+    // ตัวกรองช่องทาง: ห้องพัก Lead มี TikTok/อื่นๆ ด้วย (ใบร่างจากห้องพัก) · แท็บอื่นมีแต่แชท LINE/Facebook
+    const srcSel = $('cn-src'), hubView = ADMIN && S.view === 'tocode', sk = hubView ? 'hub' : 'std';
+    if (srcSel.dataset.k !== sk) {
+      srcSel.dataset.k = sk;
+      const opts = [['', 'ทุกช่องทาง'], ['line', 'LINE'], ['fb', 'Facebook']].concat(hubView ? [['tiktok', 'TikTok'], ['other', 'อื่นๆ']] : []);
+      srcSel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
+      srcSel.value = S.src;
+    }
     const sel = $('cn-seller');
     const showSel = ADMIN && (S.view === 'owned' || S.view === 'all') && S.pane === 'chat';
     sel.style.display = showSel ? '' : 'none';
@@ -490,13 +510,14 @@
     if (v === '_stats') { S.pane = 'stats'; renderTabs(); openStats(); showPane(); return; }
     if (v === '_cfg') { S.pane = 'cfg'; renderTabs(); openCfg(); showPane(); return; }
     S.view = v; S.pane = 'chat';
+    if (v !== 'tocode' && (S.src === 'tiktok' || S.src === 'other')) S.src = '';   // TikTok/อื่นๆ มีแค่ในห้องพัก Lead
     if (!S.openId) renderBlank();
     loadInbox(true);
   }
 
   function rowHtml(r) {
     const ck = r.awaiting ? clockText(r.due, r.since) : null;
-    const tags = [];
+    const tags = [chTag(r.src)];
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
@@ -519,8 +540,7 @@
   //   จ่ายเบอร์ได้จากตรงนี้ (โหมดทดลอง: เก็บในระบบเรา ไม่ลงชีต ไม่โพสต์กลุ่ม) · เลขรันชุดเดียวกับลูกค้า LINE OA
   //   หรือแอดมินโพสต์ใบจริง (เลข + @เซลล์) ในห้องจ่ายเบอร์เองก็ได้ — ระบบจับคู่ด้วยเบอร์/ID LINE แล้วเอาออกจากรายการเอง
   const fmtWait = m => m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที';
-  const SRC = { tiktok: ['TikTok', '#111'], facebook: ['Facebook', '#1877f2'], line: ['LINE', '#06c755'], other: ['อื่นๆ', 'var(--t3)'] };
-  const srcTag = s => { const x = SRC[s] || SRC.other; return `<span class="tag team" style="background:${x[1]}">${h(x[0])}</span>`; };
+  const srcTag = s => chTag(s in CH_CLS ? s : 'other');
   S.parkOpen = new Set(); S.parkDraft = {};
   const pWho = i => i.account || i.name || i.lineId || i.phone || '(ไม่มีชื่อ)';
 
@@ -544,25 +564,40 @@
     </div>`;
   }
 
-  function parkHtml() {
-    const P = S.parked;
-    if (!(ADMIN && S.view === 'tocode' && P && P.room)) return '';
-    const st = P.stats || {}, W = P.waiting || [], ch = P.codeHelp || {};
-    const items = W.map(i => {
-      const mins = Math.max(0, Math.floor((nowMs() - Date.parse(i.at)) / 60000));
-      const late = mins >= (P.warnMin || 30);
-      const det = [['ID LINE', i.lineId], ['เบอร์โทร', i.phone ? fmtPhone(i.phone) : ''], ['ช่องทาง', i.channel],
-                   ['รถ', i.car], ['ไลฟ์', i.live], ['Ads', i.ads], ['เพิ่มเติม', i.more]]
-        .filter(x => x[1]).map(x => `${h(x[0])}: <b>${h(x[1])}</b>`).join('<br>');
-      return `<details class="cn-prow" data-pk="${h(i.id)}"${S.parkOpen.has(i.id) ? ' open' : ''}><summary>
-        <div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
-        <div class="cn-rp">${h([i.car, i.channel].filter(Boolean).join(' · ') || '—')}</div>
-        <div class="cn-rm">${i.phone ? `<span class="tag">โทร ${h(fmtPhone(i.phone))}</span>` : ''}
-          <span class="tag">พักโดย ${h(i.by || '-')}</span>${i.reposts ? `<span class="tag">โพสต์ซ้ำ ${i.reposts}</span>` : ''}
-          <span class="tag ${late ? 'late' : 'wait'}">${ic('clock', 12)} รอเลข ${h(fmtWait(mins))}</span></div>
-      </summary>${det ? `<div class="pv">${det}</div>` : ''}${parkBoxHtml(i, ch)}</details>`;
-    }).join('');
-    // จ่ายแล้ววันนี้ — จ่ายผ่านระบบ (คัดลอกใบไปวางในห้องจ่ายเบอร์ได้) หรือแอดมินโพสต์ใบจริงเอง
+  // ── ห้องพัก Lead = ศูนย์กระจายลีด "ทุกช่องทาง" (4 ต.ค.69 · เจ้าของ: "ควรทำที่พัก lead จากทุกช่องทาง
+  //    เพื่อเป็นศูนย์กระจายให้แอดมินจ่าย") — รวม 2 แหล่งในรายการเดียว เรียงรอนานสุดขึ้นก่อน:
+  //    ① ลูกค้าแชท LINE / Facebook ที่คุยในระบบแล้วยังไม่มีเลข → กดเปิดแชท แล้วจ่ายเบอร์ในแผงขวา
+  //    ② ใบร่างที่แอดมินพักไว้ในกลุ่ม "ADMIN เก็บ Lead" (TikTok / FB / เบอร์กลาง …) → กดกาง แล้วจ่ายเบอร์ได้เลย
+  const SRC_KEY = { line: 'line', fb: 'fb', facebook: 'fb', tiktok: 'tiktok', other: 'other' };
+  const SRC_LABEL = { line: 'LINE', fb: 'Facebook', tiktok: 'TikTok', other: 'อื่นๆ' };
+
+  function parkItemHtml(i, P, ch) {
+    const mins = Math.max(0, Math.floor((nowMs() - Date.parse(i.at)) / 60000));
+    const late = mins >= (P.warnMin || 30);
+    const det = [['ID LINE', i.lineId], ['เบอร์โทร', i.phone ? fmtPhone(i.phone) : ''], ['ช่องทาง', i.channel],
+                 ['รถ', i.car], ['ไลฟ์', i.live], ['Ads', i.ads], ['เพิ่มเติม', i.more]]
+      .filter(x => x[1]).map(x => `${h(x[0])}: <b>${h(x[1])}</b>`).join('<br>');
+    return `<details class="cn-prow" data-pk="${h(i.id)}"${S.parkOpen.has(i.id) ? ' open' : ''}><summary>
+      <div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
+      <div class="cn-rp">${h([i.car, i.channel].filter(Boolean).join(' · ') || '—')}</div>
+      <div class="cn-rm"><span class="tag q">ใบร่างในห้องพัก</span>${i.phone ? `<span class="tag">โทร ${h(fmtPhone(i.phone))}</span>` : ''}
+        <span class="tag">พักโดย ${h(i.by || '-')}</span>${i.reposts ? `<span class="tag">โพสต์ซ้ำ ${i.reposts}</span>` : ''}
+        <span class="tag ${late ? 'late' : 'wait'}">${ic('clock', 12)} รอเลข ${h(fmtWait(mins))}</span></div>
+    </summary>${det ? `<div class="pv">${det}</div>` : ''}${parkBoxHtml(i, ch)}</details>`;
+  }
+
+  function hubHtml() {
+    if (!(ADMIN && S.view === 'tocode')) return '';
+    const P = S.parked || {}, st = P.stats || {}, ch = P.codeHelp || {};
+    const items = [];
+    S.rows.forEach(r => items.push({ t: Date.parse(r.since || r.lastAt || '') || 0, src: SRC_KEY[r.src] || 'line', html: rowHtml(r) }));
+    (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src)
+      .forEach(i => items.push({ t: Date.parse(i.at) || 0, src: SRC_KEY[i.source] || 'other', html: parkItemHtml(i, P, ch) }));
+    items.sort((x, y) => x.t - y.t);                     // รอนานสุดขึ้นก่อน (ไม่ว่ามาจากช่องทางไหน)
+    const cnt = {};
+    items.forEach(x => { cnt[x.src] = (cnt[x.src] || 0) + 1; });
+    const chips = Object.keys(SRC_LABEL).filter(k => cnt[k]).map(k => chTag(k, cnt[k])).join(' ');
+    // จ่ายแล้ววันนี้ (ใบร่างในห้องพัก) — จ่ายผ่านระบบ (คัดลอกใบไปวางในห้องจ่ายเบอร์ได้) หรือแอดมินโพสต์ใบจริงเอง
     const todayIso = new Date(nowMs()).toLocaleDateString('sv-SE');
     const done = (P.assigned || []).filter(i => (i.doneAt || '').slice(0, 10) === todayIso);
     const doneRows = done.map(i => {
@@ -576,12 +611,17 @@
     const skipped = (P.skipped || []).map(i => `<div class="cn-prow"><div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}</div>
       <div class="cn-rm"><span class="tag">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div></div>`).join('');
     const sum = st.assignedToday ? ` · พักเฉลี่ย ${h(fmtWait(st.avgWaitMinToday || 0))}` : '';
+    const room = P.room ? `"${h(P.room)}"` : '"ADMIN เก็บ Lead" (บอทยังไม่ได้ยินห้องนี้)';
     return `<div class="cn-park">
-      <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอเลข ${W.length} <small>(${h(P.room)} · กดที่ลีดเพื่อจ่ายเบอร์ · หรือโพสต์ใบที่มีเลข+@เซลล์ในห้องจ่ายเบอร์ ระบบเอาออกให้เอง)</small></div>
-      ${items || '<div class="cn-park-f">ไม่มีลีดรอเลขในห้องพัก 👍</div>'}
-      ${done.length ? `<details class="cn-prow" data-pk="done"${S.parkOpen.has('done') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">จ่ายแล้ววันนี้ ${done.length} ราย${sum} ▾</summary>${doneRows}</details>` : ''}
-      ${skipped ? `<details class="cn-prow" data-pk="skip"${S.parkOpen.has('skip') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย ▾</summary>${skipped}</details>` : ''}
-    </div><div class="cn-sep">ลูกค้าที่แชทเข้า LINE OA</div>`;
+        <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอจ่ายเบอร์ ${items.length} <span style="font-weight:400">${chips}</span></div>
+        <div class="cn-park-f" style="padding-top:0">ศูนย์กระจายลีดทุกช่องทาง — แชท LINE / Facebook ที่ยังไม่มีเลข + ใบร่างที่พักไว้ในกลุ่ม ${room}
+          · รอนานสุดขึ้นก่อน · แชท: เปิดแล้วจ่ายเบอร์ในแผงขวา · ใบร่าง: กดกางแล้วจ่ายได้เลย</div>
+      </div>
+      ${items.map(x => x.html).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}
+      ${done.length || skipped ? `<div class="cn-park" style="border-top:.5px solid var(--bd2)">
+        ${done.length ? `<details class="cn-prow" data-pk="done"${S.parkOpen.has('done') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ใบร่างที่ได้เลขวันนี้ ${done.length} ราย${sum} ▾</summary>${doneRows}</details>` : ''}
+        ${skipped ? `<details class="cn-prow" data-pk="skip"${S.parkOpen.has('skip') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย ▾</summary>${skipped}</details>` : ''}
+      </div>` : ''}`;
   }
 
   function parkPreview(box) {
@@ -631,18 +671,16 @@
   }
 
   function renderList() {
-    const hint = (ADMIN && S.view === 'tocode')
-      ? `<div class="cn-hint">ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — กดชื่อแล้วเลือกเซลล์ในกล่อง "จ่ายเบอร์" · ไม่ใช่ลีดขาย (ถามศูนย์บริการ/อยากขายรถ) กด "ไม่ต้องจ่ายเบอร์"</div>` : '';
-    $('cn-note').innerHTML = (S.note ? `<div class="cn-note">${h(S.note)}</div>` : '') + hint;
+    $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';
     const el = $('cn-rows');
-    const park = parkHtml();
-    if (park) {
+    const hub = hubHtml();
+    if (hub) {
       // รายชื่อถูกวาดใหม่ทุก 8 วิ — กำลังเลือกตัวเลือกในกล่องจ่ายเบอร์อยู่ = ยังไม่วาด (dropdown ที่กางอยู่จะปิดเอง)
       //   ที่เลือกค้างไว้เก็บใน S.parkDraft · ลีดที่กางดูอยู่จำใน S.parkOpen — วาดใหม่แล้วไม่หาย
       const act = document.activeElement;
       if (act && el.contains(act) && /SELECT|INPUT|TEXTAREA/.test(act.tagName)) return;
       const top = el.scrollTop;
-      el.innerHTML = park + (S.rows.length ? S.rows.map(rowHtml).join('') : `<div class="cn-empty">ไม่มีลูกค้าแชทรอจ่ายเบอร์ 👍</div>`);
+      el.innerHTML = hub;
       el.scrollTop = top;
       bindPark(el);
       el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
@@ -674,6 +712,7 @@
     if (S.view) qs.set('view', S.view);
     if (S.q) qs.set('q', S.q);
     if (S.seller) qs.set('seller', S.seller);
+    if (S.src) qs.set('src', S.src);
     if (reset) $('cn-rows').innerHTML = '<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>';
     let d;
     try { d = await api('/connect/api/inbox?' + qs.toString(), undefined, ac.signal); }
@@ -784,7 +823,7 @@
         ${avHtml(r.name, r.pic)}
         <div class="cn-ph-who">
           <h2>${h(r.name)}</h2>
-          <div class="cn-sub">${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ${r.msgs} ข้อความ${clock}</div>
+          <div class="cn-sub">${chTag(r.src)} ${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ${r.msgs} ข้อความ${clock}</div>
         </div>
         <div class="cn-acts">${acts.join('')}</div>
       </div>
@@ -879,7 +918,8 @@
     const shownName = (L && L.customer_name) || p.name;
     let x = `<div class="pf-top">${avHtml(shownName, p.pic, 'lg')}
       <div class="pf-name-row"><span class="pf-name">${h(shownName)}</span>${L && ed ? `<button class="pf-pen" data-act="name" title="แก้ชื่อลูกค้า">✎</button>` : ''}</div>
-      ${p.lineName && p.lineName !== shownName ? `<div class="pf-line">ชื่อใน LINE: ${h(p.lineName)}</div>` : ''}
+      ${p.lineName && p.lineName !== shownName ? `<div class="pf-line">ชื่อใน ${p.src === 'fb' ? 'Facebook' : 'LINE'}: ${h(p.lineName)}</div>` : ''}
+      ${p.src === 'fb' ? `<div class="pf-line">${chTag('fb')} ${h(p.page || '')}</div>${p.inbox ? `<a class="btn sm" href="${h(p.inbox)}" target="_blank" rel="noopener">เปิดใน Facebook ↗</a>` : ''}` : ''}
       ${p.status ? `<div class="pf-status">\u201c${h(p.status)}\u201d</div>` : ''}`;
     if (L) {
       x += `<div class="pf-tags">${(L.tags || []).map(t => `<span class="pf-tag">${h(t)}${ed ? `<button data-tag-del="${h(t)}" title="เอาแท็กออก">×</button>` : ''}</span>`).join('')}
@@ -1164,16 +1204,33 @@
     const d = S.chat;
     let why = '';
     if (!d.canReply) why = d.access === 'preview' ? 'กด "รับลูกค้าคนนี้" ก่อนถึงจะตอบได้' : 'ตอบได้เฉพาะเจ้าของลูกค้าและแอดมิน';
-    else if (!d.replyOn) why = 'ยังล็อกการส่งข้อความหาลูกค้าอยู่ (ช่วงทดสอบ) — ' + (ADMIN ? 'เปิดด้วยคำสั่ง manage.py checkout_config --reply on' : 'รอแอดมินเปิดระบบ');
-    const want = why ? 'why:' + why : 'comp';
+    else if (!d.replyOn) why = d.replyWhy || ('ยังล็อกการส่งข้อความหาลูกค้าอยู่ (ช่วงทดสอบ) — ' + (ADMIN ? 'เปิดด้วยคำสั่ง manage.py checkout_config --reply on' : 'รอแอดมินเปิดระบบ'));
+    // ลูกค้า Facebook ช่วงทดสอบ: แอดมินกำหนดแชทที่ใช้ทดสอบการตอบได้ (แชทของคนในบริษัท ไม่ใช่ลูกค้าจริง)
+    const ft = (ADMIN && d.fbTest && d.fbTest.mode === 'test') ? (d.fbTest.on ? 'on' : 'off') : '';
+    const ftHtml = ft ? `<div class="cn-comp-why" style="padding:6px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span>${ft === 'on' ? 'แชทนี้เป็น "แชททดสอบ" การตอบ Facebook' : 'ทดสอบการตอบ Facebook กับแชทของคนในบริษัทก่อน (เช่นทักเพจจาก FB ตัวเอง)'}</span>
+        <button class="btn sm" id="cn-fbtest">${ft === 'on' ? 'ยกเลิกแชททดสอบ' : 'ใช้แชทนี้ทดสอบการตอบ'}</button></div>` : '';
+    const want = (why ? 'why:' + why : 'comp') + '|' + ft;
     if (!fresh && w.dataset.k === want) return;          // ไม่วาดซ้ำ = ข้อความที่กำลังพิมพ์ไม่หาย
     w.dataset.k = want;
-    if (why) { w.innerHTML = `<div class="cn-comp-why">${h(why)}</div>`; return; }
+    const bindFt = () => {
+      const b = $('cn-fbtest'); if (!b) return;
+      b.onclick = async () => {
+        const id = d.row.id;
+        b.disabled = true;
+        const r = await api('/connect/api/fb_test', { id, on: ft !== 'on' });
+        b.disabled = false;
+        toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'));
+        if (r.ok) openChat(id, true);
+      };
+    };
+    if (why) { w.innerHTML = `<div class="cn-comp-why">${h(why)}</div>` + ftHtml; bindFt(); return; }
     // มือถือ: Enter = ขึ้นบรรทัด (กดปุ่มส่งเอา) — คำอธิบาย Enter/Shift+Enter มีแค่บนคอม
     const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
     w.innerHTML = `<div class="cn-err" id="cn-err"></div>
       <div class="cn-comp"><textarea id="cn-text" rows="1" placeholder="${coarse ? 'พิมพ์ข้อความถึงลูกค้า…' : 'พิมพ์ข้อความถึงลูกค้า… (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)'}"></textarea>
-      <button class="btn pri" id="cn-send">${ic('send')} ส่ง</button></div>`;
+      <button class="btn pri" id="cn-send">${ic('send')} ส่ง</button></div>` + ftHtml;
+    bindFt();
     const ta = $('cn-text');
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; });
     ta.addEventListener('keydown', e => {
@@ -1312,6 +1369,7 @@
         <div class="fld"><label><input type="checkbox" id="cf-notify"${c.notify_sellers ? ' checked' : ''}> บอกเซลล์ทาง LINE เมื่อลูกค้าทักมา</label>
           <span style="color:var(--t3)">เจ้าของลูกค้า หรือทุกคนในทีมที่เวร (ถ้ายังไม่มีเจ้าของ) · ทีมละ ~9 คน = กินโควต้าเร็ว</span></div>
       </div>
+      ${fbCardHtml(c)}
       ${testCardHtml()}
       <div style="display:flex;gap:10px;align-items:center;max-width:920px">
         <button class="btn pri" id="cf-save">บันทึก</button>
@@ -1334,6 +1392,33 @@
     $('cf-save').onclick = saveCfg;
     $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
   }
+  // ── Facebook Messenger (4 ต.ค.69 · รวมคิวเดียวกับ LINE) ──
+  function fbCardHtml(c) {
+    const F = CFG.fb || {}, L = F.last || {};
+    const pages = (F.pages || []).map(x => h(x.name)).join(' · ') || '(ยังไม่ได้ตั้ง META_PAGE_IDS)';
+    let st = 'ยังไม่เคยดึง';
+    if (L.at) {
+      const when = fmtWhen(L.at);
+      st = L.error ? `<span style="color:var(--red)">ดึงล่าสุด ${h(when)} ไม่สำเร็จ: ${h(L.error)}</span>`
+        : L.skipped ? `ดึงล่าสุด ${h(when)} — ข้าม: ${h(L.skipped)}`
+        : `ดึงล่าสุด ${h(when)} · ห้องที่มีข้อความใหม่ ${L.threads || 0} · ข้อความใหม่ ${L.newMsgs || 0}`
+          + ((L.errors || []).length ? ` · <span style="color:var(--red)">${h(L.errors.join(' · '))}</span>` : '');
+    }
+    const nTest = (c.fb_test_rows || []).length;
+    const opt = (v, t) => `<option value="${v}"${c.fb_reply === v ? ' selected' : ''}>${t}</option>`;
+    return `<div class="card">
+      <h3>Facebook Messenger</h3>
+      <div class="d">แชทจากเพจ ${pages} เข้า Connect ทุก 1 นาที — คิวเดียวกับ LINE (รับลูกค้า · นับ ${c.sla_min} นาที · โอน · จ่ายเบอร์)
+        · ตอบในแอป Facebook / Business Suite ก็หยุดนาฬิกาให้ (Facebook ส่งข้อความขาออกมาด้วย)
+        · Facebook ให้ตอบได้ภายใน 24 ชม. นับจากข้อความล่าสุดของลูกค้า</div>
+      <div class="fld"><label><input type="checkbox" id="cf-fb"${c.fb_on ? ' checked' : ''}> ดึงแชท Facebook เข้า Connect</label>
+        <span style="color:var(--t3)">${st}</span></div>
+      <div class="fld"><label>ตอบลูกค้า Facebook จาก Connect</label>
+        <select id="cf-fbreply">${opt('off', 'ปิด — ตอบใน Facebook เอง')}${opt('test', 'ทดสอบ — เฉพาะแชททดสอบ (' + nTest + ' แชท)')}${opt('on', 'เปิด — ทุกแชท')}</select></div>
+      ${c.fb_reply === 'test' ? `<div class="d" style="margin:0">ทดสอบ: ทักเพจจาก Facebook ของคุณเอง → เปิดแชทนั้นใน Connect → กด "ใช้แชทนี้ทดสอบการตอบ" ใต้ช่องพิมพ์ → ลองตอบ · ใช้ได้แล้วค่อยเปลี่ยนเป็น "เปิด"</div>` : ''}
+    </div>`;
+  }
+
   function testCardHtml() {
     const t = CFG.test; if (!t) return '';
     const c = t.counts || {};
@@ -1357,6 +1442,7 @@
       teams, anchor_date: c.anchor_date, anchor_team: teams.includes(c.anchor_team) ? c.anchor_team : (teams[0] || ''),
       overrides: c.overrides || {}, sla_min: $('cf-sla').value, open: $('cf-open').value, close: $('cf-close').value,
       alert_on: $('cf-alert').checked, alert_group: $('cf-group').value, notify_sellers: $('cf-notify').checked,
+      fb_on: $('cf-fb').checked, fb_reply: $('cf-fbreply').value,
     };
     $('cf-save').disabled = true;
     const d = await api('/connect/api/config', body);
@@ -1369,6 +1455,7 @@
   let _qT = null;
   $('cn-q').addEventListener('input', () => { clearTimeout(_qT); _qT = setTimeout(() => { S.q = $('cn-q').value.trim(); loadInbox(true); }, 350); });
   $('cn-seller').addEventListener('change', () => { S.seller = +$('cn-seller').value || 0; loadInbox(true); });
+  $('cn-src').addEventListener('change', () => { S.src = $('cn-src').value; loadInbox(true); });
 
   // ── นาฬิกาทุกวินาที (ไม่ยิงเซิร์ฟเวอร์) ──
   setInterval(() => {

@@ -1240,6 +1240,178 @@ try:
     C.tick()
     ck("★ ลีดภายนอกเกิน 90 วันถูกลบ (มีเบอร์/ID LINE ลูกค้า)", not ExtLead.objects.filter(message_id=bid).exists())
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[24] Facebook Messenger ในคิวเดียวกับ LINE (ซิงก์ทุกนาที · ตอบจาก Connect ช่วงทดสอบ)")
+    from checkout import fb_sync as FS
+    from checkout.models import FbChat, FbProfile
+    from dashboard.services import meta as M
+    settings.META_ACCESS_TOKEN, settings.META_PAGE_IDS, settings.META_AD_ACCOUNTS = "user-tok", ["111"], []
+    PSID = "990011223344556677"                      # PSID ลูกค้า — ห้ามหลุดออกหน้าเว็บ
+    FB = {"convs": [], "msgs": {}, "send": None, "sent": [], "gets": []}
+    nowu = timezone.now()
+
+    def fbt(dt):
+        return dt.astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    def conv(cid, psid, name, upd):
+        return {"id": cid, "updated_time": fbt(upd), "message_count": len(FB["msgs"].get(cid, [])),
+                "link": "/111/inbox/%s" % cid,
+                "participants": {"data": [{"id": "111", "name": "เพจเรา"}, {"id": psid, "name": name}]}}
+
+    def fmsg(mid, frm, text, at_):
+        return {"id": mid, "created_time": fbt(at_), "from": {"id": frm, "name": "x"}, "message": text}
+
+    _old_get, _old_post = requests.get, requests.post
+
+    def _fb_get(url, *a, **k):
+        if "graph.facebook.com" not in url:
+            return _old_get(url, *a, **k)
+        path = url.split("graph.facebook.com/")[1].split("/", 1)[1]
+        FB["gets"].append(path)
+        if path == "111":
+            return _R(200, {"id": "111", "access_token": "page-tok"})
+        if path == "111/conversations":
+            return _R(200, {"data": FB["convs"]})
+        if path.endswith("/messages"):
+            return _R(200, {"data": FB["msgs"].get(path.split("/")[0], [])})
+        return _R(404, {"error": {"message": "unknown " + path, "code": 100}})
+
+    def _fb_post(url, *a, **k):
+        if "graph.facebook.com" not in url:
+            return _old_post(url, *a, **k)
+        FB["sent"].append((url.split("graph.facebook.com/")[1], k.get("json")))
+        if FB["send"]:
+            return _R(400, {"error": FB["send"]})
+        return _R(200, {"recipient_id": PSID, "message_id": "m_sent_%d" % len(FB["sent"])})
+
+    requests.get, requests.post = _fb_get, _fb_post
+    try:
+        n0 = len(FB["sent"])
+        try:
+            M.post("/999/messages", payload={})
+            blocked = False
+        except M.ForeignAsset:
+            blocked = True
+        ck("★ ด่าน Meta: ส่งข้อความเข้าเพจบริษัทอื่นไม่ได้ + ไม่ยิงเน็ต", blocked and len(FB["sent"]) == n0)
+
+        t1 = nowu - timedelta(minutes=1)
+        FB["msgs"]["t_1"] = [fmsg("m_in1", PSID, "สนใจ civic fe ครับ 0812223333", t1)]
+        FB["convs"] = [conv("t_1", PSID, "ลูกค้าเฟซบุ๊ก", t1)]
+        r = FS.sync_live()
+        fp = FbProfile.objects.filter(user_id=PSID).first()
+        fo = ChatOwner.objects.filter(fb_profile=fp).first() if fp else None
+        ck("ซิงก์ทุกนาที: เก็บแชท + สร้างลูกค้าใน Connect", r.get("newMsgs") == 1 and fo is not None, (r, fo))
+        ck("★ ลูกค้า FB เข้าคิวรอรับ + เริ่มนับ 5 นาที + ทีมตามเวร", fo and fo.awaiting_since and not fo.owner_id
+           and fo.team == "A", fo and (fo.awaiting_since, fo.team))
+        g0 = len(FB["gets"])
+        FS.sync_live()
+        ck("ห้องไม่ขยับ = ไม่ยิงขอข้อความซ้ำ", not [x for x in FB["gets"][g0:] if x.endswith("/messages")], FB["gets"][g0:])
+
+        s_, d = J(ADM, "/connect/api/inbox?view=queue")
+        row = next((x for x in d.get("rows", []) if x["id"] == fo.id), {})
+        ck("รายชื่อมีป้าย Facebook + ชื่อ + ข้อความล่าสุด", row.get("src") == "fb" and row.get("name") == "ลูกค้าเฟซบุ๊ก"
+           and "civic" in row.get("preview", ""), row)
+        s_, d = J(ADM, "/connect/api/inbox?view=all&src=fb")
+        ck("ตัวกรองช่องทาง Facebook = เฉพาะลูกค้า FB", d.get("rows") and all(x["src"] == "fb" for x in d["rows"]))
+        s_, d = J(ADM, "/connect/api/inbox?view=all&src=line")
+        ck("ตัวกรอง LINE = ไม่มีลูกค้า FB", fo.id not in [x["id"] for x in d.get("rows", [])])
+        s_, d = J(SA1, "/connect/api/claim", {"id": fo.id})
+        ck("เซลล์ทีมเวรรับลูกค้า FB ได้ (กติกาเดียวกับ LINE)", s_ == 200 and ChatOwner.objects.get(pk=fo.id).owner_id == A1.id, d)
+        s_, d = J(SA1, "/connect/api/chat?id=%d" % fo.id)
+        ck("เปิดแชท FB: เห็นข้อความ + โปรไฟล์บอกเพจ", s_ == 200 and d["messages"][0]["text"].startswith("สนใจ civic")
+           and d["profile"]["src"] == "fb" and d["profile"].get("inbox", "").startswith("https://www.facebook.com/"), d.get("profile"))
+        ck("ข้อมูลลีด FB: เบอร์จากแชท + ชื่อ Account = ชื่อใน Facebook + ไม่เดาช่องทาง",
+           d["lead"]["phone"] == "0812223333" and d["lead"]["account"] == "ลูกค้าเฟซบุ๊ก" and d["lead"]["channel"] == "",
+           (d["lead"]["phone"], d["lead"]["account"], d["lead"]["channel"]))
+        ck("★ ช่วงทดสอบ: ยังตอบแชท FB ที่ไม่ใช่แชททดสอบไม่ได้", d.get("replyOn") is False and "ทดสอบ" in d.get("replyWhy", ""))
+        leakfb = [pth for pth in ("/connect/api/inbox?view=all", "/connect/api/chat?id=%d" % fo.id)
+                  if PSID in ADM.get(pth, secure=True).content.decode()]
+        ck("★ ไม่ส่ง PSID ลูกค้าออกหน้าเว็บ", not leakfb, leakfb)
+
+        n0 = len(FB["sent"])
+        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "สวัสดีครับ"})
+        ck("★ ตอบแชท FB ที่ไม่ใช่แชททดสอบ = ปฏิเสธ + ไม่ยิง Facebook", s_ == 400 and len(FB["sent"]) == n0, (s_, d))
+        s_, d = J(SA1, "/connect/api/fb_test", {"id": fo.id, "on": True})
+        ck("เซลล์ตั้งแชททดสอบไม่ได้", s_ == 403, s_)
+        s_, d = J(ADM, "/connect/api/fb_test", {"id": fo.id, "on": True})
+        ck("แอดมินตั้งเป็นแชททดสอบ", s_ == 200 and fo.id in C.cfg()["fb_test_rows"], d)
+        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "มีครับ ปี 23 ครับ"})
+        sent = FB["sent"][-1] if FB["sent"] else ("", {})
+        ck("★ ตอบจาก Connect → Send API ของเพจ (ตอบกลับภายใน 24 ชม.)", s_ == 200 and sent[0].endswith("/111/messages")
+           and sent[1] == {"recipient": {"id": PSID}, "messaging_type": "RESPONSE", "message": {"text": "มีครับ ปี 23 ครับ"}}, (s_, d, sent))
+        out = FbChat.objects.filter(thread_id="t_1", direction="out").first()
+        fo.refresh_from_db()
+        ck("บันทึกข้อความขาออก + ชื่อคนตอบ + ปิดรอบรอ", out and out.sent_by_name == "เอหนึ่ง" and out.message_id == "m_sent_%d" % len(FB["sent"])
+           and fo.awaiting_since is None and ChatOwnerLog.objects.filter(chat=fo, action="reply").exists(),
+           out and (out.sent_by_name, fo.awaiting_since))
+
+        # ซิงก์รอบถัดไป: ข้อความที่ส่งจาก Connect (id เดิม) ไม่เก็บซ้ำ · ลูกค้าตอบกลับ = รอบรอใหม่
+        t2 = timezone.now()
+        FB["msgs"]["t_1"] = [fmsg("m_in2", PSID, "ราคาเท่าไหร่ครับ", t2), fmsg(out.message_id, "111", "มีครับ ปี 23 ครับ", out.sent_at)] \
+            + FB["msgs"]["t_1"]
+        FB["convs"] = [conv("t_1", PSID, "ลูกค้าเฟซบุ๊ก", t2)]
+        FS.sync_live()
+        fo.refresh_from_db()
+        ck("★ ข้อความที่ส่งจาก Connect ไม่ถูกเก็บซ้ำตอนซิงก์", FbChat.objects.filter(thread_id="t_1", direction="out").count() == 1)
+        ck("ลูกค้าตอบกลับ = เริ่มรอบรอใหม่ (ของเจ้าของเดิม)", fo.awaiting_since and fo.owner_id == A1.id, fo.awaiting_since)
+        # เพจตอบเองใน Business Suite → ปิดรอบให้ (Facebook ส่งขาออกมาด้วย)
+        t3 = timezone.now() + timedelta(seconds=30)
+        FB["msgs"]["t_1"] = [fmsg("m_bs1", "111", "ทักไลน์มาได้เลยครับ", t3)] + FB["msgs"]["t_1"]
+        FB["convs"] = [conv("t_1", PSID, "ลูกค้าเฟซบุ๊ก", t3)]
+        FS.sync_live()
+        fo.refresh_from_db()
+        lg = ChatOwnerLog.objects.filter(chat=fo, action="reply").order_by("-at").first()
+        ck("★ ตอบใน Facebook (Business Suite) = หยุดนาฬิกาให้ + จดว่าตอบที่ไหน", fo.awaiting_since is None
+           and lg and lg.by_name == "ตอบใน Facebook", lg and lg.by_name)
+        s_, d = J(SA1, "/connect/api/chat?id=%d" % fo.id)
+        ck("บับเบิลขาออกบอกว่าใครตอบ / ตอบใน Facebook", [m["by"] for m in d["messages"] if m["dir"] == "out"]
+           == ["เอหนึ่ง", "ตอบใน Facebook"], [m["by"] for m in d["messages"] if m["dir"] == "out"])
+
+        # เกิน 24 ชม. → Facebook ปฏิเสธ → บอกเป็นภาษาคน + ไม่บันทึก
+        FB["send"] = {"message": "(#10) This message is sent outside of allowed window.", "code": 10, "error_subcode": 2018278}
+        n_out = FbChat.objects.filter(direction="out").count()
+        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "ยังสนใจไหมครับ"})
+        ck("★ เกิน 24 ชม.: บอกให้ตอบใน Business Suite + ไม่บันทึกข้อความที่ส่งไม่ถึง",
+           s_ == 400 and "24 ชม." in d.get("error", "") and FbChat.objects.filter(direction="out").count() == n_out, d)
+        FB["send"] = None
+
+        # ห้องเก่า (ข้อความ 2 ชม. ก่อน) ที่เพิ่งดึงมา = มีแถว แต่ไม่เริ่มนับ 5 นาที
+        PS2 = "880011223344556677"
+        t_old = timezone.now() - timedelta(hours=2)
+        FB["msgs"]["t_2"] = [fmsg("m_old1", PS2, "สวัสดีค่ะ", t_old)]
+        FB["convs"] = [conv("t_2", PS2, "ลูกค้าเก่า FB", t_old), conv("t_1", PSID, "ลูกค้าเฟซบุ๊ก", t3)]
+        FS.sync_live()
+        o2 = ChatOwner.objects.filter(fb_profile__user_id=PS2).first()
+        ck("★ ข้อความเก่าที่เพิ่งดึงมา = มีแถวแต่ไม่ขึ้นเลยเวลา", o2 and o2.awaiting_since is None, o2 and o2.awaiting_since)
+        # ลูกค้า FB ที่คุยภายใน 7 วันแต่ยังไม่มีแถว (ก่อนเปิดใช้) → sync_rows สร้างให้
+        fp3 = FbProfile.objects.create(user_id="770011223344556677", display_name="คุยเมื่อวาน", channel="111",
+                                       thread_id="t_3", last_seen=timezone.now() - timedelta(days=1))
+        FbChat.objects.create(thread_id="t_3", message_id="m_y1", sender_id=fp3.user_id, msg_type="text",
+                              text="มีรถไหม", channel="111", direction="in", sent_at=timezone.now() - timedelta(days=1))
+        C.sync_rows(force=True)
+        o3 = ChatOwner.objects.filter(fb_profile=fp3).first()
+        ck("ลูกค้า FB เมื่อวาน (ก่อนเปิดใช้) มีแถวใน \"ทั้งหมด\" ไม่เริ่มรอบรอ", o3 and o3.awaiting_since is None
+           and o3.last_preview == "มีรถไหม", o3 and o3.last_preview)
+
+        # ปิดสวิตช์ = ไม่ขึ้นคิว
+        cc = C.cfg(); cc["fb_on"] = False; C.save_cfg(cc)
+        PS4 = "660011223344556677"
+        FB["msgs"]["t_4"] = [fmsg("m_n1", PS4, "สนใจครับ", timezone.now())]
+        FB["convs"] = [conv("t_4", PS4, "ลูกค้าตอนปิด", timezone.now())]
+        FS.sync_live()
+        ck("ปิด \"ดึงแชท Facebook เข้า Connect\" = แชทยังเก็บ แต่ไม่ขึ้นคิว", FbChat.objects.filter(message_id="m_n1").exists()
+           and not ChatOwner.objects.filter(fb_profile__user_id=PS4).exists())
+        cc["fb_on"] = True; C.save_cfg(cc)
+        s_, d = J(ADM, "/connect/api/config", {"fb_reply": "เปิด"})
+        ck("ค่าตั้งการตอบ FB ผิด = ปฏิเสธ", s_ == 400, d)
+        s_, d = J(ADM, "/connect/api/config", {"fb_reply": "on"})
+        ck("เปิดตอบ FB ทุกแชทได้ + การ์ดตั้งค่าได้ชื่อเพจ", s_ == 200 and d["cfg"]["fb_reply"] == "on"
+           and (d.get("fb") or {}).get("pages") == [{"id": "111", "name": "111"}], d.get("fb"))
+        ck("เปิดแล้ว ตอบแชท FB ไหนก็ได้", C.fb_reply_state(ChatOwner.objects.get(pk=o2.id))[0] is True)
+        ck("tick ไม่พังเมื่อมีลูกค้า FB เลยเวลา", isinstance(C.tick(), dict))
+    finally:
+        requests.get, requests.post = _old_get, _old_post
+
 finally:
     _runner.teardown_databases(_old)
 

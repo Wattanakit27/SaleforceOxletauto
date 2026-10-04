@@ -245,6 +245,33 @@ def get(path: str, _token: str = "", **params):
     return data
 
 
+def post(path: str, _token: str = "", payload: dict | None = None) -> dict:
+    """POST Graph API (ตอบแชท Messenger จากหน้า Connect · 4 ต.ค.69) — ผ่าน allowlist เดียวกับ `get`
+
+    ★ **ไม่ลองซ้ำเอง** ต่างจาก `get` — ส่งข้อความซ้ำ = ลูกค้าได้ 2 ข้อความ (ถ้าครั้งแรกถึงแล้วแต่คำตอบหาย)
+    error ของ Meta โยนเป็น MetaError ที่มี `.code` / `.subcode` ให้ผู้เรียกแปลเป็นภาษาคน
+    """
+    if not is_configured():
+        raise NotConfigured("ยังไม่ได้ระบุ asset ของบริษัทนี้ — ตั้ง META_AD_ACCOUNTS / META_PAGE_IDS ก่อน")
+    p = "/" + (path or "").lstrip("/")
+    _check(p.split("/")[1] if len(p.split("/")) > 1 else "")
+    try:
+        r = requests.post(_base() + p, params={"access_token": _token or token()}, json=payload or {},
+                          timeout=TIMEOUT)
+        data = r.json()
+    except requests.RequestException as e:
+        raise MetaError("ต่อ Graph API ไม่ได้: %s" % e)
+    except ValueError:
+        raise MetaError("Graph API ตอบไม่ใช่ JSON (HTTP %s)" % r.status_code)
+    _note_usage(r.headers)
+    err = data.get("error") if isinstance(data, dict) else None
+    if err:
+        ex = MetaError(str(err.get("message"))[:200])
+        ex.code, ex.subcode = err.get("code"), err.get("error_subcode")
+        raise ex
+    return data
+
+
 def paged(path: str, _token: str = "", max_pages: int = 50, **params):
     """ไล่ทุกหน้าของผลลัพธ์ (yield ทีละก้อนคำตอบ) — ★ ลิงก์ `next` ถูกตรวจซ้ำทุกหน้า
 
@@ -279,10 +306,20 @@ def page_token(page_id: str) -> str:
     pid = str(page_id).strip()
     if pid not in pages():
         raise ForeignAsset("เพจ %s ไม่อยู่ใน META_PAGE_IDS" % pid)
+    # ★ 4 ต.ค.69 — จำไว้ 1 ชม. ต่อ process: แชท Messenger ซิงก์ทุกนาทีแล้ว (เดิมเที่ยงคืนครั้งเดียว)
+    #   ขอซ้ำทุกนาที = เปลืองโควต้าเปล่าๆ · page token จาก user token แบบไม่หมดอายุ ไม่หมดอายุเหมือนกัน
+    import time as _t
+    hit = _PT_CACHE.get(pid)
+    if hit and _t.time() - hit[1] < 3600:
+        return hit[0]
     t = (get("/" + pid, fields="access_token") or {}).get("access_token") or ""
     if not t:
         raise MetaError("ขอ page token ของเพจ %s ไม่ได้" % pid)
+    _PT_CACHE[pid] = (t, _t.time())
     return t
+
+
+_PT_CACHE: dict = {}
 
 
 def ad_accounts(fields: str = "account_id,name,account_status,currency") -> list:

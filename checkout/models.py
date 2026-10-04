@@ -835,7 +835,12 @@ class ChatOwner(models.Model):
     ⚠️ ห้ามส่ง LINE user id ออกหน้า Connect — ใช้ `id` ของแถวนี้เป็นตัวอ้างอิงแทน
     """
     profile = models.OneToOneField("LineProfile", verbose_name="ลูกค้า", on_delete=models.CASCADE,
-                                   related_name="owner_row")
+                                   related_name="owner_row", null=True, blank=True)
+    # ★ 4 ต.ค.69 — ลูกค้า **Facebook Messenger** ในคิวเดียวกับ LINE (เจ้าของเลือก "รวมคิวเดียวกับ LINE")
+    #   แถวหนึ่งมี `profile` (LINE) **หรือ** `fb_profile` (Facebook) อย่างใดอย่างหนึ่ง · ใช้ `connect.cust(o)` เสมอ
+    #   CASCADE เหมือนฝั่ง LINE — โปรไฟล์ FB ที่เงียบเกิน 60 วันถูกลบ (fb_sync.trim) แถวนี้หายตาม
+    fb_profile = models.OneToOneField("FbProfile", verbose_name="ลูกค้า (Facebook)", on_delete=models.CASCADE,
+                                      related_name="owner_row", null=True, blank=True)
     owner = models.ForeignKey("Employee", verbose_name="เซลล์ที่ดูแล", null=True, blank=True,
                               on_delete=models.SET_NULL, related_name="chat_customers")
     # ทีมที่เวรตอนลูกค้าเริ่มรอบนี้ (ยังไม่มีเจ้าของ) หรือทีมของเจ้าของ — ใช้โชว์/นับสถิติ
@@ -870,8 +875,9 @@ class ChatOwner(models.Model):
         ordering = ["-last_at", "-id"]
 
     def __str__(self):
-        return "%s → %s" % (self.profile.show_name if self.profile_id else "-",
-                            self.owner.nickname if self.owner_id else "(คิว)")
+        who = (self.profile.show_name if self.profile_id
+               else ("FB " + self.fb_profile.show_name) if self.fb_profile_id else "-")
+        return "%s → %s" % (who, self.owner.nickname if self.owner_id else "(คิว)")
 
 
 class ChatOwnerLog(models.Model):

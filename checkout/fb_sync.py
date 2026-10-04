@@ -71,8 +71,9 @@ def _msg_type(m: dict) -> str:
     return "text"
 
 
-def _sync_thread(cid: str, pid: str, pt: str, floor) -> tuple:
-    """ดึงข้อความใหม่ของห้องเดียว → คืน (จำนวนข้อความใหม่, เวลาข้อความเก่าสุดที่เห็น)"""
+def _sync_thread(cid: str, pid: str, pt: str, floor, collect: list | None = None) -> tuple:
+    """ดึงข้อความใหม่ของห้องเดียว → คืน (จำนวนข้อความใหม่, เวลาข้อความเก่าสุดที่เห็น)
+    `collect` = ลิสต์ที่จะได้แถว FbChat ที่เพิ่งเก็บ (หน้า Connect เอาไปเริ่ม/ปิดรอบรอคำตอบ)"""
     from dashboard.services import meta
     from dashboard.services.meta_sync import _dt
     from .models import FbChat
@@ -108,12 +109,40 @@ def _sync_thread(cid: str, pid: str, pt: str, floor) -> tuple:
                 sent_at=ct))
             if ct and (oldest is None or ct < oldest):
                 oldest = ct
+        objs = [o for o in objs if not _sent_from_connect(o)]
         if objs:
             FbChat.objects.bulk_create(objs, ignore_conflicts=True)
             new += len(objs)
+            if collect is not None:
+                collect.extend(objs)
         if stop:
             break
     return new, oldest
+
+
+def _sent_from_connect(o) -> bool:
+    """ข้อความขาออกที่ส่งจากหน้า Connect ถูกบันทึกไปแล้วตอนส่ง (มีชื่อคนตอบ) — ซิงก์มาเจออีกรอบ = ไม่เก็บซ้ำ
+
+    ปกติ message id ตรงกัน (unique) อยู่แล้ว · ตัวนี้กันกรณีรูปแบบ id ที่ Send API คืนมาไม่ตรงกับในห้องสนทนา
+    (เทียบ ห้องเดียวกัน · ข้อความเดียวกัน · ห่างกันไม่เกิน 2 นาที)
+    """
+    from .models import FbChat
+    if o.direction != FbChat.OUT or not o.sent_at:
+        return False
+    return FbChat.objects.filter(thread_id=o.thread_id, direction=FbChat.OUT, text=o.text,
+                                 sent_by_name__gt="", sent_at__gte=o.sent_at - timedelta(minutes=2),
+                                 sent_at__lte=o.sent_at + timedelta(minutes=2)).exists()
+
+
+def _notify_connect(prof, msgs) -> None:
+    """ส่งข้อความที่เพิ่งเก็บให้หน้า Connect (เริ่มรอบรอ/ปิดรอบเมื่อเพจตอบ) — พังต้องไม่ลากการซิงก์"""
+    if not msgs or prof is None:
+        return
+    try:
+        from .connect import note_fb_batch
+        note_fb_batch(prof, msgs)
+    except Exception:
+        pass
 
 
 def _upsert_profile(c: dict, pid: str, ut):
@@ -200,13 +229,15 @@ def sync(trigger: str = "cron", touch=None) -> dict:
                         out["stopped"] = why
                         done = True
                         break
-                    new, oldest = _sync_thread(str(c["id"]), pid, pt, floor)
+                    got = []
+                    new, oldest = _sync_thread(str(c["id"]), pid, pt, floor, collect=got)
                     with transaction.atomic():
                         prof.thread_updated = ut
                         prof.fetched_at = timezone.now()
                         if oldest and (not prof.first_seen or oldest < prof.first_seen):
                             prof.first_seen = oldest
                         prof.save()
+                    _notify_connect(prof, got)
                     out["newMsgs"] += new
                     out["threadsSynced"] += 1
                     n_page += 1
@@ -224,4 +255,56 @@ def sync(trigger: str = "cron", touch=None) -> dict:
     out["profiles"] = FbProfile.objects.count()
     out["trimmed"] = trim()
     out["sec"] = int(time.time() - t0)
+    return out
+
+
+# ─────────────────────────────────────────────────────────────
+#  ซิงก์ "ทุกนาที" ให้หน้า Connect (4 ต.ค.69 · เจ้าของเลือกรวมแชท FB เข้าคิวเดียวกับ LINE)
+# ─────────────────────────────────────────────────────────────
+LIVE_LIMIT = 25        # ห้องที่ขยับล่าสุดกี่ห้องต่อเพจต่อรอบ (วันละ ~100-200 ห้อง = นาทีละไม่กี่ห้อง)
+
+
+def sync_live() -> dict:
+    """รอบเบาทุกนาที — ขอ "รายชื่อห้องหน้าแรก" เพจละ 1 คำขอ · ห้องที่ไม่มีอะไรใหม่ข้ามโดยไม่ยิง API
+    ห้องที่ขยับ = ดึงเฉพาะข้อความใหม่ (หยุดเมื่อเจอข้อความที่มีแล้ว) แล้วแจ้งหน้า Connect
+
+    รอบเที่ยงคืน (`sync`) ยังทำงานเหมือนเดิม — เก็บตกห้องที่หลุดหน้าแรกไปแล้ว
+    """
+    from dashboard.services import meta
+    from dashboard.services.meta_sync import _dt
+
+    if not meta.is_configured():
+        return {"skipped": "ยังไม่ได้ตั้ง META_ACCESS_TOKEN / META_PAGE_IDS"}
+    if (meta.last_usage.get("pct") or 0) >= STOP_USAGE_PCT:
+        return {"skipped": "โควต้า Meta เกิน %d%%" % STOP_USAGE_PCT}
+    t0 = time.time()
+    now = timezone.now()
+    floor = now - timedelta(days=KEEP_DAYS)
+    out = {"threads": 0, "newMsgs": 0, "errors": []}
+    for pid in sorted(meta.pages()):
+        try:
+            pt = meta.page_token(pid)
+            data = meta.get("/%s/conversations" % pid, _token=pt, fields=_CONV_FIELDS, limit=LIVE_LIMIT)
+            for c in (data.get("data") or []):
+                ut = _dt(c.get("updated_time"))
+                if ut and ut < floor:
+                    break
+                prof = _upsert_profile(c, pid, ut)
+                if prof is None:
+                    continue
+                if prof.pk and prof.thread_updated and ut and prof.thread_updated == ut:
+                    continue                         # ไม่มีอะไรใหม่
+                got = []
+                new, oldest = _sync_thread(str(c["id"]), pid, pt, floor, collect=got)
+                prof.thread_updated = ut
+                prof.fetched_at = timezone.now()
+                if oldest and (not prof.first_seen or oldest < prof.first_seen):
+                    prof.first_seen = oldest
+                prof.save()
+                _notify_connect(prof, got)
+                out["threads"] += 1
+                out["newMsgs"] += new
+        except meta.MetaError as e:
+            out["errors"].append("เพจ %s: %s" % (pid, str(e)[:120]))
+    out["sec"] = round(time.time() - t0, 1)
     return out

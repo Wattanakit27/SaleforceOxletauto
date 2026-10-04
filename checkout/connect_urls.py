@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/lead", V.api_lead, name="connect_lead"),            # แก้ข้อมูลลีด 1 ช่อง
     path("api/assign_lead", V.api_assign_lead, name="connect_assign_lead"),   # ปุ่มจ่ายเบอร์ (ทดลอง)
     path("api/park_assign", V.api_park_assign, name="connect_park_assign"),   # จ่ายเบอร์ลีดภายนอก (ห้องพัก Lead)
+    path("api/fb_test", V.api_fb_test, name="connect_fb_test"),     # แชททดสอบการตอบ Facebook (แอดมิน)
     path("api/config", V.api_config, name="connect_config"),
     path("api/stats", V.api_stats, name="connect_stats"),
     path("api/test", V.api_test, name="connect_test"),     # โหมดทดสอบ (แอดมิน): บัญชีเซลล์/ลูกค้าจำลอง

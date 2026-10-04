@@ -104,7 +104,7 @@ def _row(request, ctx, rid):
         rid = int(rid)
     except Exception:
         return None
-    return ChatOwner.objects.select_related("profile", "owner").filter(pk=rid).first()
+    return ChatOwner.objects.select_related("profile", "fb_profile", "owner").filter(pk=rid).first()
 
 
 def _status(ctx) -> list:
@@ -211,7 +211,8 @@ def api_inbox(request):
         rows = []
         note = C.off_duty_reason(ctx["team"], c)
     else:
-        rows = C.inbox(view, me=emp, admin=admin, q=request.GET.get("q", ""), seller_id=seller)
+        rows = C.inbox(view, me=emp, admin=admin, q=request.GET.get("q", ""), seller_id=seller,
+                       src=(request.GET.get("src") or "").strip())
 
     cnt = C.counts(emp, admin)
     if not admin and not on_duty:
@@ -268,11 +269,16 @@ def api_chat(request):
         "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or mine),
         "canAssign": admin,
         # ลูกค้าจำลองไม่ติดสวิตช์ล็อก (ตอบไปไม่ออกนอกระบบ) — ต้องตรงกับ chat.send_reply
-        "replyOn": reply_on() or C.is_sim(o.profile.user_id),
+        #   ลูกค้า Facebook มีสวิตช์ของตัวเอง (connect_config.fb_reply: off/test/on) — ต้องตรงกับ fb_send.send_reply
+        "replyOn": (C.fb_reply_state(o)[0] if C.is_fb(o) else (reply_on() or C.is_sim_row(o))),
+        "replyWhy": (C.fb_reply_state(o)[1] if C.is_fb(o) else ""),
         "now": timezone.localtime().isoformat(timespec="seconds"),
     }
     if admin:
         out["history"] = C.history(o)
+        if C.is_fb(o):                               # ปุ่ม "ใช้แชทนี้ทดสอบการตอบ Facebook" (โหมด test)
+            c = C.cfg()
+            out["fbTest"] = {"mode": c["fb_reply"], "on": o.id in c["fb_test_rows"]}
     # ข้อมูลลีด (ช่องเดียวกับชีตลีด) — เฉพาะคนที่เห็นแชทเต็ม · เติมอัตโนมัติก่อนส่ง (ไม่ทับที่คนพิมพ์)
     if acc == "full":
         try:
@@ -401,7 +407,11 @@ def api_reply(request):
         return _j({"ok": False, "error": "ตอบได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
     from .chat import ReplyError, send_reply
     try:
-        row = send_reply(o.profile.user_id, body.get("text") or "", ctx["user"])
+        if C.is_fb(o):                               # ลูกค้า Facebook → Send API ของเพจ (fb_send.py)
+            from .fb_send import send_reply as fb_send_reply
+            row = fb_send_reply(o, body.get("text") or "", ctx["user"])
+        else:
+            row = send_reply(o.profile.user_id, body.get("text") or "", ctx["user"])
     except ReplyError as e:
         return _j({"ok": False, "error": str(e)}, 400)
     except Exception as e:                       # เน็ตล่ม/LINE ไม่ตอบ — อย่าคืน 500 เปล่าๆ
@@ -480,9 +490,42 @@ def api_config(request):
             return _j({"ok": False, "error": "บันทึกไม่สำเร็จ (ฐานข้อมูลไม่ตอบ)"}, 500)
     c = C.cfg()
     teams = sorted({s["team"] for s in C.seller_list()} | set(c["teams"]))
+    fb = {}
+    try:                                             # สถานะดึงแชท Facebook รอบล่าสุด (การ์ดตั้งค่า)
+        from dashboard.services import cache_store
+        from dashboard.services import meta
+        fb = {"last": (cache_store.get_kv("fb_live_last") or {}).get("data") or {},
+              "configured": meta.is_configured(),
+              "pages": [{"id": pid, "name": C.fb_page_name(pid)} for pid in sorted(meta.pages())]}
+    except Exception:
+        pass
     return _j({"ok": True, "cfg": c, "roster": C.roster(14, c), "duty": _duty(c),
                "teamsAvail": teams, "groups": _alert_groups(), "status": _status(ctx),
-               "sellers": C.seller_list()})
+               "sellers": C.seller_list(), "fb": fb})
+
+
+def api_fb_test(request):
+    """แอดมินกำหนด/ยกเลิก "แชททดสอบการตอบ Facebook" — POST `{id, on}` (ใช้ในโหมด fb_reply = test)
+
+    ทดสอบกับแชทของคนในบริษัท (เจ้าของทักเพจจาก FB ตัวเอง) ก่อนเปิดให้ตอบลูกค้าจริงทุกคน
+    """
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "เฉพาะแอดมิน"}, 403)
+    o = _row(request, ctx, body.get("id"))
+    if not o or not C.is_fb(o):
+        return _j({"ok": False, "error": "ไม่พบแชท Facebook รายนี้"}, 404)
+    c = C.cfg()
+    rows = [r for r in c["fb_test_rows"] if r != o.id]
+    if body.get("on"):
+        rows = (rows + [o.id])[-20:]
+    c["fb_test_rows"] = rows
+    if not C.save_cfg(c):
+        return _j({"ok": False, "error": "บันทึกไม่สำเร็จ"}, 500)
+    return _j({"ok": True, "message": ("ตั้งเป็นแชททดสอบแล้ว — ตอบจาก Connect ได้" if body.get("on")
+                                       else "ยกเลิกแชททดสอบแล้ว")})
 
 
 def api_test(request):
