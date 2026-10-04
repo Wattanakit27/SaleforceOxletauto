@@ -896,6 +896,12 @@ def tick(now=None) -> dict:
             out["extLeadDeleted"] = n
     except Exception as e:
         out["extLeadError"] = str(e)[:120]
+    try:                                     # ห้องพัก Lead: ลีดที่แอดมินจ่ายเบอร์ในกลุ่มแล้ว → จับคู่ใบ/จ่ายให้ใคร เอง (thread แยก)
+        r = slip_sweep_bg()
+        if r:
+            out["slipSweep"] = r
+    except Exception as e:
+        out["slipSweepError"] = str(e)[:120]
     c = cfg()
     rows = list(ChatOwner.objects.select_related("owner", "profile", "fb_profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
@@ -1448,7 +1454,175 @@ def find_slip(phone: str = "", line_name: str = ""):
     return None
 
 
-def autofill(o, msgs=None) -> ChatLead:
+# ── "จ่ายให้ใคร" (4 ต.ค.69 · เจ้าของ: "หลีดบางตัวก็จ่ายไปแล้ว บางตัวก็ยังไม่จ่าย อยากรู้ว่าจ่ายให้ใครบ้าง") ──
+#   ใบจ่ายลีดแท็กเซลล์ท้ายใบ (@ + ชื่อ LINE คำแรก เช่น "@เซลมัท" "@First" "@Mai🐶OxletAuto")
+#   → แปลงเป็นชื่อเล่นในทะเบียน · ไม่ชัด (ไม่เจอ / ตรงหลายคน) = คืนแท็กเดิม ไม่เดา
+_TAGNICK = {"at": 0.0, "map": {}}
+
+
+def _tag_key(s) -> str:
+    from .people import _norm
+    return _norm(s)
+
+
+def tag_nick(tag) -> str:
+    t = (tag or "").strip().lstrip("@")
+    if not t:
+        return ""
+    import time as _t
+    if _t.time() - _TAGNICK["at"] > 600:              # จำ 10 นาที — ทะเบียนพนักงานเปลี่ยนไม่บ่อย
+        hits = {}
+        try:
+            names = list(Employee.objects.filter(active=True).values_list("nickname", "display_name"))
+            names += list(LineProfile.objects.filter(is_employee=True).exclude(nickname="")
+                          .values_list("nickname", "display_name"))
+            for nick, dn in names:
+                for k in {_tag_key(nick), _tag_key(dn), _tag_key((dn or "").split()[0] if (dn or "").split() else "")}:
+                    if k:
+                        hits.setdefault(k, set()).add(nick)
+        except Exception:
+            pass
+        _TAGNICK.update(at=_t.time(), map=hits)
+    s = _TAGNICK["map"].get(_tag_key(t)) or set()
+    return next(iter(s)) if len(s) == 1 else t
+
+
+def _poster(g) -> str:
+    """คนโพสต์ใบจ่ายลีด (แอดมินที่จ่าย) — ชื่อเล่น · **ไม่คืน LINE user id ดิบ**"""
+    from .people import nickname_for
+    return (nickname_for(g.sender_id or "", g.sender_name or "") or "")[:60]
+
+
+def _slip_by_code(code: str):
+    """ใบจ่ายลีดของเลขนี้ในกลุ่มจ่ายเบอร์ (ใบล่าสุด) → (ข้อมูลใบ, แถวแชท) หรือ None"""
+    from .leadgroup import parse_leadsheet
+    gids = _lead_group_ids()
+    if not gids or not code:
+        return None
+    for g in (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=gids, text__icontains=code)
+              .order_by("-sent_at")[:10]):
+        d = parse_leadsheet(g.text or "")
+        if d and d.get("lead_code", "").upper() == code.upper():
+            return d, g
+    return None
+
+
+SLIP_SWEEP_MIN = 3                 # ลีดในห้องพัก: หาใบจ่ายลีดซ้ำทุกกี่นาที (ต่อคน · ตอนเปิดแชทยังเป็น 30)
+_SWEEP = {"at": 0.0}
+
+
+def slip_sweep(limit: int = 60, force: bool = False) -> dict:
+    """ลีดในห้องพักที่แอดมิน **จ่ายเบอร์ในกลุ่มไปแล้ว** → จับคู่ใบให้เอง (ได้เลข + จ่ายให้ใคร) แล้วออกจากห้องพัก
+
+    เดิมจับคู่ใบจ่ายลีดเฉพาะตอนมีคนเปิดแชทนั้น → ลีดที่จ่ายในกลุ่มแล้วค้างในห้องพักไปเรื่อยๆ
+    (วัดจริง 4 ต.ค.69: ห้องพัก 21 คน มีใบจ่ายลีดในกลุ่มแล้ว 10 คน) · เรียกจาก `tick` ทุกนาที
+    + เติม "จ่ายให้ใคร" ให้ลีดที่จับคู่ใบไว้ก่อนมีช่องนี้ (ทีละ 20)
+    """
+    import time as _t
+    if not force and _t.time() - _SWEEP["at"] < 55:
+        return {}
+    _SWEEP["at"] = _t.time()
+    now = timezone.now()
+    out = {"matched": 0, "seller": 0}
+    from datetime import datetime as _dt
+    rows = (to_code(ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead"))
+            .order_by(F("last_at").desc(nulls_last=True))[:limit])
+    for o in rows:
+        if is_sim_row(o):
+            continue
+        last = ((getattr(o, "lead", None) and o.lead.auto) or {}).get("_slip_at") or ""
+        try:
+            if last and (now - _dt.fromisoformat(last)) <= timedelta(minutes=SLIP_SWEEP_MIN):
+                continue                             # เพิ่งหาไป — ไม่โหลดแชทซ้ำทุกนาที
+        except Exception:
+            pass
+        try:
+            if autofill(o, slip_min=SLIP_SWEEP_MIN).code:
+                out["matched"] += 1
+        except Exception:
+            pass
+    # ลีดที่ได้เลขจากใบจ่ายลีดก่อนมีช่อง "จ่ายให้ใคร" → หาใบจากเลขแล้วเติม
+    for lead in (ChatLead.objects.exclude(code="").filter(auto__has_key="_slip")
+                 .exclude(auto___slip__has_key="seller")[:20]):
+        auto = dict(lead.auto or {})
+        sl = dict(auto.get("_slip") or {})
+        hit = _slip_by_code(lead.code)
+        sl.update({"seller": "", "tag": "", "by": sl.get("by", "")})
+        if hit:
+            d, g = hit
+            sl.update({"tag": d.get("assigned", ""), "seller": tag_nick(d.get("assigned", "")), "by": _poster(g),
+                       "at": sl.get("at") or _iso(g.sent_at)})
+            out["seller"] += 1
+        auto["_slip"] = sl
+        ChatLead.objects.filter(pk=lead.pk).update(auto=auto)
+    return out
+
+
+def slip_sweep_bg() -> dict:
+    """เรียกจาก `tick` — รอบกวาดใน thread แยก (โหลดแชทหลายสิบคน · ห้ามหน่วง cron_tick ที่ต้องอุ่นข้อมูลแดชบอร์ด)
+    ผลรอบล่าสุด = KV `slip_sweep_last` · เทสต์ (`BG_FILL=False`) = ทำในที่เลย"""
+    import threading
+    import time as _t
+    if _t.time() - _SWEEP["at"] < 55:
+        return {}
+    if not BG_FILL:
+        return slip_sweep()
+
+    def _work():
+        res = {}
+        try:
+            res = slip_sweep() or {}
+        except Exception as e:
+            res = {"error": str(e)[:200]}
+        finally:
+            try:
+                if res:
+                    from dashboard.services import cache_store
+                    cache_store.set_kv("slip_sweep_last", dict(res, at=timezone.now().isoformat()))
+            except Exception:
+                pass
+            try:
+                from django.db import connection
+                connection.close()
+            except Exception:
+                pass
+
+    threading.Thread(target=_work, daemon=True).start()
+    return {"started": True}
+
+
+def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
+    """ลูกค้าแชท (LINE/FB) ที่ **ได้เลขแล้ว** ภายใน `days` วัน — จ่ายให้ใคร · โดยใคร · เมื่อไหร่ · ทางไหน
+    ล่าสุดก่อน · ที่มา 2 ทาง: ปุ่มจ่ายเบอร์ในระบบ (`assigned_at`) / ใบจ่ายลีดในกลุ่ม (`auto._slip`)"""
+    now = timezone.now()
+    since = now - timedelta(days=days)
+    out = []
+    qs = (ChatLead.objects.select_related("chat", "chat__profile", "chat__fb_profile", "chat__owner", "chat__lead")
+          .exclude(code="").filter(Q(assigned_at__gte=since) | Q(auto__has_key="_slip")))
+    from datetime import datetime as _dt
+    for lead in qs[:600]:
+        o, auto = lead.chat, (lead.auto or {})
+        if lead.assigned_at:
+            at, how = lead.assigned_at, ("ระบบ (ทดลอง)" if lead.code_demo else "ระบบ")
+            seller = o.owner.nickname if o.owner_id else ""
+            by = lead.assigned_by or ""
+        else:
+            sl = auto.get("_slip") or {}
+            try:
+                at = _dt.fromisoformat(sl.get("at") or "")
+            except Exception:
+                continue
+            how, seller, by = "ใบในห้องจ่ายเบอร์", sl.get("seller") or sl.get("tag") or "", sl.get("by") or ""
+        if at < since:
+            continue
+        r = row_json(o, me, now)
+        r.update({"code": lead.code, "seller": seller, "by": by, "at": _iso(at), "how": how})
+        out.append(r)
+    out.sort(key=lambda r: r["at"], reverse=True)
+    return out[:limit]
+
+
+def autofill(o, msgs=None, slip_min=None) -> ChatLead:
     """เติมข้อมูลลีดอัตโนมัติ — **เฉพาะช่องที่ว่างและยังไม่เคยเติม** ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด
 
     ที่มา: แชท (เบอร์ · รถที่ถาม · รุ่นแบบ "CAR / สูตร") · ระบบ (ช่องทาง LINE@ · สาขา · Admin ที่โอน/ตอบ) ·
@@ -1505,7 +1679,7 @@ def autofill(o, msgs=None) -> ChatLead:
     last = auto.get("_slip_at") or ""
     try:
         from datetime import datetime as _dt
-        stale = (not last) or (now - _dt.fromisoformat(last)) > timedelta(minutes=_SLIP_EVERY_MIN)
+        stale = (not last) or (now - _dt.fromisoformat(last)) > timedelta(minutes=slip_min or _SLIP_EVERY_MIN)
     except Exception:
         stale = True
     # ลูกค้าจำลอง "ไม่ค้นใบจ่ายลีด" — เบอร์ที่พิมพ์ทดสอบอาจไปตรงใบของลูกค้าจริง แล้วดึงชื่อ/ID LINE ของจริงมาปนในข้อมูลทดสอบ
@@ -1527,7 +1701,9 @@ def autofill(o, msgs=None) -> ChatLead:
                 put(f, v, "ใบจ่ายลีด", over=(SYSTEM,))
             if d.get("phone"):
                 put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบจ่ายลีด")
-            auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or ""}
+            # จ่ายให้ใคร = คนที่ถูกแท็กท้ายใบ (ชื่อ LINE คำแรก → ชื่อเล่นในทะเบียน) · ใครโพสต์ใบ = แอดมินที่จ่าย
+            auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or "", "tag": d.get("assigned", ""),
+                             "seller": tag_nick(d.get("assigned", "")), "by": _poster(g)}
 
     def stale_sys(field) -> tuple:
         """ค่าที่ระบบเคยใส่ไว้แต่ "ไม่อยู่ในตัวเลือกของชีต" (เช่น "LINE OA" ก่อนมี dropdown) → ยอมให้แก้ให้ตรงชีต"""

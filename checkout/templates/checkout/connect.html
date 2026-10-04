@@ -219,6 +219,16 @@
   .cn-prow > summary::-webkit-details-marker { display: none; }
   .cn-prow .pv { margin-top: 6px; padding: 6px 8px; border-radius: 7px; background: var(--bg2); font-size: 12px; line-height: 1.6; }
   .cn-park-f { padding: 6px 12px 8px; color: var(--t3); font-size: 12px; }
+  /* ห้องพัก Lead: สลับ รอจ่ายเบอร์ / จ่ายแล้ว + แถบสรุปจ่ายให้ใคร */
+  .hub-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-left: 4px; font-weight: 600; }
+  .hub-sum { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+  .hub-sel { border: .5px solid var(--bd2); background: var(--bg); color: var(--t2); border-radius: 7px; padding: 3px 9px;
+             cursor: pointer; font-size: 13px; }
+  .hub-sel b { color: var(--blue-dk); }
+  .hub-sel.on { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+  .hub-sel.on b { color: var(--on-blue); }
+  .hub-to { margin-top: 3px; color: var(--t2); }
+  .hub-to b { color: var(--blue-dk); font-size: var(--fs-sub); }
   .cn-sep { padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--t3); background: var(--bg2); border-bottom: .5px solid var(--bd); }
   /* ห้องพัก Lead เต็มจอ (4 ต.ค.69 · เจ้าของ "ห้องพักลีดเป็นหน้าจอใหญ่ๆ เต็มๆ") — ไม่มีช่องแชทขวา · ลีดเป็นการ์ดหลายคอลัมน์
      กดลีดแชท = แชทเต็มจอแทนบอร์ด (ปุ่ม "← ห้องพัก Lead" กลับ) · class `hub` ใส่ที่ #cn-main ใน applyHub() */
@@ -617,41 +627,94 @@
     </summary>${det ? `<div class="pv">${det}</div>` : ''}${parkBoxHtml(i, ch)}</details>`;
   }
 
+  // ── "จ่ายแล้ว" (4 ต.ค.69 · เจ้าของ: "หลีดบางตัวก็จ่ายไปแล้ว บางตัวก็ยังไม่จ่าย อยากรู้ว่าจ่ายให้ใครบ้าง") ──
+  //   รวม 2 แหล่ง: แชท LINE/FB ที่ได้เลขแล้ว (S.assigned · จากปุ่มจ่ายเบอร์ในระบบ หรือใบจ่ายลีดในกลุ่มที่ระบบจับคู่ให้)
+  //   + ใบร่างในห้องพักที่ได้เลขแล้ว (P.assigned) · ช่วง: วันนี้ / 7 วัน · กดชื่อเซลล์ในแถบสรุป = กรองเฉพาะคนนั้น
+  S.hubTab = 'wait'; S.doneRange = 'today'; S.doneSeller = '';
+  const UNKNOWN_SELLER = 'ไม่ทราบ';
+
+  function doneItems(withSeller) {
+    const P = S.parked || {};
+    const out = (S.assigned || []).map(r => ({ kind: 'chat', id: r.id, name: r.name, src: SRC_KEY[r.src] || 'line', pic: r.pic,
+      code: r.code, seller: r.seller || '', by: r.by || '', at: r.at, how: r.how || '' }));
+    (P.assigned || []).forEach(i => {
+      const real = i.code, sys = i.sys || null;
+      out.push({ kind: 'park', name: pWho(i), src: SRC_KEY[i.source] || 'other', pic: '',
+        code: real || (sys && sys.code) || '',
+        seller: real ? (i.sellerNick || i.seller || '') : ((sys && sys.seller) || ''),
+        by: real ? (i.assignedBy || '') : ((sys && sys.by) || ''), at: i.doneAt || '',
+        how: real ? 'ใบในห้องจ่ายเบอร์' : ('ระบบ' + (sys && sys.demo ? ' (ทดลอง)' : '')),
+        slip: sys && !real ? i.id : '', extra: sys && real && sys.code !== real ? 'เลขทดลอง ' + sys.code : '' });
+    });
+    const today = new Date(nowMs()).toLocaleDateString('sv-SE');
+    const q = (S.q || '').trim().toLowerCase();
+    return out.filter(x => x.at && x.code)
+      .filter(x => S.doneRange !== 'today' || new Date(x.at).toLocaleDateString('sv-SE') === today)
+      .filter(x => !S.src || x.src === S.src)
+      .filter(x => !q || [x.name, x.code, x.seller, x.by].some(v => (v || '').toLowerCase().includes(q)))
+      .filter(x => !withSeller || !S.doneSeller || (x.seller || UNKNOWN_SELLER) === S.doneSeller)
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }
+
+  function doneCardHtml(x) {
+    const chat = x.kind === 'chat';
+    return `<div class="${chat ? 'cn-row' : 'cn-prow'} hub-done"${chat ? ` data-id="${x.id}" title="เปิดแชท"` : ''}>
+      ${chat ? avHtml(x.name, x.pic) : ''}
+      <div class="cn-rb">
+        <div class="cn-rh"><span class="cn-rn">${h(x.name)}</span><span class="cn-rt">${h(fmtWhen(x.at))}</span></div>
+        <div class="hub-to">จ่ายให้ <b>${x.seller ? '@' + h(x.seller) : UNKNOWN_SELLER}</b></div>
+        <div class="cn-rm">${chTag(x.src)}<span class="tag ok">${ic('hash', 12)} ${h(x.code)}</span>
+          <span class="tag">${h(x.how)}${x.by ? ' · โดย ' + h(x.by) : ''}</span>${x.extra ? `<span class="tag">${h(x.extra)}</span>` : ''}
+          ${x.slip ? `<button class="btn sm" data-slip="${h(x.slip)}">คัดลอกใบจ่ายลีด</button>` : ''}</div>
+      </div></div>`;
+  }
+
   function hubHtml() {
     if (!(ADMIN && S.view === 'tocode')) return '';
-    const P = S.parked || {}, st = P.stats || {}, ch = P.codeHelp || {};
+    const P = S.parked || {}, ch = P.codeHelp || {};
     const items = [];
     S.rows.forEach(r => items.push({ t: Date.parse(r.since || r.lastAt || '') || 0, src: SRC_KEY[r.src] || 'line', html: rowHtml(r) }));
     (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src)
       .forEach(i => items.push({ t: Date.parse(i.at) || 0, src: SRC_KEY[i.source] || 'other', html: parkItemHtml(i, P, ch) }));
     items.sort((x, y) => x.t - y.t);                     // รอนานสุดขึ้นก่อน (ไม่ว่ามาจากช่องทางไหน)
+    const doneAll = doneItems(false);
+    const rangeL = S.doneRange === 'today' ? 'วันนี้' : '7 วัน';
+    const seg = `<span class="hub-seg">
+        <button class="cn-tab${S.hubTab === 'wait' ? ' on' : ''}" data-hub="wait">${ic('clock')} รอจ่ายเบอร์ <span class="n">${items.length}</span></button>
+        <button class="cn-tab${S.hubTab === 'done' ? ' on' : ''}" data-hub="done">${ic('check')} จ่ายแล้ว${rangeL === 'วันนี้' ? 'วันนี้' : ' 7 วัน'} <span class="n">${doneAll.length}</span></button>
+      </span>`;
+
+    if (S.hubTab === 'done') {
+      const by = {};
+      doneAll.forEach(x => { const k = x.seller || UNKNOWN_SELLER; by[k] = (by[k] || 0) + 1; });
+      const sum = Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th')).map(([k, n]) =>
+        `<button class="hub-sel${S.doneSeller === k ? ' on' : ''}" data-dsel="${h(k)}">${k === UNKNOWN_SELLER ? h(k) : '@' + h(k)} <b>${n}</b></button>`).join('');
+      const shown = doneItems(true);
+      return `<div class="cn-park">
+          <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead ${seg}
+            <span class="hub-seg"><button class="btn sm${S.doneRange === 'today' ? ' pri' : ''}" data-hubr="today">วันนี้</button><button class="btn sm${S.doneRange === '7d' ? ' pri' : ''}" data-hubr="7d">7 วัน</button></span></div>
+          <div class="cn-park-f" style="padding-top:0">จ่ายให้ใครบ้าง${S.doneSeller ? ` — กรองเฉพาะ <b>${h(S.doneSeller)}</b> (กดชื่อเดิมอีกครั้งเพื่อดูทั้งหมด)` : ' — กดชื่อเพื่อดูเฉพาะคนนั้น'}
+            · รวมทั้งที่จ่ายผ่านปุ่มในระบบ และที่แอดมินโพสต์ใบจ่ายเบอร์ในกลุ่ม (ระบบจับคู่ใบให้เองด้วยเบอร์/ชื่อไลน์)</div>
+          ${sum ? `<div class="hub-sum">${sum}</div>` : ''}
+        </div>
+        ${shown.map(doneCardHtml).join('') || `<div class="cn-empty">ยังไม่มีลีดที่จ่ายเบอร์${h(rangeL === 'วันนี้' ? 'วันนี้' : 'ใน 7 วัน')}</div>`}`;
+    }
+
     const cnt = {};
     items.forEach(x => { cnt[x.src] = (cnt[x.src] || 0) + 1; });
     const chips = Object.keys(SRC_LABEL).filter(k => cnt[k]).map(k => chTag(k, cnt[k])).join(' ');
-    // จ่ายแล้ววันนี้ (ใบร่างในห้องพัก) — จ่ายผ่านระบบ (คัดลอกใบไปวางในห้องจ่ายเบอร์ได้) หรือแอดมินโพสต์ใบจริงเอง
-    const todayIso = new Date(nowMs()).toLocaleDateString('sv-SE');
-    const done = (P.assigned || []).filter(i => (i.doneAt || '').slice(0, 10) === todayIso);
-    const doneRows = done.map(i => {
-      const real = i.code, sys = i.sys;
-      const how = real ? `ในห้องจ่ายเบอร์ · โดย ${h(i.assignedBy || '-')}` : `จ่ายผ่านระบบ${sys && sys.demo ? ' (ทดลอง)' : ''} · โดย ${h((sys && sys.by) || '-')}`;
-      const code = real || (sys && sys.code), seller = real ? i.seller : (sys && sys.seller);
-      return `<div class="cn-prow"><div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag ok">${h(code)}</span></div>
-        <div class="cn-rp">@${h(seller || '-')} · ${how} · พัก ${h(fmtWait(i.waitMin || 0))}${sys && real && sys.code !== real ? ` · เลขทดลอง ${h(sys.code)}` : ''}</div>
-        ${sys && !real ? `<div class="cn-rm"><button class="btn sm" data-slip="${h(i.id)}">คัดลอกใบจ่ายลีด</button></div>` : ''}</div>`;
-    }).join('');
     const skipped = (P.skipped || []).map(i => `<div class="cn-prow"><div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}</div>
       <div class="cn-rm"><span class="tag">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div></div>`).join('');
-    const sum = st.assignedToday ? ` · พักเฉลี่ย ${h(fmtWait(st.avgWaitMinToday || 0))}` : '';
     const room = P.room ? `"${h(P.room)}"` : '"ADMIN เก็บ Lead" (บอทยังไม่ได้ยินห้องนี้)';
     return `<div class="cn-park">
-        <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอจ่ายเบอร์ ${items.length} <span style="font-weight:400">${chips}</span></div>
+        <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead ${seg} <span style="font-weight:400">${chips}</span></div>
         <div class="cn-park-f" style="padding-top:0">ศูนย์กระจายลีดทุกช่องทาง — แชท LINE / Facebook ที่<b>ให้เบอร์หรือไอดีไลน์แล้ว</b>แต่ยังไม่มีเลข + ใบร่างที่พักไว้ในกลุ่ม ${room}
-          · รอนานสุดขึ้นก่อน · แชท: เปิดแล้วจ่ายเบอร์ในแผงขวา · ใบร่าง: กดกางแล้วจ่ายได้เลย</div>
+          · รอนานสุดขึ้นก่อน · แชท: เปิดแล้วจ่ายเบอร์ในแผงขวา · ใบร่าง: กดกางแล้วจ่ายได้เลย
+          · แอดมินโพสต์ใบจ่ายเบอร์ในกลุ่มแล้ว = ระบบจับคู่ให้เองภายในไม่กี่นาที แล้วย้ายไป "จ่ายแล้ว"</div>
       </div>
       ${items.map(x => x.html).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}
-      ${done.length || skipped ? `<div class="cn-park" style="border-top:.5px solid var(--bd2)">
-        ${done.length ? `<details class="cn-prow" data-pk="done"${S.parkOpen.has('done') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ใบร่างที่ได้เลขวันนี้ ${done.length} ราย${sum} ▾</summary>${doneRows}</details>` : ''}
-        ${skipped ? `<details class="cn-prow" data-pk="skip"${S.parkOpen.has('skip') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย ▾</summary>${skipped}</details>` : ''}
+      ${skipped ? `<div class="cn-park" style="border-top:.5px solid var(--bd2)">
+        <details class="cn-prow" data-pk="skip"${S.parkOpen.has('skip') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย ▾</summary>${skipped}</details>
       </div>` : ''}`;
   }
 
@@ -715,6 +778,10 @@
       el.scrollTop = top;
       bindPark(el);
       el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
+      el.querySelectorAll('[data-hub]').forEach(b => b.onclick = () => { S.hubTab = b.dataset.hub; el.scrollTop = 0; renderList(); });
+      el.querySelectorAll('[data-hubr]').forEach(b => b.onclick = () => { S.doneRange = b.dataset.hubr; S.doneSeller = ''; renderList(); });
+      el.querySelectorAll('[data-dsel]').forEach(b => b.onclick = () => {
+        S.doneSeller = S.doneSeller === b.dataset.dsel ? '' : b.dataset.dsel; renderList(); });
       return;
     }
     if (!S.rows.length) {
@@ -753,7 +820,7 @@
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
     Object.assign(S, { view: d.view, rows: d.rows || [], counts: d.counts || {}, duty: d.duty, onDuty: !!d.onDuty,
                        status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
-                       parked: d.parked || null });
+                       parked: d.parked || null, assigned: d.assigned || [] });
     renderTop(); renderTabs(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }

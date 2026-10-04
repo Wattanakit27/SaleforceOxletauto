@@ -203,6 +203,11 @@ def api_inbox(request):
             C.sync_rows()                        # ลูกค้าเก่าที่ทักมาก่อนมี Connect (ทุก 2 นาทีพอ)
         except Exception:
             pass
+        if view == "tocode":
+            try:
+                C.slip_sweep_bg()                # ลีดที่จ่ายในกลุ่มแล้ว → ได้เลข + ออกจากห้องพัก (thread · เว้น ≥ 55 วิ ต่อ worker)
+            except Exception:
+                pass
     try:
         C.fill_pictures_bg()                     # ทยอยเติมรูปโปรไฟล์ลูกค้า (thread แยก · นาทีละครั้ง)
     except Exception:
@@ -232,9 +237,17 @@ def api_inbox(request):
                 # ตัวช่วยประกอบเลขตัวอย่างในกล่องจ่ายเบอร์ของลีดภายนอก (เลขรันชุดเดียวกับลูกค้า LINE OA)
                 pk["codeHelp"] = {"bases": [{"key": b, "type": t} for b, t in C.CODE_BASES],
                                   "month": timezone.localdate().month, "next": C.last_running() + 1}
+                for it in pk.get("assigned") or []:      # แท็กท้ายใบ (ชื่อ LINE คำแรก) → ชื่อเล่นในทะเบียน
+                    it["sellerNick"] = C.tag_nick(it.get("seller") or "")
                 out["parked"] = pk
         except Exception as e:
             out["parkedError"] = str(e)[:120]
+        if view == "tocode":
+            # "จ่ายแล้ว" — ลูกค้าแชทที่ได้เลขแล้ว 7 วันล่าสุด จ่ายให้ใคร/โดยใคร (เจ้าของ: "อยากรู้ว่าจ่ายให้ใครบ้าง")
+            try:
+                out["assigned"] = C.assigned_list(emp)
+            except Exception as e:
+                out["assignedError"] = str(e)[:120]
     return _j(out)
 
 

@@ -1615,6 +1615,111 @@ try:
         requests.get, requests.post = _g0, _p0
         FW.INLINE = False
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[28] ห้องพัก Lead: จ่ายให้ใคร — จับใบจ่ายลีดในกลุ่มเอง (เจ้าของ: \"อยากรู้ว่าจ่ายให้ใครบ้าง\")")
+    PG = "C" + "9" * 32
+
+    def post_slip(mid, code, phone, tag, by_name="หมิว Oxlet"):
+        return GroupChat.objects.create(
+            chat_type="group", group_id=PG, group_name="ห้องจ่ายเบอร์ ทดสอบ", message_id=mid,
+            sender_id="U%032x" % 78, sender_name=by_name, direction="in", msg_type="text",
+            text="Ac Lead No. %s\nชื่อ Account: ลูกค้าห้องพัก\nเบอร์โทร : %s\nช่องทาง : TikTok\n@%s" % (code, phone, tag),
+            sent_at=timezone.now())
+
+    MAT = Employee.objects.create(nickname="มัททดสอบ", position="ทีม A", display_name="เซลมัท OxletAuto")
+    Employee.objects.create(nickname="ไหมหนึ่ง", position="ทีม B", display_name="Mai OxletAuto")
+    Employee.objects.create(nickname="ไหมสอง", position="ทีม B", display_name="Mai🐶 Oxlet")
+    C._TAGNICK["at"] = 0.0
+    ck("แท็กชื่อเล่นตรง → ชื่อเล่น", C.tag_nick("@เอหนึ่ง") == "เอหนึ่ง", C.tag_nick("@เอหนึ่ง"))
+    ck("★ แท็กชื่อ LINE คำแรก (@เซลมัท) → ชื่อเล่นในทะเบียน", C.tag_nick("@เซลมัท") == "มัททดสอบ", C.tag_nick("@เซลมัท"))
+    ck("★ แท็กที่ตรงหลายคน (@Mai) = คืนแท็กเดิม ไม่เดา", C.tag_nick("@Mai") == "Mai", C.tag_nick("@Mai"))
+    ck("แท็กที่ไม่มีในทะเบียน = คืนแท็กเดิม", C.tag_nick("@คนนอก") == "คนนอก")
+    ck("ว่าง = ว่าง", C.tag_nick("") == "" and C.tag_nick(None) == "")
+
+    R1 = C.note_customer_message(cust(401, "ห้องพักหนึ่ง").user_id, timezone.now(), "สนใจ civic เบอร์ 0855550001 ครับ")
+    R2 = C.note_customer_message(cust(402, "ห้องพักสอง").user_id, timezone.now(), "เบอร์ 0855550002")
+    R3 = C.note_customer_message(cust(403, "ห้องพักสาม").user_id, timezone.now(), "เบอร์ 0855550003")
+    ck("(ก่อนจ่าย) ลีดที่ให้เบอร์แล้วอยู่ในห้องพัก", {R1.id, R2.id, R3.id} <= set(tocode_ids()), tocode_ids())
+    post_slip("park-slip-1", "TLD10-9101", "085-555-0001", "เซลมัท")
+    # เพิ่งหาไปไม่ถึง 3 นาที → รอบกวาดข้ามคนนี้ (ไม่โหลดแชทซ้ำทุกนาที)
+    l1 = C.lead_of(ChatOwner.objects.get(pk=R1.id))
+    ChatLead.objects.filter(pk=l1.pk).update(auto=dict(l1.auto or {}, _slip_at=timezone.now().isoformat()))
+    C.slip_sweep(force=True)
+    ck("เพิ่งหาไป (< 3 นาที) = ยังไม่หาซ้ำ", ChatLead.objects.get(pk=l1.pk).code == "", ChatLead.objects.get(pk=l1.pk).code)
+    old = (timezone.now() - timedelta(minutes=C.SLIP_SWEEP_MIN + 1)).isoformat()
+    ChatLead.objects.filter(pk=l1.pk).update(auto=dict(ChatLead.objects.get(pk=l1.pk).auto or {}, _slip_at=old))
+    out = C.slip_sweep(force=True)
+    l1 = ChatLead.objects.get(pk=l1.pk)
+    sl = (l1.auto or {}).get("_slip") or {}
+    ck("★ ใบจ่ายลีดในกลุ่ม → ลีดได้เลขเอง ไม่ต้องรอใครเปิดแชท", l1.code == "TLD10-9101" and out.get("matched", 0) >= 1,
+       (l1.code, out))
+    ck("★ ได้เลขแล้วออกจากห้องพัก", R1.id not in tocode_ids(), tocode_ids())
+    ck("★ จ่ายให้ใคร = แท็กท้ายใบ → ชื่อเล่น", sl.get("seller") == "มัททดสอบ" and sl.get("tag") == "เซลมัท", sl)
+    ck("ใครจ่าย = คนโพสต์ใบ (ชื่อ ไม่ใช่ LINE id)", sl.get("by") == "หมิว Oxlet" and not leak.search(sl.get("by", "")), sl)
+    ck("ลีดที่ยังไม่มีใบ = ยังอยู่ในห้องพัก", {R2.id, R3.id} <= set(tocode_ids()))
+    # รอบกวาดถี่ไม่ได้ (กันทุก worker ทำงานซ้ำทุกคำขอ)
+    ck("รอบกวาดเว้น ≥ 55 วิ (ไม่ force = ข้าม)", C.slip_sweep() == {})
+
+    # จ่ายผ่านปุ่มในระบบ → อยู่ในรายการ "จ่ายแล้ว" ด้วย (ผู้รับ = เจ้าของที่โอนให้)
+    ok_, msg_ = C.assign_lead(ChatOwner.objects.get(pk=R2.id), A2, "NLD", by="กวางทดสอบ")
+    ck("(จ่ายเบอร์ในระบบ R2)", ok_, msg_)
+    # ลีดที่ได้เลขจากใบก่อนมีช่อง "จ่ายให้ใคร" → รอบกวาดเติมให้จากเลข
+    post_slip("park-slip-3", "TLD10-9103", "085-555-0003", "เอหนึ่ง", by_name="กวาง")
+    l3 = C.lead_of(ChatOwner.objects.get(pk=R3.id))
+    ChatLead.objects.filter(pk=l3.pk).update(code="TLD10-9103",
+                                             auto={"_slip": {"at": timezone.now().isoformat(), "group": "ห้องจ่ายเบอร์ ทดสอบ"}})
+    C.slip_sweep(force=True)
+    sl3 = (ChatLead.objects.get(pk=l3.pk).auto or {}).get("_slip") or {}
+    ck("★ ใบเก่าที่ยังไม่รู้ผู้รับ → เติมจากเลขลีด", sl3.get("seller") == "เอหนึ่ง" and sl3.get("by") == "กวาง", sl3)
+
+    al = {r["id"]: r for r in C.assigned_list()}
+    a1, a2, a3 = al.get(R1.id) or {}, al.get(R2.id) or {}, al.get(R3.id) or {}
+    ck("รายการจ่ายแล้ว: ใบในกลุ่ม → ผู้รับ + ใครจ่าย + ทางไหน",
+       a1.get("seller") == "มัททดสอบ" and a1.get("by") == "หมิว Oxlet" and a1.get("how") == "ใบในห้องจ่ายเบอร์"
+       and a1.get("code") == "TLD10-9101", a1)
+    ck("รายการจ่ายแล้ว: ปุ่มในระบบ → ผู้รับ = เจ้าของ · ป้ายทดลอง",
+       a2.get("seller") == "เอสอง" and a2.get("by") == "กวางทดสอบ" and a2.get("how") == "ระบบ (ทดลอง)", a2)
+    ck("รายการจ่ายแล้ว: ใบเก่าที่เติมผู้รับแล้ว", a3.get("seller") == "เอหนึ่ง", a3)
+    ats = [r["at"] for r in C.assigned_list()]
+    ck("เรียงล่าสุดก่อน", ats == sorted(ats, reverse=True), ats[:5])
+    # ใบเก่าเกิน 7 วัน ไม่อยู่ในรายการ
+    l1 = ChatLead.objects.get(code="TLD10-9101")
+    ChatLead.objects.filter(pk=l1.pk).update(auto=dict(l1.auto, _slip=dict(l1.auto["_slip"],
+                                             at=(timezone.now() - timedelta(days=8)).isoformat())))
+    ck("ใบเก่าเกิน 7 วัน = ไม่อยู่ในรายการจ่ายแล้ว", R1.id not in {r["id"] for r in C.assigned_list()})
+    ChatLead.objects.filter(pk=l1.pk).update(auto=l1.auto)
+
+    # ลูกค้าจำลองไม่ไปดึงใบของลูกค้าจริงมา (กติกาเดิมของ autofill — รอบกวาดต้องไม่เลี่ยง)
+    post_slip("park-slip-sim", "TLD10-9109", "085-555-0009", "เอหนึ่ง")
+    so = C.sim_customer("เบอร์ 0855550009 ครับ")
+    C.slip_sweep(force=True)
+    ck("★ ลูกค้าจำลอง = รอบกวาดไม่ดึงใบจ่ายลีดจริงมาปน", C.lead_of(ChatOwner.objects.get(pk=so.id)).code == "",
+       C.lead_of(ChatOwner.objects.get(pk=so.id)).code)
+    C.sim_clear()
+    # cron (tick ทุกนาที) เป็นคนกวาดจริง — ไม่ต้องรอใครเปิดหน้า
+    R4 = C.note_customer_message(cust(404, "ห้องพักสี่").user_id, timezone.now(), "เบอร์ 0855550004")
+    post_slip("park-slip-4", "TLD10-9104", "0855550004", "เอหนึ่ง")
+    C._SWEEP["at"] = 0.0
+    tk = C.tick()
+    ck("★ cron tick กวาดห้องพักให้เอง", C.lead_of(ChatOwner.objects.get(pk=R4.id)).code == "TLD10-9104"
+       and (tk.get("slipSweep") or {}).get("matched", 0) >= 1, tk)
+    C._SWEEP["at"] = 0.0
+    ld4 = C.lead_of(ChatOwner.objects.get(pk=R4.id))
+    ChatLead.objects.filter(pk=ld4.pk).update(code="", auto={})
+    s_, d = J(ADM, "/connect/api/inbox?view=tocode")
+    ck("★ แอดมินเปิดห้องพัก = กวาดให้ทันที (ไม่ต้องรอ cron)", R4.id not in [r["id"] for r in d.get("rows", [])]
+       and C.lead_of(ChatOwner.objects.get(pk=R4.id)).code == "TLD10-9104", [r["id"] for r in d.get("rows", [])])
+
+    # ผ่านหน้าเว็บ — แอดมินได้ "จ่ายแล้ว" · เซลล์ไม่ได้ · ไม่มี LINE id หลุด
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    d = json.loads(r_.content.decode("utf-8"))
+    got = {x["id"]: x for x in d.get("assigned") or []}
+    ck("API ห้องพัก (แอดมิน) มีรายการจ่ายแล้ว + ผู้รับ", got.get(R1.id, {}).get("seller") == "มัททดสอบ"
+       and got.get(R2.id, {}).get("seller") == "เอสอง", list(got))
+    ck("★ API ห้องพัก: ไม่มี LINE user id หลุด", not leak.search(r_.content.decode()))
+    s_, d = J(SA1, "/connect/api/inbox?view=tocode")
+    ck("เซลล์ไม่ได้รายการจ่ายแล้ว", "assigned" not in d, list(d))
+
 finally:
     _runner.teardown_databases(_old)
 
