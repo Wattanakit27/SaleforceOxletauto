@@ -1486,7 +1486,7 @@ def last_running() -> int:
                 .order_by("-sent_at").values_list("text", flat=True)[:120])
         for t in rows:
             m = _LEAD_NO.search(t or "")
-            mm = _ANY_CODE.match(m.group(1)) if m else None
+            mm = _ANY_CODE.match(re.sub(r"[ \t]", "", m.group(1))) if m else None     # "TLD10- 8500" ก็นับ
             if mm and not mm.group(1).upper().startswith("R"):
                 nums.append(int(mm.group(3)))
             if len(nums) >= 20:

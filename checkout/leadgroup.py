@@ -42,7 +42,9 @@ GROUP_HINTS = ["จ่ายเบอร์"]
 # ── ใบจ่ายลีด ──────────────────────────────────────────────────────
 # ★ 4 ต.ค.69 — เลขลีดจริงคือ <ตัวหน้า><เดือน>-<เลขรัน> เช่น NLD10-8409 · เดิมรับเดือนได้หลักเดียว (\d?)
 #   → ตั้งแต่ ต.ค. (เดือน 10-12) **อ่านใบจ่ายลีดไม่ออกเลยสักใบ** คืน None เงียบๆ · ตอนนี้รับ 0-2 หลัก
-_LEAD_NO = re.compile(r"Ac\s*Lead\s*No\.?\s*[:：]?\s*([A-Za-z]{0,6}\d{0,2}-?\d{3,6})", re.I)
+#   ★ 4 ต.ค.69 — เว้นวรรคหลังขีดก็นับ ("RTLD9- 6456/1" ในห้อง REJECT เคยหลุด) · เว้นได้แค่ในบรรทัดเดียวกัน
+#     ([ \t] ไม่ใช่ \s) ไม่งั้นใบร่าง "TLD10-" ที่บรรทัดถัดไปขึ้นต้นด้วยเบอร์โทร จะกลายเป็นเลขลีดปลอม
+_LEAD_NO = re.compile(r"Ac\s*Lead\s*No\.?\s*[:：]?\s*([A-Za-z]{0,6}\d{0,2}[ \t]*-?[ \t]*\d{3,6})", re.I)
 _FIELDS = {
     "ads": ["ads"],
     "account": ["ชื่อ account", "ชื่อaccount"],
@@ -71,17 +73,25 @@ DONE_HINTS = {
 
 
 def parse_leadsheet(text: str) -> dict | None:
-    """แกะใบจ่ายลีด → dict · คืน None ถ้าไม่ใช่ใบจ่ายลีด"""
+    """แกะใบจ่ายลีด → dict · คืน None ถ้าไม่ใช่ใบจ่ายลีด (รวมใบร่างที่ยังไม่มีเลขรัน — ดู leadpark.parse_draft)"""
     m = _LEAD_NO.search(text or "")
     if not m:
         return None
-    out = {"lead_code": m.group(1).upper().replace(" ", ""), "assigned": ""}
+    out = {"lead_code": re.sub(r"[ \t]", "", m.group(1)).upper()}
+    out.update(parse_fields(text))
+    return out
+
+
+def parse_fields(text: str) -> dict:
+    """ช่องของใบจ่ายลีด (Ads · ชื่อ Account · ID LINE · เบอร์ · ช่องทาง · รถ · ไลฟ์ · เพิ่มเติม) + คนที่ถูกแท็กท้ายสุด
+    ใช้ร่วมกันทั้งใบจริง (`parse_leadsheet`) และใบร่างในห้องพัก Lead (`leadpark.parse_draft`)"""
+    out = {"assigned": ""}
     for raw in (text or "").splitlines():
         line = raw.strip()
         if not line or ":" not in line and "：" not in line:
             continue
         head, _, val = line.replace("：", ":").partition(":")
-        key = head.strip().lower()
+        key = head.strip().strip("*").strip().lower()      # "*เพิ่มเติม*  :" (ตัวหนาแบบ LINE) ก็นับ
         val = val.strip()
         for field, aliases in _FIELDS.items():
             if any(key == a or key.startswith(a) for a in aliases):

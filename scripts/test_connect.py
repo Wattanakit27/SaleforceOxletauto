@@ -1106,6 +1106,79 @@ try:
     C.note_customer_message(OLDP.user_id, timezone.now(), "ยังมีรถไหมครับ")
     ck("ลูกค้าเก่าทักกลับมา = เข้าแท็บจ่ายเบอร์", OLD.id in tocode_ids())
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[22] ห้องพัก Lead (\"ADMIN เก็บ Lead\") — ใบร่างยังไม่มีเลข → ใบจริงในห้องจ่ายเบอร์")
+    from checkout import leadpark as LP
+
+    def slip(code, acc="", line="", phone="", ch="Live tiktok ช่องขายบอส", car="Yaris ativ", tag=""):
+        return ("Ac Lead No.   %s\nAds  :   \nชื่อ Account : %s\nชื่อลูกค้า :      \nID LINE : %s\nชื่อไลน์ :   \n"
+                "เบอร์โทร : %s\nช่องทาง  :    %s\nรถ : %s\nไลฟ์ :   live sale\nเพิ่มเติม  :  \n\nติดต่อได้เลยนะครับ\n%s"
+                % (code, acc, line, phone, ch, car, ("@" + tag) if tag else ""))
+
+    d = LP.parse_draft(slip("TLD10-", acc="บัญชีทดสอบ", line="abc0812345678"))
+    ck("ใบร่าง: ตัวหน้า+เดือน ไม่มีเลขรัน", d and d["prefix"] == "TLD10-" and d["month"] == 10 and d["type"] == "TLD", d)
+    ck("★ เบอร์ที่ฝังอยู่ใน ID LINE ก็จับได้", d and d["phones"] == ["0812345678"], d and d["phones"])
+    ck("ใบจริง (มีเลข) ไม่ใช่ใบร่าง", LP.parse_draft(slip("TLD10-8500", tag="เอหนึ่ง")) is None)
+    ck("ใบร่างตัวหน้า R/A แยกได้", (LP.parse_draft(slip("RATLD9-")) or {}).get("reject") is True
+       and (LP.parse_draft(slip("ATLD9-")) or {}).get("admin") is True)
+    ck("ข้อความทั่วไปไม่ใช่ใบร่าง", LP.parse_draft("รับทราบครับ") is None and LP.parse_draft("7364 รอตอบ") is None)
+    ck("★ ใบจริงเว้นวรรคหลังขีด (RTLD9- 6456/1) อ่านได้ + เลขไม่มีช่องว่าง",
+       (parse_leadsheet(slip("RTLD9- 6456/1")) or {}).get("lead_code") == "RTLD9-6456",
+       parse_leadsheet(slip("RTLD9- 6456/1")))
+    ck("★ ใบร่างที่บรรทัดถัดไปขึ้นต้นด้วยเบอร์ ไม่กลายเป็นเลขลีดปลอม",
+       parse_leadsheet("Ac Lead No.   TLD10-\n0812345678\nช่องทาง : TikTok") is None
+       and LP.parse_draft("Ac Lead No.   TLD10-\n0812345678\nช่องทาง : TikTok") is not None)
+    ck("ช่อง *เพิ่มเติม* (ตัวหนาแบบ LINE) ก็อ่าน", (LP.parse_draft("Ac Lead No. NLD9-\n*เพิ่มเติม*  : ซื้อสด\nเบอร์โทร : 0899998888")
+                                                    or {}).get("more") == "ซื้อสด")
+
+    PARK, ASG, REJ, OTHER = "C" + "a" * 32, "C" + "b" * 32, "C" + "c" * 32, "C" + "d" * 32
+    ROOMS = {PARK: "ADMIN เก็บ Lead", ASG: "ห้องจ่ายเบอร์ บ้านเก่า", REJ: "ห้องจ่ายเบอร์ REJECT",
+             OTHER: "ทีมAdmin อ๊อกเล็ตธ์ออโต้"}
+    T0 = timezone.now() - timedelta(hours=2)
+    _n = [0]
+
+    def post(gid, mins, text, who="หมิว"):
+        _n[0] += 1
+        GroupChat.objects.create(chat_type="group", group_id=gid, group_name=ROOMS[gid], message_id="pk-%d" % _n[0],
+                                 sender_id="U%032x" % 500, sender_name=who, direction="in", msg_type="text",
+                                 text=text, sent_at=T0 + timedelta(minutes=mins))
+
+    post(PARK, 0, slip("TLD10-", acc="คนเอ", phone="0811111111"))                  # A — เบอร์
+    post(PARK, 1, slip("TLD10-", acc="คนบี", line="beeline99"))                     # B — ID LINE อย่างเดียว
+    post(PARK, 2, slip("TLD10-", acc="คนซี"))                                       # C — มีแต่ชื่อ Account
+    post(PARK, 3, slip("TLD10-", acc="คนเอ", phone="081-111-1111"))                 # A โพสต์ซ้ำ (เขียนเบอร์มีขีด)
+    post(OTHER, 4, slip("TLD10-", acc="คนดี", phone="0822222222"))                  # ห้องอื่น ไม่ใช่ห้องพัก
+    post(ASG, 10, slip("TLD10-9001", acc="คนเอ", phone="0811111111", tag="เอหนึ่ง"), who="เฟิร์น")
+    post(REJ, 11, slip("RTLD10-9002/1", acc="คนบี", line="beeline99", tag="บีหนึ่ง"), who="กวาง")   # ส่งต่อเคสรีเจ็ค ≠ ได้เลข
+    post(ASG, 12, slip("TLD10-9003", acc="คนซี", ch="TikTok ช่องอื่น", tag="เอสอง"))                   # ชื่อซ้ำ แต่คนละช่องทาง
+    post(ASG, 13, slip("TLD10-9004", acc="คนซี", tag="เอสอง"), who="เฟิร์น")
+    b = LP.board(cache_sec=0)
+    W = {i["account"]: i for i in b["waiting"]}
+    A = {i["account"]: i for i in b["assigned"]}
+    ck("หาห้องพักเจอจากชื่อกลุ่ม", b["room"] == "ADMIN เก็บ Lead", b["room"])
+    ck("★ ยังรอเลข = เฉพาะคนที่ยังไม่มีใบจริง (บี)", list(W) == ["คนบี"], list(W))
+    ck("★ ส่งต่อเคสรีเจ็ค (R…) ไม่นับว่าได้เลข", "คนบี" in W)
+    ck("ได้เลข: จับคู่ด้วยเบอร์ + ได้เลข/เซลล์/คนจ่าย/เวลารอ",
+       A.get("คนเอ", {}).get("code") == "TLD10-9001" and A["คนเอ"]["seller"] == "เอหนึ่ง"
+       and A["คนเอ"]["assignedBy"] == "เฟิร์น" and A["คนเอ"]["waitMin"] == 10, A.get("คนเอ"))
+    ck("★ โพสต์ใบร่างซ้ำ = ลีดเดิม (ไม่นับเป็นลีดใหม่)", A.get("คนเอ", {}).get("reposts") == 1
+       and sum(1 for i in b["waiting"] + b["assigned"] if i["account"] == "คนเอ") == 1)
+    ck("★ ไม่มีเบอร์/ID LINE → จับด้วยชื่อ Account + ช่องทาง (ชื่อซ้ำคนละช่องทางไม่นับ)",
+       A.get("คนซี", {}).get("code") == "TLD10-9004", A.get("คนซี"))
+    ck("ใบร่างในห้องอื่น (ทีมAdmin) ไม่นับ", "คนดี" not in W and "คนดี" not in A)
+    ck("สถิติวันนี้", b["stats"]["waiting"] == 1 and b["stats"]["assignedToday"] in (2, 0), b["stats"])
+
+    LP._CACHE["val"] = None
+    s_, d = J(ADM, "/connect/api/inbox?view=tocode")
+    pk = d.get("parked") or {}
+    ck("API แท็บจ่ายเบอร์: ได้ห้องพัก Lead + ตัวเลข", s_ == 200 and len(pk.get("waiting", [])) == 1
+       and d.get("counts", {}).get("parked") == 1, (s_, d.get("counts")))
+    s_, d = J(ADM, "/connect/api/inbox?view=overdue")
+    ck("แท็บอื่นได้แค่ตัวเลข (ไม่ส่งรายการทั้งก้อนทุก 8 วิ)", "parked" not in d and d.get("counts", {}).get("parked") == 1)
+    s_, d = J(SA1, "/connect/api/inbox?view=tocode")
+    ck("★ เซลล์ไม่เห็นห้องพัก Lead", "parked" not in d and "parked" not in d.get("counts", {}))
+    ck("ห้องพักไม่มี LINE user id หลุด", not leak.search(json.dumps(pk, ensure_ascii=False)))
+
 finally:
     _runner.teardown_databases(_old)
 

@@ -205,6 +205,16 @@
   .pf-assign.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
   .tag.code { background: var(--blue-bg); color: var(--blue-dk); }
   .cn-hint { margin: 0 10px 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
+  /* ห้องพัก Lead (กลุ่ม "ADMIN เก็บ Lead") — ลีดที่พักใบร่างไว้ ยังไม่ได้เลข/เซลล์ · บนสุดของแท็บจ่ายเบอร์ */
+  .cn-park { border-bottom: .5px solid var(--bd2); background: var(--amber-bg); }
+  .cn-park-h { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; padding: 9px 12px 6px; font-weight: 700; color: var(--amber); }
+  .cn-park-h small { font-weight: 400; color: var(--t3); }
+  .cn-prow { padding: 8px 12px; border-top: .5px solid var(--bd); background: var(--bg); }
+  .cn-prow > summary { list-style: none; cursor: pointer; }
+  .cn-prow > summary::-webkit-details-marker { display: none; }
+  .cn-prow .pv { margin-top: 6px; padding: 6px 8px; border-radius: 7px; background: var(--bg2); font-size: 12px; line-height: 1.6; }
+  .cn-park-f { padding: 6px 12px 8px; color: var(--t3); font-size: 12px; }
+  .cn-sep { padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--t3); background: var(--bg2); border-bottom: .5px solid var(--bd); }
   @media (max-width: 1180px) {
     .cn-chat { grid-template-columns: minmax(0,1fr); }
     .cn-side { display: none; }
@@ -457,7 +467,8 @@
     $('cn-tabs').innerHTML = tabs.map(t => {
       let n = '';
       if (t.c) {
-        const v = (S.counts || {})[t.c] || 0;
+        // แท็บจ่ายเบอร์ = ลูกค้าแชทที่ยังไม่มีเลข + ลีดในห้องพัก Lead ที่ยังรอเลข
+        const v = ((S.counts || {})[t.c] || 0) + (t.c === 'tocode' ? ((S.counts || {}).parked || 0) : 0);
         const hv = t.hotKey ? (S.counts || {})[t.hotKey] || 0 : v;
         n = `<span class="n${t.hot || t.hotKey ? (hv ? ' hot' : '') : ''}">${t.hotKey && hv ? hv + '/' + v : v}</span>`;
       }
@@ -504,11 +515,55 @@
     </div>`;
   }
 
+  // ── ห้องพัก Lead (กลุ่ม LINE "ADMIN เก็บ Lead") — อ่านอย่างเดียว · ใบร่างที่ยังไม่มีเลข/เซลล์ (leadpark.py) ──
+  //   ลีดหลุดจากรายการเองเมื่อใบจริง (มีเลข + @เซลล์) ถูกโพสต์ในห้องจ่ายเบอร์ — จับคู่ด้วยเบอร์/ID LINE
+  const fmtWait = m => m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที';
+  S.parkOpen = new Set();
+  function parkHtml() {
+    const P = S.parked;
+    if (!(ADMIN && S.view === 'tocode' && P && P.room)) return '';
+    const st = P.stats || {}, W = P.waiting || [];
+    const items = W.map(i => {
+      const k = i.at + '|' + (i.account || i.phone || i.lineId);
+      const mins = Math.max(0, Math.floor((nowMs() - Date.parse(i.at)) / 60000));
+      const late = mins >= (P.warnMin || 30);
+      const who = i.account || i.name || i.lineId || i.phone || '(ไม่มีชื่อ)';
+      const det = [['ID LINE', i.lineId], ['เบอร์โทร', i.phone ? fmtPhone(i.phone) : ''], ['ช่องทาง', i.channel],
+                   ['รถ', i.car], ['ไลฟ์', i.live], ['Ads', i.ads], ['เพิ่มเติม', i.more]]
+        .filter(x => x[1]).map(x => `${h(x[0])}: <b>${h(x[1])}</b>`).join('<br>');
+      return `<details class="cn-prow" data-pk="${h(k)}"${S.parkOpen.has(k) ? ' open' : ''}><summary>
+        <div class="cn-rh"><span class="cn-rn">${h(who)}</span><span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
+        <div class="cn-rp">${h([i.car, i.channel].filter(Boolean).join(' · ') || '—')}</div>
+        <div class="cn-rm">${i.phone ? `<span class="tag">โทร ${h(fmtPhone(i.phone))}</span>` : ''}
+          <span class="tag">พักโดย ${h(i.by || '-')}</span>${i.reposts ? `<span class="tag">โพสต์ซ้ำ ${i.reposts}</span>` : ''}
+          <span class="tag ${late ? 'late' : 'wait'}">${ic('clock', 12)} รอเลข ${h(fmtWait(mins))}</span></div>
+      </summary>${det ? `<div class="pv">${det}</div>` : ''}</details>`;
+    }).join('');
+    const today = st.assignedToday ? `วันนี้ได้เลขแล้ว ${st.assignedToday} ราย${st.avgWaitMinToday != null ? ' · พักเฉลี่ย ' + h(fmtWait(st.avgWaitMinToday)) : ''}` : '';
+    return `<div class="cn-park">
+      <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอเลข ${W.length} <small>(${h(P.room)} · หายจากรายการเองเมื่อโพสต์ใบที่มีเลข+@เซลล์ในห้องจ่ายเบอร์)</small></div>
+      ${items || '<div class="cn-park-f">ไม่มีลีดรอเลขในห้องพัก 👍</div>'}
+      ${today ? `<div class="cn-park-f">${today}</div>` : ''}
+    </div><div class="cn-sep">ลูกค้าที่แชทเข้า LINE OA</div>`;
+  }
+
   function renderList() {
     const hint = (ADMIN && S.view === 'tocode')
       ? `<div class="cn-hint">ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — กดชื่อแล้วเลือกเซลล์ในกล่อง "จ่ายเบอร์" · ไม่ใช่ลีดขาย (ถามศูนย์บริการ/อยากขายรถ) กด "ไม่ต้องจ่ายเบอร์"</div>` : '';
     $('cn-note').innerHTML = (S.note ? `<div class="cn-note">${h(S.note)}</div>` : '') + hint;
     const el = $('cn-rows');
+    const park = parkHtml();
+    if (park) {
+      // รายชื่อถูกวาดใหม่ทุก 8 วิ — จำว่ากางลีดไหนดูอยู่ ไม่ให้พับเอง
+      const top = el.scrollTop;
+      el.innerHTML = park + (S.rows.length ? S.rows.map(rowHtml).join('') : `<div class="cn-empty">ไม่มีลูกค้าแชทรอจ่ายเบอร์ 👍</div>`);
+      el.scrollTop = top;
+      el.querySelectorAll('details[data-pk]').forEach(d => d.addEventListener('toggle', () => {
+        if (d.open) S.parkOpen.add(d.dataset.pk); else S.parkOpen.delete(d.dataset.pk);
+      }));
+      el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
+      return;
+    }
     if (!S.rows.length) {
       const empty = {
         overdue: 'ไม่มีลูกค้ารอเกินเวลา 👍', queue: 'ไม่มีลูกค้ารอรับตอนนี้', tocode: 'ไม่มีลูกค้ารอจ่ายเบอร์ 👍',
@@ -543,7 +598,8 @@
     if (!d.ok) { $('cn-rows').innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
     Object.assign(S, { view: d.view, rows: d.rows || [], counts: d.counts || {}, duty: d.duty, onDuty: !!d.onDuty,
-                       status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true });
+                       status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
+                       parked: d.parked || null });
     renderTop(); renderTabs(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }

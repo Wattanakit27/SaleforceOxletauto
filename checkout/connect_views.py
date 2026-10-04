@@ -221,6 +221,16 @@ def api_inbox(request):
            "now": timezone.localtime().isoformat(timespec="seconds")}
     if admin:
         out["sellers"] = C.seller_list()
+        # ห้องพัก Lead ("ADMIN เก็บ Lead") — ลีดที่แอดมินพักใบร่างไว้ ยังไม่ได้เลข/เซลล์ (leadpark.py · จำผล 30 วิ)
+        #   อ่านไม่ได้ต้องไม่ทำให้รายชื่อลูกค้าโหลดไม่ขึ้น
+        try:
+            from .leadpark import board
+            pk = board()
+            cnt["parked"] = pk["stats"]["waiting"]
+            if view == "tocode":
+                out["parked"] = pk
+        except Exception as e:
+            out["parkedError"] = str(e)[:120]
     return _j(out)
 
 
