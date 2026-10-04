@@ -972,3 +972,52 @@ class ChatLead(models.Model):
 
     def __str__(self):
         return "%s %s" % (self.code or "-", self.customer_name or self.chat_id)
+
+
+class ExtLead(models.Model):
+    """**ลีดจากช่องทางภายนอก** (TikTok / Facebook / เบอร์กลาง …) ที่แอดมินพักใบร่างไว้ในห้อง "ADMIN เก็บ Lead"
+    แล้ว **จ่ายเบอร์ผ่านหน้า Connect** (4 ต.ค.69 · เจ้าของถาม "แล้วจะจ่ายให้เซลล์ยังไง … รวม lead ไม่ว่าจะเป็น tt หรือ fb")
+
+    1 แถว = 1 ใบร่าง (อ้างด้วย `message_id` ของใบร่างแรกในกลุ่ม) · **สร้างเฉพาะตอนแอดมินกดจ่ายเบอร์/ไม่ต้องจ่าย**
+    — ใบร่างที่ยังไม่มีใครแตะ อ่านสดจากแชทกลุ่ม (`checkout/leadpark.py`) ไม่เก็บซ้ำ
+    ข้อมูลลูกค้าเก็บเป็นสำเนา ณ ตอนจ่าย (แชทกลุ่มหมดอายุ 90 วัน แต่ใบจ่ายลีดต้องประกอบใหม่ได้)
+    เลขลีดใช้ **เลขรันชุดเดียวกับลูกค้า LINE OA** (`ChatLead`) · โหมดทดลอง = ไม่ลงชีต ไม่โพสต์กลุ่ม (`code_demo`)
+    """
+    message_id = models.CharField("ข้อความใบร่าง (LINE message id)", max_length=64, unique=True)
+    group_id = models.CharField("กลุ่ม", max_length=64, blank=True)
+    group_name = models.CharField("ชื่อกลุ่ม", max_length=160, blank=True)
+    parked_at = models.DateTimeField("พักเมื่อ", null=True, blank=True, db_index=True)
+    parked_by = models.CharField("พักโดย", max_length=80, blank=True)
+    source = models.CharField("ช่องทางหลัก", max_length=16, blank=True)   # tiktok / facebook / line / other
+    prefix = models.CharField("ตัวหน้าในใบร่าง", max_length=16, blank=True)
+    # ── สำเนาข้อมูลจากใบร่าง (ช่องเดียวกับใบจ่ายลีด) ──
+    account = models.CharField("ชื่อ Account", max_length=120, blank=True)
+    customer_name = models.CharField("ชื่อลูกค้า", max_length=120, blank=True)
+    line_id = models.CharField("ID LINE", max_length=80, blank=True)
+    phone = models.CharField("เบอร์โทร", max_length=40, blank=True, db_index=True)
+    channel = models.CharField("ช่องทาง", max_length=80, blank=True)
+    car_text = models.CharField("รถ", max_length=300, blank=True)
+    live = models.CharField("ไลฟ์", max_length=60, blank=True)
+    ads = models.CharField("Ads", max_length=120, blank=True)
+    more = models.TextField("เพิ่มเติม", blank=True)
+    # ── จ่ายเบอร์ ──
+    code = models.CharField("Code (เลขลีด)", max_length=32, blank=True, db_index=True)
+    code_demo = models.BooleanField("เลขลีดออกในโหมดทดลอง", default=False)
+    seller = models.ForeignKey("Employee", verbose_name="จ่ายให้เซลล์", null=True, blank=True,
+                               on_delete=models.SET_NULL, related_name="ext_leads")
+    seller_name = models.CharField("ชื่อเซลล์ (ตอนจ่าย)", max_length=80, blank=True)
+    assigned_at = models.DateTimeField("จ่ายเบอร์เมื่อ", null=True, blank=True)
+    assigned_by = models.CharField("จ่ายเบอร์โดย", max_length=80, blank=True)
+    # แอดมินกด "ไม่ต้องจ่ายเบอร์" (ลีดซ้ำ/ไม่ใช่ลีดขาย) — ออกจากรายการรอเลข
+    no_code = models.BooleanField("ไม่ต้องจ่ายเบอร์", default=False)
+    no_code_by = models.CharField("กดไม่ต้องจ่ายโดย", max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ลีดภายนอก (ห้องพัก Lead)"
+        verbose_name_plural = "ลีดภายนอก (ห้องพัก Lead)"
+        ordering = ["-parked_at", "-id"]
+
+    def __str__(self):
+        return "%s %s" % (self.code or self.prefix or "-", self.account or self.phone or self.message_id)

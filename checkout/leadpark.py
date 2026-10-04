@@ -115,24 +115,28 @@ def _rooms(hints) -> Q:
     return q
 
 
+def source_of(channel: str) -> str:
+    """ช่องทางหลักจากช่อง "ช่องทาง" ของใบจ่ายลีด → tiktok / facebook / line / other (ป้ายสีในหน้า Connect)"""
+    c = (channel or "").lower()
+    if "tiktok" in c or "ติ๊กต็อก" in c or re.search(r"(^|[^a-z])tt([^a-z]|$)", c):
+        return "tiktok"
+    if "facebook" in c or "เพจ" in c or "messenger" in c or re.search(r"(^|[^a-z])fb([^a-z]|$)", c):
+        return "facebook"
+    if "line" in c or "ไลน์" in c:
+        return "line"
+    return "other"
+
+
 _CACHE = {"at": 0.0, "key": None, "val": None}
 
 
-def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
-    """ลีดในห้องพัก: ยังรอเลข (`waiting` · พักนานสุดขึ้นก่อน) + จ่ายแล้ว (`assigned` · ล่าสุดก่อน)
-
-    หน้า Connect เรียกทุกครั้งที่โหลดรายชื่อ (ทุก 8 วิ) → จำผลไว้ 30 วิต่อ process
-    """
-    if cache_sec and now is None and _CACHE["val"] is not None and _CACHE["key"] == days \
-            and time.time() - _CACHE["at"] < cache_sec:
-        return _CACHE["val"]
-    real_now = now is None
-    now = now or timezone.now()
+def _scan(days: int, now):
+    """อ่านแชทกลุ่ม → ใบร่างแต่ละราย + ใบจริงที่ตามมา (ส่วนที่หนัก — จำผลไว้ใน board)"""
     since = now - timedelta(days=days)
     park_q, asg_q = _rooms(PARK_HINTS), _rooms(ASSIGN_HINTS)
     rows = list(GroupChat.objects.filter(chat_type=GroupChat.GROUP, sent_at__gte=since, sent_at__lte=now)
                 .filter(park_q | asg_q).filter(text__icontains="lead no")
-                .order_by("sent_at", "id").only("group_name", "sender_name", "text", "sent_at"))
+                .order_by("sent_at", "id").only("group_name", "sender_name", "text", "sent_at", "message_id"))
     room = (GroupChat.objects.filter(chat_type=GroupChat.GROUP).filter(park_q)
             .order_by("-sent_at").values_list("group_name", flat=True).first()) or ""
 
@@ -159,43 +163,199 @@ def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
                     and (it["_asg"] is None or it["_asg"]["g"].sent_at > at)), None)
         if dup:
             dup["reposts"] += 1
+            dup["_mids"].append(x["g"].message_id)
             continue
         # ใบจริงที่ตามมา: ลีดรีเจ็ค (R…) จับคู่กับใบ R เท่านั้น · ลีดปกติไม่นับใบ R (นั่นคือการส่งต่อเคสรีเจ็คทีหลัง)
         asg = next((f for f in fulls if f["g"].sent_at >= at and f["reject"] == x["d"]["reject"]
                     and _same(f, x)), None)
         d = x["d"]
         items.append({
-            "strong": x["strong"], "weak": x["weak"], "_asg": asg, "reposts": 0,
+            "strong": x["strong"], "weak": x["weak"], "_asg": asg, "_at": at, "_mids": [x["g"].message_id],
+            "id": x["g"].message_id, "reposts": 0,
             "at": _iso(at), "by": x["g"].sender_name or "", "room": x["g"].group_name or "",
-            "prefix": d["prefix"], "type": d["type"],
+            "prefix": d["prefix"], "type": d["type"], "base": d["base"], "reject": d["reject"], "admin": d["admin"],
+            "source": source_of(d.get("channel")),
             "account": d.get("account", ""), "name": d.get("name", ""), "lineId": d.get("line_id", ""),
             "phone": (d.get("phones") or [""])[0], "channel": d.get("channel", ""), "car": d.get("car", ""),
             "live": d.get("live", ""), "more": d.get("more", ""), "ads": d.get("ads", ""),
+            # ใบจริงในห้องจ่ายเบอร์ (แอดมินโพสต์เอง)
             "code": asg["d"]["lead_code"] if asg else "",
             "seller": (asg["d"].get("assigned") or "") if asg else "",
             "assignedAt": _iso(asg["g"].sent_at) if asg else "",
             "assignedBy": (asg["g"].sender_name or "") if asg else "",
             "assignedRoom": (asg["g"].group_name or "") if asg else "",
-            "waitMin": int(((asg["g"].sent_at if asg else now) - at).total_seconds() // 60),
         })
     for it in items:
+        it["_asgAt"] = it["_asg"]["g"].sent_at if it["_asg"] else None
         for k in ("strong", "weak", "_asg"):
             it.pop(k, None)
-    waiting = sorted([i for i in items if not i["code"]], key=lambda i: i["at"])
-    assigned = sorted([i for i in items if i["code"]], key=lambda i: i["assignedAt"], reverse=True)
-    today = timezone.localdate(now)
-    done_today = [i for i in assigned if i["assignedAt"][:10] == today.isoformat()]
-    out = {
+    return room, items
+
+
+def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
+    """ลีดในห้องพัก: ยังรอเลข (`waiting` · พักนานสุดขึ้นก่อน) + ได้เลขแล้ว (`assigned` · ล่าสุดก่อน)
+    + ซ่อนไว้ (`skipped` — แอดมินกด "ไม่ต้องจ่ายเบอร์")
+
+    ได้เลขได้ 2 ทาง: **ใบจริงในห้องจ่ายเบอร์** (แอดมินโพสต์เอง · `code`) หรือ **กดจ่ายเบอร์ในหน้า Connect**
+    (ตาราง ExtLead · `sys`) · ส่วนอ่านแชทกลุ่มจำผลไว้ 30 วิต่อ process แต่ ExtLead อ่านสดทุกครั้ง
+    → กดจ่ายแล้วหายจากรายการทันที แม้คำขอถัดไปไปตก worker อื่นของ gunicorn
+    """
+    real_now = now is None
+    now = now or timezone.now()
+    if cache_sec and real_now and _CACHE["val"] is not None and _CACHE["key"] == days \
+            and time.time() - _CACHE["at"] < cache_sec:
+        room, raw = _CACHE["val"]
+    else:
+        room, raw = _scan(days, now)
+        if real_now:
+            _CACHE.update(at=time.time(), key=days, val=(room, raw))
+
+    from .models import ExtLead
+    mids = [m for it in raw for m in it["_mids"]]
+    ext = {e.message_id: e for e in ExtLead.objects.filter(message_id__in=mids)} if mids else {}
+    items = []
+    for r in raw:
+        it = {k: v for k, v in r.items() if not k.startswith("_")}
+        e = next((ext[m] for m in r["_mids"] if m in ext), None)
+        sys_at = None
+        if e and e.code:
+            sys_at = e.assigned_at
+            it["sys"] = {"code": e.code, "seller": e.seller_name, "at": _iso(e.assigned_at), "by": e.assigned_by,
+                         "demo": e.code_demo, "slip": slip_text(e)}
+        if e and e.no_code and not e.code:
+            it["skipped"] = {"by": e.no_code_by, "at": _iso(e.updated_at)}
+        done = [t for t in (r["_asgAt"], sys_at) if t]
+        end = min(done) if done else now
+        it["doneAt"] = _iso(end) if done else ""
+        it["waitMin"] = max(0, int((end - r["_at"]).total_seconds() // 60))
+        items.append(it)
+
+    waiting = sorted([i for i in items if not i["doneAt"] and not i.get("skipped")], key=lambda i: i["at"])
+    assigned = sorted([i for i in items if i["doneAt"]], key=lambda i: i["doneAt"], reverse=True)
+    skipped = [i for i in items if i.get("skipped") and not i["doneAt"]]
+    today = timezone.localdate(now).isoformat()
+    done_today = [i for i in assigned if i["doneAt"][:10] == today]
+    return {
         "room": room, "days": days, "warnMin": WARN_MIN,
-        "waiting": waiting, "assigned": assigned[:30],
+        "waiting": waiting, "assigned": assigned[:30], "skipped": skipped[:30],
         "stats": {"waiting": len(waiting), "late": sum(1 for i in waiting if i["waitMin"] >= WARN_MIN),
-                  "assignedToday": len(done_today),
+                  "assignedToday": len(done_today), "skipped": len(skipped),
                   "avgWaitMinToday": (round(sum(i["waitMin"] for i in done_today) / len(done_today))
                                       if done_today else None)},
     }
-    if real_now:
-        _CACHE.update(at=time.time(), key=days, val=out)
-    return out
+
+
+def forget():
+    """ล้างผลที่จำไว้ (เรียกหลังจ่ายเบอร์/ซ่อนลีด) — ให้คำขอถัดไปใน process นี้อ่านใหม่"""
+    _CACHE["val"] = None
+
+
+# ─────────────────────────────────────────────────────────────
+#  จ่ายเบอร์ลีดภายนอกจากหน้า Connect (โหมดทดลอง — ไม่ลงชีต ไม่โพสต์กลุ่ม เหมือนลูกค้า LINE OA)
+# ─────────────────────────────────────────────────────────────
+KEEP_DAYS = 90         # ExtLead มีข้อมูลลูกค้า (เบอร์/ID LINE) — อายุเท่าแชทกลุ่มที่เป็นต้นทาง
+
+
+def _draft_msg(mid: str):
+    """ใบร่างจากแชทกลุ่ม (ห้องพัก/ห้องจ่ายเบอร์) → (GroupChat, parsed) · ไม่ใช่ใบร่าง = (None, None)"""
+    g = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, message_id=str(mid or ""))
+         .filter(_rooms(PARK_HINTS) | _rooms(ASSIGN_HINTS)).first())
+    d = parse_draft(g.text) if g else None
+    return (g, d) if d else (None, None)
+
+
+def _ext_for(g, d):
+    from .models import ExtLead
+    e, _ = ExtLead.objects.get_or_create(message_id=g.message_id, defaults=dict(
+        group_id=g.group_id or "", group_name=(g.group_name or "")[:160], parked_at=g.sent_at,
+        parked_by=(g.sender_name or "")[:80], source=source_of(d.get("channel")), prefix=d["prefix"][:16],
+        account=(d.get("account") or "")[:120], customer_name=(d.get("name") or "")[:120],
+        line_id=(d.get("line_id") or "")[:80], phone=((d.get("phones") or [""])[0])[:40],
+        channel=(d.get("channel") or "")[:80], car_text=(d.get("car") or "")[:300],
+        live=(d.get("live") or "")[:60], ads=(d.get("ads") or "")[:120], more=d.get("more") or ""))
+    return e
+
+
+def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, code: str = "", by: str = ""):
+    """ปุ่ม "จ่ายเบอร์" ของลีดในห้องพัก → (ok, ข้อความ, ExtLead|None)
+
+    เลขรันชุดเดียวกับลูกค้า LINE OA · เลขซ้ำ = ปฏิเสธ · ได้เลขในห้องจ่ายเบอร์ไปแล้ว = ไม่ออกเลขทับ
+    """
+    from . import connect as C
+    if not emp or not emp.active:
+        return False, "เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน", None
+    g, d = _draft_msg(mid)
+    if not g:
+        return False, "ไม่พบใบร่างนี้ในห้องพัก Lead (อาจหมดอายุแล้ว)", None
+    it = next((i for i in board(cache_sec=0)["assigned"] if i["id"] == g.message_id and i.get("code")), None)
+    if it:
+        return False, "ลีดนี้ได้เลข %s ในห้องจ่ายเบอร์แล้ว (โดย %s)" % (it["code"], it["assignedBy"] or "-"), None
+    e = _ext_for(g, d)
+    if e.code:
+        return False, "ลีดนี้จ่ายเบอร์ %s ไปแล้ว — ไม่ออกเลขทับ" % e.code, e
+    prefix = C.build_prefix(base, admin, reject)
+    code = (code or "").strip().upper()
+    if code:
+        if not C._CODE_RE.match(code):
+            return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ TLD10-8410 (ตัวหน้า + เดือน + เลขรัน)", e
+    else:
+        code = C.next_code(prefix)
+    if C.code_taken(code, ext_pk=e.pk):
+        return False, "เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code, e
+    e.code, e.code_demo = code, True
+    e.seller, e.seller_name = emp, emp.nickname[:80]
+    e.assigned_at, e.assigned_by = timezone.now(), (by or "")[:80]
+    e.no_code, e.no_code_by = False, ""
+    e.save()
+    forget()
+    return True, "จ่ายเบอร์ %s ให้ %s แล้ว (ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม)" % (code, emp.nickname), e
+
+
+def skip(mid: str, on: bool, by: str = ""):
+    """ปุ่ม "ไม่ต้องจ่ายเบอร์" (ลีดซ้ำ/ไม่ใช่ลีดขาย) → (ok, ข้อความ) · on=False = เอากลับเข้ารายการรอเลข"""
+    g, d = _draft_msg(mid)
+    if not g:
+        return False, "ไม่พบใบร่างนี้ในห้องพัก Lead (อาจหมดอายุแล้ว)"
+    e = _ext_for(g, d)
+    if on and e.code:
+        return False, "ลีดนี้จ่ายเบอร์ %s ไปแล้ว" % e.code
+    e.no_code, e.no_code_by = bool(on), ((by or "")[:80] if on else "")
+    e.save(update_fields=["no_code", "no_code_by", "updated_at"])
+    forget()
+    return True, ("ซ่อนลีดนี้แล้ว — ไม่ต้องจ่ายเบอร์" if on else "เอากลับเข้ารายการรอเลขแล้ว")
+
+
+def slip_text(e) -> str:
+    """ใบจ่ายลีดของลีดภายนอก — รูปแบบเดียวกับที่แอดมินโพสต์ในห้องจ่ายเบอร์ (`parse_leadsheet` อ่านกลับได้)"""
+    lines = [
+        "Ac Lead No.   %s" % (e.code or "-"),
+        "Ads  :   %s" % (e.ads or ""),
+        "ชื่อ Account : %s" % (e.account or ""),
+        "ชื่อลูกค้า : %s" % (e.customer_name or ""),
+        "ID LINE : %s" % (e.line_id or ""),
+        "ชื่อไลน์ : ",
+        "เบอร์โทร : %s" % (e.phone or ""),
+        "ช่องทาง  : %s" % (e.channel or ""),
+        "รถ : %s" % (e.car_text or ""),
+        "ไลฟ์ : %s" % (e.live or ""),
+        "เพิ่มเติม  : %s" % (e.more or ""),
+        "",
+        "ติดต่อได้เลยนะครับ",
+    ]
+    if e.seller_name:
+        lines.append("@%s" % e.seller_name)
+    if e.code_demo:
+        # เลขโหมดทดลองยังไม่ได้จองในชีต — กันเผลอก๊อปไปวางในกลุ่มจริงแล้วเลขชนกับของแอดมิน
+        lines.insert(0, "⚠️ ทดลอง — เลขนี้ยังไม่ได้จองในชีตจริง")
+    return "\n".join(lines)
+
+
+def cleanup(now=None) -> int:
+    """ลบ ExtLead ที่พักไว้เกิน KEEP_DAYS (มีเบอร์/ID LINE ลูกค้า — PDPA) · เรียกจาก connect.tick ทุกนาที (query เดียว)"""
+    from .models import ExtLead
+    now = now or timezone.now()
+    n, _ = ExtLead.objects.filter(parked_at__lt=now - timedelta(days=KEEP_DAYS)).delete()
+    return n
 
 
 def _iso(dt):

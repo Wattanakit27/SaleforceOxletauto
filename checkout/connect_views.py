@@ -228,6 +228,9 @@ def api_inbox(request):
             pk = board()
             cnt["parked"] = pk["stats"]["waiting"]
             if view == "tocode":
+                # ตัวช่วยประกอบเลขตัวอย่างในกล่องจ่ายเบอร์ของลีดภายนอก (เลขรันชุดเดียวกับลูกค้า LINE OA)
+                pk["codeHelp"] = {"bases": [{"key": b, "type": t} for b, t in C.CODE_BASES],
+                                  "month": timezone.localdate().month, "next": C.last_running() + 1}
                 out["parked"] = pk
         except Exception as e:
             out["parkedError"] = str(e)[:120]
@@ -312,6 +315,35 @@ def api_assign_lead(request):
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
     return _j({"ok": True, "message": msg})
+
+
+def api_park_assign(request):
+    """จ่ายเบอร์ **ลีดภายนอก** จากห้องพัก Lead (TikTok/FB/เบอร์กลาง … · แอดมิน · โหมดทดลอง)
+    POST `{mid, emp, base, admin, reject, code?}` · `{mid, skip: true|false}` = ไม่ต้องจ่ายเบอร์ / เอากลับ
+
+    `mid` = message id ของใบร่างในกลุ่ม (ไม่ใช่ข้อมูลส่วนบุคคล) · เก็บใน ExtLead อย่างเดียว ไม่ลงชีต ไม่โพสต์กลุ่ม
+    """
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "จ่ายเบอร์ได้เฉพาะแอดมิน"}, 403)
+    from . import leadpark as LP
+    mid = str(body.get("mid") or "")
+    by = ctx["name"] or "แอดมิน"
+    if "skip" in body:
+        ok, msg = LP.skip(mid, bool(body.get("skip")), by=by)
+        return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    try:
+        eid = int(body.get("emp") or 0)
+    except Exception:
+        eid = 0
+    emp = Employee.objects.filter(pk=eid).first() if eid else None
+    ok, msg, e = LP.assign(mid, emp, str(body.get("base") or ""), bool(body.get("admin")),
+                           bool(body.get("reject")), str(body.get("code") or ""), by=by)
+    if not ok:
+        return _j({"ok": False, "error": msg}, 400)
+    return _j({"ok": True, "message": msg, "code": e.code, "slip": LP.slip_text(e)})
 
 
 def api_lead(request):

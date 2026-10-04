@@ -1179,6 +1179,67 @@ try:
     ck("★ เซลล์ไม่เห็นห้องพัก Lead", "parked" not in d and "parked" not in d.get("counts", {}))
     ck("ห้องพักไม่มี LINE user id หลุด", not leak.search(json.dumps(pk, ensure_ascii=False)))
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[23] จ่ายเบอร์ลีดภายนอก (TikTok/FB) จากห้องพัก Lead — เลขรันชุดเดียวกับลูกค้า LINE OA")
+    from checkout.models import ExtLead
+    ck("ช่องทาง → ป้าย", [LP.source_of(x) for x in ("Live tiktok ช่องขายบอส", "TT ช่อง888", "เพจบ้านเก่า",
+                                                     "fb ads", "Line@", "เบอร์กลาง", "button")]
+       == ["tiktok", "tiktok", "facebook", "facebook", "line", "other", "other"])
+    ck("board มีป้ายช่องทาง + id ใบร่าง (ไม่ใช่ LINE user id)", W["คนบี"]["source"] == "tiktok"
+       and W["คนบี"]["id"].startswith("pk-"), W["คนบี"].get("id"))
+    bid = W["คนบี"]["id"]
+    CALLS.clear()
+    s_, d = J(SA1, "/connect/api/park_assign", {"mid": bid, "emp": A1.id, "base": "TLD"})
+    ck("★ เซลล์จ่ายเบอร์ลีดภายนอกไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": bid, "emp": 0, "base": "TLD"})
+    ck("ไม่เลือกเซลล์ = ปฏิเสธ", s_ == 400 and "เลือกเซลล์" in d.get("error", ""), d)
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": "ไม่มีจริง", "emp": A1.id, "base": "TLD"})
+    ck("ใบร่างไม่มีจริง = ปฏิเสธ", s_ == 400 and "ไม่พบใบร่าง" in d.get("error", ""), d)
+    nxt = C.last_running() + 1
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": bid, "emp": A1.id, "base": "TLD"})
+    eb = ExtLead.objects.filter(message_id=bid).first()
+    ck("★ จ่ายเบอร์ได้ + เลขต่อจากเลขรันล่าสุด (ชุดเดียวกับลูกค้า LINE OA)",
+       s_ == 200 and eb and eb.code == "TLD%d-%d" % (MON, nxt), (s_, d, eb and eb.code, nxt))
+    ck("เก็บสำเนาลีด + เซลล์/คนจ่าย + ติดป้ายทดลอง", eb and eb.line_id == "beeline99" and eb.account == "คนบี"
+       and eb.seller_id == A1.id and eb.seller_name == "เอหนึ่ง" and eb.assigned_by == "admin" and eb.code_demo
+       and eb.source == "tiktok", eb and (eb.line_id, eb.seller_name, eb.assigned_by))
+    ck("★ ไม่ลงชีต/ไม่โพสต์กลุ่ม (ไม่มีคำขอออกนอกระบบ)", not [c for c in CALLS if c[0] == "post"], CALLS)
+    ps = parse_leadsheet(d.get("slip", "")) or {}
+    ck("ใบจ่ายลีดที่ได้: อ่านกลับได้ (เลข + @เซลล์) + ป้ายทดลองบรรทัดแรก",
+       ps.get("lead_code") == eb.code and ps.get("assigned") == "เอหนึ่ง" and d.get("slip", "").startswith("⚠️ ทดลอง"), ps)
+    b = LP.board(cache_sec=0)
+    ck("★ จ่ายแล้วหายจากรายการรอเลขทันที", "คนบี" not in [i["account"] for i in b["waiting"]])
+    ab = next((i for i in b["assigned"] if i["account"] == "คนบี"), {})
+    ck("อยู่ใน \"จ่ายแล้ว\" พร้อมเลขที่ระบบออก", (ab.get("sys") or {}).get("code") == eb.code and not ab.get("code"), ab)
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": bid, "emp": A2.id, "base": "TLD"})
+    ck("★ จ่ายซ้ำ = ไม่ออกเลขทับ", s_ == 400 and "ไปแล้ว" in d.get("error", "")
+       and ExtLead.objects.get(message_id=bid).code == eb.code, d)
+    aid = next(i["id"] for i in b["assigned"] if i["account"] == "คนเอ")
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": aid, "emp": A1.id, "base": "TLD"})
+    ck("★ ได้เลขในห้องจ่ายเบอร์แล้ว (แอดมินโพสต์เอง) = ไม่ออกเลขซ้อน", s_ == 400 and "TLD10-9001" in d.get("error", ""), d)
+    # ลูกค้า LINE OA คนถัดไปต้องได้เลขต่อจากลีดภายนอก (ไม่ชนกัน)
+    ck("เลขถัดไปนับเลขของลีดภายนอกด้วย", C.last_running() == nxt, C.last_running())
+    post(PARK, 30, slip("TLD10-", acc="คนอี", phone="0855555555"))
+    eid_ = [i["id"] for i in LP.board(cache_sec=0)["waiting"] if i["account"] == "คนอี"][0]
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": eid_, "emp": A1.id, "base": "TLD", "code": eb.code})
+    ck("★ ใส่เลขที่ถูกใช้แล้ว = ปฏิเสธ", s_ == 400 and "ถูกใช้" in d.get("error", ""), d)
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": eid_, "skip": True})
+    b = LP.board(cache_sec=0)
+    ck("ไม่ต้องจ่ายเบอร์ = ออกจากรายการรอ + อยู่ใน \"ซ่อนไว้\"", s_ == 200 and "คนอี" not in [i["account"] for i in b["waiting"]]
+       and [i["account"] for i in b["skipped"]] == ["คนอี"] and b["stats"]["skipped"] == 1, (s_, b["stats"]))
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": eid_, "skip": False})
+    ck("เอากลับมาจ่ายเบอร์ได้", s_ == 200 and "คนอี" in [i["account"] for i in LP.board(cache_sec=0)["waiting"]])
+    s_, d = J(ADM, "/connect/api/park_assign", {"mid": bid, "skip": True})
+    ck("จ่ายเบอร์แล้ว กดซ่อนไม่ได้", s_ == 400, d)
+    LP._CACHE["val"] = None
+    s_, d = J(ADM, "/connect/api/inbox?view=tocode")
+    chp = (d.get("parked") or {}).get("codeHelp") or {}
+    ck("หน้าเว็บได้ตัวช่วยประกอบเลขตัวอย่าง", chp.get("next") == C.last_running() + 1 and chp.get("month") == MON
+       and any(x["key"] == "TLD" for x in chp.get("bases", [])), chp)
+    ExtLead.objects.filter(message_id=bid).update(parked_at=timezone.now() - timedelta(days=100))
+    C.tick()
+    ck("★ ลีดภายนอกเกิน 90 วันถูกลบ (มีเบอร์/ID LINE ลูกค้า)", not ExtLead.objects.filter(message_id=bid).exists())
+
 finally:
     _runner.teardown_databases(_old)
 

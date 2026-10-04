@@ -31,7 +31,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 
-from .models import ChatLead, ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile
+from .models import ChatLead, ChatOwner, ChatOwnerLog, Employee, ExtLead, GroupChat, LineProfile
 
 CFG_KEY = "connect_config"
 
@@ -684,6 +684,13 @@ def tick(now=None) -> dict:
         out.update(_dd_tick() or {})
     except Exception as e:
         out["dropdownsError"] = str(e)[:120]
+    try:                                     # ลีดภายนอก (ห้องพัก Lead) ที่เกิน 90 วัน — มีเบอร์/ID LINE ลูกค้า
+        from .leadpark import cleanup
+        n = cleanup(now)
+        if n:
+            out["extLeadDeleted"] = n
+    except Exception as e:
+        out["extLeadError"] = str(e)[:120]
     c = cfg()
     rows = list(ChatOwner.objects.select_related("owner", "profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
@@ -1491,11 +1498,24 @@ def last_running() -> int:
                 nums.append(int(mm.group(3)))
             if len(nums) >= 20:
                 break
-    for c in ChatLead.objects.filter(code_demo=True).exclude(code="").values_list("code", flat=True)[:500]:
+    # เลขที่โหมดทดลองออกไปแล้ว — ทั้งลูกค้า LINE OA (ChatLead) และลีดภายนอกจากห้องพัก Lead (ExtLead) ใช้เลขรันชุดเดียวกัน
+    #   เรียงล่าสุดก่อน (เดิมตัด 500 แถวโดยไม่เรียง = ได้แถวสุ่ม พอเลขเยอะจะเดาเลขถัดไปต่ำกว่าจริง)
+    demo = []
+    for M in (ChatLead, ExtLead):
+        demo += list(M.objects.filter(code_demo=True).exclude(code="").order_by("-assigned_at")
+                     .values_list("code", flat=True)[:500])
+    for c in demo:
         mm = _ANY_CODE.match(c or "")
         if mm:
             nums.append(int(mm.group(3)))
     return max(nums) if nums else 0
+
+
+def code_taken(code: str, chat_lead_pk=None, ext_pk=None) -> bool:
+    """เลขลีดนี้ถูกใช้แล้วหรือยัง — เช็คทั้งลูกค้า LINE OA (ChatLead) และลีดภายนอกจากห้องพัก Lead (ExtLead)"""
+    if ChatLead.objects.filter(code__iexact=code).exclude(pk=chat_lead_pk).exists():
+        return True
+    return ExtLead.objects.filter(code__iexact=code).exclude(pk=ext_pk).exists()
 
 
 def next_code(prefix: str) -> str:
@@ -1534,8 +1554,7 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
             return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ NLD10-8410 (ตัวหน้า + เดือน + เลขรัน)"
     else:
         code = next_code(prefix)
-    dup = ChatLead.objects.filter(code__iexact=code).exclude(pk=lead.pk).first()
-    if dup:
+    if code_taken(code, chat_lead_pk=lead.pk):
         return False, "เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code
     lead.code, lead.code_demo = code, True
     if not lead.lead_type:                       # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)

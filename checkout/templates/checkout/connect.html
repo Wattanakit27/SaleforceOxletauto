@@ -515,36 +515,119 @@
     </div>`;
   }
 
-  // ── ห้องพัก Lead (กลุ่ม LINE "ADMIN เก็บ Lead") — อ่านอย่างเดียว · ใบร่างที่ยังไม่มีเลข/เซลล์ (leadpark.py) ──
-  //   ลีดหลุดจากรายการเองเมื่อใบจริง (มีเลข + @เซลล์) ถูกโพสต์ในห้องจ่ายเบอร์ — จับคู่ด้วยเบอร์/ID LINE
+  // ── ห้องพัก Lead (กลุ่ม LINE "ADMIN เก็บ Lead") — ลีดภายนอก (TikTok/FB/เบอร์กลาง …) ที่พักใบร่างไว้ (leadpark.py) ──
+  //   จ่ายเบอร์ได้จากตรงนี้ (โหมดทดลอง: เก็บในระบบเรา ไม่ลงชีต ไม่โพสต์กลุ่ม) · เลขรันชุดเดียวกับลูกค้า LINE OA
+  //   หรือแอดมินโพสต์ใบจริง (เลข + @เซลล์) ในห้องจ่ายเบอร์เองก็ได้ — ระบบจับคู่ด้วยเบอร์/ID LINE แล้วเอาออกจากรายการเอง
   const fmtWait = m => m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที';
-  S.parkOpen = new Set();
+  const SRC = { tiktok: ['TikTok', '#111'], facebook: ['Facebook', '#1877f2'], line: ['LINE', '#06c755'], other: ['อื่นๆ', 'var(--t3)'] };
+  const srcTag = s => { const x = SRC[s] || SRC.other; return `<span class="tag team" style="background:${x[1]}">${h(x[0])}</span>`; };
+  S.parkOpen = new Set(); S.parkDraft = {};
+  const pWho = i => i.account || i.name || i.lineId || i.phone || '(ไม่มีชื่อ)';
+
+  function parkBoxHtml(i, ch) {
+    const keys = (ch.bases || []).map(b => b.key);
+    const sugBase = keys.includes(i.base) ? i.base : (i.source === 'tiktok' ? 'TLD' : 'NLD');
+    const dr = S.parkDraft[i.id] || { base: sugBase, emp: 0, admin: !!i.admin, reject: !!i.reject };
+    const bases = (ch.bases || []).map(b => `<option value="${h(b.key)}"${b.key === dr.base ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
+    const sellers = S.sellers.map(s => `<option value="${s.id}"${s.id === dr.emp ? ' selected' : ''}>${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
+    return `<div class="pf-assign" data-park="${h(i.id)}">
+      <div class="pf-g2">
+        <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
+        <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
+      </div>
+      <label class="ck"><input type="checkbox" data-x="admin"${dr.admin ? ' checked' : ''}> A — ลีดของแอดมิน</label>
+      <label class="ck"><input type="checkbox" data-x="reject"${dr.reject ? ' checked' : ''}> R — เคสรีเจ็ค</label>
+      <div style="color:var(--t3);font-size:12px">เลขที่จะได้: <span class="pf-code" data-x="preview"></span></div>
+      <div class="pf-lock" style="font-size:12px;margin:4px 0 6px">ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีต ไม่โพสต์กลุ่ม · เลขจริงคำนวณใหม่ตอนกด</div>
+      <button class="btn pri" data-pact="assign" style="width:100%">จ่ายเบอร์</button>
+      <button class="btn sm" data-pact="skip" style="width:100%;margin-top:6px" title="ลีดซ้ำ / ไม่ใช่ลีดขาย — เอาออกจากรายการรอเลข">ไม่ต้องจ่ายเบอร์ (ลีดซ้ำ/ไม่ใช่ลีดขาย)</button>
+    </div>`;
+  }
+
   function parkHtml() {
     const P = S.parked;
     if (!(ADMIN && S.view === 'tocode' && P && P.room)) return '';
-    const st = P.stats || {}, W = P.waiting || [];
+    const st = P.stats || {}, W = P.waiting || [], ch = P.codeHelp || {};
     const items = W.map(i => {
-      const k = i.at + '|' + (i.account || i.phone || i.lineId);
       const mins = Math.max(0, Math.floor((nowMs() - Date.parse(i.at)) / 60000));
       const late = mins >= (P.warnMin || 30);
-      const who = i.account || i.name || i.lineId || i.phone || '(ไม่มีชื่อ)';
       const det = [['ID LINE', i.lineId], ['เบอร์โทร', i.phone ? fmtPhone(i.phone) : ''], ['ช่องทาง', i.channel],
                    ['รถ', i.car], ['ไลฟ์', i.live], ['Ads', i.ads], ['เพิ่มเติม', i.more]]
         .filter(x => x[1]).map(x => `${h(x[0])}: <b>${h(x[1])}</b>`).join('<br>');
-      return `<details class="cn-prow" data-pk="${h(k)}"${S.parkOpen.has(k) ? ' open' : ''}><summary>
-        <div class="cn-rh"><span class="cn-rn">${h(who)}</span><span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
+      return `<details class="cn-prow" data-pk="${h(i.id)}"${S.parkOpen.has(i.id) ? ' open' : ''}><summary>
+        <div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
         <div class="cn-rp">${h([i.car, i.channel].filter(Boolean).join(' · ') || '—')}</div>
         <div class="cn-rm">${i.phone ? `<span class="tag">โทร ${h(fmtPhone(i.phone))}</span>` : ''}
           <span class="tag">พักโดย ${h(i.by || '-')}</span>${i.reposts ? `<span class="tag">โพสต์ซ้ำ ${i.reposts}</span>` : ''}
           <span class="tag ${late ? 'late' : 'wait'}">${ic('clock', 12)} รอเลข ${h(fmtWait(mins))}</span></div>
-      </summary>${det ? `<div class="pv">${det}</div>` : ''}</details>`;
+      </summary>${det ? `<div class="pv">${det}</div>` : ''}${parkBoxHtml(i, ch)}</details>`;
     }).join('');
-    const today = st.assignedToday ? `วันนี้ได้เลขแล้ว ${st.assignedToday} ราย${st.avgWaitMinToday != null ? ' · พักเฉลี่ย ' + h(fmtWait(st.avgWaitMinToday)) : ''}` : '';
+    // จ่ายแล้ววันนี้ — จ่ายผ่านระบบ (คัดลอกใบไปวางในห้องจ่ายเบอร์ได้) หรือแอดมินโพสต์ใบจริงเอง
+    const todayIso = new Date(nowMs()).toLocaleDateString('sv-SE');
+    const done = (P.assigned || []).filter(i => (i.doneAt || '').slice(0, 10) === todayIso);
+    const doneRows = done.map(i => {
+      const real = i.code, sys = i.sys;
+      const how = real ? `ในห้องจ่ายเบอร์ · โดย ${h(i.assignedBy || '-')}` : `จ่ายผ่านระบบ${sys && sys.demo ? ' (ทดลอง)' : ''} · โดย ${h((sys && sys.by) || '-')}`;
+      const code = real || (sys && sys.code), seller = real ? i.seller : (sys && sys.seller);
+      return `<div class="cn-prow"><div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag ok">${h(code)}</span></div>
+        <div class="cn-rp">@${h(seller || '-')} · ${how} · พัก ${h(fmtWait(i.waitMin || 0))}${sys && real && sys.code !== real ? ` · เลขทดลอง ${h(sys.code)}` : ''}</div>
+        ${sys && !real ? `<div class="cn-rm"><button class="btn sm" data-slip="${h(i.id)}">คัดลอกใบจ่ายลีด</button></div>` : ''}</div>`;
+    }).join('');
+    const skipped = (P.skipped || []).map(i => `<div class="cn-prow"><div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}</div>
+      <div class="cn-rm"><span class="tag">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div></div>`).join('');
+    const sum = st.assignedToday ? ` · พักเฉลี่ย ${h(fmtWait(st.avgWaitMinToday || 0))}` : '';
     return `<div class="cn-park">
-      <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอเลข ${W.length} <small>(${h(P.room)} · หายจากรายการเองเมื่อโพสต์ใบที่มีเลข+@เซลล์ในห้องจ่ายเบอร์)</small></div>
+      <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead · รอเลข ${W.length} <small>(${h(P.room)} · กดที่ลีดเพื่อจ่ายเบอร์ · หรือโพสต์ใบที่มีเลข+@เซลล์ในห้องจ่ายเบอร์ ระบบเอาออกให้เอง)</small></div>
       ${items || '<div class="cn-park-f">ไม่มีลีดรอเลขในห้องพัก 👍</div>'}
-      ${today ? `<div class="cn-park-f">${today}</div>` : ''}
+      ${done.length ? `<details class="cn-prow" data-pk="done"${S.parkOpen.has('done') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">จ่ายแล้ววันนี้ ${done.length} ราย${sum} ▾</summary>${doneRows}</details>` : ''}
+      ${skipped ? `<details class="cn-prow" data-pk="skip"${S.parkOpen.has('skip') ? ' open' : ''}><summary class="cn-park-f" style="padding:0">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย ▾</summary>${skipped}</details>` : ''}
     </div><div class="cn-sep">ลูกค้าที่แชทเข้า LINE OA</div>`;
+  }
+
+  function parkPreview(box) {
+    const ch = (S.parked || {}).codeHelp || {}, q = k => box.querySelector(`[data-x="${k}"]`);
+    q('preview').textContent = (q('reject').checked ? 'R' : '') + (q('admin').checked ? 'A' : '') + q('base').value + (ch.month || '') + '-' + (ch.next || '…');
+  }
+
+  function bindPark(el) {
+    el.querySelectorAll('details[data-pk]').forEach(d => d.addEventListener('toggle', () => {
+      if (d.open) S.parkOpen.add(d.dataset.pk); else S.parkOpen.delete(d.dataset.pk);
+    }));
+    el.querySelectorAll('[data-park]').forEach(box => {
+      const id = box.dataset.park, q = k => box.querySelector(`[data-x="${k}"]`);
+      box.querySelectorAll('[data-x]').forEach(x => x.addEventListener('change', () => {
+        S.parkDraft[id] = { base: q('base').value, emp: +(q('emp').value || 0), admin: q('admin').checked, reject: q('reject').checked };
+        parkPreview(box);
+      }));
+      parkPreview(box);
+      box.querySelector('[data-pact=assign]').onclick = async ev => {
+        const emp = +(q('emp').value || 0);
+        if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
+        ev.target.disabled = true;
+        const r = await api('/connect/api/park_assign', { mid: id, emp, base: q('base').value,
+          admin: q('admin').checked, reject: q('reject').checked });
+        ev.target.disabled = false;
+        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), 4500);
+        if (r.ok) { delete S.parkDraft[id]; S.parkOpen.delete(id); S.parkOpen.add('done'); loadInbox(false); }
+      };
+      box.querySelector('[data-pact=skip]').onclick = async ev => {
+        ev.target.disabled = true;
+        const r = await api('/connect/api/park_assign', { mid: id, skip: true });
+        ev.target.disabled = false;
+        toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'));
+        if (r.ok) { delete S.parkDraft[id]; S.parkOpen.delete(id); loadInbox(false); }
+      };
+    });
+    el.querySelectorAll('[data-unskip]').forEach(b => b.onclick = async () => {
+      const r = await api('/connect/api/park_assign', { mid: b.dataset.unskip, skip: false });
+      toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'));
+      if (r.ok) loadInbox(false);
+    });
+    el.querySelectorAll('[data-slip]').forEach(b => b.onclick = () => {
+      const it = ((S.parked || {}).assigned || []).find(x => x.id === b.dataset.slip);
+      const t = it && it.sys ? it.sys.slip : '';
+      try { navigator.clipboard.writeText(t); toast('คัดลอกใบจ่ายลีดแล้ว'); } catch (e) { toast('คัดลอกไม่ได้'); }
+    });
   }
 
   function renderList() {
@@ -554,13 +637,14 @@
     const el = $('cn-rows');
     const park = parkHtml();
     if (park) {
-      // รายชื่อถูกวาดใหม่ทุก 8 วิ — จำว่ากางลีดไหนดูอยู่ ไม่ให้พับเอง
+      // รายชื่อถูกวาดใหม่ทุก 8 วิ — กำลังเลือกตัวเลือกในกล่องจ่ายเบอร์อยู่ = ยังไม่วาด (dropdown ที่กางอยู่จะปิดเอง)
+      //   ที่เลือกค้างไว้เก็บใน S.parkDraft · ลีดที่กางดูอยู่จำใน S.parkOpen — วาดใหม่แล้วไม่หาย
+      const act = document.activeElement;
+      if (act && el.contains(act) && /SELECT|INPUT|TEXTAREA/.test(act.tagName)) return;
       const top = el.scrollTop;
       el.innerHTML = park + (S.rows.length ? S.rows.map(rowHtml).join('') : `<div class="cn-empty">ไม่มีลูกค้าแชทรอจ่ายเบอร์ 👍</div>`);
       el.scrollTop = top;
-      el.querySelectorAll('details[data-pk]').forEach(d => d.addEventListener('toggle', () => {
-        if (d.open) S.parkOpen.add(d.dataset.pk); else S.parkOpen.delete(d.dataset.pk);
-      }));
+      bindPark(el);
       el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
       return;
     }
