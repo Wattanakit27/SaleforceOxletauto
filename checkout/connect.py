@@ -405,6 +405,11 @@ def preview_of(g) -> str:
 #  แถว ChatOwner มี `profile` (LINE) หรือ `fb_profile` (FB) อย่างใดอย่างหนึ่ง — **ใช้ cust(o) เสมอ**
 # ─────────────────────────────────────────────────────────────
 FB_LIVE_MIN = 30      # ข้อความ FB ที่เพิ่งดึงมาแต่เก่ากว่านี้ ไม่เริ่มนับ 5 นาที (กันวันแรกขึ้น "เลยเวลา" ท่วม)
+# ★ ข้อความจากเพจที่ออกภายในกี่วินาทีหลังลูกค้าทัก = "ตอบอัตโนมัติ" ของเพจ ไม่ใช่คนตอบ → ไม่หยุดนาฬิกา 5 นาที
+#   (4 ต.ค.69 เจอในแชททดสอบของเจ้าของ: ข้อความต้อนรับ/ฟอร์มขอเบอร์ของ Business Suite ออกวินาทีเดียวกับที่ลูกค้าทัก
+#   และ Facebook ติดป้ายมาเหมือนคนตอบทุกอย่าง (inbox/sent/source:web) → ทุกแชท FB ถูกปิดรอบทันที ไม่มีวันเลยเวลา)
+#   คนจริงอ่านแล้วพิมพ์ตอบไม่ทันใน 15 วิ · ข้อความที่ส่งจาก Connect (มีชื่อคนตอบ) ไม่ใช้กติกานี้
+FB_AUTO_SEC = 15
 FB_BACKFILL_DAYS = 7  # ลูกค้า FB ที่คุยภายใน 7 วันก่อนเปิดใช้ → มีแถวใน "ทั้งหมด" (ไม่เริ่มรอบรอ)
 
 
@@ -700,9 +705,17 @@ def _customer_in(o, at, preview: str, c: dict, start_round: bool = True, sim: bo
     return new_round
 
 
-def _reply_done(o, at, preview: str = "", emp=None, by: str = ""):
-    """เราตอบลูกค้าแล้ว (LINE หรือ FB) — จบรอบรอ + จดเวลาที่ลูกค้ารอ (เฉพาะคำตอบที่ปิดรอบ)"""
-    if o.awaiting_since and at >= o.awaiting_since:
+def _fb_auto(at, last_in) -> bool:
+    """ข้อความขาออกของเพจ (ไม่ได้ส่งจาก Connect) ที่ออกตามหลังข้อความลูกค้าไม่เกิน FB_AUTO_SEC วินาที = ตอบอัตโนมัติ"""
+    return bool(at and last_in) and 0 <= (at - last_in).total_seconds() < FB_AUTO_SEC
+
+
+def _reply_done(o, at, preview: str = "", emp=None, by: str = "", close: bool = True):
+    """เราตอบลูกค้าแล้ว (LINE หรือ FB) — จบรอบรอ + จดเวลาที่ลูกค้ารอ (เฉพาะคำตอบที่ปิดรอบ)
+
+    `close=False` = ข้อความตอบอัตโนมัติของเพจ — อัปเดตข้อความล่าสุด แต่ไม่ปิดรอบ ไม่นับเป็นการตอบ
+    """
+    if close and o.awaiting_since and at >= o.awaiting_since:
         _log(o, ChatOwnerLog.REPLY, emp=emp, by=by or (emp.nickname if emp else ""),
              team=team_of(emp) or o.team,
              wait_sec=max(0, int((at - o.awaiting_since).total_seconds())),
@@ -739,7 +752,9 @@ def note_fb_batch(fp, msgs):
     """
     if not fb_on() or fp is None or fp.is_employee:
         return None
-    rows = sorted([m for m in (msgs or []) if m.sent_at], key=lambda m: m.sent_at)
+    # วินาทีเดียวกัน: ข้อความลูกค้าก่อน แล้วค่อยขาออก (ตอบอัตโนมัติออกวินาทีเดียวกับที่ลูกค้าทักได้)
+    rows = sorted([m for m in (msgs or []) if m.sent_at],
+                  key=lambda m: (m.sent_at, 1 if m.direction == FbChat.OUT else 0))
     if not rows:
         return None
     c, now = cfg(), timezone.now()
@@ -747,8 +762,9 @@ def note_fb_batch(fp, msgs):
     new_round = False
     for m in rows:
         if m.direction == FbChat.OUT:
+            auto = not m.sent_by_id and _fb_auto(m.sent_at, o.last_in_at)
             _reply_done(o, m.sent_at, fb_preview(m), emp=m.sent_by,
-                        by=m.sent_by_name or "ตอบใน Facebook")
+                        by=m.sent_by_name or "ตอบใน Facebook", close=not auto)
         else:
             live = (now - m.sent_at) <= timedelta(minutes=FB_LIVE_MIN)
             new_round = _customer_in(o, m.sent_at, fb_preview(m), c, start_round=live) or new_round
@@ -2096,11 +2112,19 @@ def messages(o, limit: int = 200, since=None) -> list:
             fq = fq.filter(sent_at__gte=since, direction=FbChat.IN)
         frows = list(fq.order_by("-sent_at", "-id")[:limit])
         frows.reverse()
+        ins = [m.sent_at for m in frows if m.direction != FbChat.OUT]
+
+        def _by(m):
+            if m.direction != FbChat.OUT:
+                return ""
+            if m.sent_by_name:
+                return m.sent_by_name
+            # ขาออกที่ตอบใน Facebook เอง ไม่บอกว่าใครตอบ (เป็นชื่อเพจ) — บอกว่ามาจากไหนแทน
+            # ออกตามหลังข้อความลูกค้าไม่เกิน FB_AUTO_SEC = ข้อความอัตโนมัติของเพจ (ไม่นับเป็นการตอบ)
+            return "ตอบอัตโนมัติ (เพจ)" if any(_fb_auto(m.sent_at, t) for t in ins) else "ตอบใน Facebook"
         return [{
             "at": _iso(m.sent_at), "text": fb_preview(m), "type": m.msg_type or "", "media": bool(m.has_media),
-            "dir": m.direction or "in",
-            # ขาออกที่ตอบใน Facebook เอง ไม่บอกว่าใครตอบ (เป็นชื่อเพจ) — บอกว่ามาจากไหนแทน
-            "by": m.sent_by_name or ("ตอบใน Facebook" if m.direction == FbChat.OUT else ""),
+            "dir": m.direction or "in", "by": _by(m),
         } for m in frows]
     qs = GroupChat.objects.filter(sender_id=o.profile.user_id).exclude(chat_type=GroupChat.GROUP)
     if since:

@@ -1354,6 +1354,16 @@ try:
         fo.refresh_from_db()
         ck("★ ข้อความที่ส่งจาก Connect ไม่ถูกเก็บซ้ำตอนซิงก์", FbChat.objects.filter(thread_id="t_1", direction="out").count() == 1)
         ck("ลูกค้าตอบกลับ = เริ่มรอบรอใหม่ (ของเจ้าของเดิม)", fo.awaiting_since and fo.owner_id == A1.id, fo.awaiting_since)
+        # ★ ข้อความตอบอัตโนมัติของเพจ (ออกวินาทีเดียวกับลูกค้า / ภายใน 15 วิ) = ไม่ใช่คนตอบ → นาฬิกายังเดิน
+        #   (เจอจริง 4 ต.ค.69: Business Suite ส่งฟอร์มขอเบอร์ทันทีที่ลูกค้าทัก แล้วระบบเคยนับว่า "ตอบแล้ว")
+        FB["msgs"]["t_1"] = [fmsg("m_auto1", "111", "รับโปรขับฟรี โปรดแจ้ง ชื่อ เบอร์ ไลน์", t2),
+                             fmsg("m_auto2", "111", "สวัสดีค่ะ", t2 + timedelta(seconds=3))] + FB["msgs"]["t_1"]
+        FB["convs"] = [conv("t_1", PSID, "ลูกค้าเฟซบุ๊ก", t2 + timedelta(seconds=3))]
+        FS.sync_live()
+        fo.refresh_from_db()
+        ck("★ ตอบอัตโนมัติของเพจ = ยังไม่นับว่าตอบ (รอบรอไม่ถูกปิด)", fo.awaiting_since is not None
+           and not ChatOwnerLog.objects.filter(chat=fo, action="reply", at__gte=t2 - timedelta(seconds=1), by_name="ตอบใน Facebook").exists(),
+           fo.awaiting_since)
         # เพจตอบเองใน Business Suite → ปิดรอบให้ (Facebook ส่งขาออกมาด้วย)
         t3 = timezone.now() + timedelta(seconds=30)
         FB["msgs"]["t_1"] = [fmsg("m_bs1", "111", "ทักไลน์มาได้เลยครับ", t3)] + FB["msgs"]["t_1"]
@@ -1364,8 +1374,10 @@ try:
         ck("★ ตอบใน Facebook (Business Suite) = หยุดนาฬิกาให้ + จดว่าตอบที่ไหน", fo.awaiting_since is None
            and lg and lg.by_name == "ตอบใน Facebook", lg and lg.by_name)
         s_, d = J(SA1, "/connect/api/chat?id=%d" % fo.id)
-        ck("บับเบิลขาออกบอกว่าใครตอบ / ตอบใน Facebook", [m["by"] for m in d["messages"] if m["dir"] == "out"]
-           == ["เอหนึ่ง", "ตอบใน Facebook"], [m["by"] for m in d["messages"] if m["dir"] == "out"])
+        # เทียบแบบไม่สนลำดับ — เวลาข้อความทดสอบปัดเป็นวินาที อาจมาก่อนข้อความที่ส่งจาก Connect ในวินาทีเดียวกัน
+        ck("บับเบิลขาออกบอกว่าใครตอบ / ตอบอัตโนมัติ / ตอบใน Facebook", sorted(m["by"] for m in d["messages"] if m["dir"] == "out")
+           == sorted(["เอหนึ่ง", "ตอบอัตโนมัติ (เพจ)", "ตอบอัตโนมัติ (เพจ)", "ตอบใน Facebook"]),
+           [m["by"] for m in d["messages"] if m["dir"] == "out"])
 
         # เกิน 24 ชม. → Facebook ปฏิเสธ → บอกเป็นภาษาคน + ไม่บันทึก
         FB["send"] = {"message": "(#10) This message is sent outside of allowed window.", "code": 10, "error_subcode": 2018278}
@@ -1556,7 +1568,10 @@ try:
         ck("★ ลูกค้าเดิม = ไม่ยิง Graph API เลย", not W["gets"][n_get:], W["gets"][n_get:])
         st_, d = hook(ev(PW, "m_w2", "ยังว่างไหม"))
         ck("Facebook ส่งซ้ำ = ไม่เก็บซ้ำ", d.get("dup") == 1 and FbChat.objects.filter(message_id="m_w2").count() == 1)
-        hook(ev(PW, "m_w3", "ว่างครับ ทักไลน์ได้เลย", echo=True, ts=int(timezone.now().timestamp() * 1000) + 5000))
+        hook(ev(PW, "m_w2b", "ขอบคุณที่ทักมาค่ะ", echo=True, ts=int(timezone.now().timestamp() * 1000) + 2000))
+        ow.refresh_from_db()
+        ck("★ echo ภายใน 15 วิ = ตอบอัตโนมัติ ไม่หยุดนาฬิกา", ow.awaiting_since is not None)
+        hook(ev(PW, "m_w3", "ว่างครับ ทักไลน์ได้เลย", echo=True, ts=int(timezone.now().timestamp() * 1000) + 60000))
         ow.refresh_from_db()
         ck("★ เพจตอบ (echo) = หยุดนาฬิกา", ow.awaiting_since is None
            and ChatOwnerLog.objects.filter(chat=ow, action="reply", by_name="ตอบใน Facebook").exists())
