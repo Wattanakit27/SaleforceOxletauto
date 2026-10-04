@@ -1579,8 +1579,10 @@ try:
         C._FB_RUN["at"] = 0.0
         cache_store.set_kv("fb_live_last", {"at": timezone.now().isoformat()})
         ck("★ worker อื่นเพิ่งดึง (KV) = ยังไม่ถึงรอบ", C.fb_poll_due() is False)
-        cache_store.set_kv("fb_live_last", {"at": (timezone.now() - timedelta(minutes=11)).isoformat()})
-        ck("เกิน 10 นาที (ค่าตั้งต้น) = ถึงรอบ", C.fb_poll_due() is True and C.cfg()["fb_poll_min"] == 10)
+        cache_store.set_kv("fb_live_last", {"at": (timezone.now() - timedelta(minutes=1)).isoformat()})
+        ck("ค่าตั้งต้น 2 นาที: ผ่านไป 1 นาที = ยังไม่ถึงรอบ", C.fb_poll_due() is False and C.cfg()["fb_poll_min"] == 2)
+        cache_store.set_kv("fb_live_last", {"at": (timezone.now() - timedelta(minutes=3)).isoformat()})
+        ck("เกิน 2 นาที = ถึงรอบ", C.fb_poll_due() is True)
         s_, d = J(ADM, "/connect/api/config", {"fb_poll_min": 1})
         ck("ดึงสำรองถี่กว่า 2 นาที = ปฏิเสธ", s_ == 400, d)
         s_, d = J(ADM, "/connect/api/config", {"fb_poll_min": 30})

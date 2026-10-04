@@ -63,8 +63,11 @@ DEFAULTS = {
     "fb_reply": "test",
     "fb_test_rows": [],
     # ★ ดึงแชท FB สำรองทุกกี่นาที — ตัวหลักคือ webhook (Facebook ส่งมาเอง · fb_webhook.py)
-    #   เจ้าของสั่ง "ถ้าดึงจาก API ทุกหนึ่งนาที มันจะติด Token" → ค่าตั้งต้น 10 นาที (2–60)
-    "fb_poll_min": 10,
+    #   เจ้าของห่วง "ถ้าดึงจาก API ทุกหนึ่งนาที มันจะติด Token" → วัดจริง 4 ต.ค.69 ตอนดึงทุก 1 นาที:
+    #   header ของ Meta (x-business-use-case-usage · messenger) = ใช้ไป 1% ทั้ง call/CPU/เวลา → ห่างจากเพดานมาก
+    #   ★ ค่าตั้งต้น 2 นาที (ไม่ใช่ 10) — ก่อนผ่าน App Review webhook ส่งแชทลูกค้าจริงมาไม่ได้ ทางสำรองคือทางเดียว
+    #     ดึงช้า = แชทถึง Connect ช้าแล้วขึ้น "เลยเวลา" ทันที (เส้นตายนับจากเวลาที่ลูกค้าส่ง) · ผ่านรีวิวแล้วค่อยปรับเป็น 30–60
+    "fb_poll_min": 2,
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -131,7 +134,7 @@ def cfg() -> dict:
             pass
     c["fb_test_rows"] = list(dict.fromkeys(rows))[:20]
     try:
-        c["fb_poll_min"] = max(2, min(60, int(c.get("fb_poll_min") or 10)))
+        c["fb_poll_min"] = max(2, min(60, int(c.get("fb_poll_min") or DEFAULTS["fb_poll_min"])))
     except Exception:
         c["fb_poll_min"] = DEFAULTS["fb_poll_min"]
     return c
@@ -2173,7 +2176,7 @@ def fb_poll_due(now=None, c=None) -> bool:
     ★ ถ้าจำเวลาแค่ใน process: 3 worker = ดึงถี่ขึ้น 3 เท่าโดยไม่มีใครรู้ (cron ยิงสลับ worker)"""
     import time as _t
     c = c or cfg()
-    every = c.get("fb_poll_min", 10) * 60
+    every = c.get("fb_poll_min", DEFAULTS["fb_poll_min"]) * 60
     if _t.time() - _FB_RUN["at"] < every:
         return False
     try:
