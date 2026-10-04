@@ -27,37 +27,66 @@
     <div class="muted">บริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด (Oxlet Auto) · มีผลตั้งแต่ {{ effective_th }}</div>
 
     <h2>ขอบเขต</h2>
-    <p>นโยบายนี้ใช้กับเครื่องมือวิเคราะห์ภายในของ Oxlet Auto ที่เชื่อมต่อกับบัญชี TikTok
-       ผ่าน TikTok Login Kit และใช้เฉพาะกับบัญชีที่เจ้าของบัญชีกด "อนุญาต" ด้วยตัวเองเท่านั้น</p>
+    <p>นโยบายนี้ใช้กับระบบภายในของ Oxlet Auto 2 ส่วน คือ
+       (1) ระบบตอบแชทลูกค้าที่ส่งข้อความถึงเพจ Facebook ของบริษัทผ่าน Messenger และ
+       (2) เครื่องมือวิเคราะห์ผลงานของช่อง TikTok ที่บริษัทดำเนินการ
+       ระบบทั้งสองใช้ภายในบริษัทเท่านั้น ไม่ได้เปิดให้บุคคลทั่วไปสมัครใช้งาน</p>
 
-    <h2>ข้อมูลที่เราเข้าถึง</h2>
+    <h2>1. แชทผ่าน Facebook Messenger</h2>
+    <p><b>ข้อมูลที่เราได้รับ</b></p>
+    <ul>
+      <li>ข้อความและไฟล์แนบที่ท่านส่งถึงเพจ Facebook ของบริษัท</li>
+      <li>ชื่อที่แสดงและรหัสผู้ใช้เฉพาะเพจ (Page-scoped ID) ที่ Meta ส่งมาพร้อมข้อความ</li>
+      <li>ข้อมูลที่ท่านแจ้งเองในแชท เช่น เบอร์โทรศัพท์ ไอดี LINE หรือรุ่นรถที่สนใจ</li>
+      <li>ข้อความที่พนักงานของบริษัทตอบกลับท่าน</li>
+    </ul>
+    <p><b>วัตถุประสงค์การใช้</b></p>
+    <ul>
+      <li>ตอบคำถามและให้บริการเกี่ยวกับการซื้อ-ขายรถที่ท่านติดต่อเข้ามา</li>
+      <li>ส่งต่อแชทให้พนักงานขายที่ดูแลท่าน และติดตามเวลาตอบเพื่อคุณภาพของบริการ</li>
+    </ul>
+    <p><b>สิ่งที่เราไม่ทำ</b></p>
+    <ul>
+      <li>ไม่ขาย ไม่ให้เช่า และไม่เปิดเผยข้อความของท่านแก่บุคคลภายนอก</li>
+      <li>ไม่ส่งข้อความหาท่านก่อน — ตอบเฉพาะในบทสนทนาที่ท่านเริ่ม ตามกติกาของ Messenger</li>
+      <li>ไม่โพสต์ ไม่แก้ไข และไม่ลบเนื้อหาใดๆ ในบัญชี Facebook ของท่าน</li>
+    </ul>
+    <p><b>การเก็บรักษาและผู้เข้าถึง</b></p>
+    <ul>
+      <li>เข้าถึงได้เฉพาะพนักงานที่เกี่ยวข้อง ผ่านระบบที่ต้องเข้าสู่ระบบก่อนทุกครั้ง</li>
+      <li>ข้อความและข้อมูลที่เกี่ยวข้องถูกลบโดยอัตโนมัติเมื่อครบ 60 วันนับจากข้อความล่าสุดของท่าน</li>
+    </ul>
+
+    <h2 id="data-deletion">การขอลบข้อมูล (Facebook Messenger)</h2>
+    <p>ท่านขอให้ลบข้อมูลของท่านได้ทุกเมื่อ โดยส่งข้อความถึงเพจ Facebook ของบริษัทว่า "ขอลบข้อมูล"
+       หรือติดต่อตามช่องทางด้านล่าง เราจะลบข้อความและข้อมูลที่เกี่ยวข้องกับท่านออกจากระบบภายใน 30 วัน
+       และแจ้งกลับเมื่อดำเนินการเสร็จ</p>
+
+    <h2>2. เครื่องมือวิเคราะห์ช่อง TikTok</h2>
+    <p>ใช้เฉพาะกับบัญชีที่เจ้าของบัญชีกด "อนุญาต" ผ่าน TikTok Login Kit ด้วยตัวเองเท่านั้น</p>
+    <p><b>ข้อมูลที่เราเข้าถึง</b></p>
     <ul>
       <li>ข้อมูลพื้นฐานของบัญชี: รหัสบัญชีสำหรับแอป (open_id) และชื่อที่แสดง</li>
       <li>รายการคลิปของบัญชี พร้อมยอดวิว ยอดไลก์ ยอดคอมเมนต์ และยอดแชร์ ชื่อคลิป ความยาว และลิงก์คลิป</li>
       <li>หากเจ้าของบัญชีให้สิทธิ์เพิ่มเติม: จำนวนผู้ติดตาม ยอดไลก์รวม และจำนวนคลิปของบัญชี</li>
     </ul>
-
-    <h2>สิ่งที่เราไม่ทำ</h2>
+    <p><b>สิ่งที่เราไม่ทำ</b></p>
     <ul>
-      <li>ไม่โพสต์ ไม่แก้ไข และไม่ลบเนื้อหาใดๆ ในบัญชีของท่าน</li>
-      <li>ไม่อ่านข้อความส่วนตัว ไม่เข้าถึงรหัสผ่าน และไม่เก็บรูปโปรไฟล์</li>
+      <li>ไม่โพสต์ ไม่แก้ไข และไม่ลบเนื้อหาใดๆ ในบัญชี TikTok ของท่าน</li>
+      <li>ไม่อ่านข้อความส่วนตัวในบัญชี TikTok ไม่เข้าถึงรหัสผ่าน และไม่เก็บรูปโปรไฟล์</li>
       <li>ไม่ขาย ไม่ให้เช่า และไม่เปิดเผยข้อมูลให้บุคคลภายนอก</li>
     </ul>
-
-    <h2>วัตถุประสงค์การใช้</h2>
-    <p>ใช้จัดทำรายงานผลงานของช่อง TikTok ที่ Oxlet Auto ดำเนินการหรือได้รับอนุญาต เช่น
+    <p><b>วัตถุประสงค์การใช้</b>: จัดทำรายงานผลงานของช่อง TikTok ที่ Oxlet Auto ดำเนินการหรือได้รับอนุญาต เช่น
        ยอดวิวและการมีส่วนร่วมรายวัน เพื่อการตัดสินใจภายในบริษัทเท่านั้น</p>
-
-    <h2>การเก็บรักษาข้อมูล</h2>
+    <p><b>การเก็บรักษาข้อมูล</b></p>
     <ul>
       <li>โทเคนการเข้าถึงถูกเข้ารหัสก่อนจัดเก็บ</li>
       <li>สถิติรายคลิปและรายบัญชีเก็บไว้ตลอดช่วงที่บัญชียังเชื่อมต่ออยู่</li>
       <li>ข้อมูลดิบจาก TikTok API เก็บไม่เกิน 90 วัน และข้อมูลแจ้งเตือนจาก TikTok (webhook) เก็บไม่เกิน 180 วัน จากนั้นลบโดยอัตโนมัติ</li>
     </ul>
-
-    <h2>การยกเลิกสิทธิ์และการลบข้อมูล</h2>
-    <p>ท่านยกเลิกสิทธิ์ได้ทุกเมื่อจากการตั้งค่าของแอป TikTok (จัดการสิทธิ์ของแอป) เมื่อ TikTok แจ้งการยกเลิกมายังเรา
-       ระบบจะหยุดดึงข้อมูลและลบโทเคนของบัญชีนั้นโดยอัตโนมัติ หากต้องการให้ลบสถิติที่เก็บไว้ด้วย โปรดติดต่อเรา</p>
+    <p><b>การยกเลิกสิทธิ์และการลบข้อมูล</b>: ท่านยกเลิกสิทธิ์ได้ทุกเมื่อจากการตั้งค่าของแอป TikTok (จัดการสิทธิ์ของแอป)
+       เมื่อ TikTok แจ้งการยกเลิกมายังเรา ระบบจะหยุดดึงข้อมูลและลบโทเคนของบัญชีนั้นโดยอัตโนมัติ
+       หากต้องการให้ลบสถิติที่เก็บไว้ด้วย โปรดติดต่อเรา</p>
 
     <h2>ติดต่อ</h2>
     <p>{% if contact %}{{ contact }}{% else %}ติดต่อผ่านช่องทางทางการของบริษัท อ๊อกเล็ตธ์ ออโต้ จำกัด{% endif %}</p>
@@ -67,29 +96,61 @@
     <h1>Privacy Policy</h1>
     <div class="muted">Oxlet Auto Co., Ltd. · Effective {{ effective_en }}</div>
     <h2>Scope</h2>
-    <p>This policy covers Oxlet Auto's internal analytics tool that connects to TikTok accounts through TikTok Login Kit.
-       It applies only to accounts whose owners explicitly click "Authorize".</p>
-    <h2>Data we access</h2>
+    <p>This policy covers two internal systems of Oxlet Auto: (1) our customer chat system for messages people send to
+       the company's Facebook Pages via Messenger, and (2) our analytics tool for TikTok channels operated by the company.
+       Both are used internally by the company only and are not open for public sign-up.</p>
+
+    <h2>1. Facebook Messenger conversations</h2>
+    <p><b>Data we receive</b></p>
+    <ul>
+      <li>Messages and attachments you send to the company's Facebook Page.</li>
+      <li>Your display name and Page-scoped ID, as provided by Meta with each message.</li>
+      <li>Information you choose to share in the chat, such as your phone number, LINE ID or the car you are interested in.</li>
+      <li>Replies our staff send to you.</li>
+    </ul>
+    <p><b>How we use it</b></p>
+    <ul>
+      <li>To answer your questions and provide service related to buying or selling a car.</li>
+      <li>To route your conversation to the sales staff responsible for you and to monitor response times for service quality.</li>
+    </ul>
+    <p><b>What we do not do</b></p>
+    <ul>
+      <li>We do not sell, rent or disclose your messages to third parties.</li>
+      <li>We do not message you first — we only reply in conversations you start, following Messenger's rules.</li>
+      <li>We never post, edit or delete content on your Facebook account.</li>
+    </ul>
+    <p><b>Retention and access</b></p>
+    <ul>
+      <li>Only relevant staff can access the data, through a system that requires login.</li>
+      <li>Messages and related data are deleted automatically 60 days after your last message.</li>
+    </ul>
+
+    <h2 id="data-deletion-en">Data deletion requests (Facebook Messenger)</h2>
+    <p>You can ask us to delete your data at any time by sending "delete my data" to the company's Facebook Page or by
+       contacting us as shown below. We will delete your messages and related data from our system within 30 days and
+       confirm once done.</p>
+
+    <h2>2. TikTok analytics tool</h2>
+    <p>Applies only to accounts whose owners explicitly click "Authorize" through TikTok Login Kit.</p>
+    <p><b>Data we access</b></p>
     <ul>
       <li>Basic account info: the app-scoped account ID (open_id) and display name.</li>
       <li>The account's video list with view, like, comment and share counts, title, duration and link.</li>
       <li>If the owner grants the additional permission: follower count, total likes and video count.</li>
     </ul>
-    <h2>What we do not do</h2>
+    <p><b>What we do not do</b></p>
     <ul>
-      <li>We never post, edit or delete content on your account.</li>
-      <li>We do not read private messages, access passwords, or store profile pictures.</li>
+      <li>We never post, edit or delete content on your TikTok account.</li>
+      <li>We do not read private messages on TikTok, access passwords, or store profile pictures.</li>
       <li>We do not sell, rent or share your data with third parties.</li>
     </ul>
-    <h2>How we use it</h2>
-    <p>To produce internal performance reports (e.g. daily views and engagement) for TikTok channels operated by or
-       authorized to Oxlet Auto.</p>
-    <h2>Retention</h2>
-    <p>Access tokens are encrypted at rest. Video and account statistics are kept while the account remains connected.
-       Raw API responses are deleted after 90 days and TikTok webhook events after 180 days.</p>
-    <h2>Revoking access and deletion</h2>
-    <p>You can revoke access at any time in the TikTok app's app-permission settings. When TikTok notifies us, we stop
-       collecting data and automatically delete that account's tokens. Contact us to also delete stored statistics.</p>
+    <p><b>How we use it</b>: to produce internal performance reports (e.g. daily views and engagement) for TikTok channels
+       operated by or authorized to Oxlet Auto.</p>
+    <p><b>Retention</b>: access tokens are encrypted at rest. Video and account statistics are kept while the account remains
+       connected. Raw API responses are deleted after 90 days and TikTok webhook events after 180 days.</p>
+    <p><b>Revoking access and deletion</b>: you can revoke access at any time in the TikTok app's app-permission settings.
+       When TikTok notifies us, we stop collecting data and automatically delete that account's tokens.
+       Contact us to also delete stored statistics.</p>
     <h2>Contact</h2>
     <p>{% if contact %}{{ contact }}{% else %}Please contact Oxlet Auto Co., Ltd. through its official channels.{% endif %}</p>
   </div>

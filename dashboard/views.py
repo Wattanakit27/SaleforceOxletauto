@@ -2723,7 +2723,9 @@ def legal_page(request, doc):
     return render(request, "dashboard/legal.html", {
         "doc": "privacy" if doc == "privacy" else "terms",
         "contact": getattr(settings, "LEGAL_CONTACT", ""),
-        "effective_th": "20 กันยายน 2569", "effective_en": "20 September 2026"})
+        # นโยบายความเป็นส่วนตัวแก้ 4 ต.ค.69 (เพิ่มหมวด Facebook Messenger ให้ Meta App Review) · ข้อกำหนดยังฉบับ 20 ก.ย.
+        "effective_th": "4 ตุลาคม 2569" if doc == "privacy" else "20 กันยายน 2569",
+        "effective_en": "4 October 2026" if doc == "privacy" else "20 September 2026"})
 
 
 @csrf_exempt
