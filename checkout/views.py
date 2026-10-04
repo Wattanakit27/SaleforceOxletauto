@@ -772,7 +772,7 @@ def store_chat(data) -> int:
         if ctype == GroupChat.USER and uid:
             try:
                 from . import connect
-                connect.note_customer_message(uid, row.sent_at, connect.preview_of(row), picture=pic)
+                connect.note_customer_message(uid, row.sent_at, connect.preview_of(row), picture=pic, channel=chan)
             except Exception as e:
                 err = err or ("connect: %s: %s" % (type(e).__name__, e))[:200]
     _chat_log(saved=made, skipped=skipped, events=len(events), error=err)

@@ -206,7 +206,7 @@ try:
     o1b = C.note_customer_message(P1.user_id, t0 + timedelta(minutes=1), "ผ่อนเดือนละเท่าไหร่")
     ck("ส่งรัวๆ = รอบเดิม เส้นตายไม่เลื่อน", o1b.due_at == t0 + timedelta(minutes=5))
     ck("ข้อความล่าสุดอัปเดต", o1b.last_preview == "ผ่อนเดือนละเท่าไหร่" and o1b.last_dir == "in")
-    ck("พนักงานทักเข้า OA = ไม่เข้าคิว", C.note_customer_message(STAFF.user_id, t0, "x") is None)
+    ck("พนักงานทักบอทแจ้งเตือน (push) = ไม่เข้าคิว", C.note_customer_message(STAFF.user_id, t0, "x", channel="push") is None)
     ck("ไม่รู้จักคนนี้ = ไม่พัง", C.note_customer_message("U" + "f" * 32, t0, "x") is None)
 
     # ═════════════════════════════════════════════════════════════════════
@@ -1411,6 +1411,36 @@ try:
         ck("tick ไม่พังเมื่อมีลูกค้า FB เลยเวลา", isinstance(C.tick(), dict))
     finally:
         requests.get, requests.post = _old_get, _old_post
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[25] พนักงานทักบัญชีลูกค้า = ขึ้น Connect (ป้าย \"พนักงาน\") · เจ้าของทักทดสอบจาก LINE ส่วนตัวแล้วไม่เห็น")
+    EMP2 = LineProfile.objects.create(user_id="U%032x" % 98, display_name="เจ้าของทดสอบ", is_employee=True,
+                                      nickname="บอส", employee=OFFICE)
+    ck("ทักบอทแจ้งเตือน (push) = ไม่ขึ้น", C.note_customer_message(EMP2.user_id, timezone.now(), "hi", channel="push") is None
+       and not ChatOwner.objects.filter(profile=EMP2).exists())
+    # ผ่านเส้นทางจริง: webhook → store_chat → Connect (บัญชีลูกค้า crm)
+    from checkout.views import store_chat
+    from checkout import views as CV
+    _cfg0 = CV.line_cfg()
+    _real_cfg = CV.line_cfg
+    CV.line_cfg = lambda: dict(_cfg0, store_chat=True, store_customer_chat=True)
+    try:
+        store_chat({"destination": "", "events": [{"type": "message", "timestamp": int(timezone.now().timestamp() * 1000),
+                    "source": {"type": "user", "userId": EMP2.user_id},
+                    "message": {"id": "emp-test-1", "type": "text", "text": "ทดสอบจาก LINE ส่วนตัว"}}]})
+    finally:
+        CV.line_cfg = _real_cfg
+    oe = ChatOwner.objects.filter(profile=EMP2).first()
+    ck("★ พนักงานทักบัญชีลูกค้า = ขึ้น Connect + เริ่มรอบรอ", oe is not None and oe.awaiting_since is not None, oe)
+    s_, d = J(ADM, "/connect/api/inbox?view=all")
+    re_ = next((x for x in d.get("rows", []) if oe and x["id"] == oe.id), {})
+    ck("แถวมีป้ายพนักงาน + ชื่อ", re_.get("staff") is True and re_.get("name") == "บอส", re_)
+    C.note_reply(EMP2.user_id, None, timezone.now(), "ได้รับแล้วครับ", by="admin")   # = สิ่งที่ send_reply เรียกหลังส่งสำเร็จ
+    oe.refresh_from_db()
+    ck("ตอบแล้วปิดรอบได้ (พนักงานก็เหมือนลูกค้า)", oe.awaiting_since is None, oe.awaiting_since)
+    EMP3 = LineProfile.objects.create(user_id="U%032x" % 97, display_name="คุยกับบอทแจ้งเตือน", is_employee=True)
+    ck("พนักงานที่ไม่มีแถว (คุยกับบอทแจ้งเตือน) ตอบแล้วไม่สร้างแถวใหม่",
+       C.note_reply(EMP3.user_id, None, timezone.now(), "x") is None and not ChatOwner.objects.filter(profile=EMP3).exists())
 
 finally:
     _runner.teardown_databases(_old)

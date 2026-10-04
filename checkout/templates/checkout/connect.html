@@ -518,6 +518,7 @@
   function rowHtml(r) {
     const ck = r.awaiting ? clockText(r.due, r.since) : null;
     const tags = [chTag(r.src)];
+    if (r.staff) tags.push(`<span class="tag wait" title="บัญชี LINE นี้ผูกกับพนักงานในทะเบียน — ทดสอบ/ส่งต่อลีด">พนักงาน</span>`);
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
@@ -823,7 +824,7 @@
         ${avHtml(r.name, r.pic)}
         <div class="cn-ph-who">
           <h2>${h(r.name)}</h2>
-          <div class="cn-sub">${chTag(r.src)} ${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ${r.msgs} ข้อความ${clock}</div>
+          <div class="cn-sub">${chTag(r.src)}${r.staff ? ' <span class="tag wait">พนักงาน</span>' : ''} ${own}${r.team ? ' · ' + teamTag(r.team) : ''} · ${r.msgs} ข้อความ${clock}</div>
         </div>
         <div class="cn-acts">${acts.join('')}</div>
       </div>

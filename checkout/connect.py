@@ -610,16 +610,26 @@ def _log(o, action, emp=None, by="", **kw):
         pass                       # ประวัติเขียนไม่ได้ ต้องไม่ทำให้งานหลัก (รับ/ตอบลูกค้า) พัง
 
 
-def note_customer_message(user_id: str, at=None, preview: str = "", picture: str = ""):
+# บัญชี LINE ที่ "ไม่ใช่ช่องลูกค้า" — พนักงานทักบัญชีนี้ = ลงทะเบียนรับแจ้งเตือน ไม่ใช่ลีด (ไม่ขึ้น Connect)
+STAFF_SKIP_CHANNELS = ("push",)
+
+
+def note_customer_message(user_id: str, at=None, preview: str = "", picture: str = "", channel: str = ""):
     """ลูกค้าส่งข้อความเข้ามา — เรียกจาก `store_chat` (แชท 1:1 เท่านั้น)
 
     เริ่ม "รอบรอคำตอบ" ถ้ายังไม่มี · ลูกค้าส่งรัวๆ หลายข้อความ = รอบเดิม (เส้นตายไม่เลื่อน)
     `picture` = ลิงก์รูปโปรไฟล์ที่ `touch_profile` เพิ่งดึงมา (ว่าง = ไม่ได้ดึงรอบนี้)
+    `channel` = บัญชี LINE ที่ได้ยินข้อความนี้ (crm = OA ลูกค้า · push = บอทแจ้งเตือน)
+
+    ★ 4 ต.ค.69 — **พนักงานที่ทักบัญชีลูกค้า ขึ้น Connect ด้วย** (ติดป้าย "พนักงาน")
+      เดิมตัดพนักงานทิ้งหมด → เจ้าของทักทดสอบจาก LINE ส่วนตัวแล้วไม่เห็นแชทตัวเอง ·
+      และเอ็มส่งชื่อ+เบอร์ลูกค้าที่ถามหา Civic เข้า OA ก็หายไปเงียบๆ (วัดจริง 30 วัน: 4 คน 38 ข้อความ ไม่รก)
+      ยกเว้นทักบอทแจ้งเตือน (`STAFF_SKIP_CHANNELS`) — นั่นคือแอดบอทเพื่อรับแจ้งเตือน ไม่ใช่ลีด
     """
     if not user_id:
         return None
     prof = LineProfile.objects.filter(user_id=user_id).first()
-    if not prof or prof.is_employee:
+    if not prof or (prof.is_employee and (channel or "") in STAFF_SKIP_CHANNELS):
         return None
     at = at or timezone.now()
     c = cfg()
@@ -734,7 +744,8 @@ def note_reply(user_id: str, emp=None, at=None, preview: str = "", by: str = "")
     ตอบแล้ว = จบรอบรอ · จดเวลาที่ลูกค้ารอไว้เป็นสถิติ (เฉพาะคำตอบที่ปิดรอบ)
     """
     prof = LineProfile.objects.filter(user_id=user_id).first()
-    if not prof or prof.is_employee:
+    # พนักงานที่ขึ้น Connect (ทักบัญชีลูกค้า) ก็ปิดรอบได้ — คนที่ไม่มีแถว (คุยกับบอทแจ้งเตือน) ไม่ต้องสร้างแถวใหม่
+    if not prof or (prof.is_employee and not ChatOwner.objects.filter(profile=prof).exists()):
         return None
     return _reply_done(_row_for(prof), at or timezone.now(), preview, emp=emp, by=by)
 
@@ -940,6 +951,10 @@ def sync_rows(force: bool = False) -> int:
                                   last_in_at=m.sent_at if m.direction != FbChat.OUT else None,
                                   last_out_at=m.sent_at if m.direction == FbChat.OUT else None))
     profs = list(LineProfile.objects.filter(is_employee=False, owner_row__isnull=True)[:2000])
+    staff_ids = (GroupChat.objects.filter(chat_type=GroupChat.USER, direction=GroupChat.IN,
+                                          sent_at__gte=timezone.now() - timedelta(days=7))
+                 .exclude(channel__in=STAFF_SKIP_CHANNELS).values_list("sender_id", flat=True).distinct())
+    profs += list(LineProfile.objects.filter(is_employee=True, owner_row__isnull=True, user_id__in=list(staff_ids)[:200]))
     for p in profs:
         g = (GroupChat.objects.filter(sender_id=p.user_id).exclude(chat_type=GroupChat.GROUP)
              .order_by("-sent_at", "-id").first())
@@ -985,6 +1000,7 @@ def row_json(o, me=None, now=None) -> dict:
         "pic": o.picture_url or "",
         "sim": is_sim_row(o),
         "src": "fb" if is_fb(o) else "line",            # ป้ายช่องทางในรายชื่อ (Facebook / LINE)
+        "staff": bool(getattr(p, "is_employee", False)),  # พนักงานทักบัญชีลูกค้า (ทดสอบ/ส่งต่อลีด) — ป้าย "พนักงาน"
         "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
     }
 
