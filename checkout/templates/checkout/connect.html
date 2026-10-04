@@ -200,6 +200,11 @@
   .pf-assign label.ck { display: flex; gap: 6px; align-items: center; margin: 5px 0; font-size: 13px; }
   .pf-code { font-size: var(--fs-sub); font-weight: 800; letter-spacing: .4px; color: var(--blue-dk); }
   .pf-done { font-size: 12px; color: var(--green); background: var(--green-bg); border-radius: 7px; padding: 5px 8px; margin: 6px 0; }
+  .pf-skip { font-size: 12px; color: var(--t2); background: var(--bg2); border-radius: 7px; padding: 6px 8px; margin: 6px 0;
+             display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .pf-assign.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .tag.code { background: var(--blue-bg); color: var(--blue-dk); }
+  .cn-hint { margin: 0 10px 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
   @media (max-width: 1180px) {
     .cn-chat { grid-template-columns: minmax(0,1fr); }
     .cn-side { display: none; }
@@ -243,6 +248,8 @@
     .cn-mback { display: inline-flex; }
     .cn-top { padding: 0 12px; gap: 8px; }
     .cn-top .hide-sm, .cn-sim .hide-sm { display: none; }
+    /* ชื่อคนใช้งาน (มุมขวาบน) หดเป็น "…" ได้ — เดิมดันหน้าล้นจอแนวนอนบนมือถือ (ตอนฝังในแดชบอร์ด) */
+    .cn-top #cn-me { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .cn-sim input { min-width: 0; }
     .cn-ph, .cn-msgs, .cn-comp { padding-left: 12px; padding-right: 12px; }
     .fld label { min-width: 0; width: 100%; }
@@ -310,6 +317,7 @@
     'sliders': '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
     'repeat': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
     'check': '<path d="M20 6 9 17l-5-5"/>',
+    'hash': '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
     'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
   };
   const ic = (n, sz) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${sz ? ` style="width:${sz}px;height:${sz}px"` : ''}>${ICONS[n] || ''}</svg>`;
@@ -389,6 +397,8 @@
   const TABS_ADMIN = [
     { v: 'overdue', l: 'เลยเวลา', i: 'alert', c: 'overdue', hot: true },
     { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue' },
+    // ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — งานจ่ายเบอร์ของแอดมิน (connect.to_code)
+    { v: 'tocode', l: 'จ่ายเบอร์', i: 'hash', c: 'tocode' },
     { v: 'mine', l: 'ของฉัน', i: 'user-check', c: 'mine', needEmp: true },
     { v: 'owned', l: 'มีเจ้าของ', i: 'users', c: 'owned' },
     { v: 'all', l: 'ทั้งหมด', i: 'list', c: 'all' },
@@ -478,6 +488,7 @@
     const tags = [];
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
+    if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
     if (ADMIN && r.team) tags.push(teamTag(r.team));
@@ -494,11 +505,13 @@
   }
 
   function renderList() {
-    $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';
+    const hint = (ADMIN && S.view === 'tocode')
+      ? `<div class="cn-hint">ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — กดชื่อแล้วเลือกเซลล์ในกล่อง "จ่ายเบอร์" · ไม่ใช่ลีดขาย (ถามศูนย์บริการ/อยากขายรถ) กด "ไม่ต้องจ่ายเบอร์"</div>` : '';
+    $('cn-note').innerHTML = (S.note ? `<div class="cn-note">${h(S.note)}</div>` : '') + hint;
     const el = $('cn-rows');
     if (!S.rows.length) {
       const empty = {
-        overdue: 'ไม่มีลูกค้ารอเกินเวลา 👍', queue: 'ไม่มีลูกค้ารอรับตอนนี้',
+        overdue: 'ไม่มีลูกค้ารอเกินเวลา 👍', queue: 'ไม่มีลูกค้ารอรับตอนนี้', tocode: 'ไม่มีลูกค้ารอจ่ายเบอร์ 👍',
         mine: ADMIN ? 'ยังไม่มีลูกค้าที่คุณดูแล' : 'ยังไม่มีลูกค้าของคุณ — กดรับจากแท็บ "รอรับ" ในวันเวรของทีม',
         owned: 'ยังไม่มีลูกค้าที่มีเจ้าของ', all: 'ยังไม่มีลูกค้าทักเข้ามา',
       }[S.view] || 'ไม่มีรายการ';
@@ -581,16 +594,30 @@
         <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-sim-wrap"></div><div id="cn-comp-wrap"></div></div>
         <aside class="cn-side" id="cn-side"></aside>
       </div>`;
-    applySide(); paintHeader(); paintProfile(); paintMsgs(false); paintSim(); paintComposer(true);
+    // paintProfile(true) — แผงเพิ่งถูกสร้างใหม่ (ว่าง) · ถ้าไม่บังคับ กดกลับแล้วเปิดลูกค้าคนเดิม แผงขวาจะว่าง
+    //   เพราะข้อมูลเหมือนรอบก่อน (ลายเซ็นเดิม) เลยไม่ถูกวาด
+    applySide(); paintHeader(true); paintProfile(true); paintMsgs(false); paintSim(); paintComposer(true);
   }
 
-  function paintHeader() {
+  function paintHeader(force) {
     const d = S.chat, r = d.row;
-    // หัวแชทถูกวาดใหม่ทุก 6 วิ — เก็บสิ่งที่ผู้ใช้กำลังทำค้างไว้ (เลือกเซลล์ค้าง / กางประวัติ)
+    // หัวแชทถูกวาดใหม่ทุก 6 วิ — กำลังพิมพ์/เลือกอะไรในหัวแชทอยู่ (ฟอร์มลีดแบบพับบนจอแคบ · ช่องโอน) = ยังไม่วาด
+    //   ไม่งั้นช่องที่กำลังพิมพ์หลุดโฟกัส/dropdown ที่กางอยู่ปิดเอง
+    const act = document.activeElement;
+    if (!force && act && $('cn-ph') && $('cn-ph').contains(act) && /INPUT|TEXTAREA|SELECT/.test(act.tagName)) return;
+    // เก็บสิ่งที่ผู้ใช้กำลังทำค้างไว้ (เลือกเซลล์ค้าง / กางประวัติ / ข้อมูลลูกค้าแบบพับ)
     const _prevTo = $('cn-to') ? $('cn-to').value : '';
     const _profOpen = !!document.querySelector('#cn-ph details.cn-prof-m[open]');
+    // ★ ข้อมูลลูกค้าแบบพับ (จอแคบ) อยู่ในหัวแชท — เดิมวาดหัวใหม่แล้วแผงนี้ว่างทุก 6 วิ
+    //   (paintProfile ไม่วาดซ้ำเมื่อข้อมูลเหมือนเดิม) → ย้ายแผงเดิมกลับเข้าไปทั้งก้อน
+    const _profBody = $('cn-prof-m-body');
     const own = r.owner ? `เจ้าของ <b>${h(r.owner)}</b>` : `<b>ยังไม่มีเซลล์รับ</b>`;
     const acts = [];
+    // ปุ่มลัดไปกล่อง "จ่ายเบอร์" — กล่องอยู่ในแผงข้อมูลลูกค้า (ด้านขวา/แบบพับ) ซึ่งอาจซ่อนอยู่
+    const L = d.lead;
+    if (ADMIN && d.codeHelp && L && !L.code && !L.noCode) {
+      acts.push(`<button class="btn pri" id="cn-code-btn" title="ออกเลขลีด + จ่ายลูกค้าคนนี้ให้เซลล์">${ic('hash')} จ่ายเบอร์</button>`);
+    }
     if (d.canClaim) acts.push(`<button class="btn pri" id="cn-claim">${ic('user-check')} รับลูกค้าคนนี้</button>`);
     if (d.canDismiss) acts.push(`<button class="btn" id="cn-dismiss" title="ลูกค้าส่งมาแค่ขอบคุณ/สติกเกอร์ หรือตอบนอกระบบไปแล้ว — ปิดรอบนี้โดยไม่ต้องตอบ">${ic('check')} ไม่ต้องตอบ</button>`);
     if (d.canAssign) {
@@ -626,7 +653,9 @@
     $('cn-mback').onclick = window.__cnBack;
     if (_prevTo && $('cn-to')) $('cn-to').value = _prevTo;
     if (_profOpen) { const dt = document.querySelector('#cn-ph details.cn-prof-m'); if (dt) dt.open = true; }
+    if (_profBody && _profBody.innerHTML) { const nb = $('cn-prof-m-body'); if (nb) nb.replaceWith(_profBody); }
     const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+    on('cn-code-btn', goAssign);
     on('cn-claim', () => claim(r.id));
     on('cn-dismiss', () => dismiss(r.id));
     on('cn-assign', () => assign(r.id, +($('cn-to').value || 0), false));
@@ -641,6 +670,26 @@
   // ซ่อน/แสดงคอลัมน์ข้อมูลลูกค้า — จำไว้ในเครื่อง (คนที่อยากได้แชทกว้างไม่ต้องกดซ่อนทุกครั้ง)
   function applySide() {
     const el = document.querySelector('.cn-chat'); if (el) el.classList.toggle('noside', !S.side);
+  }
+  // ปุ่ม "จ่ายเบอร์" บนหัวแชท → พาไปกล่องจ่ายเบอร์ (เปิดคอลัมน์ข้อมูลลูกค้าที่ซ่อนไว้ / กางแบบพับบนจอแคบ)
+  function goAssign() {
+    let side = $('cn-side');
+    if (side && side.offsetParent === null && !S.side && window.innerWidth > 1180) {
+      S.side = true;
+      try { localStorage.setItem('cn_side', '1'); } catch (e) {}
+      applySide(); paintHeader(true);
+    }
+    side = $('cn-side');
+    let box = (side && side.offsetParent !== null) ? side.querySelector('[data-box=assign]') : null;
+    if (!box) {
+      const dt = document.querySelector('#cn-ph details.cn-prof-m');
+      if (dt) { dt.open = true; box = dt.querySelector('[data-box=assign]'); }
+    }
+    if (!box) { toast('เปิดกล่องจ่ายเบอร์ไม่ได้ — ลองกดชื่อลูกค้าอีกครั้ง'); return; }
+    box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1800);
+    const sel = box.querySelector('[data-x=emp]');
+    if (sel && !sel.value) sel.focus({ preventScroll: true });
   }
 
   // ช่องของฟอร์ม — ชื่อ/ลำดับตามชีตลีด (คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py)
@@ -726,6 +775,10 @@
     if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
     if (L.assignedAt) {
       x += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${L.codeDemo ? ' · ทดลอง (ยังไม่ลงชีต)' : ''}</div>`;
+    } else if (L.noCode && !L.code) {
+      // แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (ไม่ใช่ลีดขาย) — ออกจากแท็บจ่ายเบอร์แล้ว · กดเอากลับได้
+      x += `<div class="pf-skip"><span>ไม่ต้องจ่ายเบอร์${L.noCode.by ? ' · ' + h(L.noCode.by) : ''}${L.noCode.at ? ' ' + h(fmtFull(L.noCode.at)) : ''}</span>
+        ${d.codeHelp ? `<button class="btn sm" data-act="nocode-undo">เอากลับมาจ่ายเบอร์</button>` : ''}</div>`;
     } else if (d.codeHelp && !L.code) {
       x += assignBoxHtml(d, sfx);
     }
@@ -781,6 +834,8 @@
       <div class="pf-code" data-x="preview"></div>
       <div class="pf-lock" style="font-size:12px;margin:6px 0">ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีตลีด ไม่โพสต์เข้ากลุ่มจ่ายเบอร์ · เลขจริงคำนวณใหม่ตอนกด (กันซ้ำ)</div>
       <button class="btn pri" data-act="assign-lead" style="width:100%">จ่ายเบอร์</button>
+      <button class="btn sm" data-act="nocode" style="width:100%;margin-top:6px"
+        title="ลูกค้าไม่ใช่ลีดขาย (ถามศูนย์บริการ · อยากขายรถให้เรา · ลูกค้าเก่าทักมาขอบคุณ) — เอาออกจากแท็บจ่ายเบอร์">ไม่ต้องจ่ายเบอร์ (ไม่ใช่ลีดขาย)</button>
     </div>`;
   }
   function codePreview(box) {
@@ -864,6 +919,17 @@
         if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
       };
     }
+    // "ไม่ต้องจ่ายเบอร์" / "เอากลับมาจ่ายเบอร์"
+    const skipLead = async (ev, on) => {
+      const id = S.chat.row.id;
+      ev.target.disabled = true;
+      const r = await api('/connect/api/assign_lead', { id, skip: on });
+      ev.target.disabled = false;
+      toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'), 3500);
+      if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
+    };
+    el.querySelectorAll('[data-act=nocode]').forEach(b => b.onclick = ev => skipLead(ev, true));
+    el.querySelectorAll('[data-act=nocode-undo]').forEach(b => b.onclick = ev => skipLead(ev, false));
     const cp = el.querySelector('[data-act=copy-slip]');
     if (cp) cp.onclick = () => {
       const t = (S.chat.lead || {}).slipText || '';

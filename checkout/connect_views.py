@@ -276,6 +276,7 @@ def api_chat(request):
 
 def api_assign_lead(request):
     """ปุ่ม **"จ่ายเบอร์"** (แอดมิน · โหมดทดลอง) — POST `{id, emp, base, admin, reject, code?}`
+    · `{id, skip: true|false}` = ปุ่ม "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย → ออกจากแท็บจ่ายเบอร์) / เอากลับเข้าแท็บ
 
     ออกเลขลีดตามกติกาจริง + โอนลูกค้าให้เซลล์ + จดว่าใครจ่ายเมื่อไหร่
     **เก็บใน Postgres อย่างเดียว ไม่ลงชีต ไม่โพสต์กลุ่ม** (เจ้าของสั่ง 4 ต.ค.69: ยังเป็นเดโม)
@@ -288,6 +289,9 @@ def api_assign_lead(request):
     o = _row(request, ctx, body.get("id"))
     if not o:
         return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    if "skip" in body:                            # ปุ่ม "ไม่ต้องจ่ายเบอร์" (true) / "เอากลับเข้าแท็บจ่ายเบอร์" (false)
+        ok, msg = C.mark_no_code(o, bool(body.get("skip")), by=ctx["name"] or "แอดมิน")
+        return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
     try:
         eid = int(body.get("emp") or 0)
     except Exception:

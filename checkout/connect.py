@@ -28,7 +28,7 @@ import statistics
 from datetime import date, timedelta
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 
 from .models import ChatLead, ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile
@@ -814,6 +814,7 @@ def row_json(o, me=None, now=None) -> dict:
         "msgs": p.msg_count or 0,
         "pic": o.picture_url or "",
         "sim": is_sim(p.user_id),
+        "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
     }
 
 
@@ -1353,6 +1354,8 @@ def lead_json(o, lead=None) -> dict:
         "codeDemo": bool(lead.code_demo),
         "assignedAt": _iso(lead.assigned_at),
         "assignedBy": lead.assigned_by or "",
+        # แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ ({by, at}) — ไม่ใช่ลีดขาย ออกจากแท็บจ่ายเบอร์
+        "noCode": (lead.auto or {}).get(NOCODE_KEY) or None,
     })
     out["slipText"] = slip_text(o, lead)
     return out
@@ -1431,6 +1434,21 @@ _TYPE_BASE = {"moderate": "NLD", "merhot": "NLD", "hot": "WLD", "very hot": "HLD
               "tld": "TLD", "tld / hot": "TLD"}
 _CODE_RE = re.compile(r"^(R?A?(?:NLD|WLD|HLD|BLD|TLD|TALD|LD))(\d{1,2})-(\d{3,6})$")
 _ANY_CODE = re.compile(r"^([A-Za-z]+)(\d{0,2})-?(\d{3,6})$")
+NOCODE_KEY = "_nocode"            # ChatLead.auto[...] = แอดมินกด "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย)
+
+
+def to_code(qs):
+    """แท็บ **"จ่ายเบอร์"** ของแอดมิน — ลูกค้าที่ **คุยในระบบแล้ว แต่ยังไม่มีเลขลีด** (4 ต.ค.69)
+
+    "คุยในระบบแล้ว" = กำลังรอคำตอบ · มีเซลล์ดูแล · หรือมีประวัติใน Connect (ตอบ/รับ/โอน/เลยเวลา)
+    → ลูกค้าเก่าที่ทักมาก่อนเปิด Connect แล้วไม่ได้ทักกลับมาอีก **ไม่นับ** (จ่ายเบอร์นอกระบบไปแล้ว ·
+    วัดจริงตอนเปิด: 381 จาก 391 คนเป็นแบบนี้ ถ้านับด้วยแท็บนี้จะใช้งานไม่ได้)
+    ไม่นับคนที่แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (`NOCODE_KEY`)
+    """
+    engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
+               | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
+    no_code = Q(lead__isnull=True) | (Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY))
+    return qs.filter(engaged).filter(no_code)
 
 
 def suggest_prefix(lead, assignee_team: str = "") -> dict:
@@ -1524,6 +1542,7 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
         core = _CODE_RE.match(code).group(1).lstrip("R").lstrip("A")
         lead.lead_type = dict(CODE_BASES).get(core, "")
     auto = dict(lead.auto or {})
+    auto.pop(NOCODE_KEY, None)                   # เคยกด "ไม่ต้องจ่ายเบอร์" ไว้แล้วเปลี่ยนใจ — จ่ายแล้วป้ายนั้นไม่ต้องค้าง
     auto["code"] = "จ่ายเบอร์(ทดลอง)"
     lead.auto = auto
     lead.assigned_at, lead.assigned_by = timezone.now(), (by or "")[:80]
@@ -1541,6 +1560,30 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
     except _Undo as e:
         return False, str(e)
     return True, "จ่ายเบอร์ %s ให้ %s แล้ว (ทดลอง — ยังไม่ลงชีต)" % (code, emp.nickname)
+
+
+def mark_no_code(o, on: bool, by: str = ""):
+    """ปุ่ม **"ไม่ต้องจ่ายเบอร์"** (แอดมิน) → (ok, ข้อความ) — ลูกค้าที่ไม่ใช่ลีดขาย (ถามศูนย์บริการ ·
+    อยากขายรถให้เรา · ลูกค้าเก่าทักมาขอบคุณ) ออกจากแท็บ "จ่ายเบอร์" · `on=False` = เอากลับเข้าแท็บ
+
+    เก็บใน `ChatLead.auto["_nocode"]` = {by, at} (คีย์ขึ้นต้น "_" ไม่ใช่ช่องของฟอร์ม · ไม่ต้อง migrate)
+    """
+    lead = lead_of(o)
+    auto = dict(lead.auto or {})
+    if on:
+        if (lead.code or "").strip():
+            return False, "ลูกค้ารายนี้มีเลขลีด %s แล้ว" % lead.code
+        auto[NOCODE_KEY] = {"by": (by or "")[:80], "at": _iso(timezone.now())}
+        msg = "บันทึกแล้ว — ไม่ต้องจ่ายเบอร์ให้ลูกค้ารายนี้ (ออกจากแท็บจ่ายเบอร์)"
+    else:
+        if NOCODE_KEY not in auto:
+            return True, "ลูกค้ารายนี้รอจ่ายเบอร์อยู่แล้ว"
+        auto.pop(NOCODE_KEY, None)
+        msg = "เอากลับเข้าแท็บจ่ายเบอร์แล้ว"
+    lead.auto = auto
+    lead.updated_by = (by or "")[:80]
+    lead.save(update_fields=["auto", "updated_by", "updated_at"])
+    return True, msg
 
 
 def lead_options() -> dict:
@@ -1646,7 +1689,7 @@ def sim_clear(by: str = "") -> dict:
     return {"customers": n_c, "messages": msgs, "sellers": n_t, "released": released}
 
 
-VIEWS = ("overdue", "queue", "mine", "owned", "all")
+VIEWS = ("overdue", "queue", "tocode", "mine", "owned", "all")
 
 
 def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int = 0,
@@ -1658,6 +1701,8 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
         qs = qs.filter(awaiting_since__isnull=False, due_at__lte=now).order_by("due_at")
     elif view == "queue":
         qs = qs.filter(owner__isnull=True, awaiting_since__isnull=False).order_by("due_at")
+    elif view == "tocode":                   # แอดมินเท่านั้น (เช็คที่ view) — คนที่รอคำตอบขึ้นก่อน ตามเส้นตาย
+        qs = to_code(qs).order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
     elif view == "mine":
         qs = qs.filter(owner=me) if me else qs.none()
         qs = qs.order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
@@ -1691,6 +1736,7 @@ def counts(me=None, admin: bool = False) -> dict:
             "overdue": base.filter(awaiting_since__isnull=False, due_at__lte=now).count(),
             "owned": base.filter(owner__isnull=False).count(),
             "all": base.count(),
+            "tocode": to_code(base.all()).count(),
         })
     return out
 

@@ -1043,6 +1043,69 @@ try:
     ld = _car(["อีซูซุ", "ปี 2015 " + "ก" * 100])
     ck("ข้อความยาว (ไม่ใช่สเปกสั้นๆ) ไม่เอามาต่อ", ld.car_text == "อีซูซุ", ld.car_text)
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[21] แท็บ \"จ่ายเบอร์\" ของแอดมิน (4 ต.ค.69 · เจ้าของถาม \"ขาดหน้าแอดมินจ่ายเบอร์มั้ย\")")
+    NEW = C.note_customer_message(cust(201, "ลูกค้าใหม่ทักมา").user_id, timezone.now(), "มี civic ไหม")
+    # ลูกค้าเก่าที่ทักมาก่อนเปิด Connect (มีแชทเก่า ไม่ได้ทักกลับมา) → แถวจาก sync_rows ไม่มีรอบรอ/ประวัติ
+    OLDP = cust(202, "ลูกค้าเก่าก่อนมี Connect")
+    GroupChat.objects.create(chat_type="user", message_id="old-202", sender_id=OLDP.user_id, direction="in",
+                             msg_type="text", text="สวัสดีครับ", sent_at=timezone.now() - timedelta(days=20))
+    C.sync_rows(force=True)
+    OLD = ChatOwner.objects.get(profile=OLDP)
+    # แอดมินตอบไปแล้ว (ไม่มีรอบรอ ไม่มีเจ้าของ) แต่ยังไม่ได้จ่ายเบอร์ → ต้องยังอยู่ในแท็บ
+    REP = C.note_customer_message(cust(203, "แอดมินตอบแล้ว").user_id, timezone.now(), "ผ่อนเท่าไหร่")
+    C.note_reply(REP.profile.user_id, None, timezone.now(), "เดือนละ 8 พันครับ", by="admin")
+    REP.refresh_from_db()
+    COD = C.note_customer_message(cust(204, "มีเลขแล้ว").user_id, timezone.now(), "สนใจครับ")
+    ChatLead.objects.create(chat=COD, code="NLD10-8001")
+
+    def tocode_ids():
+        return [r["id"] for r in C.inbox("tocode", admin=True)]
+
+    ids = tocode_ids()
+    ck("ลูกค้าใหม่ที่ยังไม่มีเลข = อยู่ในแท็บ", NEW.id in ids, ids)
+    ck("★ แอดมินตอบแล้วแต่ยังไม่จ่ายเบอร์ = ยังอยู่", REP.awaiting_since is None and REP.id in ids, ids)
+    ck("★ ลูกค้าเก่าก่อนเปิด Connect (ไม่ได้ทักกลับ) = ไม่นับ", OLD.id not in ids, ids)
+    ck("มีเลขลีดแล้ว = ไม่อยู่", COD.id not in ids, ids)
+    ck("ตัวเลขบนแท็บตรงกับรายการ", C.counts(admin=True).get("tocode") == len(ids), (C.counts(admin=True), len(ids)))
+    ck("ลูกค้าที่รอคำตอบขึ้นก่อนคนที่ตอบไปแล้ว", ids.index(NEW.id) < ids.index(REP.id), ids)
+    rowc = next((r for r in C.inbox("all", admin=True) if r["id"] == COD.id), {})
+    ck("รายชื่อมีเลขลีดให้โชว์เป็นป้าย", rowc.get("code") == "NLD10-8001", rowc.get("code"))
+
+    s_, d = J(ADM, "/connect/api/inbox?view=tocode")
+    ck("API: แอดมินเปิดแท็บจ่ายเบอร์ได้", s_ == 200 and d.get("view") == "tocode"
+       and NEW.id in [r["id"] for r in d.get("rows", [])] and "tocode" in d.get("counts", {}), (s_, d.get("view")))
+    s_, d = J(SA1, "/connect/api/inbox?view=tocode")
+    ck("★ เซลล์ขอแท็บจ่ายเบอร์ = ได้แท็บของตัวเองแทน (ไม่เห็นลูกค้าคนอื่น)",
+       s_ == 200 and d.get("view") != "tocode" and "tocode" not in d.get("counts", {}), (s_, d.get("view")))
+
+    # ไม่ใช่ลีดขาย → "ไม่ต้องจ่ายเบอร์"
+    s_, d = J(SA1, "/connect/api/assign_lead", {"id": NEW.id, "skip": True})
+    ck("★ เซลล์กด \"ไม่ต้องจ่ายเบอร์\" ไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": NEW.id, "skip": True})
+    ck("แอดมินกด \"ไม่ต้องจ่ายเบอร์\" ได้", s_ == 200 and d.get("ok"), (s_, d))
+    ck("★ ออกจากแท็บจ่ายเบอร์", NEW.id not in tocode_ids())
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % NEW.id)
+    nc = (d.get("lead") or {}).get("noCode") or {}
+    ck("หน้าเว็บรู้ว่ากดไม่ต้องจ่ายเบอร์ไว้ + ใครกด", nc.get("by") == "admin" and nc.get("at"), nc)
+    ck("ป้ายนี้ไม่โผล่เป็นช่องที่ระบบเติมให้", "_nocode" not in ((d.get("lead") or {}).get("auto") or {}))
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": NEW.id, "skip": False})
+    ck("เอากลับมาจ่ายเบอร์ได้", s_ == 200 and NEW.id in tocode_ids(), (s_, d))
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": COD.id, "skip": True})
+    ck("มีเลขลีดแล้ว กดไม่ต้องจ่ายเบอร์ = ปฏิเสธ", s_ == 400 and "มีเลขลีด" in d.get("error", ""), (s_, d))
+    # กดไม่ต้องจ่ายไว้ แล้วเปลี่ยนใจจ่ายเบอร์ → ป้ายเดิมต้องไม่ค้าง
+    C.mark_no_code(ChatOwner.objects.get(pk=NEW.id), True, by="admin")
+    n0 = len(CALLS)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": NEW.id, "emp": A1.id, "base": "NLD"})
+    ldn = ChatLead.objects.get(chat_id=NEW.id)
+    ck("จ่ายเบอร์หลังกดไม่ต้องจ่าย = ได้เลข + ล้างป้าย", s_ == 200 and ldn.code and "_nocode" not in (ldn.auto or {}),
+       (s_, d, ldn.code, ldn.auto))
+    ck("จ่ายแล้วออกจากแท็บ", NEW.id not in tocode_ids())
+    ck("★ จ่ายเบอร์ไม่มีคำขอออกนอกระบบ (ไม่ลงชีต/ไม่โพสต์กลุ่ม)", not [c for c in CALLS[n0:] if c[0] == "post"], CALLS[n0:])
+    # ลูกค้าเก่าทักกลับมาใหม่ = เป็นลีดอีกรอบ → เข้าแท็บ
+    C.note_customer_message(OLDP.user_id, timezone.now(), "ยังมีรถไหมครับ")
+    ck("ลูกค้าเก่าทักกลับมา = เข้าแท็บจ่ายเบอร์", OLD.id in tocode_ids())
+
 finally:
     _runner.teardown_databases(_old)
 
