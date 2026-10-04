@@ -163,7 +163,12 @@ def _upsert_profile(c: dict, pid: str, ut):
         channel=pid, user_id=str(cust["id"])[:64],
         defaults={"display_name": (cust.get("name") or "")[:120], "last_seen": ut or timezone.now()})
     prof.display_name = (cust.get("name") or prof.display_name)[:120]
-    prof.thread_id = str(c.get("id") or "")[:64]
+    real = str(c.get("id") or "")[:64]
+    if real and prof.thread_id and prof.thread_id != real and prof.thread_id.startswith("psid:"):
+        # ลูกค้าที่มาทาง webhook ตอนหาห้องสนทนาไม่เจอ — ข้อความถูกเก็บในห้องชั่วคราว → ย้ายเข้าห้องจริง
+        from .models import FbChat
+        FbChat.objects.filter(thread_id=prof.thread_id).update(thread_id=real)
+    prof.thread_id = real or prof.thread_id
     prof.inbox_link = link[:300]
     prof.msg_count = int(c.get("message_count") or prof.msg_count or 0)
     if ut:

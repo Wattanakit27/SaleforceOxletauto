@@ -136,6 +136,14 @@ META_AD_ACCOUNTS = [a.strip().replace("act_", "")
                     for a in os.getenv("META_AD_ACCOUNTS", "").split(",") if a.strip()]
 META_PAGE_IDS = [p.strip() for p in os.getenv("META_PAGE_IDS", "").split(",") if p.strip()]
 
+# ===== Meta Messenger webhook (4 ต.ค.69) — Facebook ส่งแชทมาเองทันที แทนการถาม API ทุกนาที =====
+# Callback URL ในหน้าแอป Meta = SITE_URL + /api/meta/webhook (ดู deploy/meta_webhook.md)
+# META_APP_SECRET = App Secret ของแอป (หน้า Settings → Basic) ใช้ตรวจลายเซ็น X-Hub-Signature-256
+#   ★ ตั้งแล้ว = ลายเซ็นไม่ตรงถูกปฏิเสธ · ยังไม่ตั้ง = รับไว้แต่จดว่าไม่ได้ตรวจ (ช่วงตั้งค่าครั้งแรกเท่านั้น)
+# META_WEBHOOK_VERIFY_TOKEN = คำลับที่เราตั้งเอง ใส่ช่อง "Verify token" ตอนลงทะเบียน URL (Meta ใช้ทักทายครั้งแรก)
+META_APP_SECRET = os.getenv("META_APP_SECRET", "")
+META_WEBHOOK_VERIFY_TOKEN = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "")
+
 # ===== TikTok for Developers — webhook (ก.ย.69) =====
 # callback URL ที่วางในหน้า TikTok Developer = SITE_URL + /api/tiktok/webhook
 # CLIENT_SECRET ใช้ตรวจลายเซ็น (header TikTok-Signature) — SECRET ห้าม commit ลง git

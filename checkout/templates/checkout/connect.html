@@ -1391,6 +1391,20 @@
       paintCfg('ยังไม่ได้บันทึก', false);
     };
     $('cf-save').onclick = saveCfg;
+    const fbMsg = t => { const e = $('cf-fbsub-msg'); if (e) e.innerHTML = t; };
+    if ($('cf-fbsub')) $('cf-fbsub').onclick = async () => {
+      fbMsg('กำลังผูก…');
+      const r = await api('/connect/api/fb_webhook', {});
+      fbMsg(r.ok ? '<span style="color:var(--green)">ผูกแล้วทุกเพจ</span>'
+        : `<span style="color:var(--red)">${h(r.error || 'ไม่สำเร็จ')} ${h(JSON.stringify(r.result || {}))}</span>`);
+    };
+    if ($('cf-fbchk')) $('cf-fbchk').onclick = async () => {
+      fbMsg('กำลังตรวจ…');
+      const r = await api('/connect/api/fb_webhook');
+      fbMsg(r.ok ? (r.pages || []).map(x => `${h(x.name)}: ${x.subscribed ? '<b style="color:var(--green)">ผูกแล้ว</b> (' + h((x.fields || []).join(', ')) + ')'
+        : x.subscribed === false ? '<b style="color:var(--red)">ยังไม่ผูก</b>' : h(x.error || 'ตรวจไม่ได้')}`).join(' · ')
+        : `<span style="color:var(--red)">${h(r.error || 'ตรวจไม่ได้')}</span>`);
+    };
     $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
   }
   // ── Facebook Messenger (4 ต.ค.69 · รวมคิวเดียวกับ LINE) ──
@@ -1406,13 +1420,27 @@
           + ((L.errors || []).length ? ` · <span style="color:var(--red)">${h(L.errors.join(' · '))}</span>` : '');
     }
     const nTest = (c.fb_test_rows || []).length;
+    const W = F.webhook || {}, WL = W.last || {};
+    const okc = b => b ? '<b style="color:var(--green)">ตั้งแล้ว</b>' : '<b style="color:var(--red)">ยังไม่ได้ตั้ง</b>';
+    let wst = 'Facebook ยังไม่เคยส่งมา';
+    if (WL.at) {
+      wst = WL.rejected ? `<span style="color:var(--red)">ส่งมาล่าสุด ${h(fmtWhen(WL.at))} แต่ไม่รับ: ${h(WL.rejected)}</span>`
+        : `ส่งมาล่าสุด ${h(fmtWhen(WL.at))} · ข้อความใหม่ ${WL.saved || 0}${WL.error ? ` · <span style="color:var(--red)">${h(WL.error)}</span>` : ''}`;
+    }
+    const pollOpt = [2, 5, 10, 15, 30, 60].map(n => `<option value="${n}"${c.fb_poll_min === n ? ' selected' : ''}>ทุก ${n} นาที</option>`).join('');
     const opt = (v, t) => `<option value="${v}"${c.fb_reply === v ? ' selected' : ''}>${t}</option>`;
     return `<div class="card">
       <h3>Facebook Messenger</h3>
-      <div class="d">แชทจากเพจ ${pages} เข้า Connect ทุก 1 นาที — คิวเดียวกับ LINE (รับลูกค้า · นับ ${c.sla_min} นาที · โอน · จ่ายเบอร์)
+      <div class="d">แชทจากเพจ ${pages} เข้า Connect — คิวเดียวกับ LINE (รับลูกค้า · นับ ${c.sla_min} นาที · โอน · จ่ายเบอร์)
         · ตอบในแอป Facebook / Business Suite ก็หยุดนาฬิกาให้ (Facebook ส่งข้อความขาออกมาด้วย)
         · Facebook ให้ตอบได้ภายใน 24 ชม. นับจากข้อความล่าสุดของลูกค้า</div>
-      <div class="fld"><label><input type="checkbox" id="cf-fb"${c.fb_on ? ' checked' : ''}> ดึงแชท Facebook เข้า Connect</label>
+      <div class="fld"><label><input type="checkbox" id="cf-fb"${c.fb_on ? ' checked' : ''}> รับแชท Facebook เข้า Connect</label></div>
+      <div class="d" style="margin:8px 0 4px"><b>ทางหลัก — Facebook ส่งมาเองทันที (webhook)</b> · ไม่ใช้โควต้า API
+        <br>Callback URL: <code>${h(W.url || '')}</code> · Verify token: ${okc(W.verifySet)} · App Secret: ${okc(W.secretSet)}
+        <br>${wst}</div>
+      <div class="fld"><button class="btn sm" id="cf-fbsub">ผูกเพจกับแอป (รับแชทผ่าน webhook)</button>
+        <button class="btn sm" id="cf-fbchk">ตรวจว่าเพจผูกแล้วหรือยัง</button><span id="cf-fbsub-msg" style="color:var(--t3)"></span></div>
+      <div class="fld"><label>ทางสำรอง — ดึงจาก API</label><select id="cf-fbpoll">${pollOpt}</select>
         <span style="color:var(--t3)">${st}</span></div>
       <div class="fld"><label>ตอบลูกค้า Facebook จาก Connect</label>
         <select id="cf-fbreply">${opt('off', 'ปิด — ตอบใน Facebook เอง')}${opt('test', 'ทดสอบ — เฉพาะแชททดสอบ (' + nTest + ' แชท)')}${opt('on', 'เปิด — ทุกแชท')}</select></div>
@@ -1443,7 +1471,7 @@
       teams, anchor_date: c.anchor_date, anchor_team: teams.includes(c.anchor_team) ? c.anchor_team : (teams[0] || ''),
       overrides: c.overrides || {}, sla_min: $('cf-sla').value, open: $('cf-open').value, close: $('cf-close').value,
       alert_on: $('cf-alert').checked, alert_group: $('cf-group').value, notify_sellers: $('cf-notify').checked,
-      fb_on: $('cf-fb').checked, fb_reply: $('cf-fbreply').value,
+      fb_on: $('cf-fb').checked, fb_reply: $('cf-fbreply').value, fb_poll_min: +$('cf-fbpoll').value,
     };
     $('cf-save').disabled = true;
     const d = await api('/connect/api/config', body);

@@ -62,6 +62,9 @@ DEFAULTS = {
     #   เริ่มที่ test — เจ้าของสั่ง "ทดสอบกับบัญชี FB ของเจ้าของก่อน ไม่ส่งหาลูกค้าจริง"
     "fb_reply": "test",
     "fb_test_rows": [],
+    # ★ ดึงแชท FB สำรองทุกกี่นาที — ตัวหลักคือ webhook (Facebook ส่งมาเอง · fb_webhook.py)
+    #   เจ้าของสั่ง "ถ้าดึงจาก API ทุกหนึ่งนาที มันจะติด Token" → ค่าตั้งต้น 10 นาที (2–60)
+    "fb_poll_min": 10,
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -127,6 +130,10 @@ def cfg() -> dict:
         except Exception:
             pass
     c["fb_test_rows"] = list(dict.fromkeys(rows))[:20]
+    try:
+        c["fb_poll_min"] = max(2, min(60, int(c.get("fb_poll_min") or 10)))
+    except Exception:
+        c["fb_poll_min"] = DEFAULTS["fb_poll_min"]
     return c
 
 
@@ -203,6 +210,14 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
             errs.append("การตอบแชท Facebook ต้องเป็น ปิด / ทดสอบ / เปิด")
         else:
             out["fb_reply"] = m
+    if "fb_poll_min" in body:
+        try:
+            n = int(body.get("fb_poll_min"))
+            if not 2 <= n <= 60:
+                raise ValueError
+            out["fb_poll_min"] = n
+        except Exception:
+            errs.append("ดึงแชท Facebook สำรองต้องเป็นตัวเลข 2–60 นาที")
     if out.get("alert_on") and not out.get("alert_group"):
         errs.append("เปิดแจ้งเตือนเข้ากลุ่ม LINE แล้ว แต่ยังไม่ได้เลือกกลุ่ม")
     return out, errs
@@ -2151,16 +2166,40 @@ def stats(days: int = 7) -> dict:
 #  แชท Facebook → Connect ทุกนาที (เรียกจาก tick ใน thread แยก — ยิง Graph API ห้ามหน่วง cron_tick)
 # ─────────────────────────────────────────────────────────────
 _FB_RUN = {"busy": False, "at": 0.0}
-FB_EVERY_SEC = 50          # cron ยิงทุกนาที — กันซ้อนถ้ามีคนยิง tick ถี่กว่านั้น
+
+
+def fb_poll_due(now=None, c=None) -> bool:
+    """ถึงรอบดึงแชท FB สำรองหรือยัง — เช็คจาก KV `fb_live_last` (ร่วมทุก worker ของ gunicorn)
+    ★ ถ้าจำเวลาแค่ใน process: 3 worker = ดึงถี่ขึ้น 3 เท่าโดยไม่มีใครรู้ (cron ยิงสลับ worker)"""
+    import time as _t
+    c = c or cfg()
+    every = c.get("fb_poll_min", 10) * 60
+    if _t.time() - _FB_RUN["at"] < every:
+        return False
+    try:
+        from datetime import datetime as _dt
+        from dashboard.services import cache_store
+        at = ((cache_store.get_kv("fb_live_last") or {}).get("data") or {}).get("at") or ""
+        if at and ((now or timezone.now()) - _dt.fromisoformat(at)).total_seconds() < every:
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def fb_tick_bg() -> dict:
-    """เริ่มซิงก์แชท FB รอบเบาใน thread แยก (ปิดสวิตช์/กำลังทำอยู่/เพิ่งทำ = ข้าม) · ผลรอบล่าสุดอยู่ KV fb_live_last"""
+    """เริ่มดึงแชท FB สำรองใน thread แยก (ปิดสวิตช์/กำลังทำอยู่/ยังไม่ถึงรอบ = ข้าม) · ผลรอบล่าสุดอยู่ KV fb_live_last"""
     import threading
     import time as _t
-    if not BG_FILL or not fb_on() or _FB_RUN["busy"] or _t.time() - _FB_RUN["at"] < FB_EVERY_SEC:
+    if not BG_FILL or not fb_on() or _FB_RUN["busy"] or not fb_poll_due():
         return {}
     _FB_RUN.update(busy=True, at=_t.time())
+    try:                                        # จองรอบไว้ก่อน — worker อื่นที่โดน cron ยิงนาทีถัดไปจะไม่ดึงซ้อน
+        from dashboard.services import cache_store
+        prev = (cache_store.get_kv("fb_live_last") or {}).get("data") or {}
+        cache_store.set_kv("fb_live_last", dict(prev, at=timezone.now().isoformat(), running=True))
+    except Exception:
+        pass
 
     def _work():
         res = {}

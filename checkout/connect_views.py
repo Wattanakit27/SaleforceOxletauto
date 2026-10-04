@@ -495,9 +495,16 @@ def api_config(request):
     try:                                             # สถานะดึงแชท Facebook รอบล่าสุด (การ์ดตั้งค่า)
         from dashboard.services import cache_store
         from dashboard.services import meta
+        from django.conf import settings as _s
+        from . import fb_webhook
         fb = {"last": (cache_store.get_kv("fb_live_last") or {}).get("data") or {},
               "configured": meta.is_configured(),
-              "pages": [{"id": pid, "name": C.fb_page_name(pid)} for pid in sorted(meta.pages())]}
+              "pages": [{"id": pid, "name": C.fb_page_name(pid)} for pid in sorted(meta.pages())],
+              # Messenger webhook (Facebook ส่งมาเอง) — ตัวหลัก · การดึงด้านบนเป็นตัวสำรอง
+              "webhook": {"url": (getattr(_s, "SITE_URL", "") or "").rstrip("/") + "/api/meta/webhook",
+                          "verifySet": bool(getattr(_s, "META_WEBHOOK_VERIFY_TOKEN", "")),
+                          "secretSet": bool(getattr(_s, "META_APP_SECRET", "")),
+                          "last": fb_webhook.last()}}
     except Exception:
         pass
     return _j({"ok": True, "cfg": c, "roster": C.roster(14, c), "duty": _duty(c),
@@ -527,6 +534,24 @@ def api_fb_test(request):
         return _j({"ok": False, "error": "บันทึกไม่สำเร็จ"}, 500)
     return _j({"ok": True, "message": ("ตั้งเป็นแชททดสอบแล้ว — ตอบจาก Connect ได้" if body.get("on")
                                        else "ยกเลิกแชททดสอบแล้ว")})
+
+
+def api_fb_webhook(request):
+    """Messenger webhook (แอดมิน) — GET = เพจไหนผูกกับแอปแล้ว · POST = ผูกเพจของเรากับแอป (messages + message_echoes)
+
+    ผูกแล้ว Facebook ส่งแชทของเพจมาที่ `/api/meta/webhook` เอง · ต้องลงทะเบียน Callback URL ในหน้าแอป Meta ก่อน
+    """
+    ctx = _ctx(request)
+    if not ctx or not ctx["admin"]:
+        return _j({"ok": False, "error": "เฉพาะแอดมิน"}, 403)
+    from . import fb_webhook
+    if request.method == "POST":
+        res = fb_webhook.subscribe_pages()
+        ok = bool(res) and all(v == "ok" for v in res.values())
+        return _j({"ok": ok, "result": {C.fb_page_name(k): v for k, v in res.items()},
+                   "error": "" if ok else "ผูกไม่สำเร็จบางเพจ — ดูรายละเอียดในผลลัพธ์"}, 200 if ok else 400)
+    st = fb_webhook.subscription_status()
+    return _j({"ok": True, "pages": [dict(v, id=k, name=C.fb_page_name(k)) for k, v in st.items()]})
 
 
 def api_test(request):

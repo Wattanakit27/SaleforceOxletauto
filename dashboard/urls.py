@@ -1,4 +1,8 @@
 from django.urls import path
+from django.views.decorators.csrf import csrf_exempt
+
+from checkout import fb_webhook as _fb_webhook
+
 from . import views
 
 urlpatterns = [
@@ -49,6 +53,8 @@ urlpatterns = [
     path("api/admin/ads", views.admin_ads, name="admin_ads"),
     path("api/admin/meta_sync", views.admin_meta_sync, name="admin_meta_sync"),
     path("api/tiktok/webhook", views.tiktok_webhook, name="tiktok_webhook"),
+    # Messenger webhook — Facebook ส่งแชทของเพจมาเองทันที (4 ต.ค.69 · แทนการถาม API ทุกนาที)
+    path("api/meta/webhook", csrf_exempt(_fb_webhook.view), name="meta_webhook"),
     path("legal/terms/", views.legal_page, {"doc": "terms"}, name="legal_terms"),
     path("legal/privacy/", views.legal_page, {"doc": "privacy"}, name="legal_privacy"),
     path("api/admin/tiktok/accounts", views.admin_tiktok_accounts, name="admin_tiktok_accounts"),

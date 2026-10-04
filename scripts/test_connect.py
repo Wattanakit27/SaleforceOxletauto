@@ -1472,6 +1472,132 @@ try:
        and ChatLead.objects.get(chat=oc).line_id == "oldc_99")
     ck("ตัวเลขแท็บตรงกับรายการ (หลังกติกาใหม่)", C.counts(admin=True)["tocode"] == len(tocode_ids()))
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[27] Messenger webhook — Facebook ส่งแชทมาเอง (แทนการถาม API ทุกนาที · เจ้าของห่วงติด token)")
+    import hashlib as _hl
+    import hmac as _hm
+    from checkout import fb_webhook as FW
+    settings.META_WEBHOOK_VERIFY_TOKEN, settings.META_APP_SECRET = "vtok-123", "app-secret-xyz"
+    FW.INLINE = True
+    W = {"gets": [], "posts": [], "conv": {}}
+    _g0, _p0 = requests.get, requests.post
+
+    def _wg(url, *a, **k):
+        if "graph.facebook.com" not in url:
+            return _g0(url, *a, **k)
+        path = url.split("graph.facebook.com/")[1].split("/", 1)[1]
+        prm = k.get("params") or {}
+        W["gets"].append((path, dict(prm)))
+        if path == "111":
+            return _R(200, {"id": "111", "access_token": "page-tok"})
+        if path == "111/conversations":
+            c = W["conv"].get(prm.get("user_id"))
+            return _R(200, {"data": [c] if c else []})
+        if path == "111/subscribed_apps":
+            return _R(200, {"data": [{"id": "app", "subscribed_fields": ["messages", "message_echoes"]}]})
+        return _R(404, {"error": {"message": "unknown", "code": 100}})
+
+    def _wp(url, *a, **k):
+        if "graph.facebook.com" not in url:
+            return _p0(url, *a, **k)
+        W["posts"].append((url.split("graph.facebook.com/")[1], k.get("json")))
+        return _R(200, {"success": True})
+
+    requests.get, requests.post = _wg, _wp
+
+    def hook(body, secret="app-secret-xyz", sig=None):
+        raw = json.dumps(body).encode()
+        if sig is None:
+            sig = "sha256=" + _hm.new(secret.encode(), raw, _hl.sha256).hexdigest()
+        r = NOB.post("/api/meta/webhook", data=raw, content_type="application/json",
+                     HTTP_X_HUB_SIGNATURE_256=sig, secure=True)
+        js = {}
+        if r.status_code == 200 and r["Content-Type"].startswith("application/json"):
+            js = r.json()
+        return r.status_code, js
+
+    def ev(psid, mid, text, echo=False, ts=None, page="111"):
+        ts = ts or int(timezone.now().timestamp() * 1000)
+        msg = {"mid": mid, "text": text}
+        if echo:
+            msg.update(is_echo=True, app_id=1)
+        return {"object": "page", "entry": [{"id": page, "time": ts, "messaging": [{
+            "sender": {"id": page if echo else psid}, "recipient": {"id": psid if echo else page},
+            "timestamp": ts, "message": msg}]}]}
+
+    try:
+        r = NOB.get("/api/meta/webhook?hub.mode=subscribe&hub.verify_token=vtok-123&hub.challenge=987654", secure=True)
+        ck("ทักทายตอนลงทะเบียน URL: verify token ตรง = ตอบ challenge", r.status_code == 200 and r.content == b"987654", r.content)
+        r = NOB.get("/api/meta/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1", secure=True)
+        ck("verify token ผิด = 403", r.status_code == 403)
+        settings.META_APP_SECRET = ""
+        st_, _ = hook(ev("990000000000000001", "m_w0", "x"), secret="x")
+        ck("★ ยังไม่ตั้ง App Secret = ไม่รับ (กันแชทปลอม)", st_ == 503 and not FbChat.objects.filter(message_id="m_w0").exists())
+        settings.META_APP_SECRET = "app-secret-xyz"
+        st_, _ = hook(ev("990000000000000001", "m_w0", "x"), sig="sha256=deadbeef")
+        ck("★ ลายเซ็นไม่ตรง = 403 ไม่เก็บ", st_ == 403 and not FbChat.objects.filter(message_id="m_w0").exists())
+        ck("หน้าตั้งค่าเห็นว่าโดนปฏิเสธเพราะอะไร", "ลายเซ็น" in (FW.last().get("rejected") or ""), FW.last())
+
+        PW = "990000000000000001"
+        W["conv"][PW] = {"id": "t_w1", "updated_time": fbt(timezone.now()), "message_count": 1, "link": "/111/inbox/t_w1",
+                         "participants": {"data": [{"id": "111", "name": "เพจ"}, {"id": PW, "name": "ลูกค้าเว็บฮุก"}]}}
+        n_get = len(W["gets"])
+        st_, d = hook(ev(PW, "m_w1", "สนใจ yaris ครับ 0855551234"))
+        fpw = FbProfile.objects.filter(user_id=PW).first()
+        ow = ChatOwner.objects.filter(fb_profile=fpw).first()
+        ck("★ ข้อความลูกค้า → เก็บ + เข้าคิว Connect ทันที (ไม่ต้องรอรอบดึง)", st_ == 200 and d.get("saved") == 1
+           and ow is not None and ow.awaiting_since is not None, (st_, d))
+        convq = [g for g in W["gets"][n_get:] if g[0] == "111/conversations"]
+        ck("ลูกค้าใหม่: ถามห้องสนทนา+ชื่อ 1 ครั้ง", fpw.thread_id == "t_w1" and fpw.display_name == "ลูกค้าเว็บฮุก"
+           and len(convq) == 1 and convq[0][1].get("user_id") == PW, convq)
+        ck("ให้เบอร์มาในข้อความ = เข้าห้องพัก Lead", ow.id in tocode_ids())
+        n_get = len(W["gets"])
+        hook(ev(PW, "m_w2", "ยังว่างไหม"))
+        ck("★ ลูกค้าเดิม = ไม่ยิง Graph API เลย", not W["gets"][n_get:], W["gets"][n_get:])
+        st_, d = hook(ev(PW, "m_w2", "ยังว่างไหม"))
+        ck("Facebook ส่งซ้ำ = ไม่เก็บซ้ำ", d.get("dup") == 1 and FbChat.objects.filter(message_id="m_w2").count() == 1)
+        hook(ev(PW, "m_w3", "ว่างครับ ทักไลน์ได้เลย", echo=True, ts=int(timezone.now().timestamp() * 1000) + 5000))
+        ow.refresh_from_db()
+        ck("★ เพจตอบ (echo) = หยุดนาฬิกา", ow.awaiting_since is None
+           and ChatOwnerLog.objects.filter(chat=ow, action="reply", by_name="ตอบใน Facebook").exists())
+        st_, d = hook(ev("990000000000000009", "m_x9", "หวัดดี", page="999"))
+        ck("★ เพจบริษัทอื่น = ไม่เก็บ", d.get("foreign") == 1 and not FbChat.objects.filter(message_id="m_x9").exists(), d)
+        st_, d = hook({"object": "page", "entry": [{"id": "111", "messaging": [{"sender": {"id": PW}, "read": {"watermark": 1}}]}]})
+        ck("อ่านแล้ว/ส่งถึง (ไม่ใช่ข้อความ) = ข้าม", d.get("skipped") == 1 and d.get("saved") == 0, d)
+        # หาห้องสนทนาไม่เจอ → ห้องชั่วคราว → รอบดึงสำรองเจอห้องจริง ย้ายข้อความเข้าห้องจริง
+        PX = "990000000000000002"
+        hook(ev(PX, "m_x1", "สนใจครับ"))
+        fpx = FbProfile.objects.get(user_id=PX)
+        ck("หาห้องไม่เจอ = ห้องชั่วคราว (ข้อความไม่หาย)", fpx.thread_id == "psid:" + PX
+           and FbChat.objects.get(message_id="m_x1").thread_id == "psid:" + PX)
+        FS._upsert_profile({"id": "t_x1", "updated_time": fbt(timezone.now()), "message_count": 1,
+                            "participants": {"data": [{"id": "111"}, {"id": PX, "name": "ลูกค้าเอ็กซ์"}]}},
+                           "111", timezone.now()).save()
+        ck("★ เจอห้องจริงแล้ว ย้ายข้อความเข้าห้องจริง", FbChat.objects.get(message_id="m_x1").thread_id == "t_x1"
+           and FbProfile.objects.get(user_id=PX).thread_id == "t_x1")
+        # ดึงสำรอง: ความถี่ตามค่าตั้ง · เช็คข้าม worker ผ่าน KV
+        C._FB_RUN["at"] = 0.0
+        cache_store.set_kv("fb_live_last", {"at": timezone.now().isoformat()})
+        ck("★ worker อื่นเพิ่งดึง (KV) = ยังไม่ถึงรอบ", C.fb_poll_due() is False)
+        cache_store.set_kv("fb_live_last", {"at": (timezone.now() - timedelta(minutes=11)).isoformat()})
+        ck("เกิน 10 นาที (ค่าตั้งต้น) = ถึงรอบ", C.fb_poll_due() is True and C.cfg()["fb_poll_min"] == 10)
+        s_, d = J(ADM, "/connect/api/config", {"fb_poll_min": 1})
+        ck("ดึงสำรองถี่กว่า 2 นาที = ปฏิเสธ", s_ == 400, d)
+        s_, d = J(ADM, "/connect/api/config", {"fb_poll_min": 30})
+        ck("ตั้งดึงสำรองทุก 30 นาทีได้ + การ์ดได้สถานะ webhook", s_ == 200 and d["cfg"]["fb_poll_min"] == 30
+           and d["fb"]["webhook"]["url"].endswith("/api/meta/webhook") and d["fb"]["webhook"]["secretSet"] is True, d.get("fb"))
+        s_, d = J(SA1, "/connect/api/fb_webhook", {})
+        ck("เซลล์กดผูกเพจไม่ได้", s_ == 403)
+        s_, d = J(ADM, "/connect/api/fb_webhook", {})
+        sub = [x for x in W["posts"] if x[0].endswith("/111/subscribed_apps")]
+        ck("ปุ่มผูกเพจ: ขอรับ messages + message_echoes", s_ == 200 and sub
+           and sub[-1][1] == {"subscribed_fields": "messages,message_echoes"}, (s_, d, sub))
+        s_, d = J(ADM, "/connect/api/fb_webhook")
+        ck("ตรวจการผูกเพจได้", s_ == 200 and d["pages"][0]["subscribed"] is True, d)
+    finally:
+        requests.get, requests.post = _g0, _p0
+        FW.INLINE = False
+
 finally:
     _runner.teardown_databases(_old)
 

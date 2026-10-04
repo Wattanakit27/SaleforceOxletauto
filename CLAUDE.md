@@ -113,7 +113,7 @@ python manage.py runserver
 | `/checkout/api/customers` | `api_customers` | **admin/ผู้บริหาร** GET: **แชทลูกค้าที่ทักเข้า LINE OA** — ไม่ใส่อะไร = รายชื่อลูกค้า (ชื่อ · LINE id · จำนวนข้อความ · ทักครั้งแรก/ล่าสุด · เข้ามาทางบัญชีไหน) · `?q=` ค้นหาชื่อ · `?user_id=` = บทสนทนาย้อนหลังของคนนั้น · **ซ่อน LINE id ของพนักงาน** (`LineProfile.is_employee`) แต่โชว์ของลูกค้า (เจ้าของขอไว้ทักกลับ) |
 | `/checkout/api/reply` | `api_reply` | **admin/ผู้บริหาร** POST `{user_id, text}`: **ตอบแชทลูกค้า** — ส่งผ่าน LINE push ด้วย token ของบัญชี OA ที่ลูกค้าคุยอยู่ + บันทึกลง `GroupChat` เป็น `direction=out` พร้อมชื่อคนตอบ · **ส่งสำเร็จเท่านั้นถึงบันทึก** (ดู section "ตอบแชทลูกค้า") |
 | `/connect/` | `connect_views.page` | **หน้า Connect — แชทลูกค้า LINE OA รวมที่เดียว** (3 ต.ค.69) · แอดมิน/ผู้บริหาร = เห็นทุกแชท + โอน/ปล่อยคืนคิว + ตั้งค่า · เซลล์ = เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ + คิวรอรับ (เฉพาะวันเวรทีม) · คนงาน = 403 · ไม่ login → `/login/?next=/connect/` · `?id=` เปิดแชทนั้นเลย · `?embed=1` = ฝังในแท็บแดชบอร์ด · ดู section "Connect" |
-| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: เลยเวลา/รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `fb_test` = แชททดสอบการตอบ Facebook |
+| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: เลยเวลา/รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -122,6 +122,7 @@ python manage.py runserver
 | `/api/admin/report_test` | `admin_report_test` | admin POST `{target?}`: แคปตารางรายงาน (Playwright) → ส่งรูปเข้า LINE เดี๋ยวนี้ (ปุ่ม "ส่งทดสอบ") · ⚠️ ได้จริงเฉพาะ prod (LINE ต้องดึงรูปจาก URL https สาธารณะ) |
 | `/api/admin/line_group_name` | `admin_line_group_name` | admin POST `{id}`: ดึงชื่อกลุ่ม LINE จาก group id (LINE group summary API · บอทต้องอยู่ในกลุ่ม) → ปุ่ม "ตรวจชื่อ" ในพาเนลรายงาน (ยืนยันว่า id คือกลุ่มไหน) |
 | `/api/admin/line_groups` | `admin_line_groups` | admin GET: รายชื่อกลุ่ม LINE ที่บอทรู้จัก (สะสมจาก webhook · KVStore `line_groups`) → dropdown เลือกกลุ่มในพาเนลรายงาน |
+| `/api/meta/webhook` | `fb_webhook.view` | **public** (csrf_exempt) — **Messenger webhook** (4 ต.ค.69 · แทนการถาม API ทุกนาที) · GET = verify (`META_WEBHOOK_VERIFY_TOKEN`) · POST = แชทเพจ → Connect ทันที · ตรวจ `X-Hub-Signature-256` ด้วย `META_APP_SECRET` (**ไม่ตั้ง = 503 ไม่รับ**) · ดู section "Connect" + [deploy/meta_webhook.md](deploy/meta_webhook.md) |
 | `/api/tiktok/webhook` | `tiktok_webhook` | **public** (csrf_exempt) — **webhook ของ TikTok for Developers** (ก.ย.69 เจ้าของขอ callback ไปวางในหน้า TikTok) · POST = event → `dash_tiktok_event` (raw) · GET = 200 (`?challenge=` ตอบค่ากลับ) · ตรวจลายเซ็น `TikTok-Signature` ด้วย `TIKTOK_CLIENT_SECRET` · ดู section "TikTok webhook" |
 | `/api/admin/tiktok/accounts` | `admin_tiktok_accounts` | admin: GET=ช่อง TikTok ที่เชื่อมแล้ว (**ไม่มี token**) · POST `{label}` = สร้างลิงก์ขออนุญาตรายช่อง (ใช้ได้ครั้งเดียว หมดอายุ 7 วัน) |
 | `/api/admin/tiktok/sync` | `admin_tiktok_sync` | admin: GET=สถานะดึงยอดคลิป · POST=ดึงเดี๋ยวนี้ (ด่านกันกดถี่ 15 นาที → 429) |
@@ -1553,7 +1554,24 @@ sender_id)` ≠ จำนวนคน**
 - **★★ Facebook Messenger ในคิวเดียวกับ LINE (4 ต.ค.69 · เจ้าของเลือก "รวมคิวเดียวกับ LINE")** — checkout migration **0030**
   - **`ChatOwner.fb_profile`** (OneToOne FbProfile · `profile` กลายเป็น null ได้) — แถวมีอย่างใดอย่างหนึ่ง ·
     **ใช้ `connect.cust(o)` / `is_fb(o)` / `is_sim_row(o)` เสมอ ห้ามเรียก `o.profile.…` ตรงๆ ในโค้ดใหม่** (FB = None)
-  - **ซิงก์ทุกนาที** `fb_sync.sync_live()` (เรียกจาก `connect.tick` → `fb_tick_bg()` ใน thread · ผล KV `fb_live_last`):
+  - **★★ ทางหลัก = Messenger webhook (Facebook ส่งมาเอง)** [fb_webhook.py](checkout/fb_webhook.py) · `/api/meta/webhook`
+    (เจ้าของสั่ง 4 ต.ค.69 *"ถ้าดึงจาก API ทุกหนึ่งนาที มันจะติด Token ลองเปลี่ยนวิธีอื่นดู"*)
+    - GET = Meta ทักทายตอนลงทะเบียน URL (`hub.verify_token` เทียบ `META_WEBHOOK_VERIFY_TOKEN` → ตอบ `hub.challenge`)
+    - POST = ตรวจ `X-Hub-Signature-256` (HMAC-SHA256 ด้วย `META_APP_SECRET`) → **ไม่ตั้ง secret = 503 ไม่รับ**
+      (ต่างจาก TikTok ที่รับไว้ก่อน — ตรงนี้แชทกลายเป็นลูกค้าในคิวเซลล์ทันที ใครรู้ URL ก็ยิงของปลอมได้) ·
+      ลายเซ็นผิด = 403 · ตอบ `EVENT_RECEIVED` ทันทีแล้วประมวลผลใน thread (`INLINE=True` เฉพาะเทสต์)
+    - `handle_payload()`: เพจที่ไม่อยู่ใน `META_PAGE_IDS` = ไม่เก็บ · `is_echo` = ข้อความเพจตอบ (หยุดนาฬิกา) ·
+      read/delivery = ข้าม · ซ้ำ `mid` = ไม่เก็บซ้ำ · **ลูกค้าเดิม = ไม่ยิง Graph API เลย** · ลูกค้าใหม่ =
+      `/<page>/conversations?user_id=` 1 ครั้ง (หาห้อง+ชื่อ) · หาไม่เจอ = **ห้องชั่วคราว `psid:<id>`** แล้ว
+      `fb_sync._upsert_profile` ย้ายข้อความเข้าห้องจริงตอนรอบสำรองเจอ
+    - ผลล่าสุด KV `fb_webhook_last` (รวม "ส่งมาแต่ไม่รับเพราะอะไร") · การ์ด FB ในตั้งค่า Connect โชว์ URL/สถานะ secret/ส่งล่าสุด
+    - **ผูกเพจกับแอป** `POST /connect/api/fb_webhook` (แอดมิน) → `/<page>/subscribed_apps` fields `messages,message_echoes` ·
+      GET = ตรวจว่าผูกแล้วหรือยัง
+    - **ขั้นตอนฝั่งเจ้าของ (ยังไม่ได้ทำ ณ 4 ต.ค.69)**: [deploy/meta_webhook.md](deploy/meta_webhook.md) — env 2 ตัว ·
+      ลงทะเบียน Callback URL ในแอป Meta · กดผูกเพจ · ⚠️ แอปโหมด Development ส่งเฉพาะคนที่มีบทบาทในแอป
+  - **ทางสำรอง = ดึงเอง** `fb_sync.sync_live()` ทุก **`fb_poll_min` นาที (ค่าตั้งต้น 10 · ตั้งได้ 2–60)** · เดิมทุก 1 นาที
+    (เรียกจาก `connect.tick` → `fb_tick_bg()` ใน thread · ผล KV `fb_live_last`) ·
+    **`fb_poll_due()` เช็คเวลาจาก KV ร่วมทุก worker** (จำแค่ใน process = 3 worker ดึงถี่ขึ้น 3 เท่า) + `fb_tick_bg` จองรอบใน KV ก่อนเริ่ม ·
     เพจละ 1 คำขอ (25 ห้องล่าสุด) · ห้องที่ `updated_time` ไม่เปลี่ยน = ไม่ยิง API · ห้องที่ขยับ = ดึงเฉพาะข้อความใหม่
     → `note_fb_batch()` · รอบเที่ยงคืนเดิม (`sync`) ก็แจ้ง Connect ด้วย (`_notify_connect`)
   - **ข้อความเก่ากว่า `FB_LIVE_MIN` (30 นาที) ไม่เริ่มนับ 5 นาที** — กันวันแรก "เลยเวลา" ท่วม · ลูกค้า FB ที่คุยใน 7 วัน
@@ -1616,7 +1634,7 @@ sender_id)` ≠ จำนวนคน**
 - **`off_duty_reason()`** แยกเหตุผล 3 แบบ: ไม่มีทีม / ทีมไม่อยู่ในเวร / ไม่ใช่วันเวร (+บอกวันเวรถัดไปจริง)
   — เดิมตอบแบบเดียวว่า "รอวันเวรของทีม" ซึ่งทีม C จะรอวันที่ไม่มีวันมาถึง
 
-**เทสต์**: `python scripts/test_connect.py` (**403 ข้อ** — ห้องพักเฉพาะลูกค้าที่ให้เบอร์/ไอดีไลน์ (ไอดีหลังเราขอ · ไม่เดาคำลอยๆ · เก็บตกแชทเดิม) · พนักงานทักบัญชีลูกค้าขึ้น Connect (บอทแจ้งเตือนไม่ขึ้น) · Facebook ในคิวเดียวกับ LINE (ซิงก์ · รอบรอ · ตอบใน FB หยุดนาฬิกา · โหมดทดสอบ · 24 ชม. · PSID ไม่หลุด) · จ่ายเบอร์ลีดภายนอก (เลขรันร่วม · กันซ้ำ · ซ่อน · ลบ 90 วัน) · ห้องพัก Lead (ใบร่าง→ใบจริง · R ไม่นับ · โพสต์ซ้ำ · เซลล์ไม่เห็น) · แท็บจ่ายเบอร์ (ลูกค้าเก่าก่อนเปิด Connect ไม่นับ · ไม่ต้องจ่ายเบอร์ · เซลล์ขอแท็บนี้ไม่ได้) · เวร/สลับเวร/3 ทีม · เส้นตายนอกเวลา · ค่าตั้งผิดต้องฟ้อง ·
+**เทสต์**: `python scripts/test_connect.py` (**425 ข้อ** — Messenger webhook (verify · ไม่มี secret = 503 · ลายเซ็นผิด = 403 · ลูกค้าเดิมไม่ยิง API · echo หยุดนาฬิกา · ห้องชั่วคราวย้ายเข้าห้องจริง · ดึงสำรองเช็คข้าม worker) · ห้องพักเฉพาะลูกค้าที่ให้เบอร์/ไอดีไลน์ (ไอดีหลังเราขอ · ไม่เดาคำลอยๆ · เก็บตกแชทเดิม) · พนักงานทักบัญชีลูกค้าขึ้น Connect (บอทแจ้งเตือนไม่ขึ้น) · Facebook ในคิวเดียวกับ LINE (ซิงก์ · รอบรอ · ตอบใน FB หยุดนาฬิกา · โหมดทดสอบ · 24 ชม. · PSID ไม่หลุด) · จ่ายเบอร์ลีดภายนอก (เลขรันร่วม · กันซ้ำ · ซ่อน · ลบ 90 วัน) · ห้องพัก Lead (ใบร่าง→ใบจริง · R ไม่นับ · โพสต์ซ้ำ · เซลล์ไม่เห็น) · แท็บจ่ายเบอร์ (ลูกค้าเก่าก่อนเปิด Connect ไม่นับ · ไม่ต้องจ่ายเบอร์ · เซลล์ขอแท็บนี้ไม่ได้) · เวร/สลับเวร/3 ทีม · เส้นตายนอกเวลา · ค่าตั้งผิดต้องฟ้อง ·
 ใครกดก่อนได้ไป · ไม่ใช่วันเวรรับไม่ได้ · ลูกค้าติดเจ้าของเดิม · เลยเวลาแจ้งครั้งเดียว · โอน/ปล่อย/ลาออกคืนคิว ·
 webhook → เข้าคิวเอง · **สิทธิ์ผ่าน test client จริง** · ตอบผ่าน API ยิง LINE จริง (ปลอมที่ `requests`) ·
 **สแกนทุก endpoint ว่าไม่มี LINE user id หลุด** · โปรไฟล์: จับเบอร์ 7 แบบ · รูปไม่ลง LineProfile · พนักงานไม่มีรูป ·
