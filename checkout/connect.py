@@ -1564,8 +1564,13 @@ def _tag_match(tag) -> str:
         hits = {}
         try:
             names = list(Employee.objects.filter(active=True).values_list("nickname", "display_name"))
-            names += list(LineProfile.objects.filter(is_employee=True).exclude(nickname="")
-                          .values_list("nickname", "display_name"))
+            # ★ 6 ต.ค.69 — ชื่อของบัญชีที่ผูกทะเบียนแล้วต้องเป็น **ชื่อในทะเบียน** ไม่ใช่สำเนาเก่า
+            #   เดิมอ่าน `LineProfile.nickname` → นิดแก้ชื่อแล้ว แท็ก "@Nid" จับได้ทั้ง "นิด" และ "Nid"
+            #   = 2 ชื่อ → ถือว่ากำกวม ไม่ยอมบอกว่าจ่ายให้ใคร
+            for nick, enick, dn in (LineProfile.objects.filter(is_employee=True)
+                                    .values_list("nickname", "employee__nickname", "display_name")):
+                if (enick or nick):
+                    names.append((enick or nick, dn))
             for nick, dn in names:
                 for k in {_tag_key(nick), _tag_key(dn), _tag_key((dn or "").split()[0] if (dn or "").split() else "")}:
                     if k:

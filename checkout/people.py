@@ -55,9 +55,19 @@ def _load(force=False):
             for key in (_norm(e.display_name), _norm(e.nickname)):
                 if key:
                     by_name.setdefault(key, e.nickname)
-        for uid, nick in (LineProfile.objects.filter(is_employee=True).exclude(nickname="")
-                          .values_list("user_id", "nickname")):
-            by_uid.setdefault(uid, nick)
+        # ★ 6 ต.ค.69 (เจ้าของแจ้ง "นิดตั้งชื่อเล่นแล้ว แต่ยังขึ้นชื่อ account")
+        #   ชื่อของบัญชี LINE ต้องมาจาก **ทะเบียนพนักงานที่ผูกอยู่** (`employee__nickname`)
+        #   ไม่ใช่ `LineProfile.nickname` ซึ่งเป็นแค่ "สำเนาตอนผูก" — เดิมอ่านสำเนา แล้ว
+        #   `touch_profile` เขียนค่าที่อ่านได้กลับลงสำเนาเดิมทุกข้อความ = **วงจรที่ชื่อใหม่ไม่มีวันเข้า**
+        #   (วัดจริง: นิดแก้ชื่อ 5/10 แต่ข้อความหลังแก้ 49 ข้อความยังถูกบันทึกเป็น "Nid")
+        #   · สำเนาใช้เฉพาะบัญชีที่ยังไม่ได้ผูกกับใครในทะเบียน
+        from django.db.models import Q
+        for uid, nick, enick in (LineProfile.objects
+                                 .filter(Q(is_employee=True) | Q(employee__isnull=False))
+                                 .values_list("user_id", "nickname", "employee__nickname")):
+            name = (enick or nick or "").strip()
+            if name:
+                by_uid.setdefault(uid, name)
     except Exception:
         pass                              # ยังไม่ migrate / DB ล่ม = ใช้ชีตอย่างเดียว
 
@@ -85,6 +95,44 @@ def _load(force=False):
                 if uid:
                     uid_of.setdefault(key, uid)
     _CACHE.update({"at": now, "by_uid": by_uid, "by_name": by_name, "uid_of_name": uid_of})
+
+
+def invalidate():
+    """ล้างแคชชื่อ — เรียกหลังแก้ทะเบียนพนักงาน (แคชอยู่ต่อ process · worker อื่นตามทันใน `_TTL`)"""
+    _CACHE["at"] = 0.0
+
+
+def propagate_nickname(emp) -> dict:
+    """ชื่อเล่นในทะเบียนเปลี่ยน → **ตามแก้สำเนาที่ระบบเก็บไว้ที่อื่นให้ตรง** — ★ 6 ต.ค.69
+
+    ชื่อเล่นถูกคัดลอกไปเก็บ 3 ที่ตอนเกิดข้อมูล (เพื่อให้อ่านได้แม้คนนั้นถูกลบจากทะเบียนทีหลัง):
+      · `LineProfile.nickname` — โชว์ในรายชื่อแชท/Connect (`show_name`) + แปลงแท็ก @ ในใบจ่ายลีด
+      · `GroupChat.sender_name` — ชื่อผู้ส่งของทุกข้อความที่เขาพิมพ์ (หน้าแชท · บันทึกโค้ช)
+      · `GroupChat.sent_by_name` — ชื่อคนตอบลูกค้าผ่าน Connect
+    ไม่แก้ตาม = แก้ชื่อในหน้า "พนักงาน" แล้วที่อื่นยังขึ้นชื่อเดิม (เจ้าของนึกว่าบันทึกไม่ติด)
+
+    แก้เฉพาะข้อความ **ของคนนี้** (ผูกด้วย LINE id ที่ผูกกับเขา / FK คนตอบ) · ไม่แตะ `CoachLog`
+    (บันทึกถาวร + ชีตเขียนต่อท้ายอย่างเดียว) · best-effort: พังก็คืน error ไม่ทำให้การบันทึกล้ม
+    """
+    out = {"profiles": 0, "messages": 0, "replies": 0}
+    nick = (getattr(emp, "nickname", "") or "").strip()
+    if not nick:
+        return out
+    try:
+        from .models import LineProfile, GroupChat
+        profs = LineProfile.objects.filter(employee=emp)
+        uids = list(profs.values_list("user_id", flat=True))
+        out["profiles"] = profs.exclude(nickname=nick).update(nickname=nick[:80], is_employee=True)
+        if uids:
+            out["messages"] = (GroupChat.objects.filter(sender_id__in=uids)
+                               .exclude(direction=GroupChat.OUT).exclude(sender_name=nick)
+                               .update(sender_name=nick[:80]))
+        out["replies"] = (GroupChat.objects.filter(sent_by=emp).exclude(sent_by_name=nick)
+                          .update(sent_by_name=nick[:80]))
+    except Exception as e:
+        out["error"] = ("%s: %s" % (type(e).__name__, e))[:200]
+    invalidate()
+    return out
 
 
 def nickname_for(user_id="", display_name="") -> str:
@@ -452,6 +500,10 @@ def touch_profile(user_id="", group_id="", room_id="", chat_type="user", channel
             emp = None
         if emp is not None and not nick:
             nick = emp.nickname
+    # ★ 6 ต.ค.69 — ผูกกับทะเบียนแล้ว = **ชื่อในทะเบียนชนะเสมอ** (ไม่รอแคช `_TTL` หมดอายุ)
+    #   ไม่งั้นเพิ่งแก้ชื่อเล่นในหน้า "พนักงาน" ข้อความถัดไปยังถูกบันทึกด้วยชื่อเดิมได้อีก 10 นาที
+    if emp is not None and (getattr(emp, "nickname", "") or "").strip():
+        nick = emp.nickname.strip()
 
     fields = {
         # ★ ห้ามล้างชื่อเล่นที่เคยจับคู่ไว้แล้ว — รอบถัดไป `nickname_for(uid)` จะหาไม่เจอ

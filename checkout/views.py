@@ -881,15 +881,39 @@ def api_employees(request):
             if nick != row.nickname and Employee.objects.filter(nickname=nick).exists():
                 return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
                                     json_dumps_params={"ensure_ascii": False})
+            renamed = nick != row.nickname
             row.nickname = nick
             for k, v in fields.items():
                 setattr(row, k, v)
             row.save()
+            if renamed:
+                # ★ 6 ต.ค.69 — ตามแก้ชื่อที่คัดลอกไปเก็บไว้ที่อื่น (โปรไฟล์ LINE · ชื่อผู้ส่งในแชท)
+                #   ไม่งั้นแก้ที่นี่แล้วหน้าแชท/Connect/ใบจ่ายลีดยังขึ้นชื่อเดิม (เคสนิด → "Nid")
+                people.propagate_nickname(row)
+                try:
+                    from . import connect as _cn
+                    _cn._TAGNICK["at"] = 0.0          # แคชแปลงแท็ก @ ในใบจ่ายลีด
+                except Exception:
+                    pass
+            else:
+                people.invalidate()
         else:
             if Employee.objects.filter(nickname=nick).exists():
                 return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
                                     json_dumps_params={"ensure_ascii": False})
             Employee.objects.create(nickname=nick, source=Employee.MANUAL, **fields)
+            people.invalidate()
+
+    # ★ 6 ต.ค.69 — คนที่ติ๊ก "ไม่ต้องเช็คชื่อ" แต่ **เช็คชื่อเข้ามาจริง** = ติ๊กผิดแน่ๆ
+    #   เคสจริง: นิดเช็คชื่อ 10 วันใน 14 วัน แต่ช่อง "เช็คชื่อ" ถูกปิดไว้ตั้งแต่ migration 0015
+    #   (ตอนนั้นตำแหน่ง/เวลาว่าง เลยถูกเดาว่าเป็นผู้บริหาร) → **หายจากตารางเช็คชื่อที่ส่งเข้า LINE
+    #   ทุกวัน** และขาดก็ไม่ถูกตาม · ไม่เปลี่ยนให้เอง (กติกาเดิม: ช่องนี้ติ๊กเองล้วนๆ) แค่บอกให้เห็น
+    from datetime import timedelta
+    from django.db.models import Count
+    from .models import CheckIn
+    since = timezone.localdate() - timedelta(days=14)
+    off_but_in = dict(CheckIn.objects.filter(date_iso__gte=since, employee__track_checkin=False)
+                      .values("employee_id").annotate(n=Count("id")).values_list("employee_id", "n"))
 
     rows = []
     for e in Employee.objects.all().prefetch_related("line_accounts"):
@@ -908,6 +932,8 @@ def api_employees(request):
             #   เดิมป้าย "ใหม่" หายทันทีที่กรอกตำแหน่ง/เวลา **ทั้งที่ชื่อเล่นยังไม่ได้ตั้ง**
             #   → ไม่มีอะไรบอกว่าต้องมาตั้งชื่อ คนเลยนึกว่าระบบไม่ยอมบันทึกที่ตั้งไป
             "needsNick": bool(e.display_name) and e.nickname == e.display_name,
+            # ปิด "เช็คชื่อ" ไว้ แต่เช็คชื่อเข้ามากี่วันใน 14 วัน (0 = ไม่มีอะไรผิดปกติ)
+            "checkinsWhileOff": off_but_in.get(e.pk, 0),
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
         })

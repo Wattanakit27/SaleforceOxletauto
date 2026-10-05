@@ -1446,7 +1446,10 @@ try:
     ck("★ พนักงานทักบัญชีลูกค้า = ขึ้น Connect + เริ่มรอบรอ", oe is not None and oe.awaiting_since is not None, oe)
     s_, d = J(ADM, "/connect/api/inbox?view=all")
     re_ = next((x for x in d.get("rows", []) if oe and x["id"] == oe.id), {})
-    ck("แถวมีป้ายพนักงาน + ชื่อ", re_.get("staff") is True and re_.get("name") == "บอส", re_)
+    # ★ 6 ต.ค.69 — ชื่อพนักงานมาจาก **ทะเบียนที่ผูกอยู่** (OFFICE = "ออฟฟิศ") ไม่ใช่สำเนาในโปรไฟล์ LINE ("บอส")
+    #   สำเนาที่ไม่ตรงทะเบียนคือบั๊ก "นิดแก้ชื่อเล่นแล้วยังขึ้นชื่อเดิม" — ดู scripts/test_employee_names.py
+    ck("แถวมีป้ายพนักงาน + ชื่อ (ชื่อในทะเบียนชนะสำเนา)",
+       re_.get("staff") is True and re_.get("name") == OFFICE.nickname, re_)
     C.note_reply(EMP2.user_id, None, timezone.now(), "ได้รับแล้วครับ", by="admin")   # = สิ่งที่ send_reply เรียกหลังส่งสำเร็จ
     oe.refresh_from_db()
     ck("ตอบแล้วปิดรอบได้ (พนักงานก็เหมือนลูกค้า)", oe.awaiting_since is None, oe.awaiting_since)
