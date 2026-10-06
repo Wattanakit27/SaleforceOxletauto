@@ -1169,14 +1169,30 @@ def dd_options(field: str) -> list:
     return list((dropdowns().get("fields") or {}).get(field) or [])
 
 
+def _ch_key(s) -> str:
+    """คีย์เทียบชื่อช่องทาง — ตัดช่องว่าง · "/" · คำว่า "ช่อง" · ไม่สนตัวพิมพ์
+    ("Live tiktok ช่องขายบอส" = "LIVE Tiktok / ช่องขายบอส" · "TikTok แซน" = "Tiktok ช่องแซน" · "เพจguru" = "เพจ Guru")"""
+    return re.sub(r"[\s/]+|ช่อง", "", str(s or "")).lower()
+
+
 def dd_pick(field: str, value) -> str:
-    """ค่าใน dropdown ที่ตรงกับ `value` (ไม่สนตัวพิมพ์/ช่องว่าง) — ไม่ตรงสักตัว = "" (ไม่เดา)"""
+    """ค่าใน dropdown ที่ตรงกับ `value` (ไม่สนตัวพิมพ์/ช่องว่าง) — ไม่ตรงสักตัว = "" (ไม่เดา)
+
+    ★ 6 ต.ค.69 ช่องทาง: เทียบด้วย `_ch_key` เพิ่ม — วัดจริงใบจ่ายลีด 30 วัน คนพิมพ์ช่องทางในกลุ่ม
+    ไม่ตรงคำใน dropdown ของชีตเลย (ชีต "LIVE Tiktok / ช่องขายบอส" · ในกลุ่ม "Live tiktok ช่องขายบอส" 181 ใบ)
+    **ต้องตรงตัวเลือกเดียวเท่านั้น** — ตรงหลายตัว/ไม่ตรงเลย = "" (ไม่เดา · ห้ามจับแบบ "คล้ายกัน")"""
     want = re.sub(r"\s+", "", str(value or "")).lower()
     if not want:
         return ""
-    for opt in dd_options(field):
+    opts = dd_options(field)
+    for opt in opts:
         if re.sub(r"\s+", "", opt).lower() == want:
             return opt
+    if field == "channel":
+        k = _ch_key(value)
+        hits = [o for o in opts if _ch_key(o) == k]
+        if k and len(hits) == 1:
+            return hits[0]
     return ""
 
 
@@ -1824,6 +1840,10 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
                 # ใบจ่ายลีด = ข้อมูลจากคน → แทน "ค่าตั้งต้นของระบบ" ได้ (ช่องทาง LINE@ → TikTok ตามใบ)
                 #   แต่ไม่แทนสิ่งที่คนพิมพ์ในหน้านี้ และไม่แทนสิ่งที่จับได้จากแชท
                 put(f, v, "ใบจ่ายลีด", over=(SYSTEM,))
+            # "ไลฟ์" ในใบ = คอลัมน์ "ทีมไลฟ์" ของชีต ("live sale" → "Live Sale") — ตรงตัวเลือกเท่านั้น ไม่เดา
+            lt = dd_pick("live_team", d.get("live", ""))
+            if lt:
+                put("live_team", lt, "ใบจ่ายลีด", over=(SYSTEM,))
             if d.get("phone"):
                 put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบจ่ายลีด")
             # จ่ายให้ใคร = คนที่ถูกแท็กท้ายใบ (ชื่อ LINE คำแรก → ชื่อเล่นในทะเบียน) · ใครโพสต์ใบ = แอดมินที่จ่าย
@@ -1922,24 +1942,22 @@ def lead_json(o, lead=None) -> dict:
     return out
 
 
+def slip_fields(o, lead) -> dict:
+    """ช่องของใบจ่ายลีด (ใช้ทั้งปุ่มคัดลอกและตอนส่งเข้ากลุ่ม) · ช่องทาง/ไลฟ์ = คำตาม dropdown ของชีตจ่ายเบอร์
+    · ไลฟ์ในใบ = ช่อง "ทีมไลฟ์" (คอลัมน์เดียวกันในชีต) — ช่อง `live` เดิมใช้เฉพาะตอนยังไม่ได้เลือกทีมไลฟ์"""
+    p, fb = cust(o), is_fb(o)
+    return {"code": lead.code, "ads": lead.ads, "account": lead.account, "name": lead.customer_name,
+            "line_id": lead.line_id, "line_name": "" if fb else (p.display_name or ""), "phone": lead.phone,
+            "channel": dd_pick("channel", lead.channel) or lead.channel,
+            "car": lead.car_text or lead.car_model,
+            "live": lead.live_team or dd_pick("live_team", lead.live) or lead.live, "more": lead.more}
+
+
 def slip_text(o, lead=None) -> str:
-    """ใบจ่ายลีดแบบย่อ — รูปแบบเดียวกับที่แอดมินโพสต์ในกลุ่มจ่ายเบอร์ (`leadgroup.parse_leadsheet` อ่านกลับได้)"""
+    """ใบจ่ายลีด (ปุ่มคัดลอก) — pattern เดียวกับที่ส่งเข้ากลุ่ม (`slippost.body`) + @เจ้าของ · อ่านกลับได้"""
+    from . import slippost
     lead = lead or lead_of(o)
-    p = cust(o)
-    car = lead.car_text or lead.car_model
-    lines = [
-        "Ac Lead No. %s" % (lead.code or "-"),
-        "Ads : %s" % (lead.ads or "-"),
-        "ชื่อ Account: %s" % (lead.account or "-"),
-        "ชื่อลูกค้า : %s" % (lead.customer_name or "-"),
-        "ID LINE : %s" % (lead.line_id or "-"),
-        "ชื่อไลน์ : %s" % ("-" if is_fb(o) else (p.display_name or "-")),
-        "เบอร์โทร : %s" % (lead.phone or "-"),
-        "ช่องทาง : %s" % (lead.channel or "-"),
-        "รถ : %s" % (car or "-"),
-        "ไลฟ์ : %s" % (lead.live or "-"),
-        "เพิ่มเติม : %s" % (lead.more or "-"),
-    ]
+    lines = [slippost.body(slip_fields(o, lead))]
     if o.owner_id:
         lines.append("@%s" % o.owner.nickname)
     if lead.code_demo:
@@ -2285,28 +2303,17 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
     return True, slippost.summary(code, emp.nickname, info) + fb_tail
 
 
-def post_body(o, lead, by: str = "") -> str:
-    """ใบจ่ายลีดที่ส่งเข้ากลุ่ม (ช่องว่างเว้นว่างแบบใบจริง ไม่ใช่ "-") + บรรทัดบอกว่าจ่ายผ่านระบบ + ลิงก์เปิดลูกค้า"""
+def post_body(o, lead) -> str:
+    """ใบที่ส่งเข้ากลุ่ม — pattern ที่เจ้าของกำหนด (`slippost.body`) · แท็กเซลล์ต่อท้ายตอนส่ง"""
     from . import slippost
-    p, fb = cust(o), is_fb(o)
-    f = {"code": lead.code, "ads": lead.ads, "account": lead.account, "name": lead.customer_name,
-         "line_id": lead.line_id, "line_name": "" if fb else (p.display_name or ""), "phone": lead.phone,
-         "channel": lead.channel, "car": lead.car_text or lead.car_model, "live": lead.live, "more": lead.more}
-    notes = ["จ่ายโดย: %s (ผ่านระบบ Connect)" % by] if by else []
-    link = _link(o)
-    if link.startswith("http"):
-        # LINE = เซลล์ตอบลูกค้าในระบบ (เจ้าของสั่ง 3 ต.ค.69 "ไม่ให้เซลตอบลูกค้าในไลน์แล้ว")
-        # Facebook = เปิดดู/กรอกข้อมูลลูกค้าได้ แต่ติดต่อลูกค้าตามเบอร์/ไอดีในใบ
-        notes.append(("ข้อมูลลูกค้าในระบบ (Facebook — ติดต่อตามเบอร์/ไอดีด้านบน): %s" if fb
-                      else "ตอบแชทลูกค้าในระบบ Connect: %s") % link)
-    return slippost.body(f, notes)
+    return slippost.body(slip_fields(o, lead))
 
 
 def _post_slip(o, lead, emp, by: str = "", c=None) -> dict:
     """ส่งใบเข้ากลุ่ม → เก็บผลลง `ChatLead.post_info` (หน้าเว็บโชว์สถานะ/ปุ่มส่งอีกครั้ง)"""
     from . import slippost
     try:
-        info = slippost.post(lead.code, post_body(o, lead, by), emp, by=by, c=c)
+        info = slippost.post(lead.code, post_body(o, lead), emp, by=by, c=c)
     except Exception as e:                       # ห้ามทำให้การจ่ายเบอร์ที่บันทึกไปแล้วกลายเป็น error 500
         info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(e)[:120]}
     ChatLead.objects.filter(pk=lead.pk).update(post_info=info)

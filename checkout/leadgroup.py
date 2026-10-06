@@ -93,6 +93,10 @@ def parse_fields(text: str) -> dict:
         head, _, val = line.replace("：", ":").partition(":")
         key = head.strip().strip("*").strip().lower()      # "*เพิ่มเติม*  :" (ตัวหนาแบบ LINE) ก็นับ
         val = val.strip()
+        if not val.strip("-–— "):
+            # ★ 6 ต.ค.69 ใบจ่ายลีดที่ระบบส่งเขียนช่องว่างเป็น "-" (pattern ที่เจ้าของกำหนด) = ว่าง
+            #   ไม่งั้นอ่านใบกลับแล้วได้ ช่องทาง "-" / รถ "-" ไปเติมข้อมูลลีด/ความต้องการลูกค้า
+            val = ""
         for field, aliases in _FIELDS.items():
             if any(key == a or key.startswith(a) for a in aliases):
                 if val and field not in out:

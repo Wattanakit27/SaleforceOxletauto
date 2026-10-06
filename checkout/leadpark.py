@@ -326,18 +326,26 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
     return True, slippost.summary(code, emp.nickname, info), e
 
 
-def post_body(e, by: str = "") -> str:
-    """ใบที่ส่งเข้ากลุ่ม — ช่องเดียวกับใบร่างที่แอดมินพักไว้ + เลข"""
+def slip_fields(e) -> dict:
+    """ช่องของใบจ่ายลีด (ปุ่มคัดลอก + ตอนส่งเข้ากลุ่ม) — สำเนาจากใบร่าง · ช่องทาง/ไลฟ์ = คำตาม dropdown ของชีต
+    (ใบร่างพิมพ์ "Live tiktok ช่องขายบอส" → ชีต "LIVE Tiktok / ช่องขายบอส" · "live sale" → "Live Sale")
+    ตรงตัวเลือกไม่ได้ = ใช้ที่แอดมินพิมพ์ไว้ตามเดิม (ไม่เดา)"""
+    from . import connect as C
+    return {"code": e.code, "ads": e.ads, "account": e.account, "name": e.customer_name, "line_id": e.line_id,
+            "line_name": "", "phone": e.phone, "channel": C.dd_pick("channel", e.channel) or e.channel,
+            "car": e.car_text, "live": C.dd_pick("live_team", e.live) or e.live, "more": e.more}
+
+
+def post_body(e) -> str:
+    """ใบที่ส่งเข้ากลุ่ม — pattern ที่เจ้าของกำหนด (`slippost.body`) · แท็กเซลล์ต่อท้ายตอนส่ง"""
     from . import slippost
-    f = {"code": e.code, "ads": e.ads, "account": e.account, "name": e.customer_name, "line_id": e.line_id,
-         "line_name": "", "phone": e.phone, "channel": e.channel, "car": e.car_text, "live": e.live, "more": e.more}
-    return slippost.body(f, ["จ่ายโดย: %s (ผ่านระบบ Connect)" % by] if by else [])
+    return slippost.body(slip_fields(e))
 
 
 def _post(e, emp, by: str = "", c=None) -> dict:
     from . import slippost
     try:
-        info = slippost.post(e.code, post_body(e, by), emp, by=by, c=c)
+        info = slippost.post(e.code, post_body(e), emp, by=by, c=c)
     except Exception as x:                        # การจ่ายในระบบบันทึกไปแล้ว — ห้ามกลายเป็น error 500
         info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(x)[:120]}
     type(e).objects.filter(pk=e.pk).update(post_info=info)
@@ -385,22 +393,9 @@ def skip(mid: str, on: bool, by: str = ""):
 
 
 def slip_text(e) -> str:
-    """ใบจ่ายลีดของลีดภายนอก — รูปแบบเดียวกับที่แอดมินโพสต์ในห้องจ่ายเบอร์ (`parse_leadsheet` อ่านกลับได้)"""
-    lines = [
-        "Ac Lead No.   %s" % (e.code or "-"),
-        "Ads  :   %s" % (e.ads or ""),
-        "ชื่อ Account : %s" % (e.account or ""),
-        "ชื่อลูกค้า : %s" % (e.customer_name or ""),
-        "ID LINE : %s" % (e.line_id or ""),
-        "ชื่อไลน์ : ",
-        "เบอร์โทร : %s" % (e.phone or ""),
-        "ช่องทาง  : %s" % (e.channel or ""),
-        "รถ : %s" % (e.car_text or ""),
-        "ไลฟ์ : %s" % (e.live or ""),
-        "เพิ่มเติม  : %s" % (e.more or ""),
-        "",
-        "ติดต่อได้เลยนะครับ",
-    ]
+    """ใบจ่ายลีดของลีดภายนอก (ปุ่มคัดลอก) — pattern เดียวกับที่ส่งเข้ากลุ่ม + @เซลล์ (`parse_leadsheet` อ่านกลับได้)"""
+    from . import slippost
+    lines = [slippost.body(slip_fields(e))]
     if e.seller_name:
         lines.append("@%s" % e.seller_name)
     if e.code_demo:

@@ -1901,10 +1901,11 @@ try:
         ck("★ แท็กเซลล์ด้วยไอดีฝั่งบอทตัวส่ง (textV2 · กดแล้วเด้งหาคน)", m0.get("type") == "textV2"
            and m0["substitution"]["seller"]["mentionee"]["userId"] == A1_PUSH and m0["text"].endswith("{seller}"), m0)
         tx = m0.get("text", "")
-        ck("ใบหน้าตาเดียวกับใบจริง: เลข + เบอร์ + ชื่อไลน์ + ติดต่อได้เลย + ลิงก์ตอบแชทในระบบ",
-           ("Ac Lead No.   " + ld.code) in tx and "0866000601" in tx and "ลูกค้าส่งจริง" in tx
-           and "ติดต่อได้เลยนะครับ" in tx and "ตอบแชทลูกค้าในระบบ Connect: https://oxlet.test/connect/?id=%d" % L1.id in tx
-           and "จ่ายโดย: admin" in tx, tx)
+        # ★ 6 ต.ค.69 เจ้าของกำหนด pattern จากรูป: 11 บรรทัด · ช่องว่าง = "-" · แท็กบรรทัดสุดท้าย · ไม่มีบรรทัดอื่นแทรก
+        want = ["Ac Lead No. " + ld.code, "Ads : -", "ชื่อ Account: -", "ชื่อลูกค้า : -", "ID LINE : -",
+                "ชื่อไลน์ : ลูกค้าส่งจริง", "เบอร์โทร : 0866000601", "ช่องทาง : LINE@", "รถ : -",
+                "ไลฟ์ : -", "เพิ่มเติม : -", "{seller}"]
+        ck("★ ใบที่ส่งตรง pattern ที่เจ้าของกำหนดทุกบรรทัด", tx.split("\n") == want, tx.split("\n"))
         pi = ld.post_info or {}
         ck("จด post_info: สำเร็จ + ห้อง + แท็กได้", pi.get("ok") and pi.get("group") == ASG and pi.get("tagged") is True
            and pi.get("groupName") == "ห้องจ่ายเบอร์ บ้านเก่า" and not pi.get("sending"), pi)
@@ -2006,7 +2007,7 @@ try:
         txt = SENT[0]["messages"][0]["text"] if SENT else ""
         ck("★ ลูกค้า Facebook: ส่งเข้ากลุ่ม + แท็ก + บอกว่าเซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น", s_ == 200 and len(SENT) == 1
            and SENT[0]["messages"][0]["type"] == "textV2" and "เก็บข้อมูลเท่านั้น" in d.get("message", "")
-           and "ข้อมูลลูกค้าในระบบ (Facebook" in txt and "ตอบแชทลูกค้าในระบบ" not in txt and "0866000609" in txt, (d, txt))
+           and "ชื่อไลน์ : -" in txt and "เบอร์โทร : 0866000609" in txt and txt.endswith("{seller}"), (d, txt))
         ck("ลูกค้า Facebook: เป็นลูกค้าของเซลล์ในระบบ", ChatOwner.objects.get(pk=F1.id).owner_id == A1.id)
         s_, d = J(SA1, "/connect/api/chat?id=%d" % F1.id)
         ck("★ ลูกค้า Facebook: เซลล์เปิดดู+กรอกข้อมูลลีดได้ แต่ตอบไม่ได้", s_ == 200 and d.get("leadEditable") is True
@@ -2046,8 +2047,14 @@ try:
         ck("★ ลีดภายนอก: ส่งเข้ากลุ่ม + แท็ก + เลขจริง", s_ == 200 and len(SENT) == 1 and SENT[0]["to"] == ASG
            and m0.get("type") == "textV2" and ex.code_demo is False and (ex.post_info or {}).get("ok")
            and (d.get("post") or {}).get("ok"), (s_, d))
-        ck("ใบของลีดภายนอกมีข้อมูลจากใบร่าง", "0866000620" in m0.get("text", "") and "คนส่งจริง" in m0.get("text", "")
-           and ("Ac Lead No.   " + ex.code) in m0.get("text", ""), m0.get("text"))
+        ck("★ ใบของลีดภายนอก: ข้อมูลจากใบร่าง + ช่องทาง/ไลฟ์เป็นคำตาม dropdown ของชีต",
+           m0.get("text", "").split("\n") == ["Ac Lead No. " + ex.code, "Ads : -", "ชื่อ Account: คนส่งจริง",
+                                               "ชื่อลูกค้า : -", "ID LINE : -", "ชื่อไลน์ : -", "เบอร์โทร : 0866000620",
+                                               "ช่องทาง : LIVE Tiktok / ช่องขายบอส", "รถ : Yaris ativ", "ไลฟ์ : Live Sale",
+                                               "เพิ่มเติม : -", "{seller}"], m0.get("text", "").split("\n"))
+        sx = LP.slip_text(ExtLead.objects.get(pk=ex.pk))
+        ck("ปุ่มคัดลอกของลีดภายนอก = pattern เดียวกัน + @เซลล์", sx.split("\n")[:-1] == m0.get("text", "").split("\n")[:-1]
+           and sx.endswith("\n@เอหนึ่ง"), sx)
         b = LP.board(cache_sec=0)
         ab = next((i for i in b["assigned"] if i["account"] == "คนส่งจริง"), {})
         ck("★ ห้องพักเห็นใบที่ระบบส่ง (จับคู่ใบจริงในห้องจ่ายเบอร์) + สถานะการส่ง",
@@ -2063,6 +2070,39 @@ try:
         s_, d = J(ADM, "/connect/api/config")
         ck("หน้าตั้งค่าเห็นห้องจ่ายเบอร์ที่จะส่ง", ((d.get("slip") or {}).get("rooms") or {}).get("main", {}).get("id") == ASG
            and d.get("cfg", {}).get("slip_post") is True, d.get("slip"))
+
+        # ── pattern ตามรูปที่เจ้าของส่งมา + คำตาม dropdown ของชีตจ่ายเบอร์ ──
+        BJ = C.note_customer_message(cust(611, "Ben Jao LINE").user_id, timezone.now(), "สวัสดีครับ")
+        bj = C.lead_of(ChatOwner.objects.get(pk=BJ.id))
+        ChatLead.objects.filter(pk=bj.pk).update(account="Ben Jao", line_id="hannork", channel="", branch="")
+        bjo = ChatOwner.objects.select_related("profile").get(pk=BJ.id)
+        bjo.profile.display_name = ""
+        st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
+        ck("★ ใบจ่ายลีด = pattern ในรูปเป๊ะ (ลูกค้า Ben Jao)", st.split("\n") == [
+            "Ac Lead No. -", "Ads : -", "ชื่อ Account: Ben Jao", "ชื่อลูกค้า : -", "ID LINE : hannork", "ชื่อไลน์ : -",
+            "เบอร์โทร : -", "ช่องทาง : -", "รถ : -", "ไลฟ์ : -", "เพิ่มเติม : -"], st.split("\n"))
+        ps = parse_leadsheet("Ac Lead No. NLD10-1234\n" + "\n".join(st.split("\n")[1:]) + "\n@เอหนึ่ง") or {}
+        ck("อ่านใบกลับ: \"-\" = ช่องว่าง (ไม่เอา \"-\" ไปเติมข้อมูล)", ps.get("account") == "Ben Jao"
+           and ps.get("line_id") == "hannork" and "channel" not in ps and "car" not in ps and ps.get("assigned") == "เอหนึ่ง", ps)
+        CH = {"Live tiktok ช่องขายบอส": "LIVE Tiktok / ช่องขายบอส", "TikTok แซน": "Tiktok ช่องแซน",
+              "TikTok ช่องแซน": "Tiktok ช่องแซน", "Line@": "LINE@", "เพจguru": "เพจ Guru", "เบอร์กลาง/เพจ": "เบอร์กลาง / เพจ",
+              "TikTok ช่องหลัก": "Tiktok  ช่องหลัก", "Live TIKTOK ช่องหลัก": "LIVE Tiktok / ช่องหลัก",
+              "TikTok ช่อง888": "TIKTOK ช่อง888", "Live tiktok ช่องguru": "LIVE Tiktok / ช่อง Guru",
+              "TIKTOK รถเข้าใหม่ อ๊อกเล็ตธ์": "TIKTOK รถเข้าใหม่อ๊อกเล็ตธ์", "TikTok guru": "Tiktok Guru"}
+        bad_ch = {k: C.dd_pick("channel", k) for k, v in CH.items() if C.dd_pick("channel", k) != v}
+        ck("★ ช่องทางที่คนพิมพ์ในกลุ่ม (วัดจริง 30 วัน) → คำตาม dropdown ของชีต", not bad_ch, bad_ch)
+        ck("ช่องทางที่ไม่มีในชีต = ไม่เดา (คงคำเดิม)", C.dd_pick("channel", "tiktok ช่องปรึกษา") == ""
+           and C.dd_pick("channel", "Live  sale tiktok ช่องขายบอส") == "")
+        keys = [C._ch_key(o) for o in C.dd_options("channel")]
+        ck("คีย์เทียบช่องทางของตัวเลือกในชีตไม่ชนกันเอง (ทุกตัวแยกกันได้)", len(keys) == len(set(keys)), keys)
+        ck("ไลฟ์: \"live sale\" → ทีมไลฟ์ \"Live Sale\"", C.dd_pick("live_team", "live sale") == "Live Sale"
+           and C.dd_pick("live_team", "Live  Productions") == "Live Productions")
+        ChatLead.objects.filter(pk=bj.pk).update(live="live infu", live_team="", channel="TikTok แซน")
+        st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
+        ck("ใบ: ช่องทาง/ไลฟ์ เป็นคำตาม dropdown", "ช่องทาง : Tiktok ช่องแซน" in st and "ไลฟ์ : Live Infu" in st, st)
+        ChatLead.objects.filter(pk=bj.pk).update(live_team="Live boss")
+        st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
+        ck("ใบ: ไลฟ์ = ช่องทีมไลฟ์ก่อน (คอลัมน์เดียวกันในชีต)", "ไลฟ์ : Live boss" in st, st)
 
         # ── ปิดสวิตช์ = โหมดทดลองเดิม ──
         C.save_cfg(dict(C.cfg(), slip_post=False))

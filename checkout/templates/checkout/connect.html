@@ -1103,8 +1103,10 @@
       });
       x += `</div>`;
     });
-    x += `<div class="pf-sec pf-slip"><div class="pf-h">ใบจ่ายลีด (ย่อ)</div>
-      <div class="pf-g2">${leadField(L, 'live', 'ไลฟ์', '', ed, sfx)}<div></div></div>
+    // ★ 6 ต.ค.69 — ใบนี้ = หน้าตาเดียวกับที่ส่งเข้ากลุ่มจ่ายเบอร์ (pattern ที่เจ้าของกำหนด) · "ไลฟ์" ในใบ = ช่อง "ทีมไลฟ์"
+    //   (คอลัมน์เดียวกันในชีต) — เลิกมีช่องพิมพ์ "ไลฟ์" แยก ไม่งั้นมี 2 ที่ให้กรอกเรื่องเดียวกัน
+    x += `<div class="pf-sec pf-slip"><div class="pf-h">ใบจ่ายลีด</div>
+      <div class="pf-note">หน้าตาเดียวกับที่ส่งเข้ากลุ่มจ่ายเบอร์ · ไลฟ์ = ช่อง "ทีมไลฟ์" ด้านบน · ช่องทาง/ไลฟ์ใช้คำตาม dropdown ของชีต</div>
       ${leadField(L, 'more', 'เพิ่มเติม', 'area', ed, sfx)}
       <pre class="pf-slip-text">${h(L.slipText || '')}</pre>
       <button class="btn sm" data-act="copy-slip">คัดลอกใบจ่ายลีด</button></div>`;
