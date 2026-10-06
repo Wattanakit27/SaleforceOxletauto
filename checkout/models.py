@@ -961,11 +961,13 @@ class ChatLead(models.Model):
     more = models.TextField("เพิ่มเติม", blank=True)
     tags = models.JSONField("แท็ก", default=list, blank=True)
 
-    # ★ 4 ต.ค.69 — ปุ่ม "จ่ายเบอร์" (โหมดทดลอง: เก็บใน Postgres อย่างเดียว ไม่ลงชีต/ไม่โพสต์กลุ่ม — เจ้าของสั่ง)
-    #   `code_demo` = เลขนี้ระบบออกเองในโหมดทดลอง **ยังไม่ได้จองในชีตจริง** (แอดมินอาจใช้เลขเดียวกันในชีต)
+    # ★ 4 ต.ค.69 — ปุ่ม "จ่ายเบอร์" · ★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ไม่ลงชีต · slippost.py)
+    #   `code_demo` = เลขนี้ออกในโหมดทดลอง (สวิตช์ส่งจริงปิด / ลูกค้าจำลอง / บัญชีทดสอบ) — ไม่ได้ส่งเข้ากลุ่ม
     assigned_at = models.DateTimeField("จ่ายเบอร์เมื่อ", null=True, blank=True)
     assigned_by = models.CharField("จ่ายเบอร์โดย", max_length=80, blank=True)
     code_demo = models.BooleanField("เลขลีดออกในโหมดทดลอง", default=False)
+    # ★ 6 ต.ค.69 — ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์จริง (slippost.py) · {ok, at, group, groupName, tagged, error, …}
+    post_info = models.JSONField("ส่งใบจ่ายลีดเข้ากลุ่ม", default=dict, blank=True)
 
     auto = models.JSONField("ช่องที่ระบบเติมให้", default=dict, blank=True)
     updated_by = models.CharField("แก้ล่าสุดโดย", max_length=80, blank=True)
@@ -987,7 +989,8 @@ class ExtLead(models.Model):
     1 แถว = 1 ใบร่าง (อ้างด้วย `message_id` ของใบร่างแรกในกลุ่ม) · **สร้างเฉพาะตอนแอดมินกดจ่ายเบอร์/ไม่ต้องจ่าย**
     — ใบร่างที่ยังไม่มีใครแตะ อ่านสดจากแชทกลุ่ม (`checkout/leadpark.py`) ไม่เก็บซ้ำ
     ข้อมูลลูกค้าเก็บเป็นสำเนา ณ ตอนจ่าย (แชทกลุ่มหมดอายุ 90 วัน แต่ใบจ่ายลีดต้องประกอบใหม่ได้)
-    เลขลีดใช้ **เลขรันชุดเดียวกับลูกค้า LINE OA** (`ChatLead`) · โหมดทดลอง = ไม่ลงชีต ไม่โพสต์กลุ่ม (`code_demo`)
+    เลขลีดใช้ **เลขรันชุดเดียวกับลูกค้า LINE OA** (`ChatLead`) · ★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง (ไม่ลงชีต)
+    · `code_demo` = ออกในโหมดทดลอง ไม่ได้ส่งเข้ากลุ่ม
     """
     message_id = models.CharField("ข้อความใบร่าง (LINE message id)", max_length=64, unique=True)
     group_id = models.CharField("กลุ่ม", max_length=64, blank=True)
@@ -1014,6 +1017,8 @@ class ExtLead(models.Model):
     seller_name = models.CharField("ชื่อเซลล์ (ตอนจ่าย)", max_length=80, blank=True)
     assigned_at = models.DateTimeField("จ่ายเบอร์เมื่อ", null=True, blank=True)
     assigned_by = models.CharField("จ่ายเบอร์โดย", max_length=80, blank=True)
+    # ★ 6 ต.ค.69 — ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์จริง (slippost.py) · {ok, at, group, groupName, tagged, error, …}
+    post_info = models.JSONField("ส่งใบจ่ายลีดเข้ากลุ่ม", default=dict, blank=True)
     # แอดมินกด "ไม่ต้องจ่ายเบอร์" (ลีดซ้ำ/ไม่ใช่ลีดขาย) — ออกจากรายการรอเลข
     no_code = models.BooleanField("ไม่ต้องจ่ายเบอร์", default=False)
     no_code_by = models.CharField("กดไม่ต้องจ่ายโดย", max_length=80, blank=True)

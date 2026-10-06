@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import statistics
+from contextlib import contextmanager
 from datetime import date, timedelta
 
 from django.db import IntegrityError, transaction
@@ -68,6 +69,12 @@ DEFAULTS = {
     #   ★ ค่าตั้งต้น 2 นาที (ไม่ใช่ 10) — ก่อนผ่าน App Review webhook ส่งแชทลูกค้าจริงมาไม่ได้ ทางสำรองคือทางเดียว
     #     ดึงช้า = แชทถึง Connect ช้าแล้วขึ้น "เลยเวลา" ทันที (เส้นตายนับจากเวลาที่ลูกค้าส่ง) · ผ่านรีวิวแล้วค่อยปรับเป็น 30–60
     "fb_poll_min": 2,
+    # ── ปุ่ม "จ่ายเบอร์" (6 ต.ค.69 · เจ้าของสั่ง "กลุ่มจ่ายเบอร์อยากให้มันต่อจริงๆ ส่งจริงๆ") ──
+    # True = ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (slippost.py) · False = โหมดทดลองเดิม (เก็บในระบบอย่างเดียว)
+    "slip_post": True,
+    # กลุ่มปลายทาง — ว่าง = หาเองจากชื่อกลุ่ม (เลขปกติ → "ห้องจ่ายเบอร์ บ้านเก่า" · เลข R… → "ห้องจ่ายเบอร์ REJECT")
+    "slip_group": "",
+    "slip_group_reject": "",
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -137,6 +144,9 @@ def cfg() -> dict:
         c["fb_poll_min"] = max(2, min(60, int(c.get("fb_poll_min") or DEFAULTS["fb_poll_min"])))
     except Exception:
         c["fb_poll_min"] = DEFAULTS["fb_poll_min"]
+    c["slip_post"] = bool(c.get("slip_post"))
+    for k in ("slip_group", "slip_group_reject"):
+        c[k] = str(c.get(k) or "").strip()
     return c
 
 
@@ -221,6 +231,15 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
             out["fb_poll_min"] = n
         except Exception:
             errs.append("ดึงแชท Facebook สำรองต้องเป็นตัวเลข 2–60 นาที")
+    if "slip_post" in body:
+        out["slip_post"] = bool(body.get("slip_post"))
+    for key, label in (("slip_group", "กลุ่มจ่ายเบอร์ (เลขปกติ)"), ("slip_group_reject", "กลุ่มจ่ายเบอร์ (เลข R…)")):
+        if key in body:
+            g = str(body.get(key) or "").strip()
+            if g and g[:1] != "C":
+                errs.append("%s ต้องเป็น group id ของ LINE (ขึ้นต้นด้วย C) หรือเว้นว่างให้ระบบหาเอง" % label)
+            else:
+                out[key] = g
     if out.get("alert_on") and not out.get("alert_group"):
         errs.append("เปิดแจ้งเตือนเข้ากลุ่ม LINE แล้ว แต่ยังไม่ได้เลือกกลุ่ม")
     return out, errs
@@ -1700,7 +1719,10 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
         o, auto = lead.chat, (lead.auto or {})
         kind, code = "sale", lead.code
         if lead.code and lead.assigned_at:
-            at, how = lead.assigned_at, ("ระบบ (ทดลอง)" if lead.code_demo else "ระบบ")
+            pi = lead.post_info or {}
+            at, how = lead.assigned_at, ("ระบบ (ทดลอง)" if lead.code_demo else
+                                         "ระบบ → ส่งเข้ากลุ่มแล้ว" if pi.get("ok") else
+                                         "ระบบ (ยังส่งเข้ากลุ่มไม่สำเร็จ)" if pi.get("error") else "ระบบ")
             seller = o.owner.nickname if o.owner_id else ""
             by = lead.assigned_by or ""
         else:
@@ -1889,6 +1911,8 @@ def lead_json(o, lead=None) -> dict:
         "codeDemo": bool(lead.code_demo),
         "assignedAt": _iso(lead.assigned_at),
         "assignedBy": lead.assigned_by or "",
+        # ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์แล้วหรือยัง ({ok, groupName, tagged, error, …} · ว่าง = ยังไม่เคยส่ง)
+        "post": {k: v for k, v in (lead.post_info or {}).items() if k != "mid"} or None,
         # แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ ({by, at}) — ไม่ใช่ลีดขาย ออกจากแท็บจ่ายเบอร์
         "noCode": (lead.auto or {}).get(NOCODE_KEY) or None,
         # ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว ({code, at, group, seller, by}) — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย
@@ -2125,11 +2149,13 @@ def last_running() -> int:
                 nums.append(int(mm.group(3)))
             if len(nums) >= 20:
                 break
-    # เลขที่โหมดทดลองออกไปแล้ว — ทั้งลูกค้า LINE OA (ChatLead) และลีดภายนอกจากห้องพัก Lead (ExtLead) ใช้เลขรันชุดเดียวกัน
+    # เลขที่ปุ่ม "จ่ายเบอร์" ออกไปแล้ว — ทั้งลูกค้า LINE OA (ChatLead) และลีดภายนอกจากห้องพัก Lead (ExtLead)
+    #   ใช้เลขรันชุดเดียวกัน · ★ 6 ต.ค.69 นับทั้งโหมดทดลองและโหมดส่งจริง (`assigned_at` = ระบบเป็นคนออกเลข)
+    #   — ใบที่ส่งเข้ากลุ่มสำเร็จจะอยู่ในแชทกลุ่มด้านบนด้วย แต่ใบที่ส่งไม่สำเร็จ (รอกดส่งอีกครั้ง) มีที่นี่ที่เดียว
     #   เรียงล่าสุดก่อน (เดิมตัด 500 แถวโดยไม่เรียง = ได้แถวสุ่ม พอเลขเยอะจะเดาเลขถัดไปต่ำกว่าจริง)
     demo = []
     for M in (ChatLead, ExtLead):
-        demo += list(M.objects.filter(code_demo=True).exclude(code="").order_by("-assigned_at")
+        demo += list(M.objects.filter(assigned_at__isnull=False).exclude(code="").order_by("-assigned_at")
                      .values_list("code", flat=True)[:500])
     for c in demo:
         mm = _ANY_CODE.match(c or "")
@@ -2153,7 +2179,46 @@ def code_help(o, lead) -> dict:
     """ข้อมูลให้หน้าเว็บประกอบตัวอย่างเลขลีดก่อนกด "จ่ายเบอร์" (เลขจริงคำนวณใหม่ตอนกด กันซ้ำ)"""
     sug = suggest_prefix(lead, team_of(o.owner) if o.owner_id else "")
     return {"suggest": sug, "bases": [{"key": b, "type": t} for b, t in CODE_BASES],
-            "month": timezone.localdate().month, "next": last_running() + 1}
+            "month": timezone.localdate().month, "next": last_running() + 1,
+            "post": post_help(sim=is_sim_row(o), fb=is_fb(o))}
+
+
+def slip_post_on(c=None) -> bool:
+    """ปุ่ม "จ่ายเบอร์" ส่งใบเข้ากลุ่มจ่ายเบอร์จริงไหม (`connect_config.slip_post`) · อ่านค่าไม่ได้ = ไม่ส่ง"""
+    try:
+        return bool((c or cfg()).get("slip_post"))
+    except Exception:
+        return False
+
+
+def post_help(sim: bool = False, fb: bool = False, c=None) -> dict:
+    """ข้อมูลให้กล่องจ่ายเบอร์บอกล่วงหน้าว่า "กดแล้วจะส่งเข้ากลุ่มไหน" (ไม่ยิงเน็ต — อ่านทะเบียนกลุ่มใน KV)"""
+    from . import slippost
+    c = c or cfg()
+    try:
+        r = slippost.rooms(c)
+    except Exception:
+        r = {slippost.MAIN: {"name": ""}, slippost.REJECT: {"name": ""}}
+    return {"on": slip_post_on(c) and not sim, "sim": bool(sim), "fb": bool(fb),
+            "fbNote": slippost.FB_DATA_ONLY if fb else "",
+            "room": r[slippost.MAIN].get("name") or "", "rejectRoom": r[slippost.REJECT].get("name") or ""}
+
+
+_CODE_LOCK = 7406061    # เลขประจำ advisory lock ของการออกเลขลีด (ทั้งโปรเจกต์ยังไม่มีล็อกอื่นใช้ — เลขอะไรก็ได้ที่ไม่ชน)
+
+
+@contextmanager
+def code_lock():
+    """ล็อกการออกเลขลีด — ★ 6 ต.ค.69 ส่งเข้ากลุ่มจริงแล้ว 2 แอดมินกดจ่ายเบอร์พร้อมกันต้องไม่ได้เลขเดียวกัน
+    (เดิมเป็นข้อจำกัดที่จดไว้ว่า "ยังไม่มีล็อก" ตอนเป็นโหมดทดลอง)
+    Postgres = advisory lock ระดับธุรกรรม (ปลดเองตอน commit/rollback) · SQLite (dev/เทสต์) เขียนได้ทีละคนอยู่แล้ว
+    ห้ามยิงเน็ตข้างในล็อก — ส่งเข้ากลุ่มหลังออกจากล็อกแล้วเท่านั้น"""
+    with transaction.atomic():
+        from django.db import connection
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", [_CODE_LOCK])
+        yield
 
 
 class _Undo(Exception):
@@ -2161,41 +2226,47 @@ class _Undo(Exception):
 
 
 def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, code: str = "", by: str = ""):
-    """ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) → (ok, ข้อความ)
+    """ปุ่ม "จ่ายเบอร์" → (ok, ข้อความ)
 
-    ออกเลขลีด → ตั้ง type (ถ้ายังว่าง) → โอนลูกค้าให้เซลล์ → จดว่าใครจ่ายเมื่อไหร่
-    **ไม่ลงชีต ไม่โพสต์เข้ากลุ่มจ่ายเบอร์** (เจ้าของสั่ง: ยังเป็นเดโม) · เลขติดป้าย `code_demo`
+    ออกเลขลีด (ล็อกกันเลขซ้ำ) → ตั้ง type (ถ้ายังว่าง) → โอนลูกค้าให้เซลล์ → จดว่าใครจ่ายเมื่อไหร่
+    → ★ 6 ต.ค.69 **ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์** (`slippost.py` · สวิตช์ `slip_post`)
+      · ลูกค้า LINE: เซลล์ได้แชท ตอบลูกค้าผ่าน Connect ได้
+      · ลูกค้า Facebook: เซลล์ได้สิทธิ์ **เพื่อเก็บข้อมูลเท่านั้น** (ตอบจาก Connect ไม่ได้ — `api_reply`)
+      · **ไม่ลงชีต** (เจ้าของสั่งไว้ 4 ต.ค.69) · ลูกค้าจำลอง/บัญชีทดสอบ = ไม่ส่งเข้ากลุ่มจริง (เป็นเลขทดลอง)
+      · ส่งไม่สำเร็จ = **การจ่ายในระบบยังอยู่** (ไม่ย้อน) แล้วจดเหตุผลใน `post_info` ให้กด "ส่งเข้ากลุ่มอีกครั้ง"
+    สวิตช์ปิด = โหมดทดลองเดิม (`code_demo`) — เก็บในระบบอย่างเดียว
     """
     if not emp or not emp.active:
         return False, "เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน"
-    lead = lead_of(o)
-    if (lead.code or "").strip():
-        # มีเลขแล้ว (จากใบจ่ายลีดจริง/คนกรอก/จ่ายไปแล้ว) — ห้ามออกเลขทดลองทับ ไม่งั้นเลขจริงที่ผูกกับชีตหาย
-        # กรณีหน้าเว็บค้างของเก่าอยู่ (ระบบเพิ่งเติมเลขจากใบจ่ายลีดระหว่างที่แอดมินกำลังเลือก) ก็โดนกันที่นี่
-        return False, "ลูกค้ารายนี้มีเลขลีด %s แล้ว — ไม่ออกเลขใหม่ทับ (จะเปลี่ยนเซลล์ใช้ปุ่ม \"โอน\")" % lead.code
+    c = cfg()
+    real = slip_post_on(c) and not is_sim_row(o) and not is_test_seller(emp)
+    lead = lead_of(o)                             # สร้างแถวก่อนเข้าล็อก (สร้างชนกันใน transaction = transaction พัง)
     prefix = build_prefix(base, admin, reject)
     code = (code or "").strip().upper()
-    if code:
-        m = _CODE_RE.match(code)
-        if not m:
-            return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ NLD10-8410 (ตัวหน้า + เดือน + เลขรัน)"
-    else:
-        code = next_code(prefix)
-    if code_taken(code, chat_lead_pk=lead.pk):
-        return False, "เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code
-    lead.code, lead.code_demo = code, True
-    if not lead.lead_type:                       # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)
-        core = _CODE_RE.match(code).group(1).lstrip("R").lstrip("A")
-        lead.lead_type = dict(CODE_BASES).get(core, "")
-    auto = dict(lead.auto or {})
-    auto.pop(NOCODE_KEY, None)                   # เคยกด "ไม่ต้องจ่ายเบอร์" ไว้แล้วเปลี่ยนใจ — จ่ายแล้วป้ายนั้นไม่ต้องค้าง
-    auto["code"] = "จ่ายเบอร์(ทดลอง)"
-    lead.auto = auto
-    lead.assigned_at, lead.assigned_by = timezone.now(), (by or "")[:80]
-    lead.updated_by = (by or "")[:80]
-    note = "จ่ายเบอร์ %s (ทดลอง)" % code
+    if code and not _CODE_RE.match(code):
+        return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ NLD10-8410 (ตัวหน้า + เดือน + เลขรัน)"
     try:
-        with transaction.atomic():               # โอนไม่สำเร็จ = เลขต้องไม่ค้างอยู่กับลูกค้าที่ไม่มีเซลล์
+        with code_lock():                         # เลขถัดไป → ตรวจซ้ำ → บันทึก ภายในล็อกเดียว · โอนไม่สำเร็จ = ย้อนทั้งหมด
+            lead = ChatLead.objects.get(pk=lead.pk)
+            if (lead.code or "").strip():
+                # มีเลขแล้ว (จากใบจ่ายลีดจริง/คนกรอก/จ่ายไปแล้ว) — ห้ามออกเลขทับ ไม่งั้นเลขจริงที่ผูกกับชีตหาย
+                # กรณีหน้าเว็บค้างของเก่าอยู่ / แอดมินอีกคนเพิ่งกดจ่ายไป ก็โดนกันที่นี่
+                raise _Undo("ลูกค้ารายนี้มีเลขลีด %s แล้ว — ไม่ออกเลขใหม่ทับ (จะเปลี่ยนเซลล์ใช้ปุ่ม \"โอน\")" % lead.code)
+            code = code or next_code(prefix)
+            if code_taken(code, chat_lead_pk=lead.pk):
+                raise _Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)
+            lead.code, lead.code_demo = code, not real
+            if not lead.lead_type:               # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)
+                core = _CODE_RE.match(code).group(1).lstrip("R").lstrip("A")
+                lead.lead_type = dict(CODE_BASES).get(core, "")
+            auto = dict(lead.auto or {})
+            auto.pop(NOCODE_KEY, None)           # เคยกด "ไม่ต้องจ่ายเบอร์" ไว้แล้วเปลี่ยนใจ — จ่ายแล้วป้ายนั้นไม่ต้องค้าง
+            auto["code"] = "จ่ายเบอร์" if real else "จ่ายเบอร์(ทดลอง)"
+            lead.auto = auto
+            lead.assigned_at, lead.assigned_by = timezone.now(), (by or "")[:80]
+            lead.updated_by = (by or "")[:80]
+            lead.post_info = {"sending": timezone.now().isoformat()} if real else {}
+            note = "จ่ายเบอร์ %s" % code + ("" if real else " (ทดลอง)")
             lead.save()
             if o.owner_id == emp.id:             # เป็นของคนนี้อยู่แล้ว — ไม่ต้องโอน แค่จดว่าจ่ายเบอร์
                 _log(o, ChatOwnerLog.ASSIGN, emp=emp, by=by, note=note)
@@ -2205,7 +2276,66 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
                     raise _Undo(msg)
     except _Undo as e:
         return False, str(e)
-    return True, "จ่ายเบอร์ %s ให้ %s แล้ว (ทดลอง — ยังไม่ลงชีต)" % (code, emp.nickname)
+    fb_tail = (" · ลูกค้า Facebook: %s ได้สิทธิ์เก็บข้อมูลเท่านั้น (ตอบแชทไม่ได้)" % emp.nickname) if is_fb(o) else ""
+    if not real:
+        why = "ลูกค้าจำลอง/บัญชีทดสอบ — ไม่ส่งเข้ากลุ่มจริง" if slip_post_on(c) else "ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม"
+        return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)%s" % (code, emp.nickname, why, fb_tail)
+    info = _post_slip(o, lead, emp, by, c)
+    from . import slippost
+    return True, slippost.summary(code, emp.nickname, info) + fb_tail
+
+
+def post_body(o, lead, by: str = "") -> str:
+    """ใบจ่ายลีดที่ส่งเข้ากลุ่ม (ช่องว่างเว้นว่างแบบใบจริง ไม่ใช่ "-") + บรรทัดบอกว่าจ่ายผ่านระบบ + ลิงก์เปิดลูกค้า"""
+    from . import slippost
+    p, fb = cust(o), is_fb(o)
+    f = {"code": lead.code, "ads": lead.ads, "account": lead.account, "name": lead.customer_name,
+         "line_id": lead.line_id, "line_name": "" if fb else (p.display_name or ""), "phone": lead.phone,
+         "channel": lead.channel, "car": lead.car_text or lead.car_model, "live": lead.live, "more": lead.more}
+    notes = ["จ่ายโดย: %s (ผ่านระบบ Connect)" % by] if by else []
+    link = _link(o)
+    if link.startswith("http"):
+        # LINE = เซลล์ตอบลูกค้าในระบบ (เจ้าของสั่ง 3 ต.ค.69 "ไม่ให้เซลตอบลูกค้าในไลน์แล้ว")
+        # Facebook = เปิดดู/กรอกข้อมูลลูกค้าได้ แต่ติดต่อลูกค้าตามเบอร์/ไอดีในใบ
+        notes.append(("ข้อมูลลูกค้าในระบบ (Facebook — ติดต่อตามเบอร์/ไอดีด้านบน): %s" if fb
+                      else "ตอบแชทลูกค้าในระบบ Connect: %s") % link)
+    return slippost.body(f, notes)
+
+
+def _post_slip(o, lead, emp, by: str = "", c=None) -> dict:
+    """ส่งใบเข้ากลุ่ม → เก็บผลลง `ChatLead.post_info` (หน้าเว็บโชว์สถานะ/ปุ่มส่งอีกครั้ง)"""
+    from . import slippost
+    try:
+        info = slippost.post(lead.code, post_body(o, lead, by), emp, by=by, c=c)
+    except Exception as e:                       # ห้ามทำให้การจ่ายเบอร์ที่บันทึกไปแล้วกลายเป็น error 500
+        info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(e)[:120]}
+    ChatLead.objects.filter(pk=lead.pk).update(post_info=info)
+    lead.post_info = info
+    return info
+
+
+def repost_lead(o, by: str = ""):
+    """ปุ่ม **"ส่งเข้ากลุ่มอีกครั้ง"** (ส่งรอบแรกไม่สำเร็จ) → (ok, ข้อความ) · ส่งสำเร็จไปแล้ว = ไม่ส่งซ้ำ"""
+    from . import slippost
+    lead = lead_of(o)
+    if not lead.code or not lead.assigned_at:
+        return False, "ลูกค้ารายนี้ยังไม่ได้จ่ายเบอร์ผ่านระบบ"
+    if lead.code_demo:
+        return False, "เลข %s ออกในโหมดทดลอง (ไม่ได้จองไว้) — ไม่ส่งเข้ากลุ่มจริง" % lead.code
+    if is_sim_row(o):
+        return False, "ลูกค้าจำลอง — ไม่ส่งเข้ากลุ่มจริง"
+    if not o.owner_id or not o.owner.active:
+        return False, "ลูกค้ารายนี้ไม่มีเซลล์แล้ว — โอนให้เซลล์ก่อน"
+    with code_lock():                             # กดซ้ำรัวๆ / 2 แอดมินกดพร้อมกัน = ส่งรอบเดียว
+        lead = ChatLead.objects.get(pk=lead.pk)
+        if (lead.post_info or {}).get("ok"):
+            return False, "ส่งใบจ่ายลีด %s เข้ากลุ่มไปแล้ว — ไม่ส่งซ้ำ" % lead.code
+        if slippost.sending(lead.post_info):
+            return False, "กำลังส่งอยู่ — รอสักครู่"
+        lead.post_info = dict(lead.post_info or {}, sending=timezone.now().isoformat())
+        lead.save(update_fields=["post_info"])
+    info = _post_slip(o, lead, o.owner, by)
+    return bool(info.get("ok")), slippost.summary(lead.code, o.owner.nickname, info)
 
 
 def mark_no_code(o, on: bool, by: str = ""):
@@ -2377,12 +2507,16 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
 def counts(me=None, admin: bool = False) -> dict:
     now = timezone.now()
     base = ChatOwner.objects
+    # ★ 6 ต.ค.69 — ลูกค้า Facebook ของเซลล์ = สิทธิ์เก็บข้อมูลเท่านั้น (ตอบจาก Connect ไม่ได้ · slippost.FB_DATA_ONLY)
+    #   → ไม่นับเป็น "รอตอบ/เลยเวลา" ของเซลล์ (ป้ายตัวเลขจะเตือนเรื่องที่เขาทำอะไรไม่ได้) · แอดมินยังเห็นในเลยเวลาตามเดิม
+    wait = base.filter(owner=me, awaiting_since__isnull=False) if me else base.none()
+    if not admin:
+        wait = wait.filter(fb_profile__isnull=True)
     out = {
         "queue": base.filter(owner__isnull=True, awaiting_since__isnull=False).count(),
         "mine": base.filter(owner=me).count() if me else 0,
-        "mineWaiting": base.filter(owner=me, awaiting_since__isnull=False).count() if me else 0,
-        "mineOverdue": (base.filter(owner=me, awaiting_since__isnull=False, due_at__lte=now).count()
-                        if me else 0),
+        "mineWaiting": wait.count() if me else 0,
+        "mineOverdue": wait.filter(due_at__lte=now).count() if me else 0,
     }
     if admin:
         out.update({

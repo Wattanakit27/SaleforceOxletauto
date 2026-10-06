@@ -26,8 +26,8 @@
 ไฟล์นี้: แกะใบร่าง (`parse_draft`) → จับคู่กับใบจริงที่ตามมาด้วย **เบอร์โทร / ID LINE**
 (ไม่มีทั้งคู่ = ชื่อ Account + ช่องทาง) → ลีดไหน "ยังรอเลข" · ลีดไหน "จ่ายแล้ว รอไปกี่นาที" (`board`)
 
-⚠️ **อ่านอย่างเดียว** ไม่ส่งอะไรเข้ากลุ่ม · ไม่เก็บข้อมูลเพิ่ม (อ่านจาก `checkout_groupchat` ที่เก็บอยู่แล้ว
-อายุ 90 วันตามเดิม) · ห้องนี้เพิ่งมีบอทเข้า 4 ต.ค.69 13:23 — แพทเทิร์นจะชัดขึ้นเมื่อมีข้อความมากกว่านี้
+ส่วนอ่านห้องพัก = **อ่านอย่างเดียว** ไม่เก็บข้อมูลเพิ่ม (อ่านจาก `checkout_groupchat` ที่เก็บอยู่แล้ว อายุ 90 วันตามเดิม)
+★ 6 ต.ค.69 — ปุ่ม "จ่ายเบอร์" ของลีดในห้องพัก **ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์** (`slippost.py`)
 """
 from __future__ import annotations
 
@@ -221,7 +221,9 @@ def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
         if e and e.code:
             sys_at = e.assigned_at
             it["sys"] = {"code": e.code, "seller": e.seller_name, "at": _iso(e.assigned_at), "by": e.assigned_by,
-                         "demo": e.code_demo, "slip": slip_text(e)}
+                         "demo": e.code_demo, "slip": slip_text(e),
+                         # ส่งเข้ากลุ่มจ่ายเบอร์แล้วหรือยัง (ไม่สำเร็จ = หน้าเว็บมีปุ่ม "ส่งเข้ากลุ่มอีกครั้ง")
+                         "post": {k: v for k, v in (e.post_info or {}).items() if k != "mid"} or None}
         if e and e.no_code and not e.code:
             it["skipped"] = {"by": e.no_code_by, "at": _iso(e.updated_at)}
         done = [t for t in (r["_asgAt"], sys_at) if t]
@@ -251,7 +253,7 @@ def forget():
 
 
 # ─────────────────────────────────────────────────────────────
-#  จ่ายเบอร์ลีดภายนอกจากหน้า Connect (โหมดทดลอง — ไม่ลงชีต ไม่โพสต์กลุ่ม เหมือนลูกค้า LINE OA)
+#  จ่ายเบอร์ลีดภายนอกจากหน้า Connect — ★ 6 ต.ค.69 ส่งเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ไม่ลงชีต · slippost.py)
 # ─────────────────────────────────────────────────────────────
 KEEP_DAYS = 90         # ExtLead มีข้อมูลลูกค้า (เบอร์/ID LINE) — อายุเท่าแชทกลุ่มที่เป็นต้นทาง
 
@@ -279,7 +281,9 @@ def _ext_for(g, d):
 def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, code: str = "", by: str = ""):
     """ปุ่ม "จ่ายเบอร์" ของลีดในห้องพัก → (ok, ข้อความ, ExtLead|None)
 
-    เลขรันชุดเดียวกับลูกค้า LINE OA · เลขซ้ำ = ปฏิเสธ · ได้เลขในห้องจ่ายเบอร์ไปแล้ว = ไม่ออกเลขทับ
+    เลขรันชุดเดียวกับลูกค้า LINE OA (ล็อกกันเลขซ้ำ) · เลขซ้ำ = ปฏิเสธ · ได้เลขในห้องจ่ายเบอร์ไปแล้ว = ไม่ออกเลขทับ
+    ★ 6 ต.ค.69 — **ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์** (เจ้าของ: "ช่องทางอื่นแท็กในกลุ่มก็พอ")
+      สิทธิ์ในระบบ = จดว่าจ่ายให้ใคร (ลีดพวกนี้ไม่มีแชทให้ตอบ) · สวิตช์ปิด = โหมดทดลองเดิม
     """
     from . import connect as C
     if not emp or not emp.active:
@@ -290,25 +294,80 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
     it = next((i for i in board(cache_sec=0)["assigned"] if i["id"] == g.message_id and i.get("code")), None)
     if it:
         return False, "ลีดนี้ได้เลข %s ในห้องจ่ายเบอร์แล้ว (โดย %s)" % (it["code"], it["assignedBy"] or "-"), None
-    e = _ext_for(g, d)
-    if e.code:
-        return False, "ลีดนี้จ่ายเบอร์ %s ไปแล้ว — ไม่ออกเลขทับ" % e.code, e
+    c = C.cfg()
+    real = C.slip_post_on(c) and not C.is_test_seller(emp)
+    e = _ext_for(g, d)                            # สร้างแถวก่อนเข้าล็อก
     prefix = C.build_prefix(base, admin, reject)
     code = (code or "").strip().upper()
-    if code:
-        if not C._CODE_RE.match(code):
-            return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ TLD10-8410 (ตัวหน้า + เดือน + เลขรัน)", e
-    else:
-        code = C.next_code(prefix)
-    if C.code_taken(code, ext_pk=e.pk):
-        return False, "เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code, e
-    e.code, e.code_demo = code, True
-    e.seller, e.seller_name = emp, emp.nickname[:80]
-    e.assigned_at, e.assigned_by = timezone.now(), (by or "")[:80]
-    e.no_code, e.no_code_by = False, ""
-    e.save()
+    if code and not C._CODE_RE.match(code):
+        return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ TLD10-8410 (ตัวหน้า + เดือน + เลขรัน)", e
+    try:
+        with C.code_lock():
+            e = type(e).objects.get(pk=e.pk)
+            if e.code:
+                raise C._Undo("ลีดนี้จ่ายเบอร์ %s ไปแล้ว — ไม่ออกเลขทับ" % e.code)
+            code = code or C.next_code(prefix)
+            if C.code_taken(code, ext_pk=e.pk):
+                raise C._Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)
+            e.code, e.code_demo = code, not real
+            e.seller, e.seller_name = emp, emp.nickname[:80]
+            e.assigned_at, e.assigned_by = timezone.now(), (by or "")[:80]
+            e.no_code, e.no_code_by = False, ""
+            e.post_info = {"sending": timezone.now().isoformat()} if real else {}
+            e.save()
+    except C._Undo as x:
+        return False, str(x), e
     forget()
-    return True, "จ่ายเบอร์ %s ให้ %s แล้ว (ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม)" % (code, emp.nickname), e
+    if not real:
+        why = "บัญชีทดสอบ — ไม่ส่งเข้ากลุ่มจริง" if C.slip_post_on(c) else "ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม"
+        return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)" % (code, emp.nickname, why), e
+    from . import slippost
+    info = _post(e, emp, by, c)
+    return True, slippost.summary(code, emp.nickname, info), e
+
+
+def post_body(e, by: str = "") -> str:
+    """ใบที่ส่งเข้ากลุ่ม — ช่องเดียวกับใบร่างที่แอดมินพักไว้ + เลข"""
+    from . import slippost
+    f = {"code": e.code, "ads": e.ads, "account": e.account, "name": e.customer_name, "line_id": e.line_id,
+         "line_name": "", "phone": e.phone, "channel": e.channel, "car": e.car_text, "live": e.live, "more": e.more}
+    return slippost.body(f, ["จ่ายโดย: %s (ผ่านระบบ Connect)" % by] if by else [])
+
+
+def _post(e, emp, by: str = "", c=None) -> dict:
+    from . import slippost
+    try:
+        info = slippost.post(e.code, post_body(e, by), emp, by=by, c=c)
+    except Exception as x:                        # การจ่ายในระบบบันทึกไปแล้ว — ห้ามกลายเป็น error 500
+        info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(x)[:120]}
+    type(e).objects.filter(pk=e.pk).update(post_info=info)
+    e.post_info = info
+    forget()                                      # ใบที่ส่งสำเร็จถูกเก็บลงแชทกลุ่มแล้ว — ห้องพักต้องเห็นทันที
+    return info
+
+
+def repost(mid: str, by: str = ""):
+    """ปุ่ม **"ส่งเข้ากลุ่มอีกครั้ง"** ของลีดภายนอก → (ok, ข้อความ) · ส่งสำเร็จไปแล้ว = ไม่ส่งซ้ำ"""
+    from . import connect as C
+    from . import slippost
+    from .models import ExtLead
+    e = ExtLead.objects.select_related("seller").filter(message_id=str(mid or "")).first()
+    if not e or not e.code:
+        return False, "ลีดนี้ยังไม่ได้จ่ายเบอร์"
+    if e.code_demo:
+        return False, "เลข %s ออกในโหมดทดลอง (ไม่ได้จองไว้) — ไม่ส่งเข้ากลุ่มจริง" % e.code
+    if not e.seller or not e.seller.active:
+        return False, "เซลล์ที่จ่ายให้ถูกปิดใช้งานแล้ว — จ่ายใหม่ไม่ได้จากปุ่มนี้"
+    with C.code_lock():
+        e = ExtLead.objects.select_related("seller").get(pk=e.pk)
+        if (e.post_info or {}).get("ok"):
+            return False, "ส่งใบจ่ายลีด %s เข้ากลุ่มไปแล้ว — ไม่ส่งซ้ำ" % e.code
+        if slippost.sending(e.post_info):
+            return False, "กำลังส่งอยู่ — รอสักครู่"
+        e.post_info = dict(e.post_info or {}, sending=timezone.now().isoformat())
+        e.save(update_fields=["post_info"])
+    info = _post(e, e.seller, by)
+    return bool(info.get("ok")), slippost.summary(e.code, e.seller.nickname, info)
 
 
 def skip(mid: str, on: bool, by: str = ""):

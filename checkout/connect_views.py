@@ -7,6 +7,7 @@
   - **แอดมิน/ผู้บริหาร** — เห็นทุกแชท · ตอบได้ทุกคน · โอน/ปล่อยคืนคิว · ตั้งค่าเวร/เส้นตาย
   - **เซลล์** — เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ · คิวรอรับเห็นแค่ข้อความที่ลูกค้าเพิ่งส่ง
     และเห็นเฉพาะวันเวรของทีมตัวเอง · ตอบได้เฉพาะลูกค้าของตัวเอง
+    · ★ 6 ต.ค.69 ลูกค้า **Facebook** = สิทธิ์เก็บข้อมูลเท่านั้น (ดูแชท/กรอกข้อมูลลีด · ตอบ/ปิดรอบไม่ได้)
   - **คนงาน (worker)** — เข้าไม่ได้
 
 ⚠️ ไม่ส่ง LINE user id ของลูกค้าออกจากไฟล์นี้เลย — อ้างอิงด้วย `ChatOwner.id`
@@ -21,6 +22,7 @@ from django.views.decorators.http import require_GET
 
 from . import connect as C
 from .models import ChatOwner, Employee
+from .slippost import FB_DATA_ONLY
 
 _ADMIN_POS = {"admin", "executive", "ผู้บริหาร", "manager", "exec"}
 
@@ -236,7 +238,8 @@ def api_inbox(request):
             if view == "tocode":
                 # ตัวช่วยประกอบเลขตัวอย่างในกล่องจ่ายเบอร์ของลีดภายนอก (เลขรันชุดเดียวกับลูกค้า LINE OA)
                 pk["codeHelp"] = {"bases": [{"key": b, "type": t} for b, t in C.CODE_BASES],
-                                  "month": timezone.localdate().month, "next": C.last_running() + 1}
+                                  "month": timezone.localdate().month, "next": C.last_running() + 1,
+                                  "post": C.post_help()}     # กดจ่ายแล้วส่งเข้ากลุ่มไหน (บอกก่อนกด)
                 for it in pk.get("assigned") or []:      # แท็กท้ายใบ (ชื่อ LINE คำแรก) → ชื่อเล่นในทะเบียน
                     it["sellerNick"] = C.tag_nick(it.get("seller") or "")
                 out["parked"] = pk
@@ -266,6 +269,7 @@ def api_chat(request):
     from .chat import reply_on
     admin, emp = ctx["admin"], ctx["emp"]
     mine = bool(emp and o.owner_id == emp.id)
+    fb_data_only = C.is_fb(o) and not admin
     if acc == "preview":
         msgs = C.messages(o, limit=10, since=o.awaiting_since)
     else:
@@ -279,12 +283,14 @@ def api_chat(request):
         "profile": C.profile_json(o, acc, [m["text"] for m in msgs if m["dir"] == "in"]),
         "canClaim": not o.owner_id and bool(emp) and (admin or acc == "preview"),
         "canReply": acc == "full" and (admin or mine),
-        "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or mine),
+        # ★ 6 ต.ค.69 — ลูกค้า Facebook: เซลล์ได้สิทธิ์ "เก็บข้อมูลเท่านั้น" → ปิดรอบรอ/ตอบไม่ได้ (แอดมินยังทำได้)
+        "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or (mine and not fb_data_only)),
         "canAssign": admin,
         # ลูกค้าจำลองไม่ติดสวิตช์ล็อก (ตอบไปไม่ออกนอกระบบ) — ต้องตรงกับ chat.send_reply
         #   ลูกค้า Facebook มีสวิตช์ของตัวเอง (connect_config.fb_reply: off/test/on) — ต้องตรงกับ fb_send.send_reply
-        "replyOn": (C.fb_reply_state(o)[0] if C.is_fb(o) else (reply_on() or C.is_sim_row(o))),
-        "replyWhy": (C.fb_reply_state(o)[1] if C.is_fb(o) else ""),
+        "replyOn": (False if fb_data_only else
+                    C.fb_reply_state(o)[0] if C.is_fb(o) else (reply_on() or C.is_sim_row(o))),
+        "replyWhy": (FB_DATA_ONLY if fb_data_only else C.fb_reply_state(o)[1] if C.is_fb(o) else ""),
         "now": timezone.localtime().isoformat(timespec="seconds"),
     }
     if admin:
@@ -308,11 +314,12 @@ def api_chat(request):
 
 
 def api_assign_lead(request):
-    """ปุ่ม **"จ่ายเบอร์"** (แอดมิน · โหมดทดลอง) — POST `{id, emp, base, admin, reject, code?}`
+    """ปุ่ม **"จ่ายเบอร์"** (แอดมิน) — POST `{id, emp, base, admin, reject, code?}`
     · `{id, skip: true|false}` = ปุ่ม "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย → ออกจากแท็บจ่ายเบอร์) / เอากลับเข้าแท็บ
+    · `{id, resend: true}` = ปุ่ม "ส่งเข้ากลุ่มอีกครั้ง" (รอบแรกส่งไม่สำเร็จ)
 
     ออกเลขลีดตามกติกาจริง + โอนลูกค้าให้เซลล์ + จดว่าใครจ่ายเมื่อไหร่
-    **เก็บใน Postgres อย่างเดียว ไม่ลงชีต ไม่โพสต์กลุ่ม** (เจ้าของสั่ง 4 ต.ค.69: ยังเป็นเดโม)
+    ★ 6 ต.ค.69 **ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์** (slippost.py · ไม่ลงชีต) — สวิตช์ `slip_post` ปิด = ทดลองเดิม
     """
     ctx, body, bad = _post_guard(request)
     if bad:
@@ -325,6 +332,10 @@ def api_assign_lead(request):
     if "skip" in body:                            # ปุ่ม "ไม่ต้องจ่ายเบอร์" (true) / "เอากลับเข้าแท็บจ่ายเบอร์" (false)
         ok, msg = C.mark_no_code(o, bool(body.get("skip")), by=ctx["name"] or "แอดมิน")
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    if body.get("resend"):
+        ok, msg = C.repost_lead(o, by=ctx["name"] or "แอดมิน")
+        return _j({"ok": ok, "message" if ok else "error": msg,
+                   "post": _post_out(C.lead_of(_row(request, ctx, o.id)))}, 200 if ok else 400)
     try:
         eid = int(body.get("emp") or 0)
     except Exception:
@@ -334,14 +345,22 @@ def api_assign_lead(request):
                             bool(body.get("reject")), str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
-    return _j({"ok": True, "message": msg})
+    return _j({"ok": True, "message": msg, "post": _post_out(C.lead_of(_row(request, ctx, o.id)))})
+
+
+def _post_out(rec) -> dict | None:
+    """ผลส่งใบเข้ากลุ่มสำหรับหน้าเว็บ (ตัด message id ของ LINE ออก — ไม่จำเป็นต้องออกหน้าเว็บ)"""
+    pi = getattr(rec, "post_info", None) or {}
+    return {k: v for k, v in pi.items() if k != "mid"} or None
 
 
 def api_park_assign(request):
-    """จ่ายเบอร์ **ลีดภายนอก** จากห้องพัก Lead (TikTok/FB/เบอร์กลาง … · แอดมิน · โหมดทดลอง)
+    """จ่ายเบอร์ **ลีดภายนอก** จากห้องพัก Lead (TikTok/FB/เบอร์กลาง … · แอดมิน)
     POST `{mid, emp, base, admin, reject, code?}` · `{mid, skip: true|false}` = ไม่ต้องจ่ายเบอร์ / เอากลับ
+    · `{mid, resend: true}` = ส่งเข้ากลุ่มอีกครั้ง
 
-    `mid` = message id ของใบร่างในกลุ่ม (ไม่ใช่ข้อมูลส่วนบุคคล) · เก็บใน ExtLead อย่างเดียว ไม่ลงชีต ไม่โพสต์กลุ่ม
+    `mid` = message id ของใบร่างในกลุ่ม (ไม่ใช่ข้อมูลส่วนบุคคล) · เก็บใน ExtLead + ★ 6 ต.ค.69 ส่งเข้ากลุ่มจ่ายเบอร์จริง
+    (สิทธิ์ในระบบ = จดว่าจ่ายให้ใคร · ไม่ลงชีต)
     """
     ctx, body, bad = _post_guard(request)
     if bad:
@@ -354,6 +373,11 @@ def api_park_assign(request):
     if "skip" in body:
         ok, msg = LP.skip(mid, bool(body.get("skip")), by=by)
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    if body.get("resend"):
+        ok, msg = LP.repost(mid, by=by)
+        from .models import ExtLead
+        return _j({"ok": ok, "message" if ok else "error": msg,
+                   "post": _post_out(ExtLead.objects.filter(message_id=mid).first())}, 200 if ok else 400)
     try:
         eid = int(body.get("emp") or 0)
     except Exception:
@@ -363,7 +387,7 @@ def api_park_assign(request):
                            bool(body.get("reject")), str(body.get("code") or ""), by=by)
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
-    return _j({"ok": True, "message": msg, "code": e.code, "slip": LP.slip_text(e)})
+    return _j({"ok": True, "message": msg, "code": e.code, "slip": LP.slip_text(e), "post": _post_out(e)})
 
 
 def api_lead(request):
@@ -419,6 +443,8 @@ def api_reply(request):
     emp = ctx["emp"]
     if not (ctx["admin"] or (emp and o.owner_id == emp.id)):
         return _j({"ok": False, "error": "ตอบได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
+    if C.is_fb(o) and not ctx["admin"]:          # ★ 6 ต.ค.69 เจ้าของสั่ง: ไม่ใช่ LINE = สิทธิ์เก็บข้อมูลเท่านั้น
+        return _j({"ok": False, "error": FB_DATA_ONLY}, 403)
     from .chat import ReplyError, send_reply
     try:
         if C.is_fb(o):                               # ลูกค้า Facebook → Send API ของเพจ (fb_send.py)
@@ -464,6 +490,8 @@ def api_dismiss(request):
     emp = ctx["emp"]
     if not (ctx["admin"] or (emp and o.owner_id == emp.id)):
         return _j({"ok": False, "error": "ทำได้เฉพาะลูกค้าของคุณ"}, 403)
+    if C.is_fb(o) and not ctx["admin"]:          # ลูกค้า Facebook ของเซลล์ = เก็บข้อมูลเท่านั้น (แอดมินดูแลแชท)
+        return _j({"ok": False, "error": FB_DATA_ONLY}, 403)
     ok, msg = C.dismiss(o.id, by=ctx["name"], emp=emp)
     return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
 
@@ -498,6 +526,17 @@ def api_config(request):
                     errs.append(e)
             except Exception:
                 pass
+        # กลุ่มจ่ายเบอร์ที่เลือกเอง — บอทตัวส่งต้องอยู่ในกลุ่มนั้นจริง (ไม่งั้นใบส่งไม่ออกทุกครั้งแบบเงียบๆ)
+        cur = C.cfg()
+        for key in ("slip_group", "slip_group_reject"):
+            if not errs and new.get(key) and new[key] != cur.get(key):
+                try:
+                    from dashboard.services.line_channels import push_group_error
+                    e = push_group_error(new[key])
+                    if e:
+                        errs.append(e)
+                except Exception:
+                    pass
         if errs:
             return _j({"ok": False, "error": " · ".join(errs), "errors": errs}, 400)
         if not C.save_cfg(new):
@@ -520,9 +559,15 @@ def api_config(request):
                           "last": fb_webhook.last()}}
     except Exception:
         pass
+    slip = {}
+    try:                                             # กลุ่มจ่ายเบอร์ที่ปุ่ม "จ่ายเบอร์" จะส่งเข้า (การ์ดตั้งค่า)
+        from . import slippost
+        slip = {"rooms": slippost.rooms(c), "candidates": slippost.lead_rooms()}
+    except Exception:
+        pass
     return _j({"ok": True, "cfg": c, "roster": C.roster(14, c), "duty": _duty(c),
                "teamsAvail": teams, "groups": _alert_groups(), "status": _status(ctx),
-               "sellers": C.seller_list(), "fb": fb})
+               "sellers": C.seller_list(), "fb": fb, "slip": slip})
 
 
 def api_fb_test(request):

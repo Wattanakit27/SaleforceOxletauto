@@ -199,7 +199,7 @@
   .pf-slip pre { white-space: pre-wrap; word-break: break-word; background: var(--bg2); border-radius: 8px; padding: 8px 10px;
                  font-size: 12px; line-height: 1.6; margin: 6px 0; font-family: inherit; }
   .pf-src { font-size: 12px; color: var(--blue); background: var(--blue-bg); border-radius: 7px; padding: 5px 8px; margin-bottom: 6px; }
-  /* ปุ่มจ่ายเบอร์ (โหมดทดลอง) */
+  /* ปุ่มจ่ายเบอร์ (ส่งเข้ากลุ่มจ่ายเบอร์จริง · สวิตช์ปิด = ทดลอง) */
   .pf-assign { border: 1px dashed var(--blue); border-radius: 10px; padding: 10px; margin: 10px 0; background: var(--bg); }
   .pf-assign select { width: 100%; padding: 6px 8px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
   .pf-assign label.ck { display: flex; gap: 6px; align-items: center; margin: 5px 0; font-size: 13px; }
@@ -579,7 +579,7 @@
   }
 
   // ── ห้องพัก Lead (กลุ่ม LINE "ADMIN เก็บ Lead") — ลีดภายนอก (TikTok/FB/เบอร์กลาง …) ที่พักใบร่างไว้ (leadpark.py) ──
-  //   จ่ายเบอร์ได้จากตรงนี้ (โหมดทดลอง: เก็บในระบบเรา ไม่ลงชีต ไม่โพสต์กลุ่ม) · เลขรันชุดเดียวกับลูกค้า LINE OA
+  //   จ่ายเบอร์ได้จากตรงนี้ (★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ · ไม่ลงชีต) · เลขรันชุดเดียวกับลูกค้า LINE OA
   //   หรือแอดมินโพสต์ใบจริง (เลข + @เซลล์) ในห้องจ่ายเบอร์เองก็ได้ — ระบบจับคู่ด้วยเบอร์/ID LINE แล้วเอาออกจากรายการเอง
   const fmtWait = m => m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที';
   const srcTag = s => chTag(s in CH_CLS ? s : 'other');
@@ -600,8 +600,8 @@
       <label class="ck"><input type="checkbox" data-x="admin"${dr.admin ? ' checked' : ''}> A — ลีดของแอดมิน</label>
       <label class="ck"><input type="checkbox" data-x="reject"${dr.reject ? ' checked' : ''}> R — เคสรีเจ็ค</label>
       <div style="color:var(--t3);font-size:12px">เลขที่จะได้: <span class="pf-code" data-x="preview"></span></div>
-      <div class="pf-lock" style="font-size:12px;margin:4px 0 6px">ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีต ไม่โพสต์กลุ่ม · เลขจริงคำนวณใหม่ตอนกด</div>
-      <button class="btn pri" data-pact="assign" style="width:100%">จ่ายเบอร์</button>
+      ${postNoteHtml(ch.post || { on: false }, 'จดว่าจ่ายให้เซลล์คนไหน')}
+      <button class="btn pri" data-pact="assign" style="width:100%">${ch.post && ch.post.on ? 'จ่ายเบอร์ + ส่งเข้ากลุ่ม' : 'จ่ายเบอร์'}</button>
       <button class="btn sm" data-pact="skip" style="width:100%;margin-top:6px" title="ลีดซ้ำ / ไม่ใช่ลีดขาย — เอาออกจากรายการรอเลข">ไม่ต้องจ่ายเบอร์ (ลีดซ้ำ/ไม่ใช่ลีดขาย)</button>
     </div>`;
   }
@@ -639,13 +639,17 @@
     const out = (S.assigned || []).map(r => ({ kind: 'chat', id: r.id, name: r.name, src: SRC_KEY[r.src] || 'line', pic: r.pic,
       code: r.code, seller: r.seller || '', by: r.by || '', at: r.at, how: r.how || '', buy: r.kind === 'buy' }));
     (P.assigned || []).forEach(i => {
-      const real = i.code, sys = i.sys || null;
+      // sp = ผลส่งใบเข้ากลุ่มของปุ่มจ่ายเบอร์ในระบบ (6 ต.ค.69) — ส่งสำเร็จแล้วใบนั้นก็จับคู่เป็น "ใบในห้อง" (real) ด้วย
+      const real = i.code, sys = i.sys || null, sp = sys && sys.post;
+      const failed = !!(sp && !sp.ok && !real && !(sp.sending && !sp.error));
       out.push({ kind: 'park', name: pWho(i), src: SRC_KEY[i.source] || 'other', pic: '',
         code: real || (sys && sys.code) || '',
         seller: real ? (i.sellerNick || i.seller || '') : ((sys && sys.seller) || ''),
         by: real ? (i.assignedBy || '') : ((sys && sys.by) || ''), at: i.doneAt || '',
-        how: real ? 'ใบในห้องจ่ายเบอร์' : ('ระบบ' + (sys && sys.demo ? ' (ทดลอง)' : '')),
-        slip: sys && !real ? i.id : '', extra: sys && real && sys.code !== real ? 'เลขทดลอง ' + sys.code : '' });
+        how: sp && sp.ok ? 'ระบบ → ส่งเข้ากลุ่มแล้ว' : real ? 'ใบในห้องจ่ายเบอร์'
+          : failed ? 'ระบบ (ส่งเข้ากลุ่มไม่สำเร็จ)' : ('ระบบ' + (sys && sys.demo ? ' (ทดลอง)' : '')),
+        slip: sys && !real ? i.id : '', repost: failed ? i.id : '', err: failed ? (sp.error || '') : '',
+        extra: sys && real && sys.code !== real ? 'เลขทดลอง ' + sys.code : '' });
     });
     const today = new Date(nowMs()).toLocaleDateString('sv-SE');
     const q = (S.q || '').trim().toLowerCase();
@@ -666,8 +670,10 @@
         <div class="hub-to">${x.buy ? 'ส่งจัดซื้อ' : 'จ่ายให้'} <b>${x.seller ? '@' + h(x.seller) : UNKNOWN_SELLER}</b>${
           x.buy ? ' <span style="color:var(--t3);font-size:12px">· ลูกค้าอยากขายรถให้เรา</span>' : ''}</div>
         <div class="cn-rm">${chTag(x.src)}<span class="tag ok">${ic('hash', 12)} ${h(x.code)}</span>
-          <span class="tag">${h(x.how)}${x.by ? ' · โดย ' + h(x.by) : ''}</span>${x.extra ? `<span class="tag">${h(x.extra)}</span>` : ''}
+          <span class="tag${x.repost || /ไม่สำเร็จ/.test(x.how || '') ? ' late' : ''}"${x.err ? ` title="${h(x.err)}"` : ''}>${h(x.how)}${x.by ? ' · โดย ' + h(x.by) : ''}</span>${x.extra ? `<span class="tag">${h(x.extra)}</span>` : ''}
+          ${x.repost ? `<button class="btn sm pri" data-prepost="${h(x.repost)}" title="${h(x.err || '')}">ส่งเข้ากลุ่มอีกครั้ง</button>` : ''}
           ${x.slip ? `<button class="btn sm" data-slip="${h(x.slip)}">คัดลอกใบจ่ายลีด</button>` : ''}</div>
+        ${x.err ? `<div style="color:var(--red);font-size:12px;margin-top:4px">${h(x.err)}</div>` : ''}
       </div></div>`;
   }
 
@@ -739,11 +745,17 @@
       box.querySelector('[data-pact=assign]').onclick = async ev => {
         const emp = +(q('emp').value || 0);
         if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
+        const P = ((S.parked || {}).codeHelp || {}).post || {};
+        if (P.on) {                              // ส่งเข้ากลุ่มจริง = ทั้งห้องเห็น — ถามก่อนทุกครั้ง
+          const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+          const room = q('reject').checked && P.rejectRoom ? P.rejectRoom : P.room;
+          if (!confirm(`จ่ายเบอร์ ${q('preview').textContent} ให้ ${nm}\nแล้วส่งใบเข้า "${room || 'กลุ่มจ่ายเบอร์'}" พร้อมแท็ก @${nm} ?`)) return;
+        }
         ev.target.disabled = true;
         const r = await api('/connect/api/park_assign', { mid: id, emp, base: q('base').value,
           admin: q('admin').checked, reject: q('reject').checked });
         ev.target.disabled = false;
-        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), 4500);
+        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), r.post && !r.post.ok ? 9000 : 6000);
         if (r.ok) { delete S.parkDraft[id]; S.parkOpen.delete(id); S.parkOpen.add('done'); loadInbox(false); }
       };
       box.querySelector('[data-pact=skip]').onclick = async ev => {
@@ -758,6 +770,14 @@
       const r = await api('/connect/api/park_assign', { mid: b.dataset.unskip, skip: false });
       toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'));
       if (r.ok) loadInbox(false);
+    });
+    el.querySelectorAll('[data-prepost]').forEach(b => b.onclick = async ev => {   // ลีดภายนอก: ส่งเข้ากลุ่มอีกครั้ง
+      ev.stopPropagation();
+      b.disabled = true;
+      const r = await api('/connect/api/park_assign', { mid: b.dataset.prepost, resend: true });
+      b.disabled = false;
+      toast(r.ok ? r.message : (r.error || 'ส่งไม่สำเร็จ'), 6000);
+      loadInbox(false);
     });
     el.querySelectorAll('[data-slip]').forEach(b => b.onclick = () => {
       const it = ((S.parked || {}).assigned || []).find(x => x.id === b.dataset.slip);
@@ -1054,7 +1074,8 @@
     }
     if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
     if (L.assignedAt) {
-      x += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${L.codeDemo ? ' · ทดลอง (ยังไม่ลงชีต)' : ''}</div>`;
+      x += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${
+        L.codeDemo ? ' · ทดลอง (ยังไม่ลงชีต ไม่ได้ส่งเข้ากลุ่ม)' : postStatusHtml(L.post, d.codeHelp ? 'data-act="repost"' : 'disabled')}</div>`;
     } else if (L.noCode && !L.code) {
       // แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (ไม่ใช่ลีดขาย) — ออกจากแท็บจ่ายเบอร์แล้ว · กดเอากลับได้
       x += `<div class="pf-skip"><span>ไม่ต้องจ่ายเบอร์${L.noCode.by ? ' · ' + h(L.noCode.by) : ''}${L.noCode.at ? ' ' + h(fmtFull(L.noCode.at)) : ''}</span>
@@ -1095,8 +1116,31 @@
     return x + dls;
   }
 
-  // ── ปุ่ม "จ่ายเบอร์" (แอดมิน · ทดลอง: เก็บในระบบเราอย่างเดียว ไม่ลงชีต/ไม่โพสต์กลุ่ม) ──
+  // ── ปุ่ม "จ่ายเบอร์" (แอดมิน) — ★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (สวิตช์ปิด = ทดลองเดิม) ──
   //   ตัวหน้าตาม type ในชีต: NLD=Moderate WLD=Hot HLD=Very Hot BLD=BLD TLD=TikTok · A=ลีดแอดมิน · R=รีเจ็ค
+  //   บอกล่วงหน้าว่า "กดแล้วส่งเข้าห้องไหน" (ch.post) — ส่งเข้ากลุ่มจริง = มีคนทั้งห้องเห็น ต้องรู้ก่อนกด
+  function postNoteHtml(P, what) {
+    if (!P) return '';
+    if (!P.on) return `<div class="pf-lock" style="font-size:12px;margin:6px 0">${P.sim
+      ? 'ลูกค้าจำลอง — ออกเลขทดลอง ไม่ส่งเข้ากลุ่มจริง'
+      : `ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีต ไม่โพสต์กลุ่ม (เปิดส่งจริงได้ที่ ตั้งค่า) · เลขจริงคำนวณใหม่ตอนกด`}</div>`;
+    const room = P.room ? `"${h(P.room)}"` : '<b style="color:var(--red)">ยังไม่พบกลุ่มจ่ายเบอร์ที่บอทตัวส่งอยู่ (ตั้งได้ที่ ตั้งค่า)</b>';
+    return `<div class="pf-src" style="font-size:12px;margin:6px 0;line-height:1.5">กดแล้ว: ออกเลข → ${h(what)}
+      → ส่งใบเข้า ${room}${P.rejectRoom && P.rejectRoom !== P.room ? ` (เลข R… → "${h(P.rejectRoom)}")` : ''} พร้อมแท็ก @เซลล์
+      · ไม่ลงชีต · เลขจริงคำนวณใหม่ตอนกด (กันซ้ำ)</div>${P.fb
+      ? `<div class="pf-lock" style="font-size:12px;margin:0 0 6px;color:var(--amber)">${h(P.fbNote)}</div>` : ''}`;
+  }
+  // ผลส่งใบเข้ากลุ่ม (post_info) — ส่งไม่สำเร็จ = ปุ่ม "ส่งเข้ากลุ่มอีกครั้ง" (การจ่ายในระบบยังอยู่ ไม่ต้องจ่ายใหม่)
+  function postStatusHtml(post, btnAttr) {
+    if (!post) return '';
+    if (post.ok) {
+      return `<br><span style="color:var(--green)">ส่งเข้า "${h(post.groupName || 'กลุ่มจ่ายเบอร์')}" แล้ว</span>${
+        post.tagged ? ` · แท็ก @${h(post.seller || '')}` : ` · <span style="color:var(--amber)">แท็กไม่ได้ (${h(post.tagWhy || '-')}) — พิมพ์ @${h(post.seller || '')} แทน</span>`}`;
+    }
+    if (post.sending && !post.error) return `<br><span style="color:var(--t3)">กำลังส่งเข้ากลุ่ม…</span>`;
+    return `<br><span style="color:var(--red)">ส่งเข้ากลุ่มไม่สำเร็จ: ${h(post.error || '-')}</span>
+      <div style="margin-top:6px"><button class="btn sm pri" ${btnAttr}>ส่งเข้ากลุ่มอีกครั้ง</button></div>`;
+  }
   function assignBoxHtml(d, sfx) {
     const ch = d.codeHelp, sg = ch.suggest || {}, r = d.row;
     // ที่แอดมินเลือกค้างไว้ต้องไม่หาย ตอนแผงถูกวาดใหม่ (ข้อความใหม่เข้ามา/ระบบเติมข้อมูลลีด)
@@ -1106,8 +1150,9 @@
     const bases = (ch.bases || []).map(b => `<option value="${h(b.key)}"${b.key === vBase ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
     const sellers = S.sellers.map(s => `<option value="${s.id}"${s.id === vEmp ? ' selected' : ''}>${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
     const sugCode = (sg.reject ? 'R' : '') + (sg.admin ? 'A' : '') + (sg.base || '');
+    const P = ch.post || null, live = !!(P && P.on);
     return `<div class="pf-assign" data-box="assign">
-      <div class="pf-h" style="margin-bottom:6px">จ่ายเบอร์ <span class="pf-auto">ทดลอง</span></div>
+      <div class="pf-h" style="margin-bottom:6px">จ่ายเบอร์ <span class="pf-auto">${live ? 'ส่งเข้ากลุ่มจริง' : 'ทดลอง'}</span></div>
       <div class="pf-g2">
         <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
         <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
@@ -1117,8 +1162,8 @@
       <div style="color:var(--t3);font-size:12px">ระบบแนะนำ <b>${h(sugCode)}</b> — ${h(sg.why || '')}</div>
       <div style="margin:6px 0 2px;color:var(--t3);font-size:12px">เลขที่จะได้:</div>
       <div class="pf-code" data-x="preview"></div>
-      <div class="pf-lock" style="font-size:12px;margin:6px 0">ทดลอง — เก็บในระบบเราเท่านั้น ยังไม่ลงชีตลีด ไม่โพสต์เข้ากลุ่มจ่ายเบอร์ · เลขจริงคำนวณใหม่ตอนกด (กันซ้ำ)</div>
-      <button class="btn pri" data-act="assign-lead" style="width:100%">จ่ายเบอร์</button>
+      ${postNoteHtml(P || { on: false }, P && P.fb ? 'ลูกค้าเป็นของเซลล์ในระบบ (เก็บข้อมูลเท่านั้น)' : 'โอนแชทให้เซลล์ (ตอบลูกค้าผ่าน Connect)')}
+      <button class="btn pri" data-act="assign-lead" style="width:100%">${live ? 'จ่ายเบอร์ + ส่งเข้ากลุ่ม' : 'จ่ายเบอร์'}</button>
       <button class="btn sm" data-act="nocode" style="width:100%;margin-top:6px"
         title="ลูกค้าไม่ใช่ลีดขาย (ถามศูนย์บริการ · อยากขายรถให้เรา · ลูกค้าเก่าทักมาขอบคุณ) — เอาออกจากแท็บจ่ายเบอร์">ไม่ต้องจ่ายเบอร์ (ไม่ใช่ลีดขาย)</button>
     </div>`;
@@ -1195,15 +1240,30 @@
         const q = k => box.querySelector(`[data-x="${k}"]`);
         const emp = +(q('emp').value || 0);
         if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
+        const P = (S.chat.codeHelp || {}).post || {};
+        if (P.on) {                              // ส่งเข้ากลุ่มจริง = ทั้งห้องเห็น — ถามก่อนทุกครั้ง
+          const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+          const room = q('reject').checked && P.rejectRoom ? P.rejectRoom : P.room;
+          if (!confirm(`จ่ายเบอร์ ${q('preview').textContent} ให้ ${nm}\nแล้วส่งใบเข้า "${room || 'กลุ่มจ่ายเบอร์'}" พร้อมแท็ก @${nm} ?`)) return;
+        }
         ev.target.disabled = true;
         const id = S.chat.row.id;
         const r = await api('/connect/api/assign_lead', { id, emp, base: q('base').value,
           admin: q('admin').checked, reject: q('reject').checked });
         ev.target.disabled = false;
-        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), 4500);
+        toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), r.post && !r.post.ok ? 9000 : 6000);
         if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
       };
     }
+    // "ส่งเข้ากลุ่มอีกครั้ง" — รอบแรกส่งไม่สำเร็จ (การจ่ายในระบบยังอยู่ ไม่ออกเลขใหม่)
+    el.querySelectorAll('[data-act=repost]').forEach(b => b.onclick = async () => {
+      const id = S.chat.row.id;
+      b.disabled = true;
+      const r = await api('/connect/api/assign_lead', { id, resend: true });
+      b.disabled = false;
+      toast(r.ok ? r.message : (r.error || 'ส่งไม่สำเร็จ'), 6000);
+      openChat(id, true); loadInbox(false);
+    });
     // "ไม่ต้องจ่ายเบอร์" / "เอากลับมาจ่ายเบอร์"
     const skipLead = async (ev, on) => {
       const id = S.chat.row.id;
@@ -1477,6 +1537,7 @@
         <div class="fld"><label><input type="checkbox" id="cf-notify"${c.notify_sellers ? ' checked' : ''}> บอกเซลล์ทาง LINE เมื่อลูกค้าทักมา</label>
           <span style="color:var(--t3)">เจ้าของลูกค้า หรือทุกคนในทีมที่เวร (ถ้ายังไม่มีเจ้าของ) · ทีมละ ~9 คน = กินโควต้าเร็ว</span></div>
       </div>
+      ${slipCardHtml(c)}
       ${fbCardHtml(c)}
       ${testCardHtml()}
       <div style="display:flex;gap:10px;align-items:center;max-width:920px">
@@ -1513,6 +1574,29 @@
         : `<span style="color:var(--red)">${h(r.error || 'ตรวจไม่ได้')}</span>`);
     };
     $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
+  }
+  // ── ปุ่ม "จ่ายเบอร์" ส่งใบเข้ากลุ่มจ่ายเบอร์จริง (6 ต.ค.69 · เจ้าของ: "กลุ่มจ่ายเบอร์อยากให้มันต่อจริงๆ ส่งจริงๆ") ──
+  //   ห้องปลายทาง: ว่าง = ระบบหาเองจากชื่อกลุ่ม · ตัวเลือก = เฉพาะกลุ่มจ่ายเบอร์ที่บอทตัวส่งอยู่ (เลือกห้องอื่นไปก็ส่งไม่ออก)
+  function slipCardHtml(c) {
+    const SL = CFG.slip || {}, R = SL.rooms || {}, cand = SL.candidates || [];
+    const sel = (id, key) => {
+      const auto = (R[key] || {}).auto ? (R[key] || {}).name : '';
+      const opts = cand.map(g => `<option value="${h(g.id)}"${c[id] === g.id ? ' selected' : ''}>${h(g.name || g.id)}</option>`).join('')
+        + (c[id] && !cand.some(g => g.id === c[id]) ? `<option value="${h(c[id])}" selected>${h(c[id])} (ไม่อยู่ในรายชื่อ)</option>` : '');
+      return `<select id="cf-${id}"><option value="">อัตโนมัติ${auto ? ' — ' + h(auto) : ' (ยังหาไม่เจอ)'}</option>${opts}</select>`;
+    };
+    return `<div class="card">
+      <h3>ส่งใบจ่ายลีดเข้ากลุ่มจ่ายเบอร์</h3>
+      <div class="d">ปุ่ม "จ่ายเบอร์" ในห้องพัก Lead / แผงข้อมูลลูกค้า: ออกเลข → ให้สิทธิ์เซลล์ในระบบ → <b>ส่งใบเข้ากลุ่มจ่ายเบอร์ + แท็ก @เซลล์</b> (บอทตัวส่ง · ไม่ลงชีต)
+        <br>· ลูกค้า LINE = โอนแชทให้เซลล์ ตอบผ่าน Connect · ลูกค้า Facebook = เซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น (ตอบแชทไม่ได้)
+        · ลีดภายนอก (TikTok ฯลฯ) = จดว่าจ่ายให้ใคร
+        <br>· แท็กไม่ได้ (เซลล์ไม่อยู่ในกลุ่ม/ยังไม่เคยพิมพ์ในกลุ่มที่บอทอยู่) = พิมพ์ @ชื่อเล่น แทน ใบยังถึงกลุ่ม
+        · ส่งไม่สำเร็จ = การจ่ายในระบบยังอยู่ กด "ส่งเข้ากลุ่มอีกครั้ง" ได้</div>
+      <div class="fld"><label><input type="checkbox" id="cf-slip"${c.slip_post ? ' checked' : ''}> ส่งเข้ากลุ่มจริง</label>
+        <span style="color:var(--t3)">ไม่ติ๊ก = โหมดทดลอง (เก็บในระบบอย่างเดียว)</span></div>
+      <div class="fld"><label>เลขปกติ ส่งเข้า</label>${sel('slip_group', 'main')}</div>
+      <div class="fld"><label>เลขขึ้นต้น R (รีเจ็ค) ส่งเข้า</label>${sel('slip_group_reject', 'reject')}</div>
+    </div>`;
   }
   // ── Facebook Messenger (4 ต.ค.69 · รวมคิวเดียวกับ LINE) ──
   function fbCardHtml(c) {
@@ -1579,6 +1663,7 @@
       overrides: c.overrides || {}, sla_min: $('cf-sla').value, open: $('cf-open').value, close: $('cf-close').value,
       alert_on: $('cf-alert').checked, alert_group: $('cf-group').value, notify_sellers: $('cf-notify').checked,
       fb_on: $('cf-fb').checked, fb_reply: $('cf-fbreply').value, fb_poll_min: +$('cf-fbpoll').value,
+      slip_post: $('cf-slip').checked, slip_group: $('cf-slip_group').value, slip_group_reject: $('cf-slip_group_reject').value,
     };
     $('cf-save').disabled = true;
     const d = await api('/connect/api/config', body);

@@ -769,6 +769,11 @@ try:
     ck("ล้างข้อมูลทดสอบ = ข้อมูลลีดของลูกค้าจำลองหายตาม", not ChatLead.objects.filter(pk=sl.pk).exists())
 
     print("[18] เลขลีด + ปุ่มจ่ายเบอร์ (ทดลอง — เก็บใน Postgres อย่างเดียว)")
+    # ★ 6 ต.ค.69 ค่าตั้งต้นเปลี่ยนเป็น "ส่งเข้ากลุ่มจริง" — ส่วนนี้ (ถึง [29]) ทดสอบโหมดทดลองเดิม (สวิตช์ปิด)
+    #   ส่วนส่งจริงอยู่ที่ [30]
+    ck("ค่าตั้งต้น = ส่งใบเข้ากลุ่มจริง", C.DEFAULTS["slip_post"] is True and C.slip_post_on())
+    C.save_cfg(dict(C.cfg(), slip_post=False))
+    ck("ปิดสวิตช์ส่งเข้ากลุ่มได้", C.slip_post_on() is False)
     ck("★ อ่านเลขลีดเดือน 2 หลักได้ (ต.ค.-ธ.ค.)", (parse_leadsheet("Ac Lead No.   NLD10-8409") or {}).get("lead_code") == "NLD10-8409")
     ck("ยังอ่านเลขแบบเดิมได้", (parse_leadsheet("Ac Lead No. TLD9-7376") or {}).get("lead_code") == "TLD9-7376"
        and (parse_leadsheet("Ac Lead No. TLD-10187") or {}).get("lead_code") == "TLD-10187")
@@ -1323,25 +1328,40 @@ try:
         ck("ข้อมูลลีด FB: เบอร์จากแชท + ชื่อ Account = ชื่อใน Facebook + ไม่เดาช่องทาง",
            d["lead"]["phone"] == "0812223333" and d["lead"]["account"] == "ลูกค้าเฟซบุ๊ก" and d["lead"]["channel"] == "",
            (d["lead"]["phone"], d["lead"]["account"], d["lead"]["channel"]))
-        ck("★ ช่วงทดสอบ: ยังตอบแชท FB ที่ไม่ใช่แชททดสอบไม่ได้", d.get("replyOn") is False and "ทดสอบ" in d.get("replyWhy", ""))
+        # ★ 6 ต.ค.69 เจ้าของสั่ง: ลูกค้าที่ไม่ใช่ LINE (Facebook) = เซลล์ได้สิทธิ์ในระบบ "เพื่อเก็บข้อมูลเท่านั้น"
+        #   → เซลล์เปิดแชท/กรอกข้อมูลลีดได้ แต่ตอบ/ปิดรอบไม่ได้ (แอดมินยังตอบได้ตามโหมด fb_reply)
+        ck("★ เซลล์ + ลูกค้า FB = สิทธิ์เก็บข้อมูลเท่านั้น (ตอบไม่ได้ · บอกเหตุผล)",
+           d.get("replyOn") is False and "เก็บข้อมูลเท่านั้น" in d.get("replyWhy", "") and d.get("canDismiss") is False,
+           (d.get("replyOn"), d.get("replyWhy"), d.get("canDismiss")))
+        s_, d = J(ADM, "/connect/api/chat?id=%d" % fo.id)
+        ck("★ ช่วงทดสอบ: แอดมินยังตอบแชท FB ที่ไม่ใช่แชททดสอบไม่ได้", d.get("replyOn") is False and "ทดสอบ" in d.get("replyWhy", ""))
         leakfb = [pth for pth in ("/connect/api/inbox?view=all", "/connect/api/chat?id=%d" % fo.id)
                   if PSID in ADM.get(pth, secure=True).content.decode()]
         ck("★ ไม่ส่ง PSID ลูกค้าออกหน้าเว็บ", not leakfb, leakfb)
 
         n0 = len(FB["sent"])
-        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "สวัสดีครับ"})
+        s_, d = J(ADM, "/connect/api/reply", {"id": fo.id, "text": "สวัสดีครับ"})
         ck("★ ตอบแชท FB ที่ไม่ใช่แชททดสอบ = ปฏิเสธ + ไม่ยิง Facebook", s_ == 400 and len(FB["sent"]) == n0, (s_, d))
         s_, d = J(SA1, "/connect/api/fb_test", {"id": fo.id, "on": True})
         ck("เซลล์ตั้งแชททดสอบไม่ได้", s_ == 403, s_)
         s_, d = J(ADM, "/connect/api/fb_test", {"id": fo.id, "on": True})
         ck("แอดมินตั้งเป็นแชททดสอบ", s_ == 200 and fo.id in C.cfg()["fb_test_rows"], d)
-        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "มีครับ ปี 23 ครับ"})
+        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "สวัสดีครับ"})
+        ck("★ เซลล์ตอบลูกค้า FB ไม่ได้แม้เป็นแชททดสอบ (เก็บข้อมูลเท่านั้น) + ไม่ยิง Facebook",
+           s_ == 403 and "เก็บข้อมูลเท่านั้น" in d.get("error", "") and len(FB["sent"]) == n0, (s_, d))
+        s_, d = J(SA1, "/connect/api/dismiss", {"id": fo.id})
+        ck("★ เซลล์ปิดรอบรอของลูกค้า FB ไม่ได้", s_ == 403, (s_, d))
+        ck("★ ลูกค้า FB ไม่นับเป็น \"รอตอบ\" ของเซลล์ (ป้ายตัวเลขไม่เตือนเรื่องที่ทำไม่ได้)",
+           C.counts(A1)["mineWaiting"] == ChatOwner.objects.filter(owner=A1, awaiting_since__isnull=False,
+                                                                   fb_profile__isnull=True).count()
+           and C.counts(A1, admin=True)["mineWaiting"] > C.counts(A1)["mineWaiting"], (C.counts(A1), C.counts(A1, admin=True)))
+        s_, d = J(ADM, "/connect/api/reply", {"id": fo.id, "text": "มีครับ ปี 23 ครับ"})
         sent = FB["sent"][-1] if FB["sent"] else ("", {})
         ck("★ ตอบจาก Connect → Send API ของเพจ (ตอบกลับภายใน 24 ชม.)", s_ == 200 and sent[0].endswith("/111/messages")
            and sent[1] == {"recipient": {"id": PSID}, "messaging_type": "RESPONSE", "message": {"text": "มีครับ ปี 23 ครับ"}}, (s_, d, sent))
         out = FbChat.objects.filter(thread_id="t_1", direction="out").first()
         fo.refresh_from_db()
-        ck("บันทึกข้อความขาออก + ชื่อคนตอบ + ปิดรอบรอ", out and out.sent_by_name == "เอหนึ่ง" and out.message_id == "m_sent_%d" % len(FB["sent"])
+        ck("บันทึกข้อความขาออก + ชื่อคนตอบ + ปิดรอบรอ", out and out.sent_by_name == "admin" and out.message_id == "m_sent_%d" % len(FB["sent"])
            and fo.awaiting_since is None and ChatOwnerLog.objects.filter(chat=fo, action="reply").exists(),
            out and (out.sent_by_name, fo.awaiting_since))
 
@@ -1376,13 +1396,13 @@ try:
         s_, d = J(SA1, "/connect/api/chat?id=%d" % fo.id)
         # เทียบแบบไม่สนลำดับ — เวลาข้อความทดสอบปัดเป็นวินาที อาจมาก่อนข้อความที่ส่งจาก Connect ในวินาทีเดียวกัน
         ck("บับเบิลขาออกบอกว่าใครตอบ / ตอบอัตโนมัติ / ตอบใน Facebook", sorted(m["by"] for m in d["messages"] if m["dir"] == "out")
-           == sorted(["เอหนึ่ง", "ตอบอัตโนมัติ (เพจ)", "ตอบอัตโนมัติ (เพจ)", "ตอบใน Facebook"]),
+           == sorted(["admin", "ตอบอัตโนมัติ (เพจ)", "ตอบอัตโนมัติ (เพจ)", "ตอบใน Facebook"]),
            [m["by"] for m in d["messages"] if m["dir"] == "out"])
 
         # เกิน 24 ชม. → Facebook ปฏิเสธ → บอกเป็นภาษาคน + ไม่บันทึก
         FB["send"] = {"message": "(#10) This message is sent outside of allowed window.", "code": 10, "error_subcode": 2018278}
         n_out = FbChat.objects.filter(direction="out").count()
-        s_, d = J(SA1, "/connect/api/reply", {"id": fo.id, "text": "ยังสนใจไหมครับ"})
+        s_, d = J(ADM, "/connect/api/reply", {"id": fo.id, "text": "ยังสนใจไหมครับ"})
         ck("★ เกิน 24 ชม.: บอกให้ตอบใน Business Suite + ไม่บันทึกข้อความที่ส่งไม่ถึง",
            s_ == 400 and "24 ชม." in d.get("error", "") and FbChat.objects.filter(direction="out").count() == n_out, d)
         FB["send"] = None
@@ -1801,6 +1821,257 @@ try:
        (s_, (d.get("lead") or {}).get("buy")))
     r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
     ck("★ API ห้องพัก (มีเคสรับซื้อ) ไม่มี LINE user id หลุด", r_.status_code == 200 and not leak.search(r_.content.decode()))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[30] ปุ่มจ่ายเบอร์ส่งเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (6 ต.ค.69 · เจ้าของ: \"ต่อจริงๆ ส่งจริงๆ\")")
+    from checkout import slippost as SP
+    from checkout.models import FbProfile
+    MEMBERS, SEND_MODE, SENT, SENT_H, SMID = set(), ["ok"], [], [], [0]
+
+    def _p30(url, *a, **k):                       # ขอบระบบ: LINE push
+        CALLS.append(("post", url, k.get("json")))
+        if "/message/push" in url:
+            body = k.get("json") or {}
+            SENT.append(body)
+            SENT_H.append(k.get("headers") or {})
+            if SEND_MODE[0] == "fail":
+                return _R(400, {"message": "Failed to send messages"})
+            if SEND_MODE[0] == "mention" and any(m.get("type") == "textV2" for m in body.get("messages", [])):
+                return _R(400, {"message": "The request body has 1 error(s)", "details": [
+                    {"message": "The mentioned user is not found in the group", "property": "messages[0].substitution"}]})
+            SMID[0] += 1                          # LINE ออก message id ไม่ซ้ำกันเลย — ของปลอมต้องไม่ซ้ำด้วย
+            return _R(200, {"sentMessages": [{"id": "sm-%d" % SMID[0], "quoteToken": "q"}]})
+        return _R(200, {})
+
+    def _g30(url, *a, **k):                       # ขอบระบบ: LINE ถามว่าคนนี้อยู่ในกลุ่มไหม
+        CALLS.append(("get", url, None))
+        mm = re.search(r"/v2/bot/group/([^/]+)/member/([^/?]+)", url)
+        if mm:
+            return _R(200, {"displayName": "x"}) if mm.group(2) in MEMBERS else _R(404, {"message": "Not found"})
+        return _R(404, {"message": "Not found"})
+
+    def assigned(cid):
+        return ChatLead.objects.get(chat_id=cid)
+
+    _g0, _p0, _site0 = requests.get, requests.post, settings.SITE_URL
+    requests.get, requests.post = _g30, _p30
+    settings.SITE_URL = "https://oxlet.test"
+    try:
+        C.save_cfg(dict(C.cfg(), slip_post=True, slip_group="", slip_group_reject=""))
+        CRMONLY = "C" + "e" * 32
+        nowi = timezone.now().isoformat()
+        cache_store.set_kv("line_groups", {
+            ASG: {"name": "ห้องจ่ายเบอร์ บ้านเก่า", "channels": ["push"], "lastSeen": nowi},
+            REJ: {"name": "ห้องจ่ายเบอร์ REJECT", "channels": ["push"], "lastSeen": nowi},
+            CRMONLY: {"name": "ห้องจ่ายเบอร์ (บอทเดิม)", "channels": ["crm"], "lastSeen": nowi},
+            PARK: {"name": "ADMIN เก็บ Lead", "channels": ["push"], "lastSeen": nowi}})
+        rr = SP.rooms()
+        ck("หาห้องเอง: เลขปกติ → บ้านเก่า · เลข R → REJECT", rr["main"]["id"] == ASG and rr["reject"]["id"] == REJ, rr)
+        ck("★ ห้องที่มีแต่บอทเดิมได้ยิน ไม่ถูกเลือก (บอทตัวส่งส่งไม่ได้)", CRMONLY not in [r["id"] for r in SP.lead_rooms()])
+        ck("ห้องพัก Lead ไม่ถูกนับเป็นห้องจ่ายเบอร์", PARK not in [r["id"] for r in SP.lead_rooms()])
+        ck("เลข R… → ห้อง REJECT · เลขปกติ → บ้านเก่า",
+           SP.room_for("RNLD10-1")["id"] == REJ and SP.room_for("NLD10-1")["id"] == ASG)
+        _c30, errs = C.clean_cfg({"slip_group": "U123"})
+        ck("ตั้งกลุ่มจ่ายเบอร์ผิดรูปแบบ = ฟ้อง ไม่เงียบ", errs and "group id" in errs[0], errs)
+        C.save_cfg(dict(C.cfg(), slip_group=REJ))
+        ck("ตั้งห้องเองได้ (ชนะการหาจากชื่อ)", SP.rooms()["main"]["id"] == REJ and SP.rooms()["main"]["auto"] is False)
+        C.save_cfg(dict(C.cfg(), slip_group=""))
+
+        A1_PUSH = "U" + "7" * 32
+        LineProfile.objects.create(user_id=A1_PUSH, display_name="เอหนึ่ง LINE", is_employee=True, employee=A1,
+                                   channel="push")
+        MEMBERS.add(A1_PUSH)
+        cache_store.set_kv("checkin_group_member", {})
+
+        # ── ลูกค้า LINE: โอนแชท (ตอบผ่าน Connect) + ส่งใบเข้ากลุ่ม + แท็ก ──
+        L1 = C.note_customer_message(cust(601, "ลูกค้าส่งจริง").user_id, timezone.now(), "สนใจ civic เบอร์ 0866000601 ครับ")
+        nxt = C.last_running() + 1
+        s_, d = J(ADM, "/connect/api/chat?id=%d" % L1.id)
+        ph = ((d.get("codeHelp") or {}).get("post") or {})
+        ck("กล่องจ่ายเบอร์บอกล่วงหน้าว่าจะส่งเข้าห้องไหน", ph.get("on") is True and ph.get("room") == "ห้องจ่ายเบอร์ บ้านเก่า"
+           and ph.get("rejectRoom") == "ห้องจ่ายเบอร์ REJECT" and ph.get("fb") is False, ph)
+        SENT.clear(); SENT_H.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L1.id, "emp": A1.id, "base": "NLD"})
+        ld = assigned(L1.id)
+        ck("จ่ายเบอร์ลูกค้า LINE + เลขต่อจากเลขรัน", s_ == 200 and ld.code == "NLD%d-%d" % (MON, nxt), (s_, d, ld.code))
+        ck("★ เลขจริง (ไม่ติดป้ายทดลอง)", ld.code_demo is False and (ld.auto or {}).get("code") == "จ่ายเบอร์")
+        ck("★ ส่งเข้าห้องบ้านเก่า 1 ครั้ง ด้วย token บอทตัวส่ง", len(SENT) == 1 and SENT[0]["to"] == ASG
+           and SENT_H[0].get("Authorization") == "Bearer tok-push", (SENT, SENT_H))
+        m0 = (SENT[0]["messages"] if SENT else [{}])[0]
+        ck("★ แท็กเซลล์ด้วยไอดีฝั่งบอทตัวส่ง (textV2 · กดแล้วเด้งหาคน)", m0.get("type") == "textV2"
+           and m0["substitution"]["seller"]["mentionee"]["userId"] == A1_PUSH and m0["text"].endswith("{seller}"), m0)
+        tx = m0.get("text", "")
+        ck("ใบหน้าตาเดียวกับใบจริง: เลข + เบอร์ + ชื่อไลน์ + ติดต่อได้เลย + ลิงก์ตอบแชทในระบบ",
+           ("Ac Lead No.   " + ld.code) in tx and "0866000601" in tx and "ลูกค้าส่งจริง" in tx
+           and "ติดต่อได้เลยนะครับ" in tx and "ตอบแชทลูกค้าในระบบ Connect: https://oxlet.test/connect/?id=%d" % L1.id in tx
+           and "จ่ายโดย: admin" in tx, tx)
+        pi = ld.post_info or {}
+        ck("จด post_info: สำเร็จ + ห้อง + แท็กได้", pi.get("ok") and pi.get("group") == ASG and pi.get("tagged") is True
+           and pi.get("groupName") == "ห้องจ่ายเบอร์ บ้านเก่า" and not pi.get("sending"), pi)
+        ck("ข้อความบอกแอดมินว่าส่งเข้าห้องไหน + แท็กใคร", "ส่งเข้า \"ห้องจ่ายเบอร์ บ้านเก่า\"" in d.get("message", "")
+           and "@เอหนึ่ง" in d.get("message", "") and (d.get("post") or {}).get("ok"), d)
+        ck("★ LINE: โอนแชทให้เซลล์", ChatOwner.objects.get(pk=L1.id).owner_id == A1.id)
+        s_, d = J(SA1, "/connect/api/chat?id=%d" % L1.id)
+        ck("★ LINE: เซลล์ตอบลูกค้าผ่าน Connect ได้ (ไม่ใช่สิทธิ์เก็บข้อมูลอย่างเดียว)", s_ == 200 and d.get("canReply") is True
+           and "เก็บข้อมูลเท่านั้น" not in (d.get("replyWhy") or ""), (d.get("canReply"), d.get("replyWhy")))
+        ck("หน้าเว็บได้สถานะการส่ง", ((d.get("lead") or {}).get("post") or {}).get("ok") is True
+           and "mid" not in ((d.get("lead") or {}).get("post") or {}), (d.get("lead") or {}).get("post"))
+        g = GroupChat.objects.filter(group_id=ASG, direction="out").order_by("-id").first()
+        ps = parse_leadsheet(g.text if g else "") or {}
+        ck("★ ใบที่ระบบส่ง เก็บในคลังแชทกลุ่มด้วย (อ่านกลับได้: เลข + @เซลล์)", g and g.message_id == "sm-1"
+           and ps.get("lead_code") == ld.code and ps.get("assigned") == "เอหนึ่ง" and g.sender_name == "admin",
+           (g and g.text[-60:], ps))
+        ck("เลขรันถัดไปต่อจากใบที่ระบบส่ง", C.last_running() == nxt, C.last_running())
+        ck("ลูกค้าที่จ่ายแล้วออกจากห้องพัก", L1.id not in tocode_ids())
+        r1 = {r["id"]: r for r in C.assigned_list()}.get(L1.id) or {}
+        ck("รายการจ่ายแล้ว: บอกว่าส่งเข้ากลุ่มแล้ว + ให้ใคร", r1.get("how") == "ระบบ → ส่งเข้ากลุ่มแล้ว"
+           and r1.get("seller") == "เอหนึ่ง", r1)
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L1.id, "resend": True})
+        ck("★ ส่งสำเร็จแล้ว กดส่งซ้ำ = ปฏิเสธ (ใบไม่เบิ้ลในกลุ่ม)", s_ == 400 and "ไปแล้ว" in d.get("error", "") and len(SENT) == 1,
+           (s_, d))
+        s_, d = J(SA1, "/connect/api/assign_lead", {"id": L1.id, "resend": True})
+        ck("เซลล์กดส่งซ้ำไม่ได้", s_ == 403, s_)
+
+        # ── เซลล์ไม่อยู่ในกลุ่ม → ไม่แท็ก (พิมพ์ @ชื่อเล่น) แต่ใบยังถึงกลุ่ม ──
+        MEMBERS.discard(A1_PUSH); cache_store.set_kv("checkin_group_member", {})
+        L2 = C.note_customer_message(cust(602, "ลูกค้าเซลล์นอกกลุ่ม").user_id, timezone.now(), "เบอร์ 0866000602")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L2.id, "emp": A1.id, "base": "NLD"})
+        m0 = (SENT[0]["messages"] if SENT else [{}])[0]
+        pi = assigned(L2.id).post_info or {}
+        ck("★ เซลล์ไม่อยู่ในกลุ่ม = ไม่แท็ก (พิมพ์ @ชื่อเล่น) ใบยังถึงกลุ่ม", len(SENT) == 1 and m0.get("type") == "text"
+           and m0.get("text", "").endswith("@เอหนึ่ง") and pi.get("ok") and pi.get("tagged") is False
+           and "ไม่ได้อยู่ในกลุ่ม" in pi.get("tagWhy", ""), (m0.get("type"), pi))
+
+        # ── LINE ไม่รับการแท็ก → ส่งซ้ำแบบพิมพ์ชื่อ (ใบไม่หาย) ──
+        MEMBERS.add(A1_PUSH); cache_store.set_kv("checkin_group_member", {})
+        SEND_MODE[0] = "mention"
+        L3 = C.note_customer_message(cust(603, "ลูกค้าแท็กพลาด").user_id, timezone.now(), "เบอร์ 0866000603 {ทดสอบปีกกา}")
+        C.save_lead_field(ChatOwner.objects.get(pk=L3.id), "more", "งบ {3 แสน}")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L3.id, "emp": A1.id, "base": "NLD"})
+        pi = assigned(L3.id).post_info or {}
+        ck("★ LINE ปฏิเสธการแท็ก = ส่งซ้ำแบบพิมพ์ชื่อ ใบถึงกลุ่ม", len(SENT) == 2 and SENT[0]["messages"][0]["type"] == "textV2"
+           and SENT[1]["messages"][0]["type"] == "text" and pi.get("ok") and pi.get("tagged") is False, (len(SENT), pi))
+        ck("ข้อความลูกค้าที่มีวงเล็บปีกกา ไม่ถูกตีเป็นตัวแทนที่ของ textV2",
+           "{3" not in SENT[0]["messages"][0]["text"] and "(3 แสน)" in SENT[0]["messages"][0]["text"]
+           and "{3 แสน}" in SENT[1]["messages"][0]["text"], SENT[0]["messages"][0]["text"][-80:])
+        SEND_MODE[0] = "ok"
+
+        # ── ส่งไม่สำเร็จ → การจ่ายในระบบยังอยู่ + กดส่งอีกครั้งได้ ──
+        SEND_MODE[0] = "fail"
+        L4 = C.note_customer_message(cust(604, "ลูกค้าส่งไม่ออก").user_id, timezone.now(), "เบอร์ 0866000604")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L4.id, "emp": A1.id, "base": "NLD"})
+        ld4 = assigned(L4.id)
+        ck("★ ส่งเข้ากลุ่มไม่สำเร็จ = ยังจ่ายเบอร์ในระบบ (เลข + เซลล์อยู่) + บอกเหตุผลภาษาคน",
+           s_ == 200 and ld4.code and ChatOwner.objects.get(pk=L4.id).owner_id == A1.id
+           and (ld4.post_info or {}).get("ok") is False and "บอทตัวส่ง" in (ld4.post_info or {}).get("error", "")
+           and (ld4.post_info or {}).get("tagged") is False
+           and "ส่งเข้ากลุ่มอีกครั้ง" in d.get("message", ""), (d, ld4.post_info))
+        ck("ไม่เก็บใบที่ส่งไม่ถึงลงคลังแชทกลุ่ม",
+           not GroupChat.objects.filter(group_id=ASG, direction="out", text__contains=ld4.code).exists())
+        ck("★ เลขที่ส่งไม่สำเร็จยังนับในเลขรัน (คนถัดไปไม่ได้เลขซ้ำ)",
+           C.last_running() >= int(ld4.code.split("-")[1]), (C.last_running(), ld4.code))
+        r4 = {r["id"]: r for r in C.assigned_list()}.get(L4.id) or {}
+        ck("รายการจ่ายแล้ว: บอกว่ายังส่งไม่สำเร็จ", r4.get("how") == "ระบบ (ยังส่งเข้ากลุ่มไม่สำเร็จ)", r4)
+        SEND_MODE[0] = "ok"; SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L4.id, "resend": True})
+        ck("★ กด \"ส่งเข้ากลุ่มอีกครั้ง\" → สำเร็จ", s_ == 200 and (d.get("post") or {}).get("ok") and len(SENT) == 1
+           and (assigned(L4.id).post_info or {}).get("ok"), (s_, d))
+        ChatLead.objects.filter(chat_id=L4.id).update(post_info={"ok": False, "error": "x",
+                                                                  "sending": timezone.now().isoformat()})
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L4.id, "resend": True})
+        ck("กดส่งซ้ำระหว่างที่อีกคำขอกำลังส่ง = ปฏิเสธ (กันใบเบิ้ล)", s_ == 400 and "กำลังส่ง" in d.get("error", "") and not SENT,
+           (s_, d))
+
+        # ── เลขขึ้นต้น R → ห้อง REJECT ──
+        L5 = C.note_customer_message(cust(605, "ลูกค้ารีเจ็ค").user_id, timezone.now(), "เบอร์ 0866000605")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L5.id, "emp": A1.id, "base": "NLD", "reject": True})
+        ck("★ เลขขึ้นต้น R → ส่งเข้าห้องจ่ายเบอร์ REJECT", s_ == 200 and SENT and SENT[0]["to"] == REJ
+           and assigned(L5.id).code.startswith("RNLD"), (s_, d, SENT and SENT[0]["to"]))
+
+        # ── ลูกค้า Facebook: ส่งเข้ากลุ่ม + เซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น ──
+        fpx = FbProfile.objects.create(channel="111", user_id="PSIDX9", thread_id="t_x9", display_name="ลูกค้าเฟซส่งจริง")
+        F1 = ChatOwner.objects.create(fb_profile=fpx, last_at=timezone.now())
+        C.save_lead_field(F1, "phone", "0866000609")
+        s_, d = J(ADM, "/connect/api/chat?id=%d" % F1.id)
+        ck("กล่องจ่ายเบอร์ของลูกค้า FB บอกล่วงหน้าว่าเซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น",
+           ((d.get("codeHelp") or {}).get("post") or {}).get("fb") is True
+           and "เก็บข้อมูลเท่านั้น" in ((d.get("codeHelp") or {}).get("post") or {}).get("fbNote", ""), d.get("codeHelp"))
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": F1.id, "emp": A1.id, "base": "NLD"})
+        txt = SENT[0]["messages"][0]["text"] if SENT else ""
+        ck("★ ลูกค้า Facebook: ส่งเข้ากลุ่ม + แท็ก + บอกว่าเซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น", s_ == 200 and len(SENT) == 1
+           and SENT[0]["messages"][0]["type"] == "textV2" and "เก็บข้อมูลเท่านั้น" in d.get("message", "")
+           and "ข้อมูลลูกค้าในระบบ (Facebook" in txt and "ตอบแชทลูกค้าในระบบ" not in txt and "0866000609" in txt, (d, txt))
+        ck("ลูกค้า Facebook: เป็นลูกค้าของเซลล์ในระบบ", ChatOwner.objects.get(pk=F1.id).owner_id == A1.id)
+        s_, d = J(SA1, "/connect/api/chat?id=%d" % F1.id)
+        ck("★ ลูกค้า Facebook: เซลล์เปิดดู+กรอกข้อมูลลีดได้ แต่ตอบไม่ได้", s_ == 200 and d.get("leadEditable") is True
+           and d.get("replyOn") is False and "เก็บข้อมูลเท่านั้น" in d.get("replyWhy", ""), (s_, d.get("replyWhy")))
+        s_, d = J(SA1, "/connect/api/lead", {"id": F1.id, "field": "occupation", "value": "พนักงานบริษัท"})
+        ck("เซลล์กรอกข้อมูลลีดของลูกค้า Facebook ได้", s_ == 200, (s_, d))
+        s_, d = J(SA1, "/connect/api/reply", {"id": F1.id, "text": "สวัสดีครับ"})
+        ck("★ เซลล์ตอบลูกค้า Facebook ไม่ได้", s_ == 403, (s_, d))
+
+        # ── ลูกค้าจำลอง / บัญชีทดสอบ = ไม่ส่งเข้ากลุ่มจริง ──
+        TS = C.test_seller("A")
+        L6 = C.note_customer_message(cust(606, "ลูกค้าให้บัญชีทดสอบ").user_id, timezone.now(), "เบอร์ 0866000606")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L6.id, "emp": TS.id, "base": "NLD"})
+        ck("★ จ่ายให้บัญชีทดสอบ = ไม่ส่งเข้ากลุ่มจริง (เลขทดลอง)", s_ == 200 and not SENT and assigned(L6.id).code_demo is True
+           and "ไม่ส่งเข้ากลุ่มจริง" in d.get("message", ""), (s_, d, len(SENT)))
+        C.sim_customer("สนใจรถ เบอร์ 0866000607")
+        SIM = ChatOwner.objects.filter(profile__user_id__startswith=C.SIM_PREFIX).order_by("-id").first()
+        s_, d = J(ADM, "/connect/api/chat?id=%d" % SIM.id)
+        ck("ลูกค้าจำลอง: กล่องจ่ายเบอร์บอกว่าไม่ส่งเข้ากลุ่ม",
+           ((d.get("codeHelp") or {}).get("post") or {}).get("on") is False, (d.get("codeHelp") or {}).get("post"))
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": SIM.id, "emp": A1.id, "base": "NLD"})
+        ck("★ ลูกค้าจำลอง = ไม่ส่งเข้ากลุ่มจริง", s_ == 200 and not SENT and assigned(SIM.id).code_demo is True, (s_, d))
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": SIM.id, "resend": True})
+        ck("ลูกค้าจำลอง: กดส่งเข้ากลุ่มไม่ได้", s_ == 400 and not SENT, (s_, d))
+        C.sim_clear()
+
+        # ── ลีดภายนอกในห้องพัก (TikTok ฯลฯ) — แท็กในกลุ่ม + จดว่าจ่ายให้ใคร ──
+        post(PARK, 110, slip("TLD10-", acc="คนส่งจริง", phone="0866000620"))
+        LP._CACHE["val"] = None
+        pid = [i["id"] for i in LP.board(cache_sec=0)["waiting"] if i["account"] == "คนส่งจริง"][0]
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/park_assign", {"mid": pid, "emp": A1.id, "base": "TLD"})
+        ex = ExtLead.objects.get(message_id=pid)
+        m0 = SENT[0]["messages"][0] if SENT else {}
+        ck("★ ลีดภายนอก: ส่งเข้ากลุ่ม + แท็ก + เลขจริง", s_ == 200 and len(SENT) == 1 and SENT[0]["to"] == ASG
+           and m0.get("type") == "textV2" and ex.code_demo is False and (ex.post_info or {}).get("ok")
+           and (d.get("post") or {}).get("ok"), (s_, d))
+        ck("ใบของลีดภายนอกมีข้อมูลจากใบร่าง", "0866000620" in m0.get("text", "") and "คนส่งจริง" in m0.get("text", "")
+           and ("Ac Lead No.   " + ex.code) in m0.get("text", ""), m0.get("text"))
+        b = LP.board(cache_sec=0)
+        ab = next((i for i in b["assigned"] if i["account"] == "คนส่งจริง"), {})
+        ck("★ ห้องพักเห็นใบที่ระบบส่ง (จับคู่ใบจริงในห้องจ่ายเบอร์) + สถานะการส่ง",
+           ab.get("code") == ex.code and ((ab.get("sys") or {}).get("post") or {}).get("ok"), ab)
+        s_, d = J(ADM, "/connect/api/park_assign", {"mid": pid, "resend": True})
+        ck("ลีดภายนอกส่งแล้ว กดส่งซ้ำ = ปฏิเสธ", s_ == 400 and len(SENT) == 1, (s_, d))
+
+        # ── ไม่มี LINE user id หลุดออกหน้าเว็บ ──
+        bad = [p_ for p_ in ("/connect/api/chat?id=%d" % L1.id, "/connect/api/inbox?view=tocode", "/connect/api/config",
+                             "/connect/api/chat?id=%d" % F1.id)
+               if leak.search(ADM.get(p_, secure=True).content.decode())]
+        ck("★ API ของการจ่ายเบอร์ ไม่มี LINE user id หลุด (รวมไอดีที่ใช้แท็ก)", not bad, bad)
+        s_, d = J(ADM, "/connect/api/config")
+        ck("หน้าตั้งค่าเห็นห้องจ่ายเบอร์ที่จะส่ง", ((d.get("slip") or {}).get("rooms") or {}).get("main", {}).get("id") == ASG
+           and d.get("cfg", {}).get("slip_post") is True, d.get("slip"))
+
+        # ── ปิดสวิตช์ = โหมดทดลองเดิม ──
+        C.save_cfg(dict(C.cfg(), slip_post=False))
+        L7 = C.note_customer_message(cust(607, "ลูกค้าปิดสวิตช์").user_id, timezone.now(), "เบอร์ 0866000607")
+        SENT.clear()
+        s_, d = J(ADM, "/connect/api/assign_lead", {"id": L7.id, "emp": A1.id, "base": "NLD"})
+        ck("ปิดสวิตช์ = ไม่ส่งเข้ากลุ่ม (ทดลองเดิม)", s_ == 200 and not SENT and assigned(L7.id).code_demo is True, (s_, d))
+    finally:
+        requests.get, requests.post, settings.SITE_URL = _g0, _p0, _site0
 
 finally:
     _runner.teardown_databases(_old)
