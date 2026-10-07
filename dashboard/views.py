@@ -3647,6 +3647,13 @@ def _checkout_ingest(data):
     def _work():
         try:
             from checkout.views import ingest_group_events, store_chat
+            # ★ 7 ต.ค.69 — คนออกจากกลุ่มเช็คชื่อ = เอาออกจากระบบเช็คชื่อเอง · กลับเข้า = คืนให้
+            #   แยก try — พังต้องไม่ลากการเก็บแชทไปด้วย
+            try:
+                from checkout.membership import handle_member_events
+                handle_member_events(data)
+            except Exception:
+                pass
             store_chat(data)             # เก็บแชทแยกกลุ่มลง Postgres (ถ้าเปิดไว้)
             ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
         except Exception as e:

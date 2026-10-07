@@ -882,10 +882,21 @@ def api_employees(request):
                 return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
                                     json_dumps_params={"ensure_ascii": False})
             renamed = nick != row.nickname
+            reopened = fields["track_checkin"] and not row.track_checkin
             row.nickname = nick
             for k, v in fields.items():
                 setattr(row, k, v)
             row.save()
+            if reopened:
+                # แอดมินติ๊ก "เช็คชื่อ" คืนเอง → ไม่ต้องจำแล้วว่าระบบเคยปิดเพราะออกจากกลุ่ม
+                try:
+                    from dashboard.services import cache_store
+                    from .membership import LEFT_KEY, left_members
+                    lm = left_members()
+                    if lm.pop(str(row.pk), None) is not None:
+                        cache_store.set_kv(LEFT_KEY, lm)
+                except Exception:
+                    pass
             if renamed:
                 # ★ 6 ต.ค.69 — ตามแก้ชื่อที่คัดลอกไปเก็บไว้ที่อื่น (โปรไฟล์ LINE · ชื่อผู้ส่งในแชท)
                 #   ไม่งั้นแก้ที่นี่แล้วหน้าแชท/Connect/ใบจ่ายลีดยังขึ้นชื่อเดิม (เคสนิด → "Nid")
@@ -915,6 +926,13 @@ def api_employees(request):
     off_but_in = dict(CheckIn.objects.filter(date_iso__gte=since, employee__track_checkin=False)
                       .values("employee_id").annotate(n=Count("id")).values_list("employee_id", "n"))
 
+    # ★ 7 ต.ค.69 — คนที่ระบบปิด "เช็คชื่อ" ให้เพราะออกจากกลุ่มเช็คชื่อ (membership.py)
+    try:
+        from .membership import left_members
+        left = left_members()
+    except Exception:
+        left = {}
+
     rows = []
     for e in Employee.objects.all().prefetch_related("line_accounts"):
         rows.append({
@@ -934,6 +952,8 @@ def api_employees(request):
             "needsNick": bool(e.display_name) and e.nickname == e.display_name,
             # ปิด "เช็คชื่อ" ไว้ แต่เช็คชื่อเข้ามากี่วันใน 14 วัน (0 = ไม่มีอะไรผิดปกติ)
             "checkinsWhileOff": off_but_in.get(e.pk, 0),
+            # ออกจากกลุ่มเช็คชื่อเมื่อไหร่ (ระบบปิดเช็คชื่อให้เอง · กลับเข้ากลุ่ม = คืนให้เอง)
+            "leftGroupAt": (left.get(str(e.pk)) or {}).get("at", ""),
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
         })
