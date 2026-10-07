@@ -1445,7 +1445,166 @@ def _car_context(msgs, hits, i) -> str:
         lo -= 1
     while hi + 1 < len(msgs) and hi - i < 3 and joinable(hi + 1):
         hi += 1
-    return " ".join((msgs[j] or "").strip() for j in range(lo, hi + 1) if (msgs[j] or "").strip())
+    # ★ 7 ต.ค.69 — เก็บแค่รุ่น+สเปกรถ ไม่เอาทั้งประโยค (เจ้าของ: "ตัดคำเกินออก มีเยอะเลย")
+    parts = [car_phrase(msgs[j]) for j in range(lo, hi + 1) if (msgs[j] or "").strip()]
+    return _dedupe_words(" ".join(p for p in parts if p))[:LEAD_FIELDS["car_text"]]
+
+
+# ── "รถลูกค้าถาม" = รุ่น + สเปก เท่านั้น (7 ต.ค.69 · เจ้าของส่งรูป "CX3 ปี2022 ขายอยู่เรทประมาณเท่าไหร่ครับ" — "ตัดคำเกินออก") ──
+#   แอดมินเขียนช่องนี้สั้น (ชีต ต.ค. 628 ค่า: ≤10 ตัวอักษร 70% · ≤20 ตัวอักษร 95%) เช่น "Civic FE 2.0RS e:HEV 2024"
+#   "รีโว่ z edition 4ประตู AT สีขาว ตัวเตี้ย" · "กะบะ 4 ประตู ออโต้ ปี 20 ขึ้น"
+#   → เก็บรุ่น/ยี่ห้อ + ปี/สี/ประตู/เกียร์/เครื่อง/รุ่นย่อย · ตัดคำถาม คำลงท้าย และเรื่องรายได้/อายุงาน/ผ่อน/ดาวน์
+#   ภาษาไทยไม่เว้นวรรค → ตัดทีละคำ (เว้นวรรค) แล้วเล็มหัว-ท้ายของคำ + ตัดที่ "คำหยุด" กลางคำ
+_CP_PRE = sorted(["สวัสดีครับ", "สวัสดีค่ะ", "สวัสดีคะ", "สวัสดี", "ขอสอบถาม", "สอบถาม", "ขอดูรถ", "ขอดู", "ขอชม", "สนใจเป็น",
+                  "สนใจขาย", "สนใจ", "อยากได้", "อยากดู", "อยากชม", "อยากทราบ", "อยากรู้ว่า", "อยากรู้", "ต้องการขาย",
+                  "ต้องการ", "กำลังหา", "หารถ", "ที่ร้านมี", "ถ้ามี", "มีรถ", "ตัว", "รถ", "เป็น", "พวก", "ผม", "หนู", "เรา",
+                  "ประมาณ", "ประมาน", "สัก", "แต่", "ขอ", "หา", "มี", "ขาย", "รุ่น", "ชอบ", "จะมี", "ที่สนใจ", "แบบ",
+                  "อยู่", "รับซื้อ", "ออก"],
+                 key=len, reverse=True)
+_CP_SUF = sorted(["ครับผม", "ครับพี่", "ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "นะคะ", "นะครับ", "นะ", "จ้า", "จ้ะ", "ฮะ", "อ่ะ",
+                  "หรอ", "มีไหม", "มีมั้ย", "ไหม", "มั้ย", "มั๊ย", "ไม๊", "บ้าง", "ได้ไหม", "ได้มั้ย", "ด้วย", "หน่อย", "ป่าว",
+                  "หรือเปล่า", "รึเปล่า", "เท่าไหร่", "เท่าไร", "เท่าไหร", "ประมาณ", "ประมาน", "ไหน", "พี่", "ก็ได้", "จ้าาา",
+                  "อยู่", "รถ"],
+                 key=len, reverse=True)
+_CP_STOP = re.compile(r"คัน(?!จริง)|ที่รีวิว|ราคา|ผ่อน|ดาวน์|ดาว(?=\d|\s|$)|เงินเดือน|รายได้|อายุงาน|ออกได้|ได้ไหม|ได้มั้ย|"
+                      r"เทิร์น|เทริน|แนะนำ|ใว้|ไว้|นี่|ต้อง|ขายอยู่|ขายได้|ขาย(?!ของ)|เรท|เท่าไหร่|เท่าไร|มีไหม|มีมั้ย|ไหม|มั้ย|"
+                      r"ครับ|ค่ะ|คะ|คับ|หรอ|บ้าง|มีแบบ|แบบไหน|ปีไหน|ปีอะไร|สีไหน|ตัวไหน|ฟรีดาวน์|เลยค่ะ|ได้อยู่")
+_CP_SPEC = re.compile(r"(?:ปี|ป\.)\s*\d{2,4}|^ปี$|(?<!\d)(?:19[89]\d|20[0-4]\d)(?!\d)|ประตู|เกียร์|ออโต้|ธรรมดา|ดีเซล|เบนซิน|"
+                      r"ไฮบริด|เทอร์โบ|โทโบ|^สี\S|ตัว(?:ท็อป|ท๊อป|top|เตี้ย|สูง|รอง|ล่าง|ไฮบริด|สันดา)|ไมล์|โฉม|หน้าใหม่|หน้ายาว|"
+                      r"หน้าเก่า|แคป|ตอนเดียว|สองตอน|ยกสูง|เตี้ย|เจน\s?\d|ที่นั่ง|กระบะ|กะบะ|เก๋ง|ขึ้นไป|มือ\s?2|มือสอง|"
+                      r"สันดา[ปบ]|^หมื่น|^แสน|^พัน|^\d{2}(?:[-–]\d{2})?\+?$")
+_CP_LATIN = re.compile(r"^[a-z0-9.+:/()\-]{1,14}$")
+_CP_JOIN = re.compile(r"^(?:กับ|และ|หรือ|/|,|&|\+)$")
+_CP_BUDGET = re.compile(r"(?:งบ|ราคา|ไม่เกิน|ผ่อน)\S*\s*[\d,.]+\s*(?:บาท|พัน|หมื่น|แสน|k)?")
+_CP_PARTICLE = re.compile(r"(?:ครับ|คับ|ค่ะ|คะ|ค่า|นะ|จ้า|ไหม|มั้ย|หรอ)$")
+UNSPEC_MODEL = "ไม่ระบุรุ่นรถ"     # ตัวเลือกใน "CAR / สูตร" ของชีต — ลูกค้าบอกแค่ยี่ห้อ/รุ่นกว้าง
+
+
+def _cp_trim(w: str):
+    """เล็มคำหน้า/ท้าย + ตัดที่คำหยุด → (คำที่เหลือ, จบประโยคไหม)"""
+    w = w.strip(" \t()[]\"'“”‘’!?.,~:-")
+    end = bool(_CP_PARTICLE.search(w))
+    for _ in range(4):
+        hit = next((p for p in _CP_PRE if w.startswith(p) and len(w) > len(p)), None)
+        if not hit:
+            break
+        w = w[len(hit):]
+    m = _CP_STOP.search(w)
+    if m:
+        end = True                              # เจอเรื่องอื่น (ราคา/ผ่อน/รายได้/คำถาม) = จบส่วนที่พูดถึงรถ
+        w = w[:m.start()]
+    for _ in range(4):
+        hit = next((s for s in _CP_SUF if w.endswith(s) and len(w) > len(s)), None)
+        if not hit:
+            break
+        w = w[:-len(hit)]
+    if w in _CP_PRE or w in _CP_SUF:
+        w = ""
+    return w.strip(" -/,"), end
+
+
+def _dedupe_words(s: str) -> str:
+    """คำซ้ำ (ไม่สนตัวพิมพ์) ออก · คำที่ขึ้นต้นด้วยคำเดิม ("MuX" แล้ว "muxสีขาว") เหลือแค่ส่วนที่ต่อท้าย"""
+    out, seen = [], set()
+    for w in s.split():
+        k = w.lower()
+        if k in seen and not _CP_JOIN.match(w):
+            continue
+        pre = next((x for x in seen if len(x) >= 3 and k.startswith(x) and len(k) > len(x)), None)
+        if pre:
+            w, k = w[len(pre):], k[len(pre):]
+            if k in seen:
+                continue
+        seen.add(k)
+        out.append(w)
+    while out and _CP_JOIN.match(out[-1]):
+        out.pop()
+    while out and _CP_JOIN.match(out[0]):
+        out.pop(0)
+    return " ".join(out)
+
+
+def car_phrase(text: str) -> str:
+    """ข้อความลูกค้า 1 ข้อความ → เฉพาะส่วนที่บอกรถ ("CX3 ปี2022 ขายอยู่เรทประมาณเท่าไหร่ครับ" → "CX3 ปี2022")
+
+    เก็บ: ยี่ห้อ/รุ่น (`car_in`) + คำที่ตามมาติดๆ ที่เป็นสเปก (ปี สี ประตู เกียร์ เครื่อง รุ่นย่อยภาษาอังกฤษ)
+    · สเปกที่อยู่ก่อนชื่อรุ่นไม่เกิน 2 คำ ("ปี 2024 Toyota Yaris cross") · ตัวเชื่อม กับ/หรือ ระหว่าง 2 รุ่น
+    · งบ/ผ่อน เก็บเฉพาะตอนไม่มีชื่อรุ่นเลย ("รถผ่อนไม่เกิน 7 พัน") — มีรุ่นแล้ว งบไม่ใช่ข้อมูลรถ
+    ไม่เจอรถเลย = คืนข้อความที่เล็มแล้ว (ไม่เกิน 40 ตัว) — ไม่ทิ้งข้อมูลที่ลูกค้าพิมพ์มา
+    """
+    raw = re.sub(r"\s+", " ", (text or "").replace("\n", " ")).strip()
+    if not raw:
+        return ""
+    words, has_model = [], False
+    for w in raw.split(" "):
+        jn = ""
+        for c in ("หรือ", "กับ", "และ"):
+            if w.startswith(c) and len(w) > len(c) + 1:
+                jn, w = c, w[len(c):]
+                break
+        t, end = _cp_trim(w)
+        if jn:
+            words.append((jn, "join", False))
+        if not t:
+            words.append(("", "end" if end else "skip", end))
+            continue
+        low = t.lower()
+        if _CP_JOIN.match(t):
+            kind = "join"
+        elif car_in(t) is not None:
+            kind = "car"
+            has_model = has_model or bool(car_in(t)[0])
+        elif _CP_SPEC.search(low):
+            kind = "spec"
+        elif _CP_LATIN.match(low) and not re.search(r"\d{5,}", low.replace(",", "")):   # เลข 5 หลัก = เงิน ไม่ใช่สเปก
+            kind = "latin"
+        else:
+            kind = "other"
+        words.append((t, kind, end))
+    out, run, after_end, last_car = [], False, False, -9
+    for i, (t, kind, end) in enumerate(words):
+        if kind == "car":
+            # สเปกก่อนชื่อรุ่น ("ปี 2024 Toyota …") — ย้อนเก็บได้ไม่เกิน 2 คำ
+            j = i - 1
+            pre = []
+            while j >= 0 and i - j <= 2 and words[j][1] in ("spec", "latin") and not words[j][2]:
+                pre.insert(0, words[j][0])
+                j -= 1
+            if out and last_car >= 0 and words[i - 1][1] == "join" if i else False:
+                out.append(words[i - 1][0])
+            out.extend(w for w in pre if w not in out)
+            out.append(t)
+            run, after_end, last_car = not end, end, i
+        elif run and kind in ("spec", "latin") or (run and kind == "other" and len(t) <= 10 and i - last_car <= 2
+                                                     and not re.search(r"\d", t)):
+            out.append(t)
+            if end:
+                run, after_end = False, True
+        elif after_end and kind == "spec":
+            out.append(t)                       # "…5 ประตูไหมคะ ประมาณปี 2018" — สเปกที่ตามมาหลังจบประโยค
+        elif kind == "join" and out:
+            continue                            # ตัวเชื่อมใส่ตอนเจอรุ่นถัดไป
+        else:
+            if kind in ("other", "end"):
+                after_end = after_end and kind == "end"
+            run = run and kind == "skip"
+    s = _dedupe_words(" ".join(out))
+    b = _CP_BUDGET.search(raw)
+    if s and b and not has_model:
+        # บอกแค่ยี่ห้อ ("งบ 3 แสน" / "ฮอนด้า") → งบเป็นข้อมูลรถที่มีอยู่ เก็บไว้ตามลำดับที่ลูกค้าพิมพ์
+        bt = re.sub(r"\s+", " ", b.group(0)).strip()
+        rest = " ".join(w for w in s.split() if w not in bt.split())
+        first = next((raw.find(w) for w in rest.split() if raw.find(w) >= 0), len(raw))
+        s = (bt + " " + rest if b.start() < first else rest + " " + bt).strip()
+    if s:
+        return s
+    # ไม่มีชื่อรุ่น (เช่น "รถเก๋งผ่อนไม่เกิน 6000") → เล็มคำลงท้าย/คำถามออก เก็บงบไว้
+    b = _CP_BUDGET.search(raw)
+    keep = [_cp_trim(w)[0] for w in raw.split(" ")]
+    s = _dedupe_words(" ".join(w for w in keep if w))
+    if b and b.group(0) not in s:
+        s = (s + " " + b.group(0)).strip()
+    return s[:40]
 
 
 def _line_channel() -> str:
@@ -1819,8 +1978,11 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
     hits = [car_in(t) for t in msgs]
     clear_i = next((i for i, h in enumerate(hits) if h and h[0]), None)
     first_i = next((i for i, h in enumerate(hits) if h), None)
+    unspec = dd_pick("car_model", UNSPEC_MODEL)
     if clear_i is not None:
-        put("car_model", hits[clear_i][0], "แชท")
+        # "ไม่ระบุรุ่นรถ" ที่ระบบใส่ไว้ตอนลูกค้าบอกแค่ยี่ห้อ → แทนด้วยรุ่นจริงได้เมื่อลูกค้าบอกรุ่นชัด
+        put("car_model", hits[clear_i][0], "แชท",
+            over=("แชท",) if unspec and lead.car_model == unspec else ())
         put("car_text", _car_context(msgs, hits, clear_i), "แชท", over=("แชท",))   # แทนข้อความกำกวมที่ระบบเติมไว้ได้
     elif first_i is not None:
         said = _car_context(msgs, hits, first_i)[:LEAD_FIELDS["car_text"]]
@@ -1831,6 +1993,17 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
             changed.append("car_text")
         else:
             put("car_text", said, "แชท")
+        # ★ 7 ต.ค.69 (เจ้าของ: "รถตามสูตรไม่ผูกแชทให้") — บอกแค่ยี่ห้อ/รุ่นกว้าง ("อีซูซุ" "city") = "ไม่ระบุรุ่นรถ"
+        #   ไม่เดารุ่น: วัดจริง ส.ค.–ต.ค. ลูกค้าพิมพ์ "city" แอดมินเลือก 5 ประตู 37% · 4 ประตู 20% · ไม่ระบุรุ่นรถ 12%
+        #   "civic" → FC แค่ 49% · อีซูซุ → D Max 6 จาก 14 — ไม่มีรุ่นไหนเกินครึ่งชัด เดาผิดแย่กว่าบอกว่ายังไม่รู้
+        if unspec:
+            put("car_model", unspec, "แชท")
+    # ค่าเก่าที่ระบบเติมทั้งประโยค (ก่อนมีตัวตัดคำ) → ตัดให้เหลือรุ่น+สเปก · ที่คน/ใบจ่ายลีดใส่ไม่แตะ
+    if auto.get("car_text") == "แชท" and lead.car_text:
+        tidy = _dedupe_words(car_phrase(lead.car_text))[:LEAD_FIELDS["car_text"]]
+        if tidy and tidy != lead.car_text:
+            lead.car_text = tidy
+            changed.append("car_text")
 
     # ใบจ่ายลีดที่แอดมินโพสต์ไว้แล้ว — หาซ้ำได้ทุก 30 นาที (ไม่ยิง query ทุกครั้งที่เปิดแชท)
     now = timezone.now()

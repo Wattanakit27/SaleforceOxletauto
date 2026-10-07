@@ -1028,7 +1028,7 @@ try:
     ld = _car(["สวัสดีครับ", "อีซูซุ", "ปี2015-2017", "มีคันไหนบ้าง"])
     ck("★ เคสจริง: อีซูซุ + ปี2015-2017 (คนละข้อความ) → รถลูกค้าถามครบทั้งคู่",
        ld.car_text == "อีซูซุ ปี2015-2017" and ld.auto.get("car_text") == "แชท", (ld.car_text, ld.auto))
-    ck("ไม่เดารุ่นให้ (อีซูซุ มีหลายรุ่นในชีต)", ld.car_model == "", ld.car_model)
+    ck("ไม่เดารุ่นให้ (อีซูซุ มีหลายรุ่นในชีต) → \"ไม่ระบุรุ่นรถ\" (7 ต.ค.69)", ld.car_model == "ไม่ระบุรุ่นรถ", ld.car_model)
     ck("ใบจ่ายลีดขึ้นรถแล้ว (เดิม \"รถ : -\")",
        "รถ : อีซูซุ ปี2015-2017" in C.slip_text(ChatOwner.objects.get(pk=o5id)), C.slip_text(ChatOwner.objects.get(pk=o5id)))
     ld = _car(["อีซูซุ"])
@@ -2164,6 +2164,50 @@ try:
     ChatLead.objects.filter(chat_id=K3.id).update(code="RWLD10-8500/1")
     ck("type ว่าง + มีเลขลีด → เติมตามตัวหน้า (RWLD → Hot)", C.autofill(K3).lead_type == "Hot",
        ChatLead.objects.get(chat_id=K3.id).lead_type)
+    # ═════════════════════════════════════════════════════════════════════
+    print("[32] รถลูกค้าถาม = รุ่น+สเปก (เจ้าของ: \"ตัดคำเกินออก\") · CAR/สูตร = ไม่ระบุรุ่นรถ เมื่อบอกแค่ยี่ห้อ")
+    C._DD.update(at=0.0, val=None)
+    CP = {   # ค่าจริงที่ระบบเคยเติมทั้งประโยค (ดึงจากเซิร์ฟเวอร์ 7 ต.ค.69 · ไม่มีชื่อ/เบอร์ลูกค้า)
+        "CX3 ปี2022 ขายอยู่เรทประมาณเท่าไหร่ครับ": "CX3 ปี2022",
+        "สนใจ Civic FC ปี 17-19 ครับ เงินเดือน 20,000 -+  ครับ": "Civic FC ปี 17-19",
+        "มีมาสด้า 2 ดีเซล 5 ประตูไหมคะ ประมาณปี 2018 ค่ะ": "มาสด้า 2 ดีเซล 5 ประตู ปี 2018",
+        "สนใจแคมรี่ปี12คันสุดท้ายที่รีวิว": "แคมรี่ปี12",
+        "สนใจ Honda HRV อายุงาน7เดือนออกได้มั้ยคะ": "Honda HRV",
+        "ยาริสเอทีฟสมาร์ท2025เทิร์นได้ไหม": "ยาริสเอทีฟสมาร์ท2025",
+        "ซีวิค รายได้2คน 34000-36000 ออกซีวิคได้ไหมครับ": "ซีวิค",
+        "Civic Fe เงินเดือนการันตี 25000+ แต่ฐานเงินเดือนแค่ 13000 ฟรีดาวน์ได้มั้ยครับ": "Civic Fe",
+        "MuXค่ะ สนใจmuxสีขาวค่ะ": "MuX สีขาว",
+        "ปี 2024 Toyota Yaris cross Premium ครับ": "ปี 2024 Toyota Yaris cross Premium",
+        "สนใจ YARIS ATIV SMART\nกับ NISSAN AMELA ครับ": "YARIS ATIV SMART กับ NISSAN AMELA",
+        "อยากชม รีโว่ z edition 4ประตู AT สีขาว ตัวเตี้ยครับ": "รีโว่ z edition 4ประตู AT สีขาว เตี้ย",
+        "Honda city 2014 1.5 SV i-VTEC": "Honda city 2014 1.5 SV i-VTEC",
+        "งบ 3 แสน ฮอนด้า": "งบ 3 แสน ฮอนด้า",
+    }
+    bad_cp = {k: C.car_phrase(k) for k, want in CP.items() if C.car_phrase(k) != want}
+    ck("★ ตัดคำถาม/คำลงท้าย/รายได้/อายุงาน/ผ่อน ออก เหลือรุ่น+สเปก (%d ข้อความจริง)" % len(CP), not bad_cp, bad_cp)
+    ck("ตัดซ้ำแล้วได้ค่าเดิม (ค่าที่ตัดแล้วไม่เปลี่ยนอีก)", all(C.car_phrase(v) == v for v in CP.values()),
+       {v: C.car_phrase(v) for v in CP.values() if C.car_phrase(v) != v})
+    ck("มีรุ่นแล้ว งบไม่เอามาปน", C.car_phrase("อีสุสุหรือรีโว่ 4 ประตู ราคาไม่เกิน 500000 ครับ") == "อีสุสุหรือรีโว่ 4 ประตู",
+       C.car_phrase("อีสุสุหรือรีโว่ 4 ประตู ราคาไม่เกิน 500000 ครับ"))
+    KC = C.note_customer_message(cust(711, "ลูกค้ารถ").user_id, timezone.now(), "สวัสดีครับ")
+    KCo = ChatOwner.objects.select_related("profile", "owner").get(pk=KC.id)
+    ld = C.autofill(KCo, ["สนใจซีวิคครับ ผ่อนเดือนละเท่าไหร่"])
+    ck("★ บอกแค่รุ่นกว้าง (ซีวิค = FC/FE/FK?) → CAR/สูตร = ไม่ระบุรุ่นรถ (ไม่เดา)", ld.car_model == "ไม่ระบุรุ่นรถ"
+       and ld.car_text == "ซีวิค", (ld.car_model, ld.car_text))
+    ld = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=KC.id),
+                    ["สนใจซีวิคครับ ผ่อนเดือนละเท่าไหร่", "เอาเป็น civic fe ครับ"])
+    ck("★ ลูกค้าบอกรุ่นชัดทีหลัง → เปลี่ยนเป็นรุ่นจริงเอง", ld.car_model == "Civic FE", ld.car_model)
+    ChatLead.objects.filter(chat_id=KC.id).update(car_model="ไม่ระบุรุ่นรถ", auto=dict(ld.auto, car_model="คน"))
+    ld = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=KC.id), ["civic fe ครับ"])
+    ck("★ คนเลือก \"ไม่ระบุรุ่นรถ\" เอง = ระบบไม่เปลี่ยน", ld.car_model == "ไม่ระบุรุ่นรถ", ld.car_model)
+    ChatLead.objects.filter(chat_id=KC.id).update(car_text="CX3 ปี2022 ขายอยู่เรทประมาณเท่าไหร่ครับ",
+                                                  auto=dict(ld.auto, car_text="แชท"))
+    ld = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=KC.id), [])
+    ck("★ ค่าเก่าที่ระบบเคยเติมทั้งประโยค → ตัดให้เองตอนเปิดแชท", ld.car_text == "CX3 ปี2022", ld.car_text)
+    ChatLead.objects.filter(chat_id=KC.id).update(car_text="CX3 อยากได้มากๆ ครับ", auto=dict(ld.auto, car_text="คน"))
+    ld = C.autofill(ChatOwner.objects.select_related("profile", "owner").get(pk=KC.id), [])
+    ck("★ ที่คนพิมพ์เองไม่ตัด", ld.car_text == "CX3 อยากได้มากๆ ครับ", ld.car_text)
+
     if _dd_saved is None:
         cache_store.set_kv(C.DD_KEY, {})
     else:
