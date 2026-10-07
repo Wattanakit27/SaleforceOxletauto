@@ -956,6 +956,8 @@ class ChatLead(models.Model):
     job_tenure = models.CharField("อายุงาน", max_length=60, blank=True)
     pay_history = models.CharField("ประวัติการผ่อน", max_length=120, blank=True)
     customer_type = models.CharField("ประเภทลูกค้า", max_length=60, blank=True)
+    # ★ 7 ต.ค.69 — คอลัมน์ Z ของชีตลีด (dropdown 24 ค่า) · ระบบจับ keyword จากแชทเติมให้ (`lead_keywords`)
+    customer_status = models.CharField("สถานะลูกค้า", max_length=40, blank=True)
     # ── ช่องของใบจ่ายลีด ──
     live = models.CharField("ไลฟ์", max_length=60, blank=True)
     more = models.TextField("เพิ่มเติม", blank=True)

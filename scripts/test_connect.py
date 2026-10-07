@@ -2113,6 +2113,63 @@ try:
     finally:
         requests.get, requests.post, settings.SITE_URL = _g0, _p0, _site0
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[31] จับ keyword จากแชท → ช่องโปรไฟล์ลีด (7 ต.ค.69 · เจ้าของ: \"จับ keyword แล้วลงตาม dropdown\")")
+    from checkout.models import ChatLead
+    _dd_saved = cache_store.get_kv(C.DD_KEY)
+    K1 = C.note_customer_message(cust(701, "ลูกค้าคีย์เวิร์ด").user_id, timezone.now(),
+                                 "เป็นพนักงานโรงงานครับ เงินเดือน 18,000 อายุงาน 2 ปี มีผ่อนมอไซค์อยู่ ผ่อนตรง")
+    kl = ChatLead.objects.filter(chat_id=K1.id).first()
+    ck("★ ข้อความเข้า = เติมโปรไฟล์ทันที (ไม่ต้องรอใครเปิดแชท)", kl is not None and kl.occupation == "พนักงานโรงงาน"
+       and kl.income == "18000" and kl.job_tenure == "2 ปี", kl and (kl.occupation, kl.income, kl.job_tenure))
+    ck("ประวัติผ่อนสรุปเป็นคำสั้นๆ", kl is not None and "ผ่อนมอเตอร์ไซค์" in kl.pay_history and "ผ่อนตรง" in kl.pay_history,
+       kl and kl.pay_history)
+    ck("ประเภทลูกค้า = ตัวเลือกของชีต (dropdown)", kl is not None and kl.customer_type == "พนักงานบริษัท"
+       and kl.customer_type in C.dd_options("customer_type"), kl and kl.customer_type)
+    ck("จดว่ามาจากแชท + จับจากคำไหน", kl is not None and kl.auto.get("occupation") == "แชท"
+       and "18,000" in (kl.auto.get("_kw") or {}).get("income", ""), kl and kl.auto)
+    K1 = ChatOwner.objects.select_related("profile", "owner").get(pk=K1.id)
+    lj = C.lead_json(K1)
+    ck("หน้าเว็บได้ \"จับจากคำไหน\" (autoWhy) แต่ไม่เห็นคีย์ภายใน", "income" in (lj.get("autoWhy") or {})
+       and "_kw" not in (lj.get("auto") or {}), (lj.get("autoWhy"), lj.get("auto")))
+    K2 = C.note_customer_message(cust(702, "ลูกค้าเงียบ").user_id, timezone.now(), "สวัสดีครับ ขอดูรูปรถหน่อย")
+    ck("ไม่เจอ keyword = ไม่สร้างแถวข้อมูลลีดเปล่า", not ChatLead.objects.filter(chat_id=K2.id).exists())
+    # คนแก้แล้ว ระบบไม่ทับ
+    C.save_lead_field(K1, "occupation", "ช่างเชื่อม", by="เอหนึ่ง")
+    C.note_customer_message(K1.profile.user_id, timezone.now(), "จริงๆ ทำงานบริษัทครับ")
+    ck("★ คนแก้อาชีพแล้ว ข้อความใหม่ไม่ทับ", ChatLead.objects.get(chat_id=K1.id).occupation == "ช่างเชื่อม")
+    # สถานะลูกค้า: ข้อความล่าสุดชนะ · คนตั้งเองแล้วล็อก
+    C.note_customer_message(K1.profile.user_id, timezone.now(), "สนใจมากครับ อยากออกเลย")
+    s1 = ChatLead.objects.get(chat_id=K1.id).customer_status
+    C.note_customer_message(K1.profile.user_id, timezone.now(), "ขอคิดดูก่อนนะครับ ขอปรึกษาแฟนก่อน")
+    s2 = ChatLead.objects.get(chat_id=K1.id).customer_status
+    ck("★ สถานะเปลี่ยนตามข้อความล่าสุด (สนใจมาก → ลังเล)", s1 == "สนใจมาก" and s2 == "ลังเล", (s1, s2))
+    C.save_lead_field(K1, "customer_status", "จอง", by="เอหนึ่ง")
+    C.note_customer_message(K1.profile.user_id, timezone.now(), "ได้รถแล้วครับ ขอบคุณ")
+    ck("★ คนตั้งสถานะเองแล้ว ข้อความใหม่ไม่ทับ", ChatLead.objects.get(chat_id=K1.id).customer_status == "จอง")
+    # dropdown ของชีต: ไม่มีตัวเลือก = ไม่เติม · ชุดที่อ่านไว้ก่อนมีช่องสถานะ = ใช้ชุดที่จำไว้เฉพาะช่องที่ขาด
+    cache_store.set_kv(C.DD_KEY, {"fields": {"customer_type": ["พนักงานบริษัท", "ไม่แจ้งอาชีพ"]},
+                                  "tab": "ตุลาคม 69", "at": timezone.now().isoformat()})
+    C._DD.update(at=0.0, val=None)
+    K3 = C.note_customer_message(cust(703, "แม่ค้าออนไลน์").user_id, timezone.now(),
+                                 "ขายของออนไลน์ค่ะ ยังไม่แน่ใจเลยค่ะ")
+    k3 = ChatLead.objects.get(chat_id=K3.id)
+    ck("★ ชีตไม่มีตัวเลือก \"ค้าขาย\" = ไม่เติมประเภทลูกค้า (แต่อาชีพเติม)", k3.customer_type == ""
+       and k3.occupation == "ขายของออนไลน์", (k3.customer_type, k3.occupation))
+    ck("★ ชุด dropdown ที่อ่านไว้ก่อนมีช่องสถานะ → ใช้ชุดที่จำไว้ (สถานะยังเติมได้)", k3.customer_status == "ลังเล",
+       k3.customer_status)
+    ck("ช่องที่อ่านจากชีตได้ ชีตชนะ (ไม่เอาชุดที่จำไว้มาปน)", C.dd_options("customer_type") == ["พนักงานบริษัท", "ไม่แจ้งอาชีพ"])
+    # type ตามตัวหน้าของเลขลีด
+    K3 = ChatOwner.objects.select_related("profile", "owner").get(pk=K3.id)
+    ChatLead.objects.filter(chat_id=K3.id).update(code="RWLD10-8500/1")
+    ck("type ว่าง + มีเลขลีด → เติมตามตัวหน้า (RWLD → Hot)", C.autofill(K3).lead_type == "Hot",
+       ChatLead.objects.get(chat_id=K3.id).lead_type)
+    if _dd_saved is None:
+        cache_store.set_kv(C.DD_KEY, {})
+    else:
+        cache_store.set_kv(C.DD_KEY, _dd_saved.get("data", _dd_saved) if isinstance(_dd_saved, dict) else _dd_saved)
+    C._DD.update(at=0.0, val=None)
+
 finally:
     _runner.teardown_databases(_old)
 

@@ -1009,15 +1009,17 @@
     { sec: 'โปรไฟล์ลูกค้า', rows: [
       [['occupation', 'อาชีพ'], ['income', 'รายได้']],
       [['job_tenure', 'อายุงาน'], ['pay_history', 'ประวัติการผ่อน']],
-      [['customer_type', 'ประเภทลูกค้า']],
+      [['customer_type', 'ประเภทลูกค้า'], ['customer_status', 'สถานะลูกค้า']],
       [['admin_profile', 'PROFILE ลูกค้า จาก ADMIN', 'area']],
     ] },
   ];
   let _DDF = {};                       // ตัวเลือก dropdown ของแชทที่เปิดอยู่ (ตั้งใน profileHtml)
 
   function leadField(L, f, label, kind, ed, sfx) {
-    const A = L.auto || {}, v = L[f] || '';
-    const badge = (A[f] && A[f] !== 'คน') ? `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])} — แก้ได้">จาก${h(A[f])}</span>` : '';
+    const A = L.auto || {}, v = L[f] || '', W = L.autoWhy || {};
+    // ช่องที่จับจาก keyword บอกด้วยว่าจับจากคำไหน — คนตรวจได้ทันทีว่าระบบอ่านถูกไหม
+    const why = W[f] ? ` · จับจากคำว่า “${W[f]}”` : '';
+    const badge = (A[f] && A[f] !== 'คน') ? `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])}${h(why)} — แก้ได้">จาก${h(A[f])}</span>` : '';
     const dis = ed ? '' : ' disabled';
     const opts = Array.isArray(_DDF[f]) && _DDF[f].length ? _DDF[f] : null;
     let inp;

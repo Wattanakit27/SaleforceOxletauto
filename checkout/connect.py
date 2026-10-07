@@ -682,6 +682,10 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
         capture_contact(o, extra=[{"dir": "in", "text": preview or ""}])
     except Exception:
         pass
+    try:                                       # อาชีพ/รายได้/สถานะ ฯลฯ จาก keyword — ลงฟอร์มลีดทันที ไม่ต้องรอเปิดแชท
+        capture_profile(o, extra=[{"dir": "in", "text": preview or ""}])
+    except Exception:
+        pass
     if picture:
         o.picture_url, o.picture_at = picture[:500], timezone.now()
         ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=o.picture_at)
@@ -789,6 +793,10 @@ def note_fb_batch(fp, msgs):
             new_round = _customer_in(o, m.sent_at, fb_preview(m), c, start_round=live) or new_round
     try:                                       # ลูกค้าให้เบอร์/ไอดี = เข้าห้องพัก Lead ทันที
         capture_contact(o)
+    except Exception:
+        pass
+    try:                                       # อาชีพ/รายได้/สถานะ ฯลฯ จาก keyword
+        capture_profile(o)
     except Exception:
         pass
     if new_round and c.get("notify_sellers"):
@@ -1090,6 +1098,7 @@ LEAD_FIELDS = {
     "car_text": 300, "car_model": 80, "call_proof": 20,
     "fill_note": 500, "admin_profile": 1000,
     "occupation": 80, "income": 60, "job_tenure": 60, "pay_history": 120, "customer_type": 60,
+    "customer_status": 40,
     "live": 60, "more": 500,
 }
 HUMAN = "คน"                      # ค่าใน `auto` = คนแก้ช่องนี้แล้ว → ระบบห้ามเติมทับ
@@ -1106,6 +1115,7 @@ DD_COLS = {
     "lead_type": "type", "car_model": "car_formula", "call_proof": "call_proof", "focus": "focus",
     "occupation": "occupation", "income": "income", "job_tenure": "job_tenure",
     "pay_history": "payment_history", "customer_type": "customer_type",
+    "customer_status": "customer_status",
 }
 DD_KEY = "connect_lead_dropdowns"
 DD_EVERY_MIN = 60                 # อ่านชีตใหม่ทุกชั่วโมง — แอดมินเพิ่มตัวเลือกในชีตแล้วเห็นในหน้า Connect ไม่เกิน 1 ชม.
@@ -1135,6 +1145,10 @@ DD_FALLBACK = {
     "customer_type": ["พนักงานบริษัท", "เจ้าของธุรกิจส่วนตัว", "อาชีพอื่นๆ", "ไม่แจ้งอาชีพ", "ข้าราชการ/รัฐวิสาหากิจ",
                       "เกษตกร/ปศุสัตว์", "ไม่มีอาชีพ", "ค้าขาย", "Rider/driver", "ฟลีแลนด์", "ข้อมูลติดต่อผิด",
                       "ลูกจ้างรับสด"],
+    "customer_status": ["คืนเคส", "จอง", "สนใจมาก", "ลังเล", "รอตอบ", "ลูกค้าไม่ตอบ", "ติดต่อไม่ได้", "ไม่รับสาย",
+                        "ยังไม่สะดวกคุย", "รถขายไปแล้ว", "รอเช็คเครดิต", "ดาวน์ไม่พอ", "ส่งมอบ", "ยังไม่ออกเร็วๆนี้",
+                        "ไม่มีรถที่ลูกค้าสนใจ", "ติดแบล็คลิส", "เงินสดเงินไม่พอ", "ลูกค้าไม่สนใจแล้ว", "ได้รถแล้ว",
+                        "รับรถแล้ว", "รอมาดูรถ", "หาคนออกให้", "มีรถเทริน", "ติดตาม"],
 }
 DD_FALLBACK_BRANCH = "ชลบุรี"     # วัดจริง ส.ค.–ต.ค.69: ลีด 6,945 แถว สาขา = ชลบุรี ทั้งหมด
 _DD = {"at": 0.0, "val": None}
@@ -1156,6 +1170,9 @@ def dropdowns() -> dict:
         d = raw.get("data", raw) if isinstance(raw, dict) else {}
         if isinstance(d, dict) and isinstance(d.get("fields"), dict) and d["fields"]:
             val = dict(d, fallback=False)
+            # ช่องที่เพิ่งเพิ่มใน DD_COLS (เช่น สถานะลูกค้า 7 ต.ค.69) ยังไม่อยู่ในชุดที่อ่านไว้จนกว่ารอบอ่านชีตถัดไป (≤1 ชม.)
+            #   → ใช้ชุดที่จดไว้ในโค้ดเฉพาะช่องที่ขาด ช่องที่อ่านจากชีตได้แล้วชีตชนะเสมอ
+            val["fields"] = {**{k: v for k, v in DD_FALLBACK.items() if k not in d["fields"]}, **d["fields"]}
     except Exception:
         val = None
     if val is None:
@@ -1898,6 +1915,15 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
     if adm:
         put("admin_name", adm, SYSTEM, over=stale_sys("admin_name"))
 
+    # ★ 7 ต.ค.69 — อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/ประเภทลูกค้า/สถานะลูกค้า จับ keyword จากแชท + โน้ตในฟอร์ม
+    changed += apply_keywords(lead, auto, msgs, _lead_notes(lead))
+    # type = ตามตัวหน้าของเลขลีด (เลขจากใบจ่ายลีด/คนกรอก) — NLD=Moderate · WLD=Hot · HLD=Very Hot · BLD · TLD
+    #   ปุ่มจ่ายเบอร์เติมให้อยู่แล้ว · ตรงนี้สำหรับเลขที่มาทางอื่น (ใบในกลุ่ม/คนพิมพ์) · R/A นำหน้า = type เดียวกับตัวหน้า
+    if lead.code and not lead.lead_type:
+        cm = _CODE_RE.match(re.sub(r"\s+|/\d+$", "", lead.code))
+        if cm:
+            put("lead_type", dd_pick("lead_type", dict(CODE_BASES).get(cm.group(1).lstrip("R").lstrip("A"), "")), SYSTEM)
+
     if changed:
         lead.auto = auto
         lead.save()
@@ -1919,6 +1945,7 @@ def lead_json(o, lead=None) -> dict:
     out.update({
         "tags": list(lead.tags or []),
         "auto": {k: v for k, v in (lead.auto or {}).items() if not k.startswith("_")},
+        "autoWhy": dict((lead.auto or {}).get(KW_KEY) or {}),   # ช่องที่จับจาก keyword → จับจากคำไหน (โชว์ในป้าย)
         "slip": (lead.auto or {}).get("_slip") or None,
         # ช่องอัตโนมัติ (คำนวณจากระบบ ไม่ให้แก้มือ — แก้แล้วจะไม่ตรงกับของจริง)
         "leadAt": _iso(p.first_seen),
@@ -2097,6 +2124,69 @@ def capture_contact(o, msgs=None, extra=None) -> bool:
     if ids and not lead.line_id and auto.get("line_id") != HUMAN:
         lead.line_id, auto["line_id"] = ids[0], "แชท"
         got.append("line_id")
+    if got:
+        lead.auto = auto
+        lead.save(update_fields=got + ["auto", "updated_at"])
+    return bool(got)
+
+
+# ── จับ keyword จากแชท → ช่องโปรไฟล์ลีด (7 ต.ค.69 · เจ้าของสั่ง "จับ keyword … กรอกลงทุกช่องตามที่ lead ต้องการ") ──
+#   ตัวจับอยู่ที่ `lead_keywords.py` (ฟังก์ชันล้วน ไม่ใช้ AI) · ตรงนี้แค่ตัดสินว่าเขียนช่องไหน
+KW_KEY = "_kw"                    # ChatLead.auto[KW_KEY] = {ช่อง: คำที่จับได้} — ป้าย "จากแชท" บอกได้ว่าจับจากคำไหน
+_KW_SRC = ("แชท", "โน้ต")
+
+
+def _lead_notes(lead) -> list:
+    """โน้ตที่คนพิมพ์ในฟอร์ม (มากรอกชีตกันเถอะ · PROFILE จาก ADMIN · เพิ่มเติม) — อ่านหา keyword ด้วย"""
+    return [x for x in (lead.fill_note, lead.admin_profile, lead.more) if x] if lead else []
+
+
+def apply_keywords(lead, auto: dict, msgs, notes=()) -> list:
+    """เติม อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/ประเภทลูกค้า/สถานะลูกค้า จาก keyword → รายชื่อช่องที่เปลี่ยน
+
+    กติกาเดียวกับ `autofill`: **เติมเฉพาะช่องที่ว่างและยังไม่เคยเติม · ช่องที่คนแก้แล้วไม่แตะเด็ดขาด**
+    · ช่อง dropdown (ประเภทลูกค้า/สถานะลูกค้า) = ตัวเลือกของชีตเท่านั้น ไม่ตรงสักตัว = ไม่เติม (ไม่เดา)
+    · **สถานะลูกค้าเปลี่ยนตามข้อความล่าสุดได้** (ลูกค้าเปลี่ยนใจ) — เฉพาะที่ระบบเติมเอง ช่องอื่นเติมครั้งเดียว
+    · โน้ตที่คนพิมพ์ในฟอร์มชนะแชท (คนสรุปมาแล้ว)
+    """
+    from . import lead_keywords as K
+    got = {f: (v, ev, "แชท") for f, (v, ev) in K.extract([t for t in (msgs or []) if t]).items()}
+    got.update({f: (v, ev, "โน้ต") for f, (v, ev) in K.extract([t for t in (notes or []) if t]).items()})
+    changed, why = [], dict(auto.get(KW_KEY) or {})
+    for f, (val, ev, src) in got.items():
+        if f == "customer_type":
+            val = K.pick(dd_options(f), K.TYPE_SPELL.get(val, []))
+        elif f == "customer_status":
+            val = K.pick(dd_options(f), K.STATUS_SPELL.get(val, []))
+        val = str(val or "").strip()[:LEAD_FIELDS[f]]
+        cur, a = (getattr(lead, f) or ""), auto.get(f)
+        if not val or a == HUMAN or cur == val:
+            continue
+        if (cur or f in auto) and not (f == "customer_status" and a in _KW_SRC):
+            continue
+        setattr(lead, f, val)
+        auto[f] = src
+        why[f] = str(ev or "")[:120]
+        changed.append(f)
+    if changed:
+        auto[KW_KEY] = why
+    return changed
+
+
+def capture_profile(o, msgs=None, extra=None) -> bool:
+    """ตอนข้อความเข้า: จับ keyword แล้วเติมโปรไฟล์ลีดทันที (ไม่ต้องรอใครเปิดแชท) → ได้อะไรใหม่ไหม
+    ไม่เจออะไรเลย = ไม่สร้างแถว ChatLead ให้เปล่าๆ (กติกาเดียวกับ `capture_contact`)"""
+    if msgs is None:
+        msgs = messages(o, limit=80)
+    texts = [m["text"] for m in list(msgs) + list(extra or [])
+             if m.get("dir") == "in" and m.get("text") and not m["text"].startswith("[")]
+    lead = lead_of(o, create=False)
+    from . import lead_keywords as K
+    if not lead and not K.extract(texts):
+        return False
+    lead = lead or lead_of(o)
+    auto = dict(lead.auto or {})
+    got = apply_keywords(lead, auto, texts, _lead_notes(lead))
     if got:
         lead.auto = auto
         lead.save(update_fields=got + ["auto", "updated_at"])
