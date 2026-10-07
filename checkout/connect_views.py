@@ -193,7 +193,7 @@ def api_inbox(request):
     view = (request.GET.get("view") or "").strip()
     allowed = C.VIEWS if admin else ("queue", "mine")
     if view not in allowed:
-        view = "overdue" if admin else ("queue" if on_duty else "mine")
+        view = "queue" if (admin or on_duty) else "mine"
     try:
         seller = int(request.GET.get("seller") or 0)
     except Exception:

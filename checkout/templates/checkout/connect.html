@@ -445,8 +445,9 @@
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
   const TABS_ADMIN = [
-    { v: 'overdue', l: 'เลยเวลา', i: 'alert', c: 'overdue', hot: true },
-    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue' },
+    // ★ 7 ต.ค.69 เอาแท็บ "เลยเวลา" ออก (เจ้าของสั่ง) — ทีมตอบลูกค้าในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา
+    //   → แชทที่ตอบไปแล้วค้างเป็น "เลยเวลา" ไปหมด ตัวเลขไม่มีความหมาย · แท็บแรกของแอดมินจึงเป็น "รอรับ"
+    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
     // ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — งานจ่ายเบอร์ของแอดมิน (connect.to_code)
     { v: 'tocode', l: 'ห้องพัก Lead', i: 'hash', c: 'tocode' },
     { v: 'mine', l: 'ของฉัน', i: 'user-check', c: 'mine', needEmp: true },
@@ -492,7 +493,7 @@
     document.documentElement.style.setProperty('--bh', b.offsetHeight + 'px');
     // ตัวเลขบนแท็บเบราว์เซอร์ — คนเปิดค้างไว้ข้างหลังจะเห็นว่ามีงาน
     const c = S.counts || {};
-    const hot = ADMIN ? (c.overdue || 0) : ((c.queue || 0) + (c.mineWaiting || 0));
+    const hot = ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0));
     document.title = (hot ? '(' + hot + ') ' : '') + 'Connect · Oxlet';
   }
 
@@ -808,7 +809,7 @@
     }
     if (!S.rows.length) {
       const empty = {
-        overdue: 'ไม่มีลูกค้ารอเกินเวลา 👍', queue: 'ไม่มีลูกค้ารอรับตอนนี้', tocode: 'ไม่มีลูกค้ารอจ่ายเบอร์ 👍',
+        queue: 'ไม่มีลูกค้ารอรับตอนนี้', tocode: 'ไม่มีลูกค้ารอจ่ายเบอร์ 👍',
         mine: ADMIN ? 'ยังไม่มีลูกค้าที่คุณดูแล' : 'ยังไม่มีลูกค้าของคุณ — กดรับจากแท็บ "รอรับ" ในวันเวรของทีม',
         owned: 'ยังไม่มีลูกค้าที่มีเจ้าของ', all: 'ยังไม่มีลูกค้าทักเข้ามา',
       }[S.view] || 'ไม่มีรายการ';

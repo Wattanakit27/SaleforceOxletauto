@@ -113,7 +113,7 @@ python manage.py runserver
 | `/checkout/api/customers` | `api_customers` | **admin/ผู้บริหาร** GET: **แชทลูกค้าที่ทักเข้า LINE OA** — ไม่ใส่อะไร = รายชื่อลูกค้า (ชื่อ · LINE id · จำนวนข้อความ · ทักครั้งแรก/ล่าสุด · เข้ามาทางบัญชีไหน) · `?q=` ค้นหาชื่อ · `?user_id=` = บทสนทนาย้อนหลังของคนนั้น · **ซ่อน LINE id ของพนักงาน** (`LineProfile.is_employee`) แต่โชว์ของลูกค้า (เจ้าของขอไว้ทักกลับ) |
 | `/checkout/api/reply` | `api_reply` | **admin/ผู้บริหาร** POST `{user_id, text}`: **ตอบแชทลูกค้า** — ส่งผ่าน LINE push ด้วย token ของบัญชี OA ที่ลูกค้าคุยอยู่ + บันทึกลง `GroupChat` เป็น `direction=out` พร้อมชื่อคนตอบ · **ส่งสำเร็จเท่านั้นถึงบันทึก** (ดู section "ตอบแชทลูกค้า") |
 | `/connect/` | `connect_views.page` | **หน้า Connect — แชทลูกค้า LINE OA รวมที่เดียว** (3 ต.ค.69) · แอดมิน/ผู้บริหาร = เห็นทุกแชท + โอน/ปล่อยคืนคิว + ตั้งค่า · เซลล์ = เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ + คิวรอรับ (เฉพาะวันเวรทีม) · คนงาน = 403 · ไม่ login → `/login/?next=/connect/` · `?id=` เปิดแชทนั้นเลย · `?embed=1` = ฝังในแท็บแดชบอร์ด · ดู section "Connect" |
-| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: เลยเวลา/รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
+| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -1351,7 +1351,7 @@ sender_id)` ≠ จำนวนคน**
 - **hook 2 จุด (ห่อ try แยก — Connect พังต้องไม่ทำให้แชท/การส่งพัง)**: `store_chat` (แชท 1:1 ขาเข้า) →
   `note_customer_message` · `chat.send_reply` (ส่งสำเร็จ) → `note_reply` · cron `cron_tick` → `connect.tick()`
 - **หน้า**: `/connect/` ([connect.html](checkout/templates/checkout/connect.html)) · มือถือ = รายชื่อ→แตะ→แชทเต็มจอ ·
-  แอดมินเข้าทางแท็บ **"Connect (แชทลูกค้า)"** (iframe `?embed=1` · ป้ายตัวเลขแดง = ลูกค้ารอเกินเวลา) ·
+  แอดมินเข้าทางแท็บ **"Connect (แชทลูกค้า)"** (iframe `?embed=1` · ป้ายตัวเลข = ลูกค้ารอเซลล์รับ) ·
   เซลล์เข้าทางปุ่ม **"แชทลูกค้า"** ในแถบโหมดของหน้าเซลล์ (ป้าย = ลูกค้าของฉันที่รอตอบ + คิว)
   · **ไม่มีหน้าต่างลอย** — ตั้งค่า/สถิติ เปิดในช่องขวาของหน้าเอง
 
@@ -1367,6 +1367,11 @@ sender_id)` ≠ จำนวนคน**
 5. **นับเฉพาะเวลาทำการ** (ค่าตั้งต้น 08:30–20:00 · ตั้งเปิด=ปิด = 24 ชม.) — ทักนอกเวลา = เริ่มนับตอนเปิด
    (ไม่ปลุกแอดมินตอนตี 2) · `due_for()`
 6. **เลยเวลา = ขึ้นในหน้า Connect เสมอ** (คำนวณจาก `due_at` เอง ไม่พึ่ง cron) · cron ติดธง `escalated_at`
+   · **★ 7 ต.ค.69 ถอดแท็บ "เลยเวลา" ของแอดมินออก (เจ้าของสั่ง "น่าจะบัค เอาออกเลย")** — ไม่ใช่บั๊กโค้ด:
+     ทีมตอบลูกค้าในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา → แชทที่ตอบแล้วค้าง "เลยเวลา" หมด (วัดจริง 102 แชท)
+     · แท็บแรกของแอดมิน = **"รอรับ"** · `VIEWS` ไม่มี `overdue` แล้ว (ลิงก์เก่าตกไปรอรับ) · `counts()` ไม่นับ `overdue`
+     · ป้ายเมนูแดชบอร์ด/ชื่อแท็บเบราว์เซอร์ = จำนวนรอรับ · **ยังคงไว้**: นาฬิกา/ป้ายแดงรายแถว · `escalated_at` · สถิติเวลาตอบ
+       · ป้ายแดงของเซลล์ (`mineOverdue`) · ถ้าวันหน้าทีมตอบผ่าน Connect จริง จะเอาแท็บกลับต้องเติมคืนทั้ง 4 จุด
    ครั้งเดียวต่อรอบ + จดประวัติ · **ส่ง LINE เข้ากลุ่มแอดมิน = ปิดโดยปริยาย** (`alert_on`) ·
    **บอกเซลล์ทาง LINE ตอนลูกค้าทัก = ปิดโดยปริยาย** (`notify_sellers` — ทีมละ ~9 คน × ทุกลูกค้าใหม่ = กินโควต้าเร็ว)
 - ค่าตั้งอยู่ KV **`connect_config`** · `clean_cfg()` **ปฏิเสธพร้อมบอกช่อง** (ไม่เงียบ) · กลุ่มแจ้งเตือนเช็ค

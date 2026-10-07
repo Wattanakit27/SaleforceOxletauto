@@ -376,6 +376,12 @@ try:
     ck("เซลล์เปิดหน้าได้", r.status_code == 200, r.status_code)
     r = ADM.get("/connect/", secure=True)
     ck("แอดมินเปิดหน้าได้", r.status_code == 200, r.status_code)
+    # ★ 7 ต.ค.69 ถอดแท็บ "เลยเวลา" — แอดมินเปิดมาเจอ "รอรับ" · ลิงก์เก่า ?view=overdue ไม่พัง ตกไปรอรับ
+    s, d = J(ADM, "/connect/api/inbox")
+    ck("แอดมินเปิด Connect → แท็บแรก = รอรับ", s == 200 and d.get("view") == "queue", (s, d.get("view")))
+    s, d = J(ADM, "/connect/api/inbox?view=overdue")
+    ck("ลิงก์เก่า view=overdue → รอรับ (ไม่ error)", s == 200 and d.get("view") == "queue"
+       and "overdue" not in d.get("counts", {}), (s, d.get("view"), list(d.get("counts", {}))))
 
     s, d = J(SA1, "/connect/api/inbox?view=all")
     ck("เซลล์ขอดู 'ทั้งหมด' → ถูกบังคับเป็นมุมมองของตัวเอง", s == 200 and d.get("view") in ("queue", "mine"),
@@ -1178,7 +1184,7 @@ try:
     pk = d.get("parked") or {}
     ck("API แท็บจ่ายเบอร์: ได้ห้องพัก Lead + ตัวเลข", s_ == 200 and len(pk.get("waiting", [])) == 1
        and d.get("counts", {}).get("parked") == 1, (s_, d.get("counts")))
-    s_, d = J(ADM, "/connect/api/inbox?view=overdue")
+    s_, d = J(ADM, "/connect/api/inbox?view=queue")
     ck("แท็บอื่นได้แค่ตัวเลข (ไม่ส่งรายการทั้งก้อนทุก 8 วิ)", "parked" not in d and d.get("counts", {}).get("parked") == 1)
     s_, d = J(SA1, "/connect/api/inbox?view=tocode")
     ck("★ เซลล์ไม่เห็นห้องพัก Lead", "parked" not in d and "parked" not in d.get("counts", {}))

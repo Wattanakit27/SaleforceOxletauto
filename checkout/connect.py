@@ -2735,7 +2735,9 @@ def sim_clear(by: str = "") -> dict:
     return {"customers": n_c, "messages": msgs, "sellers": n_t, "released": released}
 
 
-VIEWS = ("overdue", "queue", "tocode", "mine", "owned", "all")
+# ★ 7 ต.ค.69 ถอดแท็บ "เลยเวลา" (overdue) ออก — ทีมตอบในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา = ค้างเลยเวลาหมด
+#   ลิงก์เก่า ?view=overdue ตกไปหน้าเริ่มต้น (รอรับ) เอง · นาฬิกา/สถิติเวลาตอบยังเก็บเหมือนเดิม
+VIEWS = ("queue", "tocode", "mine", "owned", "all")
 
 
 def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int = 0,
@@ -2743,9 +2745,7 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
     """แถวของลิสต์ด้านซ้าย — สิทธิ์ถูกเช็คที่ view ก่อนเรียก (เซลล์ได้แค่ queue/mine)"""
     now = timezone.now()
     qs = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
-    if view == "overdue":
-        qs = qs.filter(awaiting_since__isnull=False, due_at__lte=now).order_by("due_at")
-    elif view == "queue":
+    if view == "queue":
         qs = qs.filter(owner__isnull=True, awaiting_since__isnull=False).order_by("due_at")
     elif view == "tocode":                   # แอดมินเท่านั้น (เช็คที่ view) — คนที่รอคำตอบขึ้นก่อน ตามเส้นตาย
         qs = to_code(qs).order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
@@ -2790,7 +2790,6 @@ def counts(me=None, admin: bool = False) -> dict:
     }
     if admin:
         out.update({
-            "overdue": base.filter(awaiting_since__isnull=False, due_at__lte=now).count(),
             "owned": base.filter(owner__isnull=False).count(),
             "all": base.count(),
             "tocode": to_code(base.all()).count(),

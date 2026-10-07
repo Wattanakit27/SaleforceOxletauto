@@ -273,7 +273,8 @@
       }
       ping(); setInterval(ping, 30000);
     })();
-    // 💬 Connect — ตัวเลขบนเมนู: ลูกค้ารอเกินเวลา (แดง) ไม่งั้นลูกค้ารอเซลล์รับ (ม่วง) · เบา (นับแถวอย่างเดียว)
+    // 💬 Connect — ตัวเลขบนเมนู = ลูกค้ารอเซลล์รับ · เบา (นับแถวอย่างเดียว)
+    //    ★ 7 ต.ค.69 เลิกโชว์ "รอเกินเวลา" (แดง) — ทีมตอบในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา เลขเลยเวลาไม่มีความหมาย
     //    เก็บค่าไว้ใน _cnBadge ให้ render() วาดเลขเดิมได้ทันที (กันเลขหายทุกครั้งที่หน้าวาดใหม่)
     var _cnBadge = null;   // var (ไม่ใช่ let) — render() อาจถูกเรียกก่อนบรรทัดนี้ (บทเรียน TDZ เดิม)
     function _cnBadgeHtml(){
@@ -288,7 +289,7 @@
         fetch('/connect/api/summary',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(j=>{
           if(!j || !j.ok) return;
           const c = j.counts || {};
-          _cnBadge = {late: c.overdue || 0, queue: c.queue || 0};
+          _cnBadge = {queue: c.queue || 0};
           const el = document.getElementById('cn-badge'); if(el) el.outerHTML = _cnBadgeHtml();
         }).catch(function(){});
       }
