@@ -167,7 +167,7 @@ def team_id_of(position: str) -> str:
     if not p:
         return ""
     low = p.lower()
-    if low in ("admin", "เทเลเซลล์"):
+    if low in ("admin", "เทเลเซลล์", "เทเลเซล", "เทเลเซลส์", "telesale", "telesales"):
         return "ADMIN"
 
     # ⚠️ "ขึ้นต้นด้วยคำว่าทีม" อย่างเดียวไม่พอ — **"ทีมโปรดักชัน" คือแผนก ไม่ใช่ทีมขาย**

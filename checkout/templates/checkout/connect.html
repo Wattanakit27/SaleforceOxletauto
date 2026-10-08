@@ -1578,7 +1578,7 @@
         : x.subscribed === false ? '<b style="color:var(--red)">ยังไม่ผูก</b>' : h(x.error || 'ตรวจไม่ได้')}`).join(' · ')
         : `<span style="color:var(--red)">${h(r.error || 'ตรวจไม่ได้')}</span>`);
     };
-    $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team }));
+    $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team, emp: x.dataset.emp }));
   }
   // ── ปุ่ม "จ่ายเบอร์" ส่งใบเข้ากลุ่มจ่ายเบอร์จริง (6 ต.ค.69 · เจ้าของ: "กลุ่มจ่ายเบอร์อยากให้มันต่อจริงๆ ส่งจริงๆ") ──
   //   ห้องปลายทาง: ว่าง = ระบบหาเองจากชื่อกลุ่ม · ตัวเลือก = เฉพาะกลุ่มจ่ายเบอร์ที่บอทตัวส่งอยู่ (เลือกห้องอื่นไปก็ส่งไม่ออก)
@@ -1654,10 +1654,11 @@
         · ถ้าบัญชีจำลองไปรับ/ตอบ "ลูกค้าจริง" ข้อความจะถึงลูกค้าจริง (ระบบถามยืนยันก่อนส่งทุกครั้ง)</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${(t.teams || []).map(tm => `<button class="btn pri" data-test="as" data-team="${h(tm)}">ใช้หน้าจอแบบ ทดสอบเซลล์ ${h(tm)}</button>`).join('')}
+        ${(t.accounts || []).map(a => `<button class="btn pri" data-test="as" data-emp="${h(String(a.id))}">ใช้หน้าจอแบบ ${h(a.name)} (บัญชีทดสอบ)</button>`).join('')}
         <button class="btn" data-test="customer">+ ลูกค้าจำลองทักเข้ามา</button>
-        <button class="btn red" data-test="clear"${(c.customers || c.sellers) ? '' : ' disabled'}>ล้างข้อมูลทดสอบ (ลูกค้าจำลอง ${c.customers || 0} · บัญชีจำลอง ${c.sellers || 0})</button>
+        <button class="btn red" data-test="clear"${(c.customers || c.sellers || c.realHeld) ? '' : ' disabled'}>ล้างข้อมูลทดสอบ (ลูกค้าจำลอง ${c.customers || 0} · บัญชีจำลอง ${c.sellers || 0})</button>
       </div>
-      ${c.realHeld ? `<div class="d" style="margin:8px 0 0;color:var(--red)">บัญชีจำลองถือ "ลูกค้าจริง" อยู่ ${c.realHeld} คน — กดล้างเพื่อคืนเข้าคิว</div>` : ''}
+      ${c.realHeld ? `<div class="d" style="margin:8px 0 0;color:var(--red)">บัญชีทดสอบถือ "ลูกค้าจริง" อยู่ ${c.realHeld} คน — กดล้างเพื่อคืนเข้าคิว (บัญชีทดสอบที่เป็นคนจริงไม่ถูกลบ)</div>` : ''}
     </div>`;
   }
   async function saveCfg() {

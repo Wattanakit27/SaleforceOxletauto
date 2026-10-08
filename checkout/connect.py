@@ -63,6 +63,10 @@ DEFAULTS = {
     #   เริ่มที่ test — เจ้าของสั่ง "ทดสอบกับบัญชี FB ของเจ้าของก่อน ไม่ส่งหาลูกค้าจริง"
     "fb_reply": "test",
     "fb_test_rows": [],
+    # ★ 9 ต.ค.69 — บัญชีพนักงาน "จริง" ที่ใช้เป็นบัญชีทดสอบ (ชื่อเล่นในทะเบียน · เจ้าของสั่ง)
+    #   โผล่ท้ายรายการโอน ป้าย "ทดสอบ" · แอดมินสลับไปใช้หน้าจอแบบเซลล์ของบัญชีนี้ได้ ·
+    #   จ่ายเบอร์ให้ = ไม่ส่งใบเข้ากลุ่มจ่ายเบอร์จริง · "ล้างข้อมูลทดสอบ" = คืนลูกค้าที่ถือไว้เข้าคิว (ไม่ลบตัวคน)
+    "test_accounts": ["Wattanakit"],
     # ★ ดึงแชท FB สำรองทุกกี่นาที — ตัวหลักคือ webhook (Facebook ส่งมาเอง · fb_webhook.py)
     #   เจ้าของห่วง "ถ้าดึงจาก API ทุกหนึ่งนาที มันจะติด Token" → วัดจริง 4 ต.ค.69 ตอนดึงทุก 1 นาที:
     #   header ของ Meta (x-business-use-case-usage · messenger) = ใช้ไป 1% ทั้ง call/CPU/เวลา → ห่างจากเพดานมาก
@@ -145,6 +149,8 @@ def cfg() -> dict:
     except Exception:
         c["fb_poll_min"] = DEFAULTS["fb_poll_min"]
     c["slip_post"] = bool(c.get("slip_post"))
+    c["test_accounts"] = list(dict.fromkeys(
+        str(x).strip() for x in (c.get("test_accounts") or []) if str(x).strip()))[:10]
     for k in ("slip_group", "slip_group_reject"):
         c[k] = str(c.get(k) or "").strip()
     return c
@@ -385,13 +391,19 @@ def team_of(emp) -> str:
 
 
 def seller_list() -> list:
-    """พนักงานที่อยู่ทีมขาย — ตัวเลือกตอนแอดมินโอนลูกค้า"""
+    """พนักงานที่อยู่ทีมขาย — ตัวเลือกตอนแอดมินโอนลูกค้า
+
+    ★ 9 ต.ค.69 บัญชีทดสอบ (บัญชีจำลอง "ทดสอบเซลล์ X" + บัญชีจริงใน `test_accounts`) อยู่ท้ายรายการ
+      ติด `test: True` · ไม่มีทีม = ทีม "ทดสอบ" (ไม่ใช่รหัสทีม → ไม่มีวันอยู่ในเวรรับลูกค้าจริง)
+    """
+    names = set(cfg()["test_accounts"])
     out = []
     for e in Employee.objects.filter(active=True).order_by("nickname"):
         t = team_of(e)
-        if t:
-            out.append({"id": e.id, "name": e.nickname, "team": t})
-    out.sort(key=lambda r: (r["team"], r["name"]))
+        test = e.nickname.startswith(TEST_PREFIX) or e.nickname in names
+        if t or test:
+            out.append({"id": e.id, "name": e.nickname, "team": t or "ทดสอบ", "test": test})
+    out.sort(key=lambda r: (r["test"], r["team"], r["name"]))
     return out
 
 
@@ -2658,7 +2670,25 @@ TEST_NOTE = "บัญชีทดสอบ Connect — ลบได้ที่
 
 
 def is_test_seller(emp) -> bool:
-    return bool(emp) and (getattr(emp, "nickname", "") or "").startswith(TEST_PREFIX)
+    """บัญชีจำลอง (ชื่อขึ้นต้น "ทดสอบเซลล์ ") หรือบัญชีจริงที่ตั้งเป็นบัญชีทดสอบ (`test_accounts`)"""
+    nick = (getattr(emp, "nickname", "") or "") if emp else ""
+    return bool(nick) and (nick.startswith(TEST_PREFIX) or nick in cfg()["test_accounts"])
+
+
+def test_accounts() -> list:
+    """บัญชีพนักงานจริงที่ตั้งเป็นบัญชีทดสอบ (มีในทะเบียน + ยังใช้งาน) — ปุ่มสลับหน้าจอในการ์ดทดสอบ"""
+    names = cfg()["test_accounts"]
+    return list(Employee.objects.filter(nickname__in=names, active=True).order_by("nickname")) if names else []
+
+
+def _test_held():
+    """ลูกค้าจริงที่บัญชีทดสอบ (จำลอง + บัญชีจริงที่ตั้งไว้) ถือไว้"""
+    from django.db.models import Q
+    q = Q(owner__nickname__startswith=TEST_PREFIX)
+    names = cfg()["test_accounts"]
+    if names:
+        q |= Q(owner__nickname__in=names)
+    return ChatOwner.objects.filter(q).exclude(profile__user_id__startswith=SIM_PREFIX)
 
 
 def is_sim(user_id) -> bool:
@@ -2709,8 +2739,7 @@ def sim_customer(text: str = ""):
 def sim_counts() -> dict:
     return {"customers": LineProfile.objects.filter(user_id__startswith=SIM_PREFIX).count(),
             "sellers": Employee.objects.filter(nickname__startswith=TEST_PREFIX).count(),
-            "realHeld": ChatOwner.objects.filter(owner__nickname__startswith=TEST_PREFIX)
-                                         .exclude(profile__user_id__startswith=SIM_PREFIX).count()}
+            "realHeld": _test_held().count()}
 
 
 def sim_clear(by: str = "") -> dict:
@@ -2718,10 +2747,10 @@ def sim_clear(by: str = "") -> dict:
 
     ลูกค้าจริงที่บัญชีจำลองเผลอรับไว้ → **คืนคิว** (ไม่งั้นลูกค้าจริงค้างอยู่กับบัญชีที่ไม่มีใครใช้)
     ข้อความที่บัญชีจำลองเคยส่งหาลูกค้าจริงไม่ถูกลบ — มันถูกส่งออกไปจริงแล้ว ต้องอยู่ในประวัติ
+    ★ บัญชีจริงใน `test_accounts` (เช่น Wattanakit): คืนลูกค้าที่ถือไว้เข้าคิวเหมือนกัน แต่ **ไม่ลบตัวคน/ประวัติ**
     """
     released = 0
-    for o in ChatOwner.objects.filter(owner__nickname__startswith=TEST_PREFIX) \
-                              .exclude(profile__user_id__startswith=SIM_PREFIX):
+    for o in _test_held():
         if assign(o.id, None, by=by or "ล้างข้อมูลทดสอบ")[0]:
             released += 1
     msgs = GroupChat.objects.filter(sender_id__startswith=SIM_PREFIX).delete()[0]

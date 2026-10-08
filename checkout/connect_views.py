@@ -542,7 +542,7 @@ def api_config(request):
         if not C.save_cfg(new):
             return _j({"ok": False, "error": "บันทึกไม่สำเร็จ (ฐานข้อมูลไม่ตอบ)"}, 500)
     c = C.cfg()
-    teams = sorted({s["team"] for s in C.seller_list()} | set(c["teams"]))
+    teams = sorted({s["team"] for s in C.seller_list() if not s.get("test")} | set(c["teams"]))
     fb = {}
     try:                                             # สถานะดึงแชท Facebook รอบล่าสุด (การ์ดตั้งค่า)
         from dashboard.services import cache_store
@@ -625,9 +625,20 @@ def api_test(request):
         return _j({"ok": False, "error": "โหมดทดสอบใช้ได้เฉพาะแอดมิน/ผู้บริหาร"}, 403)
     if request.method != "POST":
         return _j({"ok": True, "as": ctx["testAs"], "name": ctx["name"] if ctx["testAs"] else "",
-                   "counts": C.sim_counts(), "teams": C.cfg()["teams"]})
+                   "counts": C.sim_counts(), "teams": C.cfg()["teams"],
+                   "accounts": [{"id": e.id, "name": e.nickname} for e in C.test_accounts()]})
     body = _body(request)
     act = (body.get("action") or "").strip()
+    if act == "as" and body.get("emp"):              # บัญชีจริงที่ตั้งเป็นบัญชีทดสอบ (เช่น Wattanakit)
+        try:
+            eid = int(body.get("emp"))
+        except Exception:
+            eid = 0
+        emp = Employee.objects.filter(pk=eid, active=True).first()
+        if not emp or not C.is_test_seller(emp):
+            return _j({"ok": False, "error": "สลับได้เฉพาะบัญชีทดสอบ"}, 400)
+        request.session[TEST_AS_KEY] = emp.id
+        return _j({"ok": True, "message": "ตอนนี้คุณใช้หน้าจอแบบเซลล์ของ %s (บัญชีทดสอบ)" % emp.nickname})
     if act == "as":
         team = str(body.get("team") or "").strip().upper()
         if team not in C.cfg()["teams"]:

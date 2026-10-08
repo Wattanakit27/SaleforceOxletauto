@@ -651,6 +651,52 @@ try:
     ck("สถิติไม่เหลือชื่อบัญชีจำลอง", "ทดสอบเซลล์ A" not in {r["name"] for r in C.stats(30)["rows"]})
     ck("ลูกค้าจริงยังอยู่ครบ", ChatOwner.objects.filter(pk__in=[o1.id, o2.id]).count() == 2)
 
+    print("[16b] บัญชีทดสอบที่เป็นคนจริง (Wattanakit) + ตำแหน่งเทเลเซลล์ — 9 ต.ค.69")
+    WAT = Employee.objects.create(nickname="Wattanakit", position="")
+    MAI = Employee.objects.create(nickname="ใหม่", position="เทเลเซลล์")
+    ck("ตำแหน่ง \"เทเลเซลล์\" = ทีม ADMIN", C.team_of(MAI) == "ADMIN", C.team_of(MAI))
+    ck("สะกดแบบอื่นก็ได้ ADMIN", all(C.team_of(Employee(nickname="x", position=p_)) == "ADMIN"
+                                     for p_ in ("เทเลเซล", "Telesale", "เทเลเซลส์")))
+    sl = C.seller_list()
+    byname = {x["name"]: x for x in sl}
+    ck("★ เทเลเซลล์ (ใหม่) อยู่ในรายการโอน", byname.get("ใหม่", {}).get("team") == "ADMIN"
+       and byname["ใหม่"].get("test") is False, byname.get("ใหม่"))
+    ck("★ Wattanakit อยู่ในรายการโอน ป้ายทดสอบ", byname.get("Wattanakit", {}).get("test") is True
+       and byname["Wattanakit"].get("team") == "ทดสอบ", byname.get("Wattanakit"))
+    ck("บัญชีทดสอบอยู่ท้ายรายการ", sl and sl[-1]["name"] == "Wattanakit", [x["name"] for x in sl])
+    ck("พนักงานออฟฟิศยังไม่อยู่ในรายการ", "ออฟฟิศ" not in byname)
+    ck("is_test_seller: Wattanakit ใช่ · เซลล์จริงไม่ใช่", C.is_test_seller(WAT) and not C.is_test_seller(A1)
+       and not C.is_test_seller(MAI))
+    s_, d = J(ADM, "/connect/api/config")
+    ck("ทีม \"ทดสอบ\" ไม่โผล่ในตัวเลือกเวร", s_ == 200 and "ทดสอบ" not in (d.get("teams") or []), d.get("teams"))
+    s_, d = J(TST, "/connect/api/test")
+    ck("การ์ดทดสอบมีปุ่มบัญชี Wattanakit", [a.get("name") for a in d.get("accounts") or []] == ["Wattanakit"],
+       d.get("accounts"))
+    s_, d = J(TST, "/connect/api/test", {"action": "as", "emp": A1.id})
+    ck("★ สลับเป็นเซลล์จริง (ไม่ใช่บัญชีทดสอบ) ไม่ได้", s_ == 400, (s_, d))
+    s_, d = J(SA1, "/connect/api/test", {"action": "as", "emp": WAT.id})
+    ck("เซลล์สลับเป็น Wattanakit ไม่ได้", s_ == 403, s_)
+    s_, d = J(TST, "/connect/api/test", {"action": "as", "emp": WAT.id})
+    ck("แอดมินสลับเป็น Wattanakit ได้", s_ == 200 and d.get("ok"), (s_, d))
+    r = TST.get("/connect/", secure=True).content.decode("utf-8")
+    mm = re.search(r'<script id="cn-boot" type="application/json">(.*?)</script>', r, re.S)
+    boot = json.loads(mm.group(1)) if mm else {}
+    ck("หน้าเว็บเป็นมุมมองเซลล์ของ Wattanakit", (boot.get("me") or {}).get("name") == "Wattanakit"
+       and (boot.get("me") or {}).get("admin") is False and (boot.get("test") or {}).get("as") is True, boot.get("me"))
+    s_, d = J(TST, "/connect/api/test", {"action": "exit"})
+    ok_, _m = C.assign(o2.id, WAT, by="เทสต์")
+    ck("แอดมินโอนลูกค้าจริงให้ Wattanakit ได้", ok_ and ChatOwner.objects.get(pk=o2.id).owner_id == WAT.id, _m)
+    ck("นับว่าบัญชีทดสอบถือลูกค้าจริง", C.sim_counts()["realHeld"] == 1, C.sim_counts())
+    rr = C.sim_clear()
+    ck("★ ล้างข้อมูลทดสอบ = คืนลูกค้าเข้าคิว", rr.get("released") == 1
+       and ChatOwner.objects.get(pk=o2.id).owner_id is None, rr)
+    ck("★ ล้างแล้ว Wattanakit (คนจริง) ยังอยู่ในทะเบียน", Employee.objects.filter(pk=WAT.id, active=True).exists())
+    C.save_cfg(dict(C.cfg(), test_accounts=[]))
+    ck("เอาออกจากรายชื่อบัญชีทดสอบ = ไม่โผล่ในรายการโอนอีก (ไม่มีทีม)",
+       "Wattanakit" not in {x["name"] for x in C.seller_list()} and not C.is_test_seller(WAT))
+    C.save_cfg(dict(C.cfg(), test_accounts=["Wattanakit"]))
+    Employee.objects.filter(pk__in=[WAT.id, MAI.id]).update(active=False)
+
     print("[17] ข้อมูลลีดของลูกค้า — ช่องเดียวกับชีตลีด + เติมอัตโนมัติ + ใบจ่ายลีด")
     from checkout.models import ChatLead
     from checkout.leadgroup import parse_leadsheet
