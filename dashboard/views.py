@@ -1606,6 +1606,30 @@ def cron_tick(request):
     except Exception as e:
         coach_result = "error: %s" % str(e)[:200]
 
+    # ── 🗂️ ชีตจัดซื้อ: เตรียมแท็บเดือนหน้าให้ล่วงหน้า (ตั้งแต่วันที่ 25 · เช็ควันละครั้ง) ──
+    #    n8n เขียนเคสเทิร์นรถลงแท็บของเดือนนี้ — วันที่ 1 ไม่มีแท็บ = เคสวันนั้นหาย
+    #    ทำใน thread (ทำสำเนา+ล้างข้อมูล ~3-8 วิ) ไม่หน่วงงานอุ่นข้อมูล
+    purchase_tab_result = ""
+    try:
+        import threading as _th
+
+        from .services import purchase_tabs as _ptabs
+
+        def _pt_job(_now=now):
+            try:
+                _ptabs.maybe_prepare(_now)
+            finally:
+                try:
+                    from django.db import connection as _conn
+                    _conn.close()
+                except Exception:
+                    pass
+        if now.minute % 10 == 7:            # วันละไม่กี่ครั้งพอ (maybe_prepare กันทำซ้ำในวันเดียวกันเอง)
+            _th.Thread(target=_pt_job, daemon=True).start()
+            purchase_tab_result = "checking"
+    except Exception as e:
+        purchase_tab_result = "error: %s" % str(e)[:200]
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -1618,6 +1642,7 @@ def cron_tick(request):
         "checkin": checkin_result,   # ผลส่งตารางเช็คชื่อ/ตามคนไม่เช็ค ('' = ยังไม่ถึงเวลา)
         "connect": connect_result,   # Connect: ลูกค้ารอเกินเวลากี่คน ({} = ไม่มี)
         "coach": coach_result,       # ซิงก์บันทึกห้องโค้ชลงชีต ('' = ทำแล้ววันนี้ / ปิดอยู่)
+        "purchaseTab": purchase_tab_result,   # เตรียมแท็บชีตจัดซื้อเดือนหน้า (ผลจริงดู kv purchase_tab_last)
         "meta": meta_result,
         "youtube": youtube_result,
         "tiktok": tiktok_result,     # ต่ออายุ token TikTok ({} = ไม่มีช่องไหนใกล้หมด)         # ดึง Meta รอบเที่ยงคืน: started/running/done/retry-wait ('' = ไม่ใช่ช่วงเวลา)
@@ -2584,6 +2609,35 @@ def admin_system_health(request):
             issues.append({"level": "warn",
                            "msg": "ส่งเข้าไลน์ไม่ถึงบางคน: %s" % " · ".join(_part[:4])})
     except Exception:                       # ยังไม่ migrate / ตารางล็อกอ่านไม่ได้ = ข้ามเงียบ
+        pass
+
+    # ── 🗂️ 8 ต.ค.69 — แท็บชีตจัดซื้อเดือนหน้า (n8n เขียนเคสเทิร์นรถลงแท็บของเดือนนั้น) ──
+    #   ไม่มีแท็บตอนข้ามเดือน = เคสวันนั้นหายทั้งวัน · cron เตรียมให้ตั้งแต่วันที่ 25 แล้วจดผลไว้ที่ kv
+    try:
+        from datetime import date as _date
+
+        from .services import purchase_tabs as _ptabs
+        from .services.cache_store import get_kv as _gkv_pt
+        if _ptabs.auto_on():
+            _raw = _gkv_pt(_ptabs.KV_LAST) or {}
+            _pt = _raw.get("data", _raw) if isinstance(_raw, dict) else {}
+            _pt = _pt if isinstance(_pt, dict) else {}
+            if _pt and not _pt.get("ok"):
+                _errs = [x.get("error") for x in (_pt.get("results") or []) if x.get("error")]
+                issues.append({"level": "err",
+                               "msg": "เตรียมแท็บชีตจัดซื้อเดือนใหม่ไม่สำเร็จ: %s — เคสเทิร์นรถของเดือนนั้นจะเขียนลงชีตไม่ได้ "
+                                      "· ตรวจด้วย manage.py purchase_tab"
+                                      % ("; ".join(_errs) or _pt.get("error") or "ไม่ทราบสาเหตุ")})
+            else:
+                try:
+                    _age = (now.date() - _date.fromisoformat(_pt.get("date") or "")).days
+                except ValueError:
+                    _age = 99
+                if _age > 2:
+                    issues.append({"level": "warn",
+                                   "msg": "ยังไม่ได้เช็คแท็บชีตจัดซื้อเดือนหน้ามา %s — cron ไม่ได้เรียก?"
+                                          % ("นานแล้ว" if _age == 99 else "%d วัน" % _age)})
+    except Exception:
         pass
 
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")

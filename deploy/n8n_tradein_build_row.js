@@ -1,7 +1,16 @@
 // =====================================================
-// Build Sheet Row (Trade-in) - v21  (8 ต.ค.69)
+// Build Sheet Row (Trade-in) - v22  (8 ต.ค.69)
 // โหนด "Build Sheet Row (Trade-in)" ใน workflow ซื้อขายเทิร์นรถ
 // ก๊อปทั้งไฟล์นี้ไปวางทับในช่อง Code ของโหนดนั้นได้เลย
+//
+// ที่แก้จาก v21 (เผื่อเดือนหน้า/ปีหน้า — ใช้คู่กับ deploy/n8n_tradein_sheet_section.json ชุดใหม่):
+// 17. ★ ส่งชื่อแท็บของเดือนนี้ออกไปด้วย `_tab` (+ `_tabPrev` เดือนก่อน) — คิดจากเวลาไทย
+//     "ขายรถจบออนไลน์ <เดือน><ปี พ.ศ. 2 หลัก>" · ข้ามปีได้ (ม.ค.70 → เดือนก่อน = ธ.ค.69)
+//     โหนดเขียนชีตใช้ค่านี้ ไม่ต้องกลับมาเปลี่ยนแท็บเองทุกเดือน
+// 18. ★ `rowAS` = ค่าคอลัมน์ A–S เรียงตามตำแหน่งจริงในชีต (19 ช่อง · S = car รถตามสูตร)
+//     โหนดเขียนแบบระบุช่วง A–S ตรงๆ → ไม่ขึ้นกับชื่อหัวคอลัมน์ (แท็บจริงหัว O ว่าง · H ชื่อ "ADS")
+//     · เบอร์โทรใส่ ' นำหน้า (เลข 0 ตัวหน้าไม่หาย) · ข้อความขึ้นต้น = + - @ ใส่ ' นำหน้า (ไม่กลายเป็นสูตร)
+//     · วันที่เป็นปี ค.ศ. 4 หลัก · ช่อง `values` เดิมยังอยู่ครบ (โหนดชุดเก่ายังใช้ได้)
 //
 // ที่แก้จาก v20:
 // 11. ★ รับเฉพาะ 3 กลุ่มเคสจัดซื้อ (ไอดีฝั่งบอท OxletautoGiveLead) — กลุ่มอื่นข้ามหมด
@@ -84,8 +93,18 @@ if (/^โค้ด/.test(textHead)) {
   mode = "purchase_comment";
 }
 
-console.log("=== BUILD SHEET ROW v21 ===");
-console.log("Code:", code, "| Mode:", mode);
+// ★ v22 — แท็บรายเดือนของชีตจัดซื้อ (คิดจากเวลาไทยตอนข้อความเข้า)
+const MONTHS_TH = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+                   "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+const bkkNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+const tabFor = (y, m0) => `ขายรถจบออนไลน์ ${MONTHS_TH[m0]}${String((y + 543) % 100).padStart(2, "0")}`;
+const SHEET_TAB = tabFor(bkkNow.getFullYear(), bkkNow.getMonth());
+const SHEET_TAB_PREV = bkkNow.getMonth() === 0
+  ? tabFor(bkkNow.getFullYear() - 1, 11)
+  : tabFor(bkkNow.getFullYear(), bkkNow.getMonth() - 1);
+
+console.log("=== BUILD SHEET ROW v22 ===");
+console.log("Code:", code, "| Mode:", mode, "| Tab:", SHEET_TAB);
 console.log("Group:", grp.name, "->", grp.caseType);
 console.log("Original Sender:", senderNickname);
 
@@ -295,7 +314,9 @@ if (mode === "purchase_comment") {
       _mode: "purchase_comment",
       code,
       comment: commentText,
-      purchaserNickname
+      purchaserNickname,
+      _tab: SHEET_TAB,            // ★ v22 — ค้นเคสในแท็บเดือนนี้ก่อน
+      _tabPrev: SHEET_TAB_PREV    //          ไม่เจอค่อยค้นเดือนก่อน (คอมเมนท์ต้นเดือนมักพูดถึงเคสปลายเดือนก่อน)
     }
   }];
 }
@@ -585,8 +606,39 @@ const now = new Date();
 const bangkokTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
 const dateTH = bangkokTime.getDate() + "/" + (bangkokTime.getMonth() + 1) + "/" + String(bangkokTime.getFullYear()).slice(-2);
 
+// ★ v22 — แถว A–S ตามตำแหน่งคอลัมน์จริงของแท็บรายเดือน (เขียนแบบ USER_ENTERED)
+//   esc: ข้อความขึ้นต้น = + - @ → ใส่ ' นำหน้า ไม่งั้นชีตตีเป็นสูตร/#ERROR! ("-ครับ")
+const esc = (v) => {
+  const s = String(v ?? "");
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+};
+const dateFull = bangkokTime.getDate() + "/" + (bangkokTime.getMonth() + 1) + "/" + bangkokTime.getFullYear();
+const rowAS = [
+  dateFull,                       // A วันที่ (ชีตตั้งเป็น วัน/เดือน/ปี)
+  "",                             // B คันที่ — ทีมพิมพ์เอง
+  esc(code),                      // C Code
+  esc(carModel),                  // D รุ่นรถ
+  esc(plate),                     // E ป้ายทะเบียน
+  phone ? "'" + phone : "",       // F เบอร์ติดต่อ (คงเลข 0 ตัวหน้า)
+  esc(customerName),              // G ชื่อผู้ขาย
+  esc(ads),                       // H ADS
+  esc(channelMapped),             // I ช่องทาง
+  esc(sellType),                  // J ขาย/เทริน
+  "",                             // K รับซื้อ/ไม่รับซื้อ — ว่างเสมอ (ทีมกรอก)
+  esc(onlineOffline),             // L ออนไลน์/ออฟไลน์
+  esc(purchaserFinal),            // M จัดซื้อ
+  esc(senderNickname),            // N ผู้ส่ง
+  esc(caseType),                  // O เคส (หัวคอลัมน์ในชีตว่าง)
+  esc(finalProfile),              // P โปรไฟล์ลูกค้า
+  "",                             // Q คอมเมนท์จัดซื้อ
+  "",                             // R เหตุผล
+  esc(carDropdownValue),          // S car (รถตามสูตร)
+];
+
 return [{
   json: {
+    _tab: SHEET_TAB,                // ★ v22 — แท็บที่ต้องเขียน
+    rowAS,                          // ★ v22 — ค่าคอลัมน์ A–S
     values: [
       dateTH,                         // A: วันที่
       "",                             // B: คันที่
