@@ -1,7 +1,24 @@
 // =====================================================
-// Build Sheet Row (Trade-in) - v20  (17 ก.ย.69)
+// Build Sheet Row (Trade-in) - v21  (8 ต.ค.69)
 // โหนด "Build Sheet Row (Trade-in)" ใน workflow ซื้อขายเทิร์นรถ
 // ก๊อปทั้งไฟล์นี้ไปวางทับในช่อง Code ของโหนดนั้นได้เลย
+//
+// ที่แก้จาก v20:
+// 11. ★ รับเฉพาะ 3 กลุ่มเคสจัดซื้อ (ไอดีฝั่งบอท OxletautoGiveLead) — กลุ่มอื่นข้ามหมด
+//     webhook ตัวเดียวกับบอทได้ยินทุกกลุ่ม (ห้องจ่ายเบอร์/ทีมAdmin/จองรถ …)
+//     เดิมกันไว้แค่ "ห้องเก็บรถ" กลุ่มเดียว → ใบจ่ายลีดที่มีเบอร์โทรกลายเป็นแถวเคสเทิร์นได้
+// 12. ★ เคส HOT / VERY HOT ดูจากกลุ่มที่โพสต์อย่างเดียว
+//     เดิมเดาจากรหัสด้วย includes("C-") → OC- / SC- / TC- กลายเป็น COOL ทุกตัว
+// 13. ★ ช่อง "รับซื้อ/ไม่รับซื้อ" (K) เว้นว่างเสมอสำหรับเคสใหม่ — ให้ทีมจัดซื้อกรอกเอง
+//     เดิมเติม "รับซื้อ" ทันทีที่เจอคำนี้ในข้อความ ซึ่งมีในใบเกือบทุกใบ
+//     (บรรทัด "ราคากลางรับซื้อจากตาราง" + ชื่อโฆษณา "รับซื้อ CIVIC") · แท็บ TestBot ได้ "รับซื้อ" 64/70 แถว
+//     ช่องนี้คือ "ตัวปิดงาน" ของระบบตามงานจัดซื้อ (/buy/ · แจ้งเตือนรายวัน) → มีค่า = ถือว่าตัดสินแล้ว
+//     ถ้าปล่อยไว้ พอย้ายไปเขียนแท็บจริง เคสใหม่จะหายจากรายการ "ยังไม่ได้โทร" ตั้งแต่วินาทีแรก
+// 14. ★ โปรไฟล์ลูกค้าหยุดที่บรรทัด "ราคากลางรับซื้อจากตาราง" / "ราคาตาราง"
+//     2 บรรทัดนี้อยู่หลัง "ขายเพราะ"/"หมายเหตุ" ในใบ → เดิมถูกต่อท้ายเป็นโปรไฟล์ทุกใบ
+// 15. ★ ใบที่ขึ้นต้นด้วย "โค้ด" = เคสใหม่เสมอ · ขึ้นต้นด้วยรหัส (OC-1234 …) = คอมเมนท์จัดซื้อเสมอ
+//     เดิม Resolve Roles ตัดสินจาก "มีเบอร์ไหม" → ใบที่ไม่ได้ใส่เบอร์ถูกมองเป็นคอมเมนท์ แถวหาย
+// 16. ★ คอมเมนท์ที่ไม่มีรหัสเคส (แชทคุยทั่วไปในห้อง) = ข้าม ไม่ส่งไปค้นแถวด้วย Code ว่าง
 //
 // ที่แก้จาก v19:
 //  9. ★ กลุ่มเคส HOT — เปลี่ยนเป็นไอดีฝั่งบอท OxletautoGiveLead และรองรับ 2 กลุ่ม
@@ -24,7 +41,7 @@ if (!items || items.length === 0) return [];
 
 const item = items[0].json || {};
 
-const mode = item._mode || "";
+let mode = item._mode || "";
 const text = item.text || "";
 const code = (item.code || "").toUpperCase();
 
@@ -34,33 +51,42 @@ const purchaserNickname = item.purchaserNickname || "";
 const groupId = item.groupId || item.source?.groupId || item._line?.groupId || "";
 
 // =====================================================
-// ★ v20 — ทะเบียนกลุ่ม (ไอดีฝั่งบอท OxletautoGiveLead)
+// ★ v21 — ทะเบียนกลุ่มเคสจัดซื้อ (ไอดีฝั่งบอท OxletautoGiveLead · ยืนยันกับฐานข้อมูล 8 ต.ค.69)
 //
 // ⚠️ ไอดีกลุ่มของ LINE "ออกต่อ provider" — กลุ่มเดียวกันมีไอดีคนละตัว
-//    ในสายตาบอทแต่ละตัว · โหนด LINE - Get Profile ใช้เครดิต OxletautoGiveLead
+//    ในสายตาบอทแต่ละตัว · webhook นี้คือบอท OxletautoGiveLead
 //    ดังนั้นไอดีที่วิ่งเข้ามาต้องเป็นชุดนี้เท่านั้น
 //
-// เคส HOT แยกกลุ่มตามคนจัดซื้อ แต่กติกาเหมือนกันหมด = HOT ทั้งคู่
+// ★ เป็น "รายชื่อที่รับ" ไม่ใช่ "รายชื่อที่ห้าม" — กลุ่มไหนไม่อยู่ในนี้ = ข้าม
+//   (รวม ห้องเก็บรถ / จัดซื้อ [รายงานรถ] / ห้องจ่ายเบอร์ ฯลฯ)
+//   มีห้องเคสใหม่ → เติมบรรทัดเดียวที่นี่
+//
+// owner = คนจัดซื้อเจ้าของห้อง ใช้เติมช่อง "จัดซื้อ" เมื่อไม่มีใครถูก @tag
+//   ห้อง VERY HOT ไม่มีเจ้าของประจำ (สลับกันดู) → เว้นว่างไว้ ใช้จาก @tag อย่างเดียว
 // =====================================================
-const GROUP_HOT = {
-  "C0ad44e22acf81cd6af619da15ffb363d": "พี่หมี",
-  "C6a6450337d5588fdb0882f57d2a09cd4": "พี่ต๊าด",
+const PURCHASE_GROUPS = {
+  "C0ad44e22acf81cd6af619da15ffb363d": { name: "เคสHOT (พี่หมี)",   caseType: "HOT",      owner: "พี่หมี" },
+  "C6a6450337d5588fdb0882f57d2a09cd4": { name: "เคสHOT (พี่ต๊าด)",  caseType: "HOT",      owner: "พี่ต๊าด" },
+  "Cd308fd5c3e1f4c8948856a81fa911332": { name: "เคสVERY HOT",       caseType: "VERY HOT", owner: "" },
 };
 
-// ⚠️ 2 ตัวล่างยังเป็นไอดีของบอทเก่า — ยังไม่ได้แก้ (รอยืนยันว่าเป็นกลุ่มไหน)
-//    ตราบใดที่ยังไม่แก้ เงื่อนไข VERY HOT และตัวกันกลุ่ม "ห้องเก็บรถ" จะไม่ทำงาน
-const GROUP_VERY_HOT = "C3c65c4e97b1df1cadf1395cdefba7c3a";
-const GROUP_IGNORED = "C6fcc3c298417bb71fc3afefd29636a51"; // ห้องเก็บรถ
-
-// 🚫 Skip if this is the ignored group (ห้องเก็บรถ)
-if (groupId === GROUP_IGNORED) {
-  console.log("⚠️ Skipping - Ignored Group (ห้องเก็บรถ):", groupId);
+const grp = PURCHASE_GROUPS[groupId];
+if (!grp) {
+  console.log("⏭️ ข้าม — ไม่ใช่กลุ่มเคสจัดซื้อ:", groupId || "(ไม่มี groupId)");
   return [];
 }
 
-console.log("=== BUILD SHEET ROW v20 ===");
-console.log("Code:", code);
-console.log("GroupId:", groupId, "->", GROUP_HOT[groupId] || "(ไม่ใช่กลุ่ม HOT)");
+// ★ v21 — ตัดสินว่าเป็นใบเคสใหม่หรือคอมเมนท์ จากหน้าตาข้อความ (ชัดกว่าดูว่ามีเบอร์ไหม)
+const textHead = String(text || "").trim();
+if (/^โค้ด/.test(textHead)) {
+  mode = "case_form";
+} else if (/^[A-Za-z]{1,8}\s*-\s*\d{1,8}\b/.test(textHead)) {
+  mode = "purchase_comment";
+}
+
+console.log("=== BUILD SHEET ROW v21 ===");
+console.log("Code:", code, "| Mode:", mode);
+console.log("Group:", grp.name, "->", grp.caseType);
 console.log("Original Sender:", senderNickname);
 
 // =====================================================
@@ -246,6 +272,14 @@ const matchCarDropdown = (carText) => {
 // 1. purchase_comment (ลบ @tag + emoji)
 // =====================================================
 if (mode === "purchase_comment") {
+  // ★ v21 — ไม่มีรหัสเคส = แชทคุยทั่วไป ("ซื้อมือสองมาครับ") ไม่รู้ว่าเป็นของเคสไหน → ข้าม
+  //   ถ้าปล่อยไป โหนด Get row(s) จะค้นแถวด้วย Code ว่าง แล้วคอมเมนท์ไปติดแถวที่ไม่เกี่ยวข้อง
+  //   (วัดจากแชทจริง 600 ข้อความล่าสุด: 47 ข้อความเป็นแบบนี้)
+  if (!code) {
+    console.log("⏭️ ข้าม — คอมเมนท์ไม่มีรหัสเคส");
+    return [];
+  }
+
   let commentText = text
     .replace(/^[A-Za-z]{1,8}\s*-\s*\d{1,8}\b/, "")  // ลบ Code ด้านหน้า
     .replace(/@[^\n]+$/g, "")                        // ลบ @tag + ทุกอย่างท้ายบรรทัด
@@ -317,6 +351,17 @@ let isInProfile = false;
 for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lower = line.toLowerCase();
+
+    // ★ v21 — บรรทัดราคาตามตาราง (ท้ายใบ) ไม่ใช่โปรไฟล์ลูกค้า → ปิดโปรไฟล์ที่นี่
+    //   ใบออนไลน์: "ราคากลางรับซื้อจากตาราง :" · ใบหน้าร้าน: "ราคาตาราง :"
+    if (/^ราคา(กลาง|ตาราง)/.test(line)) {
+        if (currentProfileText) {
+            profileParts.push(currentProfileText.trim());
+            currentProfileText = "";
+        }
+        isInProfile = false;
+        continue;
+    }
 
     // เช็คว่าเป็นบรรทัดเริ่มต้นของโปรไฟล์
     if (lower.startsWith("ขายเพราะ") || lower.startsWith("เหตุผล") || lower.startsWith("สาเหตุ")) {
@@ -517,46 +562,21 @@ if (code.startsWith("OC")) {
   else if (text.includes("ขาย")) sellType = "ขายอย่างเดียว";
 }
 
-const matchBuyStatus = (text) => {
-  const lower = (text || "").toLowerCase();
-  if (lower.includes("รับซื้อ")) return "รับซื้อ";
-  if (lower.includes("ไม่รับซื้อ")) return "ไม่รับซื้อ";
-  if (lower.includes("เซลล์คุย") || lower.includes("คุยคันใหม่")) return "เซลล์คุยคันใหม่";
-  if (lower.includes("นัดดูรถ")) return "นัดดูรถ";
-  if (lower.includes("รอตัดสินใจ")) return "รอตัดสินใจ";
-  return "";
-};
-const buyStatus = matchBuyStatus(text);
+// ★ v21 — K (รับซื้อ/ไม่รับซื้อ) เว้นว่างเสมอ = ยังไม่ตัดสิน ให้ทีมจัดซื้อกรอกเอง
+//   (ดูเหตุผลที่หัวไฟล์ ข้อ 13 · ตัว matchBuyStatus เดิมถูกเอาออกแล้ว)
+const buyStatus = "";
 
 // =====================================================
-// ★ v20 — Case Type Logic (ใช้ทะเบียนกลุ่มด้านบน)
+// ★ v21 — Case Type = ตามห้องที่โพสต์ (HOT / VERY HOT)
+//   ไม่เดาจากรหัสแล้ว — OC/SC/TC บอกช่องทาง ไม่ได้บอกความร้อนของเคส
 // =====================================================
-let caseType = "";
-
-if (groupId === GROUP_VERY_HOT) {
-  caseType = "VERY HOT";
-} else if (GROUP_HOT[groupId]) {
-  caseType = "HOT";                       // พี่หมี / พี่ต๊าด — กติกาเดียวกัน
-} else {
-  const lower = (text || "").toLowerCase();
-  const codeUpper = (code || "").toUpperCase();
-
-  if (codeUpper.includes("VH") || codeUpper.includes("VERYHOT")) caseType = "VERY HOT";
-  else if (codeUpper.includes("HOT") || codeUpper.includes("H-")) caseType = "HOT";
-  else if (codeUpper.includes("COOL") || codeUpper.includes("C-")) caseType = "COOL";
-  else if (codeUpper.includes("REJ") || codeUpper.includes("REJECT")) caseType = "REJECT";
-
-  else if (lower.includes("very hot") || lower.includes("veryhot")) caseType = "VERY HOT";
-  else if (lower.includes("hot")) caseType = "HOT";
-  else if (lower.includes("cool")) caseType = "COOL";
-  else if (lower.includes("reject")) caseType = "REJECT";
-}
+const caseType = grp.caseType;
 
 // =====================================================
 // ★ v20 — จัดซื้อ: ถ้าไม่มีใครถูก @tag ใช้เจ้าของกลุ่มแทน
 //   (@tag ยังชนะเสมอ — ตัวนี้เป็นแค่ตัวสำรอง)
 // =====================================================
-const purchaserFinal = purchaserNickname || GROUP_HOT[groupId] || "";
+const purchaserFinal = purchaserNickname || grp.owner || "";
 if (!purchaserNickname && purchaserFinal) {
   console.log("  > จัดซื้อเติมจากกลุ่ม:", purchaserFinal);
 }
@@ -578,7 +598,7 @@ return [{
       ads,                            // H: Ads
       channelMapped,                  // I: ช่องทาง
       sellType,                       // J: ขาย/เทริน
-      buyStatus,                      // K: รับซื้อ/ไม่รับซื้อ
+      buyStatus,                      // K: รับซื้อ/ไม่รับซื้อ  ★ v21 ว่างเสมอ
       onlineOffline,                  // L: ออนไลน์/ออฟไลน์
       purchaserFinal,                 // M: จัดซื้อ  ★ v20
       senderNickname,                 // N: ผู้ส่ง
@@ -593,6 +613,6 @@ return [{
     _code: code,
     _sender: senderNickname,
     _purchaser: purchaserFinal,
-    _group: GROUP_HOT[groupId] || ""
+    _group: grp.name
   }
 }];
