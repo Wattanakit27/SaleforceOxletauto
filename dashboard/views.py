@@ -1630,6 +1630,28 @@ def cron_tick(request):
     except Exception as e:
         purchase_tab_result = "error: %s" % str(e)[:200]
 
+    # ── 🔁 เคสรับซื้อ/เทิร์นรถ → ชีต (แทน n8n) — เก็บตกข้อความที่ทางเรียลไทม์พลาด ──
+    #    ปกติเขียนทันทีตอนข้อความเข้า (_checkout_ingest) · ตัวนี้กันกรณีชีตล่ม/รีสตาร์ทกลางทาง
+    #    มีล็อกกันทำซ้อนกับทางเรียลไทม์ · ไม่มีงาน = query เดียวจบ
+    try:
+        import threading as _th2
+
+        def _ti_job():
+            try:
+                from checkout.tradein import process_pending
+                process_pending()
+            except Exception:
+                pass
+            finally:
+                try:
+                    from django.db import connection as _conn2
+                    _conn2.close()
+                except Exception:
+                    pass
+        _th2.Thread(target=_ti_job, daemon=True).start()
+    except Exception:
+        pass
+
     return JsonResponse({
         "ok": refresh_error is None,
         "now": f"{now.hour:02d}:{now.minute:02d}",
@@ -2609,6 +2631,22 @@ def admin_system_health(request):
             issues.append({"level": "warn",
                            "msg": "ส่งเข้าไลน์ไม่ถึงบางคน: %s" % " · ".join(_part[:4])})
     except Exception:                       # ยังไม่ migrate / ตารางล็อกอ่านไม่ได้ = ข้ามเงียบ
+        pass
+
+    # ── 🔁 8 ต.ค.69 — เคสรับซื้อ/เทิร์นรถ → ชีต (ย้ายมาจาก n8n) ต้องไม่หยุดเงียบแบบที่ n8n เคยเป็น ──
+    try:
+        from checkout import tradein as _ti
+        if _ti.get_config()["enabled"]:
+            _tl = _ti._kv(_ti.KV_LAST)
+            _stuck = _ti.pending_count(older_than_min=10)
+            if _tl.get("error"):
+                issues.append({"level": "err",
+                               "msg": "บันทึกเคสรับซื้อลงชีตล้ม: %s — ข้อความค้าง %d รายการ (ระบบลองใหม่ทุกนาที) "
+                                      "· ตรวจด้วย manage.py tradein" % (_tl["error"][:160], _stuck)})
+            elif _stuck:
+                issues.append({"level": "warn",
+                               "msg": "ใบเคส/คอมเมนต์จากห้องเคสHOT ค้างยังไม่ลงชีต %d รายการ (เกิน 10 นาที)" % _stuck})
+    except Exception:
         pass
 
     # ── 🗂️ 8 ต.ค.69 — แท็บชีตจัดซื้อเดือนหน้า (n8n เขียนเคสเทิร์นรถลงแท็บของเดือนนั้น) ──
@@ -3709,6 +3747,14 @@ def _checkout_ingest(data):
             except Exception:
                 pass
             store_chat(data)             # เก็บแชทแยกกลุ่มลง Postgres (ถ้าเปิดไว้)
+            # ★ 8 ต.ค.69 — เคสรับซื้อ/เทิร์นรถจากห้องเคสHOT/VERY HOT → ชีต "ซื้อขายเทิร์นรถ"
+            #   (แทน workflow n8n ที่หยุดเขียนเงียบๆ ตั้งแต่ 5 ต.ค.) · ต้องอยู่หลัง store_chat
+            #   เพราะอ่านจาก GroupChat · แยก try — พังต้องไม่ลากงานเบิก-คืนไปด้วย (cron เก็บตกให้)
+            try:
+                from checkout.tradein import maybe_process
+                maybe_process(data)
+            except Exception:
+                pass
             ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
         except Exception as e:
             # ★ ก.ย.69 — เดิม `except: pass` เฉยๆ: งานอยู่คนละ thread กับ response
