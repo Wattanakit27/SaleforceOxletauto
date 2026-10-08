@@ -87,8 +87,13 @@
   .cn-av.lg { width: 76px; height: 76px; font-size: 28px; }
   .cn-rb { flex: 1; min-width: 0; }
   .cn-rh { display: flex; gap: 6px; align-items: baseline; }
-  .cn-rn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-  .cn-rt { color: var(--t3); font-size: 12px; white-space: nowrap; }
+  .cn-rn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .cn-rt { color: var(--t3); font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+  /* ★ 9 ต.ค.69 — ยังไม่อ่าน: ชื่อ+ข้อความล่าสุดตัวหนา · จุดแดงหลังเวลา (แบบ LINE OA) */
+  .cn-row.unread .cn-rn { font-weight: 800; }
+  .cn-row.unread .cn-rp { color: var(--t1); font-weight: 700; }
+  .cn-row.unread .cn-rt { color: var(--red); font-weight: 700; }
+  .cn-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); flex: 0 0 auto; }
   .cn-rp { color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
   .cn-rp.out { color: var(--t3); }
   .cn-rm { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
@@ -566,13 +571,12 @@
     else if (r.buyCode) tags.push(`<span class="tag" title="ลูกค้าอยากขายรถให้เรา — ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว">ส่งจัดซื้อ ${h(r.buyCode)}</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
-    if (ADMIN && r.team) tags.push(teamTag(r.team));
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
     const claimBtn = (!ADMIN && !r.owner && S.onDuty) ? `<button class="btn pri sm" data-claim="${r.id}">รับ</button>` : '';
-    return `<div class="cn-row${r.id === S.openId ? ' sel' : ''}${r.overdue ? ' late' : ''}" data-id="${r.id}">
+    return `<div class="cn-row${r.id === S.openId ? ' sel' : ''}${r.overdue ? ' late' : ''}${r.unread ? ' unread' : ''}" data-id="${r.id}">
       ${avHtml(r.name, r.pic)}
       <div class="cn-rb">
-        <div class="cn-rh"><span class="cn-rn">${h(r.name)}</span><span class="cn-rt">${h(fmtWhen(r.lastAt))}</span></div>
+        <div class="cn-rh"><span class="cn-rn">${h(r.name)}</span><span class="cn-rt"${r.unread ? ' title="ยังไม่มีใครเปิดอ่าน"' : ''}>${h(fmtWhen(r.lastAt))}${r.unread ? '<span class="cn-dot"></span>' : ''}</span></div>
         <div class="cn-rp${r.lastDir === 'out' ? ' out' : ''}">${r.lastDir === 'out' ? 'เรา: ' : ''}${h(r.preview || '—')}</div>
         <div class="cn-rm">${tags.join('')}${claimBtn}</div>
       </div>
@@ -881,6 +885,14 @@
       return;
     }
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
+    if (d.row && !d.row.unread) {
+      const lr = S.rows.find(x => x.id === id);
+      if (lr && lr.unread) {
+        lr.unread = false;
+        const re = document.querySelector('.cn-row[data-id="' + id + '"]');
+        if (re) { re.classList.remove('unread'); const dt = re.querySelector('.cn-dot'); if (dt) dt.remove(); }
+      }
+    }
     const same = S.chat && S.chat.row.id === id;
     S.chat = d;
     if (same) { paintHeader(); paintProfile(); paintMsgs(true); paintComposer(false); }

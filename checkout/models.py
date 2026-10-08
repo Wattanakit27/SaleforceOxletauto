@@ -857,6 +857,10 @@ class ChatOwner(models.Model):
     last_at = models.DateTimeField("ขยับล่าสุด", null=True, blank=True, db_index=True)
     last_preview = models.CharField("ข้อความล่าสุด", max_length=200, blank=True)
     last_dir = models.CharField("ข้อความล่าสุดเป็นของ", max_length=4, blank=True)   # in / out
+    # ★ 9 ต.ค.69 เจ้าของสั่ง — รายชื่อโชว์ "ยังไม่อ่าน" (ตัวหนา + จุดแดงหลังเวลา) แบบ LINE OA
+    #   = ข้อความลูกค้าล่าสุดของแชทนี้ ที่มีคนเปิดอ่านแล้ว · ยังไม่อ่าน = `last_in_at > read_at`
+    #   อ่านแล้วใช้ร่วมกันทั้งทีม (แอดมิน/เจ้าของเปิดแชท หรือตอบ = อ่านแล้ว) ไม่ได้แยกรายคน
+    read_at = models.DateTimeField("อ่านถึงข้อความลูกค้าเมื่อ", null=True, blank=True)
 
     # ★ 3 ต.ค.69 เจ้าของสั่ง "เอา Profile ลูกค้าเข้ามาด้วย" — รูปโปรไฟล์ LINE ของ **ลูกค้าใน Connect เท่านั้น**
     #   ก.ย.69 เคยถอด `LineProfile.picture_url` ออกเพราะไม่มีใครใช้ (เก็บน้อยที่สุด · PDPA)

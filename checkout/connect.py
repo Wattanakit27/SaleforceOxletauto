@@ -758,6 +758,8 @@ def _reply_done(o, at, preview: str = "", emp=None, by: str = "", close: bool = 
         o.awaiting_since = o.due_at = o.escalated_at = None
     elif o.awaiting_since:
         pass                                  # คำตอบที่เก่ากว่ารอบนี้ (ดึงมาช้า) — ไม่ได้ตอบข้อความรอบนี้
+    if close and (not o.read_at or at > o.read_at):
+        o.read_at = at                        # คนที่ตอบได้อ่านแชทแล้ว (ตอบอัตโนมัติของเพจไม่นับ)
     if emp and o.owner_id == emp.id and not o.first_reply_at:
         o.first_reply_at = at
     if not o.last_out_at or at >= o.last_out_at:
@@ -817,6 +819,25 @@ def note_fb_batch(fp, msgs):
         except Exception:
             pass
     return o
+
+
+def mark_read(o) -> bool:
+    """มีคนเปิดอ่านแชทนี้แล้ว (แอดมิน/เจ้าของที่เห็นแชทเต็ม) → รายชื่อเลิกโชว์ตัวหนา/จุดแดง
+
+    อ่านถึง `last_in_at` ที่เห็นตอนเปิด (ไม่ใช่เวลาตอนนี้) — ลูกค้าส่งมาใหม่ระหว่างนั้นจะยังเป็น "ยังไม่อ่าน"
+    เขียนเฉพาะตอนสถานะเปลี่ยน — หน้าแชทรีเฟรชทุก 6 วิ ไม่ควรเขียนฐานข้อมูลทุกรอบ
+    """
+    if not o.last_in_at or (o.read_at and o.read_at >= o.last_in_at):
+        return False
+    from django.db.models import Q
+    ChatOwner.objects.filter(pk=o.pk).filter(Q(read_at__isnull=True) | Q(read_at__lt=o.last_in_at)) \
+        .update(read_at=o.last_in_at)
+    o.read_at = o.last_in_at
+    return True
+
+
+def is_unread(o) -> bool:
+    return bool(o.last_in_at and (not o.read_at or o.read_at < o.last_in_at))
 
 
 def note_reply(user_id: str, emp=None, at=None, preview: str = "", by: str = ""):
@@ -1036,6 +1057,7 @@ def sync_rows(force: bool = False) -> int:
             made.append(ChatOwner(fb_profile=fp, last_at=m.sent_at, last_preview=fb_preview(m)[:200],
                                   last_dir=m.direction or "in",
                                   last_in_at=m.sent_at if m.direction != FbChat.OUT else None,
+                                  read_at=m.sent_at,
                                   last_out_at=m.sent_at if m.direction == FbChat.OUT else None))
     profs = list(LineProfile.objects.filter(is_employee=False, owner_row__isnull=True)[:2000])
     staff_ids = (GroupChat.objects.filter(chat_type=GroupChat.USER, direction=GroupChat.IN,
@@ -1050,6 +1072,7 @@ def sync_rows(force: bool = False) -> int:
         made.append(ChatOwner(profile=p, last_at=g.sent_at, last_preview=preview_of(g)[:200],
                               last_dir=g.direction or "in",
                               last_in_at=g.sent_at if g.direction != GroupChat.OUT else None,
+                              read_at=g.sent_at,
                               last_out_at=g.sent_at if g.direction == GroupChat.OUT else None))
     if made:
         ChatOwner.objects.bulk_create(made, ignore_conflicts=True)
@@ -1085,6 +1108,7 @@ def row_json(o, me=None, now=None) -> dict:
         "since": _iso(o.awaiting_since),
         "due": _iso(o.due_at),
         "overdue": bool(o.awaiting_since and o.due_at and o.due_at <= now),
+        "unread": is_unread(o),                      # ตัวหนา + จุดแดงหลังเวลาในรายชื่อ
         "escalated": bool(o.escalated_at),
         "mine": bool(me and o.owner_id == me.id),
         "msgs": p.msg_count or 0,

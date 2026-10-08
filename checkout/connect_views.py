@@ -274,6 +274,10 @@ def api_chat(request):
         msgs = C.messages(o, limit=10, since=o.awaiting_since)
     else:
         msgs = C.messages(o)
+        try:                                       # เปิดเห็นแชทเต็ม = อ่านแล้ว (คิวรอรับแบบดูตัวอย่างไม่นับ)
+            C.mark_read(o)
+        except Exception:
+            pass
     out = {
         "ok": True,
         "row": C.row_json(o, emp),

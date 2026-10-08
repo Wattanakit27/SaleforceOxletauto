@@ -697,6 +697,39 @@ try:
     C.save_cfg(dict(C.cfg(), test_accounts=["Wattanakit"]))
     Employee.objects.filter(pk__in=[WAT.id, MAI.id]).update(active=False)
 
+    print("[16c] ยังไม่อ่าน — ตัวหนา + จุดแดงในรายชื่อ (9 ต.ค.69)")
+    UP = cust(901, "ลูกค้ายังไม่อ่าน")
+    UR = C.note_customer_message(UP.user_id, timezone.now() - timedelta(minutes=3), "มีรถกระบะไหม")
+    ck("ลูกค้าทักมาใหม่ = ยังไม่อ่าน", C.row_json(UR)["unread"] is True, C.row_json(UR).get("unread"))
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % UR.id)
+    UR.refresh_from_db()
+    ck("★ เซลล์ดูตัวอย่างในคิวรอรับ = ยังไม่นับว่าอ่าน", s_ == 200 and d.get("access") == "preview"
+       and C.is_unread(UR), (s_, d.get("access"), UR.read_at))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % UR.id)
+    UR.refresh_from_db()
+    ck("แอดมินเปิดแชท = อ่านแล้ว", s_ == 200 and d["row"]["unread"] is False and not C.is_unread(UR), (s_, UR.read_at))
+    ck("เปิดซ้ำ (หน้ารีเฟรช 6 วิ) ไม่เขียนฐานข้อมูลซ้ำ", C.mark_read(UR) is False)
+    s_, d = J(ADM, "/connect/api/inbox?view=all")
+    ck("รายชื่อเห็นว่าอ่านแล้ว", next((r for r in d.get("rows", []) if r["id"] == UR.id), {}).get("unread") is False)
+    C.note_customer_message(UP.user_id, timezone.now(), "ราคาเท่าไหร่ครับ")
+    UR.refresh_from_db()
+    ck("ลูกค้าส่งมาใหม่ = กลับเป็นยังไม่อ่าน", C.is_unread(UR))
+    C._reply_done(UR, timezone.now(), "ตอบอัตโนมัติ", close=False)
+    UR.refresh_from_db()
+    ck("★ ตอบอัตโนมัติของเพจไม่นับว่าอ่าน", C.is_unread(UR))
+    C.note_reply(UP.user_id, None, timezone.now() + timedelta(seconds=1), "มีครับ", by="admin")
+    UR.refresh_from_db()
+    ck("ตอบลูกค้าแล้ว = อ่านแล้ว", not C.is_unread(UR), (UR.last_in_at, UR.read_at))
+    OLDU = cust(902, "ลูกค้าเก่ามาก")
+    GroupChat.objects.create(chat_type="user", message_id="old-902", sender_id=OLDU.user_id, direction="in",
+                             msg_type="text", text="สวัสดี", sent_at=timezone.now() - timedelta(days=5))
+    C.sync_rows(force=True)
+    ck("★ แถวลูกค้าเก่าที่ระบบสร้างย้อนหลัง = อ่านแล้ว (ไม่ตัวหนาทั้งรายชื่อ)",
+       not C.is_unread(ChatOwner.objects.get(profile=OLDU)))
+    page = ADM.get("/connect/", secure=True).content.decode("utf-8")
+    ck("รายชื่อไม่มีป้ายทีมรายแถวแล้ว", "if (ADMIN && r.team) tags.push(teamTag(r.team));" not in page
+       and "cn-dot" in page)
+
     print("[17] ข้อมูลลีดของลูกค้า — ช่องเดียวกับชีตลีด + เติมอัตโนมัติ + ใบจ่ายลีด")
     from checkout.models import ChatLead
     from checkout.leadgroup import parse_leadsheet
