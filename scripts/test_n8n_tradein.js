@@ -72,3 +72,15 @@ ok("ต่อสายผิด → error ชัด", o.error && o.error.include
 o = run({ ...b, _tab: undefined }, [{ values: [] }]);
 ok("Build Sheet Row รุ่นเก่า → error ชัด", o.error && o.error.includes("รุ่นเก่า"), o);
 }
+{
+// 3) ผู้ส่ง (N) — "ดีเซล" ต้องไม่ถูกจับเป็นคำว่า "เซล" · "เทิร์นเซลล์X" ยังจับได้
+const fs = require("fs");
+const src = fs.readFileSync(path.join(ROOT, "deploy/n8n_tradein_build_row.js"), "utf8");
+const run = (text, code) => new Function("$input", "console", src)({ all: () => [{ json: {
+  _mode: "case_form", code, text, senderNickname: "โดนัท", purchaserNickname: "", groupId: "C0ad44e22acf81cd6af619da15ffb363d" } }] }, { log() {} })[0].json;
+const ok = (n, c, x) => { console.log((c ? "PASS " : "FAIL ") + n + (c ? "" : " — " + JSON.stringify(x))); if (!c) FAILS++; };
+let o = run("โค้ด : OC-7625\nรุ่น : Isuzu MU-X ปี23\nเครื่องยนต์: ดีเซล 1,898 ซีซี\nเบอร์ติดต่อ : 0812345678", "OC-7625");
+ok("ดีเซล 1,898 ไม่ใช่ชื่อผู้ส่ง (บั๊กจริง 8 ต.ค.69)", o.rowAS[13] === "โดนัท", o.rowAS[13]);
+o = run("โค้ด : SC-1299 เทิร์นเซลล์เก้า\nรุ่น : Benz GLE350d ปี17\nเบอร์ติดต่อ : 0812345678", "SC-1299");
+ok("เทิร์นเซลล์เก้า → ผู้ส่ง = เก้า", o.rowAS[13] === "เก้า", o.rowAS[13]);
+}
