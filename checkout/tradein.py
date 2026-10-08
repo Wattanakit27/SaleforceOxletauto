@@ -417,37 +417,59 @@ def _kv(key):
 
 
 class Sheet:
-    """แท็บในชีตจัดซื้อ + ดัชนีรหัสเคส → แถว (อ่านครั้งเดียวต่อรอบ)"""
+    """แท็บในชีตจัดซื้อ + ดัชนีรหัสเคส → แถว
+
+    ★ 8 ต.ค.69 — **ห้ามใช้ values:append** · Google เดาเองว่า "ตาราง" เริ่มคอลัมน์ไหน แล้วเดาผิด:
+      แถวก่อนหน้ามี R กับ T ว่าง → คอลัมน์ S โดดเดี่ยว → มันถือว่าตารางเริ่มที่ S
+      → เคสใหม่ 9 แถวแรกบน prod (OC-7634..7642) ไปลงคอลัมน์ S–AK แทน A–S
+      · เทสต์กับแท็บว่างไม่เจอ เพราะแท็บว่างไม่มีอะไรให้เดา
+      ตอนนี้: อ่าน A–S ใหม่ทุกครั้งก่อนเพิ่ม → หาแถวสุดท้ายที่มีค่าเอง → เขียน A{n}:S{n} ตรงๆ
+    """
 
     def __init__(self, api, tab, first_row):
         self.api, self.tab, self.first = api, tab, first_row
         self._idx = None
+        self.last = first_row - 1                      # แถวสุดท้ายที่มีค่าในช่วง A–S
+
+    def _read(self):
+        rows = self.api.get("'%s'!A%d:S%d" % (self.tab, self.first, MAX_ROW))
+        idx, last = {}, self.first - 1
+        for i, r in enumerate(rows):
+            n = self.first + i
+            if any(str(v).strip() for v in r):        # รวม B (คันที่) — ไม่ทับแถวที่ใครเริ่มพิมพ์ไว้
+                last = n
+            c = re.sub(r"\s+", "", str(r[2] if len(r) > 2 else "")).upper()
+            if c:                                      # รหัสซ้ำ = แถวล่างสุด (ล่าสุด) ชนะ
+                idx[c] = {"row": n,
+                          "q": str(r[16]).strip() if len(r) > 16 else "",
+                          "m": str(r[12]).strip() if len(r) > 12 else ""}
+        self._idx, self.last = idx, last
 
     def index(self):
         if self._idx is None:
-            rows = self.api.get("'%s'!C%d:Q%d" % (self.tab, self.first, MAX_ROW))
-            self._idx = {}
-            for i, r in enumerate(rows):
-                c = re.sub(r"\s+", "", str(r[0] if r else "")).upper()
-                if c:                                  # รหัสซ้ำ = แถวล่างสุด (ล่าสุด) ชนะ
-                    self._idx[c] = {"row": self.first + i,
-                                    "q": str(r[14]).strip() if len(r) > 14 else "",
-                                    "m": str(r[10]).strip() if len(r) > 10 else ""}
+            self._read()
         return self._idx
 
     def append(self, code, row):
         import urllib.parse
         import requests
-        rng = "'%s'!A%d:S" % (self.tab, self.first)
-        url = "%s/values/%s:append" % (self.api.base, urllib.parse.quote(rng))
-        r = requests.post(url, params={"valueInputOption": "USER_ENTERED", "insertDataOption": "OVERWRITE"},
-                          json={"values": [row]}, headers=self.api.h, timeout=60)
+        self._read()                                   # อ่านสดก่อนเขียน — ทีมอาจเพิ่งพิมพ์แถวในแท็บเดียวกัน
+        if code in self._idx:                          # ระหว่างนั้นมีคนลงรหัสนี้ไปแล้ว
+            return self._idx[code]["row"]
+        n = max(self.last + 1, self.first)
+        if n > MAX_ROW:
+            raise RuntimeError("แท็บ %s เต็มเกิน %d แถว" % (self.tab, MAX_ROW))
+        rng = "'%s'!A%d:S%d" % (self.tab, n, n)
+        url = "%s/values/%s" % (self.api.base, urllib.parse.quote(rng))
+        r = requests.put(url, params={"valueInputOption": "USER_ENTERED"},
+                         json={"values": [row]}, headers=self.api.h, timeout=60)
         if r.status_code != 200:
             raise RuntimeError("เพิ่มแถว %s ลง %s: HTTP %s %s" % (code, self.tab, r.status_code, r.text[:200]))
-        upd = (r.json().get("updates") or {}).get("updatedRange", "")
-        m = re.search(r"![A-Z]+([0-9]+)", upd)
-        n = int(m.group(1)) if m else 0
-        self.index()[code] = {"row": n, "q": "", "m": row[12]}
+        upd = str(r.json().get("updatedRange", ""))
+        if not re.search(r"!A%d(:|$)" % n, upd):
+            raise RuntimeError("เพิ่มแถว %s ลง %s: Google บอกว่าเขียนที่ %s ไม่ใช่ A%d" % (code, self.tab, upd, n))
+        self._idx[code] = {"row": n, "q": "", "m": row[12]}
+        self.last = n
         return n
 
 
@@ -642,3 +664,76 @@ def pending_count(older_than_min=0):
     if older_than_min:
         qs = qs.filter(sent_at__lt=timezone.now() - timedelta(minutes=older_than_min))
     return qs.count()
+
+
+# ════════════════════════════════════════════════════════════════════
+# ซ่อมแถวที่ลงผิดคอลัมน์ (8 ต.ค.69 · ใช้ครั้งเดียวหลัง deploy ตัวแก้)
+# ════════════════════════════════════════════════════════════════════
+_SHIFT_CODE = re.compile(r"^[A-Za-z]{1,8}-[0-9]{1,8}$")
+_SHIFT = 18            # values:append เดาว่าตารางเริ่มที่ S → ทุกช่องเลื่อนขวา 18 คอลัมน์ (A→S · C→U)
+
+
+def find_shifted(api, tab, first):
+    """แถวที่ A–R ว่างหมด แต่มีรหัสเคสอยู่ที่ U (= ช่อง C ที่เลื่อนไป 18 คอลัมน์)"""
+    rows = api.get("'%s'!A%d:AN%d" % (tab, first, MAX_ROW))
+    out = []
+    for i, r in enumerate(rows):
+        head = r[:_SHIFT]
+        code = str(r[2 + _SHIFT]).strip() if len(r) > 2 + _SHIFT else ""
+        if not any(str(v).strip() for v in head) and _SHIFT_CODE.match(code):
+            out.append((first + i, code.upper()))
+    below = 0
+    if out:
+        last_bad = out[-1][0]
+        below = sum(1 for i, r in enumerate(rows) if first + i > last_bad and any(str(v).strip() for v in r[:19]))
+    return out, below
+
+
+def repair_shifted(apply=False, api=None):
+    """ล้างแถวที่ลงผิดคอลัมน์ แล้วเขียนใหม่จากแชทเดิม (ต้นฉบับอยู่ใน GroupChat ครบ)
+
+    เขียนใหม่ด้วยตัวอ่านเดียวกับปกติ (ไม่ย้ายค่าในชีต — ย้ายแล้วเบอร์โทรเสียเลข 0 / วันที่กลายเป็นตัวเลข)
+    · ย้อนตัวชี้กลับไปที่ INITIAL_SINCE แล้วทำใหม่ — แถวที่ถูกอยู่แล้วกันซ้ำด้วยรหัส · คอมเมนต์ที่ลงแล้วไม่ต่อซ้ำ
+    """
+    from dashboard.services.cache_store import set_kv
+    from dashboard.services.purchase_followup import tab_name
+    cfg = get_config()
+    if api is None:
+        from dashboard.services.purchase_tabs import _Api
+        api = _Api()
+    if cfg["target"] == "month":
+        now = timezone.localtime()
+        tab, first = tab_name(now.year, now.month), 3
+    else:
+        tab, first = TEST_TAB, 1
+    with _Lock() as lk:
+        if not lk.got:
+            return {"error": "อีกตัวกำลังเขียนชีตอยู่ ลองใหม่อีกครั้ง"}
+        bad, below = find_shifted(api, tab, first)
+        res = {"tab": tab, "rows": [n for n, _ in bad], "codes": [c for _, c in bad],
+               "rowsBelow": below, "applied": False}
+        if not bad or not apply:
+            return res
+        if below:
+            res["error"] = ("มีแถวที่ถูกต้อง %d แถวอยู่ใต้แถวที่ลงผิด — ล้างแล้วจะเหลือช่องว่างกลางตาราง "
+                            "ไม่ซ่อมให้อัตโนมัติ" % below)
+            return res
+        from dashboard.services.purchase_tabs import col_letter
+        api.clear(["'%s'!%s%d:%s%d" % (tab, col_letter(_SHIFT), n, col_letter(_SHIFT + 18), n) for n, _ in bad])
+        set_kv(KV_STATE, {})                       # ตัวชี้กลับไปที่ INITIAL_SINCE
+        runs = []
+        for _ in range(20):
+            r = process_pending(api=api)
+            runs.append(r)
+            if r.get("error") or not r.get("processed"):
+                break
+        res.update(applied=True, added=sum((r.get("added") or [] for r in runs), []),
+                   comments=sum((r.get("comments") or [] for r in runs), []),
+                   error=next((r["error"] for r in runs if r.get("error")), ""))
+        try:
+            from dashboard.services import eventlog
+            eventlog.log(eventlog.CRON, name="ซ่อมแถวเคสรับซื้อที่ลงผิดคอลัมน์", ok=not res["error"],
+                         tab=tab, rows=res["rows"], added=res["added"])
+        except Exception:
+            pass
+        return res

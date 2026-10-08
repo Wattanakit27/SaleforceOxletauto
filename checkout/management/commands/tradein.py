@@ -29,6 +29,9 @@ class Command(BaseCommand):
         p.add_argument("--run", action="store_true", help="เขียนข้อความที่ค้างเดี๋ยวนี้")
         p.add_argument("--preview", action="store_true", help="ดูว่าจะเขียนอะไร (ไม่เขียน)")
         p.add_argument("--since", help='ตั้งจุดเริ่มใหม่ เช่น "2026-10-08 12:34" (เวลาไทย)')
+        p.add_argument("--repair", action="store_true",
+                       help="ล้างแถวที่ลงผิดคอลัมน์ (8 ต.ค.69) แล้วเขียนใหม่จากแชทเดิม · ไม่ใส่ --apply = ดูเฉยๆ")
+        p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair")
         p.add_argument("--out", help="เขียนผลลงไฟล์ (UTF-8)")
 
     def handle(self, *args, **o):
@@ -51,7 +54,12 @@ class Command(BaseCommand):
             set_kv(T.KV_STATE, {"last_id": last})
             lines.append("ตั้งจุดเริ่มใหม่: ข้อความหลัง %s (id > %d)" % (o["since"], last))
 
-        if o["run"]:
+        if o["repair"]:
+            r = T.repair_shifted(apply=o["apply"])
+            lines.append(json.dumps(r, ensure_ascii=False, indent=1))
+            if r.get("rows") and not o["apply"]:
+                lines.append("(ยังไม่ได้แก้ — ใส่ --apply เพื่อล้างแถวพวกนี้แล้วเขียนใหม่ให้ถูกที่)")
+        elif o["run"]:
             lines.append(json.dumps(T.process_pending(), ensure_ascii=False, indent=1))
         elif o["preview"]:
             from dashboard.services.purchase_tabs import _Api

@@ -135,10 +135,34 @@ class R:
         return self._js
 
 
+def _ci(col):
+    n = 0
+    for ch in col:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def _cl(i):
+    s, i = "", i + 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+_RNG = re.compile(r"'(.+)'!([A-Z]+)([0-9]+)(?::([A-Z]+)([0-9]*))?$")
+
+
 class FakeSheets:
+    """Google Sheets ปลอม — อ่าน/เขียนตามช่วงจริง
+
+    `:append` ทำแบบ Google ของจริง (บั๊กที่เจอบน prod 8 ต.ค.69): "ตาราง" = ช่วงติดกันก้อนสุดท้าย
+    ของแถวล่างสุดที่มีค่า → แถวก่อนหน้ามี S โดดเดี่ยว (R/T ว่าง) = เริ่มเขียนที่ S
+    """
+
     def __init__(self, tabs):
-        self.tabs = {k: [list(r) for r in v] for k, v in tabs.items()}   # แท็บ → แถว (A..S) เริ่มแถว 1
-        self.calls, self.fail_append = [], False
+        self.tabs = {k: [list(r) for r in v] for k, v in tabs.items()}   # แท็บ → แถว เริ่มแถว 1
+        self.calls, self.fail_write = [], False
 
     def _row(self, tab, n):
         rows = self.tabs[tab]
@@ -146,44 +170,83 @@ class FakeSheets:
             rows.append([])
         return rows[n - 1]
 
+    def _set(self, tab, n, c, v):
+        row = self._row(tab, n)
+        while len(row) <= c:
+            row.append("")
+        row[c] = v
+
     def get(self, url, params=None, headers=None, timeout=None):
         self.calls.append(("GET", urllib.parse.unquote(url)))
         if "/values/" not in url:
             return R(200, {"sheets": [{"properties": {"title": t, "sheetId": i, "index": i}}
                                       for i, t in enumerate(self.tabs)]})
-        rng = urllib.parse.unquote(url.split("/values/", 1)[1])
-        m = re.match(r"'(.+)'!C([0-9]+):Q[0-9]+", rng)
-        tab, first = m.group(1), int(m.group(2))
+        m = _RNG.match(urllib.parse.unquote(url.split("/values/", 1)[1]))
+        tab = m.group(1)
         if tab not in self.tabs:
             return R(400, {"error": {"message": "Unable to parse range"}})
-        out = [(r[2:17] if len(r) > 2 else []) for r in self.tabs[tab][first - 1:]]
+        c0, r0 = _ci(m.group(2)), int(m.group(3))
+        c1 = _ci(m.group(4)) if m.group(4) else c0
+        r1 = int(m.group(5)) if m.group(5) else len(self.tabs[tab])
+        out = [list(r[c0:c1 + 1]) for r in self.tabs[tab][r0 - 1:r1]]
+        while out and not any(str(v).strip() for v in out[-1]):
+            out.pop()
         return R(200, {"values": out})
+
+    def put(self, url, params=None, json=None, headers=None, timeout=None):
+        u = urllib.parse.unquote(url)
+        self.calls.append(("PUT", u, json))
+        if self.fail_write:
+            return R(500, {"error": "boom"})
+        m = _RNG.match(u.split("/values/", 1)[1])
+        tab, c0, r0 = m.group(1), _ci(m.group(2)), int(m.group(3))
+        for i, vals in enumerate(json["values"]):
+            for j, v in enumerate(vals):
+                self._set(tab, r0 + i, c0 + j, v)
+        return R(200, {"updatedRange": "'%s'!%s%d:%s%d" % (
+            tab, _cl(c0), r0, _cl(c0 + len(json["values"][0]) - 1), r0 + len(json["values"]) - 1)})
 
     def post(self, url, params=None, json=None, headers=None, timeout=None):
         u = urllib.parse.unquote(url)
         self.calls.append(("POST", u, json))
+        if self.fail_write:
+            return R(500, {"error": "boom"})
         if u.endswith(":append"):
-            if self.fail_append:
-                return R(500, {"error": "boom"})
-            m = re.search(r"/values/'(.+)'!A([0-9]+):S:append", u)
-            tab, first = m.group(1), int(m.group(2))
+            m = _RNG.match(u.split("/values/", 1)[1][:-len(":append")])
+            tab, first = m.group(1), int(m.group(3))
             rows = self.tabs[tab]
-            n = max(first, max((i + 1 for i, r in enumerate(rows) if len(r) > 2 and r[2]), default=first - 1) + 1)
-            self._row(tab, n)[:] = list(json["values"][0])
-            return R(200, {"updates": {"updatedRange": "'%s'!A%d:S%d" % (tab, n, n)}})
+            last = max((i + 1 for i, r in enumerate(rows) if i + 1 >= first and any(str(v).strip() for v in r[:19])),
+                       default=0)
+            start = 0
+            if last:
+                r = rows[last - 1][:19]
+                j = max(k for k, v in enumerate(r) if str(v).strip())
+                while j > 0 and str(r[j - 1]).strip():
+                    j -= 1
+                start = j
+            n = max(first, last + 1)
+            for j, v in enumerate(json["values"][0]):
+                self._set(tab, n, start + j, v)
+            return R(200, {"updates": {"updatedRange": "'%s'!%s%d" % (tab, _cl(start), n)}})
         if u.endswith("values:batchUpdate"):
             for d in json["data"]:
-                m = re.match(r"'(.+)'!([A-Z])([0-9]+)", d["range"])
-                row = self._row(m.group(1), int(m.group(3)))
-                ci = ord(m.group(2)) - 65
-                while len(row) <= ci:
-                    row.append("")
-                row[ci] = d["values"][0][0]
+                m = _RNG.match(d["range"])
+                self._set(m.group(1), int(m.group(3)), _ci(m.group(2)), d["values"][0][0])
             return R(200, {"totalUpdatedCells": len(json["data"])})
+        if u.endswith("values:batchClear"):
+            for rng in json["ranges"]:
+                m = _RNG.match(rng)
+                tab, c0, r0 = m.group(1), _ci(m.group(2)), int(m.group(3))
+                c1, r1 = _ci(m.group(4)), int(m.group(5))
+                for n in range(r0, r1 + 1):
+                    row = self._row(tab, n)
+                    for c in range(c0, min(c1 + 1, len(row))):
+                        row[c] = ""
+            return R(200, {"clearedRanges": json["ranges"]})
         return R(400, {})
 
     def writes(self):
-        return [c for c in self.calls if c[0] == "POST"]
+        return [c for c in self.calls if c[0] in ("POST", "PUT")]
 
 
 class Creds:
@@ -213,8 +276,13 @@ def msg(text, g=HOT_BEAR, uid="Uadmin1", minutes=0):
 
 def run(fake):
     with mock.patch("dashboard.services.google_sheets._get_credentials", return_value=Creds()), \
-            mock.patch("requests.get", fake.get), mock.patch("requests.post", fake.post):
+            mock.patch("requests.get", fake.get), mock.patch("requests.post", fake.post),             mock.patch("requests.put", fake.put):
         return T.process_pending()
+
+
+def run_repair(fake, apply):
+    with mock.patch("dashboard.services.google_sheets._get_credentials", return_value=Creds()),             mock.patch("requests.get", fake.get), mock.patch("requests.post", fake.post),             mock.patch("requests.put", fake.put):
+        return T.repair_shifted(apply=apply)
 
 
 old = msg("โค้ด : OC-8000\nเบอร์ 0800000000", minutes=-600)        # ก่อนจุดเริ่ม (ถือว่าจัดการแล้ว)
@@ -227,12 +295,24 @@ msg("โค้ด : OC-1000 โพสต์ซ้ำ\nเบอร์ 0822222222
 msg("OC-1000 รอลูกค้าตัดสินใจ", minutes=5)
 msg(REASSIGN, g=VHOT, minutes=6)
 msg(SLIP, g="Cother", minutes=7)                                      # ห้องอื่น — ไม่ใช่งานเรา
-fake = FakeSheets({"TestBot": [row("OC-0999"), row("OC-1000", q="โทรแล้ว", m="พี่หมี")]})
+_good = row("OC-1000", q="โทรแล้ว", m="พี่หมี")
+_good[18] = "Fortuner"          # S มีค่าแต่ R/T ว่าง = แบบเดียวกับ SC-1301 บน prod ที่ทำให้ append เดาผิด
+# พิสูจน์ก่อนว่าชีตปลอมจำลองบั๊กจริงได้: append ไปลงคอลัมน์ S
+_probe = FakeSheets({"TestBot": [row("OC-0999"), list(_good)]})
+_probe.post("x/values/'TestBot'!A1:S:append",
+            json={"values": [["8/10/2026", "", "OC-1"]]})
+ok("ชีตปลอม: append แบบเดิมไปลงคอลัมน์ S (จำลองบั๊ก prod 8 ต.ค.)",
+   len(_probe.tabs["TestBot"]) == 3 and _probe.tabs["TestBot"][2][18] == "8/10/2026"
+   and _probe.tabs["TestBot"][2][20] == "OC-1", _probe.tabs["TestBot"][2])
+fake = FakeSheets({"TestBot": [row("OC-0999"), _good]})
 res = run(fake)
 tb = fake.tabs["TestBot"]
 codes = [r[2] for r in tb if len(r) > 2 and r[2]]
 ok("เพิ่ม 2 เคสใหม่ต่อท้าย TestBot", codes == ["OC-0999", "OC-1000", "OC-9001", "SC-9003"], codes)
 ok("แถวใหม่ผู้ส่ง = ชื่อเล่นจากทะเบียน", tb[2][13] == "หมิว", tb[2][13])
+ok("แถวใหม่เริ่มคอลัมน์ A (วันที่) ไม่เลื่อน", tb[2][0] == "8/10/2026" and tb[3][2] == "SC-9003", tb[2][:3])
+ok("ไม่มีค่าเกินคอลัมน์ S", all(not any(str(v).strip() for v in r[19:]) for r in tb), [len(r) for r in tb])
+ok("ไม่เรียก values:append เลย", not any(":append" in c[1] for c in fake.calls))
 ok("โพสต์ซ้ำรหัสเดิม = ไม่เพิ่มแถว", res["dup"] == ["OC-1000"], res)
 ok("คอมเมนต์ต่อท้ายช่อง Q", tb[1][16] == "โทรแล้ว / รอลูกค้าตัดสินใจ", tb[1][16])
 ok("คอมเมนต์โอนเคส → ช่อง M เปลี่ยนตาม", tb[3][12] == "พี่ต๊าด", tb[3][12])
@@ -245,25 +325,51 @@ ok("รอบถัดไปไม่มีงาน = ไม่ยิง Google
 
 # เขียนล้ม → ไม่ขยับตัวชี้ · รอบหน้าลองใหม่
 m1 = msg("โค้ด : OC-9100\nเบอร์ 0833333333", minutes=10)
-fake.fail_append = True
+fake.fail_write = True
 res3 = run(fake)
 ok("เขียนล้ม → จด error", "HTTP 500" in res3.get("error", ""), res3)
 ok("เขียนล้ม → ข้อความยังค้าง", T.pending_count() == 1, T.pending_count())
-fake.fail_append = False
+fake.fail_write = False
 res4 = run(fake)
 ok("รอบถัดไปลองใหม่สำเร็จ", res4.get("added") == ["OC-9100"] and not res4.get("error"), res4)
 
 # โหมดแท็บรายเดือน: เขียนแท็บของเดือนที่ข้อความเข้า · คอมเมนต์หาเคสเดือนก่อนได้
 T.set_config(target="month")
 fake2 = FakeSheets({"ขายรถจบออนไลน์ กันยายน69": [["กันยายน69"], ["หัว"], row("OC-7000", q="")],
-                    "ขายรถจบออนไลน์ ตุลาคม69": [["ตุลาคม69"], ["หัว"]]})
+                    "ขายรถจบออนไลน์ ตุลาคม69": [["ตุลาคม69"], ["หัว"], ["", "1"]]})
 msg("โค้ด : OC-9200\nเบอร์ 0844444444", minutes=20)
 msg("OC-7000 ลูกค้าเลื่อนนัด", minutes=21)
 res5 = run(fake2)
 oct_ = fake2.tabs["ขายรถจบออนไลน์ ตุลาคม69"]
-ok("เดือน: เคสลงแท็บ ตุลาคม69 แถว 3", len(oct_) >= 3 and oct_[2][2] == "OC-9200", oct_)
+ok("เดือน: เคสลงแท็บ ตุลาคม69 แถวถัดไป (ไม่ทับแถวที่พิมพ์ B ไว้)",
+   len(oct_) >= 4 and oct_[3][2] == "OC-9200" and oct_[2] == ["", "1"], oct_)
 ok("เดือน: คอมเมนต์เคสเดือนก่อนลงแท็บ กันยายน69",
    fake2.tabs["ขายรถจบออนไลน์ กันยายน69"][2][16] == "ลูกค้าเลื่อนนัด", fake2.tabs["ขายรถจบออนไลน์ กันยายน69"][2])
+
+# ซ่อมแถวที่ลงผิดคอลัมน์ (ของจริงบน prod 8 ต.ค.69) — ข้อความหลัง INITIAL_SINCE (12:34)
+T.set_config(enabled=True, target="test")
+msg("โค้ด : OC-9500\nรุ่น : city 2022\nเบอร์ 0866666666", minutes=40)
+msg("โค้ด : OC-9501\nรุ่น : mazda 2\nเบอร์ 0877777777", minutes=41)
+msg("OC-9500 ลูกค้าขอคิดก่อน", minutes=42)
+shifted = lambda code: [""] * 18 + ["8/10/2026", "", code, "รุ่น", "", "0866666666"]
+_g2 = row("OC-1000", m="พี่หมี"); _g2[18] = "Fortuner"
+fake3 = FakeSheets({"TestBot": [row("OC-0999"), _g2, shifted("OC-9500"), shifted("OC-9501")]})
+rp = run_repair(fake3, False)
+ok("ซ่อม: ดูเฉยๆ เจอ 2 แถว (3,4) ไม่เขียนอะไร",
+   rp.get("rows") == [3, 4] and rp.get("codes") == ["OC-9500", "OC-9501"] and not fake3.writes(), rp)
+rp = run_repair(fake3, True)
+tb3 = fake3.tabs["TestBot"]
+ok("ซ่อม: เขียนใหม่ที่แถวเดิม เริ่มคอลัมน์ A", tb3[2][2] == "OC-9500" and tb3[3][2] == "OC-9501"
+   and tb3[2][0] == "8/10/2026", [r[:3] for r in tb3])
+ok("ซ่อม: ไม่มีค่าเกินคอลัมน์ S เหลือ", all(not any(str(v).strip() for v in r[19:]) for r in tb3),
+   [r[18:] for r in tb3])
+ok("ซ่อม: คอมเมนต์ที่เคยหาเคสไม่เจอ ลงแล้ว", tb3[2][16] == "ลูกค้าขอคิดก่อน", tb3[2][16:17])
+ok("ซ่อม: ไม่มีแถวซ้ำ", [r[2] for r in tb3 if len(r) > 2 and r[2]] == ["OC-0999", "OC-1000", "OC-9500", "OC-9501"])
+ok("ซ่อม: ผลบอกเคสที่เขียนใหม่", rp.get("applied") and rp.get("added") == ["OC-9500", "OC-9501"], rp)
+ok("ซ่อม: รันซ้ำไม่เจออะไรแล้ว", run_repair(fake3, True).get("rows") == [])
+fake4 = FakeSheets({"TestBot": [row("OC-0999"), shifted("OC-9500"), row("OC-0998")]})
+ok("ซ่อม: มีแถวถูกอยู่ใต้แถวผิด = ไม่ซ่อมเอง (กันช่องว่างกลางตาราง)",
+   run_repair(fake4, True).get("rowsBelow") == 1 and not fake4.writes())
 
 # ปิดอยู่ = ไม่ทำอะไร
 T.set_config(enabled=False)
