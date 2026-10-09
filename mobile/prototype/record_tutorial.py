@@ -109,23 +109,50 @@ def page_html():
     return path
 
 
+AUDIO_LAG = 0.35   # เสียงเริ่มหลังคำอธิบายขึ้นจอ (วินาที)
+
+
 class Rec:
-    def __init__(self, pg, total, ey):
+    def __init__(self, pg, total, ey, narr=None):
         self.pg, self.total, self.ey, self.n = pg, total, ey, 0
         self.t0, self.marks = time.time(), []
+        self.narr, self.seg, self.cur = narr or [], 0, None   # narr = [(wav, วินาที), ...] ตามลำดับ ปก + ขั้น + ปก
+
+    def _settle(self):
+        """รอให้เสียงพากย์ของช่วงก่อนหน้าพูดจบก่อนขึ้นช่วงใหม่"""
+        if self.cur:
+            rem = self.cur[0] + self.cur[1] + 0.45 - time.time()
+            if rem > 0:
+                self.wait(rem)
+        self.cur = None
+
+    def _begin(self, kind, title):
+        self._settle()
+        wav, dur = self.narr[self.seg] if self.seg < len(self.narr) else (None, 0.0)
+        self.seg += 1
+        now = time.time()
+        self.marks.append({"kind": kind, "n": self.n, "t": round(max(0.0, now - self.t0 - TRIM), 2),
+                           "title": title, "audio": wav, "dur": round(dur, 2)})
+        self.cur = (now + AUDIO_LAG, dur)
+        return dur
+
+    def finish(self):
+        self._settle()
 
     def wait(self, s):
         self.pg.wait_for_timeout(int(s * 1000))
 
     def cap(self, title, text, act="", hold=0.0):
         self.n += 1
-        self.marks.append({"n": self.n, "t": round(max(0.0, time.time() - self.t0 - TRIM), 1), "title": title})
+        self._begin("step", title)
         self.pg.evaluate("([n,t,e,a,b,c]) => window.__cap(n,t,e,a,b,c)", [self.n, self.total, self.ey, title, text, act])
         self.wait(0.6 + hold)
 
     def card(self, ey, title, text, hold):
+        dur = self._begin("card", title)
         self.pg.evaluate("([a,b,c]) => window.__card(a,b,c)", [ey, title, text])
-        self.wait(hold)
+        self.wait(max(hold, dur + AUDIO_LAG + 0.6))
+        self.cur = None
         self.pg.evaluate("() => window.__card()")
 
     def _center(self, sel):
@@ -291,8 +318,47 @@ def admin(r, pg):
            "รู้ทันทีว่ามีลีดรอเท่าไหร่ จ่ายเบอร์ให้เซลล์ได้จากมือถือ<br>ดูแลแชทและโอนลูกค้าได้ ไม่ต้องรอเปิดคอม", 4.5)
 
 
+def voices(which):
+    """สร้าง/ดึงเสียงพากย์ทุกบรรทัด → [(wav, วินาที)]"""
+    import narration
+    import tts
+    lines = narration.SELLER if which == "seller" else narration.ADMIN
+    out = []
+    for i, line in enumerate(lines):
+        w = tts.synth(line)
+        out.append((w, tts.duration(w)))
+        print("  เสียง %d/%d %.1f วิ" % (i + 1, len(lines), out[-1][1]))
+    return out
+
+
+def mix(marks, total_sec, path):
+    """วางเสียงพากย์แต่ละบรรทัดตามเวลาที่ขั้นนั้นขึ้นจอ → WAV ไฟล์เดียว"""
+    import wave
+    import numpy as np
+    sr = 24000
+    track = np.zeros(int((total_sec + 1) * sr), dtype=np.float32)
+    for m in marks:
+        if not m.get("audio"):
+            continue
+        with wave.open(m["audio"], "rb") as w:
+            sr0 = w.getframerate()
+            a = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32)
+        if sr0 != sr:
+            a = np.interp(np.linspace(0, len(a), int(len(a) * sr / sr0), endpoint=False), np.arange(len(a)), a)
+        st = int((m["t"] + AUDIO_LAG) * sr)
+        end = min(len(track), st + len(a))
+        track[st:end] += a[: end - st]
+    track = np.clip(track, -32767, 32767).astype(np.int16)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(track.tobytes())
+
+
 def record(which):
     stage = page_html()
+    narr = voices(which) if os.environ.get("OXLET_NO_VOICE") != "1" else []
     with sync_playwright() as pw:
         b = pw.chromium.launch()
         tmp = os.path.join(HERE, "_raw_" + which)
@@ -310,18 +376,30 @@ def record(which):
         pg.evaluate("() => document.fonts.ready")
         pg.wait_for_timeout(800)
         pg.mouse.move(W / 2, H / 2)
-        r = Rec(pg, 15 if which == "seller" else 12, "เซลล์" if which == "seller" else "แอดมิน")
+        r = Rec(pg, 15 if which == "seller" else 12, "เซลล์" if which == "seller" else "แอดมิน", narr)
         r.t0 = t_start
         (seller if which == "seller" else admin)(r, pg)
+        r.finish()
         ctx.close()
         raw = pg.video.path()
         b.close()
     print(which, "steps:", r.n, "errors:", errs)
     mp4 = os.path.join(OUT, "oxlet-%s.mp4" % which)
+    silent = os.path.join(HERE, "_silent_%s.mp4" % which)
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(TRIM), "-i", raw, "-c:v", "libx264", "-preset", "slow", "-crf", "24",
-                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4], check=True)
+                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", silent], check=True)
+    if narr:
+        total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", silent],
+                                     capture_output=True, text=True, check=True).stdout.strip())
+        wav = os.path.join(HERE, "_voice_%s.wav" % which)
+        mix(r.marks, total, wav)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", silent, "-i", wav, "-map", "0:v", "-map", "1:a",
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-shortest", "-movflags", "+faststart", mp4], check=True)
+    else:
+        shutil.copyfile(silent, mp4)
     print("->", mp4, round(os.path.getsize(mp4) / 1e6, 1), "MB")
-    json.dump(r.marks, open(os.path.join(OUT, "oxlet-%s.steps.json" % which), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    steps = [{"n": m["n"], "t": m["t"], "title": m["title"]} for m in r.marks if m["kind"] == "step"]
+    json.dump(steps, open(os.path.join(OUT, "oxlet-%s.steps.json" % which), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 if __name__ == "__main__":

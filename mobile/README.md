@@ -67,3 +67,4 @@ npx expo-doctor
   `python record_tutorial.py all` → `videos/oxlet-seller.mp4` · `videos/oxlet-admin.mp4` + เวลาของแต่ละขั้น (`*.steps.json`)
 - `build_guide.py` + `guide_template.html` — หน้าคู่มือ (วิดีโอ + ขั้นตอนที่แตะแล้วข้ามไปตรงนั้น) · เผยแพร่ที่ https://claude.ai/artifact/9Rrspbmts7eZV1GGsKHoec
 - ไฟล์ mp4 ไม่เข้า git (ใหญ่ · อัดใหม่ได้) · แก้ต้นแบบแล้วต้องอัดใหม่ เพราะวิดีโอกดตามตำแหน่งปุ่มจริง
+- **เสียงพากย์** — `narration.py` (บทพากย์ ลำดับ = ปกเปิด + ทุกขั้น + ปกปิด) · `tts.py` สร้างเสียงด้วย Gemini TTS (`gemini-3.8-flash-tts` · เสียง `Sulafat` · ใช้ GEMINI_API_KEY เดิม) เก็บใน `voice_cache/` รันซ้ำไม่เสียเงินซ้ำ · ตัวอัดรอให้แต่ละบรรทัดพูดจบก่อนขึ้นขั้นถัดไป แล้ววางเสียงตามเวลาขั้น · ปิดเสียงด้วย `OXLET_NO_VOICE=1` · เปลี่ยนเสียงด้วย `OXLET_TTS_VOICE` (เสียงผู้ชาย = แก้บทให้ลงท้าย ครับ ด้วย)

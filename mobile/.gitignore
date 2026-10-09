@@ -50,3 +50,4 @@ prototype/out/
 prototype/site/
 prototype/*.jpg
 prototype/videos/oxlet-guide.html
+prototype/voice_cache/
