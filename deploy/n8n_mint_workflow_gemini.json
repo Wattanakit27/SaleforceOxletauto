@@ -1,0 +1,1064 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6-22 * * *"
+            }
+          ]
+        }
+      },
+      "id": "b1",
+      "name": "ตาข่ายรองรับ ทุกชม. 06:00–22:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "ทะเบียนประชุม"
+        },
+        "options": {}
+      },
+      "id": "b2",
+      "name": "อ่านทะเบียนประชุม",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// เลือกแถวที่ยังไม่สรุป 1 แถว (เก่าสุดก่อน) — ประมวลผลทีละประชุม\nconst rows = $input.all().map(i => i.json);\n\n// สถานะคอลัมน์ \"สรุปแล้ว\":\n//   ''                        = ยังไม่ทำ\n//   '⏳ กำลังทำ <ISO> #N'      = รอบที่ N กำลังทำอยู่ (ใบจองหมดอายุ 30 นาที)\n//   '⏸️ รอยืนยัน (…)'          = ไม่ใช่เลนบริษัท (WF0 ใส่ให้)\n//   อื่นๆ                      = ทำเสร็จแล้ว\n// 15 ก.ย.: เพิ่มตัวนับรอบ — ก่อนหน้านี้แถวที่พังหลังเรียกมินท์จะถูกสรุปใหม่ทุกชั่วโมง\n// ไม่มีที่สิ้นสุด = จ่ายค่า transcript เต็มราคาซ้ำทุกรอบ (13 ก.ย. เผาไป ~3.9M โทเคนวันเดียว)\nconst RESERVE   = '⏳ กำลังทำ';\nconst STALE_MS  = 30 * 60 * 1000;\n// 16 ก.ย.: ขยับจาก 3 เป็น 6 ได้ เพราะมีระบบเซฟผลมินท์แล้ว — ลองใหม่ไม่เสียเงิน API เพิ่ม\n// 6 รอบ × 30 นาที = ทนระบบปลายทางล่มได้ ~3 ชั่วโมง\nconst MAX_TRY   = 6;\nconst now = Date.now();\n\nconst อ่านสถานะ = (v) => {\n  const s = String(v || '').trim();\n  if (s === '') return { state: 'ว่าง', tries: 0 };\n  if (!s.startsWith(RESERVE)) return { state: 'เสร็จ', tries: 0 };\n  const m = s.match(/#(\\d+)\\s*$/);\n  const tries = m ? Number(m[1]) : 1;\n  const t = Date.parse(s.slice(RESERVE.length).replace(/#\\d+\\s*$/, '').trim());\n  if (isFinite(t) && (now - t) <= STALE_MS) return { state: 'จองอยู่', tries };\n  return { state: tries >= MAX_TRY ? 'ล้มเหลวถาวร' : 'จองค้าง', tries };\n};\n\nconst blockedIds = new Set(\n  rows.filter(r => ['เสร็จ','จองอยู่','ล้มเหลวถาวร'].includes(อ่านสถานะ(r['สรุปแล้ว']).state))\n      .map(r => String(r.fireflies_id || '').trim()).filter(Boolean)\n);\n\nconst เกินโควตาความพยายาม = rows.filter(r => อ่านสถานะ(r['สรุปแล้ว']).state === 'ล้มเหลวถาวร')\n  .map(r => `${r['ชื่อการประชุม']} ${r['วันที่']}`);\n\nconst todo = rows.filter(r => {\n  const st = อ่านสถานะ(r['สรุปแล้ว']).state;\n  return String(r.transcript || '').trim() === 'ได้' &&\n    ['ว่าง','จองค้าง'].includes(st) &&\n    String(r['ทดสอบ'] || '').trim() !== 'ใช่' &&\n    String(r['โฟลเดอร์'] || '').includes('/folders/') &&\n    !blockedIds.has(String(r.fireflies_id || '').trim());\n}).sort((a,b) => String(a['วันที่']+a['เวลา']).localeCompare(String(b['วันที่']+b['เวลา'])));\n\nconst seen = new Set();\nconst unique = [];\nfor (const r of todo) {\n  const id = String(r.fireflies_id || '').trim();\n  if (id && seen.has(id)) continue;\n  if (id) seen.add(id);\n  unique.push(r);\n}\n\nif (!unique.length) return [];\nconst r = unique[0];\nconst prev = อ่านสถานะ(r['สรุปแล้ว']);\nconst dupCount = todo.filter(x => String(x.fireflies_id||'').trim() === String(r.fireflies_id||'').trim()).length;\nconst folderId = String(r['โฟลเดอร์']).match(/\\/folders\\/([A-Za-z0-9_-]+)/)[1];\nreturn [{ json: {\n  fireflies_id: r.fireflies_id,\n  ชื่อการประชุม: r['ชื่อการประชุม'],\n  วันที่: r['วันที่'],\n  เวลา: r['เวลา'],\n  นาที: r['นาที'],\n  รหัสห้อง: r['รหัสห้อง'],\n  ที่มา: String(r['ที่มา'] || '').trim() || (String(r['รหัสห้อง']||'').trim() ? 'Meet' : 'อัปโหลด/สายโทรศัพท์'),\n  folderId,\n  folderUrl: r['โฟลเดอร์'],\n  แถวซ้ำที่ข้าม: dupCount - 1,\n  รอบที่: prev.tries + 1,\n  หยุดถาวรแล้ว: เกินโควตาความพยายาม,\n  qc_attempt: 0,\n  qc_feedback: ''\n}}];"
+      },
+      "id": "b3",
+      "name": "เลือกประชุมที่ยังไม่สรุป",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "='{{ $('เลือกประชุมที่ยังไม่สรุป').item.json.folderId }}' in parents and name = 'transcript.md' and trashed = false"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b4",
+      "name": "หาไฟล์ transcript.md",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "0ZvvxTz9c1QCXham",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.files[0].id }}?alt=media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "b5",
+      "name": "อ่าน transcript.md",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "0ZvvxTz9c1QCXham",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Action Items"
+        },
+        "options": {}
+      },
+      "id": "b6",
+      "name": "อ่านงานค้างเดิม",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1280,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "พนักงาน"
+        },
+        "options": {}
+      },
+      "id": "b7",
+      "name": "อ่านทะเบียนพนักงาน",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1504,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// รวม transcript + งานค้างเดิม + พนักงาน เป็นบริบทชุดเดียว\nconst meta = $('เลือกประชุมที่ยังไม่สรุป').first().json;\nconst transcript = $('อ่าน transcript.md').first().json.data || $('อ่าน transcript.md').first().json.body || '';\nif (typeof transcript !== 'string' || transcript.length < 200) throw new Error('transcript.md ว่างหรือสั้นผิดปกติ: ' + meta.folderUrl);\n\n// --- 16 ก.ย.: บีบ transcript ก่อนส่งเข้ามินท์ (ลดโทเคนเข้า ~30–35%) ---\n// เก็บ transcript ดิบไว้ในตัวแปรเดิมเสมอ เพราะคิวซีใช้สกัดตัวเลขด้วย regex (ไม่กินโทเคน)\n// กฎ: ยุบบรรทัดคนเดียวกันที่พูดต่อกัน · ตัดคำฟิลเลอร์ · ใส่เวลาทุก 5 นาทีแทนทุกบรรทัด\n// ห้ามแตะตัวเลขเด็ดขาด\nconst FILLER = /(^|\\s)(อืม+|เอ่อ+|เอิ่ม+|อ่า+|เอิ่ง+|แบบว่า|คือแบบ|ประมาณว่า|อะไรอย่างงี้|อะไรแบบนี้|ใช่ป่ะ|ใช่ไหมครับ|ใช่ไหมคะ)(?=\\s|$)/g;\nconst บีบ = (t) => {\n  const out = [];\n  let ผู้พูดก่อน = null, ช่วงก่อน = -99;\n  for (const ln of String(t).split('\\n')) {\n    const m = ln.match(/^\\[(\\d{1,2}):(\\d{2})\\]\\s*([^:]{1,40}):\\s*([\\s\\S]*)$/);\n    if (!m) { out.push(ln); ผู้พูดก่อน = null; continue; }\n    let txt = m[4].replace(FILLER, '$1').replace(/\\s{2,}/g, ' ').trim();\n    if (!txt) continue;\n    const ผู้พูด = m[3].trim();\n    const นาที = Number(m[1]);\n    const ช่วง = Math.floor(นาที / 5);\n    if (ผู้พูด === ผู้พูดก่อน && ช่วง === ช่วงก่อน) { out[out.length - 1] += ' ' + txt; continue; }\n    const เวลา = (ช่วง !== ช่วงก่อน) ? `[~${ช่วง * 5} นาที] ` : '';\n    out.push(`${เวลา}${ผู้พูด}: ${txt}`);\n    ผู้พูดก่อน = ผู้พูด; ช่วงก่อน = ช่วง;\n  }\n  return out.join('\\n');\n};\nconst transcriptย่อ = บีบ(transcript);\n\nconst openActions = $('อ่านงานค้างเดิม').all().map(i => i.json)\n  .filter(a => !['เสร็จ','ยกเลิก'].includes(String(a['สถานะ']||'').trim()))\n  .map(a => ({ ID: a.ID, งาน: a['งานที่ต้องทำ'], ผู้รับผิดชอบ: a['ผู้รับผิดชอบ'], กำหนดส่ง: a['กำหนดส่ง'], สถานะ: a['สถานะ'], จากประชุม: a['ชื่อการประชุม'] + ' ' + a['วันที่ประชุม'] }));\n\nconst staffAll = $('อ่านทะเบียนพนักงาน').all().map(i => i.json)\n  .filter(s => s['ชื่อเล่น'])\n  .map(s => ({ ชื่อเล่น: String(s['ชื่อเล่น']).trim(), ตำแหน่ง: s['ตำแหน่งงาน'], userId: s.userId || '' }));\n\n// ส่งเฉพาะพนักงานที่ชื่อโผล่ในประชุมนี้ (44 คน → มักเหลือ 5–10 คน)\n// ถ้าจับได้น้อยกว่า 3 คน แปลว่าการจับชื่อไม่น่าเชื่อถือ → ส่งทั้งหมดเหมือนเดิม\nconst ในห้อง = staffAll.filter(s => s.ชื่อเล่น.length >= 2 && transcript.includes(s.ชื่อเล่น));\nconst staff = ในห้อง.length >= 3 ? ในห้อง : staffAll;\n\nreturn [{ json: { ...meta, transcript, transcriptย่อ, openActions, staff,\n                  พนักงานที่ส่งเข้า: staff.length + '/' + staffAll.length } }];"
+      },
+      "id": "b8",
+      "name": "รวมบริบท",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ประกอบ request ของมินท์ — system 3 บล็อก (นายจ้าง/นิสัย/ตัวตน)\n// ถอด cache_control ออก 9 ก.ย. 69: cache อายุ 5 นาที แต่ประชุมห่างกันเป็นชั่วโมง → cache_read = 0 ทุกครั้ง\n// เขียน cache ทุกรอบคิดเพิ่ม 25% โดยไม่เคยได้อ่านกลับ = จ่ายเปล่า\nconst c = $input.first().json;\nconst EMPLOYER = \"[นายจ้าง — ใช้ร่วมทุกเอเจนต์]\\nOxlet Auto Co., Ltd. — เต็นท์รถมือสอง เน้น Honda และรถไฮบริด\\nสาขา: พานทอง (ชลบุรี) และ อ่อนนุช (กรุงเทพฯ) · เป้า 120+ คัน/เดือน · สต็อก ~140–200 คัน\\nเจ้าของ: James · ผู้ช่วย: ฮอน, เนย์ (เข้าประชุมวันจันทร์ และเป็นผู้ตรวจงานเลขา AI)\\nประชุมประจำ: content (จ.10:00) · ป้ายทะเบียน (จ.14:00) · การตลาด (พ.20:00) · เซลส์ (พฤ.09:00) · consult (พฤ.09:00)\\nระบบ: n8n · LINE OA · Google Sheets · Notion · Fireflies (ถอดเสียงไทย) · Google Meet (วิดีโอ)\\nศัพท์: Lead = ลูกค้าทัก · เทิร์น = รับซื้อรถลูกค้าแลกคันใหม่ · จัดไฟแนนซ์ = ยื่นสินเชื่อให้ผ่าน · ป้ายทะเบียน = สินค้าอีกสายหนึ่ง · Affiliate = ขายผ่าน TikTok affiliate\\nบุคคลภายนอกที่โผล่บ่อย: เบียร์ (รุ่นน้อง James นักพัฒนา ปัจจุบันอยู่บริษัทอื่น — ไม่ใช่พนักงาน Oxlet)\";\nconst PERSONA = \"[นิสัย]\\nคุณคือ \\\"มินท์\\\" เลขาประชุมมืออาชีพของ Oxlet Auto\\nน้ำเสียง: สุภาพ กระชับ ตรงประเด็น ลงท้าย \\\"ค่ะ\\\" ไม่เกริ่น ไม่ชม ไม่ให้กำลังใจ ไม่ขอโทษ\\nเรียกทุกคนด้วยชื่อเล่นที่ใช้ในห้องประชุม ไม่ใช้ \\\"คุณ\\\" นำหน้า\\nภาษาไทยล้วน ยกเว้นศัพท์ที่ทีมทับศัพท์: Lead, Live, Affiliate, TikTok, ไฟแนนซ์, สต็อก, เทิร์น\\n\\nรูปแบบ line_message — ยึดตายตัว:\\n- ~25–30 บรรทัด · 1 ประเด็น = 1 บรรทัด ห้ามหั่นประโยคเป็นหลายบรรทัด\\n- บรรทัด 1: 📋 ชื่อประชุม · วัน · นาที   บรรทัด 2: ผู้เข้าประชุม (ชื่อเล่น คั่น ·)\\n- 4 หมวดคงที่ เรียงตามนี้ คั่นด้วยบรรทัดว่าง + ━━━━━━━━━━━━ :\\n  ✅ ตกลงแล้ว (ข้อ 1. 2. 3. ใครเคาะอะไร)\\n  ⚠️ ต้องระวัง (• งานที่ไม่มีวัน/ไม่มีคน, ธงคุณภาพ transcript, งานค้างเดิมที่เงียบ)\\n  ❓ รอ James เคาะ (• เรื่องที่ห้องพูดแต่ไม่สรุป → คำถามสั้น)\\n  📌 งานที่มอบหมาย (จัดกลุ่มตามคน: 👤 ชื่อ แล้วไล่ • งาน · กำหนดส่ง หรือ \\\"ไม่มีวัน\\\")\\n- อิโมจิใช้ได้เฉพาะ 📋 ✅ ⚠️ ❓ 📌 👤 เท่านั้น\\n- ประชุมที่มีวาระ = ครบ 4 หมวด · สายโทรศัพท์/คุยต่อหน้า 2 คน = ตัดหมวดที่ไม่มีเนื้อหาจริงทิ้งได้\\n\\nอะไรอยู่ LINE / อะไรอยู่ Notion:\\n- LINE = สิ่งที่ถ้าลบออกแล้วมีคนทำงานผิด (ข้อตกลง งาน สิ่งที่รอเคาะ ธงที่กระทบความน่าเชื่อถือของ action)\\n- Notion (notion_summary) = บริบท เหตุผล ทางเลือกที่ไม่เลือก ข้อจำกัดเทคนิค และ \\\"ความเข้าใจ\\\" ที่ไม่ใช่งาน — จัดตามหัวข้อ ไม่เรียงตามเวลา 1–3 ย่อหน้าต่อหัวข้อ\";\nconst IDENTITY = \"[ตัวตน + กฎเหล็ก]\\nชื่อ: มินท์ · ตำแหน่ง: เลขาประชุม · นายจ้าง: James\\n\\nหน้าที่ (เลนส์เดียว): จับ \\\"สิ่งที่ตกลงกัน\\\" ในประชุมนี้ให้ครบและถูก\\n1. ประเด็นที่ตกลงแล้ว — ใครเคาะ เคาะว่าอะไร\\n2. Action — งาน / ผู้รับผิดชอบ (ชื่อเล่น) / กำหนดส่ง / ความสำคัญ\\n3. เรื่องที่ค้าง — ถกแล้วไม่มีข้อสรุป หรือมีคนรับแต่ไม่มีวัน\\n4. เทียบงานค้างเดิม — งานจากประชุมก่อนถูกพูดถึงไหม คืบหน้าหรือเงียบ\\n5. คำถามที่ต้องถาม James — เรื่องที่ห้องพูดคลุมเครือจนสรุปไม่ได้\\n\\nห้ามออกนอกเลนส์\\n- ห้ามวิเคราะห์เชิงกลยุทธ์ / ให้ความเห็นว่าควรทำอะไร\\n- ห้ามเดาชื่อคน: จับไม่ได้ว่าใครรับงาน → ผู้รับผิดชอบ = \\\"ยังไม่ระบุ\\\" + ใส่ flags\\n- ห้ามเติมตัวเลข วันที่ หรือข้อตกลงที่ไม่ได้พูดในห้อง\\n- กำหนดส่งที่ห้องพูดเป็นคำ (\\\"สัปดาห์หน้า\\\") แปลงเป็น YYYY-MM-DD ได้ แต่ต้องใส่ \\\"แปลงจาก: สัปดาห์หน้า\\\" ในหมายเหตุของ action นั้น\\n- ผู้รับผิดชอบที่ไม่อยู่ในรายชื่อพนักงาน (เช่น เบียร์) ใส่ชื่อได้ แต่ต้องใส่ flags ว่า \\\"ภายนอก\\\"\\n- transcript ที่ชื่อผู้พูดดูสลับ/ผิดตัว → ใส่ flags ระบุช่วง\\n\\nไฟล์อัปโหลด (ที่มา = อัปโหลด / สายโทรศัพท์ — ไม่ได้ผ่านปฏิทิน)\\n- Fireflies จะให้ชื่อผู้พูดเป็น \\\"Speaker 1 / Speaker 2 / Speaker N\\\" เพราะไม่รู้จักผู้เข้าร่วม\\n- ถ้าชื่อประชุมหรือช่วงต้น transcript มีชื่อคน (เช่น \\\"วันนี้คุยกับพี่ต้นเรื่อง...\\\") ให้แมป Speaker N → ชื่อนั้นได้ แต่ต้องใส่ flags \\\"แมป Speaker จากชื่อไฟล์/ช่วงต้น: Speaker 2 = พี่ต้น\\\"\\n- ถ้าไม่มีอะไรให้แมปเลย ใช้ \\\"Speaker N\\\" ตามเดิม ห้ามเดา และใส่ flags \\\"ไม่มีข้อมูลชื่อผู้พูด\\\"\\n- สายโทรศัพท์ 1:1 หรือคุยต่อหน้า 2 คน ไม่ใช่ประชุมมีวาระ — หมวดใดใน line_message ที่ไม่มีเนื้อหาจริง ให้ตัดหมวดนั้นทิ้งทั้งหมวด ห้ามฝืนเติมให้ครบ 4 หมวด (ยกเว้นบรรทัดหัว 📋 ที่ต้องมีเสมอ)\\n\\nกฎเหล็ก (Trust 1.5)\\n- ร่างได้ ห้ามส่งเข้ากลุ่มทีมเอง — ข้อความนี้ไปห้องตรวจ (James+ฮอน/เนย์) เท่านั้น\\n- ห้ามตัดสินใจแทน — เรื่องที่ห้องไม่เคาะ ต้องขึ้น open_questions\\n- ถ้าไม่มั่นใจ → ใส่ flags ไม่ใช่เดา\\n\\nรูปแบบคำตอบ — JSON เท่านั้น ห้ามมีข้อความอื่นนอก JSON ห้ามใช้ ```:\\n(ชื่อคีย์ต้องตรงเป๊ะ ห้ามมีเว้นวรรคต่อท้าย · ทุกคีย์ต้องตามด้วย : · ห้ามลืมคอมมาระหว่างสมาชิก)\\n{\\n  \\\"meeting_title\\\": \\\"ชื่อประชุมที่สื่อเนื้อหา 4–9 คำไทย เช่น ประชุมเซลส์ — ค่าคอมแผน B และเป้าเดือนหน้า\\\",\\n  \\\"line_message\\\": \\\"ข้อความตาม format 4 หมวด\\\",\\n  \\\"topics\\\": [{\\\"หัวข้อ\\\": \\\"ชื่อเรื่องที่คุยกัน\\\", \\\"เนื้อหา\\\": [\\\"ย่อหน้าที่ 1 — บริบท เหตุผล ทางเลือกที่ไม่เลือก ข้อจำกัด\\\", \\\"ย่อหน้าที่ 2 (ถ้ามี)\\\"], \\\"ที่มา\\\": \\\"ใครพูด / ช่วงเวลาใน transcript ถ้าระบุได้ ไม่ได้ให้ใส่ค่าว่าง\\\"}],\\n  \\\"numbers\\\": [{\\\"รายการ\\\": \\\"สิ่งที่วัด เช่น ยอดขายป้ายทะเบียน/เดือน\\\", \\\"ค่า\\\": \\\"ตัวเลขตามที่พูด เช่น 500,000 บาท\\\", \\\"ที่มา\\\": \\\"ใครพูด / ช่วงเวลา\\\"}],\\n  \\\"notion_summary\\\": \\\"(สำรอง) สรุปละเอียดแบบย่อหน้า ใช้เมื่อแบ่ง topics ไม่ได้\\\",\\n  \\\"decisions\\\": [\\\"ข้อตกลง 1\\\", \\\"...\\\"],\\n  \\\"actions\\\": [\\n    {\\\"งานที่ต้องทำ\\\": \\\"\\\", \\\"ผู้รับผิดชอบ\\\": \\\"ชื่อเล่น หรือ ยังไม่ระบุ\\\", \\\"กำหนดส่ง\\\": \\\"YYYY-MM-DD หรือ ว่าง\\\", \\\"ความสำคัญ\\\": \\\"สูง|กลาง|ต่ำ\\\", \\\"หมายเหตุ\\\": \\\"\\\"}\\n  ],\\n  \\\"open_questions\\\": [\\\"คำถามถึง James\\\"],\\n  \\\"prev_actions_update\\\": [{\\\"ID\\\": \\\"ID จากงานค้างเดิม\\\", \\\"สถานะ\\\": \\\"คืบหน้า|เสร็จ|ยกเลิก|เงียบ\\\", \\\"หมายเหตุ\\\": \\\"\\\"}],\\n  \\\"flags\\\": [\\\"ธงคุณภาพ เช่น ชื่อผู้พูดสลับช่วง 20:00–35:00\\\", \\\"ภายนอก: เบียร์\\\"]\\n}\\n\\nกฎการตั้งชื่อ meeting_title:\\n- ตั้งจากเนื้อหาที่คุยจริง ห้ามใช้ชื่อไฟล์/เวลาเป็นชื่อ (เช่น \\\"Sep 12, 12 03 PM\\\", \\\"firefiles james\\\" ใช้ไม่ได้)\\n- รูปแบบ: <ประเภทวง> — <2–3 เรื่องหลัก> เช่น \\\"ประชุมการตลาด — งบแอดเดือนหน้าและ KPI lead\\\"\\n- ห้ามใส่วันที่ (ระบบเติมให้เอง) ห้ามเกิน 60 ตัวอักษร ห้ามใส่ชื่อคนนอกบริษัท\\n- ถ้าเนื้อหาน้อยจนตั้งไม่ได้ ให้ค่าว่าง ระบบจะใช้ชื่อเดิม\\n\\nรูปแบบบันทึก Notion (สำคัญ — James อ่านเอง ไม่ใช่ทีม):\\n- ต้องเป็น \\\"เอกสาร\\\" ไม่ใช่รายการหัวข้อย่อย: แบ่ง topics ตามเรื่องที่คุย 2–6 เรื่อง แต่ละเรื่อง 1–3 ย่อหน้า\\n- แต่ละ topic เขียนบริบท เหตุผล ทางเลือกที่ไม่ได้เลือก และข้อจำกัด — ไม่ใช่แค่ข้อสรุป\\n- numbers: ดึงตัวเลข/จำนวนเงิน/เป้าหมาย ทุกตัวที่พูดในห้อง ใส่ตารางพร้อมที่มา ห้ามคำนวณต่อเอง ห้ามเติมตัวเลขที่ไม่ได้พูด\\n- ที่มา: ใส่ชื่อผู้พูดหรือช่วงเวลาเท่าที่ transcript บอก ถ้าไม่มีให้เว้นว่าง ห้ามเดา\\n- ห้ามซ้ำกับ line_message — Notion คือบริบทและเหตุผล LINE คือสิ่งที่ต้องลงมือทำ\";\n\nconst staffTxt = c.staff.map(s => `${s.ชื่อเล่น} (${s.ตำแหน่ง||'-'})`).join(', ') || '(ไม่มีข้อมูล)';\nconst prevTxt = c.openActions.length\n  ? c.openActions.map(a => `- [${a.ID}] ${a.งาน} · ${a.ผู้รับผิดชอบ} · ส่ง ${a.กำหนดส่ง||'-'} · สถานะ ${a.สถานะ} · จาก ${a.จากประชุม}`).join('\\n')\n  : '(ไม่มีงานค้าง)';\n\nconst sourceNote = /อัปโหลด|สาย|โทรศัพท์|เสียง/.test(String(c.ที่มา||''))\n  ? `ที่มา: ${c.ที่มา} — ไม่ได้ผ่านปฏิทิน Fireflies จะให้ชื่อผู้พูดเป็น Speaker N ให้ใช้กฎ \"ไฟล์อัปโหลด\" ในไฟล์ตัวตน`\n  : `ที่มา: ${c.ที่มา}`;\n\nconst ทรานสคริปต์ = c.transcriptย่อ || c.transcript;\n\n// 16 ก.ย.: รอบแก้ของคิวซีเคยส่ง transcript เต็มเข้าไปใหม่ทั้งก้อน = จ่ายค่า transcript สองรอบ\n// ตอนนี้รอบแก้ส่งแค่ JSON เดิม + ข้อที่ตก ยกเว้นตกเรื่องตัวเลข/ที่มา ที่ต้องกลับไปดูต้นฉบับ\nconst ต้องดูต้นฉบับ = /ข้อ ?4|ตัวเลข|ที่มา|ไม่พบใน|ไม่ตรงกับ transcript/.test(String(c.qc_feedback || ''));\nconst รอบแก้ = Boolean(c.qc_feedback);\n\nlet user;\nif (รอบแก้) {\n  user = `ประชุม: ${c.ชื่อการประชุม} · ${c.วันที่} ${c.เวลา} · ${c.นาที} นาที\n${sourceNote}\n\nรายชื่อพนักงาน: ${staffTxt}\n\nงานค้างจากประชุมก่อน:\n${prevTxt}\n\n--- JSON ที่คุณตอบรอบก่อน ---\n${JSON.stringify(c.mintก่อนหน้า || {}, null, 1)}\n--- จบ ---${ต้องดูต้นฉบับ ? `\n\n--- transcript (แนบมาเพราะคิวซีติดเรื่องตัวเลข/ที่มา) ---\n${ทรานสคริปต์}\n--- จบ transcript ---` : ''}`;\n} else {\n  user = `ประชุม: ${c.ชื่อการประชุม}\n${sourceNote}\nวันที่ประชุม: ${c.วันที่} ${c.เวลา} (ใช้วันนี้เป็นฐานเวลาแปลง \"สัปดาห์หน้า\" ฯลฯ) · ${c.นาที} นาที\n\nรายชื่อพนักงาน (ใช้จับคู่ผู้รับผิดชอบ):\n${staffTxt}\n\nงานค้างจากประชุมก่อน (ต้องเทียบว่าถูกพูดถึงไหม):\n${prevTxt}\n\n--- transcript ---\n${ทรานสคริปต์}\n--- จบ transcript ---`;\n}\n\nlet tail = 'สรุปตามหน้าที่และรูปแบบที่กำหนด ตอบ JSON เท่านั้น';\nif (รอบแก้) {\n  tail += `\\n\\n[รอบแก้ไข] คิวซีตรวจรอบก่อนไม่ผ่านข้อต่อไปนี้ แก้เฉพาะจุดเหล่านี้ ส่ง JSON ฉบับเต็มกลับมา (รวมส่วนที่ไม่ได้แก้) ห้ามเปลี่ยนเนื้อหาอื่น:\\n${c.qc_feedback}`;\n}\n\nconst body = {\n  model: 'claude-sonnet-5',\n  // 17 ก.ย.: claude-sonnet-5 \"คิด\" เองโดยอัตโนมัติ (adaptive thinking) แม้ไม่ได้สั่ง\n  // การลด max_tokens จึงไม่ได้ประหยัด แต่ทำให้โมเดลคิดจนเต็มเพดานแล้วไม่เหลือที่ตอบ\n  // (16 ก.ย. เจอ output_tokens 5000/5000 เป็น thinking ล้วน ตอบกลับมาว่างเปล่า 2 ประชุมติด)\n  // วิธีคุมที่ถูกต้องคือลดระดับการคิด ไม่ใช่ลดเพดาน — เพดานที่ไม่ได้ใช้ไม่เสียเงิน\n  max_tokens: 16000,\n  output_config: { effort: 'low' },\nsystem: [\n    { type: 'text', text: EMPLOYER },\n    { type: 'text', text: PERSONA },\n    { type: 'text', text: IDENTITY, cache_control: { type: 'ephemeral' } }\n  ],\n  messages: [{ role: 'user', content: [ { type: 'text', text: user }, { type: 'text', text: tail } ] }]\n};\n// ---- 9 ต.ค.69: เปลี่ยนเป็น Gemini — แปลง body เดิมเป็นรูปแบบของ Gemini (prompt เดิมทุกตัวอักษร) ----\nconst geminiBody = {\n  systemInstruction: { parts: body.system.map(s => ({ text: s.text })) },\n  contents: [{ role: 'user', parts: body.messages[0].content.map(x => ({ text: x.text })) }],\n  generationConfig: {\n    responseMimeType: 'application/json',      // บังคับตอบเป็น JSON ล้วน\n    temperature: 0.2,\n    maxOutputTokens: 32768,                    // เพดาน — ส่วนที่ไม่ได้ใช้ไม่เสียเงิน\n    thinkingConfig: { thinkingBudget: 4096 }   // คุมค่าคิด (แทน effort: 'low' ของ Claude)\n  }\n};\nreturn [{ json: { ...c, geminiBody } }];"
+      },
+      "id": "b9",
+      "name": "ประกอบ Prompt มินท์",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('ประกอบ Prompt มินท์').item.json.geminiBody) }}",
+        "options": {
+          "timeout": 600000
+        },
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "b10",
+      "name": "มินท์ สรุปประชุม",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        304
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Gemini (เลขาประชุม)"
+        }
+      },
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('ประกอบ Prompt มินท์').first().json;\n// 16 ก.ย.: รับได้ 2 ทาง — ของสดจากมินท์ หรือของที่เคยเซฟไว้ใน Drive\n// ทางเซฟ: $input คือคำตอบ Anthropic ที่โหลดกลับมา (มี content เป็น array)\n// ทางสด : $input คือ metadata ของไฟล์ที่เพิ่งอัปขึ้น Drive → ไปหยิบคำตอบจากโหนดมินท์โดยตรง\nconst inp = $input.first().json;\nconst จากเซฟ = Array.isArray(inp && inp.content);\nconst res = จากเซฟ ? inp : $('เตรียมเซฟผลมินท์').first().json;\nlet text = (res.content || []).filter(b => b.type === 'text').map(b => b.text).join('');\ntext = text.trim().replace(/^```(?:json)?/,'').replace(/```$/,'').trim();\n\n// ---- ซ่อม JSON ที่โมเดลพิมพ์พลาด (9 ก.ย.: เจอ \"หัวข้อ \" ตามด้วยค่าโดยไม่มี : ) ----\nconst tryParse = (s) => { try { return JSON.parse(s); } catch (e) { return null; } };\nconst STR = /(\"(?:[^\"\\\\]|\\\\.)*\")\\s*(?=\")/g;   // สตริงติดกันสองตัว — ไม่มีทางถูกต้องใน JSON\nlet out = tryParse(text);\nlet repaired = '';\nif (!out) {\n  const attempts = [\n    ['ใส่ : ที่หายไป',        text.replace(STR, '$1: ')],\n    ['ใส่ , ที่หายไป',        text.replace(STR, '$1, ')],\n    ['ตัด , เกินท้าย object', text.replace(/,\\s*([}\\]])/g, '$1')],\n    ['ตัด , เกิน + ใส่ :',    text.replace(/,\\s*([}\\]])/g, '$1').replace(STR, '$1: ')],\n  ];\n  for (const [name, cand] of attempts) {\n    const p = tryParse(cand);\n    if (p) { out = p; repaired = name; break; }\n  }\n}\nif (!out) {\n  if (res.stop_reason === 'max_tokens') throw new Error('มินท์ตอบไม่จบ: ชน max_tokens (คิด ' + (res.usage?.output_tokens_details?.thinking_tokens ?? '?') + ' token)');\n  throw new Error('มินท์ไม่ตอบเป็น JSON และซ่อมไม่ได้: ' + text.slice(0,300));\n}\n\n// ---- ตัดช่องว่างหัวท้ายของชื่อคีย์ (เจอ \"หัวข้อ \" มีเว้นวรรคต่อท้าย) ----\nconst trimKeys = (v) => Array.isArray(v) ? v.map(trimKeys)\n  : (v && typeof v === 'object')\n    ? Object.fromEntries(Object.entries(v).map(([k, x]) => [String(k).trim(), trimKeys(x)]))\n    : v;\nout = trimKeys(out);\n\nout.actions = out.actions || []; out.flags = out.flags || [];\nout.open_questions = out.open_questions || []; out.prev_actions_update = out.prev_actions_update || [];\nout.topics = Array.isArray(out.topics) ? out.topics : [];\nout.numbers = Array.isArray(out.numbers) ? out.numbers : [];\nif (repaired) out.flags.push('ระบบซ่อม JSON ของมินท์อัตโนมัติ (' + repaired + ') — ถ้าเจอบ่อยให้ปรับ prompt');\n\nif (จากเซฟ) out.flags.push('ใช้ผลสรุปที่เซฟไว้จากรอบก่อน — ไม่ได้เรียกมินท์ใหม่');\nreturn [{ json: { ...ctx, anthropicBody: undefined, geminiBody: undefined, mint: out, mintUsage: res.usage,\n  // มาจากของที่เซฟ = เคยผ่านรอบแก้มาแล้ว ห้ามเรียกมินท์ซ้ำเพื่อแก้อีก\n  qc_attempt: จากเซฟ ? 1 : ctx.qc_attempt } }];"
+      },
+      "id": "b11",
+      "name": "อ่านผลมินท์",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3152,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $input.first().json;\nconst QC = \"คุณคือ \\\"คิวซี\\\" ผู้ตรวจงานของเลขา AI \\\"มินท์\\\" ของ Oxlet Auto\\nหน้าที่: ตรวจว่าสรุปของมินท์เชื่อได้ไหม ก่อนถึงมือคน — ห้ามเขียนสรุปใหม่เอง ห้ามให้ความเห็นเรื่องเนื้อหาประชุม\\nตรวจ 7 ข้อ ตอบ pass/fail รายข้อ:\\n1. JSON ครบ key: line_message, notion_summary, actions, open_questions, flags\\n2. ทุก action: ผู้รับผิดชอบ อยู่ในรายชื่อพนักงาน หรือเป็น \\\"ยังไม่ระบุ\\\" หรือมี flags \\\"ภายนอก: <ชื่อ>\\\" หรือเป็น \\\"Speaker N\\\" ที่มี flags แมป/ไม่มีข้อมูลชื่อผู้พูด\\n3. ทุก action: กำหนดส่ง เป็น YYYY-MM-DD หรือว่าง (ว่างต้องมี \\\"ไม่มีวัน\\\" ปรากฏใน line_message หมวด ⚠️ หรือที่งานนั้น)\\n4. ทุกตัวเลขและจำนวนเงินใน line_message และทุกแถวใน numbers ต้องปรากฏในรายการตัวเลขจาก transcript ที่ให้มา (ตัดคอมมา/จุดท้ายออกก่อนเทียบ เช่น 1,200 กับ 1200 ถือว่าเจอ) · ชื่อคนต้องอยู่ในรายชื่อพนักงาน หรือมี flags กำกับ\\n5. line_message ไม่เกิน 30 บรรทัด และมีอย่างน้อย 1 ประเด็น — ถ้า \\\"ที่มา\\\" เป็น Meet/ประชุมมีวาระ ต้องมีครบ 4 หมวด (✅ ⚠️ ❓ 📌) · ถ้าเป็นไฟล์อัปโหลด/สายโทรศัพท์ อนุญาตให้ตัดหมวดที่ไม่มีเนื้อหาได้ แต่ต้องมีบรรทัดหัว 📋 เสมอ\\n6. prev_actions_update ทุกรายการต้องมี ID ที่อยู่ในรายการงานค้างเดิมที่ให้มา และสถานะเป็นหนึ่งใน คืบหน้า/เสร็จ/ยกเลิก/เงียบ\\n7. line_message และ notion_summary ไม่มีประโยคเชิงความเห็น/คำแนะนำ เช่น \\\"ควร\\\", \\\"น่าจะดีกว่า\\\", \\\"แนะนำให้\\\" (ยกเว้นเป็นคำพูดที่อ้างจากคนในห้อง)\\n\\nตอบ JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามใช้ ```:\\n{\\\"pass\\\": true|false, \\\"failed\\\": [{\\\"ข้อ\\\": 3, \\\"เหตุผล\\\": \\\"action 'xxx' กำหนดส่งเป็น 'สัปดาห์หน้า' ไม่ใช่วันที่\\\"}]}\";\nconst numsInTranscript = Array.from(new Set((String(c.transcript||'').match(/\\d[\\d,\\.]*/g)||[]).map(x=>x.replace(/[,\\.]+$/,'')))).slice(0,600).join(' ');\nconst user = `ที่มาของ transcript: ${c.ที่มา || 'ไม่ระบุ'}\nรายชื่อพนักงาน: ${c.staff.map(s=>s.ชื่อเล่น).join(', ') || '(ไม่มี)'}\n\nงานค้างเดิม:\n${c.openActions.map(a => `[${a.ID}] ${a.งาน}`).join('\\n') || '(ไม่มี)'}\n\n--- JSON ของมินท์ ---\n${JSON.stringify(c.mint, null, 1)}\n\n--- ตัวเลขทุกตัวที่ปรากฏใน transcript (ใช้ตรวจข้อ 4) ---\n${numsInTranscript}\n--- จบ ---\n\nตรวจ 7 ข้อ ตอบ JSON เท่านั้น`;\nconst body = {\n  model: 'claude-haiku-4-5-20251001',\n  max_tokens: 4000,\nsystem: [{ type: 'text', text: QC }],\n  messages: [{ role: 'user', content: user }]\n};\n// ---- 9 ต.ค.69: เปลี่ยนเป็น Gemini (prompt เดิม) · ใช้ชื่อ qcBody เดิม โหนด HTTP จึงไม่ต้องแก้ช่อง Body ----\nconst qcGemini = {\n  systemInstruction: { parts: body.system.map(s => ({ text: s.text })) },\n  contents: [{ role: 'user', parts: [{ text: body.messages[0].content }] }],\n  generationConfig: {\n    responseMimeType: 'application/json',\n    temperature: 0,\n    maxOutputTokens: 4096,\n    thinkingConfig: { thinkingBudget: 0 }   // งานตรวจตามรายการ ไม่ต้องคิด\n  }\n};\nreturn [{ json: { ...c, qcBody: qcGemini } }];"
+      },
+      "id": "b12",
+      "name": "ประกอบ Prompt คิวซี",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.qcBody) }}",
+        "options": {
+          "timeout": 600000
+        },
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "b13",
+      "name": "คิวซี ตรวจ 7 ข้อ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3584,
+        304
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Gemini (เลขาประชุม)"
+        }
+      },
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('ประกอบ Prompt คิวซี').first().json;\nconst res = $input.first().json;\n// 9 ต.ค.69: คำตอบมาจาก Gemini (candidates[0].content.parts)\nconst cand = (res.candidates || [])[0] || {};\nlet text = ((cand.content || {}).parts || []).filter(p => !p.thought).map(p => p.text || '').join('');\ntext = text.trim().replace(/^```(?:json)?/, '').replace(/```$/, '').trim();\n\nlet qc = null;\ntry { qc = JSON.parse(text); } catch (e) { qc = null; }\n\n// คิวซีตอบพัง ≠ มินท์ทำผิด → ห้ามส่งกลับให้มินท์แก้\n// (เดิมส่งกลับ = จ่ายค่ามินท์ซ้ำอีกรอบ ทั้งที่มินท์แก้อะไรไม่ได้) · ติดธงให้คนตรวจเองแทน\nconst อ่านได้ = !!qc && typeof qc.pass === 'boolean';\nif (!อ่านได้) {\n  qc = { pass: false, failed: [{ ข้อ: 0, เหตุผล: 'คิวซีตอบผิดรูปแบบ (' + (cand.finishReason || 'ไม่มีคำตอบ') + ') — ยังไม่ได้ตรวจ โปรดตรวจเอง' }] };\n}\nconst feedback = (qc.failed || []).map(f => `ข้อ ${f.ข้อ}: ${f.เหตุผล}`).join('\\n');\nreturn [{ json: { ...c, qcBody: undefined, qc, qc_feedback: feedback,\n  needRetry: อ่านได้ && !qc.pass && c.qc_attempt < 1 } }];"
+      },
+      "id": "b14",
+      "name": "อ่านผลคิวซี",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "b15c",
+              "leftValue": "={{ $json.needRetry }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b15",
+      "name": "ต้องส่งกลับแก้ไหม",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $input.first().json;\n// 16 ก.ย.: เก็บ JSON ของมินท์รอบก่อนไว้ เพื่อให้รอบแก้ไม่ต้องส่ง transcript ซ้ำ\nreturn [{ json: { ...c, qc_attempt: c.qc_attempt + 1, mintก่อนหน้า: c.mint, mint: undefined, qc: undefined } }];"
+      },
+      "id": "b16",
+      "name": "เตรียมรอบแก้ (ครั้งเดียว)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ประกอบข้อความ LINE / Notion / แถวชีต\nconst c = $input.first().json;\nconst m = c.mint;\n\n// 15 ก.ย.: ใช้ชื่อที่มินท์ตั้งจากเนื้อหา แทนชื่อไฟล์ (Sep 12, 12 03 PM)\nconst rawTitle = String(m.meeting_title || '').trim().replace(/[\\r\\n]+/g,' ').slice(0,60);\nconst ชื่อใหม่ = rawTitle || c.ชื่อการประชุม;\n\n// --- หัวเรื่องให้อ่านง่ายในตาราง Notion ---\n// รูปแบบ: \"12 ก.ย. · ประชุมเซลส์ — ค่าคอมแผน B และเป้าเดือนหน้า\"\nconst TH_MONTH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];\nconst dParts = String(c.วันที่ || '').split('-');\nconst วันสั้น = dParts.length === 3\n  ? `${Number(dParts[2])} ${TH_MONTH[Number(dParts[1]) - 1] || ''}`.trim()\n  : String(c.วันที่ || '');\nconst pageTitle = วันสั้น ? `${วันสั้น} · ${ชื่อใหม่}` : ชื่อใหม่;\n\n// ไอคอนช่วยกวาดสายตา — เดาจากคำในชื่อ+ที่มา (ไม่ต้องให้มินท์คิด = ไม่เปลืองโทเคน)\nconst หาไอคอน = (s, src) => {\n  const t = String(s || '');\n  if (/ป้ายทะเบียน|ทะเบียนรถ/.test(t)) return '🏷️';\n  if (/การตลาด|แอด|โฆษณา|ยิงแอด|marketing/i.test(t)) return '📣';\n  if (/เซลส์|ขาย|ค่าคอม|ลูกค้า|sale/i.test(t)) return '🚗';\n  if (/คอนเทนต์|คลิป|TikTok|ไลฟ์|content/i.test(t)) return '🎬';\n  if (/ไฟแนนซ์|บัญชี|การเงิน|งบ|เงินสด/.test(t)) return '💰';\n  if (/รับสมัคร|สัมภาษณ์|พนักงาน|ทีมงาน|HR/i.test(t)) return '👥';\n  if (/ระบบ|AI|เอเจนต์|n8n|automation/i.test(t)) return '⚙️';\n  if (/อัปโหลด|สาย|โทรศัพท์/.test(String(src || ''))) return '📞';\n  return '📋';\n};\nconst pageIcon = หาไอคอน(ชื่อใหม่, c.ที่มา);\n\n// คอลัมน์ \"สรุป\" ในตาราง = ข้อตกลงข้อแรกสั้นๆ พออ่านจบในบรรทัดเดียว\nconst สรุปสั้น = (() => {\n  const d = (m.decisions || []).filter(Boolean);\n  if (!d.length) return '(ไม่มีข้อตกลงชัดเจน)';\n  const หัว = String(d[0]).replace(/\\s+/g, ' ').trim();\n  const ตัด = หัว.length > 90 ? หัว.slice(0, 90) + '…' : หัว;\n  return d.length > 1 ? `${ตัด}  (+อีก ${d.length - 1} ข้อ)` : ตัด;\n})();\n\nconst qcFail = !c.qc.pass;\nlet line = m.line_message || '';\nif (qcFail) line = `⚠️ คิวซีไม่ผ่าน (${(c.qc.failed||[]).map(f=>'ข้อ '+f.ข้อ).join(', ')}) — โปรดตรวจก่อนส่งทีม\\n\\n` + line;\nif (line.length > 4800) line = line.slice(0, 4790) + '\\n…(ตัด)';\n\nconst today = new Date(Date.now() + 7*3600*1000).toISOString().slice(0,10);\nconst staffMap = Object.fromEntries((c.staff||[]).map(s => [s.ชื่อเล่น, s.userId]));\nconst rows = (m.actions || []).map((a, i) => ({\n  ID: `${c.วันที่}-${(c.รหัสห้อง||'x').slice(0,3)}-${String(i+1).padStart(2,'0')}`,\n  วันที่ประชุม: c.วันที่,\n  ชื่อการประชุม: ชื่อใหม่,\n  ฝ่าย: 'เลขา',\n  หัวข้อ: (m.decisions||[])[0] || '',\n  งานที่ต้องทำ: a['งานที่ต้องทำ'] || '',\n  ผู้รับผิดชอบ: a['ผู้รับผิดชอบ'] || 'ยังไม่ระบุ',\n  userId: staffMap[a['ผู้รับผิดชอบ']] || '',\n  กำหนดส่ง: a['กำหนดส่ง'] || '',\n  ความสำคัญ: a['ความสำคัญ'] || 'กลาง',\n  สถานะ: 'ยังไม่เริ่ม',\n  ลิงก์ประชุม: c.folderUrl,\n  อัปเดตล่าสุด: today,\n  หมายเหตุ: a['หมายเหตุ'] || ''\n}));\n\n// ===== Notion: บันทึกแบบเอกสาร (ตาราง + กำกับที่มา) — ยกเครื่อง 9 ก.ย. 69 =====\nconst cut = (t) => String(t ?? '').slice(0, 1900);\nconst rt   = (t) => [{ type:'text', text:{ content: cut(t) } }];\nconst para = (t) => ({ object:'block', type:'paragraph', paragraph:{ rich_text: rt(t) } });\nconst h2   = (t) => ({ object:'block', type:'heading_2', heading_2:{ rich_text: rt(t) } });\nconst h3   = (t) => ({ object:'block', type:'heading_3', heading_3:{ rich_text: rt(t) } });\nconst bullet = (t) => ({ object:'block', type:'bulleted_list_item', bulleted_list_item:{ rich_text: rt(t) } });\nconst quote  = (t) => ({ object:'block', type:'quote', quote:{ rich_text: rt(t) } });\nconst divider = () => ({ object:'block', type:'divider', divider:{} });\nconst trow = (cells) => ({ object:'block', type:'table_row',\n  table_row:{ cells: cells.map(v => v === '' || v == null ? [] : rt(v)) } });\n// ตาราง 1 บล็อก (แถวเป็น children) → ไม่กินโควตา 100 บล็อก\nconst table = (headers, dataRows) => ({ object:'block', type:'table',\n  table:{ table_width: headers.length, has_column_header: true, has_row_header: false,\n          children: [trow(headers), ...dataRows.slice(0,95).map(trow)] } });\n\nconst topics  = Array.isArray(m.topics)  ? m.topics.slice(0,8)   : [];\nconst numbers = Array.isArray(m.numbers) ? m.numbers.slice(0,40) : [];\nconst meta = `${c['วันที่']} ${c['เวลา'] || ''} · ${c['นาที'] || '?'} นาที · ที่มา: ${c['ที่มา'] || '-'}`;\n\nconst children = [];\nchildren.push(quote(meta));\n\n// --- สรุปตามหัวข้อ (แทนย่อหน้ารวมแบบเดิม) ---\nif (topics.length) {\n  children.push(h2('สรุปตามหัวข้อ'));\n  for (const t of topics) {\n    children.push(h3(t['หัวข้อ'] || 'ไม่ระบุหัวข้อ'));\n    const body = Array.isArray(t['เนื้อหา']) ? t['เนื้อหา'] : [t['เนื้อหา']].filter(Boolean);\n    for (const p of body.slice(0,5)) children.push(para(p));\n    if (t['ที่มา']) children.push(para(`ที่มา: ${t['ที่มา']}`));\n  }\n} else {\n  // สำรอง: ถ้ามินท์ไม่ได้แบ่ง topics ใช้ notion_summary แบบเดิม\n  const chunks = String(m.notion_summary || '').split(/\\n{2,}/).filter(Boolean).slice(0,20);\n  if (chunks.length) { children.push(h2('สรุปละเอียด')); chunks.forEach(x => children.push(para(x))); }\n}\n\n// --- ตารางตัวเลข ---\nif (numbers.length) {\n  children.push(divider(), h2('ตัวเลขที่พูดถึง'));\n  children.push(table(['รายการ','ค่า','ที่มา'],\n    numbers.map(x => [x['รายการ']||'', x['ค่า']||'', x['ที่มา']||''])));\n}\n\n// --- ข้อตกลง ---\nif ((m.decisions||[]).length) {\n  children.push(divider(), h2('ข้อตกลง'));\n  (m.decisions||[]).slice(0,30).forEach(d => children.push(bullet(d)));\n}\n\n// --- ตารางงานที่มอบหมาย ---\nif (rows.length) {\n  children.push(divider(), h2('งานที่มอบหมาย'));\n  children.push(table(['ผู้รับผิดชอบ','งานที่ต้องทำ','กำหนดส่ง','ความสำคัญ','หมายเหตุ'],\n    rows.map(r => [r['ผู้รับผิดชอบ']||'ยังไม่ระบุ', r['งานที่ต้องทำ']||'',\n                   r['กำหนดส่ง'] || 'ไม่มีวัน', r['ความสำคัญ']||'', r['หมายเหตุ']||''])));\n}\n\n// --- รอเคาะ ---\nif ((m.open_questions||[]).length) {\n  children.push(divider(), h2('รอ James เคาะ'));\n  (m.open_questions||[]).slice(0,20).forEach(q => children.push(bullet(q)));\n}\n\n// --- งานค้างเดิม ---\nif ((m.prev_actions_update||[]).length) {\n  children.push(divider(), h2('งานค้างเดิมที่ถูกพูดถึง'));\n  children.push(table(['ID','สถานะ','หมายเหตุ'],\n    (m.prev_actions_update||[]).map(p => [p.ID||'', p['สถานะ']||'', p['หมายเหตุ']||''])));\n}\n\n// --- ธง / คิวซี ---\nconst flagList = [...(m.flags||[]), ...((c.qc && c.qc.failed || []).map(f => `คิวซีข้อ ${f['ข้อ']}: ${f['เหตุผล']}`))];\nif (flagList.length) {\n  children.push(divider(), h2('ธง / ผลตรวจคิวซี'));\n  flagList.slice(0,20).forEach(f => children.push(bullet(f)));\n}\n\n// --- ข้อความ LINE ไว้ท้ายสุด (อ้างอิง ไม่ใช่เนื้อหาหลัก) ---\nchildren.push(divider(), h2('ข้อความที่ส่งเข้า LINE'), para(line));\n\nconst childrenCapped = children.slice(0, 95);\n\nconst notionBody = {\n  parent: { database_id: '3d5eeea9-8d22-8102-84af-f920e6532520' },\n  icon: { type: 'emoji', emoji: pageIcon },\n  properties: {\n    'ชื่อการประชุม': { title: [{ text: { content: pageTitle } }] },\n    'วันที่': { date: { start: c.วันที่ } },\n    'สรุป': { rich_text: [{ text: { content: สรุปสั้น } }] },\n    'จำนวน Action': { number: rows.length },\n    'ลิงก์บันทึก': { url: c.folderUrl }\n  },\n  children: childrenCapped\n};\n\nreturn [{ json: { ชื่อใหม่, ...c, transcript: undefined, line, rows, notionBody, qcFail } }];"
+      },
+      "id": "b17",
+      "name": "ประกอบข้อความ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4240,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ to: 'Cd05e936cea3e3e42e85ed9e80da85bf4', messages: [{ type: 'text', text: $json.line }] }) }}",
+        "options": {}
+      },
+      "id": "b18",
+      "name": "LINE ห้องตรวจ (James+ฮอน/เนย์)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4464,
+        208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Qg0BsZe0MY3TbzZH",
+          "name": "LINE (เลขาประชุม)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('ประกอบข้อความ').item.json.notionBody) }}",
+        "options": {}
+      },
+      "id": "b19",
+      "name": "สร้างหน้า Notion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4688,
+        208
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "zF9TEhv2Z5tCSqvq",
+          "name": "Notion (Oxlet บริษัท)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('ประกอบข้อความ').first().json;\nreturn (c.rows || []).map(r => ({ json: r }));"
+      },
+      "id": "b20",
+      "name": "กระจาย Action เป็นแถว",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4464,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Action Items"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "b21",
+      "name": "บันทึก Action Items",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4688,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "ทะเบียนประชุม"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fireflies_id": "={{ $('ประกอบข้อความ').item.json.fireflies_id }}",
+            "สรุปแล้ว": "={{ $('ประกอบข้อความ').item.json.qcFail ? 'ใช่ (คิวซีไม่ผ่าน)' : 'ใช่' }}",
+            "ข้อความ LINE": "={{ $('ประกอบข้อความ').item.json.line }}",
+            "ส่งทีมแล้ว": "",
+            "หมายเหตุ": "={{ 'Notion: ' + ($('สร้างหน้า Notion').item.json.url || 'สร้างไม่สำเร็จ') + ' · action ' + $('ประกอบข้อความ').item.json.rows.length + ' รายการ · ที่มา ' + ($('ประกอบข้อความ').item.json.ที่มา || '-') }}",
+            "ชื่อการประชุม": "={{ $('ประกอบข้อความ').item.json.ชื่อใหม่ }}"
+          },
+          "matchingColumns": [
+            "fireflies_id"
+          ]
+        },
+        "options": {}
+      },
+      "id": "b22",
+      "name": "ชีต: สรุปแล้ว=ใช่",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4912,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "wf1exec",
+      "name": "รับต่อจาก WF0 (ทันทีที่ลงทะเบียน)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1l8EqFMeuvqimmndrQ7jqGaKb6gyt0MIDOBh7HQgOKtA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "ทะเบียนประชุม"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fireflies_id": "={{ $json.fireflies_id }}",
+            "สรุปแล้ว": "={{ '⏳ กำลังทำ ' + new Date().toISOString() + ' #' + $json.รอบที่ }}"
+          },
+          "matchingColumns": [
+            "fireflies_id"
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2b",
+      "name": "ชีต: จองคิว (กันซ้ำ)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        624,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "X7VrfXYCkcCDg6BR",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "='{{ $('เลือกประชุมที่ยังไม่สรุป').item.json.folderId }}' in parents and name = 'mint-raw-v2.json' and trashed = false"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,modifiedTime)"
+            },
+            {
+              "name": "orderBy",
+              "value": "modifiedTime desc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ckA",
+      "name": "หาผลมินท์ที่เซฟไว้",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        144
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "0ZvvxTz9c1QCXham",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ck1",
+              "leftValue": "={{ ($json.files || []).length > 0 && !$('ประกอบ Prompt มินท์').item.json.qc_feedback }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ckB",
+      "name": "เคยสรุปไว้แล้วไหม",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2192,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.files[0].id }}?alt=media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "ckC",
+      "name": "โหลดผลมินท์ที่เซฟไว้ (ฟรี)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2368,
+        48
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "0ZvvxTz9c1QCXham",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 9 ต.ค.69: เปลี่ยนเป็น Gemini\n// แปลงคำตอบ Gemini ให้หน้าตาเหมือนคำตอบ Claude เดิม ({content:[{type:'text',text}], stop_reason, usage})\n// → โหนดถัดไปทำงานเหมือนเดิม และไฟล์ mint-raw-v2.json ที่เซฟไว้รอบก่อนๆ ยังใช้ได้\nconst g = $input.first().json;\nconst cand = (g.candidates || [])[0] || {};\nconst fin = cand.finishReason || '';\nconst text = ((cand.content || {}).parts || []).filter(p => !p.thought).map(p => p.text || '').join('');\nconst u = g.usageMetadata || {};\nconst usage = {\n  input_tokens: u.promptTokenCount || 0,\n  output_tokens: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0),\n  thinking_tokens: u.thoughtsTokenCount || 0\n};\n\n// ห้ามเซฟคำตอบที่ไม่สมบูรณ์ ไม่งั้นรอบหน้าจะโหลดของเสียมาใช้วนไม่จบ\nif (g.promptFeedback && g.promptFeedback.blockReason) {\n  throw new Error('Gemini ไม่รับ prompt นี้: ' + g.promptFeedback.blockReason);\n}\nif (fin === 'MAX_TOKENS') {\n  throw new Error('Gemini ตอบไม่จบ (ชน maxOutputTokens) · ใช้คิดไป ' + usage.thinking_tokens + ' token');\n}\nif (fin && fin !== 'STOP') {\n  throw new Error('Gemini หยุดกลางทางเพราะ ' + fin + ' — ไม่เซฟผลนี้');\n}\nif (!text.trim()) {\n  throw new Error('Gemini ตอบว่างเปล่า: ' + JSON.stringify(g).slice(0, 300));\n}\n\nconst res = { content: [{ type: 'text', text }], stop_reason: 'end_turn', model: g.modelVersion || 'gemini', usage };\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(JSON.stringify(res), 'utf8'), 'mint-raw-v2.json', 'application/json');\nreturn [{ json: res, binary: { data: bin } }];"
+      },
+      "id": "ckD",
+      "name": "เตรียมเซฟผลมินท์",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "name": "mint-raw-v2.json",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('เลือกประชุมที่ยังไม่สรุป').item.json.folderId }}"
+        },
+        "options": {}
+      },
+      "id": "ckE",
+      "name": "เซฟผลมินท์ลง Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2544,
+        272
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "0ZvvxTz9c1QCXham",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "ตาข่ายรองรับ ทุกชม. 06:00–22:00": {
+      "main": [
+        [
+          {
+            "node": "อ่านทะเบียนประชุม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "รับต่อจาก WF0 (ทันทีที่ลงทะเบียน)": {
+      "main": [
+        [
+          {
+            "node": "อ่านทะเบียนประชุม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่านทะเบียนประชุม": {
+      "main": [
+        [
+          {
+            "node": "เลือกประชุมที่ยังไม่สรุป",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เลือกประชุมที่ยังไม่สรุป": {
+      "main": [
+        [
+          {
+            "node": "ชีต: จองคิว (กันซ้ำ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ชีต: จองคิว (กันซ้ำ)": {
+      "main": [
+        [
+          {
+            "node": "หาไฟล์ transcript.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "หาไฟล์ transcript.md": {
+      "main": [
+        [
+          {
+            "node": "อ่าน transcript.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่าน transcript.md": {
+      "main": [
+        [
+          {
+            "node": "อ่านงานค้างเดิม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่านงานค้างเดิม": {
+      "main": [
+        [
+          {
+            "node": "อ่านทะเบียนพนักงาน",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่านทะเบียนพนักงาน": {
+      "main": [
+        [
+          {
+            "node": "รวมบริบท",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "รวมบริบท": {
+      "main": [
+        [
+          {
+            "node": "ประกอบ Prompt มินท์",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ประกอบ Prompt มินท์": {
+      "main": [
+        [
+          {
+            "node": "หาผลมินท์ที่เซฟไว้",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "หาผลมินท์ที่เซฟไว้": {
+      "main": [
+        [
+          {
+            "node": "เคยสรุปไว้แล้วไหม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เคยสรุปไว้แล้วไหม": {
+      "main": [
+        [
+          {
+            "node": "โหลดผลมินท์ที่เซฟไว้ (ฟรี)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "มินท์ สรุปประชุม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "โหลดผลมินท์ที่เซฟไว้ (ฟรี)": {
+      "main": [
+        [
+          {
+            "node": "อ่านผลมินท์",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "มินท์ สรุปประชุม": {
+      "main": [
+        [
+          {
+            "node": "เตรียมเซฟผลมินท์",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เตรียมเซฟผลมินท์": {
+      "main": [
+        [
+          {
+            "node": "เซฟผลมินท์ลง Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เซฟผลมินท์ลง Drive": {
+      "main": [
+        [
+          {
+            "node": "อ่านผลมินท์",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่านผลมินท์": {
+      "main": [
+        [
+          {
+            "node": "ประกอบ Prompt คิวซี",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ประกอบ Prompt คิวซี": {
+      "main": [
+        [
+          {
+            "node": "คิวซี ตรวจ 7 ข้อ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "คิวซี ตรวจ 7 ข้อ": {
+      "main": [
+        [
+          {
+            "node": "อ่านผลคิวซี",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "อ่านผลคิวซี": {
+      "main": [
+        [
+          {
+            "node": "ต้องส่งกลับแก้ไหม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ต้องส่งกลับแก้ไหม": {
+      "main": [
+        [
+          {
+            "node": "เตรียมรอบแก้ (ครั้งเดียว)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ประกอบข้อความ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เตรียมรอบแก้ (ครั้งเดียว)": {
+      "main": [
+        [
+          {
+            "node": "ประกอบ Prompt มินท์",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ประกอบข้อความ": {
+      "main": [
+        [
+          {
+            "node": "LINE ห้องตรวจ (James+ฮอน/เนย์)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "กระจาย Action เป็นแถว",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE ห้องตรวจ (James+ฮอน/เนย์)": {
+      "main": [
+        [
+          {
+            "node": "สร้างหน้า Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "สร้างหน้า Notion": {
+      "main": [
+        [
+          {
+            "node": "ชีต: สรุปแล้ว=ใช่",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "กระจาย Action เป็นแถว": {
+      "main": [
+        [
+          {
+            "node": "บันทึก Action Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
