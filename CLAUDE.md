@@ -4258,6 +4258,7 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   → `POST /track/api/seller_set_stage` (ตั้งชื่อไฟล์ใน Drive ให้) · คนงาน (`position=worker`) ไม่เห็นเมนูแชท
   · **เช็ค "ต้องใส่หมายเหตุ" ในแอปก่อนต่อผลเช็คลิสต์** (เซิร์ฟเวอร์เห็นแค่ข้อความรวม — ต่อก่อนเช็ค = ผ่านโดยไม่พิมพ์อะไร)
 - **ยังไม่มี**: push แจ้งเตือน · ส่งรูปหาลูกค้า · จ่ายเบอร์/ข้อมูลลีด · ตั้งความด่วน/ธง (ใช้เว็บ)
+- **ต้นแบบ + วิดีโอสอน** ([mobile/prototype/](mobile/prototype/) · 9 ต.ค.69): ต้นแบบ HTML 4 บทบาท (ข้อมูลสมมติ) + หัวข้อทรัพยากร/ค่าใช้จ่าย (50–60 คน: เซิร์ฟเวอร์เดิมพอ · ปีแรก ~4,400 บาท) · วิดีโอสอนเซลล์/แอดมินอัดด้วย `record_tutorial.py` · **ข้อค้นพบจากการวัด: nginx ไม่บีบอัด JSON (`gzip_types` ถูกคอมเมนต์ไว้ = บีบแค่ HTML)** · worker 5 ตัวตึงตอนอัปรูปพร้อมกัน 8 โมง
 - **เทสต์**: `python scripts/test_mobile_api.py` (61 ข้อ · test client จริงทั้งสาย middleware · ปลอมแค่ชีตพนักงาน)
   · แอป: `cd mobile && npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)
 - **⚠️ `npx expo lint` ครั้งแรกติด peer dependency** (npm ดึง react-dom 19.3 ที่ไม่ตรง react 19.2.3) →

@@ -58,3 +58,12 @@ npx tsc --noEmit
 npx expo lint
 npx expo-doctor
 ```
+
+## ต้นแบบ + วิดีโอสอนใช้งาน (`prototype/`)
+
+- `oxlet-mobile-demo.html` — ต้นแบบกดเล่นได้ 4 บทบาท (เซลล์ · แอดมิน · ช่าง · จัดซื้อ) + แผนระบบ + ค่าใช้จ่าย/ทรัพยากร
+  ข้อมูลสมมติทั้งหมด · เผยแพร่ที่ https://claude.ai/artifact/XEmbwUNwLcbPEz2fj1iADH
+- `record_tutorial.py` — อัดวิดีโอสอนจากต้นแบบด้วย Playwright (เคอร์เซอร์ + วงแตะ + คำอธิบายข้างจอ) แล้วแปลงเป็น mp4 ด้วย ffmpeg
+  `python record_tutorial.py all` → `videos/oxlet-seller.mp4` · `videos/oxlet-admin.mp4` + เวลาของแต่ละขั้น (`*.steps.json`)
+- `build_guide.py` + `guide_template.html` — หน้าคู่มือ (วิดีโอ + ขั้นตอนที่แตะแล้วข้ามไปตรงนั้น) · เผยแพร่ที่ https://claude.ai/artifact/9Rrspbmts7eZV1GGsKHoec
+- ไฟล์ mp4 ไม่เข้า git (ใหญ่ · อัดใหม่ได้) · แก้ต้นแบบแล้วต้องอัดใหม่ เพราะวิดีโอกดตามตำแหน่งปุ่มจริง

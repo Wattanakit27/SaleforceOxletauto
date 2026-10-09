@@ -1,0 +1,1298 @@
+<title>Oxlet Mobile Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: feature notes on the left, sticky phone on the right (desktop); phone first then notes (narrow).
+   Phone interior = the real app's fixed light purple/white company theme; the page around it follows the viewer theme. */
+:root {
+  --pg-bg: #f3f1fa; --pg-fg: #1f1147; --pg-sub: #5f587b; --pg-card: #ffffff; --pg-line: #ddd8ef;
+  --pg-accent: #6d28d9; --pg-frame: #1c1631; --pg-ok: #15803d; --pg-ok-bg: #dcfce7; --pg-new: #b45309; --pg-new-bg: #fef3c7;
+  --purple: #7c3aed; --purple-soft: #ede9fe; --app-bg: #f5f3ff; --app-card: #ffffff; --app-text: #1f1147;
+  --app-sub: #6b6488; --app-line: #e4e0f5; --red: #dc2626; --red-bg: #fee2e2; --amber: #b45309; --amber-bg: #fef3c7;
+  --green: #15803d; --green-bg: #dcfce7; --line-green: #06c755; --line-bg: #e6f9ee; --fb: #1877f2; --fb-bg: #e7f0fe;
+  --tt: #111111; --tt-bg: #ececec; --white: #ffffff; --cam: #0e0b18; --scrim: rgba(20, 12, 40, .45);
+  --p-very: #dc2626; --p-urgent: #ea580c; --p-normal: #eab308; --p-low: #94a3b8;
+  --ph-recon: #d97706; --ph-sale: #7c3aed; --ph-release: #16a34a; --sw-off: #f3b4b4;
+  --font: "Noto Sans Thai", "Leelawadee UI", "Thonburi", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pg-bg: #14111f; --pg-fg: #ece8fb; --pg-sub: #a9a2c7; --pg-card: #1d1830; --pg-line: #2f2847;
+    --pg-accent: #b79cff; --pg-frame: #05030a; --pg-ok: #6ee7a0; --pg-ok-bg: #12301f; --pg-new: #fbbf6b; --pg-new-bg: #3a2a10; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --pg-bg: #14111f; --pg-fg: #ece8fb; --pg-sub: #a9a2c7; --pg-card: #1d1830; --pg-line: #2f2847;
+  --pg-accent: #b79cff; --pg-frame: #05030a; --pg-ok: #6ee7a0; --pg-ok-bg: #12301f; --pg-new: #fbbf6b; --pg-new-bg: #3a2a10; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--pg-bg); color: var(--pg-fg); font-family: var(--font); }
+button, input, textarea, select { font-family: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--pg-accent); outline-offset: 2px; }
+
+.page { display: flex; gap: 40px; align-items: flex-start; justify-content: center; padding: 28px 16px 48px; max-width: 1140px; margin: 0 auto; }
+.notes { flex: 1 1 360px; max-width: 470px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding-top: 12px; }
+.notes h1 { font-size: 26px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.notes p { margin: 0; color: var(--pg-sub); font-size: 15px; line-height: 1.7; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--pg-accent); font-weight: 700; }
+.roles { display: flex; flex-wrap: wrap; gap: 8px; }
+.roles button, .ghostbtn { border: 1.5px solid var(--pg-line); background: var(--pg-card); color: var(--pg-fg); border-radius: 8px; padding: 9px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.roles button[aria-pressed="true"] { border-color: var(--pg-accent); color: var(--pg-accent); }
+.ghostbtn { display: inline-flex; align-items: center; gap: 8px; }
+.fmap { display: flex; flex-direction: column; gap: 16px; }
+.phase h3 { margin: 0 0 4px; font-size: 16px; }
+.phase .why { font-size: 13px; color: var(--pg-sub); margin: 0 0 8px; line-height: 1.6; }
+.feat { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 0; border-top: 1px solid var(--pg-line); }
+.feat b { font-size: 14px; font-weight: 600; }
+.feat small { grid-column: 1; font-size: 12.5px; color: var(--pg-sub); line-height: 1.55; }
+.st { grid-column: 2; grid-row: 1 / span 2; align-self: start; font-size: 11.5px; font-weight: 700; border-radius: 5px; padding: 2px 7px; white-space: nowrap; }
+.st.ok { background: var(--pg-ok-bg); color: var(--pg-ok); }
+.st.new { background: var(--pg-new-bg); color: var(--pg-new); }
+.fine { font-size: 13px !important; border-top: 1px solid var(--pg-line); padding-top: 14px; }
+.res { display: flex; flex-direction: column; gap: 14px; border-top: 2px solid var(--pg-line); padding-top: 22px; }
+.res h2 { margin: 0; font-size: 21px; text-wrap: balance; }
+.res h3 { margin: 6px 0 0; font-size: 16px; }
+.verdict { border: 1.5px solid var(--pg-ok); background: var(--pg-ok-bg); color: var(--pg-fg); border-radius: 10px; padding: 12px 14px; font-size: 14.5px; line-height: 1.65; }
+.verdict b { color: var(--pg-ok); }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fact { background: var(--pg-card); border: 1px solid var(--pg-line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.fact b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 12px; color: var(--pg-sub); line-height: 1.45; }
+.tw { overflow-x: auto; border: 1px solid var(--pg-line); border-radius: 10px; background: var(--pg-card); }
+.ntbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ntbl th { text-align: left; font-weight: 600; color: var(--pg-sub); padding: 8px 10px; font-size: 12px; white-space: nowrap; border-bottom: 1px solid var(--pg-line); }
+.ntbl td { padding: 8px 10px; border-top: 1px solid var(--pg-line); vertical-align: top; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.ntbl tr:first-child td { border-top: 0; }
+.ntbl .n { text-align: right; white-space: nowrap; }
+.ntbl tfoot td { font-weight: 700; border-top: 1.5px solid var(--pg-line); }
+.howto { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.6; }
+.howto code { font-size: 12.5px; background: var(--pg-card); border: 1px solid var(--pg-line); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.srcs { font-size: 12.5px; color: var(--pg-sub); line-height: 1.7; }
+.srcs a { color: var(--pg-accent); }
+.hcard { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; background: var(--app-card); border: 1px solid var(--app-line); border-radius: 12px; padding: 12px; color: inherit; font-size: inherit; cursor: pointer; }
+.hcard.done { cursor: default; }
+.hcard > b { font-size: 16px; }
+.hrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wait { font-size: 12px; font-weight: 700; color: var(--amber); white-space: nowrap; }
+.wait.red { color: var(--red); }
+.fld { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+.fld span { color: var(--app-sub); }
+.fld b { font-weight: 600; overflow-wrap: anywhere; }
+.slip { margin: 0; background: var(--app-bg); border: 1px solid var(--app-line); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; color: var(--app-text); }
+.hchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 12px 10px; }
+@media (max-width: 460px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.device { flex: 0 0 auto; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); width: 390px; height: 820px; background: var(--pg-frame); border-radius: 54px; padding: 12px; box-shadow: 0 30px 60px -20px rgba(20, 10, 50, .45); }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 42px; overflow: hidden; background: var(--app-bg); color: var(--app-text); display: flex; flex-direction: column; font-size: 15px; }
+.sbar { flex: 0 0 auto; height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px 0 34px; font-weight: 700; font-size: 15px; background: var(--app-card); }
+.notch { width: 110px; height: 30px; border-radius: 16px; background: var(--pg-frame); }
+@media (max-width: 880px) {
+  .page { flex-direction: column-reverse; align-items: center; gap: 28px; }
+  .notes { max-width: 560px; padding-top: 0; }
+  .device { position: relative; top: 0; }
+}
+@media (max-width: 460px) {
+  .device { width: 100%; height: 740px; border-radius: 36px; padding: 8px; }
+  .screen { border-radius: 28px; }
+  .sbar { display: none; }
+}
+
+/* ── app ── */
+.ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.ic.s { width: 18px; height: 18px; }
+.hdr { flex: 0 0 auto; min-height: 50px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--app-card); border-bottom: 1px solid var(--app-line); }
+.hdr h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdr .side { width: 84px; display: flex; }
+.hdr .side.r { justify-content: flex-end; }
+.hbtn { position: relative; display: flex; align-items: center; gap: 2px; color: var(--purple); background: none; border: 0; font-size: 15px; padding: 6px 4px; cursor: pointer; }
+.hbtn .badge { position: absolute; top: 0; right: -4px; }
+.body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.pad { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.tabbar { flex: 0 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--app-card); border-top: 1px solid var(--app-line); padding: 6px 0 22px; }
+.tabbar button { position: relative; background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--app-sub); cursor: pointer; padding: 4px; }
+.tabbar button.on { color: var(--purple); }
+.tabbar .badge { position: absolute; top: 0; left: calc(50% + 6px); }
+.badge { min-width: 19px; height: 19px; border-radius: 10px; background: var(--red); color: var(--white); font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+
+.btn { min-height: 48px; border-radius: 8px; border: 0; padding: 0 16px; font-size: 16px; font-weight: 700; color: var(--white); background: var(--purple); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; text-align: center; }
+.btn.line { background: var(--line-green); }
+.btn.outline { background: var(--app-card); color: var(--purple); border: 1.5px solid var(--purple); }
+.btn.ghost { background: var(--app-card); color: var(--app-sub); border: 1.5px solid var(--app-line); }
+.btn.green { background: var(--green); }
+.btn.small { min-height: 40px; font-size: 14px; }
+.btn[disabled] { opacity: .45; cursor: default; }
+.card { background: var(--app-card); border: 1px solid var(--app-line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.banner { border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.55; }
+.banner.info { background: var(--purple-soft); color: var(--purple); }
+.banner.warn { background: var(--amber-bg); color: var(--amber); }
+.banner.err { background: var(--red-bg); color: var(--red); }
+.banner.ok { background: var(--green-bg); color: var(--green); }
+.tag { display: inline-flex; align-items: center; border-radius: 5px; padding: 1px 6px; font-size: 11px; font-weight: 700; background: var(--purple-soft); color: var(--purple); white-space: nowrap; }
+.tag.line { background: var(--line-bg); color: var(--line-green); }
+.tag.fb { background: var(--fb-bg); color: var(--fb); }
+.tag.tt { background: var(--tt-bg); color: var(--tt); }
+.tag.red { background: var(--red-bg); color: var(--red); }
+.tag.amber { background: var(--amber-bg); color: var(--amber); }
+.tag.green { background: var(--green-bg); color: var(--green); }
+.tag.grey { background: var(--app-line); color: var(--app-sub); }
+.sub { color: var(--app-sub); font-size: 13px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+h4 { margin: 0; font-size: 16px; }
+.sect { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sect a, .link { color: var(--purple); font-size: 13px; font-weight: 600; background: none; border: 0; cursor: pointer; padding: 0; }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--app-card); border: 1px solid var(--app-line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.kpi b { font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.kpi span { font-size: 12px; color: var(--app-sub); }
+.kpi.alert b { color: var(--red); }
+.li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--app-line); background: none; border-left: 0; border-right: 0; border-bottom: 0; width: 100%; text-align: left; color: inherit; font-size: inherit; cursor: pointer; }
+.li:first-of-type { border-top: 0; }
+.li .m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.li .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li .d { font-size: 13px; color: var(--app-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li .chev { color: var(--app-sub); }
+.pbar { height: 10px; border-radius: 5px; background: var(--app-line); overflow: hidden; display: flex; }
+.pbar i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--app-sub); }
+.legend em { font-style: normal; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.pdot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+
+/* login */
+.login { padding: 34px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+.logo { width: 76px; height: 76px; border-radius: 18px; background: var(--purple); color: var(--white); display: grid; place-items: center; font-size: 34px; font-weight: 800; margin: 18px auto 4px; }
+.login h3 { margin: 0; text-align: center; font-size: 26px; }
+.login .hint { text-align: center; color: var(--app-sub); font-size: 13px; line-height: 1.6; }
+
+/* inbox + chat */
+.segs { display: flex; gap: 8px; padding: 12px 12px 6px; }
+.segs button { flex: 1; min-height: 38px; border-radius: 8px; border: 1.5px solid var(--purple); background: var(--app-card); color: var(--purple); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0 4px; }
+.segs button.on { background: var(--purple); color: var(--white); }
+.search { margin: 0 12px 6px; display: flex; align-items: center; gap: 8px; background: var(--app-card); border: 1px solid var(--app-line); border-radius: 8px; padding: 0 10px; color: var(--app-sub); }
+.search input { flex: 1; border: 0; outline: 0; background: none; min-height: 38px; font-size: 15px; color: var(--app-text); min-width: 0; }
+.duty { padding: 0 14px 6px; font-size: 13px; color: var(--app-sub); }
+.row { display: flex; gap: 12px; padding: 12px 14px; background: var(--app-card); border-bottom: 1px solid var(--app-line); cursor: pointer; width: 100%; text-align: left; border-left: 0; border-right: 0; border-top: 0; color: inherit; font-size: inherit; }
+.av { width: 44px; height: 44px; border-radius: 50%; background: var(--purple-soft); color: var(--purple); font-weight: 700; font-size: 18px; display: grid; place-items: center; flex: 0 0 auto; }
+.rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rtop { display: flex; align-items: center; gap: 6px; }
+.rname { flex: 1; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtime { font-size: 12px; color: var(--app-sub); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.rprev { font-size: 14px; color: var(--app-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unread .rname, .unread .rprev { font-weight: 800; color: var(--app-text); }
+.unread .rtime { color: var(--red); font-weight: 700; }
+.empty { text-align: center; color: var(--app-sub); padding: 40px 20px; }
+.info { background: var(--app-card); padding: 8px 14px; border-bottom: 1px solid var(--app-line); font-size: 13px; color: var(--app-sub); }
+.msgs { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.b { display: flex; flex-direction: column; max-width: 100%; }
+.b.out { align-items: flex-end; }
+.b .bub { max-width: 82%; padding: 8px 12px; border-radius: 14px; font-size: 15.5px; line-height: 1.45; background: var(--app-card); border: 1px solid var(--app-line); border-bottom-left-radius: 4px; overflow-wrap: anywhere; white-space: pre-line; }
+.b.out .bub { background: var(--purple); color: var(--white); border: 0; border-bottom-left-radius: 14px; border-bottom-right-radius: 4px; }
+.b .bub.img { padding: 4px; background: var(--app-card); border: 1px solid var(--app-line); }
+.b .bub.img img { display: block; width: 180px; height: 135px; object-fit: cover; border-radius: 10px; }
+.b .meta { font-size: 11px; color: var(--app-sub); margin: 2px 4px 0; }
+.bar { flex: 0 0 auto; padding: 8px 10px 24px; background: var(--app-card); border-top: 1px solid var(--app-line); display: flex; flex-direction: column; gap: 8px; }
+.qrow { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.qrow button { flex: 0 0 auto; border: 1px solid var(--app-line); background: var(--app-bg); color: var(--app-text); border-radius: 16px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.inrow { display: flex; gap: 6px; align-items: flex-end; }
+.inrow textarea { flex: 1; min-width: 0; resize: none; min-height: 42px; max-height: 110px; border: 1px solid var(--app-line); border-radius: 8px; padding: 10px 12px; font-size: 16px; background: var(--app-bg); color: var(--app-text); outline: 0; }
+.iconbtn { width: 42px; height: 42px; border-radius: 8px; border: 1px solid var(--app-line); background: var(--app-card); color: var(--purple); display: grid; place-items: center; cursor: pointer; position: relative; flex: 0 0 auto; }
+.iconbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.send { width: 60px; min-height: 42px; }
+
+/* scan + cars */
+.cam { flex: 1 1 auto; background: var(--cam); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 0; padding: 16px; }
+.frame { width: 220px; height: 220px; border: 3px solid var(--white); border-radius: 16px; position: relative; overflow: hidden; }
+.frame::after { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; background: var(--line-green); top: 10%; animation: sweep 2.2s ease-in-out infinite alternate; }
+@keyframes sweep { to { top: 88%; } }
+@media (prefers-reduced-motion: reduce) { .frame::after { animation: none; top: 50%; } .push { animation: none !important; } }
+.cam p { color: var(--white); margin: 0; font-weight: 600; text-align: center; }
+.simscan { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.simscan button { background: rgba(255,255,255,.14); color: var(--white); border: 1px solid rgba(255,255,255,.35); border-radius: 8px; padding: 9px 12px; font-size: 14px; cursor: pointer; }
+.manual { display: flex; gap: 8px; padding: 12px 12px 24px; background: var(--app-card); }
+.manual input { flex: 1; min-width: 0; min-height: 42px; border: 1px solid var(--app-line); border-radius: 8px; padding: 0 12px; font-size: 16px; background: var(--app-bg); color: var(--app-text); text-transform: uppercase; }
+.manual .btn { width: auto; }
+.scanbig { display: flex; align-items: center; gap: 14px; padding: 18px; border-radius: 12px; background: var(--purple); color: var(--white); border: 0; cursor: pointer; text-align: left; width: 100%; }
+.scanbig .ic { width: 34px; height: 34px; }
+.scanbig b { font-size: 18px; display: block; }
+.scanbig span { font-size: 13px; opacity: .85; }
+.hero { height: 130px; border-radius: 10px; background: linear-gradient(135deg, var(--purple-soft), var(--app-bg)); display: grid; place-items: center; color: var(--purple); }
+.hero .ic { width: 60px; height: 60px; stroke-width: 1.4; }
+.ctitle { font-size: 19px; font-weight: 800; margin: 0; }
+.pill { display: inline-flex; background: var(--purple); color: var(--white); border-radius: 8px; padding: 5px 12px; font-weight: 700; }
+.stagerow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ph { font-size: 13px; font-weight: 700; color: var(--app-sub); margin-top: 4px; }
+.sbtn { width: 100%; text-align: left; min-height: 48px; border-radius: 8px; border: 1px solid var(--app-line); border-left-width: 6px; padding: 8px 14px; background: var(--app-card); cursor: pointer; display: flex; flex-direction: column; justify-content: center; color: var(--app-text); }
+.sbtn b { font-size: 16px; }
+.sbtn span { font-size: 12px; color: var(--app-sub); }
+.sbtn.on { background: var(--purple); border-color: var(--purple); color: var(--white); }
+.sbtn.on span { color: var(--purple-soft); }
+.form { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--app-line); padding-top: 12px; }
+.lab { font-size: 14px; font-weight: 700; }
+.lab em { font-style: normal; color: var(--red); font-weight: 600; }
+.two { display: flex; gap: 8px; }
+.two > * { flex: 1; }
+.fileb { position: relative; }
+.fileb input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.th { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--app-sub); }
+.th img { width: 68px; height: 68px; border-radius: 8px; object-fit: cover; background: var(--purple-soft); }
+.th .ok { color: var(--green); }
+.inp, .note { width: 100%; border: 1px solid var(--app-line); border-radius: 8px; padding: 10px 12px; font-size: 16px; background: var(--app-bg); color: var(--app-text); }
+.note { min-height: 72px; resize: vertical; }
+.chk { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; padding: 3px 0; cursor: pointer; }
+.chk.bad > span:first-child { color: var(--red); }
+.sw { position: relative; width: 46px; height: 28px; flex: 0 0 auto; }
+.sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.sw i { position: absolute; inset: 0; border-radius: 14px; background: var(--sw-off); transition: background .15s; }
+.sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--white); transition: transform .15s; }
+.sw input:checked + i { background: var(--purple); }
+.sw.neutral i { background: var(--app-line); }
+.sw.neutral input:checked + i { background: var(--purple); }
+.sw input:checked + i::after { transform: translateX(18px); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chipbtn { border: 1.5px solid var(--app-line); background: var(--app-card); color: var(--app-text); border-radius: 8px; padding: 7px 10px; font-size: 14px; cursor: pointer; }
+.chipbtn.on { border-color: var(--purple); background: var(--purple); color: var(--white); }
+.angles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.angle { display: flex; align-items: center; gap: 8px; border: 1px solid var(--app-line); border-radius: 8px; padding: 9px 10px; font-size: 14px; cursor: pointer; background: var(--app-card); }
+.angle input { width: 20px; height: 20px; accent-color: var(--purple); margin: 0; }
+.log { border-left: 3px solid var(--purple-soft); padding-left: 10px; display: flex; flex-direction: column; gap: 2px; }
+.log .lt { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.log .lt span { font-weight: 400; font-size: 12px; color: var(--app-sub); }
+.log p { margin: 0; font-size: 14px; white-space: pre-line; }
+.score { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 14px; align-items: center; }
+.score .bar2 { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--app-line); overflow: hidden; margin-bottom: 4px; }
+.score .bar2 i { display: block; height: 100%; background: var(--purple); }
+.selfie { width: 180px; height: 180px; border-radius: 50%; margin: 6px auto; display: grid; place-items: center; background: var(--purple-soft); color: var(--purple); position: relative; overflow: hidden; border: 3px dashed var(--purple); }
+.selfie img { width: 100%; height: 100%; object-fit: cover; }
+.selfie input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.selfie .ic { width: 48px; height: 48px; }
+.big { font-size: 30px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th { text-align: left; font-size: 12px; color: var(--app-sub); font-weight: 600; padding: 4px 0; }
+.tbl td { padding: 7px 0; border-top: 1px solid var(--app-line); font-variant-numeric: tabular-nums; }
+.tbl td.n, .tbl th.n { text-align: right; }
+
+/* sheet + push + toast */
+.scrim { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: flex-end; z-index: 5; }
+.sheet { background: var(--app-card); width: 100%; max-height: 82%; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 10px; }
+.sheet h5 { margin: 0; font-size: 18px; }
+.sheet p { margin: 0; color: var(--app-sub); font-size: 14px; line-height: 1.6; }
+.phone { font-size: 24px; font-weight: 800; letter-spacing: .02em; text-align: center; padding: 6px; user-select: all; font-variant-numeric: tabular-nums; }
+.push { position: absolute; left: 10px; right: 10px; top: 52px; z-index: 7; background: rgba(255,255,255,.97); color: var(--app-text); border-radius: 16px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; box-shadow: 0 10px 30px -8px rgba(20,10,50,.45); cursor: pointer; animation: drop .35s ease-out; border: 0; text-align: left; font-size: inherit; }
+@keyframes drop { from { transform: translateY(-120%); } to { transform: none; } }
+.push .pi { width: 34px; height: 34px; border-radius: 8px; background: var(--purple); color: var(--white); display: grid; place-items: center; font-weight: 800; flex: 0 0 auto; }
+.push .pm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.push .pt { display: flex; justify-content: space-between; font-size: 12px; color: var(--app-sub); }
+.push b { font-size: 14px; }
+.push span.pb { font-size: 13.5px; }
+.toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--app-text); color: var(--white); padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 6; max-width: 88%; text-align: center; }
+.me { display: flex; align-items: center; gap: 14px; flex-direction: row; }
+.me .av { width: 56px; height: 56px; font-size: 22px; }
+.notif { display: flex; gap: 10px; padding: 12px 14px; background: var(--app-card); border-bottom: 1px solid var(--app-line); width: 100%; text-align: left; border-left: 0; border-right: 0; border-top: 0; color: inherit; font-size: inherit; cursor: pointer; }
+.notif .ni { width: 36px; height: 36px; border-radius: 50%; background: var(--purple-soft); color: var(--purple); display: grid; place-items: center; flex: 0 0 auto; }
+.notif.new { background: var(--purple-soft); }
+.notif.new .ni { background: var(--purple); color: var(--white); }
+</style>
+
+<div class="page">
+  <section class="notes" aria-label="ระบบที่ควรมีในแอปมือถือ">
+    <div class="eyebrow">ต้นแบบแอปมือถือ · ข้อมูลตัวอย่าง</div>
+    <h1>Oxlet Mobile: ระบบที่ควรมี</h1>
+    <p>ต้นแบบกดเล่นได้ของแอปที่แต่ละฝ่ายใช้ในมือถือ หน้าแรกของแต่ละคนต่างกันตามงาน ลองสลับบทบาทแล้วกดดูได้เลย</p>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">ดูในฐานะ</div>
+      <div class="roles" role="group" aria-label="บทบาท">
+        <button type="button" data-role="seller" aria-pressed="true">เซลล์</button>
+        <button type="button" data-role="admin" aria-pressed="false">แอดมิน / ผู้บริหาร</button>
+        <button type="button" data-role="worker" aria-pressed="false">ช่าง / ลานรถ</button>
+        <button type="button" data-role="buyer" aria-pressed="false">จัดซื้อ</button>
+      </div>
+    </div>
+    <div><button type="button" class="ghostbtn" id="simpush">จำลองแจ้งเตือนเข้ามือถือ</button></div>
+    <p>แอดมิน: แท็บล่าง <b>"ห้องพัก"</b> คือห้องพัก Lead — ลีดที่รอจ่ายเบอร์จากทุกช่องทาง กดลีดแล้วจ่ายเบอร์ให้เซลล์ได้ในหน้าเดียว</p>
+
+    <div class="fmap">
+      <div class="phase">
+        <h3>ระยะที่ 1 · เหตุผลที่คุ้มทำแอปจริง</h3>
+        <p class="why">ต้องเป็นแอปที่ build เอง (บัญชี Apple Developer $99/ปี) เพราะแจ้งเตือนใช้กับ Expo Go ไม่ได้</p>
+        <div class="feat"><b>แจ้งเตือนเข้ามือถือ</b><span class="st new">ทำเพิ่ม</span><small>ลูกค้าใหม่ในคิว · เลยเวลา 5 นาที · ตามด่วน 9:00/13:00 · รถเข้าคิวของทีม · เคสรับซื้อใหม่ ตัวเลือกทั้งหมดคิดในเว็บอยู่แล้ว เหลือส่งเข้ามือถือ</small></div>
+        <div class="feat"><b>แชทลูกค้า: รับลูกค้า · ตอบ</b><span class="st ok">มีแล้ว</span><small>ทำไว้ในแอปทดลอง ใช้ API เดิมของ Connect</small></div>
+        <div class="feat"><b>ส่งรูป/ดูรูปในแชท · ข้อความสำเร็จรูป</b><span class="st new">ทำเพิ่ม</span><small>ตอนนี้ระบบเก็บแค่ว่ามีรูป ต้องโหลดตัวไฟล์จาก LINE ภายในเวลาที่กำหนด</small></div>
+        <div class="feat"><b>สแกน QR เปลี่ยนสเตป + รูป + เช็คลิสต์</b><span class="st ok">มีแล้ว</span><small>ทำไว้ในแอปทดลอง</small></div>
+      </div>
+      <div class="phase">
+        <h3>ระยะที่ 2 · งานประจำวันแต่ละฝ่าย</h3>
+        <p class="why">ข้อมูลส่วนใหญ่มีในเว็บแล้ว เหลือทำหน้าจอในแอป</p>
+        <div class="feat"><b>เซลล์: ตามด่วน · ดีลค้าง · โทรแล้วบันทึกผล</b><span class="st ok">ข้อมูลมีแล้ว</span><small>ตรรกะเดียวกับหน้าเซลล์และข้อความตามด่วน · บันทึกสถานะลูกค้าเขียนกลับชีต</small></div>
+        <div class="feat"><b>เคสจองของฉัน + อัปเดตสถานะ</b><span class="st ok">ข้อมูลมีแล้ว</span><small>ใช้ API แก้สถานะ/วันที่ของเว็บ</small></div>
+        <div class="feat"><b>เบิก-คืนรถ ถ่ายรูป 6 มุม</b><span class="st ok">ข้อมูลมีแล้ว</span><small>API เบิก/คืนรถมีอยู่ บอทสรุปเข้ากลุ่ม LINE ได้เหมือนเดิม</small></div>
+        <div class="feat"><b>เช็คชื่อเข้างาน (เซลฟี + ตำแหน่ง)</b><span class="st new">ทำเพิ่ม</span><small>แทนการส่งรูปเข้ากลุ่มแล้วให้ n8n อ่าน · ตารางเก็บเช็คชื่อมีแล้ว</small></div>
+        <div class="feat"><b>แอดมิน: ห้องพัก Lead · จ่ายเบอร์</b><span class="st ok">ข้อมูลมีแล้ว</span><small>รวมลีดทุกช่องทาง (LINE · Facebook · TikTok · เบอร์กลาง) ที่ให้เบอร์แล้ว เรียงรอนานสุดก่อน · เลือกตัวหน้า + เซลล์ แล้วส่งใบเข้าห้องจ่ายเบอร์ + แท็กเซลล์ · ดูว่าวันนี้จ่ายให้ใครไปเท่าไหร่ · API เดียวกับหน้า Connect</small></div>
+        <div class="feat"><b>จัดซื้อ: โทรตามเคส · รถขาดตลาด</b><span class="st ok">ข้อมูลมีแล้ว</span><small>ชุดเดียวกับหน้า /buy/ และข้อความเข้าห้องเคสHOT</small></div>
+      </div>
+      <div class="phase">
+        <h3>ระยะที่ 3 · ดูภาพรวม</h3>
+        <div class="feat"><b>ภาพรวมวันนี้สำหรับผู้บริหาร</b><span class="st ok">ข้อมูลมีแล้ว</span><small>ลีด/จอง/ปล่อย · ลูกค้ารอ · ใครยังไม่เช็คชื่อ · รถค้างนาน</small></div>
+        <div class="feat"><b>คะแนน/อันดับของฉัน · สต็อกรถ + ส่งรถให้ลูกค้า</b><span class="st ok">ข้อมูลมีแล้ว</span><small>คะแนน 6 ด้านเดียวกับแดชบอร์ด · ข้อมูลรถจากระบบติดตามรถ</small></div>
+      </div>
+    </div>
+    <section class="res" aria-label="ทรัพยากรและค่าใช้จ่าย">
+      <div class="eyebrow">ทรัพยากร · ค่าใช้จ่าย</div>
+      <h2>รองรับ 50–60 คน ใช้วันละ 100–200 ครั้ง ได้ไหม</h2>
+      <div class="verdict"><b>พอ ไม่ต้องอัปเกรดเซิร์ฟเวอร์</b> — แบนด์วิดท์ทั้งเดือนใช้ราว 1% ของโควต้า ช่วงพีค 8:00–9:00 ใช้ไม่ถึง 1% ของความเร็วพอร์ต และ CPU สูงสุดราว 35% แม้ทุกคนเปิดแอปพร้อมกัน แต่มี 4 จุดที่ควรปรับก่อนเปิดใช้จริง (ท้ายหัวข้อนี้)</div>
+
+      <h3>เซิร์ฟเวอร์ตอนนี้ (วัดจริง 9 ต.ค.69)</h3>
+      <div class="facts">
+        <div class="fact"><b>2 vCPU</b><span>ใช้อยู่ ~3% (load 0.05)</span></div>
+        <div class="fact"><b>8 GB</b><span>RAM ว่าง 5.6 GB</span></div>
+        <div class="fact"><b>89 GB</b><span>ดิสก์ว่าง</span></div>
+        <div class="fact"><b>8 TB</b><span>โควต้าทราฟฟิก/เดือน (Hostinger KVM 2)</span></div>
+        <div class="fact"><b>~65 GB</b><span>ทราฟฟิกที่ใช้อยู่/เดือน</span></div>
+        <div class="fact"><b>1 Gbps</b><span>พอร์ตตามที่โฆษณา (วัดอิสระ 300–730 Mbps)</span></div>
+      </div>
+
+      <h3>แอปดึงข้อมูลอะไร บ่อยแค่ไหน</h3>
+      <p>วัดจาก API จริงของ Connect ด้วยข้อมูลจำลอง 260 ลูกค้า (16 ข้อความต่อคน ตามค่า p90 ของจริง) บนเครื่อง dev แล้วคูณเวลา ×2 เผื่อ vCPU ของเซิร์ฟเวอร์ช้ากว่า</p>
+      <div class="tw"><table class="ntbl">
+        <thead><tr><th>คำขอ</th><th>ทุก</th><th class="n">เวลาประมวลผล</th><th class="n">ขนาด</th></tr></thead>
+        <tbody>
+          <tr><td>ตัวเลขแจ้งเตือนบนแท็บ</td><td>30 วิ</td><td class="n">~12 ms</td><td class="n">0.2 KB</td></tr>
+          <tr><td>รายชื่อแชท (เซลล์)</td><td>10 วิ</td><td class="n">~35 ms</td><td class="n">50–120 KB*</td></tr>
+          <tr><td>รายชื่อแชททั้งหมด (แอดมิน 200 แถว)</td><td>10 วิ</td><td class="n">~70–120 ms</td><td class="n">142 KB</td></tr>
+          <tr><td>เปิดแชทลูกค้า 1 คน</td><td>5 วิ</td><td class="n">~30–40 ms</td><td class="n">9.5 KB</td></tr>
+          <tr><td>อัปรูป 1 รูป (ส่งต่อไป Google Drive)</td><td>ตอนกด</td><td class="n">2–3 วิ</td><td class="n">~0.3–0.5 MB</td></tr>
+        </tbody>
+      </table></div>
+      <p>* คิวรอรับบนเซิร์ฟเวอร์จริงมีลูกค้ารอตอบ 167 คน รายชื่อเลยหนักราว 120 KB ต่อครั้ง ตอนนี้ยังไม่ได้บีบอัด (ดูข้อ 1 ท้ายหัวข้อ)</p>
+
+      <h3>ช่วงพีค 8:00–9:00</h3>
+      <div class="tw"><table class="ntbl">
+        <thead><tr><th>กรณี</th><th class="n">คำขอ/วินาที</th><th class="n">CPU</th><th class="n">ข้อมูลออก</th></tr></thead>
+        <tbody>
+          <tr><td>ใช้กันปกติ (เปิดพร้อมกัน ~15 คน)</td><td class="n">~4</td><td class="n">~10%</td><td class="n">~0.9 Mbps</td></tr>
+          <tr><td>แย่สุด (60 คนเปิดหน้าแชทพร้อมกัน)</td><td class="n">~14–20</td><td class="n">~35%</td><td class="n">~3.4 Mbps</td></tr>
+          <tr><td>เช็คชื่อพร้อมกัน 10 คน (เซลฟี 0.3 MB)</td><td class="n">10</td><td class="n">ต่ำ</td><td class="n">รับเข้า ~2.4 Mbps</td></tr>
+        </tbody>
+      </table></div>
+      <p>ทั้งหมดไม่ถึง 1% ของพอร์ต ส่วนที่ตึงคือ <b>จำนวน worker</b> ตอนนี้มี 5 ตัว และการอัปรูปแต่ละรูปจองไว้ 2–3 วินาทีระหว่างส่งต่อไป Drive ถ้า 8 โมงเช้ามีคนอัปพร้อมกันเกิน 5 คน คนที่เปิดแชทจะรอนานขึ้นชั่วครู่ (เช็คชื่อจริงช่วง 8 โมงเฉลี่ยวันละ 19 คน จากข้อมูล 14 วัน)</p>
+
+      <h3>ทราฟฟิกต่อเดือน</h3>
+      <div class="tw"><table class="ntbl">
+        <thead><tr><th>รายการ</th><th class="n">ต่อวัน</th><th class="n">ต่อเดือน</th></tr></thead>
+        <tbody>
+          <tr><td>ดึงข้อมูล 200 ครั้ง × ~1.8 MB (5 นาที/ครั้ง)</td><td class="n">360 MB</td><td class="n">~11 GB</td></tr>
+          <tr><td>อัปรูป: เช็คชื่อ · เปลี่ยนสเตป · เบิกรถ · ส่งในแชท</td><td class="n">~100 MB</td><td class="n">~3 GB</td></tr>
+          <tr><td>ส่งรูปต่อไปเก็บใน Google Drive</td><td class="n">~90 MB</td><td class="n">~2.7 GB</td></tr>
+          <tr><td>แจ้งเตือน ~500 ครั้ง × ~1 KB</td><td class="n">&lt;1 MB</td><td class="n">~15 MB</td></tr>
+          <tr><td>ระบบเดิม (sync ชีต · โซเชียล · เว็บ)</td><td class="n">~2.2 GB</td><td class="n">~65 GB</td></tr>
+        </tbody>
+        <tfoot><tr><td>รวม</td><td class="n"></td><td class="n">~82 GB (~1% ของ 8 TB)</td></tr></tfoot>
+      </table></div>
+      <p>เน็ตมือถือของพนักงาน: ราว 7 MB ต่อคนต่อวัน (เฉลี่ยคนละ 4 ครั้ง) หรือ ~1.5 MB ถ้าเปิดบีบอัด (ข้อ 1) · แจ้งเตือนประเมินจากของจริง: ลูกค้าใหม่ ~15 คน/วัน ส่งให้ทีมเวร ~9 คน + เลยเวลา + ตามด่วน 2 รอบ + รถเข้าคิว + เคสรับซื้อ</p>
+
+      <h3>ค่าใช้จ่าย</h3>
+      <div class="tw"><table class="ntbl">
+        <thead><tr><th>รายการ</th><th class="n">ราคา</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr><td>Apple Developer Program</td><td class="n">US$99/ปี (~3,500 บาท)</td><td>จำเป็นสำหรับ iPhone และแจ้งเตือน</td></tr>
+          <tr><td>Google Play Console</td><td class="n">US$25 ครั้งเดียว (~900 บาท)</td><td>ถ้าใช้ Android</td></tr>
+          <tr><td>Expo EAS (build บนคลาวด์ ไม่ต้องมี Mac)</td><td class="n">ฟรี</td><td>15 iOS + 15 Android build/เดือน · คิวช้า</td></tr>
+          <tr><td>ส่งแจ้งเตือน (Expo · APNs · FCM)</td><td class="n">ฟรี</td><td>ส่งได้ 600 ครั้ง/วินาที</td></tr>
+          <tr><td>เซิร์ฟเวอร์ (Hostinger KVM 2 ตัวเดิม)</td><td class="n">ไม่เพิ่ม</td><td>ใช้ API เดิมทั้งหมด</td></tr>
+          <tr><td>พื้นที่ Google Drive เก็บรูป</td><td class="n">ฟรี 15 GB · 100 GB ~US$1.99/เดือน</td><td>รูป ~2.7 GB/เดือน ฟรีเต็มในราว 5 เดือน</td></tr>
+        </tbody>
+        <tfoot><tr><td>ปีแรกประมาณ</td><td class="n">~4,400 บาท</td><td>+ ค่า Drive ถ้ารูปเกิน 15 GB</td></tr></tfoot>
+      </table></div>
+      <p>อัตราแลกเปลี่ยนคิดราว 35 บาท/ดอลลาร์ · แจ้งเตือนในแอปยังช่วยลดโควต้าข้อความของ LINE OA ที่ใช้ส่งอยู่ตอนนี้ด้วย</p>
+
+      <h3>ควรปรับก่อนเปิดใช้จริง</h3>
+      <ol class="howto">
+        <li><b>บีบอัด JSON ที่ nginx</b> — ตอนนี้ตั้ง <code>gzip on</code> แต่บีบแค่ HTML ข้อมูลที่แอปดึงไม่ถูกบีบเลย เพิ่ม <code>gzip_types application/json;</code> บรรทัดเดียว ลดข้อมูลได้ราว 4–6 เท่า</li>
+        <li><b>เพิ่ม worker สำหรับช่วง 8 โมง</b> — เปลี่ยน gunicorn เป็น <code>--workers 5 --threads 4</code> (หรือเพิ่มเป็น 8 worker ใช้ RAM เพิ่ม ~0.8 GB จากที่ว่าง 5.6 GB) กันอัปรูปพร้อมกันแล้วคนอื่นรอ</li>
+        <li><b>ลดขนาดรายชื่อแชทที่ดึงทุก 10 วินาที</b> — ส่งเฉพาะแถวที่เปลี่ยน (หรือตอบ 304 ถ้าไม่มีอะไรใหม่) และหน้าแชทส่งเฉพาะข้อความใหม่ เมื่อมีแจ้งเตือนแล้วให้แจ้งเตือนเป็นตัวสั่งรีเฟรชแทนการดึงถี่</li>
+        <li><b>เตรียมพื้นที่เก็บรูป</b> — เช็คพื้นที่ Google Drive ของบัญชีที่เก็บรูป ถ้าเหลือน้อยกว่า 10 GB ควรซื้อ 100 GB ก่อนเปิดใช้</li>
+      </ol>
+      <p class="srcs">ตัวเลขเซิร์ฟเวอร์ ปริมาณแชท เช็คชื่อ และทราฟฟิก วัดจากเซิร์ฟเวอร์จริงช่วง 14 วันล่าสุด · เวลาประมวลผลวัดบนเครื่อง dev · แหล่งอ้างอิงราคา:
+        <a href="https://www.hostinger.com/vps-hosting" target="_blank" rel="noopener">Hostinger VPS</a> ·
+        <a href="https://expo.dev/pricing" target="_blank" rel="noopener">Expo pricing</a> ·
+        <a href="https://docs.expo.dev/push-notifications/faq/" target="_blank" rel="noopener">Expo push FAQ</a> ·
+        <a href="https://one.google.com/about/plans?hl=th" target="_blank" rel="noopener">Google One</a> ·
+        <a href="https://developer.apple.com/programs/" target="_blank" rel="noopener">Apple Developer Program</a></p>
+    </section>
+
+    <p class="fine">ชื่อลูกค้า เบอร์โทร รถ และตัวเลขทั้งหมดในต้นแบบนี้สมมติขึ้น กดส่งหรือบันทึกแล้วไม่มีอะไรออกไปจริง ฟีเจอร์ "มีแล้ว" คือมีในแอปทดลองหรือเว็บแล้ว "ข้อมูลมีแล้ว" คือเว็บมีข้อมูลกับ API อยู่ เหลือทำหน้าจอในแอป</p>
+  </section>
+
+  <div class="device">
+    <div class="screen" id="app"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var app = document.getElementById("app");
+  var ICON = {
+    chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+    qr: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM21 14v.01M14 21h.01M17 21h4v-4"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
+    search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>',
+    car: '<path d="M3 15l2-6h14l2 6v3H3z"/><path d="M5 9l1.5-3h11L19 9"/><circle cx="7.5" cy="18" r="1.8"/><circle cx="16.5" cy="18" r="1.8"/>',
+    home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    wrench: '<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17v3h3l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.4 2.4-2.6-.4-.4-2.6z"/>',
+    phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+    bell: '<path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+    chev: '<path d="M9 5l7 7-7 7"/>',
+    pin: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    out: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v6H4V6h6"/>',
+    check: '<path d="M5 12l5 5 9-10"/>',
+    tray: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/>',
+    cart: '<path d="M3 4h2l2.5 11h11L21 7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>'
+  };
+  function ic(n, cls) { return '<svg class="ic' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + "</svg>"; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function now() { var d = new Date(); return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); }
+  function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+
+  var NAME = { seller: "มัท", admin: "กวาง", worker: "ช่างเอก", buyer: "พี่หมี" };
+  var ROLE_LABEL = { seller: "เซลล์ · ทีม A", admin: "แอดมิน / ผู้บริหาร", worker: "ช่าง · ลานรถ", buyer: "จัดซื้อ" };
+  var WORK_START = { seller: "9:00", admin: "8:30", worker: "8:00", buyer: "9:00" };
+  var TABS = {
+    seller: [["home", "วันนี้", "home"], ["chat", "แชท", "chat"], ["cars", "รถ", "car"], ["me", "ฉัน", "user"]],
+    admin: [["home", "ภาพรวม", "grid"], ["chat", "แชท", "chat"], ["hub", "ห้องพัก", "tray"], ["cars", "รถ", "car"], ["me", "ฉัน", "user"]],
+    worker: [["home", "งานวันนี้", "wrench"], ["cars", "รถ", "car"], ["me", "ฉัน", "user"]],
+    buyer: [["home", "วันนี้", "cart"], ["cars", "รถ", "car"], ["me", "ฉัน", "user"]]
+  };
+  var SELLERS = ["มัท", "เฟิร์ส", "โอ๊ต", "นวล", "บิว", "อุ้ม", "เก้า"];
+  var TEAM_OF = { "มัท": "A", "เฟิร์ส": "A", "โอ๊ต": "A", "นวล": "B", "บิว": "B", "อุ้ม": "B", "เก้า": "B" };
+  var DUTY_TEAM = "A";
+  // ตัวหน้าเลขลีด (ชุดเดียวกับ CODE_BASES ของ Connect) · นำหน้า A = ลีดของแอดมินเอง · R = เคสรีเจ็ค
+  var CODE_BASES = [["NLD", "Moderate"], ["WLD", "Hot"], ["HLD", "Very Hot"], ["BLD", "BLD"], ["TLD", "TikTok"], ["TALD", "TikTokAds"]];
+  var SRC_NAME = { all: "ทั้งหมด", line: "LINE", fb: "Facebook", tt: "TikTok", other: "อื่นๆ" };
+  var Z_STATUS = ["สนใจมาก", "ลังเล", "ไม่รับสาย", "รอเงิน", "รอเช็คเครดิต", "จอง", "ลูกค้าไม่สนใจแล้ว"];
+  var BOOK_STATUS = ["จอง", "รอเซ็นต์", "รอผล", "รอปล่อย", "ปล่อย", "รีเจ็ก"];
+  var QUICK = ["สวัสดีครับ สนใจรุ่นไหนครับ", "ขอเบอร์โทรติดต่อกลับได้ไหมครับ", "ร้านเปิด 8:30–20:00 ทุกวันครับ", "เดี๋ยวส่งรูปเพิ่มให้นะครับ"];
+  var PURPOSES = ["ตรวจขนส่ง", "เข้าศูนย์", "ส่งลูกค้า", "ไฟแนนซ์", "ย้ายสาขา", "ไปดูรถ/รับรถเข้าใหม่", "งานทั่วไป"];
+  var ANG_OUT = ["ด้านซ้าย", "ด้านขวา", "ด้านหน้า", "ด้านหลัง", "ห้องเครื่อง", "เลขไมล์"];
+  var ANG_IN = ["รอบคัน", "เลขไมล์", "จุดที่มีปัญหา (ถ้ามี)"];
+  var PRIO = { very: ["ด่วนมาก", "var(--p-very)"], urgent: ["ด่วน", "var(--p-urgent)"], normal: ["ปกติ", "var(--p-normal)"], low: ["ไม่เร่ง", "var(--p-low)"] };
+  var PH = { recon: ["ทำสภาพ", "var(--ph-recon)"], sale: ["ขาย", "var(--ph-sale)"], release: ["ปล่อยรถ", "var(--ph-release)"] };
+  var STAGE = { intake: "รับเข้า", repair: "เช็คซ่อม", repair_done: "ซ่อมเสร็จรอตรวจ", parts: "สั่งของ/รออะไหล่", upholstery: "งานเบาะ",
+    wash_release: "ชงล้างรอปล่อย", qc_show: "รอ QC ตรวจ", show: "รถพร้อมขาย (ตรวจรถขึ้นโชว์)", reserve: "จอง", finance: "จัดไฟแนนซ์",
+    transport_check: "ตรวจขนส่ง", qc_release: "ตรวจรถรอปล่อย", release: "ปล่อยรถ (ส่งรูปปล่อยรถ)" };
+  var TEAM_STAGES = { worker: ["repair", "parts", "upholstery"] };
+  var BTNS = {
+    seller: [["wash_release", "ล้างรถรอปล่อย", "recon", "ฝ่ายล้างรถ"], ["qc_show", "ตีกลับ QC", "recon", "QC"],
+             ["show", "รถพร้อมขาย (ตรวจรถขึ้นโชว์)", "sale", "เซลล์"], ["reserve", "จอง", "sale", "เซลล์"],
+             ["finance", "จัดไฟแนนซ์", "sale", "เซลล์"], ["transport_check", "ตรวจขนส่ง", "sale", "เซลล์"],
+             ["qc_release", "ตรวจรถรอปล่อย", "release", "เซลล์"], ["release", "ปล่อยรถ (ส่งรูปปล่อยรถ)", "release", "เซลล์"]],
+    worker: [["repair_done", "ซ่อมเสร็จรอตรวจ", "recon", "ฝ่ายทะเบียน / QC"], ["parts", "สั่งของ/รออะไหล่", "recon", "ช่าง"],
+             ["upholstery", "งานเบาะ", "recon", "ช่าง"]],
+    buyer: []
+  };
+  BTNS.admin = BTNS.worker.concat(BTNS.seller);
+  var CHECK_STAGES = ["show", "qc_release", "release"];
+  var CHECK = ["สตาร์ทติดปกติ", "เครื่องยนต์เดินเรียบ ไม่มีไฟเตือน", "ขับขี่/เกียร์เปลี่ยนปกติ", "เบรคดี ช่วงล่างดี",
+               "ไฟหน้า/ท้าย/เลี้ยว ติดครบ", "แอร์เย็น", "วิทยุ/เครื่องเสียงดัง", "กระจกไฟฟ้า/เซ็นทรัลล็อกทำงาน",
+               "ที่ปัดน้ำฝน/ฉีดน้ำทำงาน", "ยางสภาพดี (ระบุปียางในโน้ต)", "ตรวจศูนย์ล้อแล้ว", "แบตเตอรี่สภาพดี",
+               "สีตัวถัง/ภายในเรียบร้อย", "ภาษี/พ.ร.บ. เรียบร้อย (ระบุปีในโน้ต)", "กุญแจสำรอง/เอกสารครบ"];
+
+  function seed() {
+    return {
+      cust: [
+        { id: 1, name: "คุณนิภา", src: "line", owner: "", awaiting: true, overdue: false, unread: true, code: "", phone: "", lineId: "", car: "Yaris Ativ ปี 21", budget: "ดาวน์ 30,000", status: "",
+          msgs: [{ dir: "in", at: "09:12", text: "สวัสดีค่ะ สนใจ Yaris Ativ ปี 21 คันที่ไลฟ์เมื่อคืนค่ะ" }, { dir: "in", at: "09:13", text: "ดาวน์ 30,000 ผ่อนเดือนละเท่าไหร่คะ" }] },
+        { id: 2, name: "Pond Chonburi", src: "line", owner: "", awaiting: true, overdue: true, unread: true, code: "", phone: "091-552-8830", lineId: "", car: "City ปี 19-20", budget: "ไม่เกิน 4 แสน", status: "",
+          msgs: [{ dir: "in", at: "08:41", text: "มี City ปี 19-20 สีขาวไหมครับ งบไม่เกิน 4 แสน" }, { dir: "in", at: "08:44", text: "เบอร์ 091-552-8830 ครับ โทรกลับได้เลย" }] },
+        { id: 3, name: "คุณวรรณ", src: "line", owner: "มัท", awaiting: true, overdue: true, unread: true, code: "NLD10-8412", phone: "089-551-2043", lineId: "wan.s88", car: "Civic FC สีเทา", budget: "ผ่อนไหว 9,000", status: "สนใจมาก",
+          msgs: [{ dir: "in", at: "เมื่อวาน 18:20", text: "ขอดูรูปภายใน Civic FC คันสีเทาหน่อยค่ะ" }, { dir: "out", at: "เมื่อวาน 18:31", text: "ได้เลยครับ เดี๋ยวผมถ่ายส่งให้นะครับ", by: "มัท" }, { dir: "in", at: "08:05", text: "พรุ่งนี้เข้าไปดูรถได้กี่โมงคะ" }] },
+        { id: 4, name: "Jirawat", src: "line", owner: "มัท", awaiting: false, overdue: false, unread: false, code: "TLD10-8398", phone: "086-220-7781", lineId: "", car: "City 1.0 Turbo", budget: "", status: "จอง",
+          msgs: [{ dir: "in", at: "เมื่อวาน 14:02", text: "ผ่านไฟแนนซ์แล้วใช่ไหมครับ" }, { dir: "out", at: "เมื่อวาน 14:10", text: "ผ่านแล้วครับ นัดรับรถวันเสาร์ 10 โมงได้เลยครับ", by: "มัท" }] },
+        { id: 5, name: "คุณอารีย์", src: "fb", owner: "บิว", awaiting: true, overdue: false, unread: true, code: "", phone: "", lineId: "", car: "HRV", budget: "", status: "",
+          msgs: [{ dir: "in", at: "09:20", text: "สนใจ HRV ในโพสต์ค่ะ ยังอยู่ไหมคะ" }] }
+      ],
+      leads: [
+        { id: 1, name: "คุณกิตติ", phone: "081-402-7719", car: "Fortuner 2.4 V", type: "Hot", reason: "ยังไม่โทรเลย", calls: 0, status: "", hot: true },
+        { id: 2, name: "คุณสุดา", phone: "092-118-3360", car: "Yaris Cross", type: "Very Hot", reason: "ฮอทแต่ค้าง 4 วัน", calls: 2, status: "ลังเล", hot: true },
+        { id: 3, name: "Beam", phone: "064-775-9012", car: "Civic FE", type: "Moderate", reason: "ค้าง 3 วัน", calls: 1, status: "รอเงิน" },
+        { id: 4, name: "คุณประเสริฐ", phone: "087-903-4421", car: "D-Max Cab", type: "TLD", reason: "ลูกค้าสนใจมาก", calls: 3, status: "สนใจมาก" }
+      ],
+      deals: [
+        { id: 1, name: "คุณมานพ", car: "Altis 1.8 Hybrid 2020", status: "รอผล", days: 6, fin: "KK" },
+        { id: 2, name: "คุณศิริพร", car: "Mazda 2 Skyactiv 2019", status: "รอปล่อย", days: 4, fin: "TTB" },
+        { id: 3, name: "คุณชาตรี", car: "Ranger Wildtrak 2018", status: "รอเซ็นต์", days: 5, fin: "AY" }
+      ],
+      cars: {
+        CS0011: { code: "CS0011", title: "Toyota Yaris Ativ 1.2 Premium 2021", plate: "1กข 1234", price: "429,000", stage: "show", days: 2, prio: "normal", flags: [], out: null,
+          logs: [{ stage: "รถพร้อมขาย (ตรวจรถขึ้นโชว์)", who: "นวล", at: "07/10 16:40", dur: "อยู่มาแล้ว 2 วัน", note: "[ตรวจรถ] ✅ ผ่าน: 15 ข้อ", n: 4 }] },
+        CS0027: { code: "CS0027", title: "Honda City 1.0 Turbo SV 2020", plate: "2กค 5678", price: "459,000", stage: "repair", days: 4, prio: "urgent", flags: ["รอเปลี่ยนยาง"], out: null,
+          logs: [{ stage: "เช็คซ่อม", who: "ฝ่ายทะเบียน แนน", at: "05/10 09:30", dur: "อยู่มาแล้ว 4 วัน", note: "ช่วงล่างมีเสียง เช็คโช้คหน้า", n: 2 }] },
+        CS0033: { code: "CS0033", title: "Toyota Vios 1.5 Entry 2019", plate: "3กง 4521", price: "319,000", stage: "repair", days: 9, prio: "very", flags: [], out: null,
+          logs: [{ stage: "เช็คซ่อม", who: "ฝ่ายทะเบียน แนน", at: "30/09 10:05", dur: "อยู่มาแล้ว 9 วัน", note: "แอร์ไม่เย็น ลูกค้าจองรอรับ", n: 3 }] },
+        CS0041: { code: "CS0041", title: "Mazda 2 1.3 Skyactiv 2019", plate: "4กจ 8810", price: "339,000", stage: "parts", days: 6, prio: "normal", flags: [], out: null,
+          logs: [{ stage: "สั่งของ/รออะไหล่", who: "ช่างเอก", at: "03/10 13:20", dur: "อยู่มาแล้ว 6 วัน", note: "รอไฟท้ายซ้าย", n: 1 }] },
+        CS0052: { code: "CS0052", title: "Toyota Fortuner 2.4 V 2018", plate: "5กฉ 2299", price: "869,000", stage: "show", days: 12, prio: "normal", flags: [],
+          out: { who: "บิว", why: "ตรวจขนส่ง", where: "ขนส่งชลบุรี", since: "10:20" },
+          logs: [{ stage: "เบิกรถออก · ตรวจขนส่ง", who: "บิว", at: "วันนี้ 10:20", dur: "", note: "ถ่ายครบ 6 มุม", n: 6 }] },
+        CS0058: { code: "CS0058", title: "Honda Civic 1.8 EL (FC) 2017", plate: "6กช 7731", price: "559,000", stage: "show", days: 1, prio: "normal", flags: [], out: null,
+          logs: [{ stage: "รถพร้อมขาย (ตรวจรถขึ้นโชว์)", who: "อุ้ม", at: "08/10 11:15", dur: "อยู่มาแล้ว 1 วัน", note: "", n: 5 }] }
+      },
+      buy: [
+        { id: 1, code: "OC-7657", model: "Mazda 2 ปี 2018", ch: "Line@", km: "98,000", days: 1, called: false, comment: "", phone: "083-661-2390" },
+        { id: 2, code: "OC-7652", model: "Honda City ปี 2019", ch: "TikTok", km: "72,000", days: 2, called: false, comment: "", phone: "095-210-4478" },
+        { id: 3, code: "OC-7644", model: "Isuzu D-Max ปี 2016", ch: "เพจบ้านเก่า", km: "160,000", days: 3, called: true, comment: "นัดดูรถเสาร์นี้", phone: "081-773-0915" },
+        { id: 4, code: "SC-1302", model: "Toyota Yaris ปี 2020", ch: "Line@", km: "55,000", days: 4, called: false, comment: "", phone: "062-448-1187" }
+      ],
+      gap: [["Altis", 48, 0, 0], ["Yaris Cross", 41, 0, 1], ["Civic FE", 33, 0, 2], ["City 5 ประตู", 30, 2, 1], ["Corolla Cross", 27, 3, 0]],
+      hub: [
+        { id: 1, kind: "draft", src: "tt", acc: "@carlover_99", name: "", lineId: "", phone: "095-118-7721", ch: "TikTok ช่องขายบอส", car: "Fortuner", live: "Live Sale", ads: "ออแกนิก", more: "งบ 7 แสน ดาวน์ 1 แสน", wait: 12, base: "TLD" },
+        { id: 2, kind: "chat", chatId: 2, src: "line", acc: "Pond Chonburi", name: "", lineId: "", phone: "091-552-8830", ch: "Line@", car: "City ปี 19-20", live: "", ads: "", more: "งบไม่เกิน 4 แสน", wait: 38, base: "NLD" },
+        { id: 3, kind: "draft", src: "fb", acc: "Somchai K.", name: "คุณสมชาย", lineId: "", phone: "088-902-1145", ch: "เพจบ้านเก่า", car: "City ปี 20", live: "", ads: "City ผ่อน 6,900", more: "", wait: 31, base: "NLD" },
+        { id: 4, kind: "draft", src: "tt", acc: "@beer_rider", name: "", lineId: "beer.r", phone: "064-220-3381", ch: "TikTokAds", car: "D Max", live: "", ads: "D-Max ผ่อน 6 พัน", more: "มีรถเก่าจะเทิร์น", wait: 47, base: "TALD" },
+        { id: 5, kind: "draft", src: "other", acc: "เบอร์กลาง", name: "คุณวิไล", lineId: "", phone: "082-117-4409", ch: "โทรเข้าเบอร์กลาง", car: "Yaris Cross", live: "", ads: "", more: "อยากได้สีขาว", wait: 8, base: "WLD" },
+        { id: 6, kind: "draft", src: "line", acc: "Mint", name: "", lineId: "mint.pp", phone: "", ch: "Line@", car: "ไม่ระบุรุ่น", live: "", ads: "", more: "", wait: 4, base: "NLD" }
+      ],
+      assigned: [
+        { code: "NLD10-8420", to: "นวล", by: "กวาง", at: "09:20", how: "จ่ายจากระบบ", src: "fb", acc: "Tanakorn", post: "ส่งเข้า ห้องจ่ายเบอร์ บ้านเก่า แล้ว · แท็ก @นวล" },
+        { code: "TLD10-8419", to: "มัท", by: "เฟิร์น", at: "09:05", how: "ใบในห้องจ่ายเบอร์", src: "tt", acc: "@nong.car" },
+        { code: "OC-7657", to: "พี่หมี", by: "หมิว", at: "09:05", how: "ส่งจัดซื้อ · เคสHOT (พี่หมี)", src: "line", acc: "New_matter", buy: true },
+        { code: "NLD10-8418", to: "นวล", by: "กวาง", at: "08:42", how: "จ่ายจากระบบ", src: "line", acc: "คุณพร", post: "ส่งเข้า ห้องจ่ายเบอร์ บ้านเก่า แล้ว · แท็ก @นวล" }
+      ],
+      hidden: [],
+      checkin: { seller: null, admin: "08:12", worker: null, buyer: "08:47" },
+      team: { came: 38, late: 3, total: 45, missing: ["เก้า", "ทู", "ฟิล์ม", "ภู"] },
+      notifSeen: false,
+      prefs: { queue: true, overdue: true, follow: true, stage: true, buy: true },
+      run: 8421
+    };
+  }
+
+  var S;
+  function reset(role, toMain) {
+    S = { role: role || "seller", screen: toMain ? "main" : "login", tab: "home", stack: [], sheet: null, view: "queue", q: "", carq: "", carSeg: "ready",
+          confirmed: {}, pick: null, note: "", shots: [], chk: {}, co: null, ckShot: null, hubSeg: "wait", hubSrc: "all", hubWho: "", asg: null, D: seed() };
+    document.querySelectorAll(".roles button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.role === S.role)); });
+    render();
+  }
+  function me() { return NAME[S.role]; }
+  function canChat() { return S.role === "seller" || S.role === "admin"; }
+  function cust(id) { return byId(S.D.cust, id); }
+
+  /* ── counts ── */
+  function inView(c, v) {
+    if (v === "queue") return !c.owner && c.awaiting;
+    if (v === "mine") return c.owner === me();
+    if (v === "owned") return !!c.owner;
+    return true;
+  }
+  function count(v) { return S.D.cust.filter(function (c) { return inView(c, v); }).length; }
+  function srcKey(x) { return x === "line" || x === "fb" || x === "tt" ? x : "other"; }
+  function hubWaiting() { return S.D.hub.filter(function (x) { return !x.temp; }); }
+  function chatBadge() {
+    var q = count("queue");
+    if (S.role === "admin") return q;
+    return q + S.D.cust.filter(function (c) { return c.owner === me() && c.awaiting; }).length;
+  }
+  function notifs() {
+    var R = S.role, list;
+    if (R === "seller") list = [
+      { i: "chat", t: "ลูกค้าใหม่ในคิว", b: "Pond Chonburi: มี City ปี 19-20 ไหมครับ", at: "08:41", go: ["chat", 2] },
+      { i: "clock", t: "เลยเวลาตอบ 5 นาที", b: "คุณวรรณ รอคำตอบอยู่", at: "08:10", go: ["chat", 3] },
+      { i: "phone", t: "ตามด่วน 09:00", b: "ยังไม่โทร 1 · ต้องตามต่อ 3 · ดีลค้าง 3", at: "09:00", go: ["tab", "home"] }];
+    else if (R === "admin") list = [
+      { i: "tray", t: "ลีดรอจ่ายเบอร์เกิน 30 นาที", b: "@beer_rider (TikTokAds) · Pond Chonburi (LINE) · Somchai K. (Facebook)", at: "09:31", go: ["tab", "hub"] },
+      { i: "clock", t: "เลยเวลา 5 นาที · ยังไม่มีคนรับ", b: "Pond Chonburi ทักเข้า LINE OA", at: "08:46", go: ["chat", 2] },
+      { i: "user", t: "ยังไม่เช็คชื่อ 4 คน", b: "เก้า · ทู · ฟิล์ม · ภู", at: "09:30", go: ["tab", "home"] },
+      { i: "car", t: "รถค้างนาน", b: "3กง 4521 Vios เช็คซ่อม 9 วัน", at: "09:00", go: ["car", "CS0033"] }];
+    else if (R === "worker") list = [
+      { i: "car", t: "รถเข้าคิวทีมช่าง · ด่วนมาก", b: "3กง 4521 Toyota Vios — แอร์ไม่เย็น ลูกค้ารอรับ", at: "08:05", go: ["car", "CS0033"] },
+      { i: "user", t: "ยังไม่เช็คชื่อเข้างาน", b: "เข้างาน 8:00", at: "08:00", go: ["checkin"] }];
+    else list = [
+      { i: "cart", t: "เคสรับซื้อใหม่ → @พี่หมี", b: "OC-7657 Mazda 2 ปี 2018 · Line@", at: "09:05", go: ["buy", 1] },
+      { i: "phone", t: "ยังไม่ได้โทร 3 เคส", b: "ค้างใน 7 วันล่าสุด", at: "09:00", go: ["tab", "home"] }];
+    return list;
+  }
+
+  /* ── frame pieces ── */
+  function sbar() { return '<div class="sbar"><span>9:41</span><span class="notch"></span><span>5G</span></div>'; }
+  function header(v) {
+    var left = v.back ? '<button class="hbtn" data-act="back">' + ic("back") + "กลับ</button>" : "";
+    return '<div class="hdr"><div class="side">' + left + "</div><h2>" + esc(v.title) + '</h2><div class="side r">' + (v.right || "") + "</div></div>";
+  }
+  function bell() {
+    var n = S.D.notifSeen ? 0 : notifs().length;
+    return '<button class="hbtn" data-act="go" data-go="notif" aria-label="การแจ้งเตือน">' + ic("bell") + (n ? '<span class="badge">' + n + "</span>" : "") + "</button>";
+  }
+  function tabbar() {
+    return '<nav class="tabbar">' + TABS[S.role].map(function (x) {
+      var b = x[0] === "chat" ? chatBadge() : x[0] === "hub" ? hubWaiting().length : 0;
+      return '<button class="' + (S.tab === x[0] ? "on" : "") + '" data-act="tab" data-t="' + x[0] + '">' + ic(x[2]) + esc(x[1]) +
+        (b ? '<span class="badge">' + b + "</span>" : "") + "</button>";
+    }).join("") + "</nav>";
+  }
+  function srcTag(s) { return s === "fb" ? '<span class="tag fb">Facebook</span>' : s === "tt" ? '<span class="tag tt">TikTok</span>' : '<span class="tag line">LINE</span>'; }
+  function li(act, attrs, title, desc, left, right) {
+    return '<button class="li" data-act="' + act + '" ' + attrs + ">" + (left || "") + '<span class="m"><span class="t">' + title + '</span><span class="d">' + desc + "</span></span>" +
+      (right || "") + '<span class="chev">' + ic("chev", "s") + "</span></button>";
+  }
+  function checkinCard() {
+    var t = S.D.checkin[S.role];
+    if (t) return "";
+    return '<div class="banner warn" style="display:flex;align-items:center;gap:10px"><span style="flex:1">ยังไม่เช็คชื่อเข้างานวันนี้ (เข้างาน ' + WORK_START[S.role] +
+      ')</span><button class="btn small" style="width:auto" data-act="go" data-go="checkin">เช็คชื่อ</button></div>';
+  }
+
+  /* ── tab views ── */
+  function vHome() {
+    var R = S.role;
+    if (R === "seller") return { title: "วันนี้", right: bell(), body: homeSeller() };
+    if (R === "admin") return { title: "ภาพรวมวันนี้", right: bell(), body: homeAdmin() };
+    if (R === "worker") return { title: "งานวันนี้", right: bell(), body: homeWorker() };
+    return { title: "งานจัดซื้อวันนี้", right: bell(), body: homeBuyer() };
+  }
+  function homeSeller() {
+    var D = S.D, waiting = D.cust.filter(function (c) { return c.owner === me() && c.awaiting; });
+    var h = '<div class="pad"><div><div style="font-size:20px;font-weight:800">สวัสดี มัท</div><div class="sub">ทีม A · วันนี้เวรทีม A รับลูกค้าใหม่ได้</div></div>' + checkinCard() +
+      '<div class="kpis"><div class="kpi"><b>46</b><span>ลีดเดือนนี้</span></div><div class="kpi"><b>9</b><span>จองเดือนนี้</span></div>' +
+      '<div class="kpi"><b>5 / 8</b><span>ปล่อย / เป้า</span></div><div class="kpi"><b>72</b><span>คะแนน · อันดับ 3 จาก 14</span></div></div>';
+    h += '<div class="card"><div class="sect"><h4>ลูกค้าในแชทรอตอบ</h4><button class="link" data-act="tab" data-t="chat">ไปที่แชท</button></div>';
+    var q = count("queue");
+    h += waiting.length || q ? waiting.map(function (c) {
+      return li("open", 'data-id="' + c.id + '"', esc(c.name), esc(c.msgs[c.msgs.length - 1].text), '<span class="pdot" style="background:' + (c.overdue ? "var(--red)" : "var(--amber)") + '"></span>',
+        c.overdue ? '<span class="tag red">เลยเวลา</span>' : "");
+    }).join("") + (q ? li("tab", 'data-t="chat"', "คิวรอรับ " + q + " คน", "วันนี้เวรทีม A — กดรับก่อนได้ก่อน", "", '<span class="tag amber">คิว</span>') : "") : '<div class="sub">ไม่มีลูกค้ารอตอบ</div>';
+    h += '</div><div class="card"><div class="sect"><h4>ตามด่วน — โทรก่อน</h4><span class="sub">' + D.leads.length + " ราย</span></div>";
+    h += D.leads.map(function (l) {
+      return li("lead", 'data-id="' + l.id + '"', esc(l.name) + ' <span class="sub">· ' + esc(l.car) + "</span>", "ด่วนเพราะ: " + esc(l.reason) + " · โทรแล้ว " + l.calls + " ครั้ง",
+        "", '<span class="tag ' + (l.hot ? "red" : "grey") + '">' + esc(l.type) + "</span>");
+    }).join("");
+    h += '</div><div class="card"><div class="sect"><h4>ดีลค้าง — ดันต่อ</h4></div>';
+    h += D.deals.map(function (d) {
+      return li("deal", 'data-id="' + d.id + '"', esc(d.name) + ' <span class="sub">· ' + esc(d.car) + "</span>", esc(d.status) + " ค้าง " + d.days + " วัน · ไฟแนนซ์ " + esc(d.fin),
+        "", '<span class="tag amber">' + esc(d.status) + "</span>");
+    }).join("");
+    return h + "</div></div>";
+  }
+  function homeAdmin() {
+    var D = S.D, q = count("queue"), od = D.cust.filter(function (c) { return c.awaiting && c.overdue; }).length, T = D.team;
+    var h = '<div class="pad"><div class="kpis"><div class="kpi"><b>79</b><span>ลีดเข้าวันนี้</span></div><div class="kpi"><b>6</b><span>จองวันนี้</span></div>' +
+      '<div class="kpi"><b>3</b><span>ปล่อยวันนี้ · ฿1.38M</span></div><div class="kpi' + (od ? " alert" : "") + '"><b>' + q + " / " + od + "</b><span>แชทรอรับ / เลยเวลา</span></div></div>";
+    var W = hubWaiting().slice().sort(function (a, b) { return b.wait - a.wait; }), late = W.filter(function (x) { return x.wait > 30; }).length;
+    h += '<div class="card"><div class="sect"><h4>ห้องพัก Lead · รอจ่ายเบอร์ ' + W.length + '</h4><button class="link" data-act="tab" data-t="hub">ดูทั้งหมด</button></div>' +
+      (late ? '<div class="banner err">รอเกิน 30 นาที ' + late + " ราย</div>" : "") +
+      W.slice(0, 3).map(function (x) { return li("hubopen", 'data-id="' + x.id + '"', esc(x.acc) + ' <span class="sub">· ' + esc(x.car || "-") + "</span>", "รอ " + x.wait + " นาที · " + esc(x.ch), "", srcTag(x.src)); }).join("") +
+      '<div class="sub" style="padding-top:6px">จ่ายแล้ววันนี้ ' + D.assigned.length + " ราย</div>";
+    h += '</div><div class="card"><div class="sect"><h4>เช็คชื่อเข้างาน</h4><span class="sub">' + (T.came) + "/" + T.total + " คน</span></div>" +
+      '<div class="pbar"><i style="width:' + ((T.came - T.late) / T.total * 100) + '%;background:var(--green)"></i><i style="width:' + (T.late / T.total * 100) + '%;background:var(--amber)"></i><i style="width:' + (T.missing.length / T.total * 100) + '%;background:var(--red)"></i></div>' +
+      '<div class="legend"><span><em style="background:var(--green)"></em>ตรงเวลา ' + (T.came - T.late) + '</span><span><em style="background:var(--amber)"></em>สาย ' + T.late + '</span><span><em style="background:var(--red)"></em>ยังไม่มา ' + T.missing.length + "</span></div>" +
+      '<div class="sub">ยังไม่เช็คชื่อ: ' + T.missing.map(esc).join(" · ") + "</div></div>";
+    var slow = Object.keys(D.cars).map(function (k) { return D.cars[k]; }).filter(function (c) { return c.days >= 6; });
+    h += '<div class="card"><div class="sect"><h4>รถค้างนาน</h4><span class="sub">' + slow.length + " คัน</span></div>" + slow.map(function (c) {
+      return li("car", 'data-code="' + c.code + '"', esc(c.plate) + ' <span class="sub">· ' + esc(c.title) + "</span>", esc(STAGE[c.stage]) + " " + c.days + " วัน", '<span class="pdot" style="background:' + PRIO[c.prio][1] + '"></span>', "");
+    }).join("") + "</div></div>";
+    return h;
+  }
+  function homeWorker() {
+    var D = S.D, cars = Object.keys(D.cars).map(function (k) { return D.cars[k]; }).filter(function (c) { return TEAM_STAGES.worker.indexOf(c.stage) >= 0; });
+    var order = { very: 0, urgent: 1, normal: 2, low: 3 };
+    cars.sort(function (a, b) { return order[a.prio] - order[b.prio] || b.days - a.days; });
+    var h = '<div class="pad">' + checkinCard() + '<button class="scanbig" data-act="go" data-go="scan">' + ic("qr") + "<span><b>สแกน QR ที่รถ</b><span>เปลี่ยนสเตป · ถ่ายรูป · เบิก-คืนรถ</span></span></button>";
+    h += '<div class="card"><div class="sect"><h4>รถในคิวทีมช่าง</h4><span class="sub">' + cars.length + " คัน</span></div>" + cars.map(function (c) {
+      return li("car", 'data-code="' + c.code + '"', esc(c.plate) + ' <span class="sub">· ' + esc(c.title) + "</span>", esc(STAGE[c.stage]) + " " + c.days + " วัน" + (c.flags.length ? " · " + esc(c.flags.join(", ")) : ""),
+        '<span class="pdot" style="background:' + PRIO[c.prio][1] + '"></span>', '<span class="tag" style="background:' + PRIO[c.prio][1] + ';color:var(--white)">' + PRIO[c.prio][0] + "</span>");
+    }).join("") + "</div>";
+    var mine = Object.keys(D.cars).map(function (k) { return D.cars[k]; }).filter(function (c) { return c.out && c.out.who === me(); });
+    if (mine.length) h += '<div class="card"><h4>รถที่ฉันเบิกอยู่</h4>' + mine.map(function (c) { return li("car", 'data-code="' + c.code + '"', esc(c.plate), esc(c.out.why) + " · ตั้งแต่ " + esc(c.out.since), "", '<span class="tag amber">ยังไม่คืน</span>'); }).join("") + "</div>";
+    return h + "</div>";
+  }
+  function homeBuyer() {
+    var D = S.D, notCalled = D.buy.filter(function (b) { return !b.called; }).length;
+    var h = '<div class="pad">' + checkinCard() + '<div class="kpis"><div class="kpi"><b>' + D.buy.length + '</b><span>เคสค้าง 7 วัน</span></div><div class="kpi' + (notCalled ? " alert" : "") + '"><b>' + notCalled +
+      '</b><span>ยังไม่ได้โทร</span></div></div><div class="card"><div class="sect"><h4>โทรก่อน</h4><span class="sub">เรียงยังไม่ได้โทร → รุ่นขาดตลาด → ค้างนาน</span></div>';
+    var list = D.buy.slice().sort(function (a, b) { return (a.called - b.called) || b.days - a.days; });
+    h += list.map(function (b) {
+      return li("buy", 'data-id="' + b.id + '"', esc(b.code) + ' <span class="sub">· ' + esc(b.model) + "</span>", esc(b.ch) + " · ค้าง " + b.days + " วัน" + (b.comment ? " · " + esc(b.comment) : ""),
+        "", b.called ? '<span class="tag green">คุยแล้ว</span>' : '<span class="tag red">ยังไม่ได้โทร</span>');
+    }).join("");
+    h += '</div><div class="card"><h4>รถที่ขาดตลาด</h4><div class="sub">ลูกค้าถามหาเยอะ แต่ของในลานน้อย — ควรหาเข้าก่อน</div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>รุ่น</th><th class="n">ถามหา</th><th class="n">พร้อมขาย</th><th class="n">เพิ่งรับเข้า</th></tr></thead><tbody>' +
+      D.gap.map(function (g) { return "<tr><td>" + esc(g[0]) + '</td><td class="n">' + g[1] + '</td><td class="n">' + g[2] + '</td><td class="n">' + g[3] + "</td></tr>"; }).join("") + "</tbody></table></div></div></div>";
+    return h;
+  }
+
+  /* ── ห้องพัก Lead (แอดมิน) ── */
+  function hubLabel(x) { return x.kind === "chat" ? (x.src === "fb" ? "แชท Facebook" : "แชท LINE OA") : "ใบร่างจากกลุ่ม ADMIN เก็บ Lead"; }
+  function hubCard(x) {
+    return '<button class="hcard" data-act="hubopen" data-id="' + x.id + '"><span class="hrow">' + srcTag(x.src) + '<span class="sub" style="flex:1">' + hubLabel(x) +
+      '</span><span class="wait' + (x.wait > 30 ? " red" : "") + '">รอ ' + x.wait + " นาที</span></span><b>" + esc(x.acc) + (x.name ? ' <span class="sub">· ' + esc(x.name) + "</span>" : "") +
+      '</b><span class="sub">' + esc(x.car || "-") + " · " + esc(x.phone || (x.lineId ? "ID LINE " + x.lineId : "-")) + '</span><span class="hrow"><span class="tag">แนะนำ ' + esc(x.base) +
+      '</span><span class="tag grey">' + esc(x.ch) + "</span></span></button>";
+  }
+  function doneCard(x) {
+    return '<div class="hcard done"><span class="hrow">' + srcTag(x.src) + '<span class="tag ' + (x.buy ? "amber" : "green") + '">' + esc(x.code) + '</span><span class="sub" style="margin-left:auto">' +
+      esc(x.at) + "</span></span><b>" + esc(x.acc) + '</b><span class="sub">' + (x.buy ? "ส่งจัดซื้อ" : "จ่ายให้") + ' <b style="color:var(--purple)">@' + esc(x.to) + "</b> · โดย " + esc(x.by) +
+      " · " + esc(x.how) + "</span>" + (x.post ? '<span class="sub" style="color:var(--green)">' + esc(x.post) + "</span>" : "") + "</div>";
+  }
+  function vHub() {
+    var D = S.D, wait = hubWaiting(), done = D.assigned, list = S.hubSeg === "wait" ? wait : done;
+    var h = '<div class="segs"><button class="' + (S.hubSeg === "wait" ? "on" : "") + '" data-act="hubseg" data-v="wait">รอจ่ายเบอร์ ' + wait.length + '</button><button class="' +
+      (S.hubSeg === "done" ? "on" : "") + '" data-act="hubseg" data-v="done">จ่ายแล้ววันนี้ ' + done.length + "</button></div>";
+    h += '<div class="hchips">' + ["all", "line", "fb", "tt", "other"].map(function (k) {
+      var n = k === "all" ? list.length : list.filter(function (x) { return srcKey(x.src) === k; }).length;
+      return '<button class="chipbtn' + (S.hubSrc === k ? " on" : "") + '" data-act="hubsrc" data-v="' + k + '">' + SRC_NAME[k] + " " + n + "</button>";
+    }).join("") + "</div>";
+    var rows = list.filter(function (x) { return S.hubSrc === "all" || srcKey(x.src) === S.hubSrc; });
+    if (S.hubSeg === "wait") {
+      rows = rows.slice().sort(function (a, b) { return b.wait - a.wait; });
+      h += '<div class="pad" style="padding-top:0">' + (rows.length ? rows.map(hubCard).join("") : '<div class="empty">ไม่มีลีดรอจ่ายเบอร์</div>');
+      if (D.hidden.length) h += '<button class="link" style="align-self:flex-start" data-act="sheet" data-s="hidden">ซ่อนไว้ ' + D.hidden.length + " ราย (ไม่ใช่ลีดขาย) · ดู/เอากลับ</button>";
+      h += '<div class="sub">ลีดเข้าห้องพักเอง 2 ทาง: ลูกค้าในแชท LINE/Facebook ที่ให้เบอร์หรือ ID LINE แล้ว และใบร่างที่แอดมินพักไว้ในกลุ่ม "ADMIN เก็บ Lead" (TikTok · เบอร์กลาง ฯลฯ) · เรียงรอนานสุดก่อน เกิน 30 นาทีขึ้นสีแดง · จ่ายแล้วหายจากรายการเอง</div></div>';
+    } else {
+      var who = {}, order = [];
+      rows.forEach(function (x) { if (!who[x.to]) { who[x.to] = 0; order.push(x.to); } who[x.to] += 1; });
+      h += '<div class="hchips" style="padding-top:0">' + order.map(function (k) {
+        return '<button class="chipbtn' + (S.hubWho === k ? " on" : "") + '" data-act="hubwho" data-v="' + esc(k) + '">@' + esc(k) + " " + who[k] + "</button>"; }).join("") + "</div>";
+      if (S.hubWho) rows = rows.filter(function (x) { return x.to === S.hubWho; });
+      h += '<div class="pad" style="padding-top:0">' + (rows.length ? rows.map(doneCard).join("") : '<div class="empty">ยังไม่มี</div>') + "</div>";
+    }
+    return { title: "ห้องพัก Lead", right: bell(), body: h };
+  }
+  function codeOf(a) { return (a.r ? "R" : "") + (a.a ? "A" : "") + a.base + "10-" + S.D.run; }
+  function roomOf(a) { return a.r ? "ห้องจ่ายเบอร์ REJECT" : "ห้องจ่ายเบอร์ บ้านเก่า"; }
+  function slipText(x, a) {
+    return ["Ac Lead No. " + codeOf(a), "Ads : " + (x.ads || "-"), "ชื่อ Account: " + (x.acc || "-"), "ชื่อลูกค้า : " + (x.name || "-"),
+      "ID LINE : " + (x.lineId || "-"), "ชื่อไลน์ : " + (x.kind === "chat" && x.src === "line" ? x.acc : "-"), "เบอร์โทร : " + (x.phone || "-"),
+      "ช่องทาง : " + (x.ch || "-"), "รถ : " + (x.car || "-"), "ไลฟ์ : " + (x.live || "-"), "เพิ่มเติม : " + (x.more || "-"), "@" + (a.who || "เซลล์")].join("\n");
+  }
+  function vHubItem(top) {
+    var x = byId(S.D.hub, top.id), a = S.asg;
+    var h = '<div class="pad"><div class="card"><div class="hrow">' + srcTag(x.src) + '<span class="sub" style="flex:1">' + hubLabel(x) + '</span><span class="wait' + (x.wait > 30 ? " red" : "") +
+      '">รอ ' + x.wait + ' นาที</span></div><div class="fld">' + [["ชื่อ Account", x.acc], ["ชื่อลูกค้า", x.name], ["เบอร์โทร", x.phone], ["ID LINE", x.lineId], ["ช่องทาง", x.ch],
+      ["รถ", x.car], ["Ads", x.ads], ["ไลฟ์", x.live], ["เพิ่มเติม", x.more]].map(function (f) { return "<span>" + f[0] + "</span><b>" + esc(f[1] || "-") + "</b>"; }).join("") + "</div>" +
+      (x.kind === "chat" ? '<button class="btn small outline" data-act="open" data-id="' + x.chatId + '">' + ic("chat", "s") + "เปิดแชทลูกค้า</button>" : "") + "</div>";
+    h += '<div class="card"><h4>จ่ายเบอร์</h4><div class="lab">ตัวหน้า</div><div class="chips">' + CODE_BASES.map(function (b) {
+      return '<button class="chipbtn' + (a.base === b[0] ? " on" : "") + '" data-act="hbase" data-v="' + b[0] + '">' + b[0] + ' <span style="opacity:.75;font-size:12px">' + b[1] + "</span></button>"; }).join("") + "</div>" +
+      '<label class="chk"><span>A · ลีดของแอดมินเอง</span><span class="sw neutral"><input type="checkbox" id="hA"' + (a.a ? " checked" : "") + "><i></i></span></label>" +
+      '<label class="chk"><span>R · เคสรีเจ็ค (ส่งห้อง REJECT)</span><span class="sw neutral"><input type="checkbox" id="hR"' + (a.r ? " checked" : "") + "><i></i></span></label>" +
+      '<div class="lab">จ่ายให้เซลล์ <span class="sub" style="font-weight:400">· วันนี้เวรทีม ' + DUTY_TEAM + '</span></div><div class="chips">' + SELLERS.map(function (n) {
+        return '<button class="chipbtn' + (a.who === n ? " on" : "") + '" data-act="hwho" data-v="' + n + '">' + n + ' <span style="opacity:.7;font-size:12px">ทีม ' + TEAM_OF[n] +
+          (TEAM_OF[n] === DUTY_TEAM ? " · เวร" : "") + "</span></button>"; }).join("") + "</div>" +
+      '<div class="banner info">เลขที่จะได้ <b>' + codeOf(a) + "</b> · ส่งใบเข้า <b>" + roomOf(a) + "</b>" + (a.who ? " แล้วแท็ก @" + esc(a.who) : " แล้วแท็กเซลล์") + "</div>" +
+      '<div class="lab">ใบจ่ายลีด</div><pre class="slip" id="slip">' + esc(slipText(x, a)) + '</pre><button class="btn small ghost" data-act="copyslip">คัดลอกใบจ่ายลีด</button>' +
+      '<button class="btn" data-act="hassign"' + (a.who ? "" : " disabled") + ">จ่ายเบอร์ + ส่งเข้ากลุ่ม</button>" +
+      '<button class="btn ghost small" data-act="hskip">ไม่ต้องจ่ายเบอร์ (ลีดซ้ำ / ไม่ใช่ลีดขาย)</button></div></div>';
+    return { title: "จ่ายเบอร์", back: true, body: h };
+  }
+  function openHub(x) { S.asg = { base: x.base, a: false, r: false, who: "" }; push("hubitem", { id: x.id }); }
+
+  function views() { return S.role === "admin" ? [["queue", "รอรับ"], ["owned", "มีเจ้าของ"], ["all", "ทั้งหมด"]] : [["queue", "คิวรอรับ"], ["mine", "ลูกค้าของฉัน"]]; }
+  function rowsHtml() {
+    var q = S.q.trim().toLowerCase();
+    var list = S.D.cust.filter(function (c) { return inView(c, S.view) && (!q || (c.name + " " + c.code + " " + c.phone).toLowerCase().indexOf(q) >= 0); });
+    if (!list.length) return '<div class="empty">' + (q ? "ไม่พบลูกค้าที่ค้นหา" : "ยังไม่มีลูกค้าในแท็บนี้") + "</div>";
+    return list.map(function (c) {
+      var m = c.msgs[c.msgs.length - 1], t = [srcTag(c.src)];
+      if (c.overdue && c.awaiting) t.push('<span class="tag red">เลยเวลา</span>'); else if (c.awaiting) t.push('<span class="tag amber">รอตอบ</span>');
+      if (c.owner) t.push('<span class="tag">@' + esc(c.owner) + "</span>");
+      if (c.code) t.push('<span class="tag green">' + esc(c.code) + "</span>");
+      return '<button class="row' + (c.unread ? " unread" : "") + '" data-act="open" data-id="' + c.id + '"><span class="av">' + esc(c.name.charAt(0)) +
+        '</span><span class="rmain"><span class="rtop"><span class="rname">' + esc(c.name) + '</span><span class="rtime">' + esc(m.at) + "</span>" + (c.unread ? '<span class="dot"></span>' : "") +
+        '</span><span class="rprev">' + (m.dir === "out" ? "คุณ: " : "") + esc(m.img ? "[รูปภาพ]" : m.text) + '</span><span class="tags" style="margin-top:4px">' + t.join("") + "</span></span></button>";
+    }).join("");
+  }
+  function vChatList() {
+    return { title: "แชทลูกค้า", right: bell(), body: '<div class="segs">' + views().map(function (v) {
+      return '<button class="' + (S.view === v[0] ? "on" : "") + '" data-act="view" data-v="' + v[0] + '">' + v[1] + " " + count(v[0]) + "</button>";
+    }).join("") + '</div><label class="search">' + ic("search", "s") + '<input id="q" placeholder="ค้นหา ชื่อ / เบอร์ / เลขลีด" value="' + esc(S.q) + '"></label>' +
+      '<div class="duty">เวรวันนี้ ทีม A · พรุ่งนี้ทีม B</div><div id="rows">' + rowsHtml() + "</div>" };
+  }
+  function carList() {
+    var all = Object.keys(S.D.cars).map(function (k) { return S.D.cars[k]; }), q = S.carq.trim().toLowerCase();
+    return all.filter(function (c) {
+      return (S.carSeg === "all" || c.stage === "show") && (!q || (c.code + c.plate + c.title).toLowerCase().indexOf(q) >= 0);
+    }).map(function (c) {
+      return li("car", 'data-code="' + c.code + '"', esc(c.title), esc(c.plate) + " · ฿" + esc(c.price) + " · " + esc(STAGE[c.stage]), "",
+        c.out ? '<span class="tag amber">ออกนอกลาน</span>' : "");
+    }).join("") || '<div class="sub" style="padding:10px 0">ไม่พบรถ</div>';
+  }
+  function vCars() {
+    var mine = Object.keys(S.D.cars).map(function (k) { return S.D.cars[k]; }).filter(function (c) { return c.out && c.out.who === me(); });
+    var h = '<div class="pad"><button class="scanbig" data-act="go" data-go="scan">' + ic("qr") + "<span><b>สแกน QR ที่รถ</b><span>เปิดข้อมูลรถ · เปลี่ยนสเตป · เบิก-คืนรถ</span></span></button>";
+    if (mine.length) h += '<div class="card"><h4>รถที่ฉันเบิกอยู่</h4>' + mine.map(function (c) { return li("car", 'data-code="' + c.code + '"', esc(c.plate) + ' <span class="sub">· ' + esc(c.title) + "</span>", esc(c.out.why) + " · ตั้งแต่ " + esc(c.out.since), "", '<span class="tag amber">ยังไม่คืน</span>'); }).join("") + "</div>";
+    h += '<div class="card"><div class="segs" style="padding:0"><button class="' + (S.carSeg === "ready" ? "on" : "") + '" data-act="carseg" data-v="ready">พร้อมขาย</button><button class="' +
+      (S.carSeg === "all" ? "on" : "") + '" data-act="carseg" data-v="all">ทั้งหมด</button></div><label class="search" style="margin:0">' + ic("search", "s") +
+      '<input id="carq" placeholder="ค้นหา ทะเบียน / รุ่น / รหัสรถ" value="' + esc(S.carq) + '"></label><div id="carrows">' + carList() + "</div></div></div>";
+    return { title: "รถ", right: bell(), body: h };
+  }
+  function vMe() {
+    var t = S.D.checkin[S.role];
+    var h = '<div class="pad"><div class="card me"><span class="av">' + esc(me().charAt(0)) + '</span><div><div style="font-size:19px;font-weight:800">' + esc(me()) + '</div><div class="sub">' + ROLE_LABEL[S.role] + "</div></div></div>";
+    h += '<div class="card"><div class="sect"><h4>เช็คชื่อเข้างานวันนี้</h4><span class="sub">เข้างาน ' + WORK_START[S.role] + "</span></div>" +
+      (t ? '<div class="banner ok">เช็คชื่อแล้ว ' + esc(t) + " · ตรงเวลา · สาขาชลบุรี</div>" : '<button class="btn" data-act="go" data-go="checkin">' + ic("camera") + "เช็คชื่อเข้างาน</button>") + "</div>";
+    if (S.role === "seller") {
+      var sc = [["จบ (ปล่อย)", 18, 30], ["จอง", 7, 10], ["Conv", 14, 20], ["สถานะ", 8, 10], ["ติดตาม", 15, 20], ["โดนแบน", 10, 10]];
+      h += '<div class="card"><div class="sect"><h4>คะแนนเดือนนี้ 72 / 100</h4><span class="sub">อันดับ 3 จาก 14</span></div><div class="score">' +
+        sc.map(function (s) { return "<span>" + s[0] + '</span><span class="sub">' + s[1] + " / " + s[2] + '</span><span class="bar2"><i style="width:' + (s[1] / s[2] * 100) + '%"></i></span>'; }).join("") + "</div></div>";
+    }
+    var P = S.D.prefs, opts = [];
+    if (canChat()) opts.push(["queue", "ลูกค้าใหม่เข้าคิว"], ["overdue", "ลูกค้ารอเกิน 5 นาที"]);
+    if (S.role === "seller") opts.push(["follow", "ตามด่วน 9:00 และ 13:00"]);
+    if (S.role === "worker" || S.role === "admin") opts.push(["stage", "รถเข้าคิวของทีม / รถค้างนาน"]);
+    if (S.role === "buyer") opts.push(["buy", "เคสรับซื้อใหม่ที่แท็กถึงฉัน"]);
+    h += '<div class="card"><h4>แจ้งเตือนเข้ามือถือ</h4>' + opts.map(function (o) {
+      return '<label class="chk"><span>' + o[1] + '</span><span class="sw neutral"><input type="checkbox" data-pref="' + o[0] + '"' + (P[o[0]] ? " checked" : "") + "><i></i></span></label>";
+    }).join("") + "</div>";
+    h += '<button class="btn outline" style="color:var(--red);border-color:var(--red)" data-act="logout">ออกจากระบบ</button></div>';
+    return { title: "ฉัน", right: bell(), body: h };
+  }
+
+  /* ── pushed screens ── */
+  function bubble(m) {
+    var inner = m.img ? '<div class="bub img"><img src="' + m.img + '" alt="รูปที่ส่ง"></div>' : '<div class="bub">' + esc(m.text) + "</div>";
+    return '<div class="b ' + (m.dir === "out" ? "out" : "in") + '">' + inner + '<div class="meta">' + esc(m.at) + (m.dir === "out" && m.by ? " · " + esc(m.by) : "") + "</div></div>";
+  }
+  function vChat(top) {
+    var c = cust(top.id), admin = S.role === "admin";
+    var preview = !c.owner && !admin, mine = c.owner === me() || admin, fbData = c.src === "fb" && !admin;
+    var msgs = preview ? c.msgs.filter(function (m) { return m.dir === "in"; }) : c.msgs;
+    var info = (c.src === "fb" ? "Facebook" : "LINE") + (c.owner ? " · ดูแลโดย @" + c.owner : " · ยังไม่มีคนรับ") + (c.awaiting ? (c.overdue ? " · เลยเวลาตอบ" : " · รอตอบ") : "");
+    var foot;
+    if (!c.owner) foot = '<div class="bar"><button class="btn" data-act="claim">รับลูกค้าคนนี้</button></div>';
+    else if (fbData) foot = '<div class="bar"><div class="banner warn">ลูกค้า Facebook — เซลล์ดู/เก็บข้อมูลได้ แอดมินเป็นคนตอบแชท</div></div>';
+    else if (mine) foot = '<div class="bar"><div class="qrow">' + QUICK.map(function (q, i) { return '<button data-act="quick" data-i="' + i + '">' + esc(q) + "</button>"; }).join("") +
+      '</div><div class="inrow"><label class="iconbtn" aria-label="ส่งรูป">' + ic("image") + '<input type="file" id="chatimg" accept="image/*"></label><textarea id="reply" rows="1" placeholder="พิมพ์ข้อความ…"></textarea><button class="btn small send" data-act="send" id="sendb" disabled>ส่ง</button></div></div>';
+    else foot = '<div class="bar"><div class="banner warn">ตอบได้เฉพาะลูกค้าที่คุณรับไว้</div></div>';
+    var right = preview ? "" : '<button class="hbtn" data-act="go" data-go="custinfo">' + ic("info") + "ข้อมูล</button>";
+    return { title: c.name, back: true, right: right, scrollEnd: true,
+      body: '<div class="info">' + esc(info) + "</div>" + (preview ? '<div style="padding:8px 12px 0"><div class="banner info">คิวรอรับ — เห็นแค่ข้อความล่าสุดของลูกค้า กด "รับลูกค้า" เพื่อดูทั้งหมดและตอบ</div></div>' : "") +
+        '<div class="msgs" id="msgs">' + msgs.map(bubble).join("") + "</div>", foot: foot };
+  }
+  function vCustInfo(top) {
+    var c = cust(top.id), admin = S.role === "admin";
+    var h = '<div class="pad"><div class="card me"><span class="av">' + esc(c.name.charAt(0)) + '</span><div style="min-width:0"><div style="font-size:18px;font-weight:800">' + esc(c.name) + '</div><div class="tags">' + srcTag(c.src) +
+      (c.code ? '<span class="tag green">' + esc(c.code) + "</span>" : "") + "</div></div></div>";
+    h += '<div class="card"><h4>ติดต่อ</h4>' + (c.phone ? '<div class="sect"><span class="phone" style="padding:0;font-size:20px">' + esc(c.phone) + '</span><button class="btn small" style="width:auto" data-act="callc">' + ic("phone", "s") + "โทร</button></div>" : '<div class="sub">ลูกค้ายังไม่ให้เบอร์ — ระบบจะจับเบอร์จากแชทให้เอง</div>') +
+      (c.lineId ? '<div class="sub">ID LINE: ' + esc(c.lineId) + "</div>" : "") + "</div>";
+    h += '<div class="card"><h4>ข้อมูลลีด</h4><div class="sub">รถที่ถาม: ' + esc(c.car || "-") + "<br>งบ/ผ่อน: " + esc(c.budget || "-") + '</div><div class="lab">สถานะลูกค้า</div><div class="chips">' +
+      Z_STATUS.map(function (z) { return '<button class="chipbtn' + (c.status === z ? " on" : "") + '" data-act="zset" data-z="' + esc(z) + '">' + esc(z) + "</button>"; }).join("") + "</div></div>";
+    if (admin) h += '<div class="card"><h4>แอดมิน</h4><div class="two"><button class="btn small outline" data-act="sheet" data-s="transfer">โอนให้เซลล์</button>' +
+      (c.code ? '<button class="btn small ghost" disabled>จ่ายเบอร์แล้ว</button>' : '<button class="btn small" data-act="hubfor">จ่ายเบอร์</button>') + "</div></div>";
+    return { title: "ข้อมูลลูกค้า", back: true, body: h + "</div>" };
+  }
+  function vNotif() {
+    var seen = S.D.notifSeen;
+    S.D.notifSeen = true;
+    return { title: "การแจ้งเตือน", back: true, body: notifs().map(function (n, i) {
+      return '<button class="notif' + (seen ? "" : " new") + '" data-act="ngo" data-i="' + i + '"><span class="ni">' + ic(n.i, "s") + '</span><span class="rmain"><span class="rtop"><span class="rname" style="font-size:15px">' + esc(n.t) +
+        '</span><span class="rtime">' + esc(n.at) + '</span></span><span class="rprev" style="white-space:normal">' + esc(n.b) + "</span></span></button>";
+    }).join("") };
+  }
+  function vScan() {
+    return { title: "สแกน QR รถ", back: true, bodyRaw: '<div class="cam"><div class="frame"></div><p>เล็ง QR ที่ติดรถให้อยู่ในกรอบ</p><div class="simscan">' +
+      '<button data-act="car" data-code="CS0011">จำลองสแกน: Yaris Ativ</button><button data-act="car" data-code="CS0033">จำลองสแกน: Vios</button><button data-act="car" data-code="CS0052">จำลองสแกน: Fortuner</button></div></div>' +
+      '<div class="manual"><input id="code" placeholder="หรือพิมพ์รหัสรถ เช่น CS0011"><button class="btn small" data-act="manual">เปิด</button></div>' };
+  }
+  function vCar(top) {
+    var car = S.D.cars[top.code], btns = BTNS[S.role], groups = [];
+    btns.forEach(function (b) { var g = groups.filter(function (x) { return x.ph === b[2]; })[0]; if (g) g.items.push(b); else groups.push({ ph: b[2], items: [b] }); });
+    var h = '<div class="pad"><div class="card"><div class="hero">' + ic("car") + '</div><p class="ctitle">' + esc(car.title) + '</p><div class="sub">' + esc(car.code + " · " + car.plate + " · สาขาชลบุรี · ฿" + car.price) + "</div>" +
+      '<div class="stagerow"><span class="pill">' + esc(STAGE[car.stage]) + '</span><span class="sub">อยู่สเตปนี้ ' + car.days + " วัน</span></div>" +
+      '<div class="tags"><span class="tag" style="background:' + PRIO[car.prio][1] + ';color:var(--white)">ความด่วน: ' + PRIO[car.prio][0] + "</span>" + car.flags.map(function (f) { return '<span class="tag grey">' + esc(f) + "</span>"; }).join("") + "</div>" +
+      (car.out ? '<div class="banner warn">ออกนอกลานกับ ' + esc(car.out.who) + " · " + esc(car.out.why) + " · " + esc(car.out.where || "-") + " (ตั้งแต่ " + esc(car.out.since) + ")</div>" : "") + "</div>";
+    h += '<div class="two">' + (car.out ? (car.out.who === me() ? '<button class="btn green" data-act="go" data-go="return">' + ic("check", "s") + "คืนรถ</button>" : '<button class="btn ghost" disabled>' + esc(car.out.who) + " เบิกอยู่</button>")
+      : '<button class="btn outline" data-act="go" data-go="checkout">' + ic("out", "s") + "เบิกรถออก</button>") +
+      (S.role === "seller" && car.stage === "show" ? '<button class="btn outline" data-act="sheet" data-s="sendcar">' + ic("chat", "s") + "ส่งให้ลูกค้า</button>" : "") + "</div>";
+    if (btns.length) {
+      h += '<div class="card"><h4>เปลี่ยนสเตป</h4>';
+      groups.forEach(function (g) {
+        if (groups.length > 1) h += '<div class="ph">' + PH[g.ph][0] + "</div>";
+        g.items.forEach(function (b) {
+          var on = S.pick && S.pick[0] === b[0];
+          h += '<button class="sbtn' + (on ? " on" : "") + '" style="border-left-color:' + PH[b[2]][1] + '" data-act="pick" data-k="' + b[0] + '"><b>' + esc(b[1]) + "</b><span>→ " + esc(b[3]) + "</span></button>";
+          if (on) h += vForm(b);
+        });
+      });
+      h += "</div>";
+    }
+    h += '<div class="card"><h4>ประวัติ</h4>' + car.logs.map(function (l) {
+      return '<div class="log"><div class="lt">' + esc(l.stage) + "<span>" + esc(l.at) + '</span></div><div class="sub">' + esc(l.who) + (l.dur ? " · " + esc(l.dur) : "") + (l.n ? " · รูป " + l.n + " รูป" : "") + "</div>" +
+        (l.note ? "<p>" + esc(l.note) + "</p>" : "") + (l.imgs && l.imgs.length ? '<div class="thumbs">' + l.imgs.map(function (u) { return '<div class="th"><img src="' + u + '" alt="รูปที่แนบ"></div>'; }).join("") + "</div>" : "") + "</div>";
+    }).join("") + "</div></div>";
+    return { title: car.plate, back: true, body: h };
+  }
+  function vForm(b) {
+    var chk = CHECK_STAGES.indexOf(b[0]) >= 0;
+    var h = '<div class="form"><div class="lab">รูป / วิดีโอ <em>(ต้องแนบ)</em></div>' + fileButtons("st") + '<div class="thumbs" id="thumbs">' + thumbs() + "</div>" +
+      '<div class="lab">หมายเหตุ <em>(ต้องใส่)</em></div><textarea class="note" id="note" placeholder="เช่น ซ่อมช่วงล่างเสร็จ / ปียาง 2023">' + esc(S.note) + "</textarea>";
+    if (chk) h += '<div class="lab">เช็คลิสต์ตรวจรถ (ปิดข้อที่มีปัญหา)</div>' + CHECK.map(function (c, i) {
+      var on = S.chk[i] !== false;
+      return '<label class="chk' + (on ? "" : " bad") + '"><span>' + esc(c) + '</span><span class="sw"><input type="checkbox" data-chk="' + i + '"' + (on ? " checked" : "") + "><i></i></span></label>";
+    }).join("");
+    return h + '<div id="miss"></div><button class="btn" data-act="confirm" id="confb">ยืนยันเปลี่ยนสเตป</button><button class="btn ghost small" data-act="pick" data-k="">ยกเลิก</button></div>';
+  }
+  function fileButtons(k) {
+    return '<div class="two"><label class="btn small fileb">' + ic("camera", "s") + 'ถ่ายรูป<input type="file" data-up="' + k + '" accept="image/*" capture="environment"></label>' +
+      '<label class="btn small outline fileb">' + ic("image", "s") + 'เลือกจากเครื่อง<input type="file" data-up="' + k + '" accept="image/*" multiple></label></div>';
+  }
+  function thumbs() { return S.shots.map(function (s) { return '<div class="th"><img src="' + s.url + '" alt="รูปที่จะแนบ"><span class="' + (s.done ? "ok" : "") + '">' + (s.done ? "อัปแล้ว" : "กำลังอัป…") + "</span></div>"; }).join(""); }
+  function missing() {
+    var m = [];
+    if (!S.shots.some(function (s) { return s.done; })) m.push("แนบรูป");
+    if (!S.note.trim()) m.push("ใส่หมายเหตุ");
+    return m;
+  }
+  function syncForm() {
+    var m = missing(), box = document.getElementById("miss"), b = document.getElementById("confb");
+    if (box) box.innerHTML = m.length ? '<div class="banner warn">ยังขาด: ' + m.join(" และ ") + "</div>" : "";
+    if (b) b.disabled = m.length > 0 || S.shots.some(function (s) { return !s.done; });
+  }
+  function vCheckout(top, ret) {
+    var car = S.D.cars[top.code], co = S.co, angles = ret ? ANG_IN : ANG_OUT;
+    var h = '<div class="pad"><div class="card"><div class="sub">' + esc(car.plate + " · " + car.title) + "</div>";
+    if (!ret) h += '<div class="lab">เอารถไปทำอะไร</div><div class="chips">' + PURPOSES.map(function (p) { return '<button class="chipbtn' + (co.why === p ? " on" : "") + '" data-act="cowhy" data-v="' + esc(p) + '">' + esc(p) + "</button>"; }).join("") +
+      '</div><div class="lab">ไปที่ไหน</div><input class="inp" id="codest" placeholder="เช่น ขนส่งชลบุรี / ศูนย์ฮอนด้า" value="' + esc(co.where) + '">';
+    h += '<div class="lab">ถ่ายรูปรถ ' + (ret ? "ตอนคืน" : "ก่อนออก") + ' แล้วติ๊กว่าครบมุมไหน</div>' + fileButtons("co") + '<div class="thumbs" id="thumbs">' + thumbs() + '</div><div class="angles">' +
+      angles.map(function (a, i) { return '<label class="angle"><input type="checkbox" data-ang="' + i + '"' + (co.ang[i] ? " checked" : "") + ">" + esc(a) + "</label>"; }).join("") + "</div>" +
+      '<button class="link" style="align-self:flex-start" data-act="allang">ครบทุกมุม</button>';
+    if (!ret) h += '<label class="chk"><span>ขอเบิกน้ำมันด้วย</span><span class="sw neutral"><input type="checkbox" id="cofuel"' + (co.fuel ? " checked" : "") + "><i></i></span></label>";
+    else h += '<label class="chk"><span>มีความเสียหาย (หัวหน้าต้องตรวจ)</span><span class="sw"><input type="checkbox" id="codmg"' + (co.dmg ? " checked" : "") + "><i></i></span></label>";
+    h += '<div class="sub">ติ๊กไม่ครบยังบันทึกได้ ระบบจดว่าขาดมุมไหนให้หัวหน้าเห็น · บอทสรุปเข้ากลุ่ม LINE ให้เอง</div><button class="btn" data-act="' + (ret ? "doreturn" : "docheckout") + '">' + (ret ? "ยืนยันคืนรถ" : "ยืนยันเบิกรถ") + "</button></div></div>";
+    return { title: ret ? "คืนรถ" : "เบิกรถออก", back: true, body: h };
+  }
+  function vCheckin() {
+    var h = '<div class="pad"><div class="card" style="align-items:stretch;text-align:center"><div class="sub">เข้างาน ' + WORK_START[S.role] + ' · ถ่ายเซลฟีหน้าร้านเพื่อเช็คชื่อ</div><label class="selfie">' +
+      (S.ckShot ? '<img src="' + S.ckShot + '" alt="รูปเช็คชื่อ">' : ic("camera")) + '<input type="file" id="ckimg" accept="image/*" capture="user"></label>' +
+      '<div class="sub" style="display:flex;align-items:center;justify-content:center;gap:4px">' + ic("pin", "s") + "ร้าน อ๊อกเล็ตธ์ ออโต้ ชลบุรี · ห่าง 35 ม.</div>" +
+      '<div class="big">08:54</div><div class="sub">เวลาจำลองในต้นแบบ</div><button class="btn" data-act="docheckin"' + (S.ckShot ? "" : " disabled") + ">เช็คชื่อ</button></div>" +
+      '<div class="banner info">แทนการส่งรูปเข้ากลุ่ม LINE ให้ระบบอ่านเวลา — รู้ตำแหน่งจริง และตัดสินสาย/ตรงเวลาตามเวลาเข้างานของแต่ละคนทันที</div></div>';
+    return { title: "เช็คชื่อเข้างาน", back: true, body: h };
+  }
+  function vBuy(top) {
+    var b = byId(S.D.buy, top.id);
+    var h = '<div class="pad"><div class="card"><div class="sect"><h4>' + esc(b.code) + '</h4><span class="tag ' + (b.called ? "green" : "red") + '">' + (b.called ? "คุยแล้ว" : "ยังไม่ได้โทร") + "</span></div>" +
+      '<div class="sub">' + esc(b.model) + " · ไมล์ " + esc(b.km) + " · มาจาก " + esc(b.ch) + " · ค้าง " + b.days + ' วัน</div><div class="phone">' + esc(b.phone) + "</div>" +
+      '<div class="sub" style="text-align:center">กดค้างที่เบอร์เพื่อคัดลอก หรือกดโทรในแอปจริง</div></div><div class="card"><div class="lab">ผลการคุย</div><div class="chips">' +
+      ["รับซื้อ", "ไม่รับซื้อ", "นัดดูรถ", "ติดต่อไม่ได้", "ขอคิดดูก่อน"].map(function (r) { return '<button class="chipbtn" data-act="buyres" data-v="' + r + '">' + r + "</button>"; }).join("") +
+      '</div><textarea class="note" id="buynote" placeholder="คอมเมนท์จัดซื้อ — เขียนกลับชีตซื้อขายเทิร์นรถให้เอง">' + esc(b.comment) + '</textarea><button class="btn" data-act="buysave">บันทึก</button></div></div>';
+    return { title: "เคสรับซื้อ", back: true, body: h };
+  }
+
+  /* ── sheets ── */
+  function sheetHtml() {
+    var s = S.sheet, h = "";
+    if (s.t === "confirmSend") h = "<h5>ส่งหาลูกค้าจริง?</h5><p>ข้อความนี้จะถูกส่งเข้า LINE ของลูกค้าจริง ถามครั้งแรกของแต่ละแชท (ต้นแบบนี้ไม่ได้ส่งออกไปไหน)</p>" +
+      '<button class="btn" data-act="sendok">ส่ง</button><button class="btn ghost" data-act="sheetx">ยกเลิก</button>';
+    else if (s.t === "lead") {
+      var l = byId(S.D.leads, s.id);
+      h = "<h5>" + esc(l.name) + " · " + esc(l.car) + '</h5><div class="phone">' + esc(l.phone) + "</div><p>ด่วนเพราะ: " + esc(l.reason) + " · โทรแล้ว " + l.calls + " ครั้ง" + (l.status ? " · สถานะเดิม " + esc(l.status) : "") +
+        '</p><div class="lab">โทรแล้วเป็นยังไง</div><div class="chips">' + Z_STATUS.map(function (z) { return '<button class="chipbtn' + (s.z === z ? " on" : "") + '" data-act="leadz" data-z="' + esc(z) + '">' + esc(z) + "</button>"; }).join("") +
+        '</div><button class="btn" data-act="leadsave"' + (s.z ? "" : " disabled") + '>บันทึกผล</button><button class="btn ghost" data-act="sheetx">ปิด</button>';
+    } else if (s.t === "deal") {
+      var d = byId(S.D.deals, s.id);
+      h = "<h5>" + esc(d.name) + "</h5><p>" + esc(d.car) + " · ไฟแนนซ์ " + esc(d.fin) + " · " + esc(d.status) + " ค้าง " + d.days + ' วัน</p><div class="lab">อัปเดตสถานะเคส</div><div class="chips">' +
+        BOOK_STATUS.map(function (z) { return '<button class="chipbtn' + ((s.z || d.status) === z ? " on" : "") + '" data-act="dealz" data-z="' + z + '">' + z + "</button>"; }).join("") +
+        '</div><p>บันทึกแล้วเขียนกลับชีตรายงานฝ่ายขายตรงช่องสถานะ</p><button class="btn" data-act="dealsave">บันทึก</button><button class="btn ghost" data-act="sheetx">ปิด</button>';
+    } else if (s.t === "hconfirm") {
+      var hx = byId(S.D.hub, topId());
+      h = "<h5>ส่งใบจ่ายลีดเข้ากลุ่มจริง?</h5><p>" + esc(codeOf(S.asg)) + " → " + esc(roomOf(S.asg)) + " แล้วแท็ก @" + esc(S.asg.who) + " · ลูกค้า " + esc(hx.acc) +
+        (hx.kind === "chat" ? " · โอนแชทให้ @" + esc(S.asg.who) + " ด้วย" : "") + " (ต้นแบบนี้ไม่ได้ส่งจริง)</p>" +
+        '<button class="btn" data-act="hdo">ส่ง</button><button class="btn ghost" data-act="sheetx">ยกเลิก</button>';
+    } else if (s.t === "hidden") {
+      h = "<h5>ซ่อนไว้ (ไม่ใช่ลีดขาย)</h5>" + S.D.hidden.map(function (x) {
+        return '<div class="sect" style="align-items:center;padding:6px 0"><span>' + srcTag(x.src) + " " + esc(x.acc) + ' <span class="sub">· ' + esc(x.car || "-") + '</span></span><button class="btn small outline" style="width:auto" data-act="hunhide" data-id="' + x.id + '">เอากลับ</button></div>';
+      }).join("") + '<button class="btn ghost" data-act="sheetx">ปิด</button>';
+    } else if (s.t === "transfer") {
+      h = '<h5>โอนลูกค้าให้เซลล์</h5><div class="chips">' + SELLERS.map(function (x) { return '<button class="chipbtn" data-act="tsave" data-v="' + x + '">' + x + "</button>"; }).join("") +
+        '</div><button class="btn ghost" data-act="sheetx">ยกเลิก</button>';
+    } else if (s.t === "sendcar") {
+      var mine = S.D.cust.filter(function (c) { return c.owner === me() && c.src === "line"; });
+      h = "<h5>ส่งรถคันนี้ให้ลูกค้า</h5><p>ส่งรุ่น ราคา ทะเบียน และรูปปกเข้าแชทของลูกค้า</p>" + mine.map(function (c) {
+        return li("sendcarto", 'data-id="' + c.id + '"', esc(c.name), esc(c.car || ""), '<span class="av" style="width:34px;height:34px;font-size:14px">' + esc(c.name.charAt(0)) + "</span>", ""); }).join("") +
+        '<button class="btn ghost" data-act="sheetx">ยกเลิก</button>';
+    }
+    return '<div class="scrim" data-act="scrim"><div class="sheet">' + h + "</div></div>";
+  }
+  function topId() { var t = S.stack[S.stack.length - 1]; return t && t.id; }
+
+  /* ── render ── */
+  function render() {
+    var h, prevB = document.getElementById("body"), top0 = S.stack[S.stack.length - 1];
+    var key = S.screen + "|" + (top0 ? top0.t + ":" + (top0.id || top0.code || "") : "tab:" + S.tab);
+    var keep = prevB && S._key === key ? prevB.scrollTop : null;
+    S._key = key;
+    if (S.screen === "login") {
+      h = sbar() + '<div class="body"><div class="login"><div class="logo">O</div><h3>Oxlet</h3><div class="sub" style="text-align:center;margin-top:-8px">แชทลูกค้า · รถ · งานประจำวัน</div>' +
+        '<button class="btn line" data-act="login">เข้าสู่ระบบด้วย LINE</button><button class="btn outline" data-act="login">ช่าง / ฝ่ายทะเบียน (ชื่อผู้ใช้ + รหัส)</button>' +
+        '<div class="hint">ใช้บัญชีเดียวกับเว็บ · เข้าสู่ระบบครั้งเดียวอยู่ได้ 30 วัน</div><div class="banner info">ต้นแบบ · ข้อมูลตัวอย่าง</div></div></div>';
+    } else {
+      var top = S.stack[S.stack.length - 1], v;
+      if (top) v = ({ chat: vChat, custinfo: vCustInfo, notif: vNotif, scan: vScan, car: vCar, checkout: function (t) { return vCheckout(t, false); },
+        "return": function (t) { return vCheckout(t, true); }, checkin: vCheckin, buy: vBuy, hubitem: vHubItem })[top.t](top);
+      else v = S.tab === "home" ? vHome() : S.tab === "chat" ? vChatList() : S.tab === "hub" ? vHub() : S.tab === "cars" ? vCars() : vMe();
+      h = sbar() + header(v) + (v.bodyRaw || '<div class="body" id="body">' + v.body + "</div>") + (v.foot || "") + (top ? "" : tabbar());
+      S._scrollEnd = !!v.scrollEnd;
+    }
+    if (S.sheet) h += sheetHtml();
+    app.innerHTML = h;
+    var b = document.getElementById("body");
+    if (b && S._scrollEnd) b.scrollTop = b.scrollHeight;
+    else if (b && keep != null) b.scrollTop = keep;
+    if (S.pick) syncForm();
+  }
+  function push(t, extra) {
+    var o = { t: t };
+    for (var k in extra) o[k] = extra[k];
+    S.stack.push(o);
+    S.pick = null; S.shots = []; S.note = ""; S.chk = {};
+    render();
+    var b = document.getElementById("body"); if (b && !S._scrollEnd) b.scrollTop = 0;
+  }
+  function pop() { S.stack.pop(); S.pick = null; S.shots = []; S.note = ""; render(); }
+  function toast(t) {
+    var d = document.createElement("div");
+    d.className = "toast"; d.textContent = t; app.appendChild(d);
+    setTimeout(function () { d.remove(); }, 2400);
+  }
+  function go(target) {
+    if (target[0] === "tab") { S.stack = []; S.tab = target[1]; render(); }
+    else if (target[0] === "chat") { S.stack = []; S.tab = "chat"; openChat(target[1]); }
+    else if (target[0] === "car") { S.stack = []; S.tab = "cars"; push("car", { code: target[1] }); }
+    else if (target[0] === "hubitem") { S.stack = []; S.tab = "hub"; S.hubSeg = "wait"; openHub(byId(S.D.hub, target[1])); }
+    else if (target[0] === "buy") { S.stack = []; S.tab = "home"; push("buy", { id: target[1] }); }
+    else if (target[0] === "checkin") { S.stack = []; push("checkin", {}); }
+  }
+  function openChat(id) {
+    var c = cust(id);
+    if (c.owner || S.role === "admin") c.unread = false;
+    push("chat", { id: id });
+  }
+  function showPush() {
+    if (S.screen === "login") { toast("เข้าสู่ระบบก่อน แล้วค่อยจำลองแจ้งเตือน"); return; }
+    var R = S.role, n;
+    if (R === "admin") {
+      var hid = 200 + S.D.hub.length;
+      S.D.hub.push({ id: hid, kind: "draft", src: "tt", acc: "@newcar.th", name: "", lineId: "", phone: "099-310-7754", ch: "TikTok ช่องแซน", car: "Civic FE", live: "Live Infu", ads: "", more: "ดาวน์ 5 หมื่น", wait: 0, base: "TLD" });
+      n = { t: "ลีดใหม่เข้าห้องพัก · TikTok", b: "@newcar.th · Civic FE · 099-310-7754 — รอจ่ายเบอร์", go: ["hubitem", hid] };
+    } else if (R === "seller") {
+      var id = 100 + S.D.cust.length;
+      S.D.cust.unshift({ id: id, name: "คุณสมใจ", src: "line", owner: "", awaiting: true, overdue: false, unread: true, code: "", phone: "", lineId: "", car: "Vios ปี 19", budget: "", status: "",
+        msgs: [{ dir: "in", at: now(), text: "สวัสดีค่ะ มี Vios ปี 19 ไหมคะ ผ่อนไม่เกิน 7,000" }] });
+      n = { t: "ลูกค้าใหม่ในคิว · LINE OA", b: "คุณสมใจ: สวัสดีค่ะ มี Vios ปี 19 ไหมคะ ผ่อนไม่เกิน 7,000", go: ["chat", id] };
+    } else if (R === "worker") n = { t: "รถเข้าคิวทีมช่าง · ด่วนมาก", b: "3กง 4521 Toyota Vios — แอร์ไม่เย็น ลูกค้ารอรับ", go: ["car", "CS0033"] };
+    else n = { t: "เคสรับซื้อใหม่ → @พี่หมี", b: "OC-7657 Mazda 2 ปี 2018 · Line@ · เบอร์ 083-661-2390", go: ["buy", 1] };
+    S.D.notifSeen = false;
+    if (!S.stack.length) render();
+    var old = app.querySelector(".push"); if (old) old.remove();
+    var el = document.createElement("button");
+    el.className = "push"; el.type = "button";
+    el.innerHTML = '<span class="pi">O</span><span class="pm"><span class="pt"><span>OXLET</span><span>เมื่อสักครู่</span></span><b>' + esc(n.t) + '</b><span class="pb">' + esc(n.b) + "</span></span>";
+    el.addEventListener("click", function () { el.remove(); go(n.go); });
+    app.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 6000);
+  }
+
+  /* ── actions ── */
+  function doSend(text) {
+    var c = cust(topId());
+    c.msgs.push({ dir: "out", at: now(), text: text, by: me() }); c.awaiting = false; c.overdue = false;
+    S.sheet = null; render(); autoReply(c);
+  }
+  function autoReply(c) {
+    var id = c.id;
+    setTimeout(function () {
+      var r = { dir: "in", at: now(), text: "ได้ค่ะ ขอบคุณค่ะ เดี๋ยวพรุ่งนี้แวะเข้าไปดูรถนะคะ" };
+      c.msgs.push(r); c.awaiting = true;
+      var top = S.stack[S.stack.length - 1], ms = document.getElementById("msgs");
+      if (top && top.t === "chat" && top.id === id && ms) { ms.insertAdjacentHTML("beforeend", bubble(r)); var b = document.getElementById("body"); if (b) b.scrollTop = b.scrollHeight; }
+      else { c.unread = true; if (!S.stack.length) render(); }
+    }, 3500);
+  }
+  function readFiles(files, cb) {
+    Array.prototype.forEach.call(files || [], function (f) {
+      if (!/^image\//.test(f.type)) return;
+      var rd = new FileReader(); rd.onload = function () { cb(rd.result); }; rd.readAsDataURL(f);
+    });
+  }
+  function addShot(url) {
+    var s = { url: url, done: false }; S.shots.push(s);
+    var t = document.getElementById("thumbs"); if (t) t.innerHTML = thumbs(); syncForm();
+    setTimeout(function () { s.done = true; var t2 = document.getElementById("thumbs"); if (t2) t2.innerHTML = thumbs(); syncForm(); }, 800);
+  }
+
+  app.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-act]");
+    if (!a) return;
+    var act = a.dataset.act, D = S.D, s = S.sheet, car, c, id;
+    if (act === "scrim") { if (e.target === a) { S.sheet = null; render(); } return; }
+    if (act === "login") { S.screen = "main"; S.tab = "home"; render(); setTimeout(function () { if (S.screen === "main" && !S.D._pushed) { S.D._pushed = true; showPush(); } }, 2500); }
+    else if (act === "tab") { S.stack = []; S.tab = a.dataset.t; render(); }
+    else if (act === "back") pop();
+    else if (act === "go") {
+      var g = a.dataset.go;
+      if (g === "custinfo") push("custinfo", { id: topId() });
+      else if (g === "checkout") { S.co = { why: "", where: "", ang: {}, fuel: false }; push("checkout", { code: S.stack[S.stack.length - 1].code }); }
+      else if (g === "return") { S.co = { ang: {}, dmg: false }; push("return", { code: S.stack[S.stack.length - 1].code }); }
+      else if (g === "checkin") { S.ckShot = null; push("checkin", {}); }
+      else push(g, {});
+    }
+    else if (act === "ngo") go(notifs()[+a.dataset.i].go);
+    else if (act === "view") { S.view = a.dataset.v; render(); }
+    else if (act === "open") openChat(+a.dataset.id);
+    else if (act === "claim") { c = cust(topId()); c.owner = me(); c.unread = false; render(); toast("รับลูกค้าแล้ว — ลูกค้าเป็นของคุณ"); }
+    else if (act === "quick") { var r = document.getElementById("reply"); r.value = QUICK[+a.dataset.i]; document.getElementById("sendb").disabled = false; r.focus(); }
+    else if (act === "send") {
+      var txt = (document.getElementById("reply").value || "").trim(); if (!txt) return;
+      if (!S.confirmed[topId()]) { S.sheet = { t: "confirmSend", text: txt }; S.confirmed[topId()] = true; render(); document.getElementById("reply").value = txt; document.getElementById("sendb").disabled = false; }
+      else doSend(txt);
+    }
+    else if (act === "sendok") doSend(s.text);
+    else if (act === "sheetx") {
+      var keep = s && s.t === "confirmSend" ? s.text : null;
+      if (keep) S.confirmed[topId()] = false;
+      S.sheet = null; render();
+      if (keep) { document.getElementById("reply").value = keep; document.getElementById("sendb").disabled = false; }
+    }
+    else if (act === "zset") { cust(topId()).status = a.dataset.z; render(); toast("บันทึกสถานะลูกค้าแล้ว"); }
+    else if (act === "callc") toast("ในแอปจริงกดแล้วโทรออกได้ทันที");
+    else if (act === "sheet") { S.sheet = { t: a.dataset.s }; render(); }
+    else if (act === "lead") { S.sheet = { t: "lead", id: +a.dataset.id }; render(); }
+    else if (act === "leadz") { s.z = a.dataset.z; render(); }
+    else if (act === "leadsave") {
+      var l = byId(D.leads, s.id); l.calls += 1; l.status = s.z;
+      if (["จอง", "ลูกค้าไม่สนใจแล้ว"].indexOf(s.z) >= 0) D.leads = D.leads.filter(function (x) { return x.id !== l.id; });
+      else { l.reason = "เพิ่งโทร · ตามรอบถัดไป"; D.leads = D.leads.filter(function (x) { return x.id !== l.id; }).concat([l]); }
+      S.sheet = null; render(); toast("บันทึกผลการโทรแล้ว · เขียนกลับชีตลีดให้เอง");
+    }
+    else if (act === "deal") { S.sheet = { t: "deal", id: +a.dataset.id }; render(); }
+    else if (act === "dealz") { s.z = a.dataset.z; render(); }
+    else if (act === "dealsave") {
+      var d = byId(D.deals, s.id); if (s.z && s.z !== d.status) { d.status = s.z; d.days = 0; }
+      if (d.status === "ปล่อย" || d.status === "รีเจ็ก") D.deals = D.deals.filter(function (x) { return x.id !== d.id; });
+      S.sheet = null; render(); toast("อัปเดตสถานะเคสแล้ว");
+    }
+    else if (act === "hubseg") { S.hubSeg = a.dataset.v; S.hubSrc = "all"; S.hubWho = ""; render(); }
+    else if (act === "hubsrc") { S.hubSrc = a.dataset.v; render(); }
+    else if (act === "hubwho") { S.hubWho = S.hubWho === a.dataset.v ? "" : a.dataset.v; render(); }
+    else if (act === "hubopen") openHub(byId(D.hub, +a.dataset.id));
+    else if (act === "hubfor") {
+      c = cust(topId());
+      var hx = D.hub.filter(function (x) { return x.chatId === c.id; })[0];
+      if (!hx) { hx = { id: 900 + c.id, kind: "chat", chatId: c.id, src: c.src, acc: c.name, name: "", lineId: c.lineId, phone: c.phone, ch: c.src === "fb" ? "เพจบ้านเก่า" : "Line@", car: c.car, live: "", ads: "", more: c.budget, wait: 0, base: "NLD", temp: true }; D.hub.push(hx); }
+      openHub(hx);
+    }
+    else if (act === "hbase") { S.asg.base = a.dataset.v; render(); }
+    else if (act === "hwho") { S.asg.who = a.dataset.v; render(); }
+    else if (act === "copyslip") {
+      var pre = document.getElementById("slip"), txt2 = pre.textContent;
+      var sel = function () { var r = document.createRange(); r.selectNodeContents(pre); var w = window.getSelection(); w.removeAllRanges(); w.addRange(r); toast("เลือกข้อความแล้ว กดคัดลอกได้เลย"); };
+      try { navigator.clipboard.writeText(txt2).then(function () { toast("คัดลอกใบจ่ายลีดแล้ว"); }, sel); } catch (err) { sel(); }
+    }
+    else if (act === "hassign") { if (S.asg.who) { S.sheet = { t: "hconfirm" }; render(); } }
+    else if (act === "hdo") {
+      var hi = byId(D.hub, topId()), hcode = codeOf(S.asg), room = roomOf(S.asg), hwho = S.asg.who;
+      D.run += 1;
+      D.hub = D.hub.filter(function (x) { return x.id !== hi.id; });
+      D.assigned.unshift({ code: hcode, to: hwho, by: me(), at: now(), how: "จ่ายจากระบบ", src: hi.src, acc: hi.acc, post: "ส่งเข้า " + room + " แล้ว · แท็ก @" + hwho });
+      if (hi.kind === "chat") { c = cust(hi.chatId); if (c) { c.code = hcode; c.owner = hwho; } }
+      S.sheet = null; S.stack = []; S.tab = "hub"; S.hubSeg = "done"; S.hubSrc = "all"; S.hubWho = ""; render();
+      toast("จ่ายเบอร์ " + hcode + " แล้ว · ส่งเข้า" + room + " + แท็ก @" + hwho);
+    }
+    else if (act === "hskip") {
+      var hk = byId(D.hub, topId());
+      D.hub = D.hub.filter(function (x) { return x.id !== hk.id; });
+      if (!hk.temp) D.hidden.push(hk);
+      S.stack.pop(); render(); toast("ซ่อนแล้ว — ไม่ใช่ลีดขาย (เอากลับได้)");
+    }
+    else if (act === "hunhide") {
+      var hu = byId(D.hidden, +a.dataset.id);
+      D.hidden = D.hidden.filter(function (x) { return x.id !== hu.id; }); D.hub.push(hu);
+      S.sheet = D.hidden.length ? { t: "hidden" } : null; render(); toast("เอากลับเข้าห้องพักแล้ว");
+    }
+    else if (act === "tsave") { c = cust(topId()); c.owner = a.dataset.v; S.sheet = null; render(); toast("โอนให้ @" + a.dataset.v + " แล้ว"); }
+    else if (act === "sendcarto") {
+      car = D.cars[S.stack[S.stack.length - 1].code]; id = +a.dataset.id; c = cust(id);
+      c.msgs.push({ dir: "out", at: now(), by: me(), text: car.title + "\nราคา " + car.price + " บาท · ทะเบียน " + car.plate + "\nดูรถได้ที่สาขาชลบุรี เปิด 8:30–20:00 ครับ" });
+      S.sheet = null; S.stack = []; S.tab = "chat"; openChat(id); toast("ส่งข้อมูลรถให้ " + c.name + " แล้ว");
+    }
+    else if (act === "car" || act === "manual") {
+      var cd = act === "car" ? a.dataset.code : (document.getElementById("code").value || "").trim().toUpperCase();
+      if (!D.cars[cd]) { toast(cd ? "ไม่พบรถรหัส " + cd + " (ลอง CS0011)" : "พิมพ์รหัสรถก่อน"); return; }
+      if (S.stack.length && S.stack[S.stack.length - 1].t === "scan") S.stack.pop();
+      push("car", { code: cd });
+    }
+    else if (act === "carseg") { S.carSeg = a.dataset.v; render(); }
+    else if (act === "pick") {
+      var k = a.dataset.k;
+      S.pick = k && !(S.pick && S.pick[0] === k) ? BTNS[S.role].filter(function (b) { return b[0] === k; })[0] : null;
+      S.note = ""; S.shots = []; S.chk = {}; render();
+    }
+    else if (act === "confirm") {
+      if (missing().length) return;
+      car = D.cars[S.stack[S.stack.length - 1].code];
+      var full = S.note.trim(), bad = [];
+      if (CHECK_STAGES.indexOf(S.pick[0]) >= 0) {
+        CHECK.forEach(function (x, i) { if (S.chk[i] === false) bad.push(x); });
+        full += "\n[ตรวจรถ] " + (bad.length ? "❌ ไม่ผ่าน: " + bad.join(" · ") + "\n" : "") + "✅ ผ่าน: " + (CHECK.length - bad.length) + " ข้อ";
+      }
+      if (car.logs[0]) car.logs[0].dur = "อยู่ " + car.days + " วัน";
+      car.logs.unshift({ stage: STAGE[S.pick[0]], who: me(), at: "วันนี้ " + now(), dur: "อยู่มาแล้ว 0 นาที", note: full, n: S.shots.length, imgs: S.shots.map(function (x) { return x.url; }) });
+      car.stage = S.pick[0]; car.days = 0; car.prio = "normal";
+      var nm = S.pick[1]; S.pick = null; S.shots = []; S.note = "";
+      render(); toast('บันทึกแล้ว · เปลี่ยนเป็น "' + nm + '"');
+    }
+    else if (act === "cowhy") { S.co.why = a.dataset.v; render(); }
+    else if (act === "allang") { var n = S.stack[S.stack.length - 1].t === "return" ? ANG_IN.length - 1 : ANG_OUT.length; for (var i = 0; i < n; i++) S.co.ang[i] = true; render(); }
+    else if (act === "docheckout" || act === "doreturn") {
+      var ret = act === "doreturn", top = S.stack[S.stack.length - 1]; car = D.cars[top.code];
+      if (!ret && !S.co.why) { toast("เลือกก่อนว่าเอารถไปทำอะไร"); return; }
+      var angs = ret ? ANG_IN.slice(0, 2) : ANG_OUT, miss = angs.filter(function (x, i) { return !S.co.ang[i]; });
+      var stamp = "วันนี้ " + now();
+      if (!ret) { car.out = { who: me(), why: S.co.why, where: S.co.where, since: now() }; car.logs.unshift({ stage: "เบิกรถออก · " + S.co.why, who: me(), at: stamp, dur: "", note: (S.co.where ? "ไป " + S.co.where : "") + (S.co.fuel ? " · ขอเบิกน้ำมัน" : "") + (miss.length ? "\nขาดรูป: " + miss.join(", ") : "\nถ่ายครบ 6 มุม"), n: S.shots.length, imgs: S.shots.map(function (x) { return x.url; }) }); }
+      else { car.out = null; car.logs.unshift({ stage: "คืนรถ", who: me(), at: stamp, dur: "", note: (S.co.dmg ? "มีความเสียหาย — รอหัวหน้าตรวจ" : "ไม่มีความเสียหาย") + (miss.length ? "\nขาดรูป: " + miss.join(", ") : ""), n: S.shots.length, imgs: S.shots.map(function (x) { return x.url; }) }); }
+      S.stack.pop(); S.shots = []; render();
+      toast((ret ? "คืนรถแล้ว" : "เบิกรถแล้ว") + " · บอทสรุปเข้ากลุ่ม LINE ให้หัวหน้าเห็น" + (miss.length ? " (ขาด " + miss.length + " มุม)" : ""));
+    }
+    else if (act === "docheckin") { D.checkin[S.role] = "08:54"; S.stack.pop(); render(); toast("เช็คชื่อแล้ว 08:54 · ตรงเวลา"); }
+    else if (act === "buy") push("buy", { id: +a.dataset.id });
+    else if (act === "buyres") { var nt = document.getElementById("buynote"); nt.value = (nt.value ? nt.value + " · " : "") + a.dataset.v; a.classList.add("on"); }
+    else if (act === "buysave") {
+      var bb = byId(D.buy, S.stack[S.stack.length - 1].id); bb.comment = document.getElementById("buynote").value.trim(); bb.called = true;
+      pop(); toast("บันทึกแล้ว · เขียนคอมเมนท์ลงชีตให้เอง");
+    }
+    else if (act === "logout") { S.screen = "login"; S.stack = []; render(); }
+  });
+
+  app.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.id === "q") { S.q = t.value; document.getElementById("rows").innerHTML = rowsHtml(); }
+    else if (t.id === "carq") { S.carq = t.value; document.getElementById("carrows").innerHTML = carList(); }
+    else if (t.id === "reply") document.getElementById("sendb").disabled = !t.value.trim();
+    else if (t.id === "note") { S.note = t.value; syncForm(); }
+    else if (t.id === "codest") S.co.where = t.value;
+  });
+  app.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.dataset.up) { readFiles(t.files, addShot); t.value = ""; }
+    else if (t.id === "chatimg") {
+      readFiles(t.files, function (url) { var c = cust(topId()); c.msgs.push({ dir: "out", at: now(), img: url, by: me() }); c.awaiting = false; render(); autoReply(c); });
+      t.value = "";
+    }
+    else if (t.id === "ckimg") readFiles(t.files, function (url) { S.ckShot = url; render(); });
+    else if (t.dataset.chk != null) { S.chk[t.dataset.chk] = t.checked; t.closest(".chk").classList.toggle("bad", !t.checked); }
+    else if (t.dataset.ang != null) S.co.ang[t.dataset.ang] = t.checked;
+    else if (t.id === "cofuel") S.co.fuel = t.checked;
+    else if (t.id === "codmg") S.co.dmg = t.checked;
+    else if (t.dataset.pref) S.D.prefs[t.dataset.pref] = t.checked;
+    else if (t.id === "hA" || t.id === "hR") { S.asg[t.id === "hA" ? "a" : "r"] = t.checked; render(); }
+  });
+  app.addEventListener("keydown", function (e) {
+    if (e.target.id === "code" && e.key === "Enter") { e.preventDefault(); var b = app.querySelector('[data-act="manual"]'); if (b) b.click(); }
+  });
+
+  document.querySelectorAll(".roles button").forEach(function (b) { b.addEventListener("click", function () { reset(b.dataset.role, true); }); });
+  document.getElementById("simpush").addEventListener("click", showPush);
+  reset("seller", false);
+})();
+</script>

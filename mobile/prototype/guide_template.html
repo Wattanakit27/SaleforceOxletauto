@@ -1,0 +1,119 @@
+<title>คู่มือแอป Oxlet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: one section per role — video (16:9) with a clickable step list beside it (desktop) or below it (phone). */
+:root {
+  --bg: #f4f2fb; --fg: #1f1147; --sub: #5f587b; --card: #ffffff; --line: #ddd8ef;
+  --accent: #6d28d9; --accent-soft: #ede9fe; --on-accent: #ffffff; --warn-bg: #fef3c7; --warn-fg: #8a4b06; --video: #12101c;
+  --font: "Noto Sans Thai", "Leelawadee UI", "Thonburi", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #14111f; --fg: #ece8fb; --sub: #a9a2c7; --card: #1d1830; --line: #2f2847;
+    --accent: #b79cff; --accent-soft: #2a2145; --on-accent: #14111f; --warn-bg: #3a2a10; --warn-fg: #fbcf85; --video: #05030a; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #14111f; --fg: #ece8fb; --sub: #a9a2c7; --card: #1d1830; --line: #2f2847;
+  --accent: #b79cff; --accent-soft: #2a2145; --on-accent: #14111f; --warn-bg: #3a2a10; --warn-fg: #fbcf85; --video: #05030a; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 32px 56px; display: flex; flex-direction: column; gap: 36px; }
+header { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+h1 { font-size: 32px; line-height: 1.25; margin: 0; text-wrap: balance; }
+h2 { font-size: 23px; margin: 0; text-wrap: balance; }
+p { margin: 0; color: var(--sub); line-height: 1.7; }
+.note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.65; }
+.note a { color: inherit; font-weight: 700; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; }
+.jump a { border: 1.5px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px; padding: 8px 14px; font-weight: 600; text-decoration: none; }
+.jump a:hover, .jump a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+section { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 16px; }
+.role { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.player { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+video { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: var(--video); border-radius: 12px; display: block; }
+.meta { font-size: 13px; color: var(--sub); }
+ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 620px; overflow-y: auto; min-width: 0;
+     border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 6px; }
+.step { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 10px; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px;
+        padding: 9px 10px; color: var(--fg); font: inherit; cursor: pointer; }
+.step:hover { background: var(--accent-soft); }
+.step:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.step .tm { font-size: 12.5px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.step .tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.step b { font-size: 15px; }
+.step .tx span { font-size: 13.5px; color: var(--sub); line-height: 1.6; }
+.step.on { background: var(--accent); }
+.step.on .tm, .step.on b, .step.on .tx span { color: var(--on-accent); }
+.foot { border-top: 1px solid var(--line); padding-top: 16px; font-size: 13px; }
+@media (max-width: 860px) {
+  .role { grid-template-columns: minmax(0, 1fr); }
+  ol { max-height: none; }
+  h1 { font-size: 26px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ต้นแบบแอปมือถือ · วิดีโอสอนใช้งาน</div>
+    <h1>คู่มือแอป Oxlet สำหรับเซลล์และแอดมิน</h1>
+    <p>วิดีโอสั้นสองตัว สอนงานประจำวันในแอปทีละขั้น แตะชื่อขั้นในรายการเพื่อข้ามไปตรงนั้นได้เลย</p>
+    <div class="note">วิดีโอนี้อัดจาก <a href="https://claude.ai/artifact/XEmbwUNwLcbPEz2fj1iADH" target="_blank" rel="noopener">ต้นแบบแอป</a> ชื่อลูกค้า เบอร์โทร รถ และตัวเลขทั้งหมดเป็นข้อมูลสมมติ ปุ่มสแกนในวิดีโอใช้ปุ่มจำลองแทนกล้อง แอปจริงใช้ข้อมูลชุดเดียวกับเว็บ Oxlet</div>
+    <nav class="jump" aria-label="ไปที่"><a href="#seller">สำหรับเซลล์ · 2 นาทีครึ่ง</a><a href="#admin">สำหรับแอดมิน · 2 นาที</a></nav>
+  </header>
+
+  <section id="seller" aria-labelledby="h-seller">
+    <h2 id="h-seller">สำหรับเซลล์</h2>
+    <p>งานวันนี้ · เช็คชื่อ · โทรตามแล้วบันทึกผล · รับและตอบลูกค้า · สแกนรถ เปลี่ยนสเตป</p>
+    <div class="role">
+      <div class="player">
+        <video id="v-seller" src="seller.mp4" poster="seller.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta">15 ขั้น · ไม่มีเสียง อ่านคำอธิบายด้านขวาของวิดีโอ</div>
+      </div>
+      <ol aria-label="ขั้นตอนสำหรับเซลล์">
+{{SELLER_STEPS}}
+      </ol>
+    </div>
+  </section>
+
+  <section id="admin" aria-labelledby="h-admin">
+    <h2 id="h-admin">สำหรับแอดมิน / ผู้บริหาร</h2>
+    <p>ภาพรวมวันนี้ · ห้องพัก Lead และจ่ายเบอร์ · ดูแลแชทลูกค้า · โอนลูกค้า · รถค้างนาน</p>
+    <div class="role">
+      <div class="player">
+        <video id="v-admin" src="admin.mp4" poster="admin.jpg" controls playsinline preload="metadata"></video>
+        <div class="meta">12 ขั้น · ไม่มีเสียง อ่านคำอธิบายด้านขวาของวิดีโอ</div>
+      </div>
+      <ol aria-label="ขั้นตอนสำหรับแอดมิน">
+{{ADMIN_STEPS}}
+      </ol>
+    </div>
+  </section>
+
+  <p class="foot">ทุกขั้นที่บันทึกในแอปเข้าระบบเดียวกับเว็บ: ผลการโทรเขียนกลับชีตลีด · สถานะเคสเขียนกลับชีตรายงานฝ่ายขาย · ใบจ่ายลีดส่งเข้าห้องจ่ายเบอร์ · สเตปรถเข้าระบบติดตามรถ</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+  steps.forEach(function (b) {
+    b.addEventListener("click", function () {
+      var v = document.getElementById("v-" + b.dataset.v);
+      if (!v) return;
+      v.currentTime = parseFloat(b.dataset.t) || 0;
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+      mark(b.dataset.v, v.currentTime);
+    });
+  });
+  function mark(key, t) {
+    var own = steps.filter(function (b) { return b.dataset.v === key; }), cur = null;
+    own.forEach(function (b) { if (parseFloat(b.dataset.t) <= t + 0.2) cur = b; });
+    own.forEach(function (b) { b.classList.toggle("on", b === cur); });
+  }
+  ["seller", "admin"].forEach(function (k) {
+    var v = document.getElementById("v-" + k);
+    if (v) v.addEventListener("timeupdate", function () { mark(k, v.currentTime); });
+  });
+})();
+</script>
