@@ -42,12 +42,3 @@ yarn-error.*
 
 # root .gitignore ignores lib/ (Python) — this app keeps shared code in src/lib
 !src/lib/
-
-# วิดีโอสอนใช้งาน (ไฟล์ใหญ่ อัดใหม่ได้ด้วย prototype/record_tutorial.py)
-prototype/videos/*.mp4
-prototype/_*
-prototype/out/
-prototype/site/
-prototype/*.jpg
-prototype/videos/oxlet-guide.html
-prototype/voice_cache/
