@@ -498,7 +498,8 @@ def login_view(request):
             request.session.set_expiry(60 * 60 * 24 * 14)
             log_login(request, identity=duser.username, name=_wname,
                       method="worker", success=True, role=("superuser" if duser.is_superuser else ""))
-            dest = next_url if (next_url or "").startswith(("/track/", "/dashboard/")) else "/dashboard/"
+            # /m/handoff/ = login จากแอปมือถือ (คนงานสแกน QR) → ส่งรหัสกลับเข้าแอป
+            dest = next_url if (next_url or "").startswith(("/track/", "/dashboard/", "/m/handoff/")) else "/dashboard/"
             if is_ajax:
                 return JsonResponse({"ok": True, "next": dest})
             return HttpResponseRedirect(dest)
@@ -560,7 +561,8 @@ def _login_with_line_user_id(request, line_user_id, next_url="/dashboard/"):
                 return (next_url or "/dashboard/"), None   # แอดมิน/ผู้บริหารชนะเสมอ → หน้ารวม
             # ★ 3 ต.ค.69 — เซลล์กดลิงก์ Connect (จากแจ้งเตือน LINE) แล้วต้อง login → กลับมาที่แชทเดิม
             #   หน้า Connect เช็คสิทธิ์รายลูกค้าเองอยู่แล้ว (เห็นเฉพาะลูกค้าของตัวเอง)
-            if (next_url or "").startswith("/connect/"):
+            # ★ 9 ต.ค.69 — login จากแอปมือถือ (/m/handoff/…) ต้องกลับไปส่งรหัสเข้าแอป ไม่ใช่ไปหน้าเว็บ
+            if (next_url or "").startswith(("/connect/", "/m/")):
                 return next_url, None
             # เทเลเซลล์ (ไม่ใช่แอดมิน) → หน้ารวมเทเลเซลล์ (seller_from_token map ไอดี → "ADMIN")
             from .services.constants import TELE_USER_IDS, load_tele_user_ids

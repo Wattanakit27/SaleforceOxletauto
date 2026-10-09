@@ -57,6 +57,9 @@ MIDDLEWARE = [
     # เพิ่มสำหรับ cars/ (tracking) — auth + messages + clickjacking
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # ผูก session sales → Django auth ให้ /track/ (เข้าแท็บ "สถานะรถ" ไม่ต้อง login ซ้ำ) · ต้องอยู่หลัง AuthenticationMiddleware
+    # ★ 9 ต.ค.69 แอปมือถือส่ง Authorization: Bearer แทนคุกกี้ → ทำให้เหมือน login เว็บอยู่ (API เดิมใช้ได้เลย)
+    #   ต้องอยู่หลัง AuthenticationMiddleware และก่อน TrackSessionBridgeMiddleware
+    "dashboard.middleware.MobileTokenMiddleware",
     "cars.middleware.TrackSessionBridgeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -178,6 +181,9 @@ YOUTUBE_CHANNELS = [c.strip() for c in os.getenv("YOUTUBE_CHANNELS", "").split("
 #   จึงเลือกเป็น "ปิดโดยปริยาย" ไม่ใช่ "เปิดโดยปริยาย"
 # หลายคีย์ได้: คั่นด้วย comma (จะได้เพิกถอนทีละเจ้าโดยไม่กระทบเจ้าอื่น)
 EXTERNAL_API_KEYS = [k.strip() for k in os.getenv("EXTERNAL_API_KEY", "").split(",") if k.strip()]
+# ★ 9 ต.ค.69 แอปมือถือ: ยอมส่งรหัส login กลับเข้า Expo Go (exp://<IP วงใน>) ตอนทดลอง
+#   แอปตัวจริงใช้ oxletauto:// · เลิกใช้ Expo Go เมื่อไหร่ตั้ง MOBILE_DEV_REDIRECTS=False
+MOBILE_DEV_REDIRECTS = os.getenv("MOBILE_DEV_REDIRECTS", "True").strip().lower() in ("1", "true", "yes", "on")
 # โมเดล OCR (ไม่ลับ — ชื่อโมเดล): pro = แม่นสุด (ลายมือ), flash = เร็ว/ถูกกว่า
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 

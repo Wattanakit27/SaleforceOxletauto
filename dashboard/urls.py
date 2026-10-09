@@ -3,9 +3,15 @@ from django.views.decorators.csrf import csrf_exempt
 
 from checkout import fb_webhook as _fb_webhook
 
-from . import views
+from . import mobile_views, views
 
 urlpatterns = [
+    # ★ 9 ต.ค.69 — แอปมือถือ (demo): login ผ่าน LINE Login ตัวเดิม → token · ดู mobile_views.py
+    path("m/login", mobile_views.m_login, name="m_login"),
+    path("m/handoff/<str:pid>", mobile_views.m_handoff, name="m_handoff"),
+    path("api/m/token", mobile_views.m_token, name="m_token"),
+    path("api/m/me", mobile_views.m_me, name="m_me"),
+    path("api/m/logout", mobile_views.m_logout, name="m_logout"),
     path("", views.index),
     path("dashboard/", views.dashboard_page, name="dashboard"),
     path("dashboard/sql/", views.sql_page, name="sql_page"),

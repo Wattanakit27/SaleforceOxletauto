@@ -612,3 +612,57 @@ class AdsDaily(models.Model):
 
     def __str__(self):
         return "%s %s ใช้ %s บาท" % (self.date, self.account_id, self.spend)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# แอปมือถือ — ★ 9 ต.ค.69 (demo บน iPhone ผ่าน Expo Go · เจ้าของประเมินก่อนจ่ายค่า Apple)
+#
+# แอปไม่ได้ถือคุกกี้ของเว็บ → login ผ่าน LINE Login ตัวเดิมของเว็บในเบราว์เซอร์ของระบบ
+# แล้วเว็บส่ง "รหัสใช้ครั้งเดียว" กลับเข้าแอป (MobileLogin) → แอปแลกเป็น token (MobileToken)
+# → ส่ง `Authorization: Bearer` มากับทุกคำขอ · ตัวกลาง dashboard/middleware.py ทำให้คำขอนั้น
+#   เหมือนคนที่ login อยู่ → API เดิมของเว็บ (Connect / ระบบติดตามรถ) ใช้ได้เลยโดยไม่ต้องแก้
+# ─────────────────────────────────────────────────────────────────────
+class MobileLogin(models.Model):
+    """ใบผ่านทางตอน login จากแอป — 1 แถวต่อการกด "เข้าสู่ระบบ" 1 ครั้ง · อายุ 10 นาที · ใช้ได้ครั้งเดียว
+
+    แอปส่ง `challenge` (= sha256 ของรหัสลับที่แอปถือไว้ · PKCE) มาตอนเริ่ม → ตอนแลก token
+    ต้องส่งรหัสลับตัวจริงมาด้วย → แอปอื่นที่ดักรหัสครั้งเดียวไปได้ ก็แลกเป็น token ไม่ได้
+    """
+    pid = models.CharField("รหัสรายการ", max_length=48, unique=True)
+    redirect = models.CharField("ส่งกลับเข้าแอปที่", max_length=300)
+    challenge = models.CharField("PKCE challenge", max_length=128)
+    code_hash = models.CharField("แฮชรหัสใช้ครั้งเดียว", max_length=64, blank=True, db_index=True)
+    user = models.JSONField("คนที่ login", default=dict, blank=True)
+    created_at = models.DateTimeField("เริ่ม", auto_now_add=True, db_index=True)
+    handed_at = models.DateTimeField("ส่งรหัสกลับเข้าแอป", null=True, blank=True)
+    used_at = models.DateTimeField("แลก token แล้ว", null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_mobile_login"
+        verbose_name = "ใบผ่านทาง login แอปมือถือ"
+        verbose_name_plural = "ใบผ่านทาง login แอปมือถือ"
+
+
+class MobileToken(models.Model):
+    """รหัสเข้าระบบของแอปมือถือ — เก็บแค่ **แฮช** (token ตัวจริงอยู่ในเครื่องผู้ใช้เท่านั้น)
+
+    `user` = สำเนา `oxlet_user` ตอน login (ชุดเดียวกับที่ session ของเว็บเก็บ) · หมดอายุ 30 วัน
+    · กดออกจากระบบ = `revoked_at` · พนักงานถูกปิดในทะเบียน = ใช้ไม่ได้ทันที (เช็คทุกคำขอ)
+    """
+    key_hash = models.CharField("แฮช token", max_length=64, unique=True)
+    user = models.JSONField("คนที่ login", default=dict, blank=True)
+    nickname = models.CharField("ชื่อเล่น", max_length=120, blank=True, db_index=True)
+    device = models.CharField("เครื่อง", max_length=160, blank=True)
+    created_at = models.DateTimeField("ออกเมื่อ", auto_now_add=True)
+    last_used_at = models.DateTimeField("ใช้ล่าสุด", null=True, blank=True)
+    expires_at = models.DateTimeField("หมดอายุ")
+    revoked_at = models.DateTimeField("ยกเลิกเมื่อ", null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_mobile_token"
+        verbose_name = "รหัสเข้าระบบแอปมือถือ"
+        verbose_name_plural = "รหัสเข้าระบบแอปมือถือ"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return "%s (%s)" % (self.nickname, self.device or "-")

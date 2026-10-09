@@ -1,6 +1,8 @@
 from django.urls import path
 from django.views.generic.base import RedirectView
 
+from dashboard import mobile_views
+
 from . import views
 
 # ยุบเหลือ login เดียว: /track/login/ และ /track/logout/ ส่งต่อไปหน้า login/logout หลักของ sales
@@ -34,6 +36,8 @@ urlpatterns = [
     path("api/trash", views.api_trash, name="api_trash"),
     path("api/sign_upload", views.api_sign_upload, name="api_sign_upload"),
     path("api/upload", views.api_upload, name="api_upload"),  # อัปรูป/วิดีโอเข้า Google Drive
+    # ★ 9 ต.ค.69 แอปมือถือ: รถ 1 คัน + กติกาเปลี่ยนสเตป (หน้าสแกน QR) · อยู่ใต้ /track/ ให้ตัวผูก login ของระบบรถทำงาน
+    path("api/m/car/<str:code>", mobile_views.m_car, name="m_car"),
 
     # QR
     path("qr/<str:code>.png", views.qr_png, name="qr_png"),

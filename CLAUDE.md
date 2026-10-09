@@ -138,6 +138,9 @@ python manage.py runserver
 | `/api/v1/` | `api_v1_index` | **API สาธารณะ (ต้องมีคีย์)** — สารบัญ endpoint + วิธี auth |
 | `/api/v1/employees` | `api_v1_employees` | **API สาธารณะ** GET: รายชื่อพนักงาน — `userId`(LINE) · `displayName` · `nickname` · `position` · `groupId` · กรองได้ `?nickname=` `?user_id=` `?position=` `?q=` |
 | `/api/v1/groups` | `api_v1_groups` | **API สาธารณะ** GET: กลุ่ม LINE — **รวม 2 ที่**: KVStore `line_groups` (บอทจำเอง มีชื่อกลุ่ม) + **คอลัมน์ group id ในชีตพนักงาน** (ใช้ได้ทันทีไม่ต้องรอบอท) · คืน `groupId`/`name`/`lastSeen`/`source`(bot\|sheet\|both)/`employeeCount` |
+| `/m/login` · `/m/handoff/<pid>` | `mobile_views.m_login` · `m_handoff` | **login ของแอปมือถือ** (9 ต.ค.69) — แอปเปิดเบราว์เซอร์ที่ `/m/login?r=<ที่อยู่กลับเข้าแอป>&c=<PKCE challenge>&via=line\|pw` → LINE Login / หน้า `/login/` (คนงานใช้ชื่อผู้ใช้+รหัส) → `/m/handoff/<pid>` ส่งรหัสใช้ครั้งเดียวกลับเข้าแอป · ดู section "แอปมือถือ" |
+| `/api/m/token` · `/api/m/me` · `/api/m/logout` | `mobile_views.*` | แอปแลกรหัส+PKCE verifier เป็น token (30 วัน · เก็บแฮช) · ดูตัวเอง · ยกเลิก token · **ไม่คืน LINE user id** |
+| `/track/api/m/car/<code>` | `mobile_views.m_car` | แอปเปิดรถจาก QR = `car_json` + `role` + `rules` (สเตปไหนต้องแนบรูป/หมายเหตุ · เช็คลิสต์) · อยู่ใต้ `/track/` ให้ bridge login ระบบรถทำงาน |
 | `/api/cron/sync` | `cron_sync` | public (`?secret=xxx`) — sync sheets → Supabase `sheet_cache` + precompute dashboard (cron tick ตัวเดียวก็พอ · นี่เป็น endpoint แยกสำรอง) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
@@ -4226,6 +4229,37 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
 cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --dry-run --limit 5
 cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
 ```
+
+### 📱 แอปมือถือ (เวอร์ชันทดลอง · Expo Go) — [mobile/](mobile/) · 9 ต.ค.69
+*"ทำ Demo ลง iOS ก่อนได้ไหม ฉันขอประเมินดูก่อนว่าควรจะจ่ายดีไหม · เรื่องแชท เรื่องสแกน QR Code เหมือนต้องใช้ใน Mobile ง่ายที่สุด"*
+(เจ้าของเลือกให้ต่อ **เซิร์ฟเวอร์จริง**)
+
+- **ทำไม Expo Go**: ทางเดียวที่ลงแอปจริงบน iPhone ได้ **ฟรี ไม่ต้องมี Mac ไม่ต้องจ่าย $99** · ข้อจำกัด: ไม่มี push ·
+  ต้องเปิดผ่าน Expo Go + คอมรัน `npx expo start` วง Wi-Fi เดียวกัน · ใช้ได้เฉพาะ native module ที่มากับ Expo Go
+  (camera/image-picker/secure-store/web-browser/crypto มีครบ) · Expo **SDK 57** + Expo Router (`mobile/src/app/`)
+- **★ ไม่มี API ชุดใหม่ — แอปเรียก API เดิมของเว็บทั้งหมด** ด้วย `Authorization: Bearer`
+  · **[dashboard/middleware.py](dashboard/middleware.py) `MobileTokenMiddleware`** (อยู่หลัง AuthenticationMiddleware
+  ก่อน TrackSessionBridgeMiddleware) ใส่ `oxlet_user` ลง session ชั่วคราว **ไม่ส่งคุกกี้กลับ** · ข้าม CSRF เฉพาะคำขอที่ใช้ token
+  (CSRF อาศัยคุกกี้ — header Authorization เว็บอื่นแนบให้ไม่ได้) · token ผิด/หมดอายุ = 401 `{relogin:true}` ไม่ตกไปใช้คุกกี้
+  · **บัญชีคนงาน (`user_id="django_<ชื่อ>"`) ผูก Django user ตัวจริงตรงๆ** — ไม่งั้น bridge สร้าง `line_django_<ชื่อ>`
+    บัญชีใหม่ไม่มีบทบาท ช่างเปลี่ยนสเตปไม่ได้ (มีเทสต์) · ปิดบัญชีที่ /track/users/ = token ใช้ไม่ได้ทันที
+- **login** ([mobile_auth.py](dashboard/services/mobile_auth.py)): ใช้หน้า login เดิมของเว็บ (ไม่ใช้ LINE SDK ·
+  ไม่ต้องแก้อะไรใน LINE Developers) → รหัสใช้ครั้งเดียว 2 นาที → แลก token ด้วย **PKCE**
+  · ที่อยู่กลับเข้าแอปรับเฉพาะ `oxletauto://` หรือ `exp://<IPv4 วงใน>:<port>/--/…` (`MOBILE_DEV_REDIRECTS` · ไม่รับ
+  tunnel/IP สาธารณะ — ไม่งั้นใครก็ตั้งเครื่องตัวเองแล้วหลอกให้พนักงานกดลิงก์ รหัสจะวิ่งไปหาเขา)
+  · `via=pw` → `/login/` (คนงานกรอกชื่อผู้ใช้+รหัส) · `login_view` อนุญาต next `/m/handoff/` แล้ว
+  · ตาราง **`dash_mobile_login`** (ใบผ่านทาง · ลบเองเกิน 1 วัน) + **`dash_mobile_token`** (เก็บแฮช · 30 วัน)
+    — dashboard migration **0015** · เติมใน `db_inventory.TABLES` แล้ว · login จดใน `dash_event_log` kind=`mobile`
+- **ในแอป**: แชทลูกค้า (คิวรอรับ/ลูกค้าของฉัน · แอดมิน: รอรับ/มีเจ้าของ/ทั้งหมด · รีเฟรชทุก 5–10 วิ · ตอบ/รับลูกค้า ·
+  **ถามยืนยันครั้งแรกก่อนตอบลูกค้าจริงในแต่ละแชท**) · สแกน QR → หน้ารถ → เปลี่ยนสเตป (ปุ่มตามบทบาท แยกเฟส ·
+  ถ่าย/เลือกรูป อัปทันทีเข้า `/track/api/upload` · เช็คลิสต์ตรวจรถรูปแบบเดียวกับเว็บ `[ตรวจรถ] ❌/✅`)
+  → `POST /track/api/seller_set_stage` (ตั้งชื่อไฟล์ใน Drive ให้) · คนงาน (`position=worker`) ไม่เห็นเมนูแชท
+  · **เช็ค "ต้องใส่หมายเหตุ" ในแอปก่อนต่อผลเช็คลิสต์** (เซิร์ฟเวอร์เห็นแค่ข้อความรวม — ต่อก่อนเช็ค = ผ่านโดยไม่พิมพ์อะไร)
+- **ยังไม่มี**: push แจ้งเตือน · ส่งรูปหาลูกค้า · จ่ายเบอร์/ข้อมูลลีด · ตั้งความด่วน/ธง (ใช้เว็บ)
+- **เทสต์**: `python scripts/test_mobile_api.py` (61 ข้อ · test client จริงทั้งสาย middleware · ปลอมแค่ชีตพนักงาน)
+  · แอป: `cd mobile && npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)
+- **⚠️ `npx expo lint` ครั้งแรกติด peer dependency** (npm ดึง react-dom 19.3 ที่ไม่ตรง react 19.2.3) →
+  ติดตั้ง eslint เองด้วย `--legacy-peer-deps` แล้ว (อยู่ใน devDependencies แล้ว)
 
 ### 🔖 ป้ายเวอร์ชันมุมขวาล่าง (ส.ค.69)
 ทุกหน้า (login/index/seller/track base) โชว์เวอร์ชันมุมขวาล่าง — **สูตร: จำนวน git commit ÷ 10** (100 commits = v10.0 · เจ้าของกำหนด) · `app_version()` ใน [cars/context.py](cars/context.py) (git rev-list --count HEAD · cache ต่อ process · ไม่มี .git = ป้ายซ่อน) → `APP_VERSION` ผ่าน context processor `cars.context.nav` · ใช้เช็คว่า deploy ล่าสุดติดหรือยัง (ดูได้ตั้งแต่หน้า login)
