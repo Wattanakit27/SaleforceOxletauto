@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Btn, C, Card, Loading } from '../lib/ui';
+import { Btn, C, Card, Loading } from '../../lib/ui';
 
 /** ข้อความใน QR → รหัสรถ (ไม่ใช่ QR ของระบบ = '') */
 function codeFrom(data: string): string {
@@ -53,7 +53,7 @@ export default function Scan() {
   if (!perm) return <Loading />;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1 }} edges={[]}>
       {perm.granted ? (
         <View style={st.camWrap}>
           {active ? (

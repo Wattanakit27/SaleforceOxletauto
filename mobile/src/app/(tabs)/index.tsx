@@ -1,10 +1,10 @@
 // รายชื่อลูกค้า (Connect) — ข้อมูลชุดเดียวกับหน้า /connect/ ของเว็บ · สิทธิ์เช็คที่เซิร์ฟเวอร์ทั้งหมด
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
+import { canChat, useAuth } from '../../lib/auth';
 import { Avatar, Banner, C, fmtTime, Loading, Tag } from '../../lib/ui';
 
 type Row = {
@@ -51,10 +51,20 @@ export default function ChatList() {
   const [data, setData] = useState<Inbox | null>(null);
   const [err, setErr] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [q, setQ] = useState('');
+  const [query, setQuery] = useState(''); // ค่าที่ส่งไปค้นจริง (รอหยุดพิมพ์ก่อน)
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(q.trim()), 400);
+    return () => clearTimeout(t);
+  }, [q]);
+
   // แต่ละรอบโหลดผูกกับแท็บของมันเอง — สลับแท็บแล้วผลของแท็บเก่าที่ตอบช้าต้องไม่มาทับ
-  const fetchInbox = useCallback(async (v: string, alive: () => boolean) => {
+  const fetchInbox = useCallback(async (v: string, qq: string, alive: () => boolean) => {
     try {
-      const r = await api<Inbox>(`/connect/api/inbox?view=${encodeURIComponent(v)}`);
+      const r = await api<Inbox>(
+        `/connect/api/inbox?view=${encodeURIComponent(v)}` + (qq ? `&q=${encodeURIComponent(qq)}` : ''),
+      );
       if (alive()) {
         setData(r);
         setErr('');
@@ -69,20 +79,22 @@ export default function ChatList() {
     useCallback(() => {
       let on = true;
       const alive = () => on;
-      fetchInbox(view, alive);
-      const t = setInterval(() => fetchInbox(view, alive), 10000);
+      fetchInbox(view, query, alive);
+      const t = setInterval(() => fetchInbox(view, query, alive), 10000);
       return () => {
         on = false;
         clearInterval(t);
       };
-    }, [view, fetchInbox]),
+    }, [view, query, fetchInbox]),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchInbox(view, () => true);
+    await fetchInbox(view, query, () => true);
     setRefreshing(false);
   };
+
+  if (me && !canChat(me)) return <Redirect href="/scan" />; // คนงานใช้แชทลูกค้าไม่ได้
 
   return (
     <View style={{ flex: 1 }}>
@@ -105,6 +117,18 @@ export default function ChatList() {
             </Pressable>
           );
         })}
+      </View>
+      <View style={st.searchWrap}>
+        <TextInput
+          style={st.search}
+          value={q}
+          onChangeText={setQ}
+          placeholder="ค้นหา ชื่อ / เบอร์ / เลขลีด"
+          placeholderTextColor={C.sub}
+          clearButtonMode="while-editing"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
       </View>
       {data?.duty ? (
         <Text style={st.duty}>
@@ -189,6 +213,17 @@ const st = StyleSheet.create({
   tabOn: { backgroundColor: C.purple },
   tabText: { color: C.purple, fontWeight: '700', fontSize: 14 },
   duty: { fontSize: 13, color: C.sub, paddingHorizontal: 14, paddingBottom: 4 },
+  searchWrap: { paddingHorizontal: 12, paddingBottom: 6 },
+  search: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: C.text,
+    backgroundColor: '#fff',
+  },
   row: {
     flexDirection: 'row',
     gap: 12,
