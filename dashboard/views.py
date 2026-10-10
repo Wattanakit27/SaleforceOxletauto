@@ -4194,6 +4194,35 @@ def seller_car_matches(request):
     return JsonResponse(dict(seller_matches(me), ok=True), json_dumps_params={"ensure_ascii": False})
 
 
+@require_http_methods(["GET"])
+def seller_today(request):
+    """งานวันนี้ของเซลล์ (★ 10 ต.ค.69 หน้าเซลล์แบบใหม่) — GET `?token=` → ใบจ่ายลีดที่ได้ 2 วันล่าสุด + นาฬิกาโทร
+
+    เห็นเฉพาะใบของตัวเอง (`seller_name` = ชื่อเล่นของคำขอนี้) · ไม่มี LINE id · ใบทดลอง (demo) ไม่นับ"""
+    me = _seller_of(request, (request.GET.get("token") or "").strip())
+    if not me:
+        return JsonResponse({"error": "ต้องเข้าสู่ระบบด้วยบัญชีเซลล์"}, status=401)
+    from datetime import datetime as _dt, timedelta as _td
+    from django.utils import timezone as _tz
+    from checkout import leadflow as LF
+    from checkout.models import LeadTask
+    since = _tz.make_aware(_dt.combine(_tz.localdate() - _td(days=1), _dt.min.time()))
+    now = _tz.now()
+    rows = []
+    for t in (LeadTask.objects.filter(seller_name=me, created_at__gte=since)
+              .order_by("-posted_at", "-id")[:60]):
+        if (t.card or {}).get("demo"):
+            continue
+        st = LF.task_state(t, now)
+        rows.append({"code": t.code, "customer": t.customer, "car": t.car, "phone": t.phone,
+                     "postedAt": LF._iso(t.posted_at), "dueAt": LF._iso(t.due_at),
+                     "reportAt": LF._iso(t.first_report_at), "reports": t.reports, "lastReport": t.last_report,
+                     "by": t.by, "chatId": t.chat_id, **st})
+    return JsonResponse({"ok": True, "seller": me, "tasks": rows, "callMin": LF.cfg()["call_min"],
+                         "now": _tz.localtime(now).isoformat(timespec="seconds")},
+                        json_dumps_params={"ensure_ascii": False})
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def finance_check_submit(request):
@@ -4611,9 +4640,17 @@ def _render_seller_page(request, seller_name):
         "MONTHS_FULL": MONTHS_FULL,
     }
 
-    return render(request, "dashboard/seller.html", {
+    # ★ 10 ต.ค.69 หน้าเซลล์แบบใหม่ (เมนูซ้าย) · หน้าเดิมเก็บไว้ที่ ?classic=1
+    #   self_view = เจ้าของหน้าเปิดเอง (ไม่ใช่แอดมินดูแทน) → เมนู "แชทลูกค้า" เปิด Connect ของคนที่ login ซึ่งต้องเป็นคนเดียวกัน
+    from .services.constants import normalize_seller as _ns
+    _u = _session_user(request) or {}
+    _own = _ns((_u.get("seller_name") or _u.get("nickname") or "").strip())
+    self_view = bool(_own) and _ns(seller_name) == _own
+    tpl = "dashboard/seller_classic.html" if request.GET.get("classic") == "1" else "dashboard/seller.html"
+    return render(request, tpl, {
         "error": None,
         "seller": seller_name,
+        "self_view": self_view,
         "data_json": json.dumps(filtered, ensure_ascii=False, default=str),
         "constants_json": json.dumps(constants, ensure_ascii=False),
     })

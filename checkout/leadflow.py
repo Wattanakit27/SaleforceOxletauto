@@ -190,6 +190,28 @@ def fwd_code(old: str) -> str:
     return ""
 
 
+def forwarded_as(code: str) -> dict | None:
+    """เลขนี้ถูกส่งต่อไม้ 2 ไปแล้วหรือยัง (มีเลข R…/n+1 ของเลขนี้ในระบบ) → `{code, seller}` · ยัง = None
+    กันส่งต่อซ้ำจนได้ลูกค้าคนเดียว 2 เลข (เลขเดิมในแชท Connect เปลี่ยนเป็น R…/1 ไปแล้ว ค้นด้วยเลขเดิมไม่เจอ)"""
+    from .models import ChatLead
+    m = _FWD.match((code or "").strip().upper())
+    if not m:
+        return None
+    core, n = m.group(1), int(m.group(2) or 0)
+    nxt = "%s/%d" % (core if core.startswith("R") else "R" + core, n + 1)
+    for M, f in ((LeadTask, "seller_name"), (ExtLead, "seller_name"), (ChatLead, None)):
+        x = M.objects.filter(code__iexact=nxt).first()
+        if x:
+            seller = getattr(x, f) if f else ""
+            if not seller and M is ChatLead:
+                try:
+                    seller = x.chat.owner.nickname if x.chat and x.chat.owner_id else ""
+                except Exception:
+                    seller = ""
+            return {"code": x.code, "seller": seller or ""}
+    return None
+
+
 # ─────────────────────────────────────────────────────────────
 #  คิวจ่ายวน (round-robin)
 # ─────────────────────────────────────────────────────────────
@@ -237,6 +259,45 @@ def rr_candidates(c=None, exclude=(), day=None) -> list:
             continue
         out.append({"id": e.id, "name": e.nickname, "team": t, "today": n, "_last": last or epoch, "emp": e})
     out.sort(key=lambda r: (r["today"], r["_last"], r["name"]))
+    return out
+
+
+def rr_board(c=None, day=None) -> list:
+    """"มือเซลล์วันนี้" — ทุกคนในทีมของคิวจ่ายวน: วันนี้ได้กี่ใบ / เพดาน · อยู่ในคิวไหม · ถ้าไม่อยู่เพราะอะไร
+    เรียงตามคิว (คนที่อยู่ในคิวก่อน ตามลำดับที่จะได้ใบ) แล้วค่อยคนที่หลุดคิว · ไม่มี LINE id"""
+    from . import connect as C
+    from .checkin_report import THAI_DAYS
+    c = c or cfg()
+    day = day or timezone.localdate()
+    dname = THAI_DAYS[day.weekday()]
+    order = {r["id"]: i for i, r in enumerate(rr_candidates(c, day=day))}
+    counts = _today_counts(day)
+    checked = None
+    if c["need_checkin"]:
+        try:
+            from .models import CheckIn
+            checked = set(CheckIn.objects.filter(date_iso=day, employee__isnull=False)
+                          .values_list("employee_id", flat=True))
+        except Exception:
+            checked = set()
+    out = []
+    for e in Employee.objects.filter(active=True):
+        t = C.team_of(e)
+        if t not in c["rr_teams"] or C.is_test_seller(e):
+            continue
+        n = counts.get(e.id, (0, None))[0]
+        why = ""
+        if e.day_off and dname in e.day_off:
+            why = "หยุดวันนี้"
+        elif checked is not None and e.id not in checked:
+            why = "ยังไม่เช็คชื่อ"
+        elif c["cap_day"] and n >= c["cap_day"]:
+            why = "เต็มเพดาน"
+        out.append({"id": e.id, "name": e.nickname, "team": t, "today": n, "cap": c["cap_day"],
+                    "ok": e.id in order, "why": why, "_o": order.get(e.id, 999)})
+    out.sort(key=lambda r: (r["_o"], r["team"], r["name"]))
+    for r in out:
+        r.pop("_o", None)
     return out
 
 
@@ -1078,6 +1139,55 @@ def forward_chat(o, emp, by: str = "") -> tuple:
         return True, "ส่งต่อไม้ 2: %s → %s ให้ %s แล้ว (ไม่ส่งเข้ากลุ่มจริง)" % (old, new, emp.nickname)
     info = C._post_slip(o, lead, emp, by)
     return bool(info.get("ok")), "ส่งต่อไม้ 2 %s → " % old + slippost.summary(new, emp.nickname, info)
+
+
+def forward_code(code: str, emp, by: str = "") -> tuple:
+    """ส่งต่อไม้ 2 จาก **เลขลีด** (หน้าฐานข้อมูล Lead) — เลขนี้อยู่ในแชท Connect / ลีดภายนอกไหน ใช้ตัวนั้น
+    · มีแต่ในชีต (ใบที่แอดมินโพสต์เองก่อนมีระบบ) = สร้างลีดภายนอกจากแถวในชีต แล้วส่งใบไม้ 2 เข้าห้อง REJECT"""
+    from . import connect as C
+    from .leadpark import _post, forget, source_of
+    from .models import ChatLead
+    code = (code or "").strip().upper()
+    prev = forwarded_as(code)
+    if prev:
+        return False, "เลข %s ส่งต่อไม้ 2 ไปแล้ว → %s%s · จะเปลี่ยนคนให้ใช้ \"จ่ายใหม่\" ในนาฬิกาโทร" % (
+            code, prev["code"], (" (@%s)" % prev["seller"]) if prev["seller"] else "")
+    cl = ChatLead.objects.select_related("chat").filter(code__iexact=code).first()
+    if cl:
+        o = C.ChatOwner.objects.select_related("owner", "profile", "fb_profile").get(pk=cl.chat_id)
+        return forward_chat(o, emp, by)
+    e = ExtLead.objects.filter(code__iexact=code).first()
+    if e:
+        return forward_ext(e.message_id, emp, by)
+    if not emp or not emp.active:
+        return False, "เลือกเซลล์ที่จะส่งต่อให้ก่อน"
+    from .console_data import rows
+    row = next((r for r in rows() if r["code"] == code), None)
+    if not row:
+        return False, "ไม่พบเลข %s ในชีตลีด" % code
+    new = fwd_code(code)
+    if not new:
+        return False, "เลข %s ส่งต่อไม่ได้ (รูปแบบไม่ใช่เลขลีด)" % code
+    real = C.slip_post_on() and not C.is_test_seller(emp)
+    with C.code_lock():
+        if C.code_taken(new):
+            return False, "เลข %s ถูกใช้แล้ว" % new
+        e = ExtLead.objects.create(
+            message_id=("fwd:" + new)[:64], group_id="", group_name="ไม้ 2 จากฐานข้อมูล Lead",
+            parked_at=timezone.now(), parked_by=(by or "")[:80], source=source_of(row["channel"]),
+            prefix=re.sub(r"\d.*$", "", new)[:16], account=(row["name"] or "")[:120],
+            customer_name=(row["name"] or "")[:120], phone=row["phone"][:40], channel=row["channel"][:80],
+            car_text=(row["carAsk"] or row["car"])[:300], more=("ไม้ 2 จาก %s (%s)" % (code, row["seller"] or "-"))[:1000],
+            code=new, code_demo=not real, seller=emp, seller_name=emp.nickname[:80],
+            assigned_at=timezone.now(), assigned_by=(by or "")[:80],
+            post_info={"sending": timezone.now().isoformat()} if real else {})
+    forget()
+    if not real:
+        before_post(new, emp, by, ext=e, phone=e.phone, customer=e.customer_name, car=e.car_text, demo=True)
+        return True, "ส่งต่อไม้ 2: %s → %s ให้ %s แล้ว (ไม่ส่งเข้ากลุ่มจริง)" % (code, new, emp.nickname)
+    info = _post(e, emp, by)
+    from . import slippost
+    return bool(info.get("ok")), "ส่งต่อไม้ 2 %s → " % code + slippost.summary(new, emp.nickname, info)
 
 
 def forward_ext(mid: str, emp, by: str = "") -> tuple:

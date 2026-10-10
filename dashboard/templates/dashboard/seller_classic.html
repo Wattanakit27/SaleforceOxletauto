@@ -89,115 +89,9 @@
       .seller-hd h1 { font-size:var(--fs-h); }
       .seller-hd { padding: 12px 13px; }
     }
-
-    /* ══════════ ★ 10 ต.ค.69 หน้าเซลล์แบบใหม่ — เมนูซ้ายสีม่วงเข้ม (แบบที่เจ้าของสั่ง) · หน้าเดิม ?classic=1 ══════════ */
-    .sl-shell { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
-    .sl-rail { background:#1C1631; color:#EEEAF8; position:sticky; top:0; height:100vh; overflow-y:auto; padding:16px 12px;
-               display:flex; flex-direction:column; gap:2px; z-index:20; }
-    .sl-me { display:flex; gap:10px; align-items:center; padding:0 6px 14px; border-bottom:1px solid rgba(255,255,255,.14); margin-bottom:10px; }
-    .sl-me .av { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#7c3aed,#db2777); display:grid; place-items:center;
-                 font-weight:800; font-size:16px; color:#fff; flex:none; }
-    .sl-me .nm { font-weight:800; font-size:15px; }
-    .sl-me .rl { font-size:11.5px; opacity:.7; }
-    .sl-nav { display:flex; flex-direction:column; gap:2px; }
-    .sl-nb { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 11px; border-radius:7px; border:0; background:none;
-             color:inherit; font-size:13.5px; font-weight:500; opacity:.78; cursor:pointer; font-family:inherit; }
-    .sl-nb:hover { opacity:1; background:rgba(255,255,255,.08); }
-    .sl-nb.on { opacity:1; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; font-weight:700; }
-    .sl-nb .count { margin-left:auto; font-size:11px; background:#DB2777; color:#fff; padding:1px 6px; border-radius:5px; font-weight:700; }
-    .sl-nb .count.late { background:#dc2626; }
-    .sl-sec { font-size:10.5px; letter-spacing:.06em; opacity:.55; padding:12px 11px 4px; }
-    .sl-foot { margin-top:auto; padding:12px 6px 0; border-top:1px solid rgba(255,255,255,.14); display:flex; flex-direction:column; gap:7px; font-size:12px; }
-    .sl-foot a { color:#EEEAF8; opacity:.72; text-decoration:none; padding:2px 4px; }
-    .sl-foot a:hover { opacity:1; }
-    .sl-main { min-width:0; }
-    .sl-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
-    .sl-top h1 { margin:0; font-size:19px; font-weight:800; color:var(--t1); }
-    .sl-top .sub { font-size:12px; color:var(--t3); margin-top:1px; }
-    .sl-live { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--green); white-space:nowrap; }
-    .sl-live i { width:7px; height:7px; border-radius:50%; background:var(--green); display:block; animation:slpulse 2s ease-in-out infinite; }
-    .sl-live span { color:var(--t2); font-variant-numeric:tabular-nums; }
-    @keyframes slpulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
-    .sl-lock { display:flex; gap:8px; align-items:center; background:var(--blue-bg); color:var(--t2); border-radius:10px; padding:9px 12px;
-               font-size:12.5px; margin-bottom:12px; line-height:1.5; }
-    .sl-lock.warn { background:var(--amber-bg); }
-    .sl-card { background:var(--bg); border:.5px solid var(--bd); border-radius:12px; margin-bottom:12px; overflow:hidden; }
-    .sl-card.hl { border-color:#f9a8d4; box-shadow:0 0 0 2px rgba(219,39,119,.08); }
-    .sl-ch { display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:.5px solid var(--bd); flex-wrap:wrap; }
-    .sl-ch h2 { margin:0; font-size:14.5px; font-weight:800; color:var(--t1); display:flex; align-items:center; gap:6px; }
-    .sl-sh { display:flex; align-items:baseline; gap:8px; margin:18px 2px 8px; font-weight:800; font-size:14.5px; color:var(--t1); flex-wrap:wrap; }
-    .sl-sh .dot { width:9px; height:9px; border-radius:50%; display:inline-block; align-self:center; }
-    .sl-sh .n { font-weight:600; color:var(--t3); font-size:12.5px; }
-    .sl-sh .d { font-weight:400; color:var(--t3); font-size:12px; }
-    .sl-it { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 14px; padding:12px 14px; border-bottom:.5px solid var(--bd); align-items:center; }
-    .sl-it:last-child { border-bottom:0; }
-    .sl-it.hot { box-shadow:inset 3px 0 0 var(--red); }
-    .sl-it .c1 { font-size:12px; color:var(--t3); font-family:ui-monospace,Consolas,monospace; }
-    .sl-it .who { font-weight:700; color:var(--t1); }
-    .sl-it .car { font-size:13px; color:var(--t2); margin-top:2px; }
-    .sl-it .tags { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; align-items:center; font-size:12px; color:var(--t3); }
-    .sl-act { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
-    .sl-btn { height:30px; padding:0 12px; border-radius:7px; border:.5px solid var(--bd2); background:var(--bg); font-size:13px; font-weight:600;
-              color:var(--t1); cursor:pointer; display:inline-flex; align-items:center; gap:5px; text-decoration:none; font-family:inherit; white-space:nowrap; }
-    .sl-btn:hover { border-color:var(--blue); }
-    .sl-btn.pri { background:#7c3aed; color:#fff; border-color:#7c3aed; }
-    .sl-chip { display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; padding:2px 7px; border-radius:5px;
-               background:var(--blue-bg); color:var(--blue-dk); white-space:nowrap; }
-    .sl-chip.mute { background:var(--bg3); color:var(--t3); }
-    .sl-chip.ok { background:var(--green-bg); color:var(--green); }
-    .sl-chip.crit { background:var(--red-bg); color:var(--red); }
-    .sl-chip.warn { background:var(--amber-bg); color:var(--amber); }
-    .sl-chn { font-size:11px; font-weight:700; padding:1px 7px; border-radius:4px; color:#fff; background:#64748b; white-space:nowrap; }
-    .sl-timer { text-align:right; }
-    .sl-timer .num { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }
-    .sl-timer small { display:block; font-size:11px; color:var(--t3); }
-    .sl-timer.ok .num { color:var(--green); } .sl-timer.warn .num { color:var(--amber); } .sl-timer.crit .num { color:var(--red); }
-    .sl-row-car { display:flex; gap:8px; align-items:baseline; padding:10px 14px; border-bottom:.5px solid var(--bd); flex-wrap:wrap; font-size:13px; }
-    .sl-row-car:last-child { border-bottom:0; }
-    .sl-tw { overflow-x:auto; }
-    .sl-tbl { width:100%; border-collapse:collapse; font-size:13px; }
-    .sl-tbl th { text-align:left; font-weight:700; font-size:11.5px; color:var(--t3); padding:9px 12px; border-bottom:.5px solid var(--bd2); white-space:nowrap; }
-    .sl-tbl td { padding:9px 12px; border-bottom:.5px solid var(--bd); vertical-align:middle; color:var(--t1); }
-    .sl-tbl tr:last-child td { border-bottom:0; }
-    .sl-tbl tr[data-code] { cursor:pointer; }
-    .sl-tbl tr[data-code]:hover td { background:var(--bg2); }
-    .sl-tbl .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--t3); }
-    .sl-search { display:flex; gap:8px; align-items:center; padding:12px 14px; border-bottom:.5px solid var(--bd); flex-wrap:wrap; }
-    .sl-search input, .sl-search select { padding:8px 11px; border:.5px solid var(--bd2); border-radius:8px; background:var(--bg2); color:var(--t1);
-                                          font-size:13.5px; font-family:inherit; }
-    .sl-search input { flex:1; min-width:180px; }
-    .sl-empty { padding:22px; text-align:center; color:var(--t3); font-size:13px; }
-    body.sl-chat .seller-page { max-width:none; padding:0; }
-    .sl-chatframe { width:100%; height:100vh; border:0; display:block; background:var(--bg); }
-    .sl-note { font-size:12px; color:var(--t3); line-height:1.6; background:var(--bg); border:.5px solid var(--bd); border-radius:12px; padding:11px 14px; }
-    /* จอแคบ / ฝังในแดชบอร์ด = เมนูเป็นแถบแนวนอนด้านบน */
-    @media (max-width: 900px) {
-      .sl-shell { grid-template-columns:minmax(0,1fr); }
-      .sl-rail { flex-direction:row; align-items:center; height:auto; position:sticky; top:0; overflow-x:auto; padding:8px 10px; gap:6px; }
-      .sl-me { border-bottom:0; padding:0 6px 0 0; margin:0; flex:none; }
-      .sl-me .rl, .sl-me .nm { display:none; }
-      .sl-me .av { width:30px; height:30px; font-size:13px; }
-      .sl-nav { flex-direction:row; gap:4px; }
-      .sl-nb { white-space:nowrap; width:auto; flex:none; padding:7px 10px; }
-      .sl-sec { display:none; }
-      .sl-foot { flex-direction:row; border-top:0; margin:0 0 0 auto; padding:0; align-items:center; flex:none; }
-      .sl-chatframe { height:calc(100vh - 50px); }
-      .sl-it { grid-template-columns:minmax(0,1fr); }
-      .sl-act { justify-content:flex-start; }
-      .sl-timer { text-align:left; }
-    }
-    html.sl-embed .sl-shell { grid-template-columns:minmax(0,1fr); }
-    html.sl-embed .sl-rail { flex-direction:row; align-items:center; height:auto; overflow-x:auto; padding:7px 10px; gap:6px; }
-    html.sl-embed .sl-me .rl { display:none; }
-    html.sl-embed .sl-me { border-bottom:0; padding:0 8px 0 0; margin:0; flex:none; }
-    html.sl-embed .sl-nav { flex-direction:row; gap:4px; }
-    html.sl-embed .sl-nb { white-space:nowrap; width:auto; flex:none; padding:6px 10px; }
-    html.sl-embed .sl-sec, html.sl-embed .sl-foot { display:none; }
   </style>
 </head>
 <body>
-<script>try { if (window.top !== window) document.documentElement.classList.add('sl-embed'); } catch (e) { document.documentElement.classList.add('sl-embed'); }</script>
-{% if not error %}<div class="sl-shell"><nav class="sl-rail" id="sl-rail" aria-label="เมนูเซลล์"></nav><div class="sl-main">{% endif %}
 <div class="seller-page">
   {% if error %}
   <div class="err-wrap">
@@ -208,7 +102,6 @@
   <div id="root"><div class="loading-container"><div class="spin"></div><span style="font-size:var(--fs-body)">กำลังโหลด...</span></div></div>
   {% endif %}
 </div>
-{% if not error %}</div></div>{% endif %}
 
 {% if not error %}
 <script>
@@ -243,7 +136,6 @@
         const c = j.counts || {};
         _cnS = {mine: c.mineWaiting || 0, queue: c.queue || 0, late: c.mineOverdue || 0};
         const el = document.getElementById('cn-sbadge'); if (el) el.outerHTML = cnSellerBadge();
-        try { renderSlRail(); } catch (e) {}
       }).catch(function(){});
     }
     poll(); setInterval(poll, 30000);
@@ -273,14 +165,7 @@
   let bookStatusFilter = 'all';
   let statusFilter = 'all';   // dropdown ในหัว lead list: all | z_<สถานะลูกค้า> (16 ค่า · มิ.ย.69)
   let sortOrder = '';         // '' (default urgency) | 'updates_desc' | 'updates_asc'
-  // ★ 10 ต.ค.69 หน้าเซลล์แบบใหม่: เมนูซ้าย — today | newcar | mine | chat | dashboard (สถิติ) | check | cars | loan
-  //   ?m= เลือกหน้าเริ่มต้น · ฝังในแดชบอร์ดแอดมิน (iframe) เริ่มที่สถิติเหมือนเดิม
-  const SL_MODES = ['today', 'newcar', 'mine', 'chat', 'dashboard', 'check', 'cars', 'loan', 'finance'];
-  let pageMode = (() => {
-    try { const m = new URLSearchParams(location.search).get('m'); if (SL_MODES.includes(m)) return m; } catch (e) {}
-    try { if (window.top !== window) return 'dashboard'; } catch (e) { return 'dashboard'; }
-    return 'today';
-  })();
+  let pageMode = 'dashboard'; // 'dashboard' | 'finance' — เลือกจาก dropdown โหมดบนหัว
   const __charts = {};
 
   // ── date utils ──
@@ -917,275 +802,6 @@
     return h;
   }
 
-  // ══════════════ ★ 10 ต.ค.69 หน้าเซลล์แบบใหม่ — เมนูซ้าย · งานวันนี้ · รถเข้าใหม่ · ลูกค้าของฉัน · แชท · เช็คเบอร์ ══════════════
-  const SELF_VIEW = {{ self_view|yesno:"true,false" }};
-  LUCIDE['message-circle'] = '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>';
-  LUCIDE['users'] = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>';
-  LUCIDE['chart'] = '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>';
-  const SL_NAV = [
-    { m: 'today', l: 'งานวันนี้', i: 'zap', sub: 'เรียงจากเคสที่เสี่ยงเสียลูกค้าก่อน — ใบจ่ายลีด · ยังไม่โทร · นัด · ดีลค้าง · ครบรอบตาม' },
-    { m: 'newcar', l: 'รถเข้าใหม่', i: 'sparkles', sub: 'รถพร้อมขายที่ตรงกับลูกค้าที่เคยบอกว่า "ไม่มีรถ/งบไม่ถึง" — ระบบไม่ทักลูกค้าเอง คุณตัดสินใจ' },
-    { m: 'mine', l: 'ลูกค้าของฉัน', i: 'users', sub: 'เฉพาะลีดที่คุณดูแล · ค้นหาด้วยเบอร์ เลขลีด หรือรุ่นรถ · กดแถวเพื่อบันทึกผล' },
-    { m: 'chat', l: 'แชทลูกค้า', i: 'message-circle', sub: 'ลูกค้ารอรับในวันเวรทีมคุณ + ลูกค้าของคุณ (Connect)' },
-    { m: 'dashboard', l: 'สถิติของฉัน', i: 'chart', sub: 'ยอดปล่อย · คะแนน · KPI · รายการลีดและเคสจอง ตามช่วงวันที่' },
-    { m: 'check', l: 'เช็คเบอร์ซ้ำ', i: 'search', sub: 'ลูกค้าโทร/ทักมาเอง — เช็คก่อนว่าเคยเป็นลีดของใครหรือยัง' },
-    { m: 'cars', l: 'สถานะรถ', i: 'car-front', sub: 'บอร์ดรถในสต๊อก · เปลี่ยนสเตปที่คุณมีสิทธิ์', tool: true },
-    { m: 'loan', l: 'ยื่นสินเชื่อ', i: 'file-text', sub: 'ฟอร์มยื่นสินเชื่อ / เช็คไฟแนนซ์ก่อนเซ็น · สแกนเอกสารกรอกให้', tool: true },
-  ];
-  const _slReturned = l => zVal(l).includes('คืนเคส') || (l.adminStatus || '').includes('คืนเคส') || (l.salesStatus || '').includes('คืนเคส');
-  const _slPad = n => String(n).padStart(2, '0');
-  function slClockText() { const n = new Date(); return _slPad(n.getHours()) + ':' + _slPad(n.getMinutes()) + ':' + _slPad(n.getSeconds()); }
-  function slPhone(p) { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6) : (p || ''); }
-  function slCh(ch) {
-    const c = String(ch || '').toLowerCase();
-    if (!c || c === '-') return '';
-    let bg = '#64748b', t = ch;
-    if (c.includes('tiktok') || c.includes('tt ')) { bg = '#111'; t = 'TikTok'; }
-    else if (c.includes('line')) { bg = '#06c755'; t = 'LINE@'; }
-    else if (c.includes('facebook') || c.includes('เพจ') || c.includes('fb')) { bg = '#1877f2'; t = 'Facebook'; }
-    else if (c.includes('หน้าร้าน') || c.includes('walk')) { bg = '#7c3aed'; t = 'หน้าร้าน'; }
-    return `<span class="sl-chn" style="background:${bg}" title="${h(ch)}">${h(String(t).slice(0, 18))}</span>`;
-  }
-  function slTeamLabel(t) { const n = (C.TEAM_NAMES || {})[t] || t || '-'; return /^ทีม/.test(n) ? n : 'ทีม ' + n; }
-  function slRecent(days) { return (D.leads || []).filter(l => { const d = daysSinceSheetDate(l.dateIn); return d !== null && d >= 0 && d <= days; }); }
-  function slActive(l) { return !isSkipped(l) && !isBooked(l) && !_slReturned(l); }
-  function slStuck() {
-    const arr = D.bookingCases || [];
-    return arr.map((b, gi) => {
-      const st = b.status || '';
-      const sd = b.signDate && b.signDate !== '-' ? b.signDate : null;
-      let reason = null, days = 0;
-      if (st.includes('รอเซ็น') || (st.includes('จอง') && !sd)) { const d = daysSinceSheetDate(b.date); if (d != null && d > 3 && d <= 60) { reason = 'จองมา ' + d + ' วัน ยังไม่เซ็น'; days = d; } }
-      else if (st.includes('รอผล')) { const d = daysSinceSheetDate(sd || b.date); if (d != null && d > 5 && d <= 60) { reason = 'รอผลไฟแนนซ์ ' + d + ' วัน'; days = d; } }
-      else if (st.includes('รอปล่อย')) { const d = daysSinceSheetDate(b.resultDate || sd || b.date); if (d != null && d > 3 && d <= 60) { reason = 'รอปล่อย ' + d + ' วัน'; days = d; } }
-      return reason ? { b, gi, reason, days } : null;
-    }).filter(Boolean).sort((a, b) => b.days - a.days).slice(0, 8);
-  }
-  function slBuckets() {
-    const r30 = slRecent(30).filter(slActive), r60 = slRecent(60).filter(slActive);
-    const noAnsRe = /ไม่ตอบ|ไม่รับสาย/;
-    const notCalled = r30.filter(l => !(l.updateCount > 0))
-      .sort((a, b) => (daysSinceSheetDate(b.dateIn) || 0) - (daysSinceSheetDate(a.dateIn) || 0)).slice(0, 12);
-    const visit = r60.filter(l => /รอมาดูรถ|นัด/.test(zVal(l))).slice(0, 10);
-    const due = r60.filter(l => l.updateCount > 0 && !noAnsRe.test(zVal(l)) && !/รอมาดูรถ|นัด/.test(zVal(l)) && followUrgency(l) > 0)
-      .sort((a, b) => followUrgency(b) - followUrgency(a)).slice(0, 10);
-    const noAns = r60.filter(l => noAnsRe.test(zVal(l)) && followUrgency(l) > 0)
-      .sort((a, b) => followUrgency(b) - followUrgency(a)).slice(0, 8);
-    return { notCalled, visit, due, noAns, stuck: slStuck() };
-  }
-
-  // ── งานวันนี้: ใบจ่ายลีดของฉัน (นาฬิกาโทร) ──
-  let _slToday = null, _slTodayAt = 0, _slTodayBusy = false;
-  async function loadToday(force) {
-    if (_slTodayBusy || (!force && _slToday && Date.now() - _slTodayAt < 60000)) return;
-    _slTodayBusy = true;
-    try {
-      const r = await fetch('/api/seller/today?token=' + encodeURIComponent(_tok()), { credentials: 'same-origin' });
-      _slToday = await r.json();
-    } catch (e) { _slToday = { ok: false, error: 'เชื่อมต่อไม่ได้' }; }
-    _slTodayBusy = false; _slTodayAt = Date.now();
-    if (pageMode === 'today') renderToday(); else renderSlRail();
-  }
-  function slOpenTasks() { return ((_slToday || {}).tasks || []).filter(t => t.kind === 'waiting' || t.kind === 'overdue'); }
-
-  function renderSlRail() {
-    const el = document.getElementById('sl-rail'); if (!el) return;
-    const s = D.seller || {}, nm = sname(SELLER_NAME);
-    const b = slBuckets();
-    const cnt = {
-      today: slOpenTasks().length + b.notCalled.length,
-      newcar: ((_ST.cars || {}).rows || []).length,
-      chat: SELF_VIEW && _cnS ? (_cnS.mine || 0) + (_cnS.queue || 0) : 0,
-    };
-    const late = { chat: SELF_VIEW && _cnS && _cnS.late, today: slOpenTasks().some(t => t.kind === 'overdue') };
-    const btn = x => `<button class="sl-nb${(pageMode === x.m || (x.m === 'loan' && pageMode === 'finance')) ? ' on' : ''}" data-slm="${x.m}">${ic('lucide:' + x.i, 17)} ${h(x.l)}${
-      cnt[x.m] ? `<span class="count${late[x.m] ? ' late' : ''}">${cnt[x.m] > 99 ? '99+' : cnt[x.m]}</span>` : ''}</button>`;
-    const q = new URLSearchParams(location.search); q.set('classic', '1'); q.delete('m');
-    el.innerHTML = `
-      <div class="sl-me"><div class="av">${h((Array.from(nm.trim())[0] || '?').toUpperCase())}</div>
-        <div style="min-width:0"><div class="nm">${h(nm)}</div><div class="rl">เซลล์ · ${h(slTeamLabel(s.team))}</div></div></div>
-      <div class="sl-nav">${SL_NAV.filter(x => !x.tool).map(btn).join('')}
-        <div class="sl-sec">เครื่องมือ</div>${SL_NAV.filter(x => x.tool).map(btn).join('')}</div>
-      <div class="sl-foot">
-        <a href="${h(location.pathname + '?' + q.toString())}" title="หน้าตาแบบเดิม (ช่วงเปลี่ยนผ่าน)">หน้าแบบเดิม</a>
-        <a href="/logout/" onclick="return confirm('ออกจากระบบ?')">${ic('lucide:log-out', 14)} ออกจากระบบ</a>
-      </div>`;
-    el.querySelectorAll('[data-slm]').forEach(x => x.onclick = () => setPageMode(x.dataset.slm));
-  }
-
-  function slLeadItem(l, why, hot) {
-    const ph = l.phone && l.phone !== '-' ? l.phone : '';
-    const z = zVal(l);
-    return `<div class="sl-it${hot ? ' hot' : ''}">
-      <div style="min-width:0"><div><span class="c1">${h(l.code || '-')}</span> <span class="who">${h(ph ? slPhone(ph) : '')}</span></div>
-        <div class="car">${h(l.car && l.car !== '-' ? l.car : 'ไม่ระบุรุ่นรถ')}</div>
-        <div class="tags">${slCh(l.channel)}${z ? `<span class="sl-chip">${h(z)}</span>` : '<span class="sl-chip mute">ยังไม่ใส่สถานะ</span>'}<span>${h(why)}</span></div></div>
-      <div class="sl-act">${ph ? `<a class="sl-btn pri" href="tel:${h(ph.replace(/\D/g, ''))}">${ic('lucide:phone', 14)} โทร</a>` : ''}
-        <button class="sl-btn" onclick="openLeadDetail('${h(l.code)}')">${ic('lucide:pen-line', 14)} บันทึกผล</button></div></div>`;
-  }
-  function slDueText(iso) {
-    const ms = Date.parse(iso) - Date.now();
-    const a = Math.abs(ms), m = Math.floor(a / 60000), sec = Math.floor((a % 60000) / 1000);
-    const t = (m >= 60 ? Math.floor(m / 60) + ':' + _slPad(m % 60) + ':' + _slPad(sec) : _slPad(m) + ':' + _slPad(sec));
-    return { t: ms >= 0 ? t : '+' + t, cls: ms < 0 ? 'crit' : (ms < 5 * 60000 ? 'warn' : 'ok'), late: ms < 0 };
-  }
-  function slTaskItem(t) {
-    const KIND = { waiting: ['warn', 'รอรายงานผล'], overdue: ['crit', 'เลยเวลา — รายงานผลด่วน'], reported: ['ok', 'รายงานผลแล้ว'],
-                   passed: ['mute', 'ขอผ่านแล้ว'], unsent: ['mute', 'ใบยังไม่ถึงกลุ่ม'] }[t.kind] || ['mute', t.kind];
-    const lead = (D.leads || []).find(x => x.code === t.code);
-    const ph = t.phone || (lead && lead.phone !== '-' ? lead.phone : '');
-    const live = (t.kind === 'waiting' || t.kind === 'overdue') && t.dueAt;
-    const dt = live ? slDueText(t.dueAt) : null;
-    return `<div class="sl-it${t.kind === 'overdue' ? ' hot' : ''}">
-      <div style="min-width:0"><div><span class="c1">${h(t.code)}</span> <span class="who">${h(t.customer || (ph ? slPhone(ph) : ''))}</span>${t.customer && ph ? ` <span class="c1">${h(slPhone(ph))}</span>` : ''}</div>
-        <div class="car">${h(t.car || 'ไม่ระบุรุ่นรถ')}</div>
-        <div class="tags"><span class="sl-chip ${KIND[0]}">${h(KIND[1])}</span>${t.by ? `<span>จ่ายโดย ${h(t.by)}</span>` : ''}${
-          t.postedAt ? `<span>ได้ใบ ${h(new Date(t.postedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }))}</span>` : ''}${
-          t.lastReport ? `<span>· ${h(t.lastReport)}</span>` : ''}</div></div>
-      <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
-        ${live ? `<div class="sl-timer ${dt.cls}" data-due="${h(t.dueAt)}"><span class="num">${h(dt.t)}</span><small>${dt.late ? 'เลยเวลารายงานผล' : 'ต้องรายงานผลใน'}</small></div>` : ''}
-        <div class="sl-act">${ph ? `<a class="sl-btn pri" href="tel:${h(String(ph).replace(/\D/g, ''))}">${ic('lucide:phone', 14)} โทร</a>` : ''}
-          ${t.chatId && SELF_VIEW ? `<a class="sl-btn" href="/connect/?id=${t.chatId}">${ic('lucide:message-circle', 14)} เปิดแชท</a>` : ''}
-          ${lead ? `<button class="sl-btn" onclick="openLeadDetail('${h(t.code)}')">${ic('lucide:pen-line', 14)} บันทึกผล</button>` : ''}</div>
-      </div></div>`;
-  }
-  function slSection(color, title, n, desc, items) {
-    if (!items) return '';
-    return `<div class="sl-sh"><span class="dot" style="background:${color}"></span>${h(title)} <span class="n">${n}</span><span class="d">${h(desc)}</span></div>
-      <div class="sl-card">${items}</div>`;
-  }
-  function renderToday() {
-    loadToday(false); loadCarMatches(false);
-    const b = slBuckets(), T = _slToday || {}, tasks = (T.tasks || []);
-    const openT = tasks.filter(t => t.kind === 'waiting' || t.kind === 'overdue').sort((a, b) => Date.parse(a.dueAt || 0) - Date.parse(b.dueAt || 0));
-    const doneT = tasks.filter(t => !(t.kind === 'waiting' || t.kind === 'overdue'));
-    const cars = (_ST.cars || {}).rows || [];
-    const total = openT.length + b.notCalled.length + b.visit.length + b.stuck.length + b.due.length + b.noAns.length;
-    let html = modeBar();
-    html += `<div class="sl-lock">${ic('lucide:user-round', 15)} คุณเห็นเฉพาะลูกค้าที่คุณดูแลเท่านั้น — ลูกค้าของเซลล์คนอื่นและห้องพัก Lead ไม่แสดงในบัญชีนี้</div>`;
-    if (cars.length) html += `<div class="sl-card hl"><div class="sl-ch"><h2>${ic('lucide:sparkles', 16)} รถพร้อมขายตรงกับลูกค้าที่คุณเคยคุยไว้</h2><span class="sl-chip crit">${cars.length} ราย</span>
-        <button class="sl-btn pri" style="margin-left:auto" onclick="setPageMode('newcar')">ดูทั้งหมด →</button></div>
-        ${cars.slice(0, 3).map(x => `<div class="sl-row-car"><b>${h((x.cars || [])[0] ? ((x.cars[0].name || x.cars[0].code || '') + (x.cars[0].year ? ' ' + x.cars[0].year : '')) : '-')}</b>
-          <span style="color:var(--t3)">— ตรงกับ</span> <b>${h(x.customer || x.code || '-')}</b> <span style="color:var(--t3)">อยากได้ ${h(x.want || '-')}${x.budget ? ' · งบ ' + Number(x.budget).toLocaleString() : ''}</span></div>`).join('')}</div>`;
-    if (T.ok === false) html += `<div class="sl-lock warn">${ic('lucide:triangle-alert', 15)} โหลดใบจ่ายลีดไม่ได้: ${h(T.error || '')}</div>`;
-    html += slSection('#db2777', 'ใบจ่ายลีดของฉัน — ต้องรายงานผล', openT.length,
-      `โทรแล้วพิมพ์ "เลขลีด + ผล" ในห้องจ่ายเบอร์ภายใน ${T.callMin || 15} นาที`, openT.map(slTaskItem).join(''));
-    html += slSection('#dc2626', 'ยังไม่โทรเลย', b.notCalled.length, 'ลีด 30 วันล่าสุดที่ยังไม่มีการอัปเดต',
-      b.notCalled.map(l => slLeadItem(l, 'รับเคส ' + (l.dateIn || '-') + ' · ยังไม่อัปเดต', (daysSinceSheetDate(l.dateIn) || 0) >= 1)).join(''));
-    html += slSection('#16a34a', 'รอมาดูรถ / มีนัด', b.visit.length, 'เตรียมรถและเอกสารให้พร้อม',
-      b.visit.map(l => slLeadItem(l, l.lastUpdate && l.lastUpdate !== '-' ? 'อัปเดตล่าสุด ' + l.lastUpdate : '')).join(''));
-    html += slSection('#db2777', 'ดีลค้าง — ดันต่อ', b.stuck.length, 'จอง/รอเซ็นต์เกิน 3 วัน · รอผลเกิน 5 วัน · รอปล่อยเกิน 3 วัน',
-      b.stuck.map(({ b: k, gi, reason }) => `<div class="sl-it hot"><div style="min-width:0"><div><span class="c1">${h(k.leadCode || '')}</span> <span class="who">${h(k.customer || '-')}</span></div>
-        <div class="car">${h(k.car || '-')}</div><div class="tags"><span class="sl-chip warn">${h(k.status || '')}</span><span>${h(reason)}</span></div></div>
-        <div class="sl-act"><button class="sl-btn" onclick="openBadYrCase(${gi})">${ic('lucide:pen-line', 14)} เปิดเคส</button></div></div>`).join(''));
-    html += slSection('#a16207', 'ครบรอบตาม', b.due.length, 'รอบตามขึ้นกับสถานะลูกค้า: สนใจมาก ทุกวัน · ลังเล 2 วัน · รอเงิน 3 วัน',
-      b.due.map(l => slLeadItem(l, urgencyReason(l).t)).join(''));
-    html += slSection('#64748b', 'ลูกค้าไม่ตอบ', b.noAns.length, 'ทักซ้ำตามรอบ · ไม่รับสายเกิน 5 ครั้ง ระบบพักให้ ไม่ขึ้นซ้ำ',
-      b.noAns.map(l => slLeadItem(l, urgencyReason(l).t)).join(''));
-    if (!total) html += `<div class="sl-card"><div class="sl-empty">${ic('lucide:circle-check', 18)} ไม่มีงานค้างตอนนี้ 👍</div></div>`;
-    if (doneT.length) html += `<div class="sl-sh"><span class="dot" style="background:var(--t3)"></span>ใบจ่ายลีดที่จบแล้ว <span class="n">${doneT.length}</span><span class="d">2 วันล่าสุด</span></div>
-      <div class="sl-card">${doneT.slice(0, 10).map(slTaskItem).join('')}</div>`;
-    html += `<div class="sl-note">ลำดับคิดแบบเดียวกับ "ตามด่วน — โทรก่อน" ในหน้าสถิติ (ยังไม่โทร · ลูกค้าฮอตแต่ค้างนาน · สถานะลูกค้า · ค้างนาน) และชุดเดียวกับข้อความตามด่วนที่ส่งเข้าไลน์ 09:00 / 13:00 ·
-      ลีดที่คืนเคส/จอง/ปล่อยแล้วไม่ขึ้นในหน้านี้</div>`;
-    document.getElementById('root').innerHTML = html;
-  }
-
-  // ── รถเข้าใหม่ ──
-  function renderNewcar() {
-    loadCarMatches(false);
-    const d = _ST.cars, rows = (d || {}).rows || [];
-    let body;
-    if (!d) body = `<div class="sl-empty"><div class="spin" style="margin:0 auto 8px"></div>กำลังโหลด…</div>`;
-    else if (d.error) body = `<div class="sl-empty" style="color:var(--red)">${h(d.error)}</div>`;
-    else if (!rows.length) body = `<div class="sl-empty">ยังไม่มีลูกค้าที่รอรถแล้วตอนนี้มีรถตรงสเปก — ระบบเช็คให้ทุก 30 นาที</div>`;
-    else body = rows.map(x => `<div class="sl-it"><div style="min-width:0">
-        <div><span class="c1">${h(x.code || '')}</span> <span class="who">${h(x.customer || '-')}</span></div>
-        <div class="car">อยากได้ ${h(x.want || '-')}${x.budget ? ' · งบ ' + Number(x.budget).toLocaleString() : ''}${x.why ? ' · ' + h(x.why) : ''}</div>
-        <div class="tags">${(x.cars || []).map(c => `<span class="sl-chip ok">${ic('lucide:car-front', 12)} ${h(c.name || c.code || '')}${c.year ? ' ' + c.year : ''}${c.price ? ' · ' + Number(c.price).toLocaleString() : ''}</span>`).join('')}</div></div>
-        <div class="sl-act">${x.phone ? `<a class="sl-btn pri" href="tel:${h(String(x.phone).replace(/\D/g, ''))}">${ic('lucide:phone', 14)} โทร</a>` : ''}
-          ${x.code && (D.leads || []).some(l => l.code === x.code) ? `<button class="sl-btn" onclick="openLeadDetail('${h(x.code)}')">${ic('lucide:pen-line', 14)} บันทึกผล</button>` : ''}</div></div>`).join('');
-    document.getElementById('root').innerHTML = modeBar() + `<div class="sl-card"><div class="sl-ch"><h2>${ic('lucide:sparkles', 16)} รถพร้อมขายตรงกับลูกค้าของฉัน</h2>
-      <span style="font-size:12px;color:var(--t3)">${d && d.at ? 'คำนวณล่าสุด ' + h(new Date(d.at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })) : ''} · เกินงบได้ 5%</span>
-      <button class="sl-btn" style="margin-left:auto" onclick="loadCarMatches(true)">${ic('lucide:refresh-cw', 14)} โหลดใหม่</button></div>${body}</div>
-      <div class="sl-note">ลูกค้าที่เคยบอกว่า "ไม่มีรถ / งบไม่ถึง" ถูกจดไว้ — พอมีรถพร้อมขายที่ตรงรุ่น/งบ ระบบจับคู่ให้ · <b>ระบบไม่ทักลูกค้าเอง</b> คุณเลือกว่าจะโทรหาใคร</div>`;
-  }
-
-  // ── ลูกค้าของฉัน ──
-  const _slMine = { q: '', z: '', n: 100 };
-  let _slMineT = null;
-  function slMineRows() {
-    const q = _slMine.q.toLowerCase().replace(/[\s-]/g, '');
-    return (D.leads || []).filter(l => {
-      if (_slMine.z === '_none' ? zVal(l) : (_slMine.z && zVal(l) !== _slMine.z)) return false;
-      if (!q) return true;
-      return [l.code, l.phone, l.car, l.channel, zVal(l)].some(v => String(v || '').toLowerCase().replace(/[\s-]/g, '').includes(q));
-    }).sort((a, b) => (daysSinceSheetDate(a.dateIn) ?? 9999) - (daysSinceSheetDate(b.dateIn) ?? 9999));
-  }
-  function slMineTable() {
-    const rows = slMineRows(), shown = rows.slice(0, _slMine.n);
-    return `<div class="sl-tw"><table class="sl-tbl"><thead><tr><th>ลูกค้า</th><th>รถที่สนใจ</th><th>ช่องทาง</th><th>สถานะลูกค้า</th><th>อัปเดต</th><th>รับเคส</th></tr></thead><tbody>
-      ${shown.map(l => { const z = zVal(l); return `<tr data-code="${h(l.code)}"><td><b>${h(l.phone && l.phone !== '-' ? slPhone(l.phone) : '—')}</b><div class="mono">${h(l.code || '')}</div></td>
-        <td>${h(l.car && l.car !== '-' ? l.car : '—')}</td><td>${slCh(l.channel) || '—'}</td>
-        <td>${z ? `<span class="sl-chip${/คืน|ไม่สนใจ|แบล็ค|เครดิตไม่ผ่าน/.test(z) ? ' crit' : (/จอง|ได้รถ|ส่งมอบ/.test(z) ? ' ok' : '')}">${h(z)}</span>` : '<span class="sl-chip mute">ยังไม่ใส่</span>'}</td>
-        <td>${l.updateCount || 0}/${C.UPD_TGT}</td><td style="white-space:nowrap">${h(l.dateIn || '-')}</td></tr>`; }).join('')
-        || '<tr><td colspan="6" class="sl-empty">ไม่พบลีดที่ตรงเงื่อนไข</td></tr>'}</tbody></table></div>
-      ${rows.length > shown.length ? `<div style="padding:10px 14px;border-top:.5px solid var(--bd)"><button class="sl-btn" id="sl-mine-more">แสดงเพิ่มอีก ${Math.min(100, rows.length - shown.length)} ราย (จาก ${rows.length})</button></div>` : ''}`;
-  }
-  function bindMineTable() {
-    const tb = document.getElementById('sl-mine-tb'); if (!tb) return;
-    tb.querySelectorAll('tr[data-code]').forEach(tr => tr.onclick = () => openLeadDetail(tr.dataset.code));
-    const more = document.getElementById('sl-mine-more');
-    if (more) more.onclick = () => { _slMine.n += 100; tb.innerHTML = slMineTable(); bindMineTable(); };
-    const c = document.getElementById('sl-mine-n'); if (c) c.textContent = slMineRows().length.toLocaleString() + ' ราย';
-  }
-  function renderMine() {
-    const zs = Array.from(new Set((D.leads || []).map(zVal).filter(Boolean))).sort();
-    document.getElementById('root').innerHTML = modeBar() + `
-      <div class="sl-lock">${ic('lucide:user-round', 15)} คุณเห็นเฉพาะลูกค้าที่คุณดูแลเท่านั้น (ลีดทั้งปีในชีตลีดที่ลงชื่อคุณ)</div>
-      <div class="sl-card"><div class="sl-search">
-        <input id="sl-mine-q" type="search" autocomplete="off" placeholder="ค้นเบอร์ เลขลีด หรือรุ่นรถ — เฉพาะลูกค้าของคุณ" value="${h(_slMine.q)}">
-        <select id="sl-mine-z"><option value="">สถานะลูกค้าทั้งหมด</option><option value="_none"${_slMine.z === '_none' ? ' selected' : ''}>ยังไม่ใส่สถานะ</option>
-          ${zs.map(z => `<option${_slMine.z === z ? ' selected' : ''}>${h(z)}</option>`).join('')}</select>
-        <span class="sl-chip mute" id="sl-mine-n"></span></div>
-        <div id="sl-mine-tb">${slMineTable()}</div></div>`;
-    bindMineTable();
-    const qi = document.getElementById('sl-mine-q');
-    qi.oninput = () => { clearTimeout(_slMineT); _slMineT = setTimeout(() => { _slMine.q = qi.value.trim(); _slMine.n = 100;
-      document.getElementById('sl-mine-tb').innerHTML = slMineTable(); bindMineTable(); }, 250); };
-    document.getElementById('sl-mine-z').onchange = e => { _slMine.z = e.target.value; _slMine.n = 100;
-      document.getElementById('sl-mine-tb').innerHTML = slMineTable(); bindMineTable(); };
-  }
-
-  // ── แชทลูกค้า (Connect ฝังในหน้า) · เช็คเบอร์ ──
-  function renderChat() {
-    const root = document.getElementById('root');
-    if (!SELF_VIEW) {
-      root.innerHTML = `<div style="padding:14px">${modeBar()}<div class="sl-card"><div class="sl-empty">แชทลูกค้าเปิดได้เฉพาะเจ้าของหน้า — แอดมินดูแชททั้งหมดได้ที่ Connect
-        <div style="margin-top:10px"><a class="sl-btn pri" href="/connect/" target="_top">เปิด Connect</a></div></div></div></div>`;
-      return;
-    }
-    if (document.getElementById('sl-chatframe')) return;           // เปิดอยู่แล้ว — ไม่โหลดซ้ำ (แชทค้างที่เดิม)
-    root.innerHTML = `<iframe class="sl-chatframe" id="sl-chatframe" src="/connect/?embed=1" title="แชทลูกค้า"></iframe>`;
-  }
-  function renderCheck() {
-    document.getElementById('root').innerHTML = modeBar() + sellerToolsHtml(true) +
-      `<div class="sl-note">รับเฉพาะเบอร์เต็ม 10 หลัก · ระบบตอบแค่ว่าเป็นลีดของใคร เดือนไหน (ไม่ส่งข้อมูลลูกค้าของเซลล์คนอื่นออกมา) · ถ้าเป็นลีดของคนอื่น แจ้งแอดมินก่อนรับ — ลูกค้าคนเดียวไม่ควรได้เซลล์ 2 คน</div>`;
-    bindSellerTools();
-    const inp = document.getElementById('sl-phone'); if (inp && !_ST.phone) inp.focus();
-  }
-
-  // นาฬิกาหัวหน้า + นับถอยหลังรายงานผล — ทุกวินาที (ไม่ยิงเซิร์ฟเวอร์)
-  setInterval(() => {
-    const ck = document.getElementById('sl-clock'); if (ck) ck.textContent = slClockText();
-    document.querySelectorAll('[data-due]').forEach(el => {
-      const d = slDueText(el.dataset.due);
-      const n = el.querySelector('.num'); if (n) n.textContent = d.t;
-      const sm = el.querySelector('small'); if (sm) sm.textContent = d.late ? 'เลยเวลารายงานผล' : 'ต้องรายงานผลใน';
-      el.classList.remove('ok', 'warn', 'crit'); el.classList.add(d.cls);
-    });
-  }, 1000);
-  setInterval(() => { if (!document.hidden && pageMode === 'today' && !document.querySelector('.modal-overlay, [id$="-overlay"]')) loadToday(true); }, 60000);
-
   // ── render ──
   // ── ★ 10 ต.ค.69 ④ รถใหม่ตรงกับลูกค้าของฉัน + ⑤ เช็คเบอร์ซ้ำ (checkout/leadflow.py · phonebook.py) ──
   //   ข้อมูลโหลดแยก (ไม่ถ่วงหน้าแรก) แล้วเก็บไว้ใน _ST — render() วาดซ้ำได้จากของที่จำไว้ ไม่ยิงซ้ำ
@@ -1193,41 +809,36 @@
   const _tok = () => location.pathname.split('/').filter(Boolean)[1] || '';
   async function loadCarMatches(force) {
     if (!force && _ST.cars && Date.now() - _ST.carsAt < 10 * 60000) return;
-    if (_ST.carsBusy) return;
-    _ST.carsBusy = true;
     try {
       const r = await fetch('/api/seller/car_matches?token=' + encodeURIComponent(_tok()), { credentials: 'same-origin' });
       const d = await r.json();
       _ST.cars = d.ok ? d : { rows: [], error: d.error || 'โหลดไม่ได้' };
     } catch (e) { _ST.cars = { rows: [], error: 'เชื่อมต่อไม่ได้' }; }
-    _ST.carsAt = Date.now(); _ST.carsBusy = false;
-    const el = document.getElementById('sl-tools'); if (el) el.outerHTML = sellerToolsHtml(!!el.dataset.only);
+    _ST.carsAt = Date.now();
+    const el = document.getElementById('sl-tools'); if (el) el.outerHTML = sellerToolsHtml();
     bindSellerTools();
-    if (pageMode === 'newcar') renderNewcar();
-    else if (pageMode === 'today') renderToday();
-    else renderSlRail();
   }
   async function checkPhone() {
     const inp = document.getElementById('sl-phone'); if (!inp) return;
     _ST.phone = inp.value.trim();
     if (!_ST.phone) return;
     _ST.checking = true; _ST.check = null;
-    const el0 = document.getElementById('sl-tools'); if (el0) { el0.outerHTML = sellerToolsHtml(!!el0.dataset.only); bindSellerTools(); }
+    const el0 = document.getElementById('sl-tools'); if (el0) { el0.outerHTML = sellerToolsHtml(); bindSellerTools(); }
     try {
       const r = await fetch('/api/seller/check_phone', { method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: _tok(), phone: _ST.phone }) });
       _ST.check = await r.json();
     } catch (e) { _ST.check = { ok: false, error: 'เชื่อมต่อไม่ได้' }; }
     _ST.checking = false;
-    const el = document.getElementById('sl-tools'); if (el) { el.outerHTML = sellerToolsHtml(!!el.dataset.only); bindSellerTools(); }
+    const el = document.getElementById('sl-tools'); if (el) { el.outerHTML = sellerToolsHtml(); bindSellerTools(); }
   }
   function bindSellerTools() {
     const inp = document.getElementById('sl-phone');
     if (inp) inp.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); checkPhone(); } };
     const b = document.getElementById('sl-phone-go'); if (b) b.onclick = checkPhone;
   }
-  function sellerToolsHtml(onlyCheck) {
-    const c = _ST.check, cars = onlyCheck ? null : _ST.cars;
+  function sellerToolsHtml() {
+    const c = _ST.check, cars = _ST.cars;
     let res = '';
     if (_ST.checking) res = `<div style="color:var(--t3);margin-top:6px">กำลังเช็ค…</div>`;
     else if (c && !c.ok) res = `<div style="color:var(--red);margin-top:6px">${h(c.error || 'เช็คไม่ได้')}</div>`;
@@ -1248,7 +859,7 @@
     } else if (cars && cars.error) {
       carHtml = `<div style="margin-top:10px;font-size:var(--fs-body);color:var(--t3)">รถตรงกับลูกค้า: ${h(cars.error)}</div>`;
     }
-    return `<div class="section" id="sl-tools" data-only="${onlyCheck ? 1 : ''}" style="margin-bottom:14px">
+    return `<div class="section" id="sl-tools" style="margin-bottom:14px">
       <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:phone',16)} เช็คเบอร์ลูกค้าซ้ำ</h2>
       <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px;line-height:1.5">ลูกค้าโทร/ทักมาเอง — เช็คก่อนว่าเคยเป็นลีดของเซลล์คนอื่นหรือยัง (พิมพ์เบอร์เต็ม · บอกแค่ชื่อเซลล์กับเดือน)</div>
       <div style="display:flex;gap:6px;max-width:420px">
@@ -1260,16 +871,6 @@
   }
 
   function render() {
-    try { renderSlRail(); } catch (e) {}
-    document.body.classList.toggle('sl-chat', pageMode === 'chat');
-    if (pageMode === 'today') { renderToday(); return; }
-    if (pageMode === 'newcar') { renderNewcar(); return; }
-    if (pageMode === 'mine') { renderMine(); return; }
-    if (pageMode === 'chat') { renderChat(); return; }
-    if (pageMode === 'check') { renderCheck(); return; }
-    renderDashboard();
-  }
-  function renderDashboard() {
     if (pageMode === 'cars') { renderCarsMode(); return; }                            // 🚗 สถานะรถ
     if (pageMode === 'finance' || pageMode === 'loan') { renderLoanMode(); return; }  // รวมเป็นฟอร์มเดียว
     const s = D.seller;
@@ -1559,6 +1160,8 @@
         `;
       })()}
 
+      ${sellerToolsHtml()}
+
       <div class="cgrid">
         <div class="chart-card">
           <div class="chart-title">Lead ของฉัน — ${h(periodLabel)}</div>
@@ -1680,6 +1283,7 @@
 
     document.getElementById('root').innerHTML = html;
     initCharts();
+    bindSellerTools();
     loadCarMatches();
   }
 
@@ -2385,26 +1989,21 @@
   // โหมด (mode selector) — สลับ แดชบอร์ด / ฟอร์มเช็คไฟแนนซ์
   // ════════════════════════════════════════════════════════════════
   function modeBar() {
-    const cur = SL_NAV.find(x => x.m === pageMode || (x.m === 'loan' && pageMode === 'finance')) || SL_NAV[0];
     return `
-      <div class="sl-top">
-        <div><h1>${h(cur.l)}</h1><div class="sub">${h(cur.sub)}</div></div>
-        <span style="flex:1"></span>
-        <span class="sl-live"><i></i>นับเวลาจริง <span id="sl-clock">${slClockText()}</span></span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:var(--bg);border:.5px solid var(--bd);border-radius:12px;padding:10px 14px">
+        <span style="font-size:var(--fs-body);color:var(--t3);font-weight:700">โหมด</span>
+        <select onchange="setPageMode(this.value)" style="flex:1;max-width:340px;padding:9px 12px;border:.5px solid var(--bd2);border-radius:9px;background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-weight:600;font-family:inherit;cursor:pointer">
+          <option value="dashboard" ${pageMode==='dashboard'?'selected':''}>📊 แดชบอร์ดของฉัน</option>
+          <option value="cars" ${pageMode==='cars'?'selected':''}>🚗 สถานะรถ</option>
+          <option value="loan" ${(pageMode==='loan'||pageMode==='finance')?'selected':''}>📄 ยื่นสินเชื่อ / เช็คไฟแนนซ์</option>
+        </select>
+        <a href="/connect/" title="Connect — แชทลูกค้า: รับลูกค้าในวันเวรของทีม + ตอบลูกค้าของคุณ" style="position:relative;display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--blue);background:var(--blue-bg);color:var(--blue);font-weight:700;text-decoration:none;white-space:nowrap">${ic('lucide:inbox',16)} แชทลูกค้า${cnSellerBadge()}</a>
         ${sellerBellHtml()}
-        <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" class="sl-btn">${themeIcon()}</button>
-      </div>
-      ${SELF_VIEW ? '' : `<div class="sl-lock warn">${ic('lucide:eye',15)} กำลังดูหน้าของ <b>${h(sname(SELLER_NAME))}</b> (แอดมิน/ผู้บริหาร) — เมนู "แชทลูกค้า" เปิดได้เฉพาะเจ้าของหน้า</div>`}`;
+        <button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:var(--fs-sub);padding:7px 11px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>
+        <a href="/logout/" title="ออกจากระบบ" onclick="return confirm('ออกจากระบบ?')" style="font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;text-decoration:none;white-space:nowrap;font-weight:600">ออกจากระบบ</a>
+      </div>`;
   }
-  function setPageMode(v) {
-    pageMode = v; window.scrollTo(0,0);
-    try {
-      const q = new URLSearchParams(location.search);
-      if (v === 'today') q.delete('m'); else q.set('m', v);
-      history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : ''));
-    } catch (e) {}
-    render();
-  }
+  function setPageMode(v) { pageMode = v; window.scrollTo(0,0); render(); }
   function toggleTheme() {
     const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', cur);

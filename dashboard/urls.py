@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/seller/update_note", views.update_lead_note, name="update_lead_note"),
     path("api/seller/check_phone", views.seller_check_phone, name="seller_check_phone"),
     path("api/seller/car_matches", views.seller_car_matches, name="seller_car_matches"),
+    path("api/seller/today", views.seller_today, name="seller_today"),
     path("api/seller/scan_doc", views.scan_doc, name="scan_doc"),
     path("api/seller/loan_submit", views.loan_submit, name="loan_submit"),
     path("api/insights/seller", views.insights_seller, name="insights_seller"),

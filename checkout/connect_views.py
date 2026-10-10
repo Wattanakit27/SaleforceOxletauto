@@ -157,8 +157,10 @@ def page(request):
                  "teams": C.cfg()["teams"]} if ctx["realAdmin"] else None,
     }
     # json_script (ไม่ใช่ |safe) — ชื่อเล่นเป็นข้อความที่คนพิมพ์เอง ห้ามให้ปิด <script> ได้
-    return render(request, "checkout/connect.html", {"error": err, "boot": boot},
-                  status=403 if err else 200)
+    # ★ 10 ต.ค.69 หน้าตาใหม่แบบ "ศูนย์ควบคุมลีด" (เจ้าของสั่งเอาแบบมาแทน) · หน้าเดิมยังเปิดได้ที่ ?classic=1
+    tpl = "checkout/connect_classic.html" if request.GET.get("classic") == "1" else "checkout/connect.html"
+    boot["panel"] = (request.GET.get("p") or "").strip()[:12]
+    return render(request, tpl, {"error": err, "boot": boot}, status=403 if err else 200)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -229,6 +231,16 @@ def api_inbox(request):
            "now": timezone.localtime().isoformat(timespec="seconds")}
     if admin:
         out["sellers"] = C.seller_list()
+        try:                                     # ★ 10 ต.ค.69 แถบขั้นตอน (ชั้น 3: ใบจ่ายลีดวันนี้) + คิวจ่ายวน
+            from . import leadflow as LF
+            sm = LF.summary()
+            out["lfStrip"] = {"today": sm["total"], "open": sum(sm["counts"].get(k, 0) for k in
+                                                                ("waiting", "overdue", "passed", "unsent")),
+                              "late": sm["counts"].get("overdue", 0)}
+            out["rr"] = LF.rr_json(None, 12)
+            out["rrBoard"] = LF.rr_board()
+        except Exception:
+            pass
         # ห้องพัก Lead ("ADMIN เก็บ Lead") — ลีดที่แอดมินพักใบร่างไว้ ยังไม่ได้เลข/เซลล์ (leadpark.py · จำผล 30 วิ)
         #   อ่านไม่ได้ต้องไม่ทำให้รายชื่อลูกค้าโหลดไม่ขึ้น
         try:
@@ -261,7 +273,18 @@ def api_inbox(request):
                 lc = LF.cfg()
                 out["leadflow"] = {"tasks": LF.tasks_json(1), "rr": LF.rr_json(lc),
                                    "cfg": {"callMin": lc["call_min"], "cardOn": lc["card_on"],
-                                           "autoAssign": lc["auto_assign"], "autoPull": lc["auto_pull"]}}
+                                           "autoAssign": lc["auto_assign"], "autoPull": lc["auto_pull"],
+                                           "capDay": lc["cap_day"], "reportOn": lc["report_on"]}}
+                # ★ แถวลูกค้าแชทในห้องพัก: มีเบอร์/ID LINE ไหม · รถที่ถาม · เบอร์ซ้ำ — กล่องจ่ายเบอร์แบบกดชื่อเดียว
+                from .models import ChatLead
+                leads = {x.chat_id: x for x in ChatLead.objects.filter(chat_id__in=[r["id"] for r in rows])}
+                for r in rows:
+                    ld = leads.get(r["id"])
+                    if not ld:
+                        continue
+                    r["hasPhone"], r["hasLine"] = bool(ld.phone), bool(ld.line_id)
+                    r["car"] = ld.car_model or ld.car_text or ""
+                    r["dup"] = LF.dup_info(ld.phone, exclude_code=ld.code) if ld.phone else None
             except Exception as e:
                 out["leadflowError"] = str(e)[:120]
     return _j(out)
@@ -371,8 +394,11 @@ def api_assign_lead(request):
     except Exception:
         eid = 0
     emp = Employee.objects.filter(pk=eid).first() if eid else None
-    ok, msg = C.assign_lead(o, emp, str(body.get("base") or ""), bool(body.get("admin")),
-                            bool(body.get("reject")), str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
+    base, adm, rej = str(body.get("base") or ""), bool(body.get("admin")), bool(body.get("reject"))
+    if not base and emp:                          # ★ 10 ต.ค.69 กดชื่อเซลล์ในห้องพัก Lead = จ่ายเลย → ตัวหน้าตามที่ระบบแนะนำ
+        sg = C.suggest_prefix(C.lead_of(o), C.team_of(emp))
+        base, adm, rej = sg["base"], bool(sg["admin"]), bool(sg["reject"])
+    ok, msg = C.assign_lead(o, emp, base, adm, rej, str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
     return _j({"ok": True, "message": msg, "post": _post_out(C.lead_of(_row(request, ctx, o.id)))})
@@ -411,7 +437,9 @@ def api_leadflow(request):
             ok, msg = LF.reassign(t, emp, by=by)
             return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
         elif act == "forward":
-            if body.get("mid"):
+            if body.get("code"):                    # หน้าฐานข้อมูล Lead — เลขลีดที่อาจมีแต่ในชีต
+                ok, msg = LF.forward_code(str(body["code"]), emp, by=by)
+            elif body.get("mid"):
                 ok, msg = LF.forward_ext(str(body["mid"]), emp, by=by)
             else:
                 o = _row(request, ctx, body.get("id"))
@@ -426,6 +454,63 @@ def api_leadflow(request):
                "summary": LF.summary(), "sellers": C.seller_list(),
                "state": LF._kv(LF.KV_STATE), "auto": LF._kv("leadflow_auto_last"),
                "postback": LF._kv("leadflow_postback_last"), "needs": {"at": LF._kv(LF.KV_NEEDS).get("at", "")}})
+
+
+def _admin_get(request):
+    ctx = _ctx(request)
+    if not ctx or not ctx["admin"]:
+        return None, _j({"ok": False, "error": "เฉพาะแอดมิน/ผู้บริหาร"}, 403)
+    return ctx, None
+
+
+@require_GET
+def api_leaddb(request):
+    """ฐานข้อมูล Lead (แอดมิน · 10 ต.ค.69) — `?q=&mode=all|returned&status=&seller=` · `?code=` = รายละเอียดเลขนั้น
+    อ่านชีตลีดทุกแท็บ (จำ 10 นาที) · ไม่ส่ง LINE user id ออก (ชีตลีดไม่มีอยู่แล้ว)"""
+    ctx, bad = _admin_get(request)
+    if bad:
+        return bad
+    from . import console_data as CD
+    try:
+        if request.GET.get("code"):
+            d = CD.detail(request.GET["code"])
+            return _j(dict(d, ok="error" not in d), 200 if "error" not in d else 404)
+        r = CD.search(request.GET.get("q", ""), request.GET.get("mode", "all"), request.GET.get("status", ""),
+                      request.GET.get("seller", ""))
+        if request.GET.get("mode") == "match":
+            from .leadflow import _kv, KV_NEEDS
+            st = _kv(KV_NEEDS)
+            r["matches"] = [dict(x, seller=k) for k, v in (st.get("bySeller") or {}).items() for x in v][:80]
+            r["matchAt"] = st.get("at", "")
+        return _j(dict(r, ok=True))
+    except Exception as e:
+        return _j({"ok": False, "error": "อ่านชีตลีดไม่ได้: %s" % str(e)[:160]}, 502)
+
+
+@require_GET
+def api_pipeline(request):
+    """ไปป์ไลน์เต็นท์รถ (แอดมิน) — เคสจองที่ยังเดิน + ปล่อยเดือนนี้ จากชีตยอดขาย (ผลสรุปแดชบอร์ด)"""
+    ctx, bad = _admin_get(request)
+    if bad:
+        return bad
+    from . import console_data as CD
+    try:
+        return _j(dict(CD.pipeline(), ok=True))
+    except Exception as e:
+        return _j({"ok": False, "error": "โหลดไม่ได้: %s" % str(e)[:160]}, 502)
+
+
+@require_GET
+def api_team(request):
+    """แดชบอร์ดทีม (แอดมิน) — งานจ่ายเบอร์วันนี้ · ตอบแชท · จอง/ปล่อยเดือนนี้ · รายเซลล์"""
+    ctx, bad = _admin_get(request)
+    if bad:
+        return bad
+    from . import console_data as CD
+    try:
+        return _j(dict(CD.team(), ok=True))
+    except Exception as e:
+        return _j({"ok": False, "error": "โหลดไม่ได้: %s" % str(e)[:160]}, 502)
 
 
 def _post_out(rec) -> dict | None:

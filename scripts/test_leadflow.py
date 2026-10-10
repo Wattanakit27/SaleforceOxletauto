@@ -542,6 +542,105 @@ try:
     ck("รถตรงกับลูกค้า: เซลล์เปิดได้", s_ == 200 and d.get("ok"), d)
 
     # ═════════════════════════════════════════════════════════════════════
+    print("[19] ศูนย์ควบคุมลีด (หน้า Connect แบบใหม่) + งานวันนี้ของเซลล์")
+    from checkout import console_data as CD
+    import dashboard.services.fetch_dashboard as FD
+    LC = GS.LEADS_COL
+    tday = timezone.localdate()
+    ds = tday.strftime("%d/%m/%Y")
+
+    def lrow(code, phone, seller, z="", admin=""):
+        r = [""] * 40
+        r[LC.received_date], r[LC.lead_code], r[LC.phone], r[LC.sales_rep] = ds, code, phone, seller
+        r[LC.customer_status], r[LC.admin_status], r[LC.car_formula], r[LC.channel] = z, admin, "Civic FE", "LINE@"
+        return r
+
+    _orig_ft, _orig_fd = GS.fetch_leads_by_month_tabs, FD.fetch_dashboard_data
+    GS.fetch_leads_by_month_tabs = lambda *a, **k: [lrow("NLD10-7001", "0877123401", "มัททดสอบ", z="คืนเคส"),
+                                                    lrow("NLD10-7002", "087-712-3401", "บิวทดสอบ"),
+                                                    lrow("TLD10-7003", "0877000003", "บิวทดสอบ", z="จอง")]
+
+    def _dago(n):
+        return (tday - timedelta(days=n)).strftime("%d/%m/%Y")
+
+    FD.fetch_dashboard_data = lambda *a, **k: {
+        "bookingCases": [{"status": "จอง", "date": _dago(5), "customer": "ค้าง", "seller": "มัททดสอบ", "price": 500000},
+                         {"status": "รอผล", "date": _dago(9), "signDate": _dago(2), "customer": "ปกติ", "seller": "บิวทดสอบ"},
+                         {"status": "ปล่อย", "date": _dago(9), "releaseDate": ds, "customer": "ปล่อยแล้ว", "seller": "บิวทดสอบ"},
+                         {"status": "จอง", "date": _dago(400), "customer": "เก่ามาก", "seller": "บิวทดสอบ"}],
+        "monthlySummary": {str(tday.month): {"lead": 3, "booking": 1, "done": 1,
+                                             "sellers": {"บิวทดสอบ": {"booking": 1, "done": 1}}}}}
+    try:
+        CD.rows(force=True)
+        s_, d, raw = J(ADM, "/connect/api/leaddb")
+        ck("ฐานข้อมูล Lead: อ่านแถวชีต + นับคืนเคส/เบอร์ไม่ซ้ำ", s_ == 200 and d.get("total") == 3
+           and (d.get("stats") or {}).get("returned") == 1 and (d.get("stats") or {}).get("phones") == 2, d.get("stats"))
+        dd = {r["code"]: r for r in d.get("rows") or []}
+        ck("ฐานข้อมูล Lead: เบอร์เดียวกันคนละรูปแบบ = ซ้ำ", (dd.get("NLD10-7002") or {}).get("dup") == 1, dd.get("NLD10-7002"))
+        ck("★ ไม่มี LINE user id หลุดในฐานข้อมูล Lead", not leak.search(raw))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?q=3401")
+        ck("ค้นด้วย 4 ตัวท้ายของเบอร์", s_ == 200 and d.get("total") == 2, d.get("total"))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?mode=returned")
+        ck("โหมดคืนเคส = เฉพาะคืนเคส", [r["code"] for r in d.get("rows") or []] == ["NLD10-7001"], d.get("rows"))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?status=%E0%B8%88%E0%B8%AD%E0%B8%87")
+        ck("กรองสถานะลูกค้า (จอง)", [r["code"] for r in d.get("rows") or []] == ["TLD10-7003"], d.get("rows"))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?code=NLD10-7001")
+        ck("รายละเอียดเลข: เลขอื่นของเบอร์เดียวกัน + เลขไม้ 2", s_ == 200 and d.get("fwd") == "RNLD10-7001/1"
+           and [o["code"] for o in d.get("others") or []] == ["NLD10-7002"], (d.get("fwd"), d.get("others")))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?code=XLD1-1")
+        ck("เลขที่ไม่มีในชีต = 404", s_ == 404, s_)
+        for path in ("/connect/api/leaddb", "/connect/api/pipeline", "/connect/api/team"):
+            s_, d, _ = J(SEL, path)
+            ck("เซลล์เปิด %s ไม่ได้" % path.rsplit("/", 1)[1], s_ == 403, s_)
+        s_, d, _ = J(ADM, "/connect/api/leadflow", {"action": "forward", "code": "NLD10-7001", "emp": BIW.id})
+        ef = ExtLead.objects.filter(code="RNLD10-7001/1").first()
+        ck("ส่งต่อไม้ 2 จากฐานข้อมูล (เลขมีแต่ในชีต) → ลีดภายนอกเลข R…/1 ของบิว",
+           ef is not None and ef.seller_id == BIW.id and ef.phone == "0877123401", (s_, d, ef and ef.code))
+        s_, d, _ = J(ADM, "/connect/api/leadflow", {"action": "forward", "code": "NLD10-7001", "emp": MAT.id})
+        ck("ส่งต่อซ้ำ = ไม่ออกเลขซ้อน + บอกว่าส่งไปแล้ว", ExtLead.objects.filter(code__startswith="RNLD10-7001").count() == 1
+           and not d.get("ok") and "RNLD10-7001/1" in (d.get("error") or d.get("message") or ""), d)
+        s_, d, _ = J(ADM, "/connect/api/leaddb?code=NLD10-7001")
+        ck("รายละเอียดเลขที่ส่งต่อแล้ว: บอกเลขที่ส่งต่อ ไม่เสนอเลขใหม่", not d.get("fwd")
+           and (d.get("fwdDone") or {}).get("code") == "RNLD10-7001/1", (d.get("fwd"), d.get("fwdDone")))
+        s_, d, _ = J(ADM, "/connect/api/pipeline")
+        cols = {c["status"]: c for c in d.get("cols") or []}
+        ck("ไปป์ไลน์: จองเกิน 3 วัน = ค้าง · เคสปีเก่ามากไม่ขึ้น", s_ == 200 and cols["จอง"]["count"] == 1
+           and cols["จอง"]["stuck"] == 1, cols.get("จอง"))
+        ck("ไปป์ไลน์: รอผล 2 วัน ไม่ค้าง · ปล่อยเดือนนี้ 1", cols["รอผล"]["stuck"] == 0 and cols["ปล่อย"]["count"] == 1,
+           (cols.get("รอผล"), cols.get("ปล่อย")))
+        s_, d, raw = J(ADM, "/connect/api/team")
+        n_today = sum(1 for t in LeadTask.objects.filter(
+            created_at__gte=timezone.make_aware(datetime.combine(tday, datetime.min.time())))
+            if not (t.card or {}).get("demo"))
+        ck("แดชบอร์ดทีม: ใบวันนี้ตรงกับฐานข้อมูล (ไม่นับใบทดลอง)", s_ == 200 and d["tiles"]["tasksToday"] == n_today,
+           (d.get("tiles"), n_today))
+        ck("แดชบอร์ดทีม: จอง/ปล่อยเดือนนี้จากผลสรุป", d["tiles"]["doneMonth"] == 1 and d["tiles"]["bookingMonth"] == 1,
+           d.get("tiles"))
+        ck("★ ไม่มี LINE user id หลุดในแดชบอร์ดทีม", not leak.search(raw))
+        s_, d, raw = J(ADM, "/connect/api/inbox?view=queue")
+        ck("กล่องแชทรวม (แอดมิน): มือเซลล์วันนี้ + แถบขั้นตอน", s_ == 200 and isinstance(d.get("rrBoard"), list)
+           and d.get("rrBoard") and "today" in (d.get("lfStrip") or {}), (d.get("lfStrip"), (d.get("rrBoard") or [])[:1]))
+        ck("มือเซลล์วันนี้: ทุกคนมี id/ชื่อ/ทีม/ได้กี่ใบ", all({"id", "name", "team", "today", "ok"} <= set(x) for x in d["rrBoard"]))
+        s_, d, raw = J(SEL, "/api/seller/today")
+        mine_n = sum(1 for t in LeadTask.objects.filter(seller_name="มัททดสอบ",
+                                                        created_at__gte=timezone.now() - timedelta(days=2))
+                     if not (t.card or {}).get("demo"))
+        ck("งานวันนี้ของเซลล์: เห็นเฉพาะใบของตัวเอง", s_ == 200 and len(d.get("tasks") or []) == mine_n
+           and all(t.get("kind") for t in d["tasks"]), (len(d.get("tasks") or []), mine_n))
+        ck("★ ไม่มี LINE user id หลุดในงานวันนี้ของเซลล์", not leak.search(raw))
+        s_, d, _ = J(NOB, "/api/seller/today")
+        ck("งานวันนี้: ไม่ login = 401", s_ == 401, s_)
+        r_ = ADM.get("/connect/?classic=1", secure=True)
+        ck("หน้า Connect แบบเดิมยังเปิดได้ (?classic=1)", r_.status_code == 200 and b'class="cn-top"' in r_.content
+           and b'lc-rail' not in r_.content, r_.status_code)
+        r_ = ADM.get("/connect/?p=db", secure=True)
+        ck("หน้า Connect แบบใหม่ + เปิดหน้าฐานข้อมูลตรง", r_.status_code == 200 and b'id="lc-rail"' in r_.content
+           and b'"panel": "db"' in r_.content, r_.status_code)
+    finally:
+        GS.fetch_leads_by_month_tabs, FD.fetch_dashboard_data = _orig_ft, _orig_fd
+        CD._ROWS.update(at=0.0, val=None)
+
+    # ═════════════════════════════════════════════════════════════════════
     print("[18] ลบของเก่า")
     old = LeadTask.objects.create(code="NLD1-1", run="1")
     LeadTask.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=LF.KEEP_DAYS + 1))

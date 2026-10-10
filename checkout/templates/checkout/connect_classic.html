@@ -295,244 +295,6 @@
   .spin { width: 22px; height: 22px; border: 3px solid var(--bd2); border-top-color: var(--blue); border-radius: 50%;
           animation: cnspin .8s linear infinite; margin: 0 auto 10px; }
   @keyframes cnspin { to { transform: rotate(360deg); } }
-  /* ══════════ ★ 10 ต.ค.69 ศูนย์ควบคุมลีด — แบบใหม่ที่เจ้าของสั่งเอามาแทน (หน้าเดิม ?classic=1) ══════════
-     แถบเมนูซ้ายสีม่วงเข้ม · หัวหน้า + นาฬิกา · แถบขั้นตอน 3 ชั้น · การ์ดขาว · ใช้ตัวแปรสีของ globals.css (ธีมมืดตามได้) */
-  body { overflow: hidden; }
-  .lc-shell [hidden] { display: none !important; }
-  .lc-shell { display: grid; grid-template-columns: 224px minmax(0,1fr); height: 100vh; height: 100dvh; }
-  .lc-rail { background: #1C1631; color: #EEEAF8; display: flex; flex-direction: column; gap: 2px; padding: 18px 12px; overflow-y: auto; min-height: 0; }
-  .lc-brand { padding: 0 10px 14px; border-bottom: 1px solid rgba(255,255,255,.14); margin-bottom: 12px; }
-  .lc-brand .mark { font-weight: 800; font-size: 17px; display: flex; align-items: center; gap: 8px; }
-  .lc-brand .dot { width: 9px; height: 9px; border-radius: 50%; background: #A78BFA; flex: none; }
-  .lc-brand .sub { font-size: 11.5px; opacity: .7; margin-top: 2px; letter-spacing: .04em; }
-  .lc-nav { display: flex; flex-direction: column; gap: 2px; }
-  .lc-nb { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 11px; border-radius: 7px; border: 0;
-           background: none; color: inherit; font-size: 13.5px; font-weight: 500; opacity: .78; cursor: pointer; }
-  .lc-nb:hover { opacity: 1; background: rgba(255,255,255,.08); }
-  .lc-nb.on { opacity: 1; background: linear-gradient(135deg,#7c3aed,#6d28d9); color: #fff; font-weight: 700; }
-  .lc-nb .ic { width: 17px; height: 17px; }
-  .lc-nb .count { margin-left: auto; font-size: 11px; background: #DB2777; color: #fff; padding: 1px 6px; border-radius: 5px; font-weight: 700; }
-  .lc-nb .count.z { background: rgba(255,255,255,.16); }
-  .lc-foot { margin-top: auto; padding: 12px 6px 0; border-top: 1px solid rgba(255,255,255,.14); display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
-  .lc-foot .cn-chip { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #EEEAF8; white-space: normal; }
-  .lc-foot .cn-chip b { color: #fff; }
-  .lc-foot .cn-chip.on { background: rgba(74,222,128,.16); border-color: rgba(74,222,128,.5); color: #bbf7d0; }
-  .lc-link { color: #EEEAF8; opacity: .72; text-decoration: none; padding: 2px 4px; }
-  .lc-link:hover { opacity: 1; }
-  .lc-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .lc-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 20px; border-bottom: .5px solid var(--bd2); background: var(--bg); }
-  .lc-top h1 { margin: 0; font-size: 18px; font-weight: 800; }
-  .lc-top .where { font-size: 12px; color: var(--t3); margin-top: 1px; }
-  .lc-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--green); white-space: nowrap; }
-  .lc-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: block; animation: lcpulse 2s ease-in-out infinite; }
-  .lc-live .num { color: var(--t2); font-variant-numeric: tabular-nums; }
-  @keyframes lcpulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
-  /* แถบขั้นตอน 3 ชั้น (กล่องแชทรวม → ห้องพัก Lead → ใบจ่ายลีด) */
-  .lc-flow { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border: .5px solid var(--bd2); border-radius: 10px; background: var(--bg);
-             margin: 13px 18px 0; overflow: hidden; flex: none; }
-  .lc-fn { padding: 9px 14px; border-right: .5px solid var(--bd); display: flex; flex-direction: column; gap: 1px; min-width: 0; position: relative;
-           cursor: pointer; text-align: left; border-top: 0; border-bottom: 0; border-left: 0; background: none; }
-  .lc-fn:last-of-type { border-right: 0; }
-  .lc-fn .k { font-size: 10px; letter-spacing: .1em; color: var(--t3); }
-  .lc-fn .t { font-weight: 700; font-size: 13.5px; }
-  .lc-fn .s { font-size: 12px; color: var(--t2); }
-  .lc-fn.hot { background: var(--amber-bg); }
-  .lc-fn.hot .s { color: var(--amber); font-weight: 700; }
-  .lc-fn.on { box-shadow: inset 0 -3px 0 var(--blue); }
-  .lc-fn:not(:last-of-type)::after { content: "→"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px;
-           border-radius: 50%; background: var(--t1); color: var(--bg); font-size: 10px; display: grid; place-items: center; z-index: 2; }
-  .lc-fnote { grid-column: 1 / -1; border-top: .5px solid var(--bd); padding: 6px 14px; font-size: 12px; color: var(--t2); background: var(--bg2); }
-  /* กล่องแชทรวม = 3 การ์ด (รายชื่อ · แชท · ข้อมูลลูกค้า) */
-  .lc-shell .cn-main { flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: 340px minmax(0,1fr); gap: 13px; padding: 13px 18px 16px; }
-  .lc-shell .cn-list, .lc-shell .cn-pane { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; overflow: hidden; }
-  .lc-shell .cn-list { border-right: .5px solid var(--bd2); }
-  .lc-shell .cn-row.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 #DB2777; }
-  .lc-page { flex: 1; overflow-y: auto; padding: 14px 18px 40px; min-height: 0; }
-  .lc-page .cn-mback { display: none !important; }
-  .lc-page .cn-page { padding: 0; overflow: visible; }
-  .lc-card { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; margin-bottom: 13px; min-width: 0; }
-  .lc-bh { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: .5px solid var(--bd); flex-wrap: wrap; }
-  .lc-bh h2 { margin: 0; font-size: 14.5px; font-weight: 800; }
-  .lc-bh .note { font-size: 12px; color: var(--t3); }
-  .lc-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 5px;
-             background: var(--bg3); color: var(--t2); white-space: nowrap; }
-  .lc-chip.ok { background: var(--green-bg); color: var(--green); }
-  .lc-chip.warn { background: var(--amber-bg); color: var(--amber); }
-  .lc-chip.crit { background: var(--red-bg); color: var(--red); }
-  .lc-chip.brand { background: var(--blue-bg); color: var(--blue-dk); }
-  .lc-ids { display: inline-flex; gap: 4px; flex-wrap: wrap; }
-  .lc-id { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: .5px solid var(--bd2); color: var(--t3); letter-spacing: .02em; }
-  .lc-id.has { border-color: var(--green); background: var(--green-bg); color: var(--green); }
-  .lc-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
-  .lc-seg button { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); cursor: pointer; }
-  .lc-seg button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
-  .lc-seg button .n { margin-left: 4px; padding: 0 5px; border-radius: 5px; background: rgba(0,0,0,.08); }
-  .lc-seg button.on .n { background: rgba(255,255,255,.22); }
-  /* ห้องพัก Lead */
-  .lc-dist { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); gap: 13px; align-items: start; }
-  .lc-lead { padding: 12px 14px; border-bottom: .5px solid var(--bd); display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px 14px; align-items: start; }
-  .lc-lead:last-child { border-bottom: 0; }
-  .lc-lead.pool { background: var(--amber-bg); }
-  .lc-lead .who { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-  .lc-lead .code { font-size: 11.5px; font-weight: 700; color: var(--t3); letter-spacing: .02em; }
-  .lc-lead .det { font-size: 12.5px; color: var(--t2); margin-top: 3px; }
-  .lc-lead .det.m { color: var(--t3); }
-  .lc-lead .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; align-items: center; }
-  .lc-lead .acts { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; }
-  .lc-lead .more { grid-column: 1 / -1; }
-  .lc-origin { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--t1); color: var(--bg); }
-  .lc-origin.direct { background: #DB2777; color: #fff; }
-  .lc-sla { display: flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .lc-sla small { font-size: 10.5px; font-weight: 600; }
-  .lc-sla.ok { color: var(--green); } .lc-sla.warn { color: var(--amber); } .lc-sla.crit { color: var(--red); }
-  .lc-asg { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
-  .lc-asg button { height: 26px; padding: 0 9px; border-radius: 6px; border: 0; white-space: nowrap; font-size: 12px; font-weight: 700; color: #fff;
-                   opacity: .62; cursor: pointer; }
-  .lc-asg button:hover:not([disabled]) { opacity: 1; transform: translateY(-1px); }
-  .lc-asg button.next { opacity: 1; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px #DB2777; }
-  .lc-asg button[disabled] { opacity: .3; cursor: progress; }
-  .lc-hint { font-size: 11.5px; color: var(--t3); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .lc-hint a { color: var(--blue); cursor: pointer; text-decoration: none; }
-  .lc-merge { display: flex; gap: 9px; align-items: flex-start; padding: 8px 11px; margin-top: 8px; border-radius: 7px; background: var(--red-bg); font-size: 12px; line-height: 1.5; flex-wrap: wrap; }
-  .lc-merge b { color: var(--red); }
-  .lc-merge > .ic { flex: none; margin-top: 2px; color: var(--red); }
-  .lc-merge > span { flex: 1 1 220px; min-width: 0; }
-  .lc-cap { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 10px 13px; border-bottom: .5px solid var(--bd); }
-  .lc-cap:last-child { border-bottom: 0; }
-  .lc-cap.off { opacity: .55; }
-  .lc-cap .nm { font-weight: 700; font-size: 13px; display: flex; gap: 6px; align-items: center; }
-  .lc-cap .st { font-size: 11.5px; color: var(--t3); margin-top: 1px; }
-  .lc-cap .meter { height: 6px; border-radius: 3px; background: var(--bg3); overflow: hidden; margin-top: 6px; }
-  .lc-cap .meter i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
-  .lc-cap .cnt { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .lc-av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; flex: none; }
-  .lc-rl { padding: 9px 14px; border-bottom: .5px solid var(--bd); font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-  .lc-rl:last-child { border-bottom: 0; }
-  .lc-log { max-height: 280px; overflow-y: auto; }
-  .lc-logr { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 9px; padding: 7px 14px; font-size: 12.5px; border-bottom: .5px solid var(--bd); }
-  .lc-logr:last-child { border-bottom: 0; }
-  .lc-logr time { font-size: 11px; color: var(--t3); font-variant-numeric: tabular-nums; }
-  /* ฐานข้อมูล Lead */
-  .lc-dbtop { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: .5px solid var(--bd); }
-  .lc-dbs { display: flex; align-items: center; gap: 9px; background: var(--bg2); border: .5px solid var(--bd2); border-radius: 9px; padding: 8px 12px; min-width: 0; }
-  .lc-dbs input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 14px; }
-  .lc-dbst { display: flex; gap: 16px; flex-wrap: wrap; }
-  .lc-dbst .k { font-size: 11px; color: var(--t3); }
-  .lc-dbst .v { font-size: 17px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
-  .lc-dbf { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); align-items: center; }
-  .lc-dbf select { padding: 5px 9px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); font-size: 12px; }
-  .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 13px; align-items: start; }
-  .lc-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .lc-tbl th { text-align: left; font-weight: 700; font-size: 11.5px; letter-spacing: .03em; color: var(--t3); padding: 9px 12px; border-bottom: .5px solid var(--bd2); white-space: nowrap; }
-  .lc-tbl td { padding: 9px 12px; border-bottom: .5px solid var(--bd); vertical-align: middle; }
-  .lc-tbl tr:last-child td { border-bottom: 0; }
-  .lc-tbl th.r, .lc-tbl td.r { text-align: right; }
-  .lc-tbl tr[data-code] { cursor: pointer; }
-  .lc-tbl tr[data-code]:hover td { background: var(--bg2); }
-  .lc-tbl tr.on td { background: var(--blue-bg); }
-  .lc-tw { overflow-x: auto; }
-  .lc-rep { font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px; background: var(--red-bg); color: var(--red); margin-left: 4px; }
-  .lc-cust b { display: block; }
-  .lc-cust span { font-size: 11.5px; color: var(--t3); font-variant-numeric: tabular-nums; }
-  .lc-prof .ph { padding: 14px; border-bottom: .5px solid var(--bd); }
-  .lc-prof .nm { font-weight: 800; font-size: 16px; }
-  .lc-prof .sub { font-size: 12px; color: var(--t3); margin-top: 1px; }
-  .lc-prof h4 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--t3); padding: 12px 14px 6px; }
-  .lc-tl { padding: 0 14px 12px; }
-  .lc-tli { display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 10px; padding-bottom: 11px; position: relative; }
-  .lc-tli .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); margin-top: 5px; position: relative; z-index: 1; }
-  .lc-tli:not(:last-child)::before { content: ""; position: absolute; left: 4px; top: 12px; bottom: 0; width: 1px; background: var(--bd2); }
-  .lc-tli .d { font-size: 10.5px; color: var(--t3); }
-  .lc-tli .t { font-size: 12.5px; font-weight: 700; }
-  .lc-tli .m { font-size: 12px; color: var(--t2); line-height: 1.45; }
-  /* ไปป์ไลน์ */
-  .lc-kan { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
-  .lc-col { flex: 0 0 220px; background: var(--bg); border: .5px solid var(--bd2); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 200px); }
-  .lc-colh { padding: 10px 12px; border-bottom: .5px solid var(--bd); display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-  .lc-colh .t { font-weight: 800; font-size: 13px; }
-  .lc-colh .n { margin-left: auto; font-size: 12px; color: var(--t3); font-variant-numeric: tabular-nums; }
-  .lc-colb { padding: 9px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  .lc-deal { border: .5px solid var(--bd); border-radius: 8px; padding: 9px 10px; background: var(--bg2); }
-  .lc-deal.stuck { border-color: var(--red); background: var(--red-bg); }
-  .lc-deal .c { font-weight: 700; font-size: 12.5px; }
-  .lc-deal .p { font-size: 11.5px; color: var(--t3); margin-top: 2px; }
-  .lc-deal .f { display: flex; align-items: center; gap: 6px; margin-top: 7px; justify-content: space-between; font-size: 12px; }
-  .lc-deal .v { font-weight: 800; font-variant-numeric: tabular-nums; }
-  /* แดชบอร์ดทีม */
-  .lc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap: 11px; margin-bottom: 13px; }
-  .lc-tile { padding: 13px 15px; }
-  .lc-tile .lbl { font-size: 11.5px; color: var(--t3); }
-  .lc-tile .val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin-top: 3px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .lc-tile .note { font-size: 11.5px; margin-top: 3px; color: var(--t2); }
-  .lc-funnel { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px; }
-  .lc-frow { display: grid; grid-template-columns: 150px minmax(0,1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
-  .lc-frow .bar { height: 19px; border-radius: 4px; background: var(--bg3); overflow: hidden; min-width: 0; }
-  .lc-frow .bar i { display: block; height: 100%; background: var(--blue); border-radius: 4px; }
-  .lc-frow .fv { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .lc-spark { display: flex; align-items: flex-end; gap: 2px; height: 24px; }
-  .lc-spark i { width: 5px; border-radius: 1px; background: var(--blue); opacity: .45; }
-  .lc-spark i:last-child { opacity: 1; background: #DB2777; }
-  /* กฎและเส้นทาง */
-  .lc-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap: 13px; align-items: start; }
-  .lc-rule { padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; border-bottom: .5px solid var(--bd); }
-  .lc-rule:last-child { border-bottom: 0; }
-  .lc-rule .tx { min-width: 0; flex: 1; }
-  .lc-rule .tt { font-weight: 700; font-size: 13px; }
-  .lc-rule .ds { font-size: 12px; color: var(--t2); margin-top: 3px; line-height: 1.5; }
-  .lc-sw { flex: none; width: 38px; height: 22px; border-radius: 6px; background: var(--bd2); position: relative; border: 0; cursor: pointer; }
-  .lc-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 4px; background: #fff;
-                  transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
-  .lc-sw.on { background: var(--green); }
-  .lc-sw.on::after { transform: translateX(16px); }
-  .lc-sw.fixed { cursor: default; opacity: .7; }
-  .lc-lane { padding: 12px 14px; border-bottom: .5px solid var(--bd); }
-  .lc-lane:last-child { border-bottom: 0; }
-  .lc-lane .lt { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .lc-lane .ld { font-size: 12px; color: var(--t2); margin-top: 4px; line-height: 1.55; }
-  .lc-lane .path { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--t3); }
-  .lc-lane .path b { font-weight: 700; font-size: 11.5px; color: var(--t1); background: var(--bg3); padding: 2px 7px; border-radius: 5px; }
-  .lc-sec { margin: 6px 0 10px; font-size: 13px; font-weight: 800; color: var(--t2); }
-  .lc-shell .card { max-width: none; }
-  @media (max-width: 1180px) {
-    .lc-dist, .lc-dbgrid { grid-template-columns: minmax(0,1fr); }
-  }
-  /* จอแคบ + ฝังในแดชบอร์ด = เมนูเป็นแถบแนวนอนด้านบน (แดชบอร์ดมีเมนูซ้ายของตัวเองอยู่แล้ว) */
-  @media (max-width: 900px) {
-    .lc-shell { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); }
-  }
-  html.embed .lc-shell { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); }
-  @media (max-width: 900px) {
-    .lc-rail { flex-direction: row; align-items: center; overflow-x: auto; padding: 8px 10px; gap: 6px; }
-    .lc-brand { border-bottom: 0; border-right: 1px solid rgba(255,255,255,.14); padding: 0 12px 0 2px; margin: 0 4px 0 0; flex: none; }
-    .lc-brand .sub { display: none; }
-    .lc-nav { flex-direction: row; gap: 4px; }
-    .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 7px 10px; }
-    .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
-    .lc-foot .cn-chip { display: none; }
-    .lc-flow { grid-template-columns: minmax(0,1fr); }
-    .lc-fn { border-right: 0; border-bottom: .5px solid var(--bd); }
-    .lc-fn:not(:last-of-type)::after { display: none; }
-    .lc-shell .cn-main { grid-template-columns: minmax(0,1fr); padding: 10px; }
-    .lc-top { padding: 10px 12px; }
-    .lc-page { padding: 10px 10px 30px; }
-    .lc-lead { grid-template-columns: minmax(0,1fr); }
-    .lc-lead .acts { align-items: flex-start; }
-    .lc-asg, .lc-hint { justify-content: flex-start; }
-    .lc-frow { grid-template-columns: 110px minmax(0,1fr) auto; }
-  }
-  @media (max-width: 600px) {
-    .lc-flow, .lc-top .where { display: none !important; }
-  }
-  html.embed .lc-rail { flex-direction: row; align-items: center; overflow-x: auto; padding: 7px 10px; gap: 6px; }
-  html.embed .lc-brand { border-bottom: 0; border-right: 1px solid rgba(255,255,255,.14); padding: 0 12px 0 2px; margin: 0 4px 0 0; flex: none; }
-  html.embed .lc-brand .sub { display: none; }
-  html.embed .lc-nav { flex-direction: row; gap: 4px; }
-  html.embed .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 6px 10px; }
-  html.embed .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
-  html.embed .lc-foot .cn-chip, html.embed #cn-back { display: none; }
-  html.embed .lc-top { padding: 8px 14px; }
-  html.embed .lc-top h1 { font-size: 16px; }
-
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--t1); color: var(--bg);
            padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 
@@ -565,27 +327,16 @@
     </div>
   </div>
 {% else %}
-  <div class="lc-shell" id="lc-shell">
-  <nav class="lc-rail" id="lc-rail" aria-label="เมนูหลัก">
-    <div class="lc-brand"><div class="mark"><span class="dot"></span>Oxlet Auto</div><div class="sub" id="lc-brand-sub">ศูนย์ควบคุมลีด</div></div>
-    <div class="lc-nav" id="lc-nav"></div>
-    <div class="lc-foot">
-      <span class="cn-chip" id="cn-me"></span>
-      <a class="lc-link" id="cn-back" href="/dashboard/">← <span id="cn-back-t">แดชบอร์ด</span></a>
-      <a class="lc-link embed-only" href="/connect/" target="_blank" title="เปิดเต็มจอในแท็บใหม่">เต็มจอ ↗</a>
-      <a class="lc-link" id="lc-classic" href="/connect/?classic=1" title="หน้าตาแบบเดิม (ช่วงเปลี่ยนผ่าน)">หน้าแบบเดิม</a>
-    </div>
-  </nav>
-  <div class="lc-main">
-  <header class="lc-top">
-    <div><h1 id="lc-title">กล่องแชทรวม</h1><div class="where" id="lc-sub"></div></div>
+  <div class="cn-top">
+    <a class="cn-back" id="cn-back" href="/dashboard/"><span data-ic="arrow-left"></span><span class="hide-sm" id="cn-back-t">แดชบอร์ด</span></a>
+    <div class="cn-title"><span data-ic="message-circle"></span> Connect</div>
     <span class="cn-chip hide-sm" id="cn-duty">เวรวันนี้ …</span>
     <span class="cn-sp"></span>
     <span id="cn-tools-top" style="display:flex;gap:6px"></span>
-    <span class="lc-live hide-sm"><i></i>นับเวลาจริง <span class="num" id="lc-clock">—</span></span>
-  </header>
+    <a class="cn-tool embed-only" href="/connect/" target="_blank" title="เปิด Connect เต็มจอในแท็บใหม่">เต็มจอ ↗</a>
+    <span class="cn-chip" id="cn-me"></span>
+  </div>
   <div class="cn-banners" id="cn-banners"></div>
-  <div class="lc-flow" id="lc-flow" hidden></div>
   <div class="cn-main" id="cn-main">
     <aside class="cn-list">
       <div class="cn-tabs" id="cn-tabs"></div>
@@ -603,9 +354,6 @@
       <div class="cn-blank" id="cn-blank">เลือกลูกค้าทางซ้ายเพื่อเปิดแชท</div>
     </section>
   </div>
-  <div class="lc-page" id="lc-page" hidden></div>
-  </div>
-  </div>
 {% endif %}
 {{ boot|json_script:"cn-boot" }}
 <script>
@@ -620,9 +368,6 @@
   const h = s => (s === null || s === undefined) ? '' : String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const ICONS = {
-    'phone': '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
-    'database': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
-    'columns': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
     'message-circle': '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
     'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
     'send': '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
@@ -713,7 +458,7 @@
   const S = {
     view: '', q: '', seller: 0, src: '', rows: [], counts: {}, duty: null, onDuty: false, sellers: [], status: [], note: '',
     openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
-    histOpen: false, side: true, panel: 'inbox',
+    histOpen: false, side: true,
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
   const TABS_ADMIN = [
@@ -728,19 +473,6 @@
     { v: '_stats', l: 'สถิติ', i: 'chart' },
     { v: '_cfg', l: 'ตั้งค่า', i: 'sliders' },
   ];
-  // ★ 10 ต.ค.69 เมนูซ้ายแบบ "ศูนย์ควบคุมลีด" — แท็บรายชื่อ (รอรับ/มีเจ้าของ/ทั้งหมด/ของฉัน) อยู่ในกล่องแชทรวม
-  const RAIL_ADMIN = [
-    { p: 'inbox', l: 'กล่องแชทรวม', i: 'message-circle', sub: 'ชั้น 1 · แชท LINE@ และ Facebook มารวมที่นี่ก่อน — คัดลูกค้าที่ให้เบอร์/ID LINE เข้าห้องพัก Lead' },
-    { p: 'dist', l: 'ห้องพัก Lead', i: 'phone', sub: 'ชั้น 2 · ลูกค้าที่ให้เบอร์/ID LINE แล้ว + ใบร่างจากกลุ่ม ADMIN เก็บ Lead — กดชื่อเซลล์เพื่อจ่ายเบอร์' },
-    { p: 'db', l: 'ฐานข้อมูล Lead', i: 'database', sub: 'ค้นหาลูกค้าทุกคนในชีตลีด · คลิกแล้วเห็นประวัติ · ส่งต่อไม้ 2' },
-    { p: 'pipe', l: 'ไปป์ไลน์', i: 'columns', sub: 'ดีลที่กำลังเดิน จอง → รอเซ็นต์ → รอผล → รอปล่อย → ปล่อย (จากชีตยอดขาย)' },
-    { p: 'dash', l: 'แดชบอร์ดทีม', i: 'chart', sub: 'ใครได้กี่เบอร์ รายงานผลทันไหม ตอบแชททันไหม จอง/ปล่อยเดือนนี้' },
-    { p: 'rules', l: 'กฎและเส้นทาง', i: 'sliders', sub: 'กติกาการจ่ายลีด (เปิด/ปิดได้เลย) · เวร · เส้นตาย · กลุ่ม LINE · ทดสอบ' },
-  ];
-  const RAIL_SELLER = [
-    { p: 'inbox', l: 'แชทลูกค้า', i: 'message-circle', sub: 'ลูกค้ารอรับในวันเวรทีมคุณ + ลูกค้าของคุณ' },
-  ];
-  const PANEL_PANE = { inbox: 'chat', dist: 'dist', db: 'db', pipe: 'pipe', dash: 'stats', rules: 'cfg' };
   const TABS_SELLER = [
     { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
     { v: 'mine', l: 'ลูกค้าของฉัน', i: 'user-check', c: 'mine', hotKey: 'mineWaiting' },
@@ -762,7 +494,6 @@
       $('cn-back').href = (BOOT.test && BOOT.test.as) ? '/dashboard/' : '/me/';
       $('cn-back-t').textContent = (BOOT.test && BOOT.test.as) ? 'แดชบอร์ด' : 'หน้าของฉัน';
     }
-    $('lc-brand-sub').textContent = ADMIN ? 'ศูนย์ควบคุมลีด' : 'แชทลูกค้า';
     const b = $('cn-banners');
     const T = BOOT.test;
     let testBar = '';
@@ -785,9 +516,8 @@
 
   function renderTabs() {
     const all = (ADMIN ? TABS_ADMIN : TABS_SELLER).filter(t => !t.needEmp || ME.empId);
-    // ★ 10 ต.ค.69 ห้องพัก Lead / สถิติ / ตั้งค่า ย้ายไปเมนูซ้าย (ห้องพัก Lead · แดชบอร์ดทีม · กฎและเส้นทาง)
-    const tabs = all.filter(t => !t.v.startsWith('_') && t.v !== 'tocode');
-    const tools = [];
+    const tabs = all.filter(t => !t.v.startsWith('_'));          // มุมมองรายชื่อ
+    const tools = all.filter(t => t.v.startsWith('_'));          // สถิติ/ตั้งค่า → แถบบน (ไม่กินแถวในลิสต์)
     const cur = S.pane === 'stats' ? '_stats' : (S.pane === 'cfg' ? '_cfg' : S.view);
     $('cn-tools-top').innerHTML = tools.map(t =>
       `<button class="cn-tool${cur === t.v ? ' on' : ''}" data-v="${t.v}">${ic(t.i)} <span class="hide-sm">${h(t.l)}</span></button>`).join('');
@@ -821,18 +551,16 @@
       sel.value = String(S.seller || 0);
     }
     applyHub();
-    renderRail(); renderFlow();
   }
 
   // ห้องพัก Lead = บอร์ดเต็มจอ (แอดมิน · เฉพาะตอนดูรายชื่อ — สถิติ/ตั้งค่ายังเป็น 2 ช่องเหมือนเดิม)
   function applyHub() {
-    $('cn-main').classList.remove('hub');          // ★ 10 ต.ค.69 ห้องพัก Lead เป็นหน้าของตัวเองแล้ว (เมนูซ้าย)
+    $('cn-main').classList.toggle('hub', ADMIN && S.view === 'tocode' && S.pane === 'chat');
   }
 
   function pickTab(v) {
-    if (v === '_stats') { setPanel('dash'); return; }
-    if (v === '_cfg') { setPanel('rules'); return; }
-    if (v === 'tocode' && ADMIN) { setPanel('dist'); return; }
+    if (v === '_stats') { S.pane = 'stats'; renderTabs(); openStats(); showPane(); return; }
+    if (v === '_cfg') { S.pane = 'cfg'; renderTabs(); openCfg(); showPane(); return; }
     S.view = v; S.pane = 'chat';
     if (v !== 'tocode' && (S.src === 'tiktok' || S.src === 'other')) S.src = '';   // TikTok/อื่นๆ มีแค่ในห้องพัก Lead
     if (ADMIN && v === 'tocode') {
@@ -878,6 +606,11 @@
   // ── ★ 10 ต.ค.69 งานจ่ายเบอร์ (leadflow.py) ──
   //   เบอร์ซ้ำ: สมุดเบอร์ (ชีตลีดทั้งปี + ใบในห้องจ่ายเบอร์ + ปุ่มจ่ายเบอร์) บอก "เคยเป็นลีดของใคร" ก่อนกดจ่าย
   //   คิวจ่ายวน: คนได้ใบน้อยสุดวันนี้ก่อน (ตัดคนหยุด/เต็มเพดาน) — กดชื่อ = เลือกเซลล์คนนั้นในกล่อง
+  function fmtDay(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00');
+    return d.getDate() + ' ' + TH_MON[d.getMonth()] + ' ' + String(d.getFullYear() + 543).slice(-2);
+  }
   function dupHtml(dp) {
     if (!dp) return '';
     return `<div class="pf-dup">${ic('alert', 13)} เบอร์นี้เคยเป็นลีด <b>${h(dp.code || '-')}</b> ของ <b>@${h(dp.seller || 'ไม่ทราบ')}</b>${
@@ -1193,7 +926,6 @@
   }
 
   function renderList() {
-    if (S.panel === 'dist') { renderDist(); return; }
     $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';
     const el = $('cn-rows');
     const hub = hubHtml();
@@ -1250,8 +982,7 @@
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
     Object.assign(S, { view: d.view, rows: d.rows || [], counts: d.counts || {}, duty: d.duty, onDuty: !!d.onDuty,
                        status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
-                       parked: d.parked || null, assigned: d.assigned || [], leadflow: d.leadflow || S.leadflow || null,
-                       lfStrip: d.lfStrip || S.lfStrip || null, rrBoard: d.rrBoard || S.rrBoard || [] });
+                       parked: d.parked || null, assigned: d.assigned || [], leadflow: d.leadflow || S.leadflow || null });
     renderTop(); renderTabs(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }
@@ -1919,7 +1650,6 @@
   }
 
   window.__cnBack = () => {
-    if (S.backTo === 'dist' && ADMIN) { S.backTo = ''; S.openId = 0; S.chat = null; setPanel('dist'); return; }
     hidePane();
     if (S.pane !== 'chat') { S.pane = 'chat'; renderTabs(); }
     S.openId = 0; S.chat = null;
@@ -1934,13 +1664,13 @@
   // ── สถิติ (แอดมิน) ──
   async function openStats(days) {
     days = days || 7;
-    const PG = $('lc-stats') || $('lc-page');
-    PG.innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังคำนวณ…</div></div>`;
+    S.chat = null; S.openId = 0;
+    $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังคำนวณ…</div></div>`;
     const d = await api('/connect/api/stats?days=' + days);
     if (S.pane !== 'stats') return;
-    if (!d.ok) { PG.innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
     const rows = d.rows || [];
-    PG.innerHTML = `<div class="cn-page">
+    $('cn-pane').innerHTML = `<div class="cn-page">
       <div style="margin-bottom:10px"><button class="btn sm cn-mback" onclick="window.__cnBack()">${ic('arrow-left')} กลับ</button></div>
       <div class="card">
         <h3>เวลาตอบลูกค้า รายคน</h3>
@@ -1953,17 +1683,17 @@
         </tbody></table></div>` : `<div class="cn-empty">ยังไม่มีข้อมูลในช่วงนี้ — ตัวเลขจะขึ้นเมื่อเริ่มรับ/ตอบลูกค้าผ่าน Connect</div>`}
         ${d.unownedLate ? `<div class="d" style="margin-top:10px;color:var(--red)">ลูกค้าที่ <b>ไม่มีเซลล์รับ</b> จนเลยเวลา: ${d.unownedLate} ครั้ง</div>` : ''}
       </div></div>`;
-    PG.querySelectorAll('[data-d]').forEach(b => b.onclick = () => openStats(+b.dataset.d));
+    $('cn-pane').querySelectorAll('[data-d]').forEach(b => b.onclick = () => openStats(+b.dataset.d));
   }
 
   // ── ตั้งค่า (แอดมิน) — เวร · เส้นตาย · แจ้งเตือน ──
   let CFG = null;
-  const CPG = () => $('lc-page');
   async function openCfg() {
-    if (!CFG) CPG().innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>`;
+    S.chat = null; S.openId = 0;
+    $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>`;
     const [d, t, lf] = await Promise.all([api('/connect/api/config'), api('/connect/api/test'), api('/connect/api/leadflow')]);
     if (S.pane !== 'cfg') return;
-    if (!d.ok) { CPG().innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
     CFG = d; CFG.test = (t && t.ok) ? t : null; CFG.lf = (lf && lf.ok) ? lf : null; paintCfg();
   }
   function _computed(dateIso) {      // ทีมตามสูตรวันเว้นวัน (ไม่นับการสลับเวร) — ใช้ตอนกดสลับในตาราง
@@ -1986,10 +1716,8 @@
     const teamBoxes = d.teamsAvail.map(t => `<label style="display:inline-flex;gap:5px;align-items:center;margin-right:12px"><input type="checkbox" data-team="${h(t)}"${c.teams.includes(t) ? ' checked' : ''}> ทีม ${h(t)}</label>`).join('');
     const grpOpts = `<option value="">— เลือกกลุ่ม —</option>` + d.groups.map(g => `<option value="${h(g.id)}"${g.id === c.alert_group ? ' selected' : ''}>${h(g.name || g.id)}</option>`).join('')
       + (c.alert_group && !d.groups.some(g => g.id === c.alert_group) ? `<option value="${h(c.alert_group)}" selected>${h(c.alert_group)} (ไม่อยู่ในรายชื่อ)</option>` : '');
-    const _top = CPG().scrollTop;
-    CPG().innerHTML = `<div class="cn-page">
-      ${rulesHtml()}
-      <div class="lc-sec" id="lc-cfg-h">ตั้งค่าละเอียด</div>
+    $('cn-pane').innerHTML = `<div class="cn-page">
+      <div style="margin-bottom:10px"><button class="btn sm cn-mback" onclick="window.__cnBack()">${ic('arrow-left')} กลับ</button></div>
       ${(d.status || []).map(s => `<div class="card" style="border-color:var(--${s.level === 'err' ? 'red' : 'amber'})"><b>${h(s.text)}</b>${s.fix ? `<div class="d" style="margin:6px 0 0">เปิดด้วยคำสั่งบนเซิร์ฟเวอร์: <code>${h(s.fix)}</code></div>` : ''}</div>`).join('')}
       <div class="card">
         <h3>เวรรับลูกค้าใหม่ (วันเว้นวัน)</h3>
@@ -2051,8 +1779,7 @@
         : x.subscribed === false ? '<b style="color:var(--red)">ยังไม่ผูก</b>' : h(x.error || 'ตรวจไม่ได้')}`).join(' · ')
         : `<span style="color:var(--red)">${h(r.error || 'ตรวจไม่ได้')}</span>`);
     };
-    CPG().querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team, emp: x.dataset.emp }));
-    bindRules(); CPG().scrollTop = _top;
+    $('cn-pane').querySelectorAll('[data-test]').forEach(x => x.onclick = () => testAct(x.dataset.test, { team: x.dataset.team, emp: x.dataset.emp }));
   }
   // ── ปุ่ม "จ่ายเบอร์" ส่งใบเข้ากลุ่มจ่ายเบอร์จริง (6 ต.ค.69 · เจ้าของ: "กลุ่มจ่ายเบอร์อยากให้มันต่อจริงๆ ส่งจริงๆ") ──
   //   ห้องปลายทาง: ว่าง = ระบบหาเองจากชื่อกลุ่ม · ตัวเลือก = เฉพาะกลุ่มจ่ายเบอร์ที่บอทตัวส่งอยู่ (เลือกห้องอื่นไปก็ส่งไม่ออก)
@@ -2198,455 +1925,6 @@
     loadInbox(false);
   }
 
-
-  // ══════════════ ★ 10 ต.ค.69 ศูนย์ควบคุมลีด — เมนูซ้าย · แถบขั้นตอน · ห้องพัก Lead · ฐานข้อมูล · ไปป์ไลน์ · ทีม · กฎ ══════════════
-  function rail() { return ADMIN ? RAIL_ADMIN : RAIL_SELLER; }
-  function renderRail() {
-    const c = S.counts || {};
-    const cnt = { inbox: ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0)), dist: (c.tocode || 0) + (c.parked || 0) };
-    $('lc-nav').innerHTML = rail().map(r => `<button class="lc-nb${S.panel === r.p ? ' on' : ''}" data-p="${r.p}">${ic(r.i)} ${h(r.l)}${
-      cnt[r.p] != null ? `<span class="count${cnt[r.p] ? '' : ' z'}">${cnt[r.p]}</span>` : ''}</button>`).join('');
-    $('lc-nav').querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
-    const cur = rail().find(r => r.p === S.panel) || rail()[0];
-    $('lc-title').textContent = cur.l; $('lc-sub').textContent = cur.sub;
-    $('lc-classic').href = '/connect/?classic=1' + (BOOT.embed ? '&embed=1' : '');
-  }
-  function renderFlow() {
-    const el = $('lc-flow');
-    const show = ADMIN && (S.panel === 'inbox' || S.panel === 'dist');
-    el.hidden = !show;
-    if (!show) return;
-    const c = S.counts || {}, L = S.lfStrip || {}, wait = (c.tocode || 0) + (c.parked || 0);
-    el.innerHTML = `
-      <button class="lc-fn${S.panel === 'inbox' ? ' on' : ''}" data-p="inbox"><span class="k">ชั้น 1</span><span class="t">กล่องแชทรวม (Connect)</span>
-        <span class="s">รอรับ ${c.queue || 0} · มีเจ้าของ ${c.owned || 0} · ทั้งหมด ${c.all || 0}</span></button>
-      <button class="lc-fn${S.panel === 'dist' ? ' on' : ''}${wait ? ' hot' : ''}" data-p="dist"><span class="k">ชั้น 2</span><span class="t">ห้องพัก Lead</span>
-        <span class="s">${wait} รอจ่ายเบอร์</span></button>
-      <button class="lc-fn" data-p="dist" data-hubtab="clock"><span class="k">ชั้น 3</span><span class="t">ใบจ่ายลีด → เซลล์</span>
-        <span class="s">วันนี้ ${L.today || 0} ใบ · ยังไม่รายงานผล ${L.open || 0}${L.late ? ' · เลยเวลา ' + L.late : ''}</span></button>
-      <div class="lc-fnote"><span class="lc-origin direct">ลัด</span> ใบร่างจากกลุ่ม <b>ADMIN เก็บ Lead</b> (TikTok · ไลฟ์ · เพจ) และสายเข้าเบอร์กลาง ข้ามชั้น 1 เข้าห้องพักตรง เพราะได้เบอร์มาแล้วและแอดมินคัดมาแล้ว</div>`;
-    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { if (b.dataset.hubtab) S.hubTab = b.dataset.hubtab; setPanel(b.dataset.p); });
-  }
-  function setPanel(p, first) {
-    if (!rail().some(r => r.p === p)) p = 'inbox';
-    const prev = S.panel;
-    S.panel = p; S.pane = PANEL_PANE[p] || 'chat';
-    const isInbox = p === 'inbox';
-    $('cn-main').hidden = !isInbox;
-    $('lc-page').hidden = isInbox;
-    if (!isInbox) { hidePane(); }
-    try {
-      const q = new URLSearchParams();
-      if (p !== 'inbox') q.set('p', p);
-      if (isInbox && S.openId) q.set('id', S.openId);
-      if (BOOT.embed) q.set('embed', '1');
-      history.replaceState(null, '', '/connect/' + (q.toString() ? '?' + q.toString() : ''));
-    } catch (e) {}
-    renderRail(); renderFlow();
-    if (p === 'inbox') {
-      if (S.view === 'tocode' || !S.view) S.view = ADMIN ? 'queue' : '';
-      if (!S.openId) renderBlank();
-      loadInbox(true);
-    } else if (p === 'dist') {
-      S.view = 'tocode';
-      if (prev !== 'dist') { S.src = ''; S.q = ''; S.seller = 0; const qi = $('cn-q'); if (qi) qi.value = ''; }
-      if (prev !== 'dist') $('lc-page').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>`;
-      loadInbox(false);
-    } else if (p === 'db') openDb();
-    else if (p === 'pipe') openPipe();
-    else if (p === 'dash') openDash();
-    else if (p === 'rules') openCfg();
-    // เปิดตรงมาที่หน้าอื่น (?p=) — ยังต้องโหลดรายชื่อเซลล์/ตัวเลขบนเมนูซ้ายหนึ่งรอบ
-    if (first && p !== 'inbox' && p !== 'dist') { S.view = ADMIN ? 'queue' : ''; loadInbox(false); }
-    if (!first) $('lc-page').scrollTop = 0;
-  }
-  window.__lcGo = setPanel;
-
-  // นาฬิกาหัวหน้า + เวลาที่ลีดพักอยู่ (data-since) — ทุกวินาที ไม่ยิงเซิร์ฟเวอร์
-  function slaOf(sinceIso) {
-    const m = Math.max(0, Math.floor((nowMs() - Date.parse(sinceIso)) / 1000));
-    const mm = Math.floor(m / 60);
-    return { text: mm >= 60 ? Math.floor(mm / 60) + ':' + pad(mm % 60) + ' ชม.' : pad(mm) + ':' + pad(m % 60),
-             cls: mm < 10 ? 'ok' : (mm < 30 ? 'warn' : 'crit') };
-  }
-  setInterval(() => {
-    const n = new Date(nowMs());
-    const ck = $('lc-clock'); if (ck) ck.textContent = pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
-    document.querySelectorAll('[data-since]').forEach(el => {
-      const s = slaOf(el.dataset.since);
-      const t = el.querySelector('.num'); if (t) t.textContent = s.text;
-      el.classList.remove('ok', 'warn', 'crit'); el.classList.add(s.cls);
-    });
-  }, 1000);
-
-  // ── ห้องพัก Lead (แบบใหม่): ลีด 1 แถว = ข้อมูล + เวลาพัก + ปุ่มชื่อเซลล์ (กดเดียวจ่ายเลย) ──
-  const teamColor = t => TEAM_C[t] || 'var(--t3)';
-  function asgButtons(kind, id, dup) {
-    const B = (S.rrBoard || []).filter(x => x.ok);
-    if (!B.length) return `<div class="lc-hint">ไม่มีเซลล์ว่างในคิว — <a data-lcmore="${h(kind)}:${h(id)}">เลือกเซลล์เอง</a></div>`;
-    return `<div class="lc-asg">${B.slice(0, 9).map((x, i) => `<button style="background:${teamColor(x.team)}" class="${i === 0 ? 'next' : ''}"
-      data-asg="${h(kind)}:${h(id)}" data-emp="${x.id}" title="ทีม ${h(x.team)} · วันนี้ได้ ${x.today}${x.cap ? '/' + x.cap : ''} ใบ${i === 0 ? ' · คิวถัดไป' : ''}">${h(x.name)}</button>`).join('')}</div>`;
-  }
-  function distLeadHtml(x) {
-    const chat = x.kind === 'chat', r = x.r;
-    const idPills = `<span class="lc-ids"><span class="lc-id${x.hasPhone ? ' has' : ''}">เบอร์ ${x.hasPhone ? '✓' : '✗'}</span>${
-      x.hasLine ? '<span class="lc-id has">ID LINE ✓</span>' : ''}</span>`;
-    const dup = x.dup ? `<div class="lc-merge">${ic('alert', 13)} <span><b>เบอร์ซ้ำ</b> — เคยเป็นลีด <b>${h(x.dup.code || '-')}</b> ของ <b>@${h(x.dup.seller || '?')}</b>${
-      x.dup.date ? ' (' + h(x.dup.date) + ')' : ''} · ลูกค้าคนเดียวไม่ควรได้เซลล์ 2 คน</span>${x.dup.sellerId
-      ? `<button class="btn sm" data-asg="${h(x.kind)}:${h(x.id)}" data-emp="${x.dup.sellerId}">จ่ายให้ @${h(x.dup.seller)} (เจ้าของเดิม)</button>` : ''}</div>` : '';
-    const more = S.distMore === x.kind + ':' + x.id;
-    return `<div class="lc-lead${x.mins >= 30 ? ' pool' : ''}" data-lead="${h(x.kind)}:${h(x.id)}">
-      <div>
-        <div class="who"><span class="code">${h(x.prefix || '')}</span><span class="lc-chip">ยังไม่มีเลข</span> ${h(x.name)}
-          <span class="lc-origin${chat ? '' : ' direct'}">${chat ? 'จากแชท' : 'ใบร่าง/สายเข้า'}</span></div>
-        <div class="det">${h(x.car || 'ไม่ระบุรุ่นรถ')}</div>
-        <div class="det m">${h(x.line)}</div>
-        <div class="tags">${chTag(x.src)} ${idPills}${x.reposts ? `<span class="lc-chip">โพสต์ซ้ำ ${x.reposts}</span>` : ''}</div>
-        ${dup}
-      </div>
-      <div class="acts">
-        <div class="lc-sla" data-since="${h(x.since)}"><span class="num">${h(slaOf(x.since).text)}</span><small>พักมาแล้ว</small></div>
-        ${asgButtons(x.kind, x.id, x.dup)}
-        <div class="lc-hint">กดชื่อเพื่อจ่ายเบอร์ · <a data-lcmore="${h(x.kind)}:${h(x.id)}">${more ? 'ปิด' : 'ตั้งเลข/เซลล์เอง'}</a>
-          · <a data-lcskip="${h(x.kind)}:${h(x.id)}">ไม่ต้องจ่ายเบอร์</a>${chat ? ` · <a data-lcopen="${x.id}">เปิดแชท</a>` : ''}</div>
-      </div>
-      ${more ? `<div class="more">${chat ? `<div class="lc-hint" style="justify-content:flex-start">ตั้งตัวหน้า/A/R เอง: เปิดแชทแล้วใช้กล่อง "จ่ายเบอร์" ในแผงขวา — <a data-lcopen="${x.id}">เปิดแชท</a></div>`
-        : parkBoxHtml(x.i, ((S.parked || {}).codeHelp) || {})}</div>` : ''}
-    </div>`;
-  }
-  function distItems() {
-    const P = S.parked || {}, out = [];
-    (S.rows || []).forEach(r => out.push({ kind: 'chat', id: r.id, r, name: r.name, src: SRC_KEY[r.src] || 'line', car: r.car || '',
-      line: 'แชท ' + (r.src === 'fb' ? 'Facebook' : 'LINE@') + ' · ' + (r.preview || ''), since: r.since || r.lastAt || new Date(nowMs()).toISOString(),
-      hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, prefix: '' }));
-    (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src).forEach(i => out.push({ kind: 'park', id: i.id, i, name: pWho(i),
-      src: SRC_KEY[i.source] || 'other', car: i.car || '', line: 'ใบร่างจากกลุ่ม ' + (P.room || 'ADMIN เก็บ Lead') + (i.channel ? ' · ' + i.channel : '') + (i.by ? ' · พักโดย ' + i.by : ''),
-      since: i.at, hasPhone: !!i.phone, hasLine: !!i.lineId, dup: i.dup || null, prefix: i.prefix, reposts: i.reposts }));
-    out.forEach(x => { x.mins = Math.floor((nowMs() - Date.parse(x.since)) / 60000); });
-    return out.sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
-  }
-  function capHtml() {
-    const B = S.rrBoard || [];
-    if (!B.length) return `<div class="cn-empty" style="padding:18px">ยังไม่มีเซลล์ในทีมของคิวจ่ายวน — ตั้งทีมได้ที่ กฎและเส้นทาง</div>`;
-    const duty = (S.duty || {}).today;
-    return B.map(x => {
-      const pct = x.cap ? Math.min(100, Math.round(x.today * 100 / x.cap)) : Math.min(100, x.today * 8);
-      const st = x.why || (x.team === duty ? 'เวรรับแชทวันนี้' : 'รับลีดอยู่');
-      return `<div class="lc-cap${x.ok ? '' : ' off'}"><span class="lc-av" style="background:${teamColor(x.team)}">${h(initial(x.name))}</span>
-        <div style="min-width:0"><div class="nm">${h(x.name)} ${teamTag(x.team)}</div><div class="st">${x.today}${x.cap ? '/' + x.cap : ''} ใบวันนี้ · ${h(st)}</div>
-          <div class="meter"><i style="width:${pct}%;background:${x.ok ? 'var(--blue)' : 'var(--t3)'}"></i></div></div>
-        <span class="cnt">${x.today}</span></div>`;
-    }).join('');
-  }
-  function ruleState(on) { return on ? '<span class="lc-chip ok">เปิด</span>' : '<span class="lc-chip">ปิด</span>'; }
-  function renderDist() {
-    const pg = $('lc-page');
-    const act = document.activeElement;
-    if (act && pg.contains(act) && /SELECT|INPUT|TEXTAREA/.test(act.tagName)) return;      // กำลังเลือก/พิมพ์ในกล่อง — รอบหน้าค่อยวาด
-    const P = S.parked || {}, ch = P.codeHelp || {}, L = S.leadflow || {}, LC = L.cfg || {};
-    const items = distItems(), done = doneItems(false), lateN = lfLate();
-    const seg = `<span class="lc-seg">
-      <button class="${S.hubTab === 'wait' ? 'on' : ''}" data-hub="wait">รอจ่ายเบอร์<span class="n">${items.length}</span></button>
-      <button class="${S.hubTab === 'done' ? 'on' : ''}" data-hub="done">จ่ายแล้ว${S.doneRange === 'today' ? 'วันนี้' : ' 7 วัน'}<span class="n">${done.length}</span></button>
-      <button class="${S.hubTab === 'clock' ? 'on' : ''}" data-hub="clock">นาฬิกาโทร<span class="n">${lateN}</span></button></span>`;
-    let body;
-    if (S.hubTab === 'clock') body = clockHubHtml('');
-    else if (S.hubTab === 'done') {
-      const by = {};
-      done.forEach(x => { const k = x.seller || UNKNOWN_SELLER; by[k] = (by[k] || 0) + 1; });
-      const sum = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) =>
-        `<button class="hub-sel${S.doneSeller === k ? ' on' : ''}" data-dsel="${h(k)}">${k === UNKNOWN_SELLER ? h(k) : '@' + h(k)} <b>${n}</b></button>`).join('');
-      body = `<div class="lc-bh"><span class="lc-seg"><button class="${S.doneRange === 'today' ? 'on' : ''}" data-hubr="today">วันนี้</button><button class="${S.doneRange === '7d' ? 'on' : ''}" data-hubr="7d">7 วัน</button></span>
-        <span class="note">จ่ายให้ใครบ้าง — กดชื่อเพื่อดูเฉพาะคนนั้น · รวมที่จ่ายผ่านระบบ + ใบในห้องจ่ายเบอร์ + ส่งจัดซื้อ</span></div>
-        ${sum ? `<div class="hub-sum" style="padding-top:10px">${sum}</div>` : ''}
-        ${doneItems(true).map(doneCardHtml).join('') || '<div class="cn-empty">ยังไม่มีลีดที่จ่ายเบอร์ในช่วงนี้</div>'}`;
-    } else {
-      const skipped = (P.skipped || []).map(i => `<div class="lc-rl"><b>${h(pWho(i))}</b> ${srcTag(i.source)}<span class="lc-chip">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div>`).join('');
-      body = `<div class="lc-bh" style="background:var(--bg2)"><span class="note">เลขลีดออกตอนกดจ่าย ต่อจากเลขรันล่าสุด <b>${h(String(ch.next || '…'))}</b> · ${
-        ch.post && ch.post.on ? `ใบเข้าห้อง "${h(ch.post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(ch.post.rejectRoom || 'REJECT')}")` : 'โหมดทดลอง — เก็บในระบบอย่างเดียว ไม่ส่งเข้ากลุ่ม'}
-        · ปุ่มที่มีกรอบชมพู = คิวถัดไป</span></div>
-        ${items.map(distLeadHtml).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}
-        ${skipped ? `<details class="lc-rl" style="display:block"${S.parkOpen.has('skip') ? ' open' : ''} data-pk="skip"><summary style="cursor:pointer;color:var(--t3)">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย</summary>${skipped}</details>` : ''}`;
-    }
-    const log = done.filter(x => new Date(x.at).toLocaleDateString('sv-SE') === new Date(nowMs()).toLocaleDateString('sv-SE')).slice(0, 40)
-      .map(x => `<div class="lc-logr"><time>${h(fmtWhen(x.at))}</time><div>${x.buy ? 'ส่งจัดซื้อ' : 'จ่าย'} <b>${h(x.code)}</b> ${h(x.name)} → <b>${x.seller ? '@' + h(x.seller) : UNKNOWN_SELLER}</b>
-        <span style="color:var(--t3)">· ${h(x.how)}${x.by ? ' · ' + h(x.by) : ''}</span></div></div>`).join('');
-    const top = pg.scrollTop;
-    pg.innerHTML = `<div class="lc-dist">
-      <div style="min-width:0">
-        <div class="lc-card"><div class="lc-bh"><h2>ห้องพัก Lead</h2>${seg}<span class="note">${h(P.room ? 'ใบร่างจาก "' + P.room + '"' : '')}</span></div>${body}</div>
-        <div class="lc-card"><div class="lc-bh"><h2>บันทึกการจ่าย</h2><span class="note">วันนี้ · ย้อนดูได้ว่าใครได้เบอร์ไหน เมื่อไหร่ (ใบจริงอยู่ในห้องจ่ายเบอร์ด้วย)</span></div>
-          <div class="lc-log">${log || '<div class="cn-empty" style="padding:16px">วันนี้ยังไม่มีการจ่ายเบอร์</div>'}</div></div>
-      </div>
-      <div style="min-width:0">
-        <div class="lc-card"><div class="lc-bh"><h2>มือเซลล์วันนี้</h2><span class="lc-chip">เวรรับแชท: ทีม ${h((S.duty || {}).today || '-')}</span></div>${capHtml()}</div>
-        <div class="lc-card"><div class="lc-bh"><h2>กติกา</h2><a class="btn sm" style="margin-left:auto" data-p="rules">ตั้งค่า</a></div>
-          <div class="lc-rl">${ruleState(true)} แอดมินเลือกเซลล์ ระบบออกเลขให้ (เลขรันชุดเดียวทุกตัวหน้า กันเลขซ้ำ)</div>
-          <div class="lc-rl">${ruleState(ch.post && ch.post.on)} ส่งใบจ่ายลีดเข้าห้องจ่ายเบอร์ + แท็ก @เซลล์ (เลข R เข้าห้อง REJECT)</div>
-          <div class="lc-rl">${ruleState(true)} ต้องรายงานผลภายใน <b>${LC.callMin || 15} นาที</b> หลังใบถึงกลุ่ม (นาฬิกาโทร)</div>
-          <div class="lc-rl">${ruleState(LC.cardOn)} แนบการ์ดปุ่ม รับเคส/ขอผ่าน ต่อท้ายใบ</div>
-          <div class="lc-rl">${ruleState(LC.autoAssign)} จ่ายวนอัตโนมัติ (ใบร่างที่รอนาน · ข้ามคนหยุด/เต็มมือ)</div>
-          <div class="lc-rl">${ruleState(LC.autoPull)} เลยเวลา/ขอผ่าน → ดึงคืนจ่ายคนถัดไป (เลขเดิม)</div>
-          <div class="lc-rl">${ruleState(true)} เบอร์ซ้ำ → หยุดรอแอดมินยืนยันก่อน</div></div>
-      </div></div>`;
-    pg.scrollTop = top;
-    bindDist(pg);
-  }
-  async function distAssign(kindId, emp) {
-    const [kind, id] = kindId.split(/:(.*)/s);
-    const P = S.parked || {}, post = (P.codeHelp || {}).post || {};
-    const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
-    const it = distItems().find(x => x.kind === kind && String(x.id) === String(id));
-    if (!it) return;
-    if (it.dup && it.dup.sellerId && it.dup.sellerId !== emp
-        && !confirm(`เบอร์นี้เคยเป็นลีด ${it.dup.code || ''} ของ @${it.dup.seller}\nยังจะจ่ายให้ ${nm} อีกคนใช่ไหม?`)) return;
-    const reject = kind === 'park' ? !!it.i.reject : false;
-    if (post.on && !confirm(`จ่ายเบอร์ "${it.name}" ให้ ${nm}\nแล้วส่งใบเข้า "${(reject && post.rejectRoom) || post.room || 'กลุ่มจ่ายเบอร์'}" พร้อมแท็ก @${nm} ?`)) return;
-    document.querySelectorAll(`[data-asg="${CSS.escape(kindId)}"]`).forEach(b => { b.disabled = true; });
-    const r = kind === 'chat'
-      ? await api('/connect/api/assign_lead', { id: +id, emp })
-      : await api('/connect/api/park_assign', { mid: id, emp, base: it.i.base, admin: !!it.i.admin, reject: !!it.i.reject });
-    toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), r.post && !r.post.ok ? 9000 : 6000);
-    loadInbox(false);
-  }
-  function bindDist(pg) {
-    pg.querySelectorAll('[data-hub]').forEach(b => b.onclick = () => { S.hubTab = b.dataset.hub; renderDist(); });
-    pg.querySelectorAll('[data-hubr]').forEach(b => b.onclick = () => { S.doneRange = b.dataset.hubr; S.doneSeller = ''; renderDist(); });
-    pg.querySelectorAll('[data-dsel]').forEach(b => b.onclick = () => { S.doneSeller = S.doneSeller === b.dataset.dsel ? '' : b.dataset.dsel; renderDist(); });
-    pg.querySelectorAll('[data-asg]').forEach(b => b.onclick = () => distAssign(b.dataset.asg, +b.dataset.emp));
-    pg.querySelectorAll('[data-lcmore]').forEach(a => a.onclick = () => { S.distMore = S.distMore === a.dataset.lcmore ? '' : a.dataset.lcmore; renderDist(); });
-    pg.querySelectorAll('[data-lcopen]').forEach(a => a.onclick = () => { S.backTo = 'dist'; setPanel('inbox'); openChat(+a.dataset.lcopen); });
-    pg.querySelectorAll('[data-lcskip]').forEach(a => a.onclick = async () => {
-      const [kind, id] = a.dataset.lcskip.split(/:(.*)/s);
-      const r = kind === 'chat' ? await api('/connect/api/assign_lead', { id: +id, skip: true }) : await api('/connect/api/park_assign', { mid: id, skip: true });
-      toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ')); loadInbox(false);
-    });
-    pg.querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
-    bindPark(pg); bindClock(pg);
-    pg.querySelectorAll('.hub-done[data-id]').forEach(r => r.onclick = () => { S.backTo = 'dist'; setPanel('inbox'); openChat(+r.dataset.id); });
-  }
-
-  // ── ฐานข้อมูล Lead ──
-  S.db = { mode: 'all', q: '', status: '', seller: '', code: '', data: null, detail: null };
-  const DB_STATUS = ['', 'รอตอบ', 'ไม่รับสาย', 'ลูกค้าไม่ตอบ', 'สนใจมาก', 'ลังเล', 'รอมาดูรถ', 'จอง', 'คืนเคส', 'ได้รถแล้ว'];
-  let _dbT = null, _dbSeq = 0;
-  async function openDb(keep) {
-    const pg = $('lc-page');
-    if (!keep) pg.innerHTML = dbShell();
-    bindDbShell();
-    const seq = ++_dbSeq;
-    $('lc-db-rows').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังค้นในชีตลีด… (ครั้งแรกอาจใช้ ~10 วินาที)</div>`;
-    const q = new URLSearchParams({ mode: S.db.mode, q: S.db.q, status: S.db.status, seller: S.db.seller });
-    const d = await api('/connect/api/leaddb?' + q.toString());
-    if (seq !== _dbSeq || S.panel !== 'db') return;
-    S.db.data = d;
-    paintDb();
-  }
-  function dbShell() {
-    return `<div class="lc-card">
-      <div class="lc-bh" style="padding-bottom:0;border-bottom:0"><span class="lc-seg" id="lc-db-modes">
-        <button data-dbm="all">รายชื่อทั้งหมด</button><button data-dbm="returned">คืนเคส รอส่งต่อไม้ 2</button><button data-dbm="match">รถพร้อมขายใหม่ แมตช์ลูกค้าเก่า</button></span></div>
-      <div class="lc-dbtop"><label class="lc-dbs">${ic('list')}<input id="lc-db-q" type="search" autocomplete="off" placeholder="ค้นหาเบอร์ (หรือ 4 ตัวท้าย) · เลขลีด · รุ่นรถ · ชื่อ · ช่องทาง" value="${h(S.db.q)}"></label>
-        <div class="lc-dbst" id="lc-db-st"></div></div>
-      <div class="lc-dbf"><span style="color:var(--t3);font-size:12px">สถานะลูกค้า</span><span class="lc-seg" id="lc-db-status">${DB_STATUS.map(x =>
-        `<button data-dbs="${h(x)}">${h(x || 'ทั้งหมด')}</button>`).join('')}</span>
-        <select id="lc-db-seller"><option value="">เซลล์ทุกคน</option></select></div>
-    </div>
-    <div class="lc-dbgrid"><div class="lc-card" style="min-width:0"><div id="lc-db-rows"></div></div><div class="lc-card lc-prof" id="lc-db-prof">
-      <div class="cn-empty" style="padding:22px">คลิกแถวเพื่อดูประวัติลูกค้า · เลขอื่นของเบอร์เดียวกัน · งานจ่ายเบอร์ · รายงานผล</div></div></div>`;
-  }
-  function bindDbShell() {
-    const pg = $('lc-page');
-    pg.querySelectorAll('[data-dbm]').forEach(b => { b.classList.toggle('on', b.dataset.dbm === S.db.mode);
-      b.onclick = () => { S.db.mode = b.dataset.dbm; openDb(true); }; });
-    pg.querySelectorAll('[data-dbs]').forEach(b => { b.classList.toggle('on', b.dataset.dbs === S.db.status);
-      b.onclick = () => { S.db.status = b.dataset.dbs; openDb(true); }; });
-    const qi = $('lc-db-q');
-    qi.oninput = () => { clearTimeout(_dbT); _dbT = setTimeout(() => { S.db.q = qi.value.trim(); openDb(true); }, 450); };
-    const sel = $('lc-db-seller');
-    sel.onchange = () => { S.db.seller = sel.value; openDb(true); };
-  }
-  function paintDb() {
-    const d = S.db.data || {};
-    if (!d.ok) { $('lc-db-rows').innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    const st = d.stats || {};
-    $('lc-db-st').innerHTML = `<div><div class="k">แถวในชีตลีด</div><div class="v">${(st.rows || 0).toLocaleString()}</div></div>
-      <div><div class="k">เบอร์ไม่ซ้ำ</div><div class="v">${(st.phones || 0).toLocaleString()}</div></div>
-      <div><div class="k">คืนเคส</div><div class="v" style="color:var(--red)">${(st.returned || 0).toLocaleString()}</div></div>`;
-    const sel = $('lc-db-seller');
-    if (sel.options.length <= 1) { sel.innerHTML = '<option value="">เซลล์ทุกคน</option>' + (d.sellers || []).map(x => `<option>${h(x)}</option>`).join(''); }
-    sel.value = S.db.seller;
-    if (S.db.mode === 'match') {
-      const M = d.matches || [];
-      $('lc-db-rows').innerHTML = `<div class="lc-bh"><span class="note">ลูกค้าที่เคยบอก "ไม่มีรถ/งบไม่ถึง" แล้วตอนนี้มีรถพร้อมขายตรงรุ่น/งบ (เกินงบได้ 5%) · คำนวณทุก 30 นาที${d.matchAt ? ' (ล่าสุด ' + h(fmtWhen(d.matchAt)) + ')' : ''} · ระบบไม่ทักลูกค้าเอง — เซลล์เจ้าของเห็นในหน้าของตัวเองด้วย</span></div>` +
-        (M.map(x => `<div class="lc-rl" style="display:block"><b>${h(x.customer || '-')}</b> <span style="color:var(--t3)">${h(x.code || '')} · @${h(x.seller)}</span>
-          <div style="font-size:12px;color:var(--t2);margin-top:2px">อยากได้ ${h(x.want || '-')}${x.budget ? ' · งบ ' + Number(x.budget).toLocaleString() : ''}${x.why ? ' · ' + h(x.why) : ''}</div>
-          <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${(x.cars || []).map(c => `<span class="lc-chip ok">${h(c.name || c.code || '')}${c.year ? ' ' + c.year : ''}${c.price ? ' · ' + Number(c.price).toLocaleString() : ''}</span>`).join('')}</div></div>`).join('')
-         || '<div class="cn-empty">ยังไม่มีลูกค้าที่รอรถแล้วตอนนี้มีรถตรงสเปก</div>');
-      return;
-    }
-    const rows = d.rows || [];
-    $('lc-db-rows').innerHTML = `<div class="lc-tw"><table class="lc-tbl"><thead><tr><th>วันที่</th><th>Code</th><th>ลูกค้า</th><th>รถที่ถาม</th><th>เซลล์</th><th>สถานะลูกค้า (Z)</th><th>แอดมิน</th></tr></thead><tbody>
-      ${rows.map(r => `<tr data-code="${h(r.code)}" class="${S.db.code === r.code ? 'on' : ''}"><td style="white-space:nowrap">${h(fmtDay(r.date))}</td>
-        <td style="white-space:nowrap"><b>${h(r.code || '-')}</b>${r.dup ? `<span class="lc-rep">ซ้ำ ${r.dup + 1}×</span>` : ''}</td>
-        <td class="lc-cust"><b>${h(r.name || '—')}</b><span>${h(r.phone ? fmtPhone(r.phone) : '')}</span></td>
-        <td>${h(r.car || '—')}</td><td>${h(r.seller === 'ADMIN' ? 'เทเลเซลล์' : (r.seller || '—'))}</td>
-        <td>${r.z ? `<span class="lc-chip${/คืน|ไม่สนใจ|แบล็ค/.test(r.z) ? ' crit' : (/จอง|ได้รถ|ส่งมอบ/.test(r.z) ? ' ok' : '')}">${h(r.z)}</span>` : '<span style="color:var(--t3)">—</span>'}</td>
-        <td style="font-size:12px;color:var(--t2)">${h(r.admin || '')}</td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="lc-bh" style="border-top:.5px solid var(--bd);border-bottom:0"><span class="note">แสดง ${rows.length.toLocaleString()} จาก ${(d.total || 0).toLocaleString()} รายการ${d.total > rows.length ? ' — พิมพ์ค้นหาให้แคบลง' : ''} · ชื่อลูกค้ามาจากใบจ่ายลีด/แชท (ชีตลีดไม่มีช่องชื่อ)</span></div>`;
-    $('lc-db-rows').querySelectorAll('tr[data-code]').forEach(tr => tr.onclick = () => openDbDetail(tr.dataset.code));
-  }
-  async function openDbDetail(code) {
-    S.db.code = code;
-    document.querySelectorAll('#lc-db-rows tr[data-code]').forEach(tr => tr.classList.toggle('on', tr.dataset.code === code));
-    const box = $('lc-db-prof');
-    box.innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>`;
-    const d = await api('/connect/api/leaddb?code=' + encodeURIComponent(code));
-    if (S.db.code !== code) return;
-    if (!d.ok) { box.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    const r = d.row, ev = [];
-    ev.push({ d: fmtDay(r.date), t: 'เข้าชีตลีด ' + r.code, m: [r.channel, r.type, r.carAsk].filter(Boolean).join(' · ') });
-    (d.tasks || []).forEach(t => ev.push({ d: fmtWhen(t.postedAt), t: 'ใบจ่ายลีด ' + t.code + ' → @' + (t.seller || '-'),
-      m: (LF_KIND[t.kind] || ['', ''])[1] + (t.lastReport ? ' · ' + t.lastReport : '') + (t.history && t.history.length ? ' · เคยจ่ายให้ ' + t.history.join(', ') : '') }));
-    (d.reports || []).forEach(x => ev.push({ d: fmtWhen(x.at), t: 'รายงานผล โดย ' + x.seller, m: x.text }));
-    if (r.note) ev.push({ d: '', t: 'มากรอกชีตกันเถอะ', m: r.note });
-    const others = (d.others || []).map(o => `<div class="lc-rl"><b>${h(o.code || '-')}</b> <span style="color:var(--t3)">@${h(o.seller || '?')} · ${h(fmtDay(o.date))}</span></div>`).join('');
-    const sellers = S.sellers.map(s => `<option value="${s.id}">${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
-    box.innerHTML = `<div class="ph"><div class="nm">${h(r.name || 'ไม่ทราบชื่อ')}</div><div class="sub">${h(r.code)} · ${h(r.phone ? fmtPhone(r.phone) : 'ไม่มีเบอร์')} · @${h(r.seller || '-')}</div>
-        <div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${r.z ? `<span class="lc-chip">${h(r.z)}</span>` : ''}${r.admin ? `<span class="lc-chip">${h(r.admin)}</span>` : ''}${r.car ? `<span class="lc-chip brand">${h(r.car)}</span>` : ''}</div></div>
-      ${others ? `<h4>เบอร์เดียวกันเคยเป็นลีด</h4><div class="lc-card" style="margin:0 14px 10px">${others}</div>` : ''}
-      <h4>ประวัติ</h4><div class="lc-tl">${ev.map(e => `<div class="lc-tli"><span class="dot"></span><div><div class="d">${h(e.d)}</div><div class="t">${h(e.t)}</div>${e.m ? `<div class="m">${h(e.m)}</div>` : ''}</div></div>`).join('')}</div>
-      ${d.fwdDone ? `<h4>ส่งต่อไม้ 2</h4><div style="padding:0 14px 14px"><span class="lc-chip ok">ส่งต่อแล้ว → ${h(d.fwdDone.code)}${d.fwdDone.seller ? ' @' + h(d.fwdDone.seller) : ''}</span>
-        <div class="lf-line" style="margin-top:6px">จะเปลี่ยนคน ให้ใช้ "จ่ายใหม่" ที่ห้องพัก Lead → นาฬิกาโทร</div></div>` : ''}
-      ${d.fwd ? `<h4>ส่งต่อไม้ 2</h4><div style="padding:0 14px 14px"><div class="lf-line">ออกเลข <b>${h(d.fwd)}</b> (R + เลขเดิม + /1) → ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก</div>
-        <select id="lc-fw-emp" style="width:100%;margin-top:6px;padding:6px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2)"><option value="">— เลือกเซลล์ไม้ 2 —</option>${sellers}</select>
-        <button class="btn pri sm" id="lc-fw" style="width:100%;margin-top:6px">ส่งต่อไม้ 2</button></div>` : ''}`;
-    const fw = $('lc-fw');
-    if (fw) fw.onclick = async () => {
-      const emp = +($('lc-fw-emp').value || 0);
-      if (!emp) { toast('เลือกเซลล์ไม้ 2 ก่อน'); return; }
-      const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
-      if (!confirm(`ส่งต่อไม้ 2 ของ ${code} ให้ ${nm}\n(เลข ${d.fwd} · ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก)?`)) return;
-      fw.disabled = true;
-      const x = await api('/connect/api/leadflow', { action: 'forward', code, emp });
-      fw.disabled = false; toast(x.ok ? x.message : (x.error || 'ไม่สำเร็จ'), 8000);
-      if (x.ok) openDbDetail(code);
-    };
-  }
-
-  // ── ไปป์ไลน์ ──
-  async function openPipe() {
-    const pg = $('lc-page');
-    pg.innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>`;
-    const d = await api('/connect/api/pipeline');
-    if (S.panel !== 'pipe') return;
-    if (!d.ok) { pg.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    const R = d.stuckRule || {};
-    pg.innerHTML = `<div class="lc-sec">ไปป์ไลน์เต็นท์รถ <span style="font-weight:400;color:var(--t3)">· คอลัมน์ = สถานะเคสชุดเดียวกับรายงานฝ่ายขาย · ปล่อย = เดือนนี้ · กรอบแดง = ค้างเกินกำหนด (จอง/รอเซ็นต์ ${R['จอง'] || 3} วัน · รอผล ${R['รอผล'] || 5} วัน · รอปล่อย ${R['รอปล่อย'] || 3} วัน)</span></div>
-      <div class="lc-kan">${(d.cols || []).map(c => `<div class="lc-col"><div class="lc-colh"><span class="t">${h(c.status)}</span>${c.stuck ? `<span class="lc-chip crit">ค้าง ${c.stuck}</span>` : ''}<span class="n">${c.count}</span></div>
-        <div class="lc-colb">${c.items.map(x => `<div class="lc-deal${x.stuck ? ' stuck' : ''}"><div class="c">${h(x.customer)}</div><div class="p">${h(x.car || '')}</div>
-          ${x.stuck ? `<div style="margin-top:5px"><span class="lc-chip crit">ค้าง · ${h(c.status)} ${x.days} วัน</span></div>` : ''}
-          <div class="f"><span>${h(x.seller === 'ADMIN' ? 'เทเลเซลล์' : x.seller)}</span><span class="v">${x.price ? Number(x.price).toLocaleString() : ''}</span></div></div>`).join('')
-          || '<div style="color:var(--t3);font-size:12px;padding:6px">—</div>'}
-          ${c.count > c.items.length ? `<div style="color:var(--t3);font-size:12px">… และอีก ${c.count - c.items.length} เคส</div>` : ''}</div></div>`).join('')}</div>
-      <div style="font-size:12px;color:var(--t3);margin-top:6px">ดีลค้างเหล่านี้ขึ้นในข้อความตามด่วนที่ส่งเข้าไลน์เซลล์ 09:00 / 13:00 อยู่แล้ว · แก้สถานะ/วันที่ของเคสได้ในแดชบอร์ด (แท็บสถานะจองปล่อย)</div>`;
-  }
-
-  // ── แดชบอร์ดทีม ──
-  async function openDash() {
-    const pg = $('lc-page');
-    pg.innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังคำนวณ…</div>`;
-    const d = await api('/connect/api/team');
-    if (S.panel !== 'dash') return;
-    if (!d.ok) { pg.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    const T = d.tiles || {}, F = d.funnel || [];
-    const pct = (a, b) => b ? Math.round(a * 100 / b) : null;
-    const repPct = pct(T.reportedToday, T.tasksToday), chatPct = pct(T.repOk, T.repAll);
-    const fmax = Math.max(1, ...F.map(x => x.v));
-    pg.innerHTML = `<div class="lc-sec">ภาพรวมวันนี้ <span style="font-weight:400;color:var(--t3)">· ${h(d.dayName)} ${h(fmtDay(d.date))} · อัปเดตสด ไม่ต้องรอประชุมสิ้นเดือน</span></div>
-      <div class="lc-tiles">
-        <div class="lc-card lc-tile"><div class="lbl">จ่ายเบอร์วันนี้</div><div class="val">${T.tasksToday || 0}</div><div class="note">ใบจ่ายลีดผ่านระบบ + ใบที่แอดมินโพสต์ในห้อง</div></div>
-        <div class="lc-card lc-tile"><div class="lbl">รายงานผลแล้ว</div><div class="val" style="color:${repPct == null ? 'var(--t3)' : (repPct >= 80 ? 'var(--green)' : 'var(--amber)')}">${repPct == null ? '–' : repPct + '%'}</div><div class="note">${T.reportedToday || 0} จาก ${T.tasksToday || 0} ใบ · เลยเวลา ${T.lateToday || 0} ใบ</div></div>
-        <div class="lc-card lc-tile"><div class="lbl">ตอบแชททันเวลา (ผ่าน Connect)</div><div class="val" style="color:${chatPct == null ? 'var(--t3)' : (chatPct >= 80 ? 'var(--green)' : 'var(--amber)')}">${chatPct == null ? '–' : chatPct + '%'}</div><div class="note">${T.repOk || 0} จาก ${T.repAll || 0} คำตอบวันนี้ · ตอบในแอป LINE OA ไม่นับ</div></div>
-        <div class="lc-card lc-tile"><div class="lbl">ปล่อยเดือนนี้</div><div class="val">${T.doneMonth || 0}</div><div class="note">จอง ${T.bookingMonth || 0} · จากชีตยอดขาย</div></div>
-      </div>
-      <div class="lc-card"><div class="lc-bh"><h2>กรวยเดือนนี้ — จากแชทถึงปล่อยรถ</h2><span class="note">แต่ละแถวบอกที่มาของตัวเลข</span></div>
-        <div class="lc-funnel">${F.map((x, i) => `<div class="lc-frow"><span>${h(x.k)}</span><div class="bar"><i style="width:${Math.round(x.v * 100 / fmax)}%"></i></div>
-          <span class="fv">${x.v.toLocaleString()}${i && F[i - 1].v ? ` <span style="color:var(--t3);font-weight:600">${Math.round(x.v * 100 / F[i - 1].v)}%</span>` : ''} <span style="color:var(--t3);font-weight:500">· ${h(x.src)}</span></span></div>`).join('')}</div></div>
-      <div class="lc-card"><div class="lc-tw"><table class="lc-tbl"><thead><tr><th>เซลล์</th><th>ทีม</th><th class="r">ลีดวันนี้</th><th class="r">รายงานแล้ว</th><th class="r">เลยเวลา</th><th class="r">ตอบแชท (ทัน/ทั้งหมด)</th><th class="r">จองเดือนนี้</th><th class="r">ปล่อยเดือนนี้</th><th>6 วันล่าสุด</th><th class="r">สถานะ</th></tr></thead><tbody>
-        ${(d.sellers || []).map(s => { const mx = Math.max(1, ...s.spark); return `<tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="lc-av" style="background:${teamColor(s.team)}">${h(initial(s.name))}</span><b>${h(s.name)}</b></span></td>
-          <td>${teamTag(s.team)}</td><td class="r">${s.leadsToday}</td><td class="r">${s.reported}</td><td class="r" style="color:${s.late ? 'var(--red)' : 'var(--t3)'}">${s.late}</td>
-          <td class="r">${s.replies ? s.repliesOk + '/' + s.replies : '–'}</td><td class="r">${s.booking}</td><td class="r">${s.done}</td>
-          <td><span class="lc-spark" title="${h(d.sixDays.join(' · '))}">${s.spark.map(v => `<i style="height:${Math.max(3, Math.round(v * 22 / mx))}px"></i>`).join('')}</span></td>
-          <td class="r"><span class="lc-chip${s.status === 'หยุดวันนี้' ? '' : ' ok'}">${h(s.status)}</span></td></tr>`; }).join('')}
-      </tbody></table></div></div>
-      <div id="lc-stats"></div>`;
-    openStats(7);
-  }
-
-  // ── กฎและเส้นทาง: สวิตช์ใช้งานได้จริง (บันทึกทันที) + สองเส้นทาง · ตั้งค่าละเอียดอยู่ด้านล่าง ──
-  const RULES = [
-    { t: 'แอดมินคัดก่อน เซลล์ถึงได้รับ', d: 'ห้องพัก Lead รับเฉพาะลูกค้าที่ให้เบอร์หรือ ID LINE แล้ว (ระบบจับจากแชทให้เอง) + ปุ่ม "ไม่ต้องจ่ายเบอร์" สำหรับคนที่ไม่ใช่ลีดขาย', fixed: true },
-    { t: 'ส่งใบจ่ายลีดเข้าห้องจ่ายเบอร์ + แท็ก @เซลล์', d: 'ทุกครั้งที่กดจ่าย ส่งจากบอทตัวส่ง (เลข R เข้าห้อง REJECT) · ปิด = โหมดทดลอง เก็บในระบบอย่างเดียว', src: 'c', k: 'slip_post', out: true },
-    { t: 'จ่ายวนตามคิว (อัตโนมัติ)', d: 'ใบร่างในห้องพักที่รอเกินเวลาที่ตั้ง → จ่ายให้คนได้ใบน้อยสุด ข้ามคนหยุด/เต็มมือ · เบอร์ซ้ำไม่จ่ายเอง · แชท LINE/FB ไม่จ่ายเอง', src: 'lf', k: 'auto_assign', out: true },
-    { t: 'ดึงคืนเมื่อเลยเวลา', d: 'ไม่รายงานผลภายในเวลาที่ตั้ง หรือกดขอผ่าน → จ่ายใหม่ให้คนถัดไปในคิว เลขเดิม ใบเดิม แท็กคนใหม่', src: 'lf', k: 'auto_pull', out: true },
-    { t: 'การ์ดปุ่ม รับเคส / ขอผ่าน ในห้องจ่ายเบอร์', d: 'แนบต่อท้ายใบในข้อความเดียวกัน (ไม่เพิ่มโควต้า) · ปุ่มตอบด้วย reply ฟรี · กดได้เฉพาะคนที่ได้เคส', src: 'lf', k: 'card_on', out: true },
-    { t: 'รายงานผล → การ์ดยืนยันแชทส่วนตัว → ลงชีต', d: 'เซลล์พิมพ์ "เลข + ผล" ในห้อง · ถ้ามีข้อมูลจริง (อาชีพ/รายได้/นัด/จอง) ส่งการ์ดให้กดยืนยันก่อนลงชีตลีด', src: 'lf', k: 'report_on', out: true },
-    { t: 'เตือนนัดลูกค้า', d: 'นัดที่เซลล์ยืนยันแล้ว → เตือนเข้าแชทส่วนตัวก่อนถึงเวลา', src: 'lf', k: 'remind_on', out: true },
-    { t: 'ต้องเช็คชื่อเข้างานก่อนได้ใบ', d: 'คิวจ่ายวนข้ามคนที่ยังไม่เช็คชื่อวันนี้', src: 'lf', k: 'need_checkin' },
-    { t: 'เบอร์ซ้ำ → หยุดรอแอดมินยืนยัน', d: 'สมุดเบอร์ (ชีตลีดทั้งปี + ใบในห้อง + ปุ่มจ่ายเบอร์) บอกว่าเคยเป็นลีดของใคร ก่อนกดจ่าย', fixed: true },
-    { t: 'แจ้งกลุ่มแอดมินเมื่อแชทรอเกินเวลา', d: 'ต้องเลือกกลุ่มในตั้งค่าละเอียดด้านล่าง · ⚠️ ทีมยังตอบในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา — เปิดแล้วจะแจ้งถี่', src: 'c', k: 'alert_on', out: true },
-    { t: 'บอกเซลล์ทาง LINE เมื่อลูกค้าทัก', d: 'เจ้าของลูกค้า หรือทั้งทีมที่เวร · ทีมละ ~9 คน = กินโควต้าเร็ว', src: 'c', k: 'notify_sellers', out: true },
-    { t: 'รับแชท Facebook เข้า Connect', d: 'คิวเดียวกับ LINE · ตอบ Facebook ตั้งได้ในตั้งค่าละเอียด', src: 'c', k: 'fb_on' },
-  ];
-  function ruleVal(r) {
-    if (r.fixed) return true;
-    const C2 = (CFG || {}).cfg || {}, L2 = ((CFG || {}).lf || {}).cfg || {};
-    return !!(r.src === 'c' ? C2[r.k] : L2[r.k]);
-  }
-  function rulesHtml() {
-    if (!ADMIN) return '';
-    return `<div class="lc-rules">
-      <div class="lc-card"><div class="lc-bh"><h2>กติกาการจ่ายลีด</h2><span class="note">กดสวิตช์ = บันทึกทันที · สีเขียว = เปิด</span></div>
-        ${RULES.map((r, i) => `<div class="lc-rule"><div class="tx"><div class="tt">${h(r.t)}</div><div class="ds">${h(r.d)}</div></div>
-          <button class="lc-sw${ruleVal(r) ? ' on' : ''}${r.fixed ? ' fixed' : ''}" data-rule="${i}" aria-pressed="${ruleVal(r)}" title="${r.fixed ? 'ทำงานตลอด' : 'กดเพื่อเปิด/ปิด'}"></button></div>`).join('')}</div>
-      <div>
-        <div class="lc-card"><div class="lc-bh"><h2>สองเส้นทางที่ต้องรองรับ</h2></div>
-          <div class="lc-lane"><div class="lt"><span class="lc-origin">จากแชท</span> แชทมาก่อน เบอร์มาทีหลัง</div>
-            <div class="ld">LINE@ และ Facebook Messenger (คิวเดียวกันใน Connect) — ได้ ID ของแพลตฟอร์มทันทีที่ตอบ แต่ยังไม่มีเบอร์ ไม่ต้องบังคับขอเบอร์ก่อนตอบ ลูกค้าหนี · Instagram ยังต่อไม่ได้ (เพจยังไม่ผูก IG) · TikTok inbox รออนุมัติ API</div>
-            <div class="path"><b>แชทเข้า</b>→<b>ได้เบอร์/ID LINE</b>→<b>ห้องพัก Lead</b>→<b>จ่ายเบอร์</b>→<b>ใบเข้าห้อง + @เซลล์</b></div></div>
-          <div class="lc-lane"><div class="lt"><span class="lc-origin direct">ใบร่าง/สายเข้า</span> เบอร์มาก่อน ไม่มีแชท</div>
-            <div class="ld">ใบร่างที่แอดมินพักไว้ในกลุ่ม ADMIN เก็บ Lead (TikTok · ไลฟ์ · เพจ) และสายที่โทรเข้าเบอร์กลาง — ได้ชื่อกับเบอร์มาเลย แอดมินคัดมาแล้ว ไม่ต้องคัดซ้ำ</div>
-            <div class="path"><b>ใบร่าง/สายเข้า</b>→<b>ห้องพัก Lead</b>→<b>จ่ายเบอร์</b>→<b>เซลล์โทร</b></div></div></div>
-        <div class="lc-card"><div class="lc-bh"><h2>ลูกค้าคนเดียวหลายร่าง</h2></div>
-          <div class="lc-lane"><div class="ld">ทักไลน์ตอนเช้า เย็นกรอกฟอร์มเว็บ อีกวันทักจากไลฟ์ = 3 เลขลีด · <b>ตัวจับคู่ที่เชื่อได้มีแค่เบอร์โทร</b> เพราะ LINE userId กับ Facebook PSID เป็นคนละระบบ —
-            ระบบเช็คสมุดเบอร์ทุกครั้งที่จะจ่าย ถ้าเคยมีคนดูแลอยู่จะขึ้นปุ่ม "จ่ายให้เจ้าของเดิม"</div>
-            <div class="path"><b>ได้เบอร์ใหม่</b>→<b>เช็คสมุดเบอร์</b>→<b>เจอซ้ำ</b>→<b>จ่ายเจ้าของเดิม</b></div></div></div>
-      </div></div>`;
-  }
-  function bindRules() {
-    CPG().querySelectorAll('[data-rule]').forEach(b => b.onclick = async () => {
-      const r = RULES[+b.dataset.rule];
-      if (!r || r.fixed) return;
-      const on = !ruleVal(r);
-      if (on && r.out && !confirm(`เปิด "${r.t}" ?\n(เรื่องนี้ส่ง LINE ออก/จ่ายงานแทนคน)`)) return;
-      b.disabled = true;
-      const res = r.src === 'c' ? await api('/connect/api/config', { [r.k]: on })
-                                : await api('/connect/api/leadflow', { action: 'config', [r.k]: on });
-      b.disabled = false;
-      if (!res.ok) { toast(res.error || 'บันทึกไม่สำเร็จ', 6000); return; }
-      toast((on ? 'เปิด ' : 'ปิด ') + r.t + ' แล้ว');
-      openCfg();
-    });
-  }
-  function fmtDay(iso) {
-    if (!iso) return '';
-    const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-    if (isNaN(d)) return String(iso);
-    return d.getDate() + ' ' + TH_MON[d.getMonth()] + ' ' + String(d.getFullYear() + 543).slice(-2);
-  }
-
   // ── ค้นหา / เลือกเซลล์ ──
   let _qT = null;
   $('cn-q').addEventListener('input', () => { clearTimeout(_qT); _qT = setTimeout(() => { S.q = $('cn-q').value.trim(); loadInbox(true); }, 350); });
@@ -2667,12 +1945,12 @@
     });
   }, 1000);
   // ── รีเฟรช: รายชื่อทุก 8 วิ · แชทที่เปิดอยู่ทุก 6 วิ (หยุดตอนสลับไปแท็บอื่น) ──
-  setInterval(() => { if (!document.hidden && (S.pane === 'chat' || S.pane === 'dist')) loadInbox(false); }, 8000);
+  setInterval(() => { if (!document.hidden && S.pane === 'chat') loadInbox(false); }, 8000);
   setInterval(() => { if (!document.hidden && S.pane === 'chat' && S.chat) openChat(S.chat.row.id, true); }, 6000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadInbox(false); });
 
   if (S.openId) showPane();
-  setPanel(ADMIN && PANEL_PANE[BOOT.panel] && !S.openId ? BOOT.panel : 'inbox', true);
+  loadInbox(true);
 })();
 </script>
 </body>
