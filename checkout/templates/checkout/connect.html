@@ -421,7 +421,10 @@
   .lc-dbst .v { font-size: 17px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .lc-dbf { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); align-items: center; }
   .lc-dbf select { padding: 5px 9px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); font-size: 12px; }
-  .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 13px; align-items: start; }
+  .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr); gap: 13px; align-items: start; }
+  .lc-dbgrid.has-prof { grid-template-columns: minmax(0,1fr) 340px; }
+  .lc-dbst > div.go { cursor: pointer; border-radius: 7px; padding: 2px 6px; margin: -2px -6px; }
+  .lc-dbst > div.go:hover { background: var(--bg2); }
   .lc-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
   .lc-tbl th { text-align: left; font-weight: 700; font-size: 11.5px; letter-spacing: .03em; color: var(--t3); padding: 9px 12px; border-bottom: .5px solid var(--bd2); white-space: nowrap; }
   .lc-tbl td { padding: 9px 12px; border-bottom: .5px solid var(--bd); vertical-align: middle; }
@@ -434,6 +437,52 @@
   .lc-rep { font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px; background: var(--red-bg); color: var(--red); margin-left: 4px; }
   .lc-cust b { display: block; }
   .lc-cust span { font-size: 11.5px; color: var(--t3); font-variant-numeric: tabular-nums; }
+  /* ตารางแบบชีตลีด (26 คอลัมน์ ค่าดิบ) — หัวตารางตรึงบน · 5 คอลัมน์แรก (ตรวจซ้ำ ว/ด/ป เบอร์ เวลา Code) ตรึงซ้าย */
+  .lc-sheet { max-height: calc(100vh - 290px); min-height: 280px; overflow: auto; }
+  html.embed .lc-sheet { max-height: calc(100vh - 250px); }
+  .lc-raw { width: max-content; min-width: 100%; font-size: 12.5px; }
+  .lc-raw th, .lc-raw td { padding: 7px 10px; background: var(--bg); }
+  .lc-raw thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--bd2); }
+  .lc-raw td { white-space: nowrap; }
+  .lc-raw .c { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lc-raw .c.w { max-width: 260px; }
+  .lc-raw tr[data-key] { cursor: pointer; }
+  .lc-raw tr[data-key]:hover td { background: var(--bg2); }
+  .lc-raw tr.sys td { background: var(--blue-bg); }
+  .lc-raw tr.on td { background: var(--bg3); }
+  .lc-raw td.hit { background: var(--amber-bg); }
+  .lc-raw .s0 .c { width: 96px; max-width: none; white-space: normal; display: flex; flex-wrap: wrap; gap: 3px; }
+  .lc-grp td { background: var(--bg3) !important; font-weight: 700; font-size: 12px; color: var(--t1); padding: 6px 10px; }
+  .lc-grp td span { position: sticky; left: 10px; }
+  .lc-dbb { font-size: 10.5px; font-weight: 800; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+  .lc-dbb.c { background: var(--red-bg); color: var(--red); }
+  .lc-dbb.p { background: var(--amber-bg); color: var(--amber); }
+  .lc-dbb.s { background: var(--blue-bg); color: var(--blue-dk); }
+  .lc-dbb.f { background: var(--bg3); color: var(--t2); }
+  .lc-dbn { font-size: 11px; color: var(--t3); }
+  @media (min-width: 901px) {
+    .lc-raw .s0, .lc-raw .s1, .lc-raw .s2, .lc-raw .s3, .lc-raw .s4 { position: sticky; z-index: 1; }
+    .lc-raw thead .s0, .lc-raw thead .s1, .lc-raw thead .s2, .lc-raw thead .s3, .lc-raw thead .s4 { z-index: 3; }
+    .lc-raw .s0 { left: 0; }
+    .lc-raw .s1 { left: 116px; } .lc-raw .s1 .c { width: 68px; }
+    .lc-raw .s2 { left: 204px; } .lc-raw .s2 .c { width: 140px; max-width: none; }
+    .lc-raw .s3 { left: 364px; } .lc-raw .s3 .c { width: 38px; }
+    .lc-raw .s4 { left: 422px; box-shadow: inset -1px 0 0 var(--bd2); } .lc-raw .s4 .c { width: 104px; max-width: none; }
+    .lc-raw thead .s4 { box-shadow: inset -1px 0 0 var(--bd2), inset 0 -1px 0 var(--bd2); }
+  }
+  .lc-px { float: right; margin: -4px -4px 0 6px; }
+  .lc-chk { display: grid; gap: 6px; padding: 0 14px 10px; font-size: 12.5px; }
+  .lc-chk > div { display: flex; align-items: center; gap: 8px; }
+  .lc-chk > div > span:first-child { width: 42px; color: var(--t3); font-size: 12px; }
+  .lc-mt { padding: 8px 12px; border-bottom: .5px solid var(--bd); font-size: 12.5px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+  .lc-mt:last-child { border-bottom: 0; }
+  .lc-mt.go { cursor: pointer; }
+  .lc-mt.go:hover { background: var(--bg2); }
+  .lc-prof .mu, .lc-mt .mu { color: var(--t3); font-size: 11.5px; font-weight: 400; }
+  .lc-kvs { padding: 0 14px 14px; display: grid; gap: 5px; }
+  .lc-kv { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 8px; font-size: 12.5px; }
+  .lc-kv span { color: var(--t3); font-size: 11.5px; }
+  .lc-kv b { font-weight: 600; word-break: break-word; white-space: pre-wrap; }
   .lc-prof .ph { padding: 14px; border-bottom: .5px solid var(--bd); }
   .lc-prof .nm { font-weight: 800; font-size: 16px; }
   .lc-prof .sub { font-size: 12px; color: var(--t3); margin-top: 1px; }
@@ -494,7 +543,11 @@
   .lc-sec { margin: 6px 0 10px; font-size: 13px; font-weight: 800; color: var(--t2); }
   .lc-shell .card { max-width: none; }
   @media (max-width: 1180px) {
-    .lc-dist, .lc-dbgrid { grid-template-columns: minmax(0,1fr); }
+    .lc-dist, .lc-dbgrid, .lc-dbgrid.has-prof { grid-template-columns: minmax(0,1fr); }
+    .lc-dbgrid .lc-prof { order: -1; }
+  }
+  @media (max-width: 760px) {                       /* ตัวเลขสรุป 5 ช่องขึ้นบรรทัดใหม่ ไม่บีบช่องค้นหาจนหาย */
+    .lc-dbtop { grid-template-columns: minmax(0,1fr); }
   }
   /* จอแคบ + ฝังในแดชบอร์ด = เมนูเป็นแถบแนวนอนด้านบน (แดชบอร์ดมีเมนูซ้ายของตัวเองอยู่แล้ว) */
   @media (max-width: 900px) {
@@ -1920,6 +1973,7 @@
 
   window.__cnBack = () => {
     if (S.backTo === 'dist' && ADMIN) { S.backTo = ''; S.openId = 0; S.chat = null; setPanel('dist'); return; }
+    if (S.backTo === 'db' && ADMIN) { S.backTo = ''; S.openId = 0; S.chat = null; setPanel('db'); return; }
     hidePane();
     if (S.pane !== 'chat') { S.pane = 'chat'; renderTabs(); }
     S.openId = 0; S.chat = null;
@@ -2426,53 +2480,88 @@
     pg.querySelectorAll('.hub-done[data-id]').forEach(r => r.onclick = () => { S.backTo = 'dist'; setPanel('inbox'); openChat(+r.dataset.id); });
   }
 
-  // ── ฐานข้อมูล Lead ──
-  S.db = { mode: 'all', q: '', status: '', seller: '', code: '', data: null, detail: null };
+  // ── ฐานข้อมูล Lead ── (11 ต.ค.69 · 26 คอลัมน์ตามชีตลีด + ตรวจลีดซ้ำ 2 ทาง: Code และช่องเบอร์โทร (เบอร์/ID LINE))
+  S.db = { mode: 'all', q: '', status: '', seller: '', key: '', limit: 150, data: null };
   const DB_STATUS = ['', 'รอตอบ', 'ไม่รับสาย', 'ลูกค้าไม่ตอบ', 'สนใจมาก', 'ลังเล', 'รอมาดูรถ', 'จอง', 'คืนเคส', 'ได้รถแล้ว'];
+  const DB_WHY = { code: 'crit', fwd: '', phone: 'warn', line: 'warn', book: 'brand' };
+  const DB_LONG = new Set([10, 11, 18, 19, 23]);      // ADS · รถลูกค้าถาม · มากรอกชีต · PROFILE · ประวัติผ่อน = ช่องข้อความยาว
   let _dbT = null, _dbSeq = 0;
   async function openDb(keep) {
     const pg = $('lc-page');
-    if (!keep) pg.innerHTML = dbShell();
+    if (!keep) { pg.innerHTML = dbShell(); S.db.limit = 150; }
     bindDbShell();
     const seq = ++_dbSeq;
-    $('lc-db-rows').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังค้นในชีตลีด… (ครั้งแรกอาจใช้ ~10 วินาที)</div>`;
-    const q = new URLSearchParams({ mode: S.db.mode, q: S.db.q, status: S.db.status, seller: S.db.seller });
+    if (keep !== 'more') $('lc-db-rows').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังค้นในชีตลีด… (ครั้งแรกอาจใช้ ~10 วินาที)</div>`;
+    const q = new URLSearchParams({ mode: S.db.mode, q: S.db.q, status: S.db.status, seller: S.db.seller, limit: S.db.limit });
     const d = await api('/connect/api/leaddb?' + q.toString());
     if (seq !== _dbSeq || S.panel !== 'db') return;
     S.db.data = d;
     paintDb();
+    if (!keep && S.db.key) openDbDetail(S.db.key);          // กลับมาจากแชท → เปิดแถวเดิมต่อ
   }
+  function dbReload() { S.db.limit = 150; openDb(true); }
   function dbShell() {
     return `<div class="lc-card">
       <div class="lc-bh" style="padding-bottom:0;border-bottom:0"><span class="lc-seg" id="lc-db-modes">
-        <button data-dbm="all">รายชื่อทั้งหมด</button><button data-dbm="returned">คืนเคส รอส่งต่อไม้ 2</button><button data-dbm="match">รถพร้อมขายใหม่ แมตช์ลูกค้าเก่า</button></span></div>
-      <div class="lc-dbtop"><label class="lc-dbs">${ic('list')}<input id="lc-db-q" type="search" autocomplete="off" placeholder="ค้นหาเบอร์ (หรือ 4 ตัวท้าย) · เลขลีด · รุ่นรถ · ชื่อ · ช่องทาง" value="${h(S.db.q)}"></label>
+        <button data-dbm="all">รายชื่อทั้งหมด</button><button data-dbm="dup">ลีดซ้ำ · Code / เบอร์ / ไลน์</button><button data-dbm="unsheeted">ในระบบ ยังไม่ลงชีต</button><button data-dbm="returned">คืนเคส รอส่งต่อไม้ 2</button><button data-dbm="match">รถพร้อมขายใหม่ แมตช์ลูกค้าเก่า</button></span></div>
+      <div class="lc-dbtop"><label class="lc-dbs">${ic('list')}<input id="lc-db-q" type="search" autocomplete="off" placeholder="ค้นหาเบอร์ (หรือ 4 ตัวท้าย) · ID LINE · เลขลีด · รุ่นรถ · ชื่อ · ช่องทาง" value="${h(S.db.q)}"></label>
         <div class="lc-dbst" id="lc-db-st"></div></div>
       <div class="lc-dbf"><span style="color:var(--t3);font-size:12px">สถานะลูกค้า</span><span class="lc-seg" id="lc-db-status">${DB_STATUS.map(x =>
         `<button data-dbs="${h(x)}">${h(x || 'ทั้งหมด')}</button>`).join('')}</span>
         <select id="lc-db-seller"><option value="">เซลล์ทุกคน</option></select></div>
     </div>
-    <div class="lc-dbgrid"><div class="lc-card" style="min-width:0"><div id="lc-db-rows"></div></div><div class="lc-card lc-prof" id="lc-db-prof">
-      <div class="cn-empty" style="padding:22px">คลิกแถวเพื่อดูประวัติลูกค้า · เลขอื่นของเบอร์เดียวกัน · งานจ่ายเบอร์ · รายงานผล</div></div></div>`;
+    <div class="lc-dbgrid${S.db.key ? ' has-prof' : ''}" id="lc-dbgrid"><div class="lc-card" style="min-width:0;margin-bottom:0"><div id="lc-db-rows"></div></div><div class="lc-card lc-prof" id="lc-db-prof"${S.db.key ? '' : ' hidden'}></div></div>`;
   }
   function bindDbShell() {
     const pg = $('lc-page');
     pg.querySelectorAll('[data-dbm]').forEach(b => { b.classList.toggle('on', b.dataset.dbm === S.db.mode);
-      b.onclick = () => { S.db.mode = b.dataset.dbm; openDb(true); }; });
+      b.onclick = () => { S.db.mode = b.dataset.dbm; dbReload(); }; });
     pg.querySelectorAll('[data-dbs]').forEach(b => { b.classList.toggle('on', b.dataset.dbs === S.db.status);
-      b.onclick = () => { S.db.status = b.dataset.dbs; openDb(true); }; });
+      b.onclick = () => { S.db.status = b.dataset.dbs; dbReload(); }; });
     const qi = $('lc-db-q');
-    qi.oninput = () => { clearTimeout(_dbT); _dbT = setTimeout(() => { S.db.q = qi.value.trim(); openDb(true); }, 450); };
+    qi.oninput = () => { clearTimeout(_dbT); _dbT = setTimeout(() => { S.db.q = qi.value.trim(); dbReload(); }, 450); };
     const sel = $('lc-db-seller');
-    sel.onchange = () => { S.db.seller = sel.value; openDb(true); };
+    sel.onchange = () => { S.db.seller = sel.value; dbReload(); };
+  }
+  function dbStat(k, v, color, mode, tip) {
+    return `<div${mode ? ` class="go" data-dbgo="${mode}"` : ''}${tip ? ` title="${h(tip)}"` : ''}><div class="k">${h(k)}</div><div class="v"${color ? ` style="color:${color}"` : ''}>${(v || 0).toLocaleString()}</div></div>`;
+  }
+  function dbBadges(r) {
+    const b = [];
+    if (r.src === 'system') b.push(`<span class="lc-dbb s" title="ระบบออกเลขให้แล้ว (จ่ายเบอร์ใน Connect / ลีดภายนอก / ไม้ 2) แต่ยังไม่มีแถวในชีตลีด">ยังไม่ลงชีต</span>`);
+    if (r.codeDup) b.push(`<span class="lc-dbb c" title="เลข ${h(r.code)} อยู่ในชีตลีด ${r.codeDup} แถว">Code ×${r.codeDup}</span>`);
+    if (r.dup) {
+      const k = r.dupKind || [];
+      const nm = k.length > 1 ? 'เบอร์/ไลน์' : (k[0] === 'line' ? 'ไลน์' : 'เบอร์');
+      b.push(`<span class="lc-dbb p" title="${h(nm)}เดียวกันนี้เป็นลีดอีก ${r.dup} เลข (ไม่นับไม้ 2 ของเลขเดิม)">${nm} ×${r.dup + 1}</span>`);
+    }
+    if (r.fwdOf) b.push(`<span class="lc-dbb f" title="ไม้ 2 ของเลข ${h(r.fwdOf)} — ลีดเดียวกัน ไม่นับว่าซ้ำ">ไม้ 2</span>`);
+    if (b.length) return b.join('');
+    if (!r.phone && !r.lineId) return `<span class="lc-dbn" title="ช่องเบอร์โทรไม่มีเบอร์/ไอดีไลน์ที่ใช้เทียบได้ (เช่น QR code / Line@) — เทียบได้แค่ Code">เทียบแค่ Code</span>`;
+    return '<span class="lc-dbn">ไม่ซ้ำ</span>';
+  }
+  function dbZ(x) {
+    return `<span class="lc-chip${/คืน|ไม่สนใจ|แบล็ค/.test(x) ? ' crit' : (/จอง|ได้รถ|ส่งมอบ/.test(x) ? ' ok' : '')}">${h(x)}</span>`;
+  }
+  function dbRow(r) {
+    const cells = (r.v || []).map((x, i) => {
+      const cls = [i < 4 ? 's' + (i + 1) : '', (i === 3 && r.codeDup) || (i === 1 && r.dup) ? 'hit' : ''].filter(Boolean).join(' ');
+      const inner = i === 3 ? `<b>${h(x || '—')}</b>` : (i === 25 && x ? dbZ(x) : h(x));
+      return `<td${cls ? ` class="${cls}"` : ''}${x && x.length > 18 ? ` title="${h(x)}"` : ''}><div class="c${DB_LONG.has(i) ? ' w' : ''}">${inner}</div></td>`;
+    }).join('');
+    return `<tr data-key="${h(r.key)}" class="${S.db.key === r.key ? 'on' : ''}${r.src === 'system' ? ' sys' : ''}"><td class="s0"><div class="c">${dbBadges(r)}</div></td>${cells}</tr>`;
   }
   function paintDb() {
     const d = S.db.data || {};
     if (!d.ok) { $('lc-db-rows').innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
     const st = d.stats || {};
-    $('lc-db-st').innerHTML = `<div><div class="k">แถวในชีตลีด</div><div class="v">${(st.rows || 0).toLocaleString()}</div></div>
-      <div><div class="k">เบอร์ไม่ซ้ำ</div><div class="v">${(st.phones || 0).toLocaleString()}</div></div>
-      <div><div class="k">คืนเคส</div><div class="v" style="color:var(--red)">${(st.returned || 0).toLocaleString()}</div></div>`;
+    $('lc-db-st').innerHTML = dbStat('แถวในชีตลีด', st.rows, '', '', 'ทุกแท็บรายเดือนของชีตลีด · เบอร์ ' + (st.phones || 0).toLocaleString() + ' เบอร์ · ID LINE ' + (st.lineIds || 0).toLocaleString() + ' ไอดี')
+      + dbStat('Code ซ้ำ', st.codeDup, 'var(--red)', 'dup', 'เลขลีดเดียวกันอยู่ในชีตมากกว่า 1 แถว (' + (st.codeDupRows || 0).toLocaleString() + ' แถว) — เช่นลงซ้ำข้ามเดือน หรือใช้เลขเดียวกันกับลูกค้า 2 คน')
+      + dbStat('เบอร์/ไลน์ซ้ำ', st.contactDup, 'var(--amber)', 'dup', 'เบอร์หรือ ID LINE เดียวกันเป็นลีดมากกว่า 1 เลข (ไม่นับไม้ 2 ของเลขเดิม)')
+      + dbStat('ยังไม่ลงชีต', st.unsheeted, 'var(--blue)', 'unsheeted', 'ระบบออกเลขให้แล้ว แต่ยังไม่มีแถวในชีตลีด')
+      + dbStat('คืนเคส', st.returned, 'var(--red)', 'returned', '');
+    $('lc-db-st').querySelectorAll('[data-dbgo]').forEach(x => x.onclick = () => {
+      S.db.mode = x.dataset.dbgo; document.querySelectorAll('[data-dbm]').forEach(b => b.classList.toggle('on', b.dataset.dbm === S.db.mode)); dbReload(); });
     const sel = $('lc-db-seller');
     if (sel.options.length <= 1) { sel.innerHTML = '<option value="">เซลล์ทุกคน</option>' + (d.sellers || []).map(x => `<option>${h(x)}</option>`).join(''); }
     sel.value = S.db.seller;
@@ -2485,53 +2574,85 @@
          || '<div class="cn-empty">ยังไม่มีลูกค้าที่รอรถแล้วตอนนี้มีรถตรงสเปก</div>');
       return;
     }
-    const rows = d.rows || [];
-    $('lc-db-rows').innerHTML = `<div class="lc-tw"><table class="lc-tbl"><thead><tr><th>วันที่</th><th>Code</th><th>ลูกค้า</th><th>รถที่ถาม</th><th>เซลล์</th><th>สถานะลูกค้า (Z)</th><th>แอดมิน</th></tr></thead><tbody>
-      ${rows.map(r => `<tr data-code="${h(r.code)}" class="${S.db.code === r.code ? 'on' : ''}"><td style="white-space:nowrap">${h(fmtDay(r.date))}</td>
-        <td style="white-space:nowrap"><b>${h(r.code || '-')}</b>${r.dup ? `<span class="lc-rep">ซ้ำ ${r.dup + 1}×</span>` : ''}</td>
-        <td class="lc-cust"><b>${h(r.name || '—')}</b><span>${h(r.phone ? fmtPhone(r.phone) : '')}</span></td>
-        <td>${h(r.car || '—')}</td><td>${h(r.seller === 'ADMIN' ? 'เทเลเซลล์' : (r.seller || '—'))}</td>
-        <td>${r.z ? `<span class="lc-chip${/คืน|ไม่สนใจ|แบล็ค/.test(r.z) ? ' crit' : (/จอง|ได้รถ|ส่งมอบ/.test(r.z) ? ' ok' : '')}">${h(r.z)}</span>` : '<span style="color:var(--t3)">—</span>'}</td>
-        <td style="font-size:12px;color:var(--t2)">${h(r.admin || '')}</td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="lc-bh" style="border-top:.5px solid var(--bd);border-bottom:0"><span class="note">แสดง ${rows.length.toLocaleString()} จาก ${(d.total || 0).toLocaleString()} รายการ${d.total > rows.length ? ' — พิมพ์ค้นหาให้แคบลง' : ''} · ชื่อลูกค้ามาจากใบจ่ายลีด/แชท (ชีตลีดไม่มีช่องชื่อ)</span></div>`;
-    $('lc-db-rows').querySelectorAll('tr[data-code]').forEach(tr => tr.onclick = () => openDbDetail(tr.dataset.code));
+    const cols = d.cols || [], rows = d.rows || [];
+    let lastG = null;
+    const body = rows.map(r => {
+      let g = '';
+      if (S.db.mode === 'dup' && r.grp !== lastG) { lastG = r.grp; g = `<tr class="lc-grp"><td colspan="${cols.length + 1}"><span>${h(r.grpLabel || '')}</span></td></tr>`; }
+      return g + dbRow(r);
+    }).join('');
+    const empty = !rows.length ? `<div class="cn-empty">${S.db.mode === 'dup' ? 'ไม่พบลีดซ้ำตามตัวกรองนี้' : (S.db.mode === 'unsheeted' ? 'ทุกเลขที่ระบบออกให้ ลงชีตแล้ว' : 'ไม่พบรายการ')}</div>` : '';
+    const lead = S.db.mode === 'dup'
+      ? `<div class="lc-bh"><span class="note">จับคู่ 2 ทาง: <b>Code</b> เดียวกัน · <b>ช่องเบอร์โทร</b> เดียวกัน (เบอร์ หรือ ID LINE — ช่องนี้ในชีตเก็บได้ทั้งสองแบบ) · ไม้ 2 (R…/1) ของเลขเดิมไม่นับว่าซ้ำ · ${(d.groups || 0).toLocaleString()} กลุ่ม เรียงกลุ่มล่าสุดก่อน</span></div>`
+      : (S.db.mode === 'unsheeted' ? `<div class="lc-bh"><span class="note">เลขที่ระบบออกให้ (จ่ายเบอร์ใน Connect · ลีดภายนอก · ไม้ 2) ที่ยังไม่มีแถวในชีตลีด — แอดมินลงชีตแล้วจะหายจากหน้านี้เองภายใน 10 นาที</span></div>` : '');
+    $('lc-db-rows').innerHTML = lead + (empty || `<div class="lc-tw lc-sheet"><table class="lc-tbl lc-raw"><thead><tr><th class="s0">ตรวจซ้ำ</th>${cols.map((c, i) => `<th${i < 4 ? ` class="s${i + 1}"` : ''}>${h(c)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`)
+      + `<div class="lc-bh" style="border-top:.5px solid var(--bd);border-bottom:0"><span class="note">แสดง ${rows.length.toLocaleString()} จาก ${(d.total || 0).toLocaleString()} แถว · ค่าตามชีตลีด (ค่าดิบ) · เลื่อนตารางไปทางขวาดูครบ 26 คอลัมน์ · ${(st.noContact || 0).toLocaleString()} แถวในชีตไม่มีเบอร์/ไลน์ให้เทียบ (เช่น QR code / Line@) — เทียบได้แค่ Code</span>
+        ${d.total > rows.length && S.db.limit < 600 ? '<button class="btn sm" id="lc-db-more" style="margin-left:auto">ดูเพิ่มอีก 150 แถว</button>' : (d.total > rows.length ? '<span class="note" style="margin-left:auto">พิมพ์ค้นหาให้แคบลงเพื่อดูส่วนที่เหลือ</span>' : '')}</div>`;
+    const more = $('lc-db-more');
+    if (more) more.onclick = () => { S.db.limit = Math.min(600, S.db.limit + 150); more.disabled = true; openDb('more'); };
+    $('lc-db-rows').querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openDbDetail(tr.dataset.key));
   }
-  async function openDbDetail(code) {
-    S.db.code = code;
-    document.querySelectorAll('#lc-db-rows tr[data-code]').forEach(tr => tr.classList.toggle('on', tr.dataset.code === code));
-    const box = $('lc-db-prof');
+  function dbCloseProf() {
+    S.db.key = '';
+    const grid = $('lc-dbgrid'), box = $('lc-db-prof');
+    if (grid) grid.classList.remove('has-prof');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+    document.querySelectorAll('#lc-db-rows tr.on').forEach(tr => tr.classList.remove('on'));
+  }
+  async function openDbDetail(key) {
+    S.db.key = key;
+    document.querySelectorAll('#lc-db-rows tr[data-key]').forEach(tr => tr.classList.toggle('on', tr.dataset.key === key));
+    const grid = $('lc-dbgrid'), box = $('lc-db-prof');
+    if (!grid || !box) return;
+    grid.classList.add('has-prof'); box.hidden = false;
     box.innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>`;
-    const d = await api('/connect/api/leaddb?code=' + encodeURIComponent(code));
-    if (S.db.code !== code) return;
-    if (!d.ok) { box.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    const r = d.row, ev = [];
-    ev.push({ d: fmtDay(r.date), t: 'เข้าชีตลีด ' + r.code, m: [r.channel, r.type, r.carAsk].filter(Boolean).join(' · ') });
+    if (window.innerWidth <= 1180) box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const d = await api('/connect/api/leaddb?key=' + encodeURIComponent(key));
+    if (S.db.key !== key) return;
+    if (!d.ok) { box.innerHTML = `<div class="lc-px"><button class="btn sm" id="lc-db-x">ปิด</button></div><div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; $('lc-db-x').onclick = dbCloseProf; return; }
+    const r = d.row, cols = d.cols || [], v = r.v || [], mt = d.matches || [];
+    const contact = r.phone ? fmtPhone(r.phone) : (r.lineId ? 'LINE ' + r.lineId : 'ไม่มีเบอร์/ไลน์');
+    const nCode = mt.filter(m => m.why === 'code').length;
+    const ctLeads = new Set(mt.filter(m => m.why === 'phone' || m.why === 'line').map(m => m.lin || m.code || m.key));
+    const hasCt = !!(r.phone || r.lineId);
+    const chk = `<div class="lc-chk"><div><span>Code</span>${!r.code ? '<b class="mu">ไม่มีเลขลีด</b>' : (nCode ? `<span class="lc-chip crit">อยู่ในชีต ${nCode + 1} แถว</span>` : '<span class="lc-chip ok">ไม่ซ้ำ</span>')}</div>
+      <div><span>${r.phone ? 'เบอร์' : 'ไลน์'}</span>${!hasCt ? '<b class="mu">ไม่มีเบอร์/ไลน์ให้เทียบ</b>' : (ctLeads.size ? `<span class="lc-chip warn">เป็นลีดอื่นอีก ${ctLeads.size} ลีด</span>` : '<span class="lc-chip ok">ไม่เคยเป็นลีดอื่น</span>')}</div></div>`;
+    const mlist = mt.map(m => `<div class="lc-mt${m.key ? ' go' : ''}"${m.key ? ` data-mk="${h(m.key)}"` : ''}><span class="lc-chip ${DB_WHY[m.why] || ''}">${h(m.whyText)}</span><b>${h(m.code || '—')}</b>
+        <span class="mu">${m.lin && m.lin !== m.code && m.why !== 'fwd' ? 'ไม้ 2 ของ ' + h(m.lin) + ' · ' : ''}${h(fmtDay(m.date))}${m.seller ? ' · @' + h(m.seller === 'ADMIN' ? 'เทเลเซลล์' : m.seller) : ''}${m.z ? ' · ' + h(m.z) : ''}${m.src === 'system' ? ' · ยังไม่ลงชีต' : ''}</span></div>`).join('');
+    const ev = [];
+    ev.push({ d: fmtDay(r.date), t: (r.src === 'system' ? 'ระบบออกเลข ' : 'เข้าชีตลีด ') + (r.code || ''), m: [r.channel, v[9], r.carAsk].filter(Boolean).join(' · ') });
     (d.tasks || []).forEach(t => ev.push({ d: fmtWhen(t.postedAt), t: 'ใบจ่ายลีด ' + t.code + ' → @' + (t.seller || '-'),
       m: (LF_KIND[t.kind] || ['', ''])[1] + (t.lastReport ? ' · ' + t.lastReport : '') + (t.history && t.history.length ? ' · เคยจ่ายให้ ' + t.history.join(', ') : '') }));
     (d.reports || []).forEach(x => ev.push({ d: fmtWhen(x.at), t: 'รายงานผล โดย ' + x.seller, m: x.text }));
-    if (r.note) ev.push({ d: '', t: 'มากรอกชีตกันเถอะ', m: r.note });
-    const others = (d.others || []).map(o => `<div class="lc-rl"><b>${h(o.code || '-')}</b> <span style="color:var(--t3)">@${h(o.seller || '?')} · ${h(fmtDay(o.date))}</span></div>`).join('');
+    const kv = cols.map((c, i) => v[i] ? `<div class="lc-kv"><span>${h(c)}</span><b>${i === 25 ? dbZ(v[i]) : h(v[i])}</b></div>` : '').join('');
     const sellers = S.sellers.map(s => `<option value="${s.id}">${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
-    box.innerHTML = `<div class="ph"><div class="nm">${h(r.name || 'ไม่ทราบชื่อ')}</div><div class="sub">${h(r.code)} · ${h(r.phone ? fmtPhone(r.phone) : 'ไม่มีเบอร์')} · @${h(r.seller || '-')}</div>
-        <div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${r.z ? `<span class="lc-chip">${h(r.z)}</span>` : ''}${r.admin ? `<span class="lc-chip">${h(r.admin)}</span>` : ''}${r.car ? `<span class="lc-chip brand">${h(r.car)}</span>` : ''}</div></div>
-      ${others ? `<h4>เบอร์เดียวกันเคยเป็นลีด</h4><div class="lc-card" style="margin:0 14px 10px">${others}</div>` : ''}
+    box.innerHTML = `<div class="ph"><div class="lc-px"><button class="btn sm" id="lc-db-x" title="ปิด">✕</button></div>
+        <div class="nm">${h(r.name || 'ไม่ทราบชื่อ')}</div><div class="sub">${h(r.code || 'ไม่มีเลขลีด')} · ${h(contact)} · @${h(r.seller === 'ADMIN' ? 'เทเลเซลล์' : (r.seller || '-'))}</div>
+        <div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${r.src === 'system' ? '<span class="lc-chip brand">ยังไม่ลงชีต (มีแต่ในระบบ)</span>' : '<span class="lc-chip">ชีตลีด</span>'}${r.z ? dbZ(r.z) : ''}${r.car ? `<span class="lc-chip brand">${h(r.car)}</span>` : ''}</div>
+        ${d.chatId ? `<button class="btn sm" id="lc-db-chat" style="margin-top:9px">เปิดแชทลูกค้า</button>` : ''}</div>
+      <h4>ตรวจลีดซ้ำ</h4>${chk}
+      ${mlist ? `<div class="lc-card" style="margin:0 14px 10px">${mlist}</div>` : ''}
       <h4>ประวัติ</h4><div class="lc-tl">${ev.map(e => `<div class="lc-tli"><span class="dot"></span><div><div class="d">${h(e.d)}</div><div class="t">${h(e.t)}</div>${e.m ? `<div class="m">${h(e.m)}</div>` : ''}</div></div>`).join('')}</div>
       ${d.fwdDone ? `<h4>ส่งต่อไม้ 2</h4><div style="padding:0 14px 14px"><span class="lc-chip ok">ส่งต่อแล้ว → ${h(d.fwdDone.code)}${d.fwdDone.seller ? ' @' + h(d.fwdDone.seller) : ''}</span>
         <div class="lf-line" style="margin-top:6px">จะเปลี่ยนคน ให้ใช้ "จ่ายใหม่" ที่ห้องพัก Lead → นาฬิกาโทร</div></div>` : ''}
       ${d.fwd ? `<h4>ส่งต่อไม้ 2</h4><div style="padding:0 14px 14px"><div class="lf-line">ออกเลข <b>${h(d.fwd)}</b> (R + เลขเดิม + /1) → ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก</div>
         <select id="lc-fw-emp" style="width:100%;margin-top:6px;padding:6px 8px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2)"><option value="">— เลือกเซลล์ไม้ 2 —</option>${sellers}</select>
-        <button class="btn pri sm" id="lc-fw" style="width:100%;margin-top:6px">ส่งต่อไม้ 2</button></div>` : ''}`;
+        <button class="btn pri sm" id="lc-fw" style="width:100%;margin-top:6px">ส่งต่อไม้ 2</button></div>` : ''}
+      <h4>ข้อมูลในชีต (${r.src === 'system' ? 'จากระบบ — ' : ''}ช่องที่มีค่า)</h4><div class="lc-kvs">${kv || '<div class="mu" style="padding:0 14px 12px">—</div>'}</div>`;
+    $('lc-db-x').onclick = dbCloseProf;
+    box.querySelectorAll('[data-mk]').forEach(x => x.onclick = () => openDbDetail(x.dataset.mk));
+    const ch = $('lc-db-chat');
+    if (ch) ch.onclick = () => { S.backTo = 'db'; setPanel('inbox'); openChat(+d.chatId); };
     const fw = $('lc-fw');
     if (fw) fw.onclick = async () => {
       const emp = +($('lc-fw-emp').value || 0);
       if (!emp) { toast('เลือกเซลล์ไม้ 2 ก่อน'); return; }
       const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
-      if (!confirm(`ส่งต่อไม้ 2 ของ ${code} ให้ ${nm}\n(เลข ${d.fwd} · ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก)?`)) return;
+      if (!confirm(`ส่งต่อไม้ 2 ของ ${r.code} ให้ ${nm}\n(เลข ${d.fwd} · ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก)?`)) return;
       fw.disabled = true;
-      const x = await api('/connect/api/leadflow', { action: 'forward', code, emp });
+      const x = await api('/connect/api/leadflow', { action: 'forward', code: r.code, emp });
       fw.disabled = false; toast(x.ok ? x.message : (x.error || 'ไม่สำเร็จ'), 8000);
-      if (x.ok) openDbDetail(code);
+      if (x.ok) openDbDetail(key);
     };
   }
 

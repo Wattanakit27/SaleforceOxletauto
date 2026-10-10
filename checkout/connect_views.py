@@ -465,18 +465,23 @@ def _admin_get(request):
 
 @require_GET
 def api_leaddb(request):
-    """ฐานข้อมูล Lead (แอดมิน · 10 ต.ค.69) — `?q=&mode=all|returned&status=&seller=` · `?code=` = รายละเอียดเลขนั้น
-    อ่านชีตลีดทุกแท็บ (จำ 10 นาที) · ไม่ส่ง LINE user id ออก (ชีตลีดไม่มีอยู่แล้ว)"""
+    """ฐานข้อมูล Lead (แอดมิน · 10 ต.ค.69) — `?q=&mode=all|dup|unsheeted|returned|match&status=&seller=&limit=`
+    · `?key=` / `?code=` = รายละเอียดแถวนั้น + ลีดที่ตรงกัน (Code / เบอร์ / ไลน์)
+    อ่านชีตลีดทุกแท็บ (จำ 10 นาที) · ไม่ส่ง LINE user id ออก (ชีตลีดไม่มี · ID LINE ในชีต = ไอดีที่ลูกค้าตั้งเอง ไม่ใช่ userId)"""
     ctx, bad = _admin_get(request)
     if bad:
         return bad
     from . import console_data as CD
     try:
-        if request.GET.get("code"):
-            d = CD.detail(request.GET["code"])
+        if request.GET.get("code") or request.GET.get("key"):
+            d = CD.detail(request.GET.get("code", ""), request.GET.get("key", ""))
             return _j(dict(d, ok="error" not in d), 200 if "error" not in d else 404)
+        try:
+            lim = int(request.GET.get("limit") or 150)
+        except ValueError:
+            lim = 150
         r = CD.search(request.GET.get("q", ""), request.GET.get("mode", "all"), request.GET.get("status", ""),
-                      request.GET.get("seller", ""))
+                      request.GET.get("seller", ""), limit=lim)
         if request.GET.get("mode") == "match":
             from .leadflow import _kv, KV_NEEDS
             st = _kv(KV_NEEDS)

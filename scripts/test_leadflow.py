@@ -11,7 +11,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -572,8 +572,9 @@ try:
                                              "sellers": {"บิวทดสอบ": {"booking": 1, "done": 1}}}}}
     try:
         CD.rows(force=True)
+        CD._SYS.update(at=0.0, val=None)
         s_, d, raw = J(ADM, "/connect/api/leaddb")
-        ck("ฐานข้อมูล Lead: อ่านแถวชีต + นับคืนเคส/เบอร์ไม่ซ้ำ", s_ == 200 and d.get("total") == 3
+        ck("ฐานข้อมูล Lead: อ่านแถวชีต + นับคืนเคส/เบอร์ไม่ซ้ำ", s_ == 200 and (d.get("stats") or {}).get("rows") == 3
            and (d.get("stats") or {}).get("returned") == 1 and (d.get("stats") or {}).get("phones") == 2, d.get("stats"))
         dd = {r["code"]: r for r in d.get("rows") or []}
         ck("ฐานข้อมูล Lead: เบอร์เดียวกันคนละรูปแบบ = ซ้ำ", (dd.get("NLD10-7002") or {}).get("dup") == 1, dd.get("NLD10-7002"))
@@ -639,6 +640,131 @@ try:
     finally:
         GS.fetch_leads_by_month_tabs, FD.fetch_dashboard_data = _orig_ft, _orig_fd
         CD._ROWS.update(at=0.0, val=None)
+        CD._SYS.update(at=0.0, val=None)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[20] ฐานข้อมูล Lead: 26 คอลัมน์ตามชีต + ตรวจลีดซ้ำ 2 ทาง (Code · ช่องเบอร์โทร = เบอร์/ID LINE)")
+    ck("ID LINE: ตัดป้าย/พิมพ์เล็ก/คำลงท้าย", CD.contact_keys("ID LINE : Somsak_99 ครับ") == ["l:somsak_99"],
+       CD.contact_keys("ID LINE : Somsak_99 ครับ"))
+    ck("ID LINE: QR code / Line@ / '-' / ชื่อไลน์ = ไม่ใช่ไอดี",
+       all(CD.contact_keys(x) == [] for x in ("ID LINE : QR code", "Qr code", "ID LINE : Line@", "ID LINE : -",
+                                              "ID LINE : ชื่อไลน์ : สมชาย", "เซลล์ส่ง QR CODE ให้ลูกค้าแล้ว")))
+    ck("ID LINE: ลิงก์ line.me/ti/p/~xxx = ไอดี xxx", CD.contact_keys("https://line.me/ti/p/~Kidz99") == ["l:kidz99"])
+    ck("ID LINE: ไอดีที่เป็นเบอร์ = เบอร์", CD.contact_keys("ID LINE : 0812345678") == ["p:0812345678"])
+    ck("เบอร์ + ไลน์ในช่องเดียว = ได้ทั้งคู่", CD.contact_keys("081-222-3344 / ID LINE : abc_x")
+       == ["p:0812223344", "l:abc_x"], CD.contact_keys("081-222-3344 / ID LINE : abc_x"))
+    ck("QR code / ไลน์ ไม่กลืนไอดีที่ตามมา", CD.contact_keys("Qr code  /  yingat9015") == ["l:yingat9015"])
+    ck("ไม้ 2: R + เลขเดิม + /1 = ลีดเดียวกับเลขเดิม · R ไม่มี /n = ลีดของตัวเอง",
+       CD.lineage("RTLD9-6456/1") == "TLD9-6456" and CD.lineage("RNLD10-9001") == "RNLD10-9001")
+
+    def lr(code, phone, seller, d=None, z=""):
+        r = [""] * 40
+        r[LC.received_date], r[LC.lead_code], r[LC.phone], r[LC.sales_rep] = d or ds, code, phone, seller
+        r[LC.customer_status], r[LC.time], r[LC.channel], r[LC.customer_type] = z, "10:30", "LINE@", "พนักงานบริษัท"
+        return r
+
+    yd = (tday - timedelta(days=1)).strftime("%d/%m/%Y")
+    GS.fetch_leads_by_month_tabs = lambda *a, **k: [
+        lr("NLD10-7101", "ID LINE : Somsak_99", "มัททดสอบ"),
+        lr("TLD10-7102", "ID LINE : somsak_99 ครับ", "บิวทดสอบ", d=yd),
+        lr("RTLD10-7102/1", "ID LINE : somsak_99", "มัททดสอบ"),
+        lr("NLD10-7104", "ID LINE : QR code", "มัททดสอบ"),
+        lr("NLD10-7105", "ID LINE : QR code", "บิวทดสอบ"),
+        lr("NLD10-7106", "0812223344", "มัททดสอบ"),
+        lr("NLD10-7106", "0819998877", "บิวทดสอบ", d=yd),
+        lr("BLD10-7108", "081-222-3344 / ID LINE : abc_x", "บิวทดสอบ", d=yd),
+        lr("NLD10-7109", "0855554444", "มัททดสอบ", d=yd),
+        lr("RNLD10-7109/1", "0855554444", "บิวทดสอบ")]
+    # ลีดในระบบ: เลขที่อยู่ในชีตแล้ว (ผูกแชท) · เลขที่ยังไม่ลงชีต (ไลน์ซ้ำกับลีดในชีต)
+    def sys_cust(n, code, phone="", line_id=""):
+        p = LineProfile.objects.create(user_id="U" + ("%032x" % (0xd00000 + n)), display_name="ลูกค้า %d" % n)
+        o = ChatOwner.objects.create(profile=p, owner=MAT)
+        ChatLead.objects.create(chat=o, code=code, phone=phone, line_id=line_id, customer_name="คุณระบบ %d" % n,
+                                assigned_at=timezone.now(), car_text="Yaris")
+        return o
+    MINE = {"NLD10-7101", "TLD10-7102", "RTLD10-7102/1", "NLD10-7104", "NLD10-7105", "NLD10-7106", "BLD10-7108",
+            "NLD10-7109", "RNLD10-7109/1", "WLD10-7199"}
+    try:
+        CD.rows(force=True)
+        CD._SYS.update(at=0.0, val=None)
+        # ลีดในระบบจากหัวข้อก่อนๆ (เลขที่ไม่มีในชีตชุดนี้) = ยังไม่ลงชีต อยู่แล้ว → ใช้เป็นฐานนับ
+        uns0 = set(r["code"] for r in CD.search(mode="unsheeted", limit=600)["rows"])
+        O71 = sys_cust(71, "NLD10-7106", phone="0812223344")
+        sys_cust(72, "WLD10-7199", line_id="Somsak_99")
+        CD._SYS.update(at=0.0, val=None)
+        s_, d, raw = J(ADM, "/connect/api/leaddb?limit=300")
+        st = d.get("stats") or {}
+        ck("คอลัมน์ 26 ช่องตามชีตลีด (ลำดับเดียวกัน)", d.get("cols") == CD.COLS and len(CD.COLS) == 26
+           and CD.COLS[1] == "เบอร์โทร" and CD.COLS[3] == "Code" and CD.COLS[25] == "สถานะลูกค้า", d.get("cols"))
+        R = {}
+        for r in d.get("rows") or []:
+            R.setdefault(r["code"], []).append(r)
+        r1 = (R.get("NLD10-7101") or [{}])[0]
+        ck("แถวส่ง 26 ค่าดิบตามชีต", len(r1.get("v") or []) == 26 and r1["v"][1] == "ID LINE : Somsak_99"
+           and r1["v"][3] == "NLD10-7101" and r1["v"][2] == "10:30" and r1["v"][24] == "พนักงานบริษัท", r1.get("v"))
+        ck("สถิติ: Code ซ้ำ 1 · ไอดีไลน์ 2 · ไม่มีเบอร์/ไลน์ 2 แถว · ยังไม่ลงชีต 1",
+           st.get("codeDup") == 1 and st.get("lineIds") == 2 and st.get("noContact") == 2
+           and st.get("unsheeted") == len(uns0) + 1, (st, len(uns0)))
+        ck("ไลน์เดียวกัน (ต่างตัวพิมพ์/มีคำลงท้าย) = ซ้ำ · นับลีดในระบบที่ยังไม่ลงชีตด้วย",
+           r1.get("dup") == 2 and r1.get("dupKind") == ["line"], r1)
+        rf = (R.get("RTLD10-7102/1") or [{}])[0]
+        ck("ไม้ 2 ติดป้ายเลขเดิม", rf.get("fwdOf") == "TLD10-7102", rf)
+        ck("QR code 2 แถว ≠ ลีดซ้ำ", all(not x["dup"] and not x["codeDup"] for c in ("NLD10-7104", "NLD10-7105")
+                                         for x in R.get(c) or [{"dup": 1}]), [R.get("NLD10-7104"), R.get("NLD10-7105")])
+        ck("Code เดียวกัน 2 แถว = Code ซ้ำ ทั้งคู่", [x["codeDup"] for x in R.get("NLD10-7106") or []] == [2, 2],
+           R.get("NLD10-7106"))
+        ck("เบอร์ในช่องเดียวกับไลน์ (081-222-3344 / ID LINE) จับคู่เบอร์ได้",
+           (R.get("BLD10-7108") or [{}])[0].get("dup") == 1, R.get("BLD10-7108"))
+        ck("มีแต่ไม้ 2 ของเลขเดียวกัน = ไม่ซ้ำ", all(not x["dup"] for c in ("NLD10-7109", "RNLD10-7109/1")
+                                                  for x in R.get(c) or [{"dup": 1}]), [R.get("NLD10-7109")])
+        ck("เลขในระบบที่อยู่ในชีตแล้ว = แถวชีตแถวเดียว (ไม่ขึ้นซ้ำ)", sum(1 for x in R.get("NLD10-7106") or []
+                                                                       if x["src"] == "system") == 0)
+        ws = (R.get("WLD10-7199") or [{}])[0]
+        ck("เลขที่ระบบออกแต่ยังไม่ลงชีต = แถว 26 ช่องจากระบบ", ws.get("src") == "system"
+           and ws["v"][1] == "ID LINE : Somsak_99" and ws["v"][4] == "มัททดสอบ" and ws["v"][11] == "Yaris"
+           and ws["v"][3] == "WLD10-7199", ws)
+        ck("★ ไม่มี LINE user id หลุดในตารางลีด", not leak.search(raw))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?mode=dup")
+        grp = {}
+        for r in d.get("rows") or []:
+            grp.setdefault(r["grp"], []).append(r["code"])
+        grp = {g: c for g, c in grp.items() if set(c) & MINE}      # ไม่นับกลุ่มของลีดจากหัวข้อก่อนๆ
+        ck("โหมดลีดซ้ำ: 2 กลุ่ม (ไลน์ somsak_99 + Code/เบอร์ NLD10-7106) · ไม่มี QR code/ไม้ 2 ล้วน",
+           len(grp) == 2 and sorted(map(sorted, grp.values())) == sorted(map(sorted, [
+               ["NLD10-7101", "TLD10-7102", "RTLD10-7102/1", "WLD10-7199"],
+               ["NLD10-7106", "NLD10-7106", "BLD10-7108"]])), grp)
+        ck("โหมดลีดซ้ำ: แถวแรกของกลุ่มมีคำอธิบาย", all(r.get("grpLabel") for r in d.get("rows") or []
+                                                      if r is next(x for x in d["rows"] if x["grp"] == r["grp"])))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?mode=unsheeted")
+        un = set(r["code"] for r in d.get("rows") or [])
+        ck("โหมดยังไม่ลงชีต = เฉพาะเลขในระบบที่ไม่มีในชีต", un - uns0 == {"WLD10-7199"} and not (un & (MINE - {"WLD10-7199"}))
+           and all(r["src"] == "system" for r in d.get("rows") or []), un - uns0)
+        s_, d, _ = J(ADM, "/connect/api/leaddb?q=somsak_99")
+        ck("ค้นด้วย ID LINE", sorted(r["code"] for r in d.get("rows") or []) ==
+           sorted(["NLD10-7101", "TLD10-7102", "RTLD10-7102/1", "WLD10-7199"]), [r["code"] for r in d.get("rows") or []])
+        s_, d, _ = J(ADM, "/connect/api/leaddb?q=abc7101x")
+        ck("พิมพ์ไอดีที่มีตัวเลข ≠ ค้นเลขรัน (ไม่โดน NLD10-7101)", d.get("total") == 0, d.get("total"))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?key=" + r1["key"])
+        why = {(m["code"], m["why"]) for m in d.get("matches") or []}
+        ck("รายละเอียด: ลีดที่ตรงกันด้วยไลน์ (ชีต + ระบบ)", {("TLD10-7102", "line"), ("RTLD10-7102/1", "line"),
+                                                         ("WLD10-7199", "line")} <= why, why)
+        tk = next(r["key"] for r in R["TLD10-7102"])
+        s_, d, _ = J(ADM, "/connect/api/leaddb?key=" + tk)
+        why = {(m["code"], m["why"]) for m in d.get("matches") or []}
+        ck("รายละเอียด: ไม้ 2 ของเลขนี้ = เหตุผล 'ไม้ 2' ไม่ใช่ลีดซ้ำ", ("RTLD10-7102/1", "fwd") in why
+           and ("NLD10-7101", "line") in why, why)
+        k6 = R["NLD10-7106"][0]["key"]
+        s_, d, raw = J(ADM, "/connect/api/leaddb?key=" + k6)
+        why = {(m["code"], m["why"]) for m in d.get("matches") or []}
+        ck("รายละเอียด: Code ซ้ำ + เบอร์ซ้ำ + เปิดแชทได้ (เลขผูกแชทในระบบ)", ("NLD10-7106", "code") in why
+           and ("BLD10-7108", "phone") in why and d.get("chatId") == O71.id, (why, d.get("chatId")))
+        ck("★ ไม่มี LINE user id หลุดในรายละเอียด", not leak.search(raw))
+        s_, d, _ = J(ADM, "/connect/api/leaddb?key=s:999:XLD1-1")
+        ck("คีย์ที่ไม่มี = 404", s_ == 404, s_)
+    finally:
+        GS.fetch_leads_by_month_tabs = _orig_ft
+        CD._ROWS.update(at=0.0, val=None)
+        CD._SYS.update(at=0.0, val=None)
 
     # ═════════════════════════════════════════════════════════════════════
     print("[18] ลบของเก่า")
