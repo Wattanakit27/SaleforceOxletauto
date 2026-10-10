@@ -185,6 +185,38 @@ r = browser(SELLER, csrf=True).post("/connect/api/claim", json.dumps({"id": 9999
                                     content_type="application/json", secure=True)
 ok(r.status_code == 403, "POST ด้วยคุกกี้ไม่มี CSRF → ยังโดนบล็อกเหมือนเดิม")
 
+# ★ 11 ต.ค.69 หน้ารวมแชท — หน้า "งาน/นัด" ในแอปเรียก API ใหม่ด้วย token (CSRF เปิดอยู่แบบเครื่องจริง)
+print("\n[5b] หน้ารวมแชทจากแอป (ขั้น · นัด · รูปหลักฐาน · บันทึกการโทร · แจ้งเตือน)")
+import tempfile  # noqa: E402
+from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
+from django.test import override_settings  # noqa: E402
+from checkout.models import ChatOwner, LineProfile  # noqa: E402
+_mat = Employee.objects.get(nickname="มัท")
+_cp = LineProfile.objects.create(user_id="U" + "c" * 32, display_name="ลูกค้าแอป")
+_co = ChatOwner.objects.create(profile=_cp, owner=_mat, last_at=timezone.now(), last_in_at=timezone.now())
+c = Client(enforce_csrf_checks=True)
+r = c.post("/connect/api/crm", json.dumps({"action": "stage", "id": _co.id, "stage": "contacted"}),
+           content_type="application/json", secure=True, **H)
+ok(r.status_code == 200 and r.json()["row"]["stage"] == "contacted", "เปลี่ยนขั้นของลีดจากแอป")
+due = (timezone.localtime() + timedelta(days=1)).strftime("%Y-%m-%dT10:00")
+r = c.post("/connect/api/crm", json.dumps({"action": "followup", "id": _co.id, "kind": "viewing", "due": due}),
+           content_type="application/json", secure=True, **H)
+ok(r.status_code == 200 and r.json()["crm"]["followups"][0]["kindLabel"] == "นัดดูรถ", "นัดดูรถจากแอป")
+with tempfile.TemporaryDirectory() as tmp, override_settings(MEDIA_ROOT=tmp):
+    up = c.post("/connect/api/upload", {"id": _co.id, "file": SimpleUploadedFile("c.jpg", b"\xff\xd8\xff" + b"0" * 32,
+                                                                                  "image/jpeg")}, secure=True, **H)
+    uj = up.json() if up.status_code == 200 else {}
+    ok(up.status_code == 200 and str(uj.get("id", "")).startswith("connect/%d/" % _co.id),
+       "อัปรูปหลักฐานการโทรจากแอป (multipart + token)" + ("" if up.status_code == 200 else " [%s]" % up.status_code))
+    r = c.post("/connect/api/crm", json.dumps({"action": "call", "id": _co.id, "result": "ok", "media": [{"id": uj.get("id")}]}),
+               content_type="application/json", secure=True, **H)
+    ok(r.status_code == 200 and r.json()["crm"]["calls"][0]["media"], "บันทึกการโทร + รูปจากแอป")
+r = Client().get("/connect/api/alerts", secure=True, **H)
+ok(r.status_code == 200 and isinstance(r.json().get("items"), list), "กระดิ่งแจ้งเตือนในแอป")
+r = Client().get("/connect/api/chat?id=%d" % _co.id, secure=True, **H)
+ok(r.status_code == 200 and r.json().get("canRelease") is True and "U" + "c" * 32 not in r.content.decode(),
+   "หน้าแชทในแอป: ปุ่มคืนกองกลาง + ไม่มี LINE id ลูกค้าหลุด")
+
 print("\n[6] ระบบติดตามรถ (/track/) ผ่าน token")
 from cars.models import Car  # noqa: E402
 Car.objects.create(code="CSDEMO1", plate="1กก1234", brand="Toyota", model="Yaris")

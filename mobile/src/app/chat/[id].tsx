@@ -1,12 +1,13 @@
 // หน้าแชทลูกค้า 1 คน — อ่าน/ตอบ/รับลูกค้า ผ่าน API เดิมของ Connect
 // ส่งได้หรือไม่ (canReply/replyOn/replyWhy) เซิร์ฟเวอร์ตัดสินทั้งหมด แอปแค่โชว์ตามนั้น
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -15,11 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../../lib/api';
+import { Extra, HEAT } from '../../lib/crm';
 import { Banner, Btn, C, fmtTime, Loading } from '../../lib/ui';
 
 type Msg = { at: string; text: string; type: string; media: boolean; dir: string; by: string };
 type Chat = {
-  row: { id: number; name: string; owner: string; sim: boolean; src: string; overdue: boolean; awaiting: boolean };
+  row: Extra & { id: number; name: string; owner: string; sim: boolean; src: string; overdue: boolean; awaiting: boolean };
   access: 'full' | 'preview';
   messages: Msg[];
   canClaim: boolean;
@@ -108,7 +110,21 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen
+        options={{
+          title,
+          // ★ 11 ต.ค.69 งานกับลูกค้า: ขั้นของลีด · นัด · บันทึกการโทร · สรุป (เฉพาะคนที่เห็นแชทเต็ม)
+          headerRight: () =>
+            d?.access === 'full' ? (
+              <Pressable
+                hitSlop={10}
+                onPress={() => router.push({ pathname: '/lead/[id]', params: { id: String(id) } })}
+                style={{ paddingHorizontal: 6 }}>
+                <Text style={{ color: C.purple, fontWeight: '700', fontSize: 15 }}>งาน/นัด</Text>
+              </Pressable>
+            ) : null,
+        }}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -127,6 +143,15 @@ export default function ChatScreen() {
                 {d.row.owner ? ` · ดูแลโดย @${d.row.owner}` : ' · ยังไม่มีคนรับ'}
                 {d.row.overdue ? ' · เลยเวลาตอบ' : d.row.awaiting ? ' · รอตอบ' : ''}
               </Text>
+              {d.access === 'full' && d.row.stageLabel ? (
+                <Pressable onPress={() => router.push({ pathname: '/lead/[id]', params: { id: String(id) } })}>
+                  <Text style={[st.infoText, { color: C.purple, marginTop: 2 }]} numberOfLines={1}>
+                    ขั้น: {d.row.stageLabel}
+                    {d.row.heat ? ` · ${HEAT[d.row.heat][0]}` : ''}
+                    {d.row.appt ? ` · ${d.row.appt.kind === 'viewing' ? 'นัดดูรถ' : 'นัด'} ${fmtTime(d.row.appt.due)}` : ''} · แตะเพื่อบันทึกงาน ›
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             {d.access === 'preview' ? (
               <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>

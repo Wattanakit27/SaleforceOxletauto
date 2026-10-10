@@ -605,6 +605,71 @@
     .cn-ph, .cn-msgs, .cn-comp { padding-left: 12px; padding-right: 12px; }
     .fld label { min-width: 0; width: 100%; }
   }
+  /* ── ★ 11 ต.ค.69 หน้ารวมแชท (crm.py): ขั้นของลีด · ความร้อน · ตัวกรอง · กระดิ่ง · นัด/โทร/สรุป ── */
+  .lc-main { position: relative; }
+  .tag.st-new, .tag.st-pool { background: var(--blue-bg); color: var(--blue-dk); }
+  .tag.st-waiting { background: var(--amber-bg); color: var(--amber); }
+  .tag.st-contacted { background: var(--bg3); color: var(--t1); }
+  .tag.st-viewing, .tag.st-finance { background: #ede9fe; color: #6d28d9; }
+  .tag.st-won { background: var(--green-bg); color: var(--green); }
+  .tag.st-lost { background: var(--bg3); color: var(--t3); text-decoration: line-through; }
+  .tag.ht-hot { background: var(--red-bg); color: var(--red); }
+  .tag.ht-warm { background: var(--amber-bg); color: var(--amber); }
+  .tag.ht-cold { background: var(--bg3); color: var(--t3); }
+  .tag.ap { background: #ede9fe; color: #6d28d9; }
+  .tag.ap.late { background: var(--red); color: #fff; }
+  .tag.match { background: var(--green-bg); color: var(--green); }
+  html[data-theme="dark"] .tag.st-viewing, html[data-theme="dark"] .tag.st-finance, html[data-theme="dark"] .tag.ap:not(.late) { background: rgba(167,139,250,.18); color: #c4b5fd; }
+  .cn-quick { display: flex; gap: 5px; padding: 0 10px 8px; overflow-x: auto; scrollbar-width: thin; }
+  .cn-quick button { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 7px; border: .5px solid var(--bd2);
+                     background: var(--bg2); color: var(--t2); cursor: pointer; flex: none; }
+  .cn-quick button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .cn-quick button.clr { color: var(--red); }
+  .cn-flt { padding: 0 10px 10px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 8px; border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
+  .cn-flt label { font-size: 11.5px; color: var(--t3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .cn-flt input, .cn-flt select { padding: 5px 7px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; min-width: 0; width: 100%; }
+  .cn-ra { margin: 4px 10px 8px; padding: 9px 11px; border-radius: 8px; background: var(--blue-bg); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .cn-ra .tx { flex: 1; min-width: 160px; font-size: 12.5px; color: var(--t2); line-height: 1.5; }
+  .cn-ra-res { margin: 0 10px 8px; padding: 8px 11px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; line-height: 1.6; }
+  .cn-ra-res .x { float: right; cursor: pointer; color: var(--t3); border: 0; background: none; }
+  .cn-bell { position: relative; }
+  .cn-bell .n { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff;
+                font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .cn-alerts { position: absolute; right: 16px; top: 54px; z-index: 60; width: min(390px, calc(100vw - 32px)); max-height: 62vh; overflow: auto;
+               background: var(--bg); border: .5px solid var(--bd2); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+  .cn-alerts .hd { padding: 9px 12px; font-weight: 800; border-bottom: .5px solid var(--bd); display: flex; gap: 8px; align-items: center; }
+  .cn-al { display: flex; gap: 9px; padding: 9px 12px; border-bottom: .5px solid var(--bd); cursor: pointer; line-height: 1.45; align-items: flex-start; }
+  .cn-al:hover { background: var(--bg2); }
+  .cn-al i { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--blue); }
+  .cn-al.warn i { background: var(--amber-mid); }
+  .cn-al.err i { background: var(--red); }
+  .crm-stages { display: flex; flex-wrap: wrap; gap: 4px; }
+  .crm-stages button { font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t2); cursor: pointer; }
+  .crm-stages button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .crm-stages button:disabled { cursor: default; opacity: .7; }
+  .crm-line { font-size: 12px; color: var(--t2); margin-top: 6px; line-height: 1.5; }
+  .crm-it { border: .5px solid var(--bd); border-radius: 8px; padding: 7px 9px; margin: 6px 0; font-size: 12.5px; line-height: 1.5; background: var(--bg); }
+  .crm-it.late { border-color: var(--red); background: var(--red-bg); }
+  .crm-it.done { opacity: .7; }
+  .crm-it .acts { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+  .crm-it .ph { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+  .crm-it .ph img, .crm-up img { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; border: .5px solid var(--bd2); display: block; }
+  .crm-form { border: .5px dashed var(--bd2); border-radius: 9px; padding: 8px; margin-top: 8px; background: var(--bg2); }
+  .crm-form input, .crm-form select, .crm-form textarea { width: 100%; padding: 6px 8px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg); font-size: 13px; margin-bottom: 6px; min-width: 0; }
+  .crm-form textarea { resize: vertical; min-height: 64px; line-height: 1.5; }
+  .crm-qd { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+  .crm-qd button { font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: .5px solid var(--bd2); background: var(--bg); color: var(--t2); cursor: pointer; }
+  .crm-up { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+  .crm-ai { border-radius: 9px; padding: 8px 10px; margin: 6px 0; background: #f5f3ff; border: .5px solid #c4b5fd; font-size: 12.5px; line-height: 1.55; }
+  html[data-theme="dark"] .crm-ai { background: rgba(167,139,250,.12); border-color: rgba(167,139,250,.4); }
+  .crm-ai .acts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .crm-po { font-size: 12px; line-height: 1.55; padding: 3px 0; border-bottom: .5px dashed var(--bd); }
+  .crm-po:last-child { border-bottom: 0; }
+  .lc-bars { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .lc-bars .r { display: grid; grid-template-columns: 120px minmax(0,1fr) 54px; gap: 8px; align-items: center; font-size: 12.5px; }
+  .lc-bars .b { height: 10px; border-radius: 5px; background: var(--bg3); overflow: hidden; }
+  .lc-bars .b i { display: block; height: 100%; background: linear-gradient(90deg,#7c3aed,#a78bfa); }
+  @media (max-width: 760px) { .cn-flt { grid-template-columns: minmax(0,1fr); } .lc-bars .r { grid-template-columns: 90px minmax(0,1fr) 44px; } }
 </style>
 </head>
 <body>
@@ -635,8 +700,10 @@
     <span class="cn-chip hide-sm" id="cn-duty">เวรวันนี้ …</span>
     <span class="cn-sp"></span>
     <span id="cn-tools-top" style="display:flex;gap:6px"></span>
+    <button class="btn sm cn-bell" id="cn-bell" title="แจ้งเตือน — ลูกค้าใหม่ · เลยเวลา · นัดวันนี้ · ลูกค้าเงียบ · รถใหม่ตรง"><span data-ic="bell"></span><span class="n" id="cn-bell-n" hidden></span></button>
     <span class="lc-live hide-sm"><i></i>นับเวลาจริง <span class="num" id="lc-clock">—</span></span>
   </header>
+  <div class="cn-alerts" id="cn-alerts" hidden></div>
   <div class="cn-banners" id="cn-banners"></div>
   <div class="lc-flow" id="lc-flow" hidden></div>
   <div class="cn-main" id="cn-main">
@@ -649,6 +716,8 @@
         </select>
         <select id="cn-seller" style="display:none"></select>
       </div>
+      <div class="cn-quick" id="cn-quick"></div>
+      <div class="cn-flt" id="cn-flt" hidden></div>
       <div id="cn-note"></div>
       <div class="cn-rows" id="cn-rows"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>
     </aside>
@@ -689,6 +758,8 @@
     'repeat': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
     'check': '<path d="M20 6 9 17l-5-5"/>',
     'hash': '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
+    'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    'calendar': '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
     'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
   };
   const ic = (n, sz) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${sz ? ` style="width:${sz}px;height:${sz}px"` : ''}>${ICONS[n] || ''}</svg>`;
@@ -767,6 +838,9 @@
     view: '', q: '', seller: 0, src: '', rows: [], counts: {}, duty: null, onDuty: false, sellers: [], status: [], note: '',
     openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
     histOpen: false, side: true, panel: 'inbox',
+    // ★ 11 ต.ค.69 หน้ารวมแชท — ตัวกรอง (crm.FILTER_KEYS) · ตัวเลือกจากเซิร์ฟเวอร์ · ร่างที่พิมพ์ค้างไว้ต่อแชท
+    f: {}, fltOpen: false, crmOpts: null, alerts: null, raResult: null,
+    lostPick: 0, aiDraft: {}, sumDraft: {}, apptDraft: {}, callDraft: {}, callMedia: {},
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
   const TABS_ADMIN = [
@@ -901,6 +975,7 @@
   function rowHtml(r) {
     const ck = r.awaiting ? clockText(r.due, r.since) : null;
     const tags = [chTag(r.src)];
+    tags.push(...crmTags(r));
     if (r.staff) tags.push(`<span class="tag wait" title="บัญชี LINE นี้ผูกกับพนักงานในทะเบียน — ทดสอบ/ส่งต่อลีด">พนักงาน</span>`);
     if (r.owner) tags.push(`<span class="tag">${ic('user-check', 12)} ${h(r.owner)}</span>`);
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
@@ -919,6 +994,145 @@
       </div>
     </div>`;
   }
+
+  // ── ★ 11 ต.ค.69 หน้ารวมแชท: ป้ายในรายชื่อ ──
+  const STAGE_SKIP_TAG = { new: 1 };            // ลีดใหม่ = ทุกแถวในคิวรอรับเหมือนกันหมด (ไม่ต้องติดป้าย)
+  const HEAT_TXT = { hot: '🔥 ร้อน', warm: 'อุ่น', cold: 'เย็น' };
+  function crmTags(r) {
+    const t = [];
+    if (r.stage && !STAGE_SKIP_TAG[r.stage]) t.push(`<span class="tag st-${h(r.stage)}"${r.lostReason ? ` title="${h(r.lostReason)}"` : ''}>${h(r.stageLabel || r.stage)}</span>`);
+    if (r.heat === 'hot' || r.heat === 'warm') t.push(`<span class="tag ht-${r.heat}" title="ความร้อน ${r.heatScore}/100${(r.heatWhy || []).length ? ' — ' + h(r.heatWhy.join(' · ')) : ''}">${HEAT_TXT[r.heat]}</span>`);
+    if (r.appt) t.push(`<span class="tag ap${r.appt.late ? ' late' : ''}" title="${r.appt.kind === 'viewing' ? 'นัดดูรถ' : 'นัดติดตาม'}${r.appt.late ? ' — เลยเวลานัดแล้ว' : ''}">${ic('calendar', 12)} ${r.appt.kind === 'viewing' ? 'ดูรถ' : 'นัด'} ${h(fmtWhen(r.appt.due))}</span>`);
+    if (r.silent) t.push(`<span class="tag wait" title="ลูกค้าไม่ได้ทักมา ${r.silentDays} วัน">เงียบ ${r.silentDays} วัน</span>`);
+    else if (r.noReply) t.push(`<span class="tag wait" title="เราส่งล่าสุดเกิน 24 ชม. แล้วลูกค้ายังไม่ตอบ">ลูกค้าไม่ตอบ</span>`);
+    if (r.carMatch) t.push(`<span class="tag match" title="มีรถพร้อมขายที่ตรงกับที่ลูกค้าหา">รถใหม่ตรง ${r.carMatch}</span>`);
+    return t;
+  }
+
+  // ── ★ 11 ต.ค.69 ตัวกรอง (สเปกข้อ 9) — ปุ่มลัดแถวเดียว + แผงตัวกรองเพิ่ม ──
+  const QUICK = [
+    { k: 'awaiting', v: '1', l: 'รอเราตอบ' }, { k: 'follow', v: 'today', l: 'ติดตามวันนี้' },
+    { k: 'noreply', v: '1', l: 'ลูกค้าไม่ตอบกลับ' }, { k: 'silent', v: '3', l: 'เงียบ 3+ วัน' },
+    { k: 'silent', v: '7', l: 'เงียบ 7+ วัน' }, { k: 'heat', v: 'hot', l: '🔥 ร้อน' }, { k: 'carmatch', v: '1', l: 'รถใหม่ตรง' },
+  ];
+  const FLT_PANEL = ['stage', 'heat', 'reason', 'car', 'pmin', 'pmax', 'dfrom', 'dto'];
+  function fltCount() { return Object.keys(S.f).length; }
+  function renderQuick() {
+    const el = $('cn-quick'); if (!el) return;
+    const show = S.panel === 'inbox';
+    el.hidden = !show; if (!show) { $('cn-flt').hidden = true; return; }
+    const n = fltCount();
+    el.innerHTML = QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('')
+      + `<button data-q="more" class="${S.fltOpen ? 'on' : ''}">ตัวกรองเพิ่ม${n ? ' (' + n + ')' : ''} ▾</button>`
+      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '');
+    el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+      const q = b.dataset.q;
+      if (q === 'more') { S.fltOpen = !S.fltOpen; renderFltPanel(); renderQuick(); return; }
+      if (q === 'clear') { S.f = {}; renderFltPanel(true); renderQuick(); loadInbox(true); return; }
+      const it = QUICK[+q];
+      if (S.f[it.k] === it.v) delete S.f[it.k]; else S.f[it.k] = it.v;
+      renderFltPanel(true); renderQuick(); loadInbox(true);
+    });
+  }
+  // แผงวาดครั้งเดียว (ไม่วาดทับตอนรายชื่อรีเฟรชทุก 8 วิ — คนกำลังพิมพ์รุ่นรถ/ราคาอยู่) · `sync` = ตั้งค่าในช่องตาม S.f
+  function renderFltPanel(sync) {
+    const el = $('cn-flt'); if (!el) return;
+    el.hidden = !S.fltOpen || S.panel !== 'inbox';
+    const O = S.crmOpts; if (!O) return;
+    if (!el.dataset.built) {
+      el.dataset.built = '1';
+      el.innerHTML = `
+        <label>ขั้นของลีด<select data-fk="stage"><option value="">ทุกขั้น</option>${O.stages.map(x => `<option value="${h(x.key)}">${h(x.label)}</option>`).join('')}</select></label>
+        <label>ความร้อน<select data-fk="heat"><option value="">ทั้งหมด</option>${O.heat.map(x => `<option value="${h(x.key)}">${h(x.label)}</option>`).join('')}</select></label>
+        <label>เหตุผลที่ไม่ซื้อ<select data-fk="reason"><option value="">ทั้งหมด</option>${O.lostReasons.map(x => `<option value="${h(x)}">${h(x)}</option>`).join('')}</select></label>
+        <label>รุ่นรถ<input data-fk="car" type="search" placeholder="เช่น City, D Max" autocomplete="off"></label>
+        <label>งบตั้งแต่ (บาท)<input data-fk="pmin" type="number" inputmode="numeric" min="0" step="10000" placeholder="เช่น 300000"></label>
+        <label>งบไม่เกิน (บาท)<input data-fk="pmax" type="number" inputmode="numeric" min="0" step="10000" placeholder="เช่น 500000"></label>
+        <label>คุยล่าสุดตั้งแต่<input data-fk="dfrom" type="date"></label>
+        <label>ถึง<input data-fk="dto" type="date"></label>`;
+      let _t = null;
+      el.querySelectorAll('[data-fk]').forEach(inp => {
+        // วันที่ใช้ change — Chrome ยิง input ทุกครั้งที่เลื่อนเดือนในปฏิทิน (บทเรียน 4 ต.ค.69: ตัวกรองกลายเป็นวันที่ไม่ได้เลือก)
+        const ev = (inp.tagName === 'SELECT' || inp.type === 'date') ? 'change' : 'input';
+        inp.addEventListener(ev, () => {
+          clearTimeout(_t);
+          _t = setTimeout(() => {
+            const k = inp.dataset.fk, v = (inp.value || '').trim();
+            if (inp.type === 'date' && v && !/^(19|20)\d\d-\d\d-\d\d$/.test(v)) return;   // ปีพิมพ์ยังไม่ครบ
+            if (v) S.f[k] = v; else delete S.f[k];
+            renderQuick(); loadInbox(true);
+          }, inp.tagName === 'SELECT' ? 0 : 450);
+        });
+      });
+      sync = true;
+    }
+    if (sync) el.querySelectorAll('[data-fk]').forEach(inp => { inp.value = S.f[inp.dataset.fk] || ''; });
+  }
+
+  // ── ★ 11 ต.ค.69 Run Auto (แอดมิน · คิวรอรับ) — จ่ายลูกค้ารอรับให้เซลล์ตามคิวจ่ายวน · เบอร์ซ้ำกลับเจ้าของเดิม ──
+  function runAutoHtml() {
+    let x = '';
+    if (ADMIN && S.view === 'queue' && S.rows.length) {
+      x += `<div class="cn-ra"><div class="tx"><b>Run Auto</b> — จ่ายลูกค้ารอรับ ${S.rows.length} คนให้เซลล์ตามคิวจ่ายวน (คนได้น้อยสุดก่อน · เบอร์เคยเป็นลีดของใครส่งกลับคนนั้น) · โอนในระบบเท่านั้น ไม่ส่ง LINE</div>
+        <button class="btn sm pri" id="cn-ra-btn">${ic('repeat', 14)} Run Auto</button></div>`;
+    }
+    const R = S.raResult;
+    if (ADMIN && R && S.view === 'queue') {           // ผลรอบล่าสุด — โชว์เฉพาะแท็บรอรับ (ที่กด Run Auto)
+      x += `<div class="cn-ra-res"><button class="x" id="cn-ra-x" title="ปิด">✕</button><b>${h(R.message || '')}</b>${(R.assigned || []).map(a =>
+        `<div>${h(a.name)} → <b>@${h(a.to)}</b> <span style="color:var(--t3)">(${h(a.why)})</span></div>`).join('')}${(R.skipped || []).map(a =>
+        `<div style="color:var(--amber)">ข้าม ${h(a.name)} — ${h(a.why)}</div>`).join('')}</div>`;
+    }
+    return x;
+  }
+  function bindRunAuto() {
+    const b = $('cn-ra-btn');
+    if (b) b.onclick = async () => {
+      if (!confirm(`จ่ายลูกค้ารอรับ ${S.rows.length} คนให้เซลล์ตามคิวจ่ายวนเลยไหม?\n(โอนในระบบ · เซลล์เห็นในแท็บ "ลูกค้าของฉัน" · ไม่ส่งข้อความ LINE)`)) return;
+      b.disabled = true;
+      const r = await api('/connect/api/crm', { action: 'run_auto' });
+      b.disabled = false;
+      if (!r.ok) { toast(r.error || 'Run Auto ไม่สำเร็จ', 6000); return; }
+      S.raResult = r; toast(r.message || 'จ่ายแล้ว', 5000); loadInbox(true);
+    };
+    const x = $('cn-ra-x'); if (x) x.onclick = () => { S.raResult = null; renderList(); };
+  }
+
+  // ── ★ 11 ต.ค.69 กระดิ่งแจ้งเตือน (สเปกข้อ 7) — ทุก 30 วิ ──
+  async function loadAlerts() {
+    let d;
+    try { d = await api('/connect/api/alerts'); } catch (e) { return; }
+    if (!d || !d.ok) return;
+    S.alerts = d;
+    const n = $('cn-bell-n');
+    if (n) { n.hidden = !d.count; n.textContent = d.count > 99 ? '99+' : String(d.count || ''); }
+    if (!$('cn-alerts').hidden) paintAlerts();
+  }
+  function paintAlerts() {
+    const el = $('cn-alerts'), A = S.alerts || { items: [] };
+    el.innerHTML = `<div class="hd">${ic('bell', 15)} แจ้งเตือน <span class="cn-sp"></span><button class="btn sm" id="cn-al-x">ปิด</button></div>`
+      + ((A.items || []).length ? A.items.map((it, i) => `<div class="cn-al ${h(it.level)}" data-al="${i}"><i></i><div>${h(it.text)}</div></div>`).join('')
+         : `<div class="cn-empty" style="padding:22px">ไม่มีอะไรค้าง 👍</div>`);
+    $('cn-al-x').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('[data-al]').forEach(x => x.onclick = () => {
+      const it = A.items[+x.dataset.al]; el.hidden = true;
+      if (S.panel !== 'inbox') setPanel('inbox');
+      if (it.id) { openChat(it.id); return; }
+      if (it.view) { S.f = {}; renderFltPanel(true); renderQuick(); pickTab(it.view); return; }
+      if (it.filter) {
+        S.f = Object.assign({}, it.filter); renderFltPanel(true); renderQuick();
+        pickTab(ADMIN ? 'all' : 'mine');
+      }
+    });
+  }
+  $('cn-bell').onclick = (e) => {
+    e.stopPropagation();
+    const el = $('cn-alerts'); el.hidden = !el.hidden;
+    if (!el.hidden) { paintAlerts(); loadAlerts(); }
+  };
+  document.addEventListener('click', (e) => {
+    const el = $('cn-alerts');
+    if (el && !el.hidden && !el.contains(e.target) && e.target !== $('cn-bell')) el.hidden = true;
+  });
 
   // ── ห้องพัก Lead (กลุ่ม LINE "ADMIN เก็บ Lead") — ลีดภายนอก (TikTok/FB/เบอร์กลาง …) ที่พักใบร่างไว้ (leadpark.py) ──
   //   จ่ายเบอร์ได้จากตรงนี้ (★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ · ไม่ลงชีต) · เลขรันชุดเดียวกับลูกค้า LINE OA
@@ -1247,7 +1461,8 @@
 
   function renderList() {
     if (S.panel === 'dist') { renderDist(); return; }
-    $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';
+    $('cn-note').innerHTML = (S.note ? `<div class="cn-note">${h(S.note)}</div>` : '') + runAutoHtml();
+    bindRunAuto();
     const el = $('cn-rows');
     const hub = hubHtml();
     if (hub) {
@@ -1273,7 +1488,7 @@
         mine: ADMIN ? 'ยังไม่มีลูกค้าที่คุณดูแล' : 'ยังไม่มีลูกค้าของคุณ — กดรับจากแท็บ "รอรับ" ในวันเวรของทีม',
         owned: 'ยังไม่มีลูกค้าที่มีเจ้าของ', all: 'ยังไม่มีลูกค้าทักเข้ามา',
       }[S.view] || 'ไม่มีรายการ';
-      el.innerHTML = S.note ? '' : `<div class="cn-empty">${h(empty)}</div>`;
+      el.innerHTML = S.note ? '' : `<div class="cn-empty">${h(fltCount() ? 'ไม่มีลูกค้าที่ตรงกับตัวกรอง — กด "ล้างตัวกรอง"' : empty)}</div>`;
       return;
     }
     const top = el.scrollTop;
@@ -1294,6 +1509,8 @@
     if (S.q) qs.set('q', S.q);
     if (S.seller) qs.set('seller', S.seller);
     if (S.src) qs.set('src', S.src);
+    // ★ 11 ต.ค.69 ตัวกรองหน้ารวมแชท — เฉพาะหน้ากล่องแชทรวม (ห้องพัก Lead ใช้ตัวโหลดเดียวกัน แต่ไม่ใช้ตัวกรองชุดนี้)
+    if (S.panel === 'inbox') Object.keys(S.f || {}).forEach(k => qs.set(k, S.f[k]));
     if (reset) $('cn-rows').innerHTML = '<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>';
     let d;
     try { d = await api('/connect/api/inbox?' + qs.toString(), undefined, ac.signal); }
@@ -1305,7 +1522,8 @@
                        status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
                        parked: d.parked || null, assigned: d.assigned || [], leadflow: d.leadflow || S.leadflow || null,
                        lfStrip: d.lfStrip || S.lfStrip || null, rrBoard: d.rrBoard || S.rrBoard || [] });
-    renderTop(); renderTabs(); renderList();
+    if (d.crm && !S.crmOpts) { S.crmOpts = d.crm; renderFltPanel(true); }
+    renderTop(); renderTabs(); renderQuick(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }
 
@@ -1388,6 +1606,7 @@
       acts.push(`<button class="btn pri" id="cn-code-btn" title="ออกเลขลีด + จ่ายลูกค้าคนนี้ให้เซลล์">${ic('hash')} จ่ายเบอร์</button>`);
     }
     if (d.canClaim) acts.push(`<button class="btn pri" id="cn-claim">${ic('user-check')} รับลูกค้าคนนี้</button>`);
+    if (d.canRelease) acts.push(`<button class="btn red" id="cn-pool" title="คืนลูกค้าคนนี้เข้าคิวรอรับ ให้เซลล์คนอื่นรับต่อ (จดประวัติว่าใครคืน เพราะอะไร)">คืนกองกลาง</button>`);
     if (d.canDismiss) acts.push(`<button class="btn" id="cn-dismiss" title="ลูกค้าส่งมาแค่ขอบคุณ/สติกเกอร์ หรือตอบนอกระบบไปแล้ว — ปิดรอบนี้โดยไม่ต้องตอบ">${ic('check')} ไม่ต้องตอบ</button>`);
     if (d.canAssign) {
       acts.push(`<select id="cn-to"><option value="">โอนให้เซลล์…</option>${S.sellers.filter(s => s.id !== r.ownerId).map(s =>
@@ -1429,6 +1648,7 @@
     on('cn-dismiss', () => dismiss(r.id));
     on('cn-assign', () => assign(r.id, +($('cn-to').value || 0), false));
     on('cn-release', () => assign(r.id, 0, true));
+    on('cn-pool', () => crmRelease(r.id));
     on('cn-hist-btn', () => { S.histOpen = !S.histOpen; paintHeader(); });
     on('cn-side-btn', () => {
       S.side = !S.side;
@@ -1518,6 +1738,7 @@
         ${ed ? `<input class="pf-tag-in" data-act="tag" placeholder="+ ใส่แท็ก" list="dl-tag-${sfx}">` : ''}</div>`;
     }
     x += `</div>`;
+    if (p.full && d.crm) x += crmHtml(d, sfx);          // ★ 11 ต.ค.69 ขั้น · นัด · โทร · สรุป (บนสุด — งานที่ต้องลงมือ)
     x += `<div class="pf-sec">
       <div class="pf-kv"><span>ผู้รับผิดชอบ</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>`;
     if (!p.full) {
@@ -1680,7 +1901,8 @@
   function paintProfile(force) {
     const d = S.chat; if (!d) return;
     const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
-                                d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup]);
+                                d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
+                                S.lostPick === d.row.id, S.aiDraft[d.row.id] || null]);
     const act = document.activeElement;
     const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA|SELECT/.test(act.tagName);
     if (!force && (sig === _profSig || typing)) return;
@@ -1695,6 +1917,7 @@
   }
 
   function bindProfile(el) {
+    bindCrm(el);
     el.querySelectorAll('[data-f]').forEach(inp => {
       inp.addEventListener('change', () => {
         if (inp.tagName === 'SELECT') inp.classList.toggle('empty', !inp.value);
@@ -1808,6 +2031,207 @@
     };
   }
 
+  // ── ★ 11 ต.ค.69 หน้ารวมแชท: งานกับลูกค้าคนนี้ (สเปกข้อ 5/6/10) ──
+  //   ขั้นของลีด · ความร้อน · สถานะไฟแนนซ์ (ชีตยอดขาย) · รถใหม่ตรง · นัดหมาย · บันทึกการโทร + หลักฐาน · สรุป (AI ร่าง) · ใครเคยดูแล
+  //   ที่พิมพ์ค้างไว้เก็บใน S.*Draft[id] — แผงถูกวาดใหม่เมื่อข้อมูลเปลี่ยน ห้ามทำให้ที่พิมพ์หาย
+  const pad2 = n => String(n).padStart(2, '0');
+  const localDT = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  const fmtBaht = n => n ? '฿' + Number(n).toLocaleString() : '';
+  function crmHtml(d, sfx) {
+    const K = d.crm, id = d.row.id, ed = !!d.leadEditable, E = K.extra || {};
+    let x = `<div class="pf-sec"><div class="pf-h">ขั้นของลีด${E.heat ? ` · <span class="tag ht-${h(E.heat)}">${HEAT_TXT[E.heat]} ${E.heatScore}</span>` : ''}</div>
+      <div class="crm-stages">${K.stages.map(s => `<button data-stage="${h(s.key)}" class="${E.stage === s.key ? 'on' : ''}"${ed ? '' : ' disabled'}>${h(s.label)}</button>`).join('')}</div>
+      <div class="crm-line">ตอนนี้: <b>${h(E.stageLabel || '')}</b>${E.stage === 'lost' && E.lostReason ? ' · ' + h(E.lostReason) : ''}${
+        K.stageBy ? ` · ตั้งโดย ${h(K.stageBy)} ${h(fmtFull(K.stageAt))}${ed ? ` · <a href="#" data-stage="">ให้ระบบคิดเอง</a>` : ''}` : ' · ระบบคิดให้ (จากการรับ/ตอบลูกค้า)'}</div>`;
+    if (S.lostPick === id) {
+      x += `<div class="crm-form"><select data-x="lost"><option value="">— เหตุผลที่ไม่ซื้อ (ใช้วิเคราะห์) —</option>${K.lostReasons.map(r => `<option>${h(r)}</option>`).join('')}</select>
+        <div class="crm-qd"><button class="btn sm red" data-act="lost-save">บันทึก ไม่สนใจ</button><button class="btn sm" data-act="lost-cancel">ยกเลิก</button></div></div>`;
+    }
+    if ((E.heatWhy || []).length) x += `<div class="pf-note" style="margin-top:6px">ความร้อน ${E.heatScore}/100 — ${h(E.heatWhy.join(' · '))}</div>`;
+    const B = K.booking;
+    if (B) x += `<div class="pf-done" style="color:var(--t1)">ชีตยอดขาย: <b>${h(B.status || '-')}</b>${B.car ? ' · ' + h(B.car) : ''}${B.date ? ' · จอง ' + h(B.date) : ''}${
+      B.signDate ? ' · เซ็น ' + h(B.signDate) : ''}${B.resultDate ? ' · ผล ' + h(B.resultDate) : ''}${B.releaseDate ? ' · ปล่อย ' + h(B.releaseDate) : ''}${B.price ? ' · ' + fmtBaht(B.price) : ''}</div>`;
+    if ((K.cars || []).length) x += `<div class="pf-done">รถพร้อมขายที่ตรงกับลูกค้า: ${K.cars.map(c => `<b>${h(c.name || c.code)}</b>${c.year ? ' ' + h(c.year) : ''}${c.price ? ' ' + fmtBaht(c.price) : ''}`).join(' · ')}</div>`;
+    x += `</div>`;
+    // นัดหมาย
+    const open = (K.followups || []).filter(f => !f.done), done = (K.followups || []).filter(f => f.done);
+    const ad = S.apptDraft[id] || {};
+    x += `<div class="pf-sec"><div class="pf-h">นัดหมาย${open.length ? ' · ค้าง ' + open.length : ''}</div>
+      ${open.map(f => `<div class="crm-it${f.late ? ' late' : ''}"><b>${h(f.kindLabel)}</b> ${h(fmtFull(f.due))}${f.who ? ' · @' + h(f.who) : ''}${f.late ? ' · <b style="color:var(--red)">เลยนัดแล้ว</b>' : ''}
+        ${f.note ? `<div>${h(f.note)}</div>` : ''}${ed ? `<div class="acts"><button class="btn sm pri" data-fdone="${f.id}">ทำแล้ว</button><button class="btn sm" data-fcancel="${f.id}">ยกเลิกนัด</button></div>` : ''}</div>`).join('')}
+      ${done.map(f => `<div class="crm-it done">${h(f.kindLabel)} ${h(fmtFull(f.due))} · ${h(f.result || 'ทำแล้ว')}${f.doneBy ? ' · ' + h(f.doneBy) : ''}</div>`).join('')}
+      ${!open.length && !done.length ? '<div class="pf-note">ยังไม่มีนัด</div>' : ''}
+      ${ed ? `<div class="crm-form" data-box="appt">
+        <select data-x="kind"><option value="follow"${ad.kind !== 'viewing' ? ' selected' : ''}>นัดติดตาม</option><option value="viewing"${ad.kind === 'viewing' ? ' selected' : ''}>นัดดูรถ (ขั้นเป็น "นัดดูรถ" ให้เอง)</option></select>
+        <div class="crm-qd"><button data-qd="1">พรุ่งนี้ 10:00</button><button data-qd="3">อีก 3 วัน</button><button data-qd="7">อีก 7 วัน</button></div>
+        <input type="datetime-local" data-x="due" value="${h(ad.due || '')}">
+        <input type="text" data-x="note" maxlength="300" placeholder="รายละเอียด (ไม่บังคับ) เช่น มาดู City ที่สาขา" value="${h(ad.note || '')}">
+        <button class="btn sm pri" data-act="appt-add" style="width:100%">บันทึกนัด</button></div>` : ''}</div>`;
+    // บันทึกการโทร
+    const cd = S.callDraft[id] || {}, cm = S.callMedia[id] || [];
+    x += `<div class="pf-sec"><div class="pf-h">บันทึกการโทร</div>
+      ${(K.calls || []).slice(0, 6).map(c => `<div class="crm-it"><b>${h(c.resultLabel)}</b> · ${h(fmtFull(c.at))}${c.by ? ' · ' + h(c.by) : ''}${c.note ? `<div>${h(c.note)}</div>` : ''}${
+        (c.media || []).length ? `<div class="ph">${c.media.map(m => `<a href="${h(m.url)}" target="_blank" rel="noopener"><img src="${h(m.url)}" alt="หลักฐาน" loading="lazy"></a>`).join('')}</div>` : ''}</div>`).join('')}
+      ${!(K.calls || []).length ? '<div class="pf-note">ยังไม่มีบันทึกการโทร</div>' : ''}
+      ${ed ? `<div class="crm-form" data-box="call">
+        <select data-x="result"><option value="">— ผลการโทร —</option>${K.callResults.map(r => `<option value="${h(r.key)}"${cd.result === r.key ? ' selected' : ''}>${h(r.label)}</option>`).join('')}</select>
+        <input type="text" data-x="note" maxlength="500" placeholder="หมายเหตุ เช่น นัดโทรกลับหลัง 5 โมง" value="${h(cd.note || '')}">
+        <div class="crm-up">${cm.map(m => `<img src="${h(m.url)}" alt="">`).join('')}</div>
+        <label class="btn sm" style="width:100%;margin-bottom:6px">แนบรูปหลักฐานการโทร<input type="file" accept="image/*" multiple data-x="file" hidden></label>
+        <button class="btn sm pri" data-act="call-add" style="width:100%">บันทึกการโทร</button></div>` : ''}</div>`;
+    // สรุปลูกค้า (AI ร่าง · เซลล์ตรวจก่อนบันทึก)
+    const ai = S.aiDraft[id];
+    const sumVal = S.sumDraft[id] != null ? S.sumDraft[id] : (K.summary || '');
+    x += `<div class="pf-sec"><div class="pf-h">สรุปลูกค้า</div>`;
+    if (ai) {
+      x += `<div class="crm-ai"><b>AI ร่างให้ — ตรวจก่อนบันทึก</b>${ai.stage ? `<div>ขั้นที่แนะนำ: <b>${h(ai.stageLabel)}</b>${ai.stageReason ? ' — ' + h(ai.stageReason) : ''}</div>` : ''}${
+        ai.followAt ? `<div>ควรติดตาม: <b>${h(fmtFull(ai.followAt))}</b>${ai.followNote ? ' — ' + h(ai.followNote) : ''}</div>` : ''}
+        <div class="acts">${ai.stage && ed ? `<button class="btn sm" data-act="ai-stage">ใช้ขั้นนี้</button>` : ''}${ai.followAt && ed ? `<button class="btn sm" data-act="ai-follow">สร้างนัดติดตามนี้</button>` : ''}<button class="btn sm" data-act="ai-close">ปิดคำแนะนำ</button></div></div>`;
+    }
+    if (ed) {
+      x += `<div class="crm-form" data-box="sum"><textarea data-x="sum" maxlength="2000" placeholder="ลูกค้าต้องการรถอะไร งบ/ผ่อน/ดาวน์ ข้อกังวล ทำอะไรค้างไว้">${h(sumVal)}</textarea>
+        <div class="crm-qd">${K.aiOn ? `<button class="btn sm" data-act="ai">ให้ AI ร่างสรุปจากแชท</button>` : ''}<button class="btn sm pri" data-act="sum-save">บันทึกสรุป</button></div>
+        <div class="pf-note">${K.summaryAt ? 'บันทึกล่าสุด ' + h(fmtFull(K.summaryAt)) + (K.summaryBy ? ' โดย ' + h(K.summaryBy) : '') + ' · ' : ''}${K.aiOn ? 'AI แค่ร่าง — ระบบปิดบังเบอร์/ไอดีก่อนส่งให้ AI · ต้องกดบันทึกเอง' : 'ยังไม่ได้ตั้งคีย์ AI — พิมพ์สรุปเองได้'}</div></div>`;
+    } else {
+      x += K.summary ? `<div class="crm-it" style="white-space:pre-wrap">${h(K.summary)}</div>` : '<div class="pf-note">ยังไม่มีสรุป</div>';
+    }
+    x += `</div>`;
+    // ใครเคยดูแล (ชื่อเก็บเป็นข้อความ — เซลล์ลาออกแล้วก็ยังเห็น)
+    if ((K.pastOwners || []).length) {
+      x += `<div class="pf-sec"><div class="pf-h">ใครเคยดูแลลูกค้าคนนี้</div>${K.pastOwners.map(o => `<div class="crm-po"><b>@${h(o.name)}</b> ${h(fmtFull(o.from))} → ${o.to ? h(fmtFull(o.to)) + ' · ' + h(o.end) : '<b style="color:var(--green)">ตอนนี้</b>'}<br><span style="color:var(--t3)">${h(o.how)}${o.by ? ' · โดย ' + h(o.by) : ''}</span></div>`).join('')}</div>`;
+    }
+    return x;
+  }
+
+  async function crmAct(action, extra, btn) {
+    const id = S.chat && S.chat.row.id; if (!id) return null;
+    if (btn) btn.disabled = true;
+    const r = await api('/connect/api/crm', Object.assign({ action, id }, extra || {}));
+    if (btn) btn.disabled = false;
+    if (!r.ok) { toast(r.error || 'ทำไม่สำเร็จ', 5500); return null; }
+    if (r.message) toast(r.message, 3500);
+    if (S.chat && S.chat.row.id === id) {
+      if (r.crm) S.chat.crm = r.crm;
+      if (r.row) Object.assign(S.chat.row, r.row);
+      paintProfile(true); paintHeader(true);
+    }
+    loadInbox(false); loadAlerts();
+    return r;
+  }
+  async function crmRelease(id) {
+    const why = prompt('คืนลูกค้าคนนี้เข้าคิวรอรับ (กองกลาง)?\nเหตุผล (ไม่บังคับ) เช่น ลูกค้าอยู่ต่างจังหวัด / ไม่ใช่รุ่นที่ถนัด', '');
+    if (why === null) return;
+    const r = await api('/connect/api/crm', { action: 'release', id, reason: why });
+    if (!r.ok) { toast(r.error || 'คืนกองกลางไม่สำเร็จ', 5500); return; }
+    toast('คืนกองกลางแล้ว — เซลล์ทีมที่เวรรับต่อได้', 5000);
+    S.openId = 0; S.chat = null; hidePane(); renderBlank('คืนลูกค้ากลับกองกลางแล้ว');
+    try { history.replaceState(null, '', '/connect/' + (BOOT.embed ? '?embed=1' : '')); } catch (e) {}
+    loadInbox(true); loadAlerts();
+  }
+  async function upProof(file, id) {
+    const fd = new FormData(); fd.append('id', id); fd.append('file', file);
+    let d;
+    try {
+      const r = await fetch('/connect/api/upload', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': csrf() } });
+      try { d = await r.json(); } catch (e) { d = { ok: false, error: 'อัปโหลดไม่สำเร็จ (' + r.status + ')' }; }
+    } catch (e) { d = { ok: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้' }; }
+    return d;
+  }
+  function bindCrm(el) {
+    const id = S.chat && S.chat.row.id; if (!id) return;
+    el.querySelectorAll('[data-stage]').forEach(b => b.onclick = (e) => {
+      e.preventDefault();
+      const st = b.dataset.stage;
+      if (st === 'lost') { S.lostPick = id; paintProfile(true); return; }
+      crmAct('stage', { stage: st }, b.tagName === 'BUTTON' ? b : null);
+    });
+    const q = (box, k) => box.querySelector(`[data-x="${k}"]`);
+    el.querySelectorAll('[data-act=lost-save]').forEach(b => b.onclick = async () => {
+      const box = b.closest('.crm-form'), why = q(box, 'lost').value;
+      if (!why) { toast('เลือกเหตุผลที่ไม่ซื้อก่อน'); return; }
+      const r = await crmAct('stage', { stage: 'lost', reason: why }, b);
+      if (r) { S.lostPick = 0; paintProfile(true); }
+    });
+    el.querySelectorAll('[data-act=lost-cancel]').forEach(b => b.onclick = () => { S.lostPick = 0; paintProfile(true); });
+    el.querySelectorAll('[data-fdone]').forEach(b => b.onclick = () => {
+      const res = prompt('ผลของนัดนี้ (ไม่บังคับ)', ''); if (res === null) return;
+      crmAct('followup_done', { fid: +b.dataset.fdone, result: res }, b);
+    });
+    el.querySelectorAll('[data-fcancel]').forEach(b => b.onclick = () => {
+      if (!confirm('ยกเลิกนัดนี้?')) return;
+      crmAct('followup_done', { fid: +b.dataset.fcancel, cancel: true }, b);
+    });
+    const ab = el.querySelector('[data-box=appt]');
+    if (ab) {
+      const keep = () => { S.apptDraft[id] = { kind: q(ab, 'kind').value, due: q(ab, 'due').value, note: q(ab, 'note').value }; };
+      ab.querySelectorAll('[data-x]').forEach(i => i.addEventListener('input', keep));
+      ab.querySelectorAll('[data-qd]').forEach(b => b.onclick = () => {
+        const d0 = new Date(nowMs()); d0.setDate(d0.getDate() + (+b.dataset.qd)); d0.setHours(10, 0, 0, 0);
+        q(ab, 'due').value = localDT(d0); keep();
+      });
+      ab.querySelector('[data-act=appt-add]').onclick = async (ev) => {
+        keep();
+        const v = S.apptDraft[id];
+        if (!v.due) { toast('เลือกวันเวลานัดก่อน'); return; }
+        const r = await crmAct('followup', { kind: v.kind, due: v.due, note: v.note }, ev.target);
+        if (r) { delete S.apptDraft[id]; paintProfile(true); }
+      };
+    }
+    const cb = el.querySelector('[data-box=call]');
+    if (cb) {
+      const keep = () => { S.callDraft[id] = { result: q(cb, 'result').value, note: q(cb, 'note').value }; };
+      cb.querySelectorAll('select[data-x], input[type=text][data-x]').forEach(i => i.addEventListener('input', keep));
+      cb.querySelectorAll('select[data-x]').forEach(i => i.addEventListener('change', keep));
+      q(cb, 'file').addEventListener('change', async (ev) => {
+        const files = Array.from(ev.target.files || []); ev.target.value = '';
+        for (const f of files) {
+          if ((S.callMedia[id] || []).length >= 6) { toast('แนบได้ไม่เกิน 6 รูปต่อครั้ง'); break; }
+          toast('กำลังอัปโหลด ' + f.name + '…', 1800);
+          const r = await upProof(f, id);
+          if (!r.ok) { toast(r.error || 'อัปโหลดไม่สำเร็จ', 5000); continue; }
+          (S.callMedia[id] = S.callMedia[id] || []).push({ id: r.id, url: r.url });
+        }
+        keep(); paintProfile(true);
+      });
+      cb.querySelector('[data-act=call-add]').onclick = async (ev) => {
+        keep();
+        const v = S.callDraft[id] || {};
+        if (!v.result) { toast('เลือกผลการโทรก่อน'); return; }
+        const r = await crmAct('call', { result: v.result, note: v.note || '', media: (S.callMedia[id] || []).map(m => ({ id: m.id })) }, ev.target);
+        if (r) { delete S.callDraft[id]; delete S.callMedia[id]; paintProfile(true); }
+      };
+    }
+    const sb = el.querySelector('[data-box=sum]');
+    if (sb) {
+      q(sb, 'sum').addEventListener('input', () => { S.sumDraft[id] = q(sb, 'sum').value; });
+      sb.querySelector('[data-act=sum-save]').onclick = async (ev) => {
+        const r = await crmAct('summary', { text: q(sb, 'sum').value }, ev.target);
+        if (r) { delete S.sumDraft[id]; paintProfile(true); }
+      };
+      const aib = sb.querySelector('[data-act=ai]');
+      if (aib) aib.onclick = async () => {
+        aib.disabled = true; aib.textContent = 'AI กำลังอ่านแชท…';
+        const r = await api('/connect/api/crm', { action: 'ai', id });
+        aib.disabled = false; aib.textContent = 'ให้ AI ร่างสรุปจากแชท';
+        if (!r.ok) { toast(r.error || 'AI สรุปไม่สำเร็จ', 6000); return; }
+        S.aiDraft[id] = r.draft;
+        if (r.draft.summary) S.sumDraft[id] = r.draft.summary;      // ใส่ในช่องให้ตรวจ/แก้ — ยังไม่บันทึก
+        paintProfile(true);
+      };
+    }
+    el.querySelectorAll('[data-act=ai-stage]').forEach(b => b.onclick = () => {
+      const ai = S.aiDraft[id]; if (!ai || !ai.stage) return;
+      if (ai.stage === 'lost') { S.lostPick = id; paintProfile(true); return; }
+      crmAct('stage', { stage: ai.stage }, b);
+    });
+    el.querySelectorAll('[data-act=ai-follow]').forEach(b => b.onclick = async () => {
+      const ai = S.aiDraft[id]; if (!ai || !ai.followAt) return;
+      const r = await crmAct('followup', { kind: 'follow', due: ai.followAt, note: ai.followNote || '' }, b);
+      if (r) { ai.followAt = ''; paintProfile(true); }
+    });
+    el.querySelectorAll('[data-act=ai-close]').forEach(b => b.onclick = () => { delete S.aiDraft[id]; paintProfile(true); });
+  }
+
   // บันทึกทีละช่อง (ไม่ใช่ทั้งฟอร์ม) — 2 คนแก้คนละช่องพร้อมกันไม่ทับกัน
   async function saveLead(field, value, inp, repaint) {
     const d = S.chat; if (!d) return;
@@ -1830,7 +2254,9 @@
         if (x.type === 'checkbox') x.checked = !!r.lead[field]; else x.value = r.lead[field] || '';
       });
       document.querySelectorAll('.pf-slip-text').forEach(x => { x.textContent = r.lead.slipText || ''; });
-      _profSig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team]);
+      _profSig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
+                                 d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
+                                 S.lostPick === d.row.id, S.aiDraft[d.row.id] || null]);
     }
     if (repaint) paintProfile(true);
     if (field === 'customer_name' || field === 'tags') loadInbox(false);   // ชื่อ/แท็กโชว์ในรายชื่อด้วย
@@ -2680,7 +3106,12 @@
     pg.innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังคำนวณ…</div>`;
     const d = await api('/connect/api/team');
     if (S.panel !== 'dash') return;
-    if (!d.ok) { pg.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    if (!d.ok) {
+      // ตัวเลขทีม (ชีต) โหลดไม่ได้ — วิเคราะห์แชท/สถิติเวลาตอบ (ฐานข้อมูลของเรา) ยังต้องโชว์ได้
+      pg.innerHTML = `<div class="lc-card"><div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div></div><div id="lc-insights"></div><div id="lc-stats"></div>`;
+      openStats(7); openInsights(S.insDays || 30);
+      return;
+    }
     const T = d.tiles || {}, F = d.funnel || [];
     const pct = (a, b) => b ? Math.round(a * 100 / b) : null;
     const repPct = pct(T.reportedToday, T.tasksToday), chatPct = pct(T.repOk, T.repAll);
@@ -2702,8 +3133,41 @@
           <td><span class="lc-spark" title="${h(d.sixDays.join(' · '))}">${s.spark.map(v => `<i style="height:${Math.max(3, Math.round(v * 22 / mx))}px"></i>`).join('')}</span></td>
           <td class="r"><span class="lc-chip${s.status === 'หยุดวันนี้' ? '' : ' ok'}">${h(s.status)}</span></td></tr>`; }).join('')}
       </tbody></table></div></div>
+      <div id="lc-insights"></div>
       <div id="lc-stats"></div>`;
     openStats(7);
+    openInsights(S.insDays || 30);
+  }
+
+  // ── ★ 11 ต.ค.69 วิเคราะห์แชท (สเปกข้อ 8) — ขั้นของลีด · ความร้อน · ช่องทาง · เหตุผลที่ไม่ซื้อ · รายชื่อไม่ต้องการ ──
+  async function openInsights(days) {
+    S.insDays = days;
+    const el = $('lc-insights'); if (!el) return;
+    el.innerHTML = `<div class="lc-card"><div class="cn-empty"><div class="spin"></div>กำลังวิเคราะห์แชท…</div></div>`;
+    const d = await api('/connect/api/insights?days=' + days);
+    if (S.panel !== 'dash' || !$('lc-insights')) return;
+    if (!d.ok) { el.innerHTML = `<div class="lc-card"><div class="cn-empty" style="color:var(--red)">${h(d.error || 'วิเคราะห์ไม่สำเร็จ')}</div></div>`; return; }
+    const st = d.stages || [], mx = Math.max(1, ...st.map(x => x.n)), H = d.heat || {};
+    const lostN = (d.lost || []).reduce((a, x) => a + x.n, 0), lmx = Math.max(1, ...(d.lost || []).map(x => x.n));
+    el.innerHTML = `<div class="lc-card"><div class="lc-bh"><h2>วิเคราะห์ลูกค้าแชท (หน้ารวมแชท)</h2><span class="note">ลูกค้าที่คุยใน ${days} วันล่าสุด · ขั้นที่เซลล์ตั้ง + ระบบคิดให้</span>
+        <span class="cn-sp"></span><span class="lc-seg">${[7, 30, 90].map(n => `<button data-ins="${n}" class="${n === days ? 'on' : ''}">${n} วัน</button>`).join('')}</span></div>
+        <div class="lc-tiles" style="padding:12px 14px 0">
+          <div class="lc-card lc-tile"><div class="lbl">🔥 ร้อน</div><div class="val" style="color:var(--red)">${H.hot || 0}</div><div class="note">ควรตามก่อน</div></div>
+          <div class="lc-card lc-tile"><div class="lbl">อุ่น</div><div class="val" style="color:var(--amber)">${H.warm || 0}</div><div class="note">ยังคุยอยู่</div></div>
+          <div class="lc-card lc-tile"><div class="lbl">เย็น</div><div class="val" style="color:var(--t3)">${H.cold || 0}</div><div class="note">เงียบนาน/เคสเสีย</div></div>
+          <div class="lc-card lc-tile"><div class="lbl">ไม่ต้องการ</div><div class="val">${d.unwanted || 0}</div><div class="note"><a href="/connect/api/insights?csv=unwanted&days=${Math.max(days, 90)}">ดาวน์โหลดรายชื่อ (CSV)</a> · ไว้ตัดออกจากกลุ่มเป้าหมายโฆษณา · มีเบอร์ลูกค้า</div></div>
+        </div>
+        <div class="lc-bars">${st.map(x => `<div class="r"><span>${h(x.label)}</span><div class="b"><i style="width:${Math.round(x.n * 100 / mx)}%"></i></div><b style="text-align:right">${x.n}</b></div>`).join('')}</div></div>
+      <div class="lc-card"><div class="lc-bh"><h2>ตามช่องทาง</h2><span class="note">ช่องทางในข้อมูลลีด (ว่าง = LINE / Facebook ตามที่ทักมา)</span></div>
+        <div class="lc-tw"><table class="lc-tbl"><thead><tr><th>ช่องทาง</th><th class="r">ลูกค้า</th><th class="r">ติดต่อแล้ว</th><th class="r">นัดดูรถ</th><th class="r">ยื่นไฟแนนซ์</th><th class="r">ปิดการขาย</th><th class="r">ไม่สนใจ</th><th class="r">% ปิด</th></tr></thead><tbody>
+        ${(d.sources || []).map(s => `<tr><td><b>${h(s.src)}</b></td><td class="r">${s.total}</td><td class="r">${s.contacted}</td><td class="r">${s.viewing}</td><td class="r">${s.finance}</td>
+          <td class="r" style="color:var(--green)">${s.won}</td><td class="r" style="color:var(--t3)">${s.lost}</td><td class="r">${s.winRate}%</td></tr>`).join('') || '<tr><td colspan="8" style="color:var(--t3)">ยังไม่มีข้อมูล</td></tr>'}
+        </tbody></table></div></div>
+      <div class="lc-card"><div class="lc-bh"><h2>ไม่ซื้อเพราะอะไร</h2><span class="note">${lostN} คน · เซลล์เลือกตอนตั้งขั้น "ไม่สนใจ"</span></div>
+        <div class="lc-bars">${(d.lost || []).map(x => `<div class="r"><span>${h(x.reason)}</span><div class="b"><i style="width:${Math.round(x.n * 100 / lmx)}%"></i></div><b style="text-align:right">${x.n}</b></div>`).join('') || '<div class="pf-note">ยังไม่มีเคสที่ตั้งเป็นไม่สนใจ</div>'}</div></div>
+      ${(d.ads || []).length ? `<div class="lc-card"><div class="lc-bh"><h2>ตามโฆษณา (ADS)</h2></div><div class="lc-tw"><table class="lc-tbl"><thead><tr><th>ADS</th><th class="r">ลูกค้า</th><th class="r">ปิดการขาย</th><th class="r">ไม่สนใจ</th></tr></thead><tbody>
+        ${d.ads.map(a => `<tr><td>${h(a.ads)}</td><td class="r">${a.total}</td><td class="r" style="color:var(--green)">${a.won}</td><td class="r" style="color:var(--t3)">${a.lost}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
+    el.querySelectorAll('[data-ins]').forEach(b => b.onclick = () => openInsights(+b.dataset.ins));
   }
 
   // ── กฎและเส้นทาง: สวิตช์ใช้งานได้จริง (บันทึกทันที) + สองเส้นทาง · ตั้งค่าละเอียดอยู่ด้านล่าง ──
@@ -2720,6 +3184,9 @@
     { t: 'แจ้งกลุ่มแอดมินเมื่อแชทรอเกินเวลา', d: 'ต้องเลือกกลุ่มในตั้งค่าละเอียดด้านล่าง · ⚠️ ทีมยังตอบในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา — เปิดแล้วจะแจ้งถี่', src: 'c', k: 'alert_on', out: true },
     { t: 'บอกเซลล์ทาง LINE เมื่อลูกค้าทัก', d: 'เจ้าของลูกค้า หรือทั้งทีมที่เวร · ทีมละ ~9 คน = กินโควต้าเร็ว', src: 'c', k: 'notify_sellers', out: true },
     { t: 'รับแชท Facebook เข้า Connect', d: 'คิวเดียวกับ LINE · ตอบ Facebook ตั้งได้ในตั้งค่าละเอียด', src: 'c', k: 'fb_on' },
+    // ★ 11 ต.ค.69 หน้ารวมแชท (crm.py)
+    { t: 'ดึงลูกค้าแชทคืนเมื่อเซลล์ไม่ตอบ (15 นาที)', d: 'รับลูกค้าแล้วไม่ตอบจนเลยเส้นตาย + เกิน 15 นาทีหลังรับ → คืนคิวให้คนอื่นรับ · ⚠️ ทีมยังตอบในแอป LINE OA Manager (LINE ไม่ส่งกลับมา) — เปิดตอนนี้จะดึงลูกค้าที่ตอบไปแล้วคืนผิดๆ', src: 'c', k: 'pull_min', num: 15, out: true },
+    { t: 'เตือนนัดลูกค้าทาง LINE (หน้ารวมแชท)', d: 'นัดติดตาม/นัดดูรถที่บันทึกในแชท → เตือนเข้าแชทส่วนตัวเซลล์ 30 นาทีก่อนถึงเวลา (ครั้งเดียว) · ในหน้าเว็บ/แอปขึ้นกระดิ่งอยู่แล้วแม้ปิดสวิตช์นี้', src: 'c', k: 'appt_line', out: true },
   ];
   function ruleVal(r) {
     if (r.fixed) return true;
@@ -2753,7 +3220,8 @@
       const on = !ruleVal(r);
       if (on && r.out && !confirm(`เปิด "${r.t}" ?\n(เรื่องนี้ส่ง LINE ออก/จ่ายงานแทนคน)`)) return;
       b.disabled = true;
-      const res = r.src === 'c' ? await api('/connect/api/config', { [r.k]: on })
+      const val = r.num ? (on ? r.num : 0) : on;
+      const res = r.src === 'c' ? await api('/connect/api/config', { [r.k]: val })
                                 : await api('/connect/api/leadflow', { action: 'config', [r.k]: on });
       b.disabled = false;
       if (!res.ok) { toast(res.error || 'บันทึกไม่สำเร็จ', 6000); return; }
@@ -2792,6 +3260,8 @@
   setInterval(() => { if (!document.hidden && S.pane === 'chat' && S.chat) openChat(S.chat.row.id, true); }, 6000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadInbox(false); });
 
+  loadAlerts();
+  setInterval(() => { if (!document.hidden) loadAlerts(); }, 30000);
   if (S.openId) showPane();
   setPanel(ADMIN && PANEL_PANE[BOOT.panel] && !S.openId ? BOOT.panel : 'inbox', true);
 })();

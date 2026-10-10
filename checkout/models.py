@@ -892,9 +892,12 @@ class ChatOwnerLog(models.Model):
     """
     CLAIM, ASSIGN, RELEASE, ESCALATE, REPLY, DISMISS = (
         "claim", "assign", "release", "escalate", "reply", "dismiss")
+    # ★ 11 ต.ค.69 หน้ารวมแชท (Chat Inbox) — เปลี่ยนขั้นลีด · นัดหมาย · บันทึกการโทร ก็จดลงประวัติเดียวกัน
+    STAGE, APPT, CALL, SUMMARY = "stage", "appt", "call", "summary"
     ACTION_CHOICES = [(CLAIM, "รับลูกค้า"), (ASSIGN, "แอดมินโอนให้"), (RELEASE, "ปล่อยคืนคิว"),
                       (ESCALATE, "เลยเวลา แจ้งแอดมิน"), (REPLY, "ตอบลูกค้า"),
-                      (DISMISS, "ไม่ต้องตอบ")]
+                      (DISMISS, "ไม่ต้องตอบ"), (STAGE, "เปลี่ยนขั้นลีด"), (APPT, "นัดหมาย"),
+                      (CALL, "บันทึกการโทร"), (SUMMARY, "บันทึกสรุปลูกค้า")]
 
     chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE,
                              related_name="logs")
@@ -966,6 +969,17 @@ class ChatLead(models.Model):
     live = models.CharField("ไลฟ์", max_length=60, blank=True)
     more = models.TextField("เพิ่มเติม", blank=True)
     tags = models.JSONField("แท็ก", default=list, blank=True)
+
+    # ★ 11 ต.ค.69 หน้ารวมแชท — "ขั้นของลีด" (คนละเรื่องกับสถานะลูกค้าคอลัมน์ Z ของชีต)
+    #   ว่าง = ระบบคิดให้เอง (ลีดใหม่ / รอติดต่อ / ติดต่อแล้ว) · คนตั้งแล้ว = ใช้ค่าที่ตั้ง · ดู crm.STAGES
+    stage = models.CharField("ขั้นของลีด", max_length=12, blank=True, db_index=True)
+    stage_at = models.DateTimeField("เปลี่ยนขั้นเมื่อ", null=True, blank=True)
+    stage_by = models.CharField("เปลี่ยนขั้นโดย", max_length=80, blank=True)
+    lost_reason = models.CharField("เหตุผลที่ไม่ซื้อ", max_length=40, blank=True, db_index=True)
+    # สรุปลูกค้า (AI ร่างให้ · เซลล์ตรวจ/แก้ แล้วกดบันทึกเอง — ไม่บันทึกอัตโนมัติ)
+    summary = models.TextField("สรุปลูกค้า", blank=True)
+    summary_at = models.DateTimeField("บันทึกสรุปเมื่อ", null=True, blank=True)
+    summary_by = models.CharField("บันทึกสรุปโดย", max_length=80, blank=True)
 
     # ★ 4 ต.ค.69 — ปุ่ม "จ่ายเบอร์" · ★ 6 ต.ค.69 ส่งใบเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ไม่ลงชีต · slippost.py)
     #   `code_demo` = เลขนี้ออกในโหมดทดลอง (สวิตช์ส่งจริงปิด / ลูกค้าจำลอง / บัญชีทดสอบ) — ไม่ได้ส่งเข้ากลุ่ม
@@ -1155,3 +1169,63 @@ class LeadReport(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.code or "-", self.seller_name or "-", (self.text or "")[:30])
+
+
+class ChatFollowup(models.Model):
+    """**นัดหมายของลูกค้าแชท** (หน้ารวมแชท · 11 ต.ค.69) — นัดติดตาม / นัดดูรถ
+
+    1 แถว = 1 นัด · ทำแล้วกด "เสร็จ" (`done_at`) · ยังไม่เสร็จ = ขึ้นแจ้งเตือนเมื่อถึงเวลา
+    หายตามลูกค้า (CASCADE) — ลูกค้าเงียบเกิน 60 วันถูกลบ (PDPA เดียวกับแชท)
+    """
+    FOLLOW, VIEWING = "follow", "viewing"
+    KIND_CHOICES = [(FOLLOW, "นัดติดตาม"), (VIEWING, "นัดดูรถ")]
+
+    chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE, related_name="followups")
+    kind = models.CharField("ชนิด", max_length=8, choices=KIND_CHOICES, default=FOLLOW)
+    due_at = models.DateTimeField("นัดเมื่อ", db_index=True)
+    note = models.CharField("รายละเอียด", max_length=300, blank=True)
+    employee = models.ForeignKey("Employee", verbose_name="เซลล์ที่ต้องทำ", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="chat_followups")
+    emp_name = models.CharField("ชื่อเซลล์", max_length=80, blank=True)
+    by_name = models.CharField("นัดโดย", max_length=80, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    done_at = models.DateTimeField("ทำแล้วเมื่อ", null=True, blank=True, db_index=True)
+    done_by = models.CharField("ทำแล้วโดย", max_length=80, blank=True)
+    result = models.CharField("ผล", max_length=300, blank=True)
+    reminded_at = models.DateTimeField("เตือนทาง LINE แล้ว", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Connect — นัดหมาย"
+        verbose_name_plural = "Connect — นัดหมาย"
+        ordering = ["due_at", "id"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.get_kind_display(), self.due_at, self.chat_id)
+
+
+class ChatCall(models.Model):
+    """**บันทึกการโทรหาลูกค้าแชท** + หลักฐาน (รูปหน้าจอการโทร) — หน้ารวมแชท · 11 ต.ค.69
+
+    ระบบรู้เองไม่ได้ว่าเซลล์โทรจริงไหม (โทรจากมือถือส่วนตัว) → เซลล์จดเอง + แนบรูปได้
+    `media` = `[{"id": "connect/<chat>/<ไฟล์>"}]` (เก็บดิสก์ VPS · ชื่อไฟล์สุ่ม) · หายตามลูกค้า (CASCADE)
+    """
+    OK, NOANS, BUSY, WRONG, LATER, OTHER = "ok", "noans", "busy", "wrong", "later", "other"
+    RESULT_CHOICES = [(OK, "คุยได้"), (NOANS, "ไม่รับสาย"), (BUSY, "ปิดเครื่อง/สายไม่ว่าง"),
+                      (WRONG, "เบอร์ผิด"), (LATER, "ให้โทรกลับทีหลัง"), (OTHER, "อื่นๆ")]
+
+    chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE, related_name="calls")
+    employee = models.ForeignKey("Employee", verbose_name="คนโทร", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="chat_calls")
+    emp_name = models.CharField("ชื่อคนโทร", max_length=80, blank=True)
+    at = models.DateTimeField("โทรเมื่อ", default=timezone.now, db_index=True)
+    result = models.CharField("ผล", max_length=8, choices=RESULT_CHOICES, default=OK)
+    note = models.CharField("หมายเหตุ", max_length=500, blank=True)
+    media = models.JSONField("หลักฐาน", default=list, blank=True)
+
+    class Meta:
+        verbose_name = "Connect — บันทึกการโทร"
+        verbose_name_plural = "Connect — บันทึกการโทร"
+        ordering = ["-at", "-id"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.at, self.get_result_display(), self.emp_name)

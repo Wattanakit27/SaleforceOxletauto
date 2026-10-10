@@ -79,6 +79,12 @@ DEFAULTS = {
     # กลุ่มปลายทาง — ว่าง = หาเองจากชื่อกลุ่ม (เลขปกติ → "ห้องจ่ายเบอร์ บ้านเก่า" · เลข R… → "ห้องจ่ายเบอร์ REJECT")
     "slip_group": "",
     "slip_group_reject": "",
+    # ── ★ 11 ต.ค.69 หน้ารวมแชท (crm.py) ──
+    # เจ้าของรับลูกค้าแล้วไม่ตอบจนเลยเส้นตาย + เกินกี่นาทีหลังรับ → ระบบดึงคืนคิว (0 = ปิด · ปิดโดยปริยาย)
+    #   ⚠️ ทีมยังตอบในแอป LINE OA Manager อยู่ (LINE ไม่ส่งกลับมา) — เปิดตอนนี้ = ดึงลูกค้าที่ตอบไปแล้วคืนผิดๆ
+    "pull_min": 0,
+    # เตือนนัดลูกค้า (นัดติดตาม/นัดดูรถ) ทาง LINE แชทส่วนตัวเซลล์ 30 นาทีก่อนถึงเวลา — ปิดโดยปริยาย
+    "appt_line": False,
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -239,6 +245,16 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
             errs.append("ดึงแชท Facebook สำรองต้องเป็นตัวเลข 2–60 นาที")
     if "slip_post" in body:
         out["slip_post"] = bool(body.get("slip_post"))
+    if "pull_min" in body:
+        try:
+            n = int(body.get("pull_min") or 0)
+            if n and not 5 <= n <= 240:
+                raise ValueError
+            out["pull_min"] = n
+        except Exception:
+            errs.append("ดึงลูกค้าคืนเมื่อไม่ตอบ ต้องเป็น 0 (ปิด) หรือ 5–240 นาที")
+    if "appt_line" in body:
+        out["appt_line"] = bool(body.get("appt_line"))
     for key, label in (("slip_group", "กลุ่มจ่ายเบอร์ (เลขปกติ)"), ("slip_group_reject", "กลุ่มจ่ายเบอร์ (เลข R…)")):
         if key in body:
             g = str(body.get(key) or "").strip()
@@ -725,6 +741,7 @@ def _customer_in(o, at, preview: str, c: dict, start_round: bool = True, sim: bo
         _log(o, ChatOwnerLog.RELEASE, emp=o.owner, by="ระบบ",
              note="เซลล์ไม่ได้ทำงานแล้ว — คืนคิวอัตโนมัติ")
         o.owner, o.claimed_at, o.first_reply_at = None, None, None
+        _crm_hook("on_release", o)
     new_round = start_round and o.awaiting_since is None
     if new_round:
         o.awaiting_since = at
@@ -889,6 +906,7 @@ def claim(row_id, emp, admin: bool = False):
         return False, "%s รับลูกค้าคนนี้ไปก่อนแล้ว" % who
     o.refresh_from_db()
     _log(o, ChatOwnerLog.CLAIM, emp=emp, by=emp.nickname, team=my)
+    _crm_hook("on_owner", o)
     return True, "รับลูกค้าแล้ว — อย่าลืมตอบก่อนเส้นตาย"
 
 
@@ -905,7 +923,8 @@ def assign(row_id, emp=None, by: str = "", note: str = ""):
         o.owner, o.claimed_at, o.first_reply_at = None, None, None
         o.team = today_team()
         o.save()
-        _log(o, ChatOwnerLog.RELEASE, emp=old, by=by, note="แอดมินปล่อยคืนคิว")
+        _log(o, ChatOwnerLog.RELEASE, emp=old, by=by, note=note or "แอดมินปล่อยคืนคิว")
+        _crm_hook("on_release", o)
         return True, "ปล่อยคืนคิวแล้ว — เซลล์ทีมที่เวรวันนี้กดรับได้"
     if not emp.active:
         return False, "%s ถูกปิดใช้งานในทะเบียนพนักงาน" % emp.nickname
@@ -916,7 +935,17 @@ def assign(row_id, emp=None, by: str = "", note: str = ""):
     o.save()
     _log(o, ChatOwnerLog.ASSIGN, emp=emp, by=by,
          note=note or (("โอนจาก %s" % old.nickname) if old else "โอนจากคิว"))
+    _crm_hook("on_owner", o)
     return True, "โอนให้ %s แล้ว" % emp.nickname
+
+
+def _crm_hook(name, o):
+    """แจ้ง crm.py ว่าความเป็นเจ้าของเปลี่ยน (ขั้น "คืนกองกลาง") — พังต้องไม่ทำให้รับ/โอน/ปล่อยพัง"""
+    try:
+        from . import crm
+        getattr(crm, name)(o)
+    except Exception:
+        pass
 
 
 def dismiss(row_id, by: str = "", emp=None):
@@ -975,6 +1004,13 @@ def tick(now=None) -> dict:
             out["slipSweep"] = r
     except Exception as e:
         out["slipSweepError"] = str(e)[:120]
+    try:                                     # ★ 11 ต.ค.69 หน้ารวมแชท: ดึงคืนเมื่อไม่ตอบ · เตือนนัด · ลบหลักฐานของลูกค้าที่ถูกลบ
+        from .crm import tick as _crm_tick
+        r = _crm_tick(now)
+        if r:
+            out["crm"] = r
+    except Exception as e:
+        out["crmError"] = str(e)[:120]
     c = cfg()
     rows = list(ChatOwner.objects.select_related("owner", "profile", "fb_profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
@@ -1103,11 +1139,12 @@ def _iso(dt):
     return timezone.localtime(dt).isoformat(timespec="seconds") if dt else ""
 
 
-def row_json(o, me=None, now=None) -> dict:
+def row_json(o, me=None, now=None, appt_map=None, matches=None) -> dict:
+    """`appt_map`/`matches` = ส่งมาจาก inbox() (ถามฐานข้อมูลครั้งเดียวทั้งหน้า) · ไม่ส่ง = ถามเองทีละแถว"""
     now = now or timezone.now()
     p = cust(o)
     ld = lead_of(o, create=False)
-    return {
+    out = {
         "id": o.id,
         "name": (ld.customer_name if ld and ld.customer_name else p.show_name),
         "tags": list(ld.tags or [])[:4] if ld else [],
@@ -1133,6 +1170,14 @@ def row_json(o, me=None, now=None) -> dict:
         # เลขเคสรับซื้อ (OC-…) — ลูกค้าที่อยากขายรถให้เรา ถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว
         "buyCode": ((ld.auto or {}).get(BUY_KEY) or {}).get("code", "") if ld else "",
     }
+    # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้นของลีด · ความร้อน · เงียบกี่วัน · นัดถัดไป · รถใหม่ตรง (crm.py)
+    try:
+        from . import crm
+        out.update(crm.row_extra(o, ld, now, appt=(appt_map.get(o.id, False) if appt_map is not None else None),
+                                 matches=matches))
+    except Exception:
+        pass
+    return out
 
 
 # ─────────────────────────────────────────────────────────────
@@ -2815,8 +2860,12 @@ VIEWS = ("queue", "tocode", "mine", "owned", "all")
 
 
 def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int = 0,
-          limit: int = 200, src: str = "") -> list:
-    """แถวของลิสต์ด้านซ้าย — สิทธิ์ถูกเช็คที่ view ก่อนเรียก (เซลล์ได้แค่ queue/mine)"""
+          limit: int = 200, src: str = "", flt=None) -> list:
+    """แถวของลิสต์ด้านซ้าย — สิทธิ์ถูกเช็คที่ view ก่อนเรียก (เซลล์ได้แค่ queue/mine)
+
+    `flt` = ตัวกรองหน้ารวมแชท (crm.FILTER_KEYS) · ขั้น/ความร้อน/รถใหม่ตรง คิดใน Python (ค่าที่คำนวณเอง)
+    """
+    from . import crm
     now = timezone.now()
     qs = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
     if view == "queue":
@@ -2845,7 +2894,16 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
                        | Q(last_preview__icontains=q) | Q(lead__customer_name__icontains=q)
                        | Q(lead__phone__contains=re.sub(r"\D", "", q) or q) | Q(lead__code__icontains=q)
                        | Q(lead__tags__icontains=q))
-    return [row_json(o, me, now) for o in qs[:limit]]
+    flt = flt or {}
+    if flt:
+        qs = crm.db_filter(qs, flt, now)
+    if crm.needs_python(flt):
+        objs = crm.py_filter(list(qs[:1500]), flt, now)[:limit]
+    else:
+        objs = list(qs[:limit])
+    amap = crm.next_appt_map([o.id for o in objs])
+    mm = crm.match_map()
+    return [row_json(o, me, now, appt_map=amap, matches=mm) for o in objs]
 
 
 def counts(me=None, admin: bool = False) -> dict:

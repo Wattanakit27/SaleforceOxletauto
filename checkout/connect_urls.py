@@ -24,4 +24,9 @@ urlpatterns = [
     path("api/config", V.api_config, name="connect_config"),
     path("api/stats", V.api_stats, name="connect_stats"),
     path("api/test", V.api_test, name="connect_test"),     # โหมดทดสอบ (แอดมิน): บัญชีเซลล์/ลูกค้าจำลอง
+    # ★ 11 ต.ค.69 หน้ารวมแชท (crm.py)
+    path("api/crm", V.api_crm, name="connect_crm"),             # ขั้น/นัด/โทร/สรุป/AI/คืนกองกลาง/Run Auto
+    path("api/upload", V.api_upload, name="connect_upload"),    # รูปหลักฐานการโทร
+    path("api/alerts", V.api_alerts, name="connect_alerts"),    # กระดิ่งแจ้งเตือน
+    path("api/insights", V.api_insights, name="connect_insights"),   # วิเคราะห์ (แอดมิน)
 ]

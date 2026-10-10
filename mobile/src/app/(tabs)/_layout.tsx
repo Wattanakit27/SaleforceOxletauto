@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../lib/api';
 import { canChat, useAuth } from '../../lib/auth';
+import { BellButton } from '../../lib/crm';
 import { C, Loading } from '../../lib/ui';
 
 type Summary = { counts: { queue: number; mineWaiting: number }; admin: boolean };
@@ -47,6 +48,7 @@ export default function TabsLayout() {
         options={{
           title: 'แชทลูกค้า',
           tabBarLabel: 'แชท',
+          headerRight: () => <BellButton />,
           href: chat ? undefined : null,
           tabBarBadge: chat && badge > 0 ? (badge > 99 ? '99+' : badge) : undefined,
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,

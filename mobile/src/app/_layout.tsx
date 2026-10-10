@@ -6,7 +6,7 @@ import { AuthProvider } from '../lib/auth';
 import { C } from '../lib/ui';
 
 // โครงหน้า: (tabs) = แชท · สแกน QR · ฉัน (หน้าแรกหลัง login = แชท)
-//           chat/[id] กับ car/[code] เปิดซ้อนเต็มจอเหนือแถบด้านล่าง
+//           chat/[id] · lead/[id] (งานกับลูกค้า) · alerts · car/[code] เปิดซ้อนเต็มจอเหนือแถบด้านล่าง
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -22,6 +22,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="chat/[id]" options={{ title: 'แชท' }} />
+          <Stack.Screen name="lead/[id]" options={{ title: 'งานกับลูกค้า' }} />
+          <Stack.Screen name="alerts" options={{ title: 'แจ้งเตือน' }} />
           <Stack.Screen name="car/[code]" options={{ title: 'รถ' }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
         </Stack>

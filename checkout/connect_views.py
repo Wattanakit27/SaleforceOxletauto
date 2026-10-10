@@ -220,15 +220,16 @@ def api_inbox(request):
         rows = []
         note = C.off_duty_reason(ctx["team"], c)
     else:
+        from . import crm
         rows = C.inbox(view, me=emp, admin=admin, q=request.GET.get("q", ""), seller_id=seller,
-                       src=(request.GET.get("src") or "").strip())
+                       src=(request.GET.get("src") or "").strip(), flt=crm.clean_filters(request.GET))
 
     cnt = C.counts(emp, admin)
     if not admin and not on_duty:
         cnt["queue"] = 0
     out = {"ok": True, "view": view, "rows": rows, "counts": cnt, "duty": duty,
            "onDuty": on_duty, "note": note, "status": _status(ctx),
-           "now": timezone.localtime().isoformat(timespec="seconds")}
+           "now": timezone.localtime().isoformat(timespec="seconds"), "crm": _crm_opts()}
     if admin:
         out["sellers"] = C.seller_list()
         try:                                     # ★ 10 ต.ค.69 แถบขั้นตอน (ชั้น 3: ใบจ่ายลีดวันนี้) + คิวจ่ายวน
@@ -326,6 +327,8 @@ def api_chat(request):
         # ★ 6 ต.ค.69 — ลูกค้า Facebook: เซลล์ได้สิทธิ์ "เก็บข้อมูลเท่านั้น" → ปิดรอบรอ/ตอบไม่ได้ (แอดมินยังทำได้)
         "canDismiss": acc == "full" and bool(o.awaiting_since) and (admin or (mine and not fb_data_only)),
         "canAssign": admin,
+        # ★ 11 ต.ค.69 เซลล์ "คืนกองกลาง" ลูกค้าของตัวเองได้ (แอดมินใช้ปุ่มปล่อยคืนคิวเดิม)
+        "canRelease": acc == "full" and mine and not admin,
         # ลูกค้าจำลองไม่ติดสวิตช์ล็อก (ตอบไปไม่ออกนอกระบบ) — ต้องตรงกับ chat.send_reply
         #   ลูกค้า Facebook มีสวิตช์ของตัวเอง (connect_config.fb_reply: off/test/on) — ต้องตรงกับ fb_send.send_reply
         "replyOn": (False if fb_data_only else
@@ -346,6 +349,11 @@ def api_chat(request):
             out["lead"] = C.lead_json(o, lead)
             out["leadEditable"] = bool(admin or mine)
             out["leadOptions"] = C.lead_options()
+            try:                                  # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้น · นัด · โทร · ใครเคยดูแล · ไฟแนนซ์ · รถตรง
+                from . import crm
+                out["crm"] = crm.detail_json(o, lead)
+            except Exception as e:
+                out["crmError"] = str(e)[:120]
             if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
                 out["codeHelp"] = C.code_help(o, lead)
                 try:                              # ★ 10 ต.ค.69 เบอร์ซ้ำ · คิวจ่ายวน · ส่งต่อไม้ 2 · นาฬิกาโทร
@@ -853,4 +861,147 @@ def api_stats(request):
     out = C.stats(days)
     out["ok"] = True
     out["slaMin"] = C.cfg()["sla_min"]
+    return _j(out)
+
+
+# ─────────────────────────────────────────────────────────────
+#  ★ 11 ต.ค.69 หน้ารวมแชท (Chat Inbox) — crm.py
+#    ขั้นของลีด · นัดหมาย · บันทึกการโทร + หลักฐาน · AI สรุป · คืนกองกลาง · Run Auto · แจ้งเตือน · วิเคราะห์
+# ─────────────────────────────────────────────────────────────
+def _crm_opts() -> dict:
+    from . import crm
+    return {"stages": [{"key": k, "label": v} for k, v in crm.STAGES],
+            "heat": [{"key": k, "label": v} for k, v in crm.HEAT_NAME.items()],
+            "lostReasons": crm.LOST_REASONS, "silent": list(crm.SILENT_STEPS)}
+
+
+def _own_or_admin(ctx, o) -> bool:
+    emp = ctx["emp"]
+    return bool(ctx["admin"] or (emp and o.owner_id == emp.id))
+
+
+def api_crm(request):
+    """POST `{action, id, …}` — งานของหน้ารวมแชท (เจ้าของลูกค้าหรือแอดมิน · `run_auto` แอดมินเท่านั้น)
+
+    action: `stage {stage, reason}` · `followup {kind, due, note}` · `followup_done {fid, result, cancel}` ·
+    `call {result, note, media:[{id}]}` · `summary {text}` · `ai` (ร่างสรุป — ไม่บันทึก) ·
+    `release {reason}` (คืนกองกลาง) · `run_auto {ids?}`
+    """
+    from . import crm
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    act = str(body.get("action") or "")
+    who = ctx["name"] or "แอดมิน"
+    if act == "run_auto":
+        if not ctx["admin"]:
+            return _j({"ok": False, "error": "Run Auto ได้เฉพาะแอดมิน"}, 403)
+        ids = body.get("ids") if isinstance(body.get("ids"), list) else None
+        return _j(crm.run_auto(by=who, ids=ids))
+    o = _row(request, ctx, body.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    if not _own_or_admin(ctx, o):
+        return _j({"ok": False, "error": "ทำได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
+    emp = ctx["emp"]
+    if act == "stage":
+        ok, msg = crm.set_stage(o, str(body.get("stage") or ""), by=who, emp=emp, reason=str(body.get("reason") or ""))
+    elif act == "followup":
+        ok, msg, _f = crm.add_followup(o, str(body.get("kind") or ""), str(body.get("due") or ""),
+                                       note=str(body.get("note") or ""), by=who, emp=emp)
+    elif act == "followup_done":
+        try:
+            fid = int(body.get("fid") or 0)
+        except Exception:
+            fid = 0
+        ok, msg = crm.done_followup(o, fid, by=who, result=str(body.get("result") or ""),
+                                    cancel=bool(body.get("cancel")))
+    elif act == "call":
+        ok, msg, _c = crm.add_call(o, str(body.get("result") or ""), note=str(body.get("note") or ""),
+                                   media=body.get("media") if isinstance(body.get("media"), list) else [],
+                                   by=who, emp=emp)
+    elif act == "summary":
+        ok, msg = crm.save_summary(o, str(body.get("text") or ""), by=who, emp=emp)
+    elif act == "ai":
+        ok, draft = crm.ai_draft(o, C.messages(o, limit=80))
+        if not ok:
+            return _j({"ok": False, "error": draft}, 400)
+        return _j({"ok": True, "draft": draft})
+    elif act == "release":
+        if not o.owner_id:
+            return _j({"ok": True, "message": "ลูกค้าอยู่ในคิวอยู่แล้ว"})
+        ok, msg = crm.release_by_owner(o, emp, by=who, reason=str(body.get("reason") or ""))
+    else:
+        return _j({"ok": False, "error": "ไม่รู้จักคำสั่ง %s" % act}, 400)
+    if not ok:
+        return _j({"ok": False, "error": msg}, 400)
+    o = _row(request, ctx, o.id)
+    out = {"ok": True, "message": msg, "row": C.row_json(o, emp)}
+    if _own_or_admin(ctx, o):                    # คืนกองกลางแล้ว = ไม่ใช่ของเซลล์คนนี้แล้ว (ไม่ส่งรายละเอียดต่อ)
+        out["crm"] = crm.detail_json(o)
+    return _j(out)
+
+
+def api_upload(request):
+    """POST multipart `{id, file}` — รูปหลักฐานการโทร → ดิสก์ VPS `media/connect/<id>/<สุ่ม>` · เจ้าของ/แอดมิน"""
+    from . import crm
+    if request.method != "POST":
+        return _j({"ok": False, "error": "ต้องเป็น POST"}, 405)
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    o = _row(request, ctx, request.POST.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    if not _own_or_admin(ctx, o):
+        return _j({"ok": False, "error": "แนบได้เฉพาะลูกค้าของคุณ"}, 403)
+    ok, r = crm.save_proof(o, request.FILES.get("file"))
+    if not ok:
+        return _j({"ok": False, "error": r}, 400)
+    return _j({"ok": True, "id": r["id"], "url": r["url"]})
+
+
+@require_GET
+def api_alerts(request):
+    """กระดิ่งแจ้งเตือน — ลูกค้าใหม่รอรับ · เลยเวลา/ใกล้หมดเวลา · นัดวันนี้ · ลูกค้าเงียบ 3/5/7 วัน · รถใหม่ตรง"""
+    from . import crm
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    out = crm.alerts(ctx["emp"], ctx["admin"])
+    out["ok"] = True
+    return _j(out)
+
+
+@require_GET
+def api_insights(request):
+    """วิเคราะห์ (แอดมิน) — ขั้นของลีดตามช่องทาง · ความร้อน · เหตุผลที่ไม่ซื้อ · `?csv=unwanted` = รายชื่อไม่ต้องการ"""
+    from urllib.parse import quote
+
+    from django.http import HttpResponse
+
+    from . import crm
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "เฉพาะแอดมิน/ผู้บริหาร"}, 403)
+    try:
+        days = max(1, min(365, int(request.GET.get("days") or 30)))
+    except Exception:
+        days = 30
+    if request.GET.get("csv") == "unwanted":
+        try:
+            from dashboard.services import eventlog
+            eventlog.log("export", name="รายชื่อลูกค้าไม่ต้องการ (Connect)", target=ctx["name"], ok=True, days=days)
+        except Exception:
+            pass
+        resp = HttpResponse(crm.unwanted_csv(days), content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = "attachment; filename*=UTF-8''" + quote("ลูกค้าไม่ต้องการ_%dวัน.csv" % days)
+        return resp
+    out = crm.insights(days)
+    out["ok"] = True
     return _j(out)
