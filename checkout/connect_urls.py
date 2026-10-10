@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/lead", V.api_lead, name="connect_lead"),            # แก้ข้อมูลลีด 1 ช่อง
     path("api/assign_lead", V.api_assign_lead, name="connect_assign_lead"),   # ปุ่มจ่ายเบอร์ (ทดลอง)
     path("api/park_assign", V.api_park_assign, name="connect_park_assign"),   # จ่ายเบอร์ลีดภายนอก (ห้องพัก Lead)
+    path("api/leadflow", V.api_leadflow, name="connect_leadflow"),   # งานจ่ายเบอร์: นาฬิกาโทร/จ่ายวน/ไม้ 2 (แอดมิน)
     path("api/fb_test", V.api_fb_test, name="connect_fb_test"),     # แชททดสอบการตอบ Facebook (แอดมิน)
     path("api/fb_webhook", V.api_fb_webhook, name="connect_fb_webhook"),   # ผูกเพจกับ Messenger webhook (แอดมิน)
     path("api/config", V.api_config, name="connect_config"),

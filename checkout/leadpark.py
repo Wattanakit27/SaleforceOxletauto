@@ -319,6 +319,9 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
         return False, str(x), e
     forget()
     if not real:
+        from . import leadflow                    # นาฬิกาโทรเดินด้วย (ทดสอบหน้าจอได้) — ไม่มีอะไรส่งออก
+        leadflow.before_post(code, emp, by, ext=e, phone=e.phone, customer=e.customer_name or e.account,
+                             car=e.car_text, demo=True)
         why = "บัญชีทดสอบ — ไม่ส่งเข้ากลุ่มจริง" if C.slip_post_on(c) else "ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม"
         return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)" % (code, emp.nickname, why), e
     from . import slippost
@@ -343,11 +346,14 @@ def post_body(e) -> str:
 
 
 def _post(e, emp, by: str = "", c=None) -> dict:
-    from . import slippost
+    from . import leadflow, slippost
+    task, extra = leadflow.before_post(e.code, emp, by, ext=e, phone=e.phone, customer=e.customer_name or e.account,
+                                       car=e.car_text)
     try:
-        info = slippost.post(e.code, post_body(e), emp, by=by, c=c)
+        info = slippost.post(e.code, post_body(e), emp, by=by, c=c, extra=extra)
     except Exception as x:                        # การจ่ายในระบบบันทึกไปแล้ว — ห้ามกลายเป็น error 500
         info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(x)[:120]}
+    leadflow.after_post(task, info, card=bool(extra))
     type(e).objects.filter(pk=e.pk).update(post_info=info)
     e.post_info = info
     forget()                                      # ใบที่ส่งสำเร็จถูกเก็บลงแชทกลุ่มแล้ว — ห้องพักต้องเห็นทันที

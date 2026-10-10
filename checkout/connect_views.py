@@ -242,6 +242,11 @@ def api_inbox(request):
                                   "post": C.post_help()}     # กดจ่ายแล้วส่งเข้ากลุ่มไหน (บอกก่อนกด)
                 for it in pk.get("assigned") or []:      # แท็กท้ายใบ (ชื่อ LINE คำแรก) → ชื่อเล่นในทะเบียน
                     it["sellerNick"] = C.tag_nick(it.get("seller") or "")
+                # ★ 10 ต.ค.69 เบอร์นี้เคยเป็นลีดของใคร (สมุดเบอร์ · ไม่ยิงเน็ต) — บอกก่อนกดจ่าย
+                from . import leadflow as LF
+                for it in pk.get("waiting") or []:
+                    if it.get("phone") and not it.get("code"):
+                        it["dup"] = LF.dup_info(it["phone"])
                 out["parked"] = pk
         except Exception as e:
             out["parkedError"] = str(e)[:120]
@@ -251,6 +256,14 @@ def api_inbox(request):
                 out["assigned"] = C.assigned_list(emp)
             except Exception as e:
                 out["assignedError"] = str(e)[:120]
+            try:                                 # ★ 10 ต.ค.69 นาฬิกาโทร (งานจ่ายเบอร์วันนี้) + คิวจ่ายวน
+                from . import leadflow as LF
+                lc = LF.cfg()
+                out["leadflow"] = {"tasks": LF.tasks_json(1), "rr": LF.rr_json(lc),
+                                   "cfg": {"callMin": lc["call_min"], "cardOn": lc["card_on"],
+                                           "autoAssign": lc["auto_assign"], "autoPull": lc["auto_pull"]}}
+            except Exception as e:
+                out["leadflowError"] = str(e)[:120]
     return _j(out)
 
 
@@ -312,6 +325,19 @@ def api_chat(request):
             out["leadOptions"] = C.lead_options()
             if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
                 out["codeHelp"] = C.code_help(o, lead)
+                try:                              # ★ 10 ต.ค.69 เบอร์ซ้ำ · คิวจ่ายวน · ส่งต่อไม้ 2 · นาฬิกาโทร
+                    from . import leadflow as LF
+                    ch = out["codeHelp"]
+                    ch["dup"] = LF.dup_info(lead.phone, exclude_code=lead.code) if lead.phone else None
+                    ch["rr"] = LF.rr_json()
+                    ch["fwd"] = LF.fwd_code(lead.code) if lead.code else ""
+                    t = o.lead_tasks.order_by("-id").first()
+                    ch["task"] = (dict(LF.task_state(t), code=t.code, seller=t.seller_name, id=t.id,
+                                       dueAt=LF._iso(t.due_at), reports=t.reports, lastReport=t.last_report,
+                                       canReassign=t.source == "system")
+                                  if t else None)
+                except Exception as e:
+                    out["codeHelp"]["lfError"] = str(e)[:120]
         except Exception as e:                    # ส่วนลีดพัง ต้องไม่ทำให้เปิดแชทไม่ได้
             out["leadError"] = "โหลดข้อมูลลีดไม่ได้: %s" % str(e)[:120]
     return _j(out)
@@ -350,6 +376,56 @@ def api_assign_lead(request):
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
     return _j({"ok": True, "message": msg, "post": _post_out(C.lead_of(_row(request, ctx, o.id)))})
+
+
+def api_leadflow(request):
+    """งานจ่ายเบอร์ (แอดมิน) — ★ 10 ต.ค.69 · ตรรกะอยู่ใน leadflow.py
+    GET = ค่าตั้ง + คิวจ่ายวน + งานวันนี้ · POST:
+      `{action:"config", ...ค่า}` ตั้งค่า · `{action:"reassign", task, emp?}` จ่ายใหม่เลขเดิม (emp ว่าง = คนถัดไปในคิว)
+      `{action:"forward", id|mid, emp}` ส่งต่อไม้ 2 (R+เลขเดิม+/1 → ห้อง REJECT) · `{action:"pass", task}` แอดมินบันทึกว่าเซลล์ขอผ่าน
+    """
+    from . import leadflow as LF
+    from .models import LeadTask
+    ctx = _ctx(request)
+    if not ctx or not ctx["admin"]:
+        return _j({"ok": False, "error": "เฉพาะแอดมิน/ผู้บริหาร"}, 403)
+    by = ctx["name"] or "แอดมิน"
+    if request.method == "POST":
+        body = _body(request)
+        act = str(body.get("action") or "")
+        try:
+            eid = int(body.get("emp") or 0)
+        except Exception:
+            eid = 0
+        emp = Employee.objects.filter(pk=eid, active=True).first() if eid else None
+        if act == "config":
+            new, errs = LF.clean_cfg(body)
+            if errs:
+                return _j({"ok": False, "error": " · ".join(errs)}, 400)
+            if not LF.save_cfg(new):
+                return _j({"ok": False, "error": "บันทึกไม่สำเร็จ (ฐานข้อมูลไม่ตอบ)"}, 500)
+        elif act == "reassign":
+            t = LeadTask.objects.filter(pk=body.get("task") or 0).first()
+            if not t:
+                return _j({"ok": False, "error": "ไม่พบงานนี้"}, 404)
+            ok, msg = LF.reassign(t, emp, by=by)
+            return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+        elif act == "forward":
+            if body.get("mid"):
+                ok, msg = LF.forward_ext(str(body["mid"]), emp, by=by)
+            else:
+                o = _row(request, ctx, body.get("id"))
+                if not o:
+                    return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+                ok, msg = LF.forward_chat(o, emp, by=by)
+            return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+        else:
+            return _j({"ok": False, "error": "ไม่รู้จักคำสั่ง"}, 400)
+    c = LF.cfg()
+    return _j({"ok": True, "cfg": c, "rr": LF.rr_json(c, 20), "tasks": LF.tasks_json(1),
+               "summary": LF.summary(), "sellers": C.seller_list(),
+               "state": LF._kv(LF.KV_STATE), "auto": LF._kv("leadflow_auto_last"),
+               "postback": LF._kv("leadflow_postback_last"), "needs": {"at": LF._kv(LF.KV_NEEDS).get("at", "")}})
 
 
 def _post_out(rec) -> dict | None:

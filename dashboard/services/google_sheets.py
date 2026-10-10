@@ -526,6 +526,82 @@ def update_lead_field(code: str, field: str, value: str, month: int | None = Non
     return {"error": f"ไม่พบเคส Code '{code}' ในชีต"}
 
 
+def update_lead_fields(code: str, values: dict, month: int | None = None,
+                       expected_seller: str = "") -> dict:
+    """เขียนหลายช่องของลีดเดียวในครั้งเดียว (หาแถวรอบเดียว · `values:batchUpdate`) — ★ 10 ต.ค.69
+
+    ใช้ตอนเซลล์กด "ถูกต้อง" ในการ์ดยืนยันรายงาน (`checkout/leadflow.py`) · ช่องที่อนุญาต = ชุดเดียวกับ
+    `update_lead_field` (S/Z/T–Y) · **ต้องใส่ `expected_seller` เสมอ** — เขียนเฉพาะแถวที่ชื่อเซลล์ตรง
+    คืน `{ok, tab, cells}` หรือ `{error}` · ช่องที่ชีตแท็บนั้นไม่มีหัว = ข้าม (บอกใน `skipped`)
+    """
+    import urllib.parse
+    from .constants import normalize_seller
+    want = {f: v for f, v in (values or {}).items() if f in _WRITABLE_LEAD_FIELDS and str(v or "").strip()}
+    if not want:
+        return {"error": "ไม่มีช่องที่เขียนได้"}
+    if not expected_seller:
+        return {"error": "ต้องระบุเซลล์เจ้าของเคส"}
+    load_sheet_config_overrides()
+    code = (code or "").strip()
+    if not code:
+        return {"error": "ไม่มี Code"}
+    sid = SHEET_CONFIG["leads"]["spreadsheet_id"]
+    creds = _get_credentials()
+    creds.refresh(AuthRequest())
+    auth = {"Authorization": f"Bearer {creds.token}"}
+    try:
+        meta = requests.get(f"{SHEETS_API}/{sid}?fields=sheets.properties.title", headers=auth, timeout=15).json()
+        titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+    except Exception as e:
+        return {"error": f"อ่านรายชื่อ tab ไม่ได้: {e}"}
+    monthly = [t for t in titles if any(t.startswith(m + " ") for m in _THAI_MONTHS)]
+    ordered = []
+    if month and 1 <= month <= 12:
+        ordered += [t for t in monthly if t.startswith(_THAI_MONTHS[month - 1] + " ")]
+    ordered += [t for t in reversed(monthly) if t not in ordered]      # เดือนล่าสุดก่อน
+    owner_other = ""
+    for tab in ordered:
+        r = requests.get(f"{SHEETS_API}/{sid}/values/{urllib.parse.quote(chr(39) + tab + chr(39))}"
+                         "?valueRenderOption=FORMATTED_VALUE", headers=auth, timeout=30)
+        if r.status_code != 200:
+            continue
+        vals = r.json().get("values", [])
+        if not vals:
+            continue
+        colmap = _resolve_lead_colmap(vals[0], vals[1:21])
+        code_src, rep_src = colmap.get(LEADS_COL.lead_code), colmap.get(LEADS_COL.sales_rep)
+        if code_src is None:
+            continue
+        for i, raw in enumerate(vals[1:], start=2):
+            if not (code_src < len(raw) and (raw[code_src] or "").strip().upper() == code.upper()):
+                continue
+            rs = normalize_seller(raw[rep_src]) if rep_src is not None and rep_src < len(raw) else ""
+            if rs != expected_seller:
+                owner_other = rs or "-"
+                continue
+            data, cells, skipped = [], [], []
+            for f, v in want.items():
+                src = colmap.get(_WRITABLE_LEAD_FIELDS[f])
+                if src is None:
+                    skipped.append(f)
+                    continue
+                a1 = f"'{tab}'!{_col_letter(src)}{i}"
+                data.append({"range": a1, "values": [[str(v)]]})
+                cells.append(f"{_col_letter(src)}{i}")
+            if not data:
+                return {"error": f"แท็บ {tab} ไม่มีคอลัมน์ที่จะเขียน", "skipped": skipped}
+            up = requests.post(f"{SHEETS_API}/{sid}/values:batchUpdate",
+                               headers={**auth, "Content-Type": "application/json"},
+                               json={"valueInputOption": "USER_ENTERED", "data": data}, timeout=20)
+            if up.status_code != 200:
+                return {"error": f"เขียนไม่สำเร็จ {up.status_code}: {up.text[:160]}"}
+            invalidate_cache()
+            return {"ok": True, "tab": tab, "cells": cells, "skipped": skipped}
+    if owner_other:
+        return {"error": f"เคส {code} ในชีตเป็นของ {owner_other} — ไม่เขียนทับ"}
+    return {"error": f"ไม่พบเคส Code '{code}' ในชีต (แอดมินอาจยังไม่ได้เพิ่มแถว)"}
+
+
 def update_lead_fill_note(code: str, value: str, month: int | None = None,
                           expected_seller: str = "") -> dict:
     """back-compat — เขียนคอลัม S ('มากรอกชีตกันเถอะ'). ใช้ update_lead_field ข้างใน."""

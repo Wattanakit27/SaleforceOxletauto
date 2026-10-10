@@ -213,6 +213,18 @@
   .pf-skip { font-size: 12px; color: var(--t2); background: var(--bg2); border-radius: 7px; padding: 6px 8px; margin: 6px 0;
              display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .pf-assign.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* ★ 10 ต.ค.69 งานจ่ายเบอร์ (leadflow.py): เบอร์ซ้ำ · คิวจ่ายวน · นาฬิกาโทร · ส่งต่อไม้ 2 */
+  .pf-dup { font-size: 12px; line-height: 1.55; color: var(--amber); background: var(--amber-bg); border-radius: 7px;
+            padding: 6px 8px; margin: 0 0 8px; }
+  .pf-dup b { color: var(--t1); }
+  .lf-rr { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 2px 0 6px; font-size: 12px; color: var(--t3); }
+  .lf-rr .hub-sel { font-size: 12px; padding: 2px 7px; }
+  .lf-box { border: .5px solid var(--bd2); border-radius: 10px; padding: 10px; margin: 8px 0; background: var(--bg); }
+  .lf-box select { width: 100%; padding: 6px 8px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
+  .lf-line { font-size: 12px; color: var(--t2); line-height: 1.6; }
+  .lf-row { padding: 9px 12px; border-top: .5px solid var(--bd); background: var(--bg); }
+  .lf-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .lf-acts select { padding: 3px 6px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 12px; }
   .tag.code { background: var(--blue-bg); color: var(--blue-dk); }
   .cn-hint { margin: 0 10px 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
   /* ห้องพัก Lead (กลุ่ม "ADMIN เก็บ Lead") — ลีดที่พักใบร่างไว้ ยังไม่ได้เลข/เซลล์ · บนสุดของแท็บจ่ายเบอร์ */
@@ -591,6 +603,56 @@
   S.parkOpen = new Set(); S.parkDraft = {};
   const pWho = i => i.account || i.name || i.lineId || i.phone || '(ไม่มีชื่อ)';
 
+  // ── ★ 10 ต.ค.69 งานจ่ายเบอร์ (leadflow.py) ──
+  //   เบอร์ซ้ำ: สมุดเบอร์ (ชีตลีดทั้งปี + ใบในห้องจ่ายเบอร์ + ปุ่มจ่ายเบอร์) บอก "เคยเป็นลีดของใคร" ก่อนกดจ่าย
+  //   คิวจ่ายวน: คนได้ใบน้อยสุดวันนี้ก่อน (ตัดคนหยุด/เต็มเพดาน) — กดชื่อ = เลือกเซลล์คนนั้นในกล่อง
+  function fmtDay(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00');
+    return d.getDate() + ' ' + TH_MON[d.getMonth()] + ' ' + String(d.getFullYear() + 543).slice(-2);
+  }
+  function dupHtml(dp) {
+    if (!dp) return '';
+    return `<div class="pf-dup">${ic('alert', 13)} เบอร์นี้เคยเป็นลีด <b>${h(dp.code || '-')}</b> ของ <b>@${h(dp.seller || 'ไม่ทราบ')}</b>${
+      dp.date ? ' (' + h(fmtDay(dp.date)) + ')' : ''}${dp.more ? ` · และอีก ${dp.more} ครั้ง` : ''}
+      — ลูกค้าคนเดียวไม่ควรได้เซลล์ 2 คน${dp.sellerId ? `<br><button class="hub-sel" data-pick="${dp.sellerId}">จ่ายให้ @${h(dp.seller)} (เจ้าของเดิม)</button>` : ''}</div>`;
+  }
+  function rrHtml(rr) {
+    if (!rr || !rr.length) return '';
+    return `<div class="lf-rr">คิวจ่ายวน:${rr.map((x, i) => `<button class="hub-sel" data-pick="${x.id}" title="วันนี้ได้ไป ${x.today} ใบ">${i === 0 ? '▶ ' : ''}${h(x.name)} <b>${x.today}</b></button>`).join('')}</div>`;
+  }
+  // ปุ่ม data-pick ในกล่อง = เลือกเซลล์คนนั้นใน select ของกล่องเดียวกัน
+  function bindPick(box) {
+    box.querySelectorAll('[data-pick]').forEach(b => b.onclick = ev => {
+      ev.preventDefault();
+      const sel = box.querySelector('[data-x="emp"]'); if (!sel) return;
+      sel.value = b.dataset.pick; sel.dispatchEvent(new Event('change'));
+    });
+  }
+  // นาฬิกาโทร — ต้องรายงานผลภายใน call_min นาทีหลังใบถึงกลุ่ม (นับเฉพาะเวลาทำการ)
+  function taskClock(dueIso) {
+    if (!dueIso) return { cls: '', text: '' };
+    const left = Date.parse(dueIso) - nowMs();
+    if (left <= 0) return { cls: 'late', text: 'เลยเวลา ' + Math.max(1, Math.round(-left / 60000)) + ' นาที' };
+    const lim = (((S.leadflow || {}).cfg || {}).callMin || 15) * 60000;
+    if (left > lim + 30000) {
+      const st = new Date(Date.parse(dueIso) - lim);
+      return { cls: 'wait', text: 'เริ่มนับ ' + pad(st.getHours()) + ':' + pad(st.getMinutes()) };
+    }
+    return { cls: 'wait', text: 'เหลือ ' + fmtLeft(left) };
+  }
+  const LF_KIND = { reported: ['ok', 'รายงานผลแล้ว'], passed: ['late', 'ขอผ่าน'], unsent: ['late', 'ใบยังไม่ถึงกลุ่ม'],
+                    demo: ['', 'ทดลอง (ไม่ได้ส่งเข้ากลุ่ม)'] };
+  function taskTag(t) {
+    if (!t) return '';
+    if (t.kind === 'overdue' || t.kind === 'waiting') {
+      const ck = taskClock(t.dueAt);
+      return `<span class="tag ${ck.cls}" data-tdue="${h(t.dueAt)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`;
+    }
+    const k = LF_KIND[t.kind] || ['', t.kind];
+    return `<span class="tag ${k[0]}">${h(k[1])}${t.kind === 'reported' && t.reports > 1 ? ' ' + t.reports + ' ครั้ง' : ''}</span>`;
+  }
+
   function parkBoxHtml(i, ch) {
     const keys = (ch.bases || []).map(b => b.key);
     const sugBase = keys.includes(i.base) ? i.base : (i.source === 'tiktok' ? 'TLD' : 'NLD');
@@ -598,6 +660,7 @@
     const bases = (ch.bases || []).map(b => `<option value="${h(b.key)}"${b.key === dr.base ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
     const sellers = S.sellers.map(s => `<option value="${s.id}"${s.id === dr.emp ? ' selected' : ''}>${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
     return `<div class="pf-assign" data-park="${h(i.id)}">
+      ${dupHtml(i.dup)}${rrHtml(((S.leadflow || {}).rr) || [])}
       <div class="pf-g2">
         <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
         <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
@@ -682,6 +745,70 @@
       </div></div>`;
   }
 
+  // ── ★ 10 ต.ค.69 แท็บ "นาฬิกาโทร" — ใบจ่ายลีดวันนี้ทุกใบ (ปุ่มในระบบ + ใบที่แอดมินโพสต์เอง) ──
+  //   เซลล์พิมพ์ "เลขรัน + ผล" ในห้องจ่ายเบอร์ (หรือตอบลูกค้าผ่าน Connect) = นาฬิกาหยุด
+  //   ระบบรู้ไม่ได้ว่าโทรจริงไหม — วัดจาก "รายงานผล" เท่านั้น
+  S.clockFilter = 'open';
+  const lfLate = () => ((S.leadflow || {}).tasks || []).filter(t => t.kind === 'overdue' || t.kind === 'passed').length;
+  function clockRowHtml(t) {
+    const fwdable = t.chatId || t.extId;
+    const sellers = S.sellers.filter(s => s.id !== t.sellerId).map(s => `<option value="${s.id}">${h(s.name)}</option>`).join('');
+    return `<div class="lf-row">
+      <div class="cn-rh"><span class="cn-rn">${h(t.code)}</span>${taskTag(t)}<span class="cn-rt">${h(fmtWhen(t.postedAt))}</span></div>
+      <div class="hub-to">@<b>${h(t.seller || 'ไม่ทราบ')}</b>${t.customer ? ' · ' + h(t.customer) : ''}${t.car ? ' · ' + h(t.car) : ''}</div>
+      <div class="cn-rm"><span class="tag">${t.source === 'system' ? 'จ่ายผ่านระบบ' : 'ใบในห้องจ่ายเบอร์'}${t.by ? ' · ' + h(t.by) : ''}</span>
+        ${t.ackedAt ? `<span class="tag ok">กดรับเคส ${h(fmtWhen(t.ackedAt))}</span>` : ''}
+        ${t.history && t.history.length ? `<span class="tag">เคยจ่ายให้ ${h(t.history.join(', '))}</span>` : ''}</div>
+      ${t.lastReport ? `<div class="lf-line" style="margin-top:4px">รายงานล่าสุด: <b>${h(t.lastReport)}</b></div>` : ''}
+      <div class="lf-acts">
+        ${t.chatId ? `<button class="btn sm" data-open="${t.chatId}">เปิดแชท</button>` : ''}
+        ${t.canReassign && /overdue|passed|waiting|unsent/.test(t.kind) ? `<button class="btn sm" data-lfre="${t.id}">จ่ายใหม่ (คนถัดไปในคิว)</button>` : ''}
+        ${fwdable && t.kind !== 'demo' ? `<select data-lffw-emp="${t.id}"><option value="">ไม้ 2 ให้…</option>${sellers}</select>
+          <button class="btn sm" data-lffw="${t.id}">ส่งต่อไม้ 2</button>` : ''}
+      </div></div>`;
+  }
+  function clockHubHtml(seg) {
+    const L = S.leadflow || {}, all = L.tasks || [], c = L.cfg || {};
+    const open = t => /overdue|waiting|passed|unsent/.test(t.kind);
+    const rows = all.filter(t => S.clockFilter === 'all' || open(t));
+    const n = k => all.filter(t => t.kind === k).length;
+    return `<div class="cn-park">
+        <div class="cn-park-h">${ic('inbox')} ห้องพัก Lead ${seg}</div>
+        <div class="cn-park-f" style="padding-top:0">ใบจ่ายลีดวันนี้ ${all.length} ใบ · เลยเวลา <b>${n('overdue')}</b> · ขอผ่าน <b>${n('passed')}</b>
+          · รอรายงาน ${n('waiting')} · รายงานแล้ว ${n('reported')}
+          <br>เซลล์ต้องรายงานผลภายใน <b>${c.callMin || 15} นาที</b> หลังใบถึงกลุ่ม — พิมพ์ "เลขรัน + ผล" ในห้องจ่ายเบอร์ หรือตอบลูกค้าผ่าน Connect = นาฬิกาหยุด
+          ${c.cardOn ? '· แนบการ์ดปุ่ม รับเคส/ขอผ่าน ต่อท้ายใบ' : ''}${c.autoPull ? ' · เลยเวลา/ขอผ่าน = จ่ายใหม่อัตโนมัติ' : ''}
+          <div class="hub-seg" style="margin-top:6px"><button class="btn sm${S.clockFilter === 'open' ? ' pri' : ''}" data-clf="open">ยังไม่รายงาน</button>
+            <button class="btn sm${S.clockFilter === 'all' ? ' pri' : ''}" data-clf="all">ทั้งหมดวันนี้</button></div>
+          ${rrHtml(L.rr)}</div>
+      </div>
+      ${rows.map(clockRowHtml).join('') || '<div class="cn-empty">ไม่มีใบที่ค้างรายงานผล 👍</div>'}`;
+  }
+  function bindClock(el) {
+    el.querySelectorAll('[data-clf]').forEach(b => b.onclick = () => { S.clockFilter = b.dataset.clf; renderList(); });
+    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openChat(+b.dataset.open));
+    el.querySelectorAll('.lf-rr [data-pick]').forEach(b => b.onclick = ev => ev.preventDefault());
+    el.querySelectorAll('[data-lfre]').forEach(b => b.onclick = async () => {
+      if (!confirm('จ่ายใบนี้ใหม่ให้คนถัดไปในคิวจ่ายวน (เลขเดิม · ใบเดิม แท็กคนใหม่)?')) return;
+      b.disabled = true;
+      const r = await api('/connect/api/leadflow', { action: 'reassign', task: +b.dataset.lfre });
+      b.disabled = false; toast(r.ok ? r.message : (r.error || 'ไม่สำเร็จ'), 7000);
+      loadInbox(false);
+    });
+    el.querySelectorAll('[data-lffw]').forEach(b => b.onclick = async () => {
+      const t = ((S.leadflow || {}).tasks || []).find(x => x.id === +b.dataset.lffw); if (!t) return;
+      const emp = +(el.querySelector(`[data-lffw-emp="${t.id}"]`).value || 0);
+      if (!emp) { toast('เลือกเซลล์ไม้ 2 ก่อน'); return; }
+      const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+      if (!confirm(`ส่งต่อไม้ 2 ของ ${t.code} ให้ ${nm}\n(เลขใหม่ R…/1 · ใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก)?`)) return;
+      b.disabled = true;
+      const r = await api('/connect/api/leadflow', t.chatId ? { action: 'forward', id: t.chatId, emp }
+                                                            : { action: 'forward', mid: t.extId, emp });
+      b.disabled = false; toast(r.ok ? r.message : (r.error || 'ไม่สำเร็จ'), 8000);
+      loadInbox(false);
+    });
+  }
+
   function hubHtml() {
     if (!(ADMIN && S.view === 'tocode')) return '';
     const P = S.parked || {}, ch = P.codeHelp || {};
@@ -695,7 +822,10 @@
     const seg = `<span class="hub-seg">
         <button class="cn-tab${S.hubTab === 'wait' ? ' on' : ''}" data-hub="wait">${ic('clock')} รอจ่ายเบอร์ <span class="n">${items.length}</span></button>
         <button class="cn-tab${S.hubTab === 'done' ? ' on' : ''}" data-hub="done">${ic('check')} จ่ายแล้ว${rangeL === 'วันนี้' ? 'วันนี้' : ' 7 วัน'} <span class="n">${doneAll.length}</span></button>
+        <button class="cn-tab${S.hubTab === 'clock' ? ' on' : ''}" data-hub="clock">${ic('clock')} นาฬิกาโทร <span class="n">${lfLate()}</span></button>
       </span>`;
+
+    if (S.hubTab === 'clock') return clockHubHtml(seg);
 
     if (S.hubTab === 'done') {
       const by = {};
@@ -747,12 +877,16 @@
         parkPreview(box);
       }));
       parkPreview(box);
+      bindPick(box);
       box.querySelector('[data-pact=assign]').onclick = async ev => {
         const emp = +(q('emp').value || 0);
         if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
         const P = ((S.parked || {}).codeHelp || {}).post || {};
+        const it0 = ((S.parked || {}).waiting || []).find(x => x.id === id) || {};
+        const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+        if (it0.dup && it0.dup.sellerId && it0.dup.sellerId !== emp
+            && !confirm(`เบอร์นี้เคยเป็นลีด ${it0.dup.code || ''} ของ @${it0.dup.seller}\nยังจะจ่ายให้ ${nm} อีกคนใช่ไหม?`)) return;
         if (P.on) {                              // ส่งเข้ากลุ่มจริง = ทั้งห้องเห็น — ถามก่อนทุกครั้ง
-          const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
           const room = q('reject').checked && P.rejectRoom ? P.rejectRoom : P.room;
           if (!confirm(`จ่ายเบอร์ ${q('preview').textContent} ให้ ${nm}\nแล้วส่งใบเข้า "${room || 'กลุ่มจ่ายเบอร์'}" พร้อมแท็ก @${nm} ?`)) return;
         }
@@ -804,6 +938,7 @@
       el.innerHTML = hub;
       el.scrollTop = top;
       bindPark(el);
+      bindClock(el);
       el.querySelectorAll('.cn-row').forEach(r => r.onclick = () => openChat(+r.dataset.id));
       el.querySelectorAll('[data-hub]').forEach(b => b.onclick = () => { S.hubTab = b.dataset.hub; el.scrollTop = 0; renderList(); });
       el.querySelectorAll('[data-hubr]').forEach(b => b.onclick = () => { S.doneRange = b.dataset.hubr; S.doneSeller = ''; renderList(); });
@@ -847,7 +982,7 @@
     if (d.now) SKEW = Date.parse(d.now) - Date.now();
     Object.assign(S, { view: d.view, rows: d.rows || [], counts: d.counts || {}, duty: d.duty, onDuty: !!d.onDuty,
                        status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
-                       parked: d.parked || null, assigned: d.assigned || [] });
+                       parked: d.parked || null, assigned: d.assigned || [], leadflow: d.leadflow || S.leadflow || null });
     renderTop(); renderTabs(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }
@@ -1103,6 +1238,7 @@
     } else if (d.codeHelp && !L.code) {
       x += assignBoxHtml(d, sfx);
     }
+    if (d.codeHelp && L.code) x += lfBoxHtml(d);
     LEAD_UI.forEach(sec => {
       x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}`;
       sec.rows.forEach(row => {
@@ -1170,6 +1306,7 @@
     const P = ch.post || null, live = !!(P && P.on);
     return `<div class="pf-assign" data-box="assign">
       <div class="pf-h" style="margin-bottom:6px">จ่ายเบอร์ <span class="pf-auto">${live ? 'ส่งเข้ากลุ่มจริง' : 'ทดลอง'}</span></div>
+      ${dupHtml(ch.dup)}${rrHtml(ch.rr)}
       <div class="pf-g2">
         <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
         <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
@@ -1185,6 +1322,29 @@
         title="ลูกค้าไม่ใช่ลีดขาย (ถามศูนย์บริการ · อยากขายรถให้เรา · ลูกค้าเก่าทักมาขอบคุณ) — เอาออกจากแท็บจ่ายเบอร์">ไม่ต้องจ่ายเบอร์ (ไม่ใช่ลีดขาย)</button>
     </div>`;
   }
+  // ── ★ 10 ต.ค.69 ลูกค้าที่มีเลขแล้ว: นาฬิกาโทร + จ่ายใหม่ (เลขเดิม) + ส่งต่อไม้ 2 (R+เลขเดิม+/1 → ห้อง REJECT) ──
+  function lfBoxHtml(d) {
+    const ch = d.codeHelp || {}, t = ch.task, r = d.row;
+    if (!t && !ch.fwd) return '';
+    const sellers = S.sellers.filter(s => s.id !== r.ownerId)
+      .map(s => `<option value="${s.id}">${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
+    let x = `<div class="lf-box" data-box="lf">`;
+    if (t) {
+      x += `<div class="pf-h" style="margin-bottom:4px">นาฬิกาโทร ${taskTag(t)}</div>
+        <div class="lf-line">${h(t.code)} → @${h(t.seller || '-')}${t.dueAt ? ' · ต้องรายงานผลภายใน ' + h(fmtWhen(t.dueAt)) + ' น.' : ''}
+        ${t.lastReport ? `<br>รายงานล่าสุด: <b>${h(t.lastReport)}</b>` : ''}</div>
+        ${t.canReassign && /overdue|passed|waiting|unsent/.test(t.kind) ? `<div class="lf-acts">
+          <button class="btn sm" data-lf="reassign" data-task="${t.id}">จ่ายใหม่ให้คนถัดไปในคิว (เลขเดิม)</button></div>` : ''}`;
+    }
+    if (ch.fwd) {
+      x += `<div class="pf-h" style="margin:${t ? '10px' : '0'} 0 4px">ส่งต่อไม้ 2</div>
+        <div class="lf-line">ออกเลข <b>${h(ch.fwd)}</b> (R + เลขเดิม + /1 แบบที่ทีมใช้) → โอนลูกค้า → ใบเข้าห้องจ่ายเบอร์ REJECT</div>
+        ${rrHtml(ch.rr)}
+        <select data-x="emp" style="margin-top:4px"><option value="">— เลือกเซลล์ไม้ 2 —</option>${sellers}</select>
+        <button class="btn sm pri" data-lf="forward" style="width:100%;margin-top:6px">ส่งต่อไม้ 2</button>`;
+    }
+    return x + `</div>`;
+  }
   function codePreview(box) {
     const ch = (S.chat || {}).codeHelp; if (!ch || !box) return;
     const q = k => box.querySelector(`[data-x="${k}"]`);
@@ -1197,7 +1357,8 @@
   let _profSig = '';
   function paintProfile(force) {
     const d = S.chat; if (!d) return;
-    const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team]);
+    const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
+                                d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup]);
     const act = document.activeElement;
     const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA|SELECT/.test(act.tagName);
     if (!force && (sig === _profSig || typing)) return;
@@ -1253,13 +1414,17 @@
         codePreview(box);
       }));
       codePreview(box);
+      bindPick(box);
       box.querySelector('[data-act=assign-lead]').onclick = async (ev) => {
         const q = k => box.querySelector(`[data-x="${k}"]`);
         const emp = +(q('emp').value || 0);
         if (!emp) { toast('เลือกเซลล์ที่จะจ่ายเบอร์ให้ก่อน'); return; }
         const P = (S.chat.codeHelp || {}).post || {};
+        const dp = (S.chat.codeHelp || {}).dup;
+        const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+        if (dp && dp.sellerId && dp.sellerId !== emp
+            && !confirm(`เบอร์นี้เคยเป็นลีด ${dp.code || ''} ของ @${dp.seller}\nยังจะจ่ายให้ ${nm} อีกคนใช่ไหม?`)) return;
         if (P.on) {                              // ส่งเข้ากลุ่มจริง = ทั้งห้องเห็น — ถามก่อนทุกครั้ง
-          const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
           const room = q('reject').checked && P.rejectRoom ? P.rejectRoom : P.room;
           if (!confirm(`จ่ายเบอร์ ${q('preview').textContent} ให้ ${nm}\nแล้วส่งใบเข้า "${room || 'กลุ่มจ่ายเบอร์'}" พร้อมแท็ก @${nm} ?`)) return;
         }
@@ -1270,6 +1435,28 @@
         ev.target.disabled = false;
         toast(r.ok ? r.message : (r.error || 'จ่ายเบอร์ไม่สำเร็จ'), r.post && !r.post.ok ? 9000 : 6000);
         if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
+      };
+    }
+    const lfb = el.querySelector('[data-box=lf]');
+    if (lfb) {
+      bindPick(lfb);
+      lfb.querySelectorAll('[data-lf=reassign]').forEach(b => b.onclick = async () => {
+        if (!confirm('จ่ายเคสนี้ใหม่ให้คนถัดไปในคิวจ่ายวน (เลขเดิม · ใบเดิม แท็กคนใหม่)?')) return;
+        const id = S.chat.row.id; b.disabled = true;
+        const r = await api('/connect/api/leadflow', { action: 'reassign', task: +b.dataset.task });
+        b.disabled = false; toast(r.ok ? r.message : (r.error || 'ไม่สำเร็จ'), 7000);
+        openChat(id, true); loadInbox(false);
+      });
+      const fw = lfb.querySelector('[data-lf=forward]');
+      if (fw) fw.onclick = async () => {
+        const emp = +(lfb.querySelector('[data-x="emp"]').value || 0);
+        if (!emp) { toast('เลือกเซลล์ไม้ 2 ก่อน'); return; }
+        const nm = (S.sellers.find(s => s.id === emp) || {}).name || '';
+        if (!confirm(`ส่งต่อไม้ 2 เลข ${(S.chat.codeHelp || {}).fwd} ให้ ${nm}\n(โอนลูกค้า + ส่งใบเข้าห้องจ่ายเบอร์ REJECT พร้อมแท็ก)?`)) return;
+        const id = S.chat.row.id; fw.disabled = true;
+        const r = await api('/connect/api/leadflow', { action: 'forward', id, emp });
+        fw.disabled = false; toast(r.ok ? r.message : (r.error || 'ไม่สำเร็จ'), 8000);
+        if (r.ok) { openChat(id, true); loadInbox(false); }
       };
     }
     // "ส่งเข้ากลุ่มอีกครั้ง" — รอบแรกส่งไม่สำเร็จ (การจ่ายในระบบยังอยู่ ไม่ออกเลขใหม่)
@@ -1504,10 +1691,10 @@
   async function openCfg() {
     S.chat = null; S.openId = 0;
     $('cn-pane').innerHTML = `<div class="cn-page"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>`;
-    const [d, t] = await Promise.all([api('/connect/api/config'), api('/connect/api/test')]);
+    const [d, t, lf] = await Promise.all([api('/connect/api/config'), api('/connect/api/test'), api('/connect/api/leadflow')]);
     if (S.pane !== 'cfg') return;
     if (!d.ok) { $('cn-pane').innerHTML = `<div class="cn-blank" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
-    CFG = d; CFG.test = (t && t.ok) ? t : null; paintCfg();
+    CFG = d; CFG.test = (t && t.ok) ? t : null; CFG.lf = (lf && lf.ok) ? lf : null; paintCfg();
   }
   function _computed(dateIso) {      // ทีมตามสูตรวันเว้นวัน (ไม่นับการสลับเวร) — ใช้ตอนกดสลับในตาราง
     const c = CFG.cfg, teams = c.teams;
@@ -1555,6 +1742,7 @@
           <span style="color:var(--t3)">เจ้าของลูกค้า หรือทุกคนในทีมที่เวร (ถ้ายังไม่มีเจ้าของ) · ทีมละ ~9 คน = กินโควต้าเร็ว</span></div>
       </div>
       ${slipCardHtml(c)}
+      ${lfCardHtml()}
       ${fbCardHtml(c)}
       ${testCardHtml()}
       <div style="display:flex;gap:10px;align-items:center;max-width:920px">
@@ -1576,6 +1764,7 @@
       paintCfg('ยังไม่ได้บันทึก', false);
     };
     $('cf-save').onclick = saveCfg;
+    if ($('lf-save')) $('lf-save').onclick = saveLf;
     const fbMsg = t => { const e = $('cf-fbsub-msg'); if (e) e.innerHTML = t; };
     if ($('cf-fbsub')) $('cf-fbsub').onclick = async () => {
       fbMsg('กำลังผูก…');
@@ -1614,6 +1803,51 @@
       <div class="fld"><label>เลขปกติ ส่งเข้า</label>${sel('slip_group', 'main')}</div>
       <div class="fld"><label>เลขขึ้นต้น R (รีเจ็ค) ส่งเข้า</label>${sel('slip_group_reject', 'reject')}</div>
     </div>`;
+  }
+  // ── ★ 10 ต.ค.69 งานจ่ายเบอร์ (leadflow.py) — ทุกอย่างที่ส่งออกปิดโดยปริยาย ──
+  function lfCardHtml() {
+    const F = CFG.lf; if (!F || !F.cfg) return '';
+    const c = F.cfg, st = F.state || {}, pb = F.postback || {}, au = F.auto || {};
+    const ck = (id, on, lab, note) => `<div class="fld"><label><input type="checkbox" id="lf-${id}"${on ? ' checked' : ''}> ${lab}</label>${note ? `<span style="color:var(--t3)">${note}</span>` : ''}</div>`;
+    const num = (id, v, lo, hi) => `<input id="lf-${id}" type="number" min="${lo}" max="${hi}" value="${v}" style="width:80px">`;
+    const teams = Array.from(new Set((CFG.teamsAvail || []).concat(c.rr_teams || []).concat(['ADMIN']))).map(t =>
+      `<label style="display:inline-flex;gap:5px;align-items:center;margin-right:12px"><input type="checkbox" data-lfteam="${h(t)}"${(c.rr_teams || []).includes(t) ? ' checked' : ''}> ${t === 'ADMIN' ? 'เทเลเซลล์' : 'ทีม ' + h(t)}</label>`).join('');
+    return `<div class="card">
+      <h3>งานจ่ายเบอร์ — นาฬิกาโทร · จ่ายวน · รายงานผล</h3>
+      <div class="d">นาฬิกา = ใบจ่ายลีดทุกใบ (ปุ่มในระบบ + ใบที่แอดมินโพสต์เอง) ต้องมี "รายงานผล" ภายในเวลาที่ตั้ง — ดูได้ที่ ห้องพัก Lead → นาฬิกาโทร (ไม่ส่งอะไรออก)
+        <br>เซลล์รายงานผลแบบที่ทำอยู่: พิมพ์ <b>เลขรัน + ผล</b> ในห้องจ่ายเบอร์ ("9075 รอตอบครับ") · ข้อความที่มี @ ไม่นับ (แอดมินทวง)
+        <br>★ ช่องข้างล่างที่ส่ง LINE ออก <b>ปิดไว้ทั้งหมด</b> — เปิดทีละอย่างเมื่อพร้อม</div>
+      <div class="fld"><label>ต้องรายงานผลภายใน</label>${num('call_min', c.call_min, 5, 240)} นาที <span style="color:var(--t3)">(นับเฉพาะเวลาทำการของ Connect)</span></div>
+      ${ck('card_on', c.card_on, 'แนบการ์ดปุ่ม "รับเคส / ขอผ่าน / โทร" ต่อท้ายใบจ่ายลีด', 'ส่งใน push เดียวกับใบ (ไม่เพิ่มโควต้า) · ปุ่มตอบด้วย reply (ฟรี) · ใช้กับใบที่จ่ายผ่านระบบ')}
+      ${ck('report_on', c.report_on, 'รายงานที่มีข้อมูลจริง → ส่งการ์ดยืนยันเข้าแชทส่วนตัวเซลล์ → กด "ถูกต้อง" = ลงชีตลีด', 'สถานะ (Z) · อาชีพ · รายได้ · อายุงาน · ประวัติผ่อน · ประเภทลูกค้า · "รอตอบ" เฉยๆ ไม่ส่ง')}
+      ${ck('remind_on', c.remind_on, 'เตือนนัดลูกค้าเข้าแชทส่วนตัวเซลล์ก่อนถึงเวลา', '')}
+      <div class="fld"><label>เตือนก่อน</label>${num('remind_min', c.remind_min, 10, 240)} นาที <span style="color:var(--t3)">(เฉพาะนัดที่เซลล์กดยืนยันแล้ว)</span></div>
+      <div class="d" style="margin-top:10px"><b>คิวจ่ายวน</b> — คนได้ใบน้อยสุดวันนี้ก่อน · ตัดคนวันหยุด (ช่อง "วันหยุด" ในหน้าพนักงาน) · บัญชีทดสอบไม่อยู่ในคิว</div>
+      <div class="fld"><label>ทีมในคิว</label><div>${teams}</div></div>
+      <div class="fld"><label>เพดานต่อคนต่อวัน</label>${num('cap_day', c.cap_day, 0, 100)} ใบ <span style="color:var(--t3)">(0 = ไม่จำกัด)</span></div>
+      ${ck('need_checkin', c.need_checkin, 'ต้องเช็คชื่อเข้างานวันนี้แล้วถึงจะได้ใบ', '')}
+      ${ck('auto_assign', c.auto_assign, 'จ่ายวนอัตโนมัติ: ใบร่างในห้องพัก Lead ที่รอเกิน', '')}
+      <div class="fld"><label>รอเกิน</label>${num('auto_after_min', c.auto_after_min, 1, 120)} นาที <span style="color:var(--t3)">· เบอร์ซ้ำ = ไม่จ่ายเอง (รอแอดมินตัดสิน) · แชท LINE/FB ไม่จ่ายเอง</span></div>
+      ${ck('auto_pull', c.auto_pull, 'เลยเวลา/กดขอผ่าน → จ่ายใหม่ให้คนถัดไปในคิวเอง (เลขเดิม)', '')}
+      <div class="fld"><label>จ่ายใหม่อัตโนมัติได้สูงสุด</label>${num('pull_max', c.pull_max, 0, 5)} ครั้งต่อใบ</div>
+      <div class="d" style="margin-top:8px;color:var(--t3)">อ่านห้องจ่ายเบอร์ล่าสุด: ${h(fmtWhen(st.at)) || '–'}${st.reports != null ? ` (ใบ ${st.slips || 0} · รายงาน ${st.reports || 0})` : ''}
+        · ปุ่มในการ์ดล่าสุด: ${pb.at ? h(fmtWhen(pb.at)) + ' — ' + h(pb.msg || '') : 'ยังไม่มีใครกด'}${au.at ? ` · จ่ายวนล่าสุด ${h(fmtWhen(au.at))} (${(au.done || []).length} ใบ · ข้าม ${(au.skipped || []).length})` : ''}</div>
+      <div style="margin-top:8px"><button class="btn sm pri" id="lf-save">บันทึกงานจ่ายเบอร์</button> <span id="lf-msg"></span></div>
+    </div>`;
+  }
+  async function saveLf() {
+    const v = id => $('lf-' + id), body = { action: 'config' };
+    ['card_on', 'report_on', 'remind_on', 'auto_assign', 'auto_pull', 'need_checkin'].forEach(k => { body[k] = v(k).checked; });
+    ['call_min', 'remind_min', 'auto_after_min', 'pull_max', 'cap_day'].forEach(k => { body[k] = +v(k).value; });
+    body.rr_teams = Array.from(document.querySelectorAll('[data-lfteam]')).filter(x => x.checked).map(x => x.dataset.lfteam);
+    const turnOn = ['card_on', 'report_on', 'remind_on', 'auto_assign', 'auto_pull'].filter(k => body[k] && !CFG.lf.cfg[k]);
+    if (turnOn.length && !confirm('เปิดการส่ง LINE / จ่ายอัตโนมัติ:\n' + turnOn.join(', ') + '\nยืนยัน?')) return;
+    $('lf-save').disabled = true;
+    const r = await api('/connect/api/leadflow', body);
+    $('lf-save').disabled = false;
+    if (!r.ok) { $('lf-msg').style.color = 'var(--red)'; $('lf-msg').textContent = r.error || 'บันทึกไม่สำเร็จ'; return; }
+    CFG.lf = r; paintCfg('บันทึกงานจ่ายเบอร์แล้ว', false);
+    loadInbox(false);
   }
   // ── Facebook Messenger (4 ต.ค.69 · รวมคิวเดียวกับ LINE) ──
   function fbCardHtml(c) {
@@ -1686,7 +1920,8 @@
     $('cf-save').disabled = true;
     const d = await api('/connect/api/config', body);
     if (!d.ok) { $('cf-save').disabled = false; $('cf-msg').style.color = 'var(--red)'; $('cf-msg').textContent = d.error || 'บันทึกไม่สำเร็จ'; return; }
-    CFG = d; paintCfg('บันทึกแล้ว', false);
+    const keepLf = CFG.lf, keepTest = CFG.test;
+    CFG = d; CFG.lf = keepLf; CFG.test = keepTest; paintCfg('บันทึกแล้ว', false);
     loadInbox(false);
   }
 
@@ -1700,6 +1935,11 @@
   setInterval(() => {
     document.querySelectorAll('[data-due]').forEach(el => {
       const ck = clockText(el.dataset.due);
+      const t = el.querySelector('.ck'); if (t) t.textContent = ck.text;
+      el.classList.toggle('late', ck.cls === 'late'); el.classList.toggle('wait', ck.cls === 'wait');
+    });
+    document.querySelectorAll('[data-tdue]').forEach(el => {
+      const ck = taskClock(el.dataset.tdue);
       const t = el.querySelector('.ck'); if (t) t.textContent = ck.text;
       el.classList.toggle('late', ck.cls === 'late'); el.classList.toggle('wait', ck.cls === 'wait');
     });

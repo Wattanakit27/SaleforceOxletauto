@@ -220,10 +220,12 @@ def _store(room: dict, code: str, text: str, nick: str, info: dict, by: str, cha
         pass
 
 
-def post(code: str, text: str, emp, by: str = "", c=None) -> dict:
+def post(code: str, text: str, emp, by: str = "", c=None, extra=None) -> dict:
     """ส่งใบเข้ากลุ่มจ่ายเบอร์ + แท็กเซลล์ → ผลการส่ง (ผู้เรียกเก็บลง `post_info` ของลีด)
 
     `{ok, at, by, group, groupName, seller, tagged, tagWhy, error, mid}` · ไม่โยน exception
+    `extra` = ข้อความต่อท้ายใน **push เดียวกัน** (การ์ดปุ่มรับเคส · `leadflow.card_message`) —
+    LINE นับโควต้าต่อผู้รับต่อครั้งที่ยิง ส่งแยกครั้ง = กลุ่ม 30 คนเสียเพิ่ม 30 ข้อความทุกใบ
     """
     from dashboard.services.line_channels import key_of_token, push_token
     from .checkin_report import _send_msgs
@@ -243,7 +245,8 @@ def post(code: str, text: str, emp, by: str = "", c=None) -> dict:
     uid, why = mention_id(emp, room["id"], token)
     try:
         # แท็กโดนปฏิเสธ = สร้างใหม่แบบพิมพ์ชื่อแล้วส่งซ้ำ (ตัวเดียวกับตารางเช็คชื่อ) · ล้มเพราะอย่างอื่นไม่ส่งซ้ำ
-        sc, resp, tagged = _send_msgs(room["id"], lambda m: messages(text, nick, uid, m), token, WHAT)
+        tail = list(extra or [])[:4]             # LINE รับไม่เกิน 5 ข้อความต่อครั้ง
+        sc, resp, tagged = _send_msgs(room["id"], lambda m: messages(text, nick, uid, m) + tail, token, WHAT)
     except Exception as e:
         info["error"] = "ต่อ LINE ไม่ได้: %s" % str(e)[:120]
         return info

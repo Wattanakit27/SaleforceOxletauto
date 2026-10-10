@@ -760,6 +760,12 @@ def _reply_done(o, at, preview: str = "", emp=None, by: str = "", close: bool = 
         pass                                  # คำตอบที่เก่ากว่ารอบนี้ (ดึงมาช้า) — ไม่ได้ตอบข้อความรอบนี้
     if close and (not o.read_at or at > o.read_at):
         o.read_at = at                        # คนที่ตอบได้อ่านแชทแล้ว (ตอบอัตโนมัติของเพจไม่นับ)
+    if close and o.pk:                        # ★ 10 ต.ค.69 ตอบลูกค้าแล้ว = ติดต่อแล้ว → นาฬิกาโทรของงานแชทนี้หยุด
+        try:
+            from .leadflow import note_chat_reply
+            note_chat_reply(o, at)
+        except Exception:
+            pass
     if emp and o.owner_id == emp.id and not o.first_reply_at:
         o.first_reply_at = at
     if not o.last_out_at or at >= o.last_out_at:
@@ -956,6 +962,13 @@ def tick(now=None) -> dict:
             out["extLeadDeleted"] = n
     except Exception as e:
         out["extLeadError"] = str(e)[:120]
+    try:                                     # ★ 10 ต.ค.69 งานจ่ายเบอร์: นาฬิกาโทร · จ่ายวน · รายงานผล (leadflow.py)
+        from .leadflow import tick as _lf_tick
+        r = _lf_tick(now)
+        if r:
+            out["leadflow"] = r
+    except Exception as e:
+        out["leadflowError"] = str(e)[:120]
     try:                                     # ห้องพัก Lead: ลีดที่แอดมินจ่ายเบอร์ในกลุ่มแล้ว → จับคู่ใบ/จ่ายให้ใคร เอง (thread แยก)
         r = slip_sweep_bg()
         if r:
@@ -2247,7 +2260,8 @@ CODE_BASES = [("NLD", "Moderate"), ("WLD", "Hot"), ("HLD", "Very Hot"), ("BLD", 
               ("TLD", "TLD"), ("TALD", "TLD")]
 _TYPE_BASE = {"moderate": "NLD", "merhot": "NLD", "hot": "WLD", "very hot": "HLD", "bld": "BLD",
               "tld": "TLD", "tld / hot": "TLD"}
-_CODE_RE = re.compile(r"^(R?A?(?:NLD|WLD|HLD|BLD|TLD|TALD|LD))(\d{1,2})-(\d{3,6})$")
+# ★ 10 ต.ค.69 รับ "/n" ท้ายเลข — ส่งต่อไม้ 2 ในห้อง REJECT ใช้ R + เลขเดิม + /1 (leadflow.fwd_code)
+_CODE_RE = re.compile(r"^(R?A?(?:NLD|WLD|HLD|BLD|TLD|TALD|LD))(\d{1,2})-(\d{3,6})(?:/\d{1,2})?$")
 _ANY_CODE = re.compile(r"^([A-Za-z]+)(\d{0,2})-?(\d{3,6})$")
 NOCODE_KEY = "_nocode"            # ChatLead.auto[...] = แอดมินกด "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย)
 
@@ -2595,6 +2609,9 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
         return False, str(e)
     fb_tail = (" · ลูกค้า Facebook: %s ได้สิทธิ์เก็บข้อมูลเท่านั้น (ตอบแชทไม่ได้)" % emp.nickname) if is_fb(o) else ""
     if not real:
+        from . import leadflow                   # นาฬิกาโทรเดินด้วย (ทดสอบหน้าจอได้) — ไม่มีอะไรส่งออก
+        leadflow.before_post(code, emp, by, chat=o, phone=lead.phone, customer=lead.customer_name or lead.account,
+                             car=lead.car_model or lead.car_text, demo=True)
         why = "ลูกค้าจำลอง/บัญชีทดสอบ — ไม่ส่งเข้ากลุ่มจริง" if slip_post_on(c) else "ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม"
         return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)%s" % (code, emp.nickname, why, fb_tail)
     info = _post_slip(o, lead, emp, by, c)
@@ -2610,11 +2627,15 @@ def post_body(o, lead) -> str:
 
 def _post_slip(o, lead, emp, by: str = "", c=None) -> dict:
     """ส่งใบเข้ากลุ่ม → เก็บผลลง `ChatLead.post_info` (หน้าเว็บโชว์สถานะ/ปุ่มส่งอีกครั้ง)"""
-    from . import slippost
+    from . import leadflow, slippost
+    task, extra = leadflow.before_post(lead.code, emp, by, chat=o, phone=lead.phone,
+                                       customer=lead.customer_name or lead.account,
+                                       car=lead.car_model or lead.car_text)
     try:
-        info = slippost.post(lead.code, post_body(o, lead), emp, by=by, c=c)
+        info = slippost.post(lead.code, post_body(o, lead), emp, by=by, c=c, extra=extra)
     except Exception as e:                       # ห้ามทำให้การจ่ายเบอร์ที่บันทึกไปแล้วกลายเป็น error 500
         info = {"ok": False, "at": _iso(timezone.now()), "by": (by or "")[:80], "error": "ส่งไม่สำเร็จ: %s" % str(e)[:120]}
+    leadflow.after_post(task, info, card=bool(extra))
     ChatLead.objects.filter(pk=lead.pk).update(post_info=info)
     lead.post_info = info
     return info

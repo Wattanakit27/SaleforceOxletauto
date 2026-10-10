@@ -129,6 +129,9 @@ python manage.py runserver
 | `/api/line/webhook` | `line_webhook` | **public** (csrf_exempt) — LINE Messaging API webhook · จับ `groupId`+ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message) → เก็บ `line_groups` (ยืนยัน signature ถ้ามี `LINE_CHANNEL_SECRET`) · **ต้อง register URL นี้ใน LINE Console** (Messaging API → Webhook URL = `SITE_URL/api/line/webhook` · เปิด Use webhook) |
 | `/api/line/group_ingest` | `line_group_ingest` | **public** (csrf_exempt · auth `?secret=CRON_SECRET` / header `X-Cron-Secret`) — รับ group event จาก **n8n** (กรณี n8n เป็นตัวรับ LINE webhook แล้ว forward มา) → เก็บ `line_groups` เดียวกับ webhook · body ยืดหยุ่น (LINE raw `{events:[...]}` / `{groupId,groupName?}` / list) · คืน `{ok,count,groups}` |
 | `/api/admin/update_release_date` | `update_release_date` | **admin (session) หรือเซลล์ (token/session + ownership)** POST: inline edit วันที่/สถานะ เขียนกลับชีตยอดขายตรงเซลล์ — body `{tab,row,col(2\|13\|14\|18\|19\|20\|21\|23),value,token?}` → `update_release_date()` PUT cell — **2=วันจอง · 13=N สถานะเคส (จอง/จอง(ซื้อสด)/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก · validate ตัด (ซื้อสด) แล้วต้องเป็น 1 ใน 6) · 14=เซ็น · 18=เอกสาร · 19/20=ผล · 21/23=ปล่อย**. เซลล์แก้ได้เฉพาะเคสตัวเอง (เช็คชื่อที่ marker ของแถว = `cell(r,0)`). ใช้จาก `saveReleaseDate`/`saveTimelineDate`/`saveCaseStatus` (index.html แอดมิน + seller.html เซลล์ · modal เคสจองมี dropdown สถานะ + แก้วันที่) |
+| `/connect/api/leadflow` | `connect_views.api_leadflow` | **แอดมิน/ผู้บริหาร** งานจ่ายเบอร์ (10 ต.ค.69 · `checkout/leadflow.py`) — GET = ค่าตั้ง + คิวจ่ายวน + งานวันนี้ · POST `{action:"config", …}` ตั้งค่า (ค่าผิด = 400 บอกช่อง) · `{action:"reassign", task, emp?}` จ่ายใหม่เลขเดิม (emp ว่าง = คนถัดไปในคิว) · `{action:"forward", id\|mid, emp}` ส่งต่อไม้ 2 (R+เลขเดิม+/1 → ห้อง REJECT) · ดู section "งานจ่ายเบอร์" |
+| `/api/seller/check_phone` | `seller_check_phone` | **ต้อง login** (เซลล์ · token `/s/` หรือ session `/me/` · token ของคนอื่นใช้ไม่ได้) POST `{token?, phone}` → เบอร์นี้เคยเป็นลีดของใคร เดือนไหน (`phonebook.check_for_seller`) · ของคนอื่น = บอกแค่ชื่อ+เดือน **ไม่ส่งเลขลีด** · รับเฉพาะเบอร์เต็ม · จด `dash_event_log` |
+| `/api/seller/car_matches` | `seller_car_matches` | **ต้อง login** (เซลล์) GET `?token=` → ลูกค้าของฉันที่รอรถ + รถพร้อมขายที่ตรงรุ่น/งบ (`leadflow.seller_matches` · คำนวณทุก 30 นาที) · ระบบไม่ทักลูกค้าเอง |
 | `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership |
 | `/api/seller/scan_doc` | `scan_doc` | **ต้อง login (any)** POST: รับรูปเอกสาร (base64, ≤8MB) + `form` (`finance`\|`loan`) → Gemini OCR (`gemini_ocr.extract_finance_fields`/`extract_loan_fields`) → คืน `{ok, fields}` ให้ฟอร์มกรอกอัตโนมัติ (ฉบับร่างให้เซลล์ตรวจก่อนส่ง) |
 | `/api/seller/finance_check` | `finance_check_submit` | เซลล์ (token) POST: ส่งฟอร์ม "เช็คไฟแนนซ์ก่อนเซ็น" → สร้าง Flex (`build_finance_check_flex`) push เข้า `FINANCE_TEST_LINE_ID` (ช่วง test) + เก็บ Supabase `finance_checks` (best-effort) |
@@ -1848,8 +1851,59 @@ sender_id)` ≠ จำนวนคน**
   - `store_chat` ส่ง `channel=` (บัญชีที่ได้ยิน) ให้ `note_customer_message` · `note_reply` ปิดรอบให้พนักงานที่มีแถวแล้วเท่านั้น
   - `sync_rows` เติมแถว (ไม่เริ่มรอบรอ) ให้พนักงานที่ทักบัญชีลูกค้าใน 7 วันก่อนแก้
 
+- **★★ งานจ่ายเบอร์ — นาฬิกาโทร · จ่ายวน · ไม้ 2 · การ์ดปุ่ม · อ่านรายงานผล (10 ต.ค.69 · เจ้าของสั่ง)** —
+  [leadflow.py](checkout/leadflow.py) + [phonebook.py](checkout/phonebook.py) · checkout migration **0034** (`LeadPhone` · `LeadTask` · `LeadReport`)
+  - ที่มา: เจ้าของส่งตัวอย่างหน้าจอ 3 ชุด (ศูนย์ควบคุมลีด · มือถือเซลล์ · หน้าเซลล์ — คนนอกทำ) แล้วสั่ง
+    *"ปรับให้เข้ากับระบบเรา ไม่ใช่ปรับไฟล์ของเขา"* → เลือก 7 อย่าง (ทำครบ):
+    แอดมิน ① เช็คเบอร์ซ้ำตอนจ่ายเบอร์ ② ส่งต่อไม้ 2 ③ จ่ายวน + นาฬิกาโทร · เซลล์ ④ รถใหม่ตรงกับลูกค้าของฉัน
+    ⑤ เช็คเบอร์ซ้ำเอง ⑥ การ์ดปุ่ม รับเคส/ขอผ่าน ⑦ อ่านรายงาน "เลข + ผล" → การ์ดยืนยันแชทส่วนตัว → ลงชีต
+  - **ข้อเท็จจริงจากห้องจริง (วัดก่อนทำ)**: เซลล์รายงานผลด้วย **เลขรัน + ผล** ("9075 รอตอบครับ" · ไม่เว้นวรรคก็มี)
+    ~1,189 ข้อความ/สัปดาห์ · แอดมินทวงในรูปแบบเดียวกันแต่มี **@** ("9075 @มัท ตามด้วย") → **มี @ = ไม่นับ** ·
+    ไม้ 2 ในห้อง REJECT = **R + เลขเดิม + /1** (1,075/1,077 ใบ · ไม่เคยเห็น /2) · `_CODE_RE` รับ `/n` แล้ว
+  - **สมุดเบอร์ (`LeadPhone`)** เก็บแค่ เบอร์+เลขลีด+เซลล์+ช่องทาง+รถ+วันที่ (ไม่เก็บชื่อลูกค้า) · 3 แหล่ง: ชีตลีด
+    (`rebuild_from_sheet` ทั้งชุดทุก 6 ชม. · thread) · ใบในห้องจ่ายเบอร์ · ปุ่มจ่ายเบอร์ · ชีตชนะเรื่อง "เซลล์"
+    · แอดมิน: กล่องจ่ายเบอร์ (แชท + ใบร่างในห้องพัก) ขึ้น **"เบอร์นี้เคยเป็นลีด X ของ @Y"** + ปุ่มจ่ายให้เจ้าของเดิม
+      + **ถามยืนยันถ้าจะจ่ายให้คนอื่น** · เซลล์: หน้าเซลล์มีช่อง "เช็คเบอร์ลูกค้าซ้ำ" (ของคนอื่นบอกแค่ชื่อ+เดือน)
+  - **นาฬิกาโทร (`LeadTask` · 1 แถว/ใบ)** — ใบจากปุ่มในระบบ (`before_post`/`after_post` ใน `connect._post_slip` + `leadpark._post`)
+    **และใบที่แอดมินโพสต์เองในห้อง** (`note_group_slip`) · เริ่มนับเมื่อใบถึงกลุ่มจริง · ต้องรายงานภายใน `call_min` (15)
+    นับเวลาทำการของ Connect · **ระบบรู้ไม่ได้ว่าโทรจริงไหม** → หยุดเมื่อ "รายงานผล" ในห้อง หรือตอบลูกค้าผ่าน Connect
+    (`note_chat_reply` ใน `_reply_done`) · กดรับเคส = รับทราบ ไม่หยุดนาฬิกา · ใบทดลอง/บัญชีทดสอบ = มีนาฬิกา (ทดสอบหน้าจอได้) ไม่ส่งอะไรออก
+    · หน้าเว็บ: Connect → ห้องพัก Lead → แท็บ **"นาฬิกาโทร"** (เลยเวลา/ขอผ่าน/รอ/รายงานแล้ว · จ่ายใหม่ · ไม้ 2) +
+      กล่อง "นาฬิกาโทร / ส่งต่อไม้ 2" ในแผงขวาของแชทที่มีเลขแล้ว
+  - **อ่านรายงาน** (`process_pending` · ตัวชี้ GroupChat.id ใน KV `leadflow_state` · advisory lock · webhook + cron เก็บตก):
+    ผู้ส่งต้องเป็น **ทีมขาย** (ผูกทะเบียน + `team_of`) · จับคู่งานด้วยเลขรัน (/n = งานที่ขึ้นต้น R · หลายงาน = ของคนรายงานก่อน)
+    · ใบเก่าก่อนเปิดระบบ = หาใบในห้องย้อน 60 วันแล้วสร้างงานย้อนหลัง (`_lazy_task`) · อ่านคำ **ไม่ใช้ AI**:
+    สถานะ Z (คำในรายงาน + `lead_keywords`) · อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/ประเภทลูกค้า · **วันนัด** (`parse_appt` —
+    ต้องมีคำว่า นัด/เข้ามา/มาดู ก่อน · พรุ่งนี้/มะรืน/วันในสัปดาห์/หน้า/d/m · 10 โมง/บ่ายสอง/4 โมงเย็น/3 ทุ่ม/เที่ยง/14:30 ·
+    เวลาที่ผ่านไปแล้ว = ไม่เดา)
+  - **การ์ดยืนยัน** (`report_on`): เฉพาะรายงานที่ **มีข้อมูลจริง** (`rich` — "รอตอบ" เฉยๆ ไม่ส่ง) → แชทส่วนตัวเซลล์ →
+    กด "ถูกต้อง" = `google_sheets.update_lead_fields` (หาแถวรอบเดียว · `values:batchUpdate` · **เขียนเฉพาะแถวที่เซลล์ในชีต =
+    คนกด** ไม่งั้นบอกว่าเป็นของใคร) + เติมข้อมูลลีด Connect ช่องที่คนยังไม่แก้ · "ไม่บันทึก" = ข้าม · เตือนนัด (`remind_on`) ครั้งเดียว
+  - **การ์ดปุ่ม** (`card_on`): ต่อท้ายใบใน **push เดียวกัน** (`slippost.post(extra=…)` — LINE นับโควต้าต่อผู้รับต่อครั้งที่ยิง)
+    · ปุ่ม รับเคส / ขอผ่าน / โทรหาลูกค้า (tel:) · บอก "รายงานผลภายใน HH:MM" (การ์ด LINE แก้ย้อนหลังไม่ได้ → ไม่ใช่นับถอยหลัง)
+    · postback ลงชื่อ **HMAC (`SECRET_KEY`)** · กดได้เฉพาะคนที่ได้เคส · ตอบด้วย **reply token (ฟรี)** · มาทาง webhook เดิม
+      (`_checkout_ingest` → `leadflow.handle_events` · n8n ส่ง body ดิบอยู่แล้ว ไม่ต้องแก้) · ล่าสุดที่ KV `leadflow_postback_last`
+  - **คิวจ่ายวน** (`rr_candidates`): ทีมใน `rr_teams` · ตัดวันหยุดของคนนั้น (ช่อง "วันหยุด") · บัญชีทดสอบ · ยังไม่เช็คชื่อ
+    (ถ้าเปิด `need_checkin`) · เต็ม `cap_day` · เรียงคนได้ใบน้อยสุดวันนี้ก่อน (เท่ากัน = ได้ใบล่าสุดนานกว่า) · หน้าเว็บโชว์เป็นชิปให้กดเลือก
+    · **`auto_assign`** = ใบร่างในห้องพัก Lead ที่รอเกิน `auto_after_min` → จ่ายวนเอง (ทีละ 3 ใบ/นาที) · **เบอร์ซ้ำ = ไม่จ่ายเอง** ·
+      **แชท LINE/FB ไม่จ่ายเอง** (ยังต้องดูว่าเป็นลีดขายไหม) · ผลที่ KV `leadflow_auto_last`
+    · **`auto_pull`** = เลยเวลา/ขอผ่าน → จ่ายใหม่คนถัดไป **เลขเดิม ใบเดิม แท็กคนใหม่** (โอนแชทตาม) · ใบละไม่เกิน `pull_max` ·
+      ใบที่แอดมินโพสต์เองจ่ายใหม่จากระบบไม่ได้ (ไม่มีลูกค้า/ลีดให้โอน → ใช้ไม้ 2)
+  - **ส่งต่อไม้ 2** (`forward_chat`/`forward_ext`): เลข `fwd_code` · จำเลขเดิมใน `ChatLead.auto["_prev_codes"]` · โอน · ใบเข้าห้อง REJECT
+  - **④ รถตรงกับลูกค้าของฉัน**: `refresh_needs` ทุก 30 นาที (thread) อ่านห้องจ่ายเบอร์ **ต่อจากที่ค้าง** (`leadgroup.ingest(since_id=)`
+    — เดิมอ่าน 4,000 ข้อความ **เก่าสุด** เสมอ พอห้องเกิน ~3 สัปดาห์ข้อความใหม่ไม่ถูกอ่านเลย) → `need_match.scan` → แยกตามเซลล์
+    (`tag_nick`) ใน KV `leadflow_needs` · หน้าเซลล์โชว์ใต้ "ดีลค้าง"
+  - **สวิตช์ทั้งหมดใน KV `leadflow_config`** — ตั้งที่ Connect → ตั้งค่า → การ์ด "งานจ่ายเบอร์" (เปิดอันที่ส่งออก = ถามยืนยัน)
+    · **ทุกอย่างที่ส่งออก/จ่ายเอง ปิดโดยปริยาย** (`card_on` · `report_on` · `remind_on` · `auto_assign` · `auto_pull`) ·
+    นาฬิกา + สมุดเบอร์ + อ่านรายงาน (จดอย่างเดียว) ทำงานเลยหลัง deploy
+  - **พังเงียบไม่ได้**: `before_post`/`refresh_needs` ล้ม = จด KV `leadflow_error` + `dash_event_log` (kind=`leadflow`) · ใบยังส่งได้ตามเดิม
+  - **อายุข้อมูล**: `LeadTask`/`LeadReport` 90 วัน (`cleanup`) · สมุดเบอร์จากชีตสร้างใหม่ทุก 6 ชม.
+  - **เทสต์**: `python scripts/test_leadflow.py` (**103 ข้อ** · ปลอมที่ `requests` + ใบรับรอง Google) · `LF.BG_SLOW = False` ในเทสต์
+    (thread งานช้าชน SQLite — `test_connect.py` ตั้งด้วย) · ตรวจ UI ด้วย Chrome จริง (template ตัวจริง · stub เฉพาะ API · ไม่มี JS error ·
+    ไม่ล้นจอ 1590/390) · **บทเรียน**: `exclude(card__demo=True)` บนคีย์ JSON ที่ไม่มีอยู่ **ตัดแถวทิ้งหมดบน SQLite** → กรองใน Python
+
 **⚠️ ต้องทำก่อนใช้จริง (ระบบพร้อม แต่ยังเปิดใช้จริงไม่ได้จนกว่าจะทำครบ)**
-1. `migrate` (checkout **0025** · ลีดภายนอกจากห้องพัก Lead = **0029** · Facebook ใน Connect = **0030** · ส่งใบเข้ากลุ่มจ่ายเบอร์ = **0031** · สถานะลูกค้า (จับ keyword) = **0032** · ยังไม่อ่าน = **0033**)
+1. `migrate` (checkout **0025** · งานจ่ายเบอร์ = **0034** · ลีดภายนอกจากห้องพัก Lead = **0029** · Facebook ใน Connect = **0030** · ส่งใบเข้ากลุ่มจ่ายเบอร์ = **0031** · สถานะลูกค้า (จับ keyword) = **0032** · ยังไม่อ่าน = **0033**)
 2. **`manage.py checkout_config --customer-chat on`** — ไม่เปิด = ลูกค้าที่ทักเข้ามาไม่เข้า Connect (หน้าเว็บขึ้นแถบแดงบอก)
 3. **`manage.py checkout_config --reply on`** — ยังล็อกไว้ตามที่เจ้าของสั่ง ("อย่าเพิ่งส่งข้อความหาลูกค้า")
    ระหว่างล็อก ดู/รับ/โอนได้ แต่กดส่งไม่ได้ (หน้าเว็บบอกเหตุผล)

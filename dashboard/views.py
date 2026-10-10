@@ -3757,6 +3757,13 @@ def _checkout_ingest(data):
                 maybe_process(data)
             except Exception:
                 pass
+            # ★ 10 ต.ค.69 — งานจ่ายเบอร์: ปุ่มรับเคส/ขอผ่าน (postback) + ใบ/รายงานผลในห้องจ่ายเบอร์
+            #   ต้องอยู่หลัง store_chat (อ่านจาก GroupChat) · แยก try — cron เก็บตกให้ทุกนาที
+            try:
+                from checkout.leadflow import handle_events
+                handle_events(data)
+            except Exception:
+                pass
             ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
         except Exception as e:
             # ★ ก.ย.69 — เดิม `except: pass` เฉยๆ: งานอยู่คนละ thread กับ response
@@ -4133,6 +4140,58 @@ def update_lead_note(request):
 
     # dashboard เห็นค่าใหม่รอบ precompute ถัดไป (cron อ่าน Google ตรง — เลิก raw mirror แล้ว)
     return JsonResponse(res, json_dumps_params={"ensure_ascii": False})
+
+
+def _seller_of(request, token: str = "") -> str:
+    """เซลล์ของคำขอนี้ — token ลิงก์เซลล์ (/s/<token>/) ก่อน ไม่งั้นเซลล์ที่ login อยู่ (/me/) · ไม่รู้ = ''
+    ★ ต้อง login เสมอ (PDPA — กติกาเดียวกับหน้าเซลล์)"""
+    user = _session_user(request)
+    if not user:
+        return ""
+    name = seller_from_token(token) if token else ""
+    if name and not _can_view_all(user):
+        from .services.constants import normalize_seller
+        mine = normalize_seller(user.get("seller_name") or user.get("nickname") or "")
+        if mine and mine != name:
+            return ""                      # เซลล์เอา token ของคนอื่นมาใช้ไม่ได้
+    return name or (user.get("seller_name") or "")
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def seller_check_phone(request):
+    """⑤ เซลล์เช็คเบอร์ซ้ำเอง (★ 10 ต.ค.69) — POST `{token?, phone}` → `{found, mine, seller, month, code?}`
+
+    ตอบแค่ "เป็นลีดของใคร เดือนไหน" — ไม่ส่งเลขลีด/รถ/ช่องทางของคนอื่นออก (ของตัวเองบอกเลขให้)
+    รับเฉพาะเบอร์เต็ม (ไม่รับ 4 ตัวท้าย — กันใช้ไล่ดูเบอร์ทีละชุด) · จด dash_event_log ทุกครั้ง
+    """
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON ไม่ถูกต้อง"}, status=400)
+    me = _seller_of(request, (body.get("token") or "").strip())
+    if not me:
+        return JsonResponse({"error": "ต้องเข้าสู่ระบบด้วยบัญชีเซลล์"}, status=401)
+    from checkout.phonebook import check_for_seller
+    res = check_for_seller(str(body.get("phone") or ""), me)
+    try:
+        from .services import eventlog
+        eventlog.log("phone_check", name="เซลล์เช็คเบอร์ซ้ำ", target=me, ok=bool(res.get("ok")),
+                     found=bool(res.get("found")))
+    except Exception:
+        pass
+    return JsonResponse(res, status=200 if res.get("ok") else 400, json_dumps_params={"ensure_ascii": False})
+
+
+@require_http_methods(["GET"])
+def seller_car_matches(request):
+    """④ รถใหม่ตรงกับลูกค้าของฉัน (★ 10 ต.ค.69) — GET `?token=` → ลูกค้าที่รอรถ + รถพร้อมขายที่ตรงสเปก/งบ
+    ผลคำนวณทุก 30 นาที (leadflow.refresh_needs) · ระบบไม่ทักลูกค้าเอง — เซลล์ตัดสินใจ"""
+    me = _seller_of(request, (request.GET.get("token") or "").strip())
+    if not me:
+        return JsonResponse({"error": "ต้องเข้าสู่ระบบด้วยบัญชีเซลล์"}, status=401)
+    from checkout.leadflow import seller_matches
+    return JsonResponse(dict(seller_matches(me), ok=True), json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt

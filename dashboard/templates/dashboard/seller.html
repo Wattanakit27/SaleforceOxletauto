@@ -803,6 +803,73 @@
   }
 
   // ── render ──
+  // ── ★ 10 ต.ค.69 ④ รถใหม่ตรงกับลูกค้าของฉัน + ⑤ เช็คเบอร์ซ้ำ (checkout/leadflow.py · phonebook.py) ──
+  //   ข้อมูลโหลดแยก (ไม่ถ่วงหน้าแรก) แล้วเก็บไว้ใน _ST — render() วาดซ้ำได้จากของที่จำไว้ ไม่ยิงซ้ำ
+  const _ST = { cars: null, carsAt: 0, phone: '', check: null, checking: false };
+  const _tok = () => location.pathname.split('/').filter(Boolean)[1] || '';
+  async function loadCarMatches(force) {
+    if (!force && _ST.cars && Date.now() - _ST.carsAt < 10 * 60000) return;
+    try {
+      const r = await fetch('/api/seller/car_matches?token=' + encodeURIComponent(_tok()), { credentials: 'same-origin' });
+      const d = await r.json();
+      _ST.cars = d.ok ? d : { rows: [], error: d.error || 'โหลดไม่ได้' };
+    } catch (e) { _ST.cars = { rows: [], error: 'เชื่อมต่อไม่ได้' }; }
+    _ST.carsAt = Date.now();
+    const el = document.getElementById('sl-tools'); if (el) el.outerHTML = sellerToolsHtml();
+    bindSellerTools();
+  }
+  async function checkPhone() {
+    const inp = document.getElementById('sl-phone'); if (!inp) return;
+    _ST.phone = inp.value.trim();
+    if (!_ST.phone) return;
+    _ST.checking = true; _ST.check = null;
+    const el0 = document.getElementById('sl-tools'); if (el0) { el0.outerHTML = sellerToolsHtml(); bindSellerTools(); }
+    try {
+      const r = await fetch('/api/seller/check_phone', { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: _tok(), phone: _ST.phone }) });
+      _ST.check = await r.json();
+    } catch (e) { _ST.check = { ok: false, error: 'เชื่อมต่อไม่ได้' }; }
+    _ST.checking = false;
+    const el = document.getElementById('sl-tools'); if (el) { el.outerHTML = sellerToolsHtml(); bindSellerTools(); }
+  }
+  function bindSellerTools() {
+    const inp = document.getElementById('sl-phone');
+    if (inp) inp.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); checkPhone(); } };
+    const b = document.getElementById('sl-phone-go'); if (b) b.onclick = checkPhone;
+  }
+  function sellerToolsHtml() {
+    const c = _ST.check, cars = _ST.cars;
+    let res = '';
+    if (_ST.checking) res = `<div style="color:var(--t3);margin-top:6px">กำลังเช็ค…</div>`;
+    else if (c && !c.ok) res = `<div style="color:var(--red);margin-top:6px">${h(c.error || 'เช็คไม่ได้')}</div>`;
+    else if (c && !c.found) res = `<div style="color:var(--green);margin-top:6px;font-weight:600">${ic('lucide:circle-check',14)} ไม่เคยเป็นลีดในระบบ — รับได้เลย</div>`;
+    else if (c && c.mine) res = `<div style="color:var(--blue);margin-top:6px;font-weight:600">${ic('lucide:user',14)} ลูกค้าของคุณเอง${c.code ? ' · เลขลีด ' + h(c.code) : ''}${c.month ? ' (' + h(c.month) + ')' : ''}</div>`;
+    else if (c) res = `<div style="color:var(--amber);margin-top:6px;font-weight:600">${ic('lucide:triangle-alert',14)} เป็นลีดของ @${h(c.seller)}${c.month ? ' (' + h(c.month) + ')' : ''} — คุยกับเจ้าของเดิม/แอดมินก่อนรับ</div>`;
+    let carHtml = '';
+    if (cars && (cars.rows || []).length) {
+      carHtml = `<div style="margin-top:12px;border-top:.5px solid var(--bd);padding-top:10px">
+        <div style="font-weight:700;display:flex;align-items:center;gap:6px">${ic('lucide:car-front',16)} รถพร้อมขายที่ตรงกับลูกค้าของฉัน <span style="font-weight:400;color:var(--t3)">(${cars.rows.length})</span></div>
+        <div style="font-size:var(--fs-body);color:var(--t3);margin:2px 0 8px">ลูกค้าที่เคยบอก "ไม่มีรถ/งบไม่ถึง" แล้วตอนนี้มีรถพร้อมขายตรงรุ่น/งบ (เกินงบได้ 5%) — ระบบไม่ทักลูกค้าเอง คุณตัดสินใจ</div>
+        <div style="display:grid;gap:8px">${cars.rows.map(x => `
+          <div style="background:var(--bg2);border:.5px solid var(--bd);border-left:3px solid var(--green);border-radius:8px;padding:9px 12px">
+            <div style="font-weight:700">${h(x.customer || '-')}${x.code ? ` <span style="font-weight:400;color:var(--t3)">· ${h(x.code)}</span>` : ''}</div>
+            <div style="font-size:var(--fs-body);color:var(--t3)">อยากได้ ${h(x.want || '-')}${x.budget ? ' · งบ ' + Number(x.budget).toLocaleString() : ''}${x.why ? ' · ' + h(x.why) : ''}</div>
+            <div style="font-size:var(--fs-body);margin-top:4px">${(x.cars || []).map(cc => `<span class="badge" style="background:var(--green-bg);color:var(--green);margin:2px 4px 0 0;display:inline-block">${h(cc.name || cc.code || '')}${cc.year ? ' ' + cc.year : ''}${cc.price ? ' · ' + Number(cc.price).toLocaleString() : ''}</span>`).join('')}</div>
+          </div>`).join('')}</div></div>`;
+    } else if (cars && cars.error) {
+      carHtml = `<div style="margin-top:10px;font-size:var(--fs-body);color:var(--t3)">รถตรงกับลูกค้า: ${h(cars.error)}</div>`;
+    }
+    return `<div class="section" id="sl-tools" style="margin-bottom:14px">
+      <h2 style="display:flex;align-items:center;gap:6px">${ic('lucide:phone',16)} เช็คเบอร์ลูกค้าซ้ำ</h2>
+      <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px;line-height:1.5">ลูกค้าโทร/ทักมาเอง — เช็คก่อนว่าเคยเป็นลีดของเซลล์คนอื่นหรือยัง (พิมพ์เบอร์เต็ม · บอกแค่ชื่อเซลล์กับเดือน)</div>
+      <div style="display:flex;gap:6px;max-width:420px">
+        <input id="sl-phone" inputmode="tel" placeholder="เช่น 081 234 5678" value="${h(_ST.phone)}"
+          style="flex:1;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);font-size:var(--fs-body)">
+        <button class="f-btn on" id="sl-phone-go" style="padding:8px 14px">เช็ค</button>
+      </div>${res}${carHtml}
+    </div>`;
+  }
+
   function render() {
     if (pageMode === 'cars') { renderCarsMode(); return; }                            // 🚗 สถานะรถ
     if (pageMode === 'finance' || pageMode === 'loan') { renderLoanMode(); return; }  // รวมเป็นฟอร์มเดียว
@@ -1093,6 +1160,8 @@
         `;
       })()}
 
+      ${sellerToolsHtml()}
+
       <div class="cgrid">
         <div class="chart-card">
           <div class="chart-title">Lead ของฉัน — ${h(periodLabel)}</div>
@@ -1214,6 +1283,8 @@
 
     document.getElementById('root').innerHTML = html;
     initCharts();
+    bindSellerTools();
+    loadCarMatches();
   }
 
   function renderLeadList(allLeads) {

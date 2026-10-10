@@ -42,6 +42,8 @@ from django.utils import timezone  # noqa: E402
 
 from checkout import connect as C  # noqa: E402
 C.BG_FILL = False            # ไม่ให้ thread เติมรูปวิ่งชนฐานข้อมูลทดสอบ (เรียก fill_pictures ตรงๆ แทน)
+from checkout import leadflow as _LF  # noqa: E402
+_LF.BG_SLOW = False          # งานจ่ายเบอร์: ไม่ให้ thread งานช้าวิ่งชนฐานข้อมูลทดสอบ
 from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
 from dashboard.services import cache_store  # noqa: E402
 

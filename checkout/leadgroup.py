@@ -286,17 +286,25 @@ def _find(lead_code: str) -> CustomerNeed | None:
             .order_by("-updated_at").first())
 
 
-def ingest(limit: int = 4000) -> dict:
-    """อ่านข้อความในกลุ่มจ่ายเบอร์ → สร้าง/อัปเดต `CustomerNeed` (source=group)"""
+def ingest(limit: int = 4000, since_id=None) -> dict:
+    """อ่านข้อความในกลุ่มจ่ายเบอร์ → สร้าง/อัปเดต `CustomerNeed` (source=group)
+
+    `since_id` = อ่านต่อจากข้อความนี้ (★ 10 ต.ค.69 · `leadflow.refresh_needs` ทุก 30 นาที) — เดิมอ่าน
+    `limit` ข้อความ **เก่าสุด** เสมอ พอห้องมีเกิน 4,000 ข้อความ (≈ 3 สัปดาห์) ข้อความใหม่ไม่ถูกอ่านเลย
+    · ผลมี `_last_id` ให้ผู้เรียกจำไว้รอบหน้า
+    """
     from django.db.models import Q
     cond = Q()
     for hint in GROUP_HINTS:
         cond |= Q(group_name__icontains=hint)
-    rows = list(GroupChat.objects
-                .filter(chat_type=GroupChat.GROUP)
-                .exclude(text="")
-                .filter(cond)
-                .order_by("sent_at", "id")[:limit])
+    qs = (GroupChat.objects
+          .filter(chat_type=GroupChat.GROUP)
+          .exclude(text="")
+          .filter(cond))
+    if since_id is not None:
+        rows = list(qs.filter(id__gt=since_id).order_by("id")[:limit])
+    else:
+        rows = list(qs.order_by("sent_at", "id")[:limit])
 
     st = {"ข้อความ": len(rows), "ใบจ่ายลีด": 0, "อัปเดต": 0,
           "ไม่มีรถ (เก็บรอ)": 0, "ปิดเคส": 0, "ไม่เข้าเงื่อนไข": 0}
@@ -362,4 +370,6 @@ def ingest(limit: int = 4000) -> dict:
         need.evidence = (need.evidence or "")[:600] + "\n[อัปเดต] " + msg[:300]
         need.note = (need.note or "")[:200]
         need.save()
+    if rows:
+        st["_last_id"] = rows[-1].id
     return st

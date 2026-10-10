@@ -1038,3 +1038,120 @@ class ExtLead(models.Model):
 
     def __str__(self):
         return "%s %s" % (self.code or self.prefix or "-", self.account or self.phone or self.message_id)
+
+
+# ─────────────────────────────────────────────────────────────
+#  งานจ่ายเบอร์ (10 ต.ค.69 · เจ้าของเลือกจากตัวอย่างหน้าจอ "ศูนย์ควบคุมลีด") — ดู checkout/leadflow.py
+# ─────────────────────────────────────────────────────────────
+class LeadPhone(models.Model):
+    """**สมุดเบอร์ลูกค้า** — เบอร์นี้เคยเป็นลีดเลขไหน ของเซลล์คนไหน (ใช้เช็คเบอร์ซ้ำก่อนจ่ายเบอร์)
+
+    เก็บแค่ เบอร์ + เลขลีด + เซลล์ + วันที่ (ไม่เก็บชื่อลูกค้า — เท่าที่ต้องใช้ตอบว่า "ซ้ำไหม ของใคร")
+    3 แหล่ง: **ชีตลีด** (ประวัติทั้งปี · สร้างใหม่ทุก 6 ชม.) · **ใบจ่ายลีดในห้องจ่ายเบอร์** · **ปุ่มจ่ายเบอร์ในระบบ**
+    """
+    SHEET, SLIP, SYSTEM = "sheet", "slip", "system"
+    SRC_CHOICES = [(SHEET, "ชีตลีด"), (SLIP, "ใบจ่ายลีดในกลุ่ม"), (SYSTEM, "ปุ่มจ่ายเบอร์ในระบบ")]
+
+    phone = models.CharField("เบอร์ (ตัวเลขล้วน)", max_length=10, db_index=True)
+    code = models.CharField("เลขลีด", max_length=32, blank=True, db_index=True)
+    seller = models.CharField("เซลล์", max_length=80, blank=True)
+    channel = models.CharField("ช่องทาง", max_length=80, blank=True)
+    car = models.CharField("รถที่ถาม", max_length=120, blank=True)
+    seen_on = models.DateField("วันที่เป็นลีด", null=True, blank=True, db_index=True)
+    source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=SHEET)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "สมุดเบอร์ลูกค้า"
+        verbose_name_plural = "สมุดเบอร์ลูกค้า"
+        constraints = [models.UniqueConstraint(fields=["phone", "code", "source"], name="uniq_leadphone")]
+
+    def __str__(self):
+        return "%s %s %s" % (self.phone, self.code or "-", self.seller or "-")
+
+
+class LeadTask(models.Model):
+    """**งานจ่ายเบอร์ 1 ใบ = 1 แถว** — นาฬิการายงานผล · ปุ่มรับเคส/ขอผ่าน · รายงานผลที่เซลล์พิมพ์ในห้อง
+
+    เกิดได้ 2 ทาง: ปุ่มจ่ายเบอร์ในระบบ (`system`) หรือใบจ่ายลีดที่แอดมินโพสต์เองในห้องจ่ายเบอร์ (`group`)
+    → นาฬิกาครอบทั้งสองทาง ไม่ใช่แค่ที่จ่ายผ่านระบบ
+    **ระบบรู้ไม่ได้ว่าเซลล์โทรจริงไหม** (มือถือเซลล์ไม่ได้ต่อระบบ) — นาฬิกาหยุดเมื่อเซลล์ "รายงานผล" ในห้อง
+    (ข้อความขึ้นต้นด้วยเลขรัน เช่น "9075 รอตอบครับ") หรือตอบลูกค้าผ่าน Connect
+    มีเบอร์/ชื่อลูกค้า → ลบเองเมื่อเกิน 90 วัน (`leadflow.cleanup`)
+    """
+    SYSTEM, GROUP = "system", "group"
+
+    code = models.CharField("เลขลีด", max_length=32, unique=True)
+    run = models.CharField("เลขรัน (ที่เซลล์พิมพ์)", max_length=12, db_index=True)
+    source = models.CharField("ที่มา", max_length=8, default=SYSTEM)
+    seller = models.ForeignKey("Employee", verbose_name="เซลล์", null=True, blank=True,
+                               on_delete=models.SET_NULL, related_name="lead_tasks")
+    seller_name = models.CharField("ชื่อเซลล์", max_length=80, blank=True)
+    by = models.CharField("จ่ายโดย", max_length=80, blank=True)
+    chat = models.ForeignKey("ChatOwner", verbose_name="ลูกค้าแชท", null=True, blank=True,
+                             on_delete=models.SET_NULL, related_name="lead_tasks")
+    ext = models.ForeignKey("ExtLead", verbose_name="ลีดภายนอก", null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name="lead_tasks")
+    customer = models.CharField("ลูกค้า", max_length=120, blank=True)
+    phone = models.CharField("เบอร์", max_length=10, blank=True)
+    car = models.CharField("รถ", max_length=120, blank=True)
+    group_id = models.CharField("กลุ่มที่ใบอยู่", max_length=64, blank=True)
+
+    posted_at = models.DateTimeField("ใบถึงกลุ่มเมื่อ", null=True, blank=True, db_index=True)
+    due_at = models.DateTimeField("ต้องรายงานผลภายใน", null=True, blank=True, db_index=True)
+    acked_at = models.DateTimeField("กดรับเคสเมื่อ", null=True, blank=True)
+    passed_at = models.DateTimeField("กดขอผ่านเมื่อ", null=True, blank=True)
+    first_report_at = models.DateTimeField("รายงานผลครั้งแรก", null=True, blank=True)
+    last_report_at = models.DateTimeField("รายงานผลล่าสุด", null=True, blank=True)
+    reports = models.PositiveIntegerField("รายงานกี่ครั้ง", default=0)
+    last_report = models.CharField("รายงานล่าสุด", max_length=300, blank=True)
+    overdue_at = models.DateTimeField("เลยเวลาเมื่อ", null=True, blank=True)
+    history = models.JSONField("เปลี่ยนมือ", default=list, blank=True)    # [{seller, at, why}]
+    card = models.JSONField("ผลส่งการ์ดปุ่ม", default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "งานจ่ายเบอร์ (นาฬิการายงานผล)"
+        verbose_name_plural = "งานจ่ายเบอร์ (นาฬิการายงานผล)"
+        ordering = ["-posted_at", "-id"]
+
+    def __str__(self):
+        return "%s → %s" % (self.code, self.seller_name or "-")
+
+
+class LeadReport(models.Model):
+    """**รายงานผลที่เซลล์พิมพ์ในห้องจ่ายเบอร์** ("9075 รอตอบครับ") — 1 ข้อความ = 1 แถว
+
+    ระบบอ่านคำ (ไม่ใช้ AI) → ถ้ามีข้อมูลจริง (อาชีพ/รายได้/นัด/สถานะสำคัญ) ส่งการ์ดยืนยันเข้าแชทส่วนตัวเซลล์
+    เซลล์กด "ถูกต้อง" = เขียนลงชีตลีด (ช่องเดียวกับที่เซลล์กรอกเองในหน้าเซลล์) · ไม่กด = ไม่เขียน
+    """
+    NOTED, ASKED, SAVED, SKIPPED, FAILED = "noted", "asked", "saved", "skipped", "failed"
+    STATE_CHOICES = [(NOTED, "จดไว้เฉยๆ"), (ASKED, "ส่งการ์ดยืนยันแล้ว"), (SAVED, "เซลล์ยืนยัน ลงชีตแล้ว"),
+                     (SKIPPED, "เซลล์กดไม่บันทึก"), (FAILED, "ส่งการ์ด/ลงชีตไม่สำเร็จ")]
+
+    message_id = models.CharField("ข้อความ (LINE message id)", max_length=64, unique=True)
+    task = models.ForeignKey(LeadTask, verbose_name="งานจ่ายเบอร์", null=True, blank=True,
+                             on_delete=models.SET_NULL, related_name="report_rows")
+    code = models.CharField("เลขลีด", max_length=32, blank=True, db_index=True)
+    seller = models.ForeignKey("Employee", verbose_name="เซลล์", null=True, blank=True,
+                               on_delete=models.SET_NULL, related_name="lead_reports")
+    seller_name = models.CharField("ชื่อเซลล์", max_length=80, blank=True)
+    text = models.TextField("ข้อความ", blank=True)
+    sent_at = models.DateTimeField("ส่งเมื่อ", null=True, blank=True, db_index=True)
+    fields = models.JSONField("อ่านได้", default=dict, blank=True)
+    state = models.CharField("สถานะ", max_length=8, choices=STATE_CHOICES, default=NOTED, db_index=True)
+    asked_at = models.DateTimeField(null=True, blank=True)
+    done_at = models.DateTimeField(null=True, blank=True)
+    saved = models.JSONField("ผลลงชีต", default=dict, blank=True)
+    appt_at = models.DateTimeField("นัดลูกค้า", null=True, blank=True, db_index=True)
+    reminded_at = models.DateTimeField("เตือนนัดแล้ว", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "รายงานผลจากห้องจ่ายเบอร์"
+        verbose_name_plural = "รายงานผลจากห้องจ่ายเบอร์"
+        ordering = ["-sent_at", "-id"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.code or "-", self.seller_name or "-", (self.text or "")[:30])
