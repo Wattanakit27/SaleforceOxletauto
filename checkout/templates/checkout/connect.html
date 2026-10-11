@@ -334,33 +334,13 @@
   .lc-link { color: #EEEAF8; opacity: .72; text-decoration: none; padding: 2px 4px; }
   .lc-link:hover { opacity: 1; }
   .lc-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  /* ★ 11 ต.ค.69 เจ้าของ "ตัวหนังสือบอกเฉยๆ ไม่ต้องใหญ่ขนาดนั้น มันเปลืองพื้นที่" — หัวหน้าเหลือบรรทัดเดียว
-     ชื่อหน้า + คำอธิบายต่อท้ายในบรรทัดเดียวกัน (ยาวเกิน = ตัด … ไม่ดันขึ้นบรรทัดใหม่ · เอาเมาส์ชี้เห็นเต็ม) */
-  .lc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 16px; border-bottom: .5px solid var(--bd2); background: var(--bg); }
-  .lc-top .lc-tt { display: flex; align-items: baseline; gap: 8px; flex: 1 1 0; min-width: 140px; }
-  .lc-top .cn-sp { display: none; }
-  .lc-top h1 { margin: 0; font-size: 15px; font-weight: 800; white-space: nowrap; }
-  .lc-top .where { font-size: 12px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .lc-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--green); white-space: nowrap; }
-  .lc-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: block; animation: lcpulse 2s ease-in-out infinite; }
-  .lc-live .num { color: var(--t2); font-variant-numeric: tabular-nums; }
-  @keyframes lcpulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
-  /* แถบขั้นตอน 3 ชั้น (กล่องแชทรวม → ห้องพัก Lead → ใบจ่ายลีด) */
-  /* ★ 11 ต.ค.69 เดิมสูง ~94px (3 บรรทัด/ช่อง + บรรทัดอธิบาย "ลัด") → แถวเดียว ~30px · คำอธิบาย "ลัด" อยู่ใน tooltip */
-  .lc-flow { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)) auto; border: .5px solid var(--bd2); border-radius: 8px; background: var(--bg);
-             margin: 8px 12px 0; overflow: hidden; flex: none; }
-  .lc-fn { padding: 5px 12px; border-right: .5px solid var(--bd); display: flex; flex-direction: row; align-items: baseline; gap: 6px; min-width: 0;
-           position: relative; cursor: pointer; text-align: left; border-top: 0; border-bottom: 0; border-left: 0; background: none; white-space: nowrap; }
-  .lc-fn .k { font-size: 10.5px; color: var(--t3); flex: none; }
-  .lc-fn .t { font-weight: 700; font-size: 12.5px; flex: none; }
-  .lc-fn .s { font-size: 12px; color: var(--t2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .lc-fn.hot { background: var(--amber-bg); }
-  .lc-fn.hot .s { color: var(--amber); font-weight: 700; }
-  .lc-fn.on { box-shadow: inset 0 -3px 0 var(--blue); }
-  .lc-fn:not(:last-of-type)::after { content: "→"; position: absolute; right: -7px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px;
-           border-radius: 50%; background: var(--t1); color: var(--bg); font-size: 9px; display: grid; place-items: center; z-index: 2; }
-  .lc-fnote { display: flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 12px; color: var(--t2); background: var(--bg2);
-              white-space: nowrap; cursor: help; }
+  /* ★ 11 ต.ค.69 รอบ 5 เจ้าของ "ตัดออก ไม่ก็เหลือแค่ส่วนที่จำเป็นเท่านั้น" — เลิกแถวหัวหน้า (ชื่อหน้าซ้ำกับเมนู · คำอธิบาย · นาฬิกา)
+     และแถบขั้นตอน 3 ชั้น (ตัวเลขซ้ำกับป้ายบนเมนู) · เหลือ "เวรวันนี้ + กระดิ่ง" ย้ายมาอยู่ในแถบเมนู (.lc-st)
+     · คำอธิบายของแต่ละหน้าอยู่ใน title ของปุ่มเมนู (ชี้เมาส์เห็น) */
+  .lc-st { display: flex; align-items: center; gap: 6px; padding: 0 4px 12px; }
+  .lc-st .cn-chip { display: block; line-height: 1.45; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #EEEAF8; flex: 1 1 auto; white-space: normal; }
+  .lc-st .cn-chip b { color: #fff; }
+  .lc-st .cn-bell { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #EEEAF8; flex: none; }
   /* กล่องแชทรวม = 3 การ์ด (รายชื่อ · แชท · ข้อมูลลูกค้า) */
   .lc-shell .cn-main { flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: 340px minmax(0,1fr); gap: 10px; padding: 8px 12px 10px; }
   /* แท็บรายชื่อแถวเดียว (เดิมขึ้น 2 บรรทัด) — ไม่มีไอคอน · เกินกว่ากล่องก็เลื่อนแนวนอนได้ */
@@ -588,11 +568,7 @@
     .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 7px 10px; }
     .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
     .lc-foot .cn-chip { display: none; }
-    .lc-flow { grid-template-columns: repeat(3, minmax(0,1fr)); margin: 6px 8px 0; }
-    .lc-fn .k, .lc-fnote { display: none; }
-    .lc-fn:not(:last-of-type)::after { display: none; }
     .lc-shell .cn-main { grid-template-columns: minmax(0,1fr); padding: 6px 8px 8px; }
-    .lc-top { padding: 6px 12px; }
     .lc-page { padding: 10px 10px 30px; }
     .lc-lead { grid-template-columns: minmax(0,1fr); }
     .lc-lead .acts { align-items: flex-start; }
@@ -600,8 +576,7 @@
     .lc-frow { grid-template-columns: 110px minmax(0,1fr) auto; }
   }
   @media (max-width: 600px) {
-    .lc-flow, .lc-top .where, .lc-top .lc-live { display: none !important; }
-    .lc-top .lc-tt { min-width: 0; flex: 1 1 auto; }
+    .lc-st .lc-tmr { display: none; }               /* มือถือ: "เวรวันนี้ ทีม A" พอ */
   }
   html.embed .lc-rail { flex-direction: row; align-items: center; overflow-x: auto; padding: 7px 10px; gap: 6px; }
   html.embed .lc-brand { border-bottom: 0; border-right: 1px solid rgba(255,255,255,.14); padding: 0 12px 0 2px; margin: 0 4px 0 0; flex: none; }
@@ -610,7 +585,25 @@
   html.embed .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 6px 10px; }
   html.embed .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
   html.embed .lc-foot .cn-chip, html.embed #cn-back { display: none; }
-  html.embed .lc-top { padding: 5px 14px; }
+  /* แถบเมนูแนวนอน (ฝังในแดชบอร์ด / จอแคบ): เมนูซ้าย · เวร+กระดิ่ง+ลิงก์ชิดขวา · ไม่มีโลโก้ (แดชบอร์ด/หน้าเซลล์มีของตัวเองแล้ว) */
+  html.embed .lc-brand, html.embed #lc-classic { display: none; }
+  html.embed .lc-nav { order: 1; }
+  /* เวร+กระดิ่ง ติดขอบขวาเสมอ (sticky) — แอดมินบนมือถือแท็บเลื่อนเกินจอ กระดิ่งต้องไม่เลื่อนหายไปกับแท็บ */
+  html.embed .lc-st { order: 2; margin-left: auto; padding: 0 0 0 8px; flex: none; position: sticky; right: 0; z-index: 2;
+                      background: #1C1631; box-shadow: -10px 0 10px -4px #1C1631; }
+  html.embed .lc-st .cn-chip { white-space: nowrap; }
+  html.embed .lc-foot { order: 3; margin-left: 4px; }
+  @media (max-width: 900px) {
+    .lc-brand { display: none; }
+    .lc-nav { order: 1; }
+    .lc-st { order: 2; margin-left: auto; padding: 0 0 0 8px; flex: none; position: sticky; right: 0; z-index: 2;
+             background: #1C1631; box-shadow: -10px 0 10px -4px #1C1631; }
+    .lc-st .cn-chip { white-space: nowrap; }
+    .lc-foot { order: 3; margin-left: 4px; }
+  }
+  /* กล่องแจ้งเตือน (.lc-main = position:relative) — แถบเมนูแนวนอน: ใต้แถบ ชิดขวา · เมนูซ้ายจอกว้าง: ข้างเมนู ชิดบน */
+  .lc-main .cn-alerts { top: 6px; right: 12px; }
+  @media (min-width: 901px) { html:not(.embed) .lc-main .cn-alerts { left: 8px; right: auto; top: 8px; } }
 
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--t1); color: var(--bg);
            padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
@@ -728,6 +721,10 @@
   <div class="lc-shell" id="lc-shell">
   <nav class="lc-rail" id="lc-rail" aria-label="เมนูหลัก">
     <div class="lc-brand"><div class="mark"><span class="dot"></span>Oxlet Auto</div><div class="sub" id="lc-brand-sub">ศูนย์ควบคุมลีด</div></div>
+    <div class="lc-st">
+      <span class="cn-chip" id="cn-duty">เวรวันนี้ …</span>
+      <button class="btn sm cn-bell" id="cn-bell" title="แจ้งเตือน — ลูกค้าใหม่ · เลยเวลา · นัดวันนี้ · ลูกค้าเงียบ · รถใหม่ตรง"><span data-ic="bell"></span><span class="n" id="cn-bell-n" hidden></span></button>
+    </div>
     <div class="lc-nav" id="lc-nav"></div>
     <div class="lc-foot">
       <span class="cn-chip" id="cn-me"></span>
@@ -737,17 +734,8 @@
     </div>
   </nav>
   <div class="lc-main">
-  <header class="lc-top">
-    <div class="lc-tt"><h1 id="lc-title">กล่องแชทรวม</h1><div class="where" id="lc-sub"></div></div>
-    <span class="cn-chip hide-sm" id="cn-duty">เวรวันนี้ …</span>
-    <span class="cn-sp"></span>
-    <span id="cn-tools-top" style="display:flex;gap:6px"></span>
-    <button class="btn sm cn-bell" id="cn-bell" title="แจ้งเตือน — ลูกค้าใหม่ · เลยเวลา · นัดวันนี้ · ลูกค้าเงียบ · รถใหม่ตรง"><span data-ic="bell"></span><span class="n" id="cn-bell-n" hidden></span></button>
-    <span class="lc-live hide-sm"><i></i>นับเวลาจริง <span class="num" id="lc-clock">—</span></span>
-  </header>
   <div class="cn-alerts" id="cn-alerts" hidden></div>
   <div class="cn-banners" id="cn-banners"></div>
-  <div class="lc-flow" id="lc-flow" hidden></div>
   <div class="cn-main" id="cn-main">
     <aside class="cn-list">
       <div class="cn-tabs" id="cn-tabs"></div>
@@ -920,7 +908,7 @@
   function renderTop() {
     const d = S.duty;
     if (d) {
-      $('cn-duty').innerHTML = `เวรวันนี้ <b>ทีม ${h(d.today)}</b> · พรุ่งนี้ทีม ${h(d.tomorrow)}`;
+      $('cn-duty').innerHTML = `เวรวันนี้ <b>ทีม ${h(d.today)}</b><span class="lc-tmr"> · พรุ่งนี้ทีม ${h(d.tomorrow)}</span>`;
     }
     const me = $('cn-me');
     if (ADMIN) {
@@ -958,11 +946,7 @@
     const all = (ADMIN ? TABS_ADMIN : TABS_SELLER).filter(t => !t.needEmp || ME.empId);
     // ★ 10 ต.ค.69 ห้องพัก Lead / สถิติ / ตั้งค่า ย้ายไปเมนูซ้าย (ห้องพัก Lead · แดชบอร์ดทีม · กฎและเส้นทาง)
     const tabs = all.filter(t => !t.v.startsWith('_') && t.v !== 'tocode');
-    const tools = [];
     const cur = S.pane === 'stats' ? '_stats' : (S.pane === 'cfg' ? '_cfg' : S.view);
-    $('cn-tools-top').innerHTML = tools.map(t =>
-      `<button class="cn-tool${cur === t.v ? ' on' : ''}" data-v="${t.v}">${ic(t.i)} <span class="hide-sm">${h(t.l)}</span></button>`).join('');
-    $('cn-tools-top').querySelectorAll('.cn-tool').forEach(b => b.onclick = () => pickTab(b.dataset.v));
     $('cn-tabs').innerHTML = tabs.map(t => {
       let n = '';
       if (t.c) {
@@ -992,7 +976,7 @@
       sel.value = String(S.seller || 0);
     }
     applyHub();
-    renderRail(); renderFlow();
+    renderRail();
   }
 
   // ห้องพัก Lead = บอร์ดเต็มจอ (แอดมิน · เฉพาะตอนดูรายชื่อ — สถิติ/ตั้งค่ายังเป็น 2 ช่องเหมือนเดิม)
@@ -2528,7 +2512,7 @@
     const _top = CPG().scrollTop;
     CPG().innerHTML = `<div class="cn-page">
       ${rulesHtml()}
-      <div class="lc-sec" id="lc-cfg-h">ตั้งค่าละเอียด</div>
+      <div class="lc-sec" id="lc-cfg-h">ตั้งค่าละเอียด <a href="/connect/?classic=1${BOOT.embed ? '&embed=1' : ''}" style="float:right;font-weight:400;font-size:12px;color:var(--t3)">หน้าแบบเดิม (ช่วงเปลี่ยนผ่าน)</a></div>
       ${(d.status || []).map(s => `<div class="card" style="border-color:var(--${s.level === 'err' ? 'red' : 'amber'})"><b>${h(s.text)}</b>${s.fix ? `<div class="d" style="margin:6px 0 0">เปิดด้วยคำสั่งบนเซิร์ฟเวอร์: <code>${h(s.fix)}</code></div>` : ''}</div>`).join('')}
       <div class="card">
         <h3>เวรรับลูกค้าใหม่ (วันเว้นวัน)</h3>
@@ -2743,29 +2727,10 @@
   function renderRail() {
     const c = S.counts || {};
     const cnt = { inbox: ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0)), dist: (c.tocode || 0) + (c.parked || 0) };
-    $('lc-nav').innerHTML = rail().map(r => `<button class="lc-nb${S.panel === r.p ? ' on' : ''}" data-p="${r.p}">${ic(r.i)} ${h(r.l)}${
+    $('lc-nav').innerHTML = rail().map(r => `<button class="lc-nb${S.panel === r.p ? ' on' : ''}" data-p="${r.p}" title="${h(r.sub || '')}">${ic(r.i)} ${h(r.l)}${
       cnt[r.p] != null ? `<span class="count${cnt[r.p] ? '' : ' z'}">${cnt[r.p]}</span>` : ''}</button>`).join('');
     $('lc-nav').querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
-    const cur = rail().find(r => r.p === S.panel) || rail()[0];
-    $('lc-title').textContent = cur.l; $('lc-sub').textContent = cur.sub; $('lc-sub').title = cur.sub;
     $('lc-classic').href = '/connect/?classic=1' + (BOOT.embed ? '&embed=1' : '');
-  }
-  function renderFlow() {
-    const el = $('lc-flow');
-    const show = ADMIN && (S.panel === 'inbox' || S.panel === 'dist');
-    el.hidden = !show;
-    if (!show) return;
-    const c = S.counts || {}, L = S.lfStrip || {}, wait = (c.tocode || 0) + (c.parked || 0);
-    el.innerHTML = `
-      <button class="lc-fn${S.panel === 'inbox' ? ' on' : ''}" data-p="inbox"><span class="k">ชั้น 1</span><span class="t">กล่องแชทรวม (Connect)</span>
-        <span class="s">รอรับ ${c.queue || 0} · มีเจ้าของ ${c.owned || 0} · ทั้งหมด ${c.all || 0}</span></button>
-      <button class="lc-fn${S.panel === 'dist' ? ' on' : ''}${wait ? ' hot' : ''}" data-p="dist"><span class="k">ชั้น 2</span><span class="t">ห้องพัก Lead</span>
-        <span class="s">${wait} รอจ่ายเบอร์</span></button>
-      <button class="lc-fn" data-p="dist" data-hubtab="clock"><span class="k">ชั้น 3</span><span class="t">ใบจ่ายลีด → เซลล์</span>
-        <span class="s">วันนี้ ${L.today || 0} ใบ · ยังไม่รายงานผล ${L.open || 0}${L.late ? ' · เลยเวลา ' + L.late : ''}</span></button>
-      <div class="lc-fnote" title="ใบร่างจากกลุ่ม ADMIN เก็บ Lead (TikTok · ไลฟ์ · เพจ) และสายเข้าเบอร์กลาง ข้ามชั้น 1 เข้าห้องพักตรง เพราะได้เบอร์มาแล้วและแอดมินคัดมาแล้ว"><span class="lc-origin direct">ลัด</span> ใบร่าง/สายเข้า → ชั้น 2</div>`;
-    el.querySelectorAll('.lc-fn').forEach(b => { b.title = b.textContent.replace(/\s+/g, ' ').trim(); });
-    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { if (b.dataset.hubtab) S.hubTab = b.dataset.hubtab; setPanel(b.dataset.p); });
   }
   function setPanel(p, first) {
     if (!rail().some(r => r.p === p)) p = 'inbox';
@@ -2782,7 +2747,7 @@
       if (BOOT.embed) q.set('embed', '1');
       history.replaceState(null, '', '/connect/' + (q.toString() ? '?' + q.toString() : ''));
     } catch (e) {}
-    renderRail(); renderFlow();
+    renderRail();
     if (p === 'inbox') {
       if (S.view === 'tocode' || !S.view) S.view = ADMIN ? 'queue' : '';
       if (!S.openId) renderBlank();
@@ -2802,7 +2767,7 @@
   }
   window.__lcGo = setPanel;
 
-  // นาฬิกาหัวหน้า + เวลาที่ลีดพักอยู่ (data-since) — ทุกวินาที ไม่ยิงเซิร์ฟเวอร์
+  // เวลาที่ลีดพักอยู่ (data-since) — ทุกวินาที ไม่ยิงเซิร์ฟเวอร์
   function slaOf(sinceIso) {
     const m = Math.max(0, Math.floor((nowMs() - Date.parse(sinceIso)) / 1000));
     const mm = Math.floor(m / 60);
@@ -2810,8 +2775,6 @@
              cls: mm < 10 ? 'ok' : (mm < 30 ? 'warn' : 'crit') };
   }
   setInterval(() => {
-    const n = new Date(nowMs());
-    const ck = $('lc-clock'); if (ck) ck.textContent = pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
     document.querySelectorAll('[data-since]').forEach(el => {
       const s = slaOf(el.dataset.since);
       const t = el.querySelector('.num'); if (t) t.textContent = s.text;

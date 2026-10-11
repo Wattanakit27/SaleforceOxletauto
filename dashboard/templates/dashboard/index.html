@@ -88,6 +88,8 @@
       .pipe-lbl { font-size: var(--fs-body); }
       .card { padding: 11px 9px; }
     }
+  /* ★ 11 ต.ค.69 แท็บ Connect บนจอกว้าง: ไม่มีหัวเว็บ — แถบเมนูซ้ายมีโลโก้/ผู้ใช้/ออกจากระบบอยู่แล้ว · กรอบแชทยืดขึ้นไปเต็มจอ */
+  @media (min-width: 1100px) { body.has-sidebar header.hdr-cn { display: none !important; } }
   </style>
 </head>
 <body>
@@ -1345,8 +1347,11 @@
 
       // Header
       // ★ 11 ต.ค.69 แท็บ Connect = หัวเว็บเตี้ย (ไม่มี breadcrumb · ชื่อหน้าเล็กลง) เอาที่ไปให้แชท — เจ้าของ "ช่อง chat เล็กไป"
+      // ★ 11 ต.ค.69 รอบ 5 เจ้าของ "ตัดออก ไม่ก็เหลือแค่ส่วนที่จำเป็นเท่านั้น":
+      //   จอกว้าง (มีแถบเมนูซ้าย) = ไม่มีหัวเว็บเลย (class hdr-cn · แถบเมนูของ Connect เป็นหัวแทน)
+      //   จอแคบ = เหลือ ☰ + โลโก้ + สลับธีม + ออกจากระบบ (ป้ายบทบาท/ออนไลน์/กระดิ่ง/ดูในฐานะ/รีเฟรช ไม่เกี่ยวกับแชท)
       const _hdrSlim = tab === 'cn';
-      html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:${_hdrSlim?'8px':'14px'};padding:${_hdrSlim?'6px 14px':'13px 18px'};background:var(--bg);border:.5px solid var(--bd);border-radius:${_hdrSlim?'12px':'16px'};box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
+      html += `<header${_hdrSlim ? ' class="hdr-cn"' : ''} style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:${_hdrSlim?'8px':'14px'};padding:${_hdrSlim?'6px 14px':'13px 18px'};background:var(--bg);border:.5px solid var(--bd);border-radius:${_hdrSlim?'12px':'16px'};box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
       html += `<div style="display:flex;align-items:center;gap:13px">`;
       // display:none ตรงนี้ = ค่าปลอดภัยถ้า CSS ใหม่ยังไม่มา (หัวเว็บจะหน้าตาเหมือนเดิมทุกอย่าง)
       html += `<div class="hdr-page" style="display:none">${_hdrSlim ? '' : `<div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div>`}<div class="hdr-h1"${_hdrSlim?' style="font-size:16px"':''}>${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
@@ -1354,7 +1359,9 @@
       html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:${_hdrSlim?30:42}px;width:auto;display:block">`;
       html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:${_hdrSlim?17:22}px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span>${_hdrSlim ? '' : `<span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span>`}</div>`;
       // Viewer badge
-      if(canViewAll) {
+      if(_hdrSlim) {
+        // แท็บ Connect: ไม่มีป้ายบทบาท
+      } else if(canViewAll) {
         const roleLabel = isAdmin ? 'Admin' : 'ผู้บริหาร';
         const roleBg = isAdmin ? 'var(--amber-bg)' : 'var(--purple-bg)';
         const roleFg = isAdmin ? 'var(--amber)' : 'var(--purple)';
@@ -1370,7 +1377,7 @@
       html += `</div>`;
       html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">`;
       // Admin-only: หัวเว็บเหลือแค่ "ตัวบอกสถานะสด" (ออนไลน์/กระดิ่ง) — เครื่องมือจัดการย้ายเข้า drawer แล้ว (ดู ADMIN_MENU)
-      if(isAdmin) {
+      if(isAdmin && !_hdrSlim) {
         // 🟢 คนเข้าเว็บตอนนี้ (online now) — heartbeat อัปเดต #online-count ทุก ~45 วิ
         html += `<button id="online-now" onclick="openOnlinePanel()" title="คนกำลังใช้งานเว็บตอนนี้ — กดดูรายชื่อ (อัปเดต ~45 วิ)" style="font-size:var(--fs-body);padding:5px 11px;border-radius:7px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer">${ic('lucide:radio',14)} <span id="online-count">${_onlineNow!=null?_onlineNow:'–'}</span> ออนไลน์</button>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
@@ -1381,7 +1388,7 @@
         html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: รถค้างนาน / เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:var(--fs-body);padding:5px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
-      if(canViewAll && D.sellers) {
+      if(canViewAll && D.sellers && !_hdrSlim) {
         const allNames = D.sellers.map(s=>s.name);
         const selfLabel = isAdmin ? 'Admin (ทั้งหมด)' : 'ผู้บริหาร (ทั้งหมด)';
         html += `<select onchange="setImpersonate(this.value)" style="font-size:var(--fs-body);padding:3px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">`;
@@ -1390,7 +1397,7 @@
         html += `</select>`;
       }
       html += `<button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:var(--fs-body);padding:4px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>`;
-      html += `<button onclick="location.reload()" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:refresh-cw',15)} รีเฟรช</button>`;
+      if(!_hdrSlim) html += `<button onclick="location.reload()" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:refresh-cw',15)} รีเฟรช</button>`;
       // ออกจากระบบ — ทุกคนที่เห็นหน้านี้ login แล้ว (admin/ผู้บริหาร). role กำหนดตอน login ที่ /login/
       html += `<button class="hdr-logout" onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:log-out',15)} ออกจากระบบ</button>`;
       html += `</div></header>`;
