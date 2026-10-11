@@ -44,7 +44,7 @@
   html.embed .cn-back { display: none; }
 
   .cn-banners:empty { display: none; }
-  .cn-banner { display: flex; gap: 8px; align-items: flex-start; padding: 8px 16px; border-bottom: .5px solid var(--bd); }
+  .cn-banner { display: flex; gap: 8px; align-items: flex-start; padding: 5px 14px; border-bottom: .5px solid var(--bd); font-size: 12.5px; line-height: 1.5; }
   .cn-banner.err { background: var(--red-bg); color: var(--red); }
   .cn-banner.warn { background: var(--amber-bg); color: var(--amber); }
   .cn-banner code { background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
@@ -320,30 +320,42 @@
   .lc-link { color: #EEEAF8; opacity: .72; text-decoration: none; padding: 2px 4px; }
   .lc-link:hover { opacity: 1; }
   .lc-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .lc-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 20px; border-bottom: .5px solid var(--bd2); background: var(--bg); }
-  .lc-top h1 { margin: 0; font-size: 18px; font-weight: 800; }
-  .lc-top .where { font-size: 12px; color: var(--t3); margin-top: 1px; }
+  /* ★ 11 ต.ค.69 เจ้าของ "ตัวหนังสือบอกเฉยๆ ไม่ต้องใหญ่ขนาดนั้น มันเปลืองพื้นที่" — หัวหน้าเหลือบรรทัดเดียว
+     ชื่อหน้า + คำอธิบายต่อท้ายในบรรทัดเดียวกัน (ยาวเกิน = ตัด … ไม่ดันขึ้นบรรทัดใหม่ · เอาเมาส์ชี้เห็นเต็ม) */
+  .lc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 16px; border-bottom: .5px solid var(--bd2); background: var(--bg); }
+  .lc-top .lc-tt { display: flex; align-items: baseline; gap: 8px; flex: 1 1 0; min-width: 140px; }
+  .lc-top .cn-sp { display: none; }
+  .lc-top h1 { margin: 0; font-size: 15px; font-weight: 800; white-space: nowrap; }
+  .lc-top .where { font-size: 12px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .lc-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--green); white-space: nowrap; }
   .lc-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: block; animation: lcpulse 2s ease-in-out infinite; }
   .lc-live .num { color: var(--t2); font-variant-numeric: tabular-nums; }
   @keyframes lcpulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
   /* แถบขั้นตอน 3 ชั้น (กล่องแชทรวม → ห้องพัก Lead → ใบจ่ายลีด) */
-  .lc-flow { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border: .5px solid var(--bd2); border-radius: 10px; background: var(--bg);
-             margin: 13px 18px 0; overflow: hidden; flex: none; }
-  .lc-fn { padding: 9px 14px; border-right: .5px solid var(--bd); display: flex; flex-direction: column; gap: 1px; min-width: 0; position: relative;
-           cursor: pointer; text-align: left; border-top: 0; border-bottom: 0; border-left: 0; background: none; }
-  .lc-fn:last-of-type { border-right: 0; }
-  .lc-fn .k { font-size: 10px; letter-spacing: .1em; color: var(--t3); }
-  .lc-fn .t { font-weight: 700; font-size: 13.5px; }
-  .lc-fn .s { font-size: 12px; color: var(--t2); }
+  /* ★ 11 ต.ค.69 เดิมสูง ~94px (3 บรรทัด/ช่อง + บรรทัดอธิบาย "ลัด") → แถวเดียว ~30px · คำอธิบาย "ลัด" อยู่ใน tooltip */
+  .lc-flow { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)) auto; border: .5px solid var(--bd2); border-radius: 8px; background: var(--bg);
+             margin: 8px 12px 0; overflow: hidden; flex: none; }
+  .lc-fn { padding: 5px 12px; border-right: .5px solid var(--bd); display: flex; flex-direction: row; align-items: baseline; gap: 6px; min-width: 0;
+           position: relative; cursor: pointer; text-align: left; border-top: 0; border-bottom: 0; border-left: 0; background: none; white-space: nowrap; }
+  .lc-fn .k { font-size: 10.5px; color: var(--t3); flex: none; }
+  .lc-fn .t { font-weight: 700; font-size: 12.5px; flex: none; }
+  .lc-fn .s { font-size: 12px; color: var(--t2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .lc-fn.hot { background: var(--amber-bg); }
   .lc-fn.hot .s { color: var(--amber); font-weight: 700; }
   .lc-fn.on { box-shadow: inset 0 -3px 0 var(--blue); }
-  .lc-fn:not(:last-of-type)::after { content: "→"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px;
-           border-radius: 50%; background: var(--t1); color: var(--bg); font-size: 10px; display: grid; place-items: center; z-index: 2; }
-  .lc-fnote { grid-column: 1 / -1; border-top: .5px solid var(--bd); padding: 6px 14px; font-size: 12px; color: var(--t2); background: var(--bg2); }
+  .lc-fn:not(:last-of-type)::after { content: "→"; position: absolute; right: -7px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px;
+           border-radius: 50%; background: var(--t1); color: var(--bg); font-size: 9px; display: grid; place-items: center; z-index: 2; }
+  .lc-fnote { display: flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 12px; color: var(--t2); background: var(--bg2);
+              white-space: nowrap; cursor: help; }
   /* กล่องแชทรวม = 3 การ์ด (รายชื่อ · แชท · ข้อมูลลูกค้า) */
-  .lc-shell .cn-main { flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: 340px minmax(0,1fr); gap: 13px; padding: 13px 18px 16px; }
+  .lc-shell .cn-main { flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: 340px minmax(0,1fr); gap: 10px; padding: 8px 12px 10px; }
+  /* แท็บรายชื่อแถวเดียว (เดิมขึ้น 2 บรรทัด) — ไม่มีไอคอน · เกินกว่ากล่องก็เลื่อนแนวนอนได้ */
+  .lc-shell .cn-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 3px; padding: 6px 8px 5px; }
+  .lc-shell .cn-tabs::-webkit-scrollbar { display: none; }
+  .lc-shell .cn-tab { padding: 4px 8px; gap: 4px; white-space: nowrap; flex: none; }
+  .lc-shell .cn-tab svg { display: none; }
+  .lc-shell .cn-tools { padding: 0 8px 6px; }
+  .lc-shell .cn-tools input, .lc-shell .cn-tools select { padding: 6px 9px; }
   .lc-shell .cn-list, .lc-shell .cn-pane { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; overflow: hidden; }
   .lc-shell .cn-list { border-right: .5px solid var(--bd2); }
   .lc-shell .cn-row.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 #DB2777; }
@@ -562,11 +574,11 @@
     .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 7px 10px; }
     .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
     .lc-foot .cn-chip { display: none; }
-    .lc-flow { grid-template-columns: minmax(0,1fr); }
-    .lc-fn { border-right: 0; border-bottom: .5px solid var(--bd); }
+    .lc-flow { grid-template-columns: repeat(3, minmax(0,1fr)); margin: 6px 8px 0; }
+    .lc-fn .k, .lc-fnote { display: none; }
     .lc-fn:not(:last-of-type)::after { display: none; }
-    .lc-shell .cn-main { grid-template-columns: minmax(0,1fr); padding: 10px; }
-    .lc-top { padding: 10px 12px; }
+    .lc-shell .cn-main { grid-template-columns: minmax(0,1fr); padding: 6px 8px 8px; }
+    .lc-top { padding: 6px 12px; }
     .lc-page { padding: 10px 10px 30px; }
     .lc-lead { grid-template-columns: minmax(0,1fr); }
     .lc-lead .acts { align-items: flex-start; }
@@ -574,7 +586,8 @@
     .lc-frow { grid-template-columns: 110px minmax(0,1fr) auto; }
   }
   @media (max-width: 600px) {
-    .lc-flow, .lc-top .where { display: none !important; }
+    .lc-flow, .lc-top .where, .lc-top .lc-live { display: none !important; }
+    .lc-top .lc-tt { min-width: 0; flex: 1 1 auto; }
   }
   html.embed .lc-rail { flex-direction: row; align-items: center; overflow-x: auto; padding: 7px 10px; gap: 6px; }
   html.embed .lc-brand { border-bottom: 0; border-right: 1px solid rgba(255,255,255,.14); padding: 0 12px 0 2px; margin: 0 4px 0 0; flex: none; }
@@ -583,8 +596,7 @@
   html.embed .lc-nb { white-space: nowrap; width: auto; flex: none; padding: 6px 10px; }
   html.embed .lc-foot { flex-direction: row; border-top: 0; margin: 0 0 0 auto; padding: 0; align-items: center; flex: none; }
   html.embed .lc-foot .cn-chip, html.embed #cn-back { display: none; }
-  html.embed .lc-top { padding: 8px 14px; }
-  html.embed .lc-top h1 { font-size: 16px; }
+  html.embed .lc-top { padding: 5px 14px; }
 
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--t1); color: var(--bg);
            padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
@@ -620,7 +632,10 @@
   .tag.ap.late { background: var(--red); color: #fff; }
   .tag.match { background: var(--green-bg); color: var(--green); }
   html[data-theme="dark"] .tag.st-viewing, html[data-theme="dark"] .tag.st-finance, html[data-theme="dark"] .tag.ap:not(.late) { background: rgba(167,139,250,.18); color: #c4b5fd; }
-  .cn-quick { display: flex; gap: 5px; padding: 0 10px 8px; overflow-x: auto; scrollbar-width: thin; }
+  .cn-quick { display: flex; gap: 5px; padding: 0 10px 6px; overflow-x: auto; scrollbar-width: none; }
+  .cn-quick::-webkit-scrollbar { display: none; }
+  .cn-quick.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+                   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
   .cn-quick button { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 7px; border: .5px solid var(--bd2);
                      background: var(--bg2); color: var(--t2); cursor: pointer; flex: none; }
   .cn-quick button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
@@ -696,7 +711,7 @@
   </nav>
   <div class="lc-main">
   <header class="lc-top">
-    <div><h1 id="lc-title">กล่องแชทรวม</h1><div class="where" id="lc-sub"></div></div>
+    <div class="lc-tt"><h1 id="lc-title">กล่องแชทรวม</h1><div class="where" id="lc-sub"></div></div>
     <span class="cn-chip hide-sm" id="cn-duty">เวรวันนี้ …</span>
     <span class="cn-sp"></span>
     <span id="cn-tools-top" style="display:flex;gap:6px"></span>
@@ -1022,9 +1037,19 @@
     const show = S.panel === 'inbox';
     el.hidden = !show; if (!show) { $('cn-flt').hidden = true; return; }
     const n = fltCount();
-    el.innerHTML = QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('')
-      + `<button data-q="more" class="${S.fltOpen ? 'on' : ''}">ตัวกรองเพิ่ม${n ? ' (' + n + ')' : ''} ▾</button>`
-      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '');
+    el.innerHTML = `<button data-q="more" class="${S.fltOpen ? 'on' : ''}">ตัวกรองเพิ่ม${n ? ' (' + n + ')' : ''} ▾</button>`
+      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '')
+      + QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('');
+    if (!el.dataset.wheel) {
+      el.dataset.wheel = '1';
+      // ล้อเมาส์ = เลื่อนแนวนอน (ปุ่มกรองยาวเกินกล่อง และไม่มีแถบเลื่อนให้เห็นแล้ว)
+      el.addEventListener('wheel', e => {
+        if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        el.scrollLeft += e.deltaY; e.preventDefault();
+      }, { passive: false });
+      el.addEventListener('scroll', () => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
+    }
+    requestAnimationFrame(() => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
     el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
       const q = b.dataset.q;
       if (q === 'more') { S.fltOpen = !S.fltOpen; renderFltPanel(); renderQuick(); return; }
@@ -2688,7 +2713,7 @@
       cnt[r.p] != null ? `<span class="count${cnt[r.p] ? '' : ' z'}">${cnt[r.p]}</span>` : ''}</button>`).join('');
     $('lc-nav').querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
     const cur = rail().find(r => r.p === S.panel) || rail()[0];
-    $('lc-title').textContent = cur.l; $('lc-sub').textContent = cur.sub;
+    $('lc-title').textContent = cur.l; $('lc-sub').textContent = cur.sub; $('lc-sub').title = cur.sub;
     $('lc-classic').href = '/connect/?classic=1' + (BOOT.embed ? '&embed=1' : '');
   }
   function renderFlow() {
@@ -2704,7 +2729,8 @@
         <span class="s">${wait} รอจ่ายเบอร์</span></button>
       <button class="lc-fn" data-p="dist" data-hubtab="clock"><span class="k">ชั้น 3</span><span class="t">ใบจ่ายลีด → เซลล์</span>
         <span class="s">วันนี้ ${L.today || 0} ใบ · ยังไม่รายงานผล ${L.open || 0}${L.late ? ' · เลยเวลา ' + L.late : ''}</span></button>
-      <div class="lc-fnote"><span class="lc-origin direct">ลัด</span> ใบร่างจากกลุ่ม <b>ADMIN เก็บ Lead</b> (TikTok · ไลฟ์ · เพจ) และสายเข้าเบอร์กลาง ข้ามชั้น 1 เข้าห้องพักตรง เพราะได้เบอร์มาแล้วและแอดมินคัดมาแล้ว</div>`;
+      <div class="lc-fnote" title="ใบร่างจากกลุ่ม ADMIN เก็บ Lead (TikTok · ไลฟ์ · เพจ) และสายเข้าเบอร์กลาง ข้ามชั้น 1 เข้าห้องพักตรง เพราะได้เบอร์มาแล้วและแอดมินคัดมาแล้ว"><span class="lc-origin direct">ลัด</span> ใบร่าง/สายเข้า → ชั้น 2</div>`;
+    el.querySelectorAll('.lc-fn').forEach(b => { b.title = b.textContent.replace(/\s+/g, ' ').trim(); });
     el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { if (b.dataset.hubtab) S.hubTab = b.dataset.hubtab; setPanel(b.dataset.p); });
   }
   function setPanel(p, first) {

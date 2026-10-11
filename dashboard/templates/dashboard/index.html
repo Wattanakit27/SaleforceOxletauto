@@ -1344,13 +1344,15 @@
       if (_inSocial) _soLastTab = tab;          // กดปุ่ม "โซเชียล" ครั้งถัดไป = กลับมาแพลตฟอร์มที่ดูล่าสุด
 
       // Header
-      html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:13px 18px;background:var(--bg);border:.5px solid var(--bd);border-radius:16px;box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
+      // ★ 11 ต.ค.69 แท็บ Connect = หัวเว็บเตี้ย (ไม่มี breadcrumb · ชื่อหน้าเล็กลง) เอาที่ไปให้แชท — เจ้าของ "ช่อง chat เล็กไป"
+      const _hdrSlim = tab === 'cn';
+      html += `<header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:${_hdrSlim?'8px':'14px'};padding:${_hdrSlim?'6px 14px':'13px 18px'};background:var(--bg);border:.5px solid var(--bd);border-radius:${_hdrSlim?'12px':'16px'};box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
       html += `<div style="display:flex;align-items:center;gap:13px">`;
       // display:none ตรงนี้ = ค่าปลอดภัยถ้า CSS ใหม่ยังไม่มา (หัวเว็บจะหน้าตาเหมือนเดิมทุกอย่าง)
-      html += `<div class="hdr-page" style="display:none"><div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div><div class="hdr-h1">${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
+      html += `<div class="hdr-page" style="display:none">${_hdrSlim ? '' : `<div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div>`}<div class="hdr-h1"${_hdrSlim?' style="font-size:16px"':''}>${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
       html += `<button class="nav-burger" onclick="toggleNav()" title="เมนู — แท็บทั้งหมด" aria-label="เปิดเมนู">${ic('lucide:menu',20)}</button>`;
-      html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:42px;width:auto;display:block">`;
-      html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:22px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span><span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span></div>`;
+      html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:${_hdrSlim?30:42}px;width:auto;display:block">`;
+      html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:${_hdrSlim?17:22}px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span>${_hdrSlim ? '' : `<span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span>`}</div>`;
       // Viewer badge
       if(canViewAll) {
         const roleLabel = isAdmin ? 'Admin' : 'ผู้บริหาร';
@@ -6291,7 +6293,7 @@
     function fitConnectFrame(){
       const f = document.getElementById('cnFrame'); if(!f) return;
       const top = f.getBoundingClientRect().top + window.scrollY;
-      f.style.height = Math.max(520, window.innerHeight - top - 12) + 'px';
+      f.style.height = Math.max(520, window.innerHeight - top - 8) + 'px';
     }
     window.addEventListener('resize', fitConnectFrame);
 
