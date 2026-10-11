@@ -2135,13 +2135,14 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
     return out[:limit]
 
 
-def autofill(o, msgs=None, slip_min=None) -> ChatLead:
+def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
     """เติมข้อมูลลีดอัตโนมัติ — **เฉพาะช่องที่ว่างและยังไม่เคยเติม** ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด
 
     ที่มา: แชท (เบอร์ · รถที่ถาม · รุ่นแบบ "CAR / สูตร") · ระบบ (ช่องทาง LINE@ · สาขา · Admin ที่โอน/ตอบ) ·
     **ใบจ่ายลีดในกลุ่มจ่ายเบอร์** (Code/ADS/Account/ชื่อลูกค้า/ID LINE/ช่องทาง/รถ — ถ้าเบอร์หรือชื่อไลน์ตรง)
     ช่องที่ชีตเป็น dropdown → เติมเฉพาะค่าที่อยู่ในตัวเลือกของชีต (`dd_pick`) ไม่ตรงสักตัว = ไม่เติม
     `msgs` = ข้อความลูกค้า (เก่า→ใหม่) ที่โหลดมาแล้วสำหรับหน้าแชท (ไม่ต้อง query ซ้ำ)
+    `events` = แชททั้ง 2 ฝั่ง (dict จาก `messages()`) — ใช้จับลีดรับซื้อจากข้อความของเรา/รูปที่ลูกค้าส่ง
     """
     lead = lead_of(o)
     # ★ 4 ต.ค.69 — ลูกค้าจำลองก็เติมให้ (เดิมข้ามทั้งหมด → เจ้าของทดสอบด้วยลูกค้าจำลองแล้วเห็นฟอร์มว่างทุกช่อง
@@ -2163,7 +2164,8 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
         changed.append(field)
 
     if msgs is None:
-        msgs = [m["text"] for m in messages(o) if m["dir"] == "in" and m["text"] and not m["text"].startswith("[")]
+        events = messages(o) if events is None else events
+        msgs = [m["text"] for m in events if m["dir"] == "in" and m["text"] and not m["text"].startswith("[")]
     ph = phones_in(msgs)
     if ph:
         put("phone", ph[0], "แชท")
@@ -2295,7 +2297,7 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
     # ★ 7 ต.ค.69 — อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/ประเภทลูกค้า/สถานะลูกค้า จับ keyword จากแชท + โน้ตในฟอร์ม
     changed += apply_keywords(lead, auto, msgs, _lead_notes(lead))
     # ★ 11 ต.ค.69 ลีดรับซื้อรถ vs ลีดขายรถ (+ มีรถเทิร์น) — คนตั้งไว้แล้วไม่เดาทับ
-    if apply_deal_kind(lead, auto, msgs):
+    if apply_deal_kind(lead, auto, msgs, events=deal_events(events)):
         changed.append(BUYLEAD_KEY)
     # type = ตามตัวหน้าของเลขลีด (เลขจากใบจ่ายลีด/คนกรอก) — NLD=Moderate · WLD=Hot · HLD=Very Hot · BLD · TLD
     #   ปุ่มจ่ายเบอร์เติมให้อยู่แล้ว · ตรงนี้สำหรับเลขที่มาทางอื่น (ใบในกลุ่ม/คนพิมพ์) · R/A นำหน้า = type เดียวกับตัวหน้า
@@ -2567,12 +2569,18 @@ def deal_of(lead) -> str:
     return "buy" if (BUY_KEY in auto or BUYLEAD_KEY in auto) else "sell"
 
 
-def apply_deal_kind(lead, auto: dict, texts_in, texts_out=()) -> bool:
+def deal_events(msgs) -> list:
+    """แชท (dict จาก `messages()`) → ไทม์ไลน์ให้ `lead_keywords.deal_kind` นับรูปที่ลูกค้าส่งหลังเราขอ"""
+    return [(m.get("dir") or "in", m.get("text") or "", (m.get("type") or "") in ("image", "video"))
+            for m in (msgs or []) if isinstance(m, dict)]
+
+
+def apply_deal_kind(lead, auto: dict, texts_in, texts_out=(), events=None) -> bool:
     """จับว่าเป็นลีดรับซื้อ/มีรถเทิร์นจากแชท → แก้ `auto` (ยังไม่ save) · คืนว่าเปลี่ยนไหม
     · มีเลขลีดขายแล้ว / คนยืนยันว่าเป็นลีดขาย / แอดมินติ๊กรับ lead (ห้องพักขาย) = ไม่จัดเป็นรับซื้อ
     · ระบบจัดเป็นรับซื้อไว้ แล้วลูกค้าพูดถึงรถเทิร์นทีหลัง = กลับเป็นลีดขาย (คนตั้งไว้ = ไม่แตะ)"""
     from . import lead_keywords as K
-    r = K.deal_kind(texts_in, texts_out)
+    r = K.deal_kind(texts_in, texts_out, events)
     changed = False
     now = _iso(timezone.now())
     if r["trade"] and TRADE_KEY not in auto:
@@ -2638,6 +2646,49 @@ def set_deal_kind(o, kind: str, by: str = ""):
     lead.updated_by = who
     lead.save(update_fields=["auto", "updated_by", "updated_at"])
     return True, msg
+
+
+def scan_deals(days: int = 30, apply: bool = False, limit: int = 3000) -> dict:
+    """เก็บตก: แชทที่ลูกค้าทักภายใน `days` วัน (ก่อนมีตัวจับลีดรับซื้อ) → จัดประเภทย้อนหลัง
+    ของใหม่จับตอนข้อความเข้า/เปิดแชทอยู่แล้ว · `apply=False` = ดูเฉยๆ ไม่เขียน · คืน {checked, buy, trade, already, rows}
+    ไม่แตะแชทที่คนตั้งประเภทไว้แล้ว/มีเลขลีดขาย/ส่งจัดซื้อแล้ว (กติกาเดียวกับ `apply_deal_kind`)"""
+    from . import lead_keywords as K
+    since = timezone.now() - timedelta(days=days)
+    out = {"checked": 0, "buy": 0, "trade": 0, "already": 0, "rows": []}
+    qs = (ChatOwner.objects.select_related("profile", "fb_profile", "lead")
+          .filter(last_in_at__gte=since).order_by(F("last_in_at").desc(nulls_last=True)))
+    for o in qs[:limit]:
+        if is_sim_row(o):
+            continue
+        out["checked"] += 1
+        lead = lead_of(o, create=False)
+        if lead and deal_of(lead) == "buy":
+            out["already"] += 1
+            continue
+        ms = messages(o, limit=120)
+        ins = [m["text"] for m in ms if m["dir"] == "in" and m["text"] and not m["text"].startswith("[")]
+        evs = deal_events(ms)
+        r = K.deal_kind(ins, (), evs)
+        if not r["kind"] and not r["trade"]:
+            continue
+        if not apply:
+            # ดูเฉยๆ: ประเมินด้วยกติกาเดียวกับตอนเขียน (สำเนา auto ไม่ save)
+            probe = lead or ChatLead(chat=o)
+            auto = dict(probe.auto or {})
+            apply_deal_kind(probe, auto, ins, (), evs)
+            got = "buy" if BUYLEAD_KEY in auto else ("trade" if TRADE_KEY in auto else "")
+        else:
+            lead = lead or lead_of(o)
+            auto = dict(lead.auto or {})
+            if apply_deal_kind(lead, auto, ins, (), evs):
+                lead.auto = auto
+                lead.save(update_fields=["auto", "updated_at"])
+            got = "buy" if BUYLEAD_KEY in (lead.auto or {}) else ("trade" if TRADE_KEY in (lead.auto or {}) else "")
+        if got:
+            out[got] += 1
+            out["rows"].append({"id": o.id, "kind": got, "src": "fb" if is_fb(o) else "line",
+                                "why": r["why"] if got == "buy" else r["trade"]})
+    return out
 
 
 def last_buy_code() -> dict:
@@ -2844,15 +2895,16 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
     outs = [m["text"] for m in allm if m.get("dir") == "out" and m.get("text")]
     lead = lead_of(o, create=False)
     from . import lead_keywords as K
+    evs = deal_events(allm)
     if not lead:
-        dk = K.deal_kind(texts, outs)
+        dk = K.deal_kind(texts, outs, evs)
         if not K.extract(texts) and not dk["kind"] and not dk["trade"]:
             return False
     lead = lead or lead_of(o)
     auto = dict(lead.auto or {})
     got = apply_keywords(lead, auto, texts, _lead_notes(lead))
     # ★ 11 ต.ค.69 ลีดรับซื้อ (ลูกค้าอยากขายรถให้เรา) / มีรถเทิร์น — จับตอนข้อความเข้า ลีดแยกแท็บทันที
-    deal = apply_deal_kind(lead, auto, texts, outs)
+    deal = apply_deal_kind(lead, auto, texts, outs, evs)
     if got or deal:
         lead.auto = auto
         lead.save(update_fields=got + ["auto", "updated_at"])

@@ -391,7 +391,7 @@ def api_chat(request):
     if acc == "full":
         try:
             C.capture_contact(o, msgs)                # เบอร์/ID LINE ที่ลูกค้าให้ (รวมไอดีที่ส่งหลังเราขอ)
-            lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"])
+            lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"], events=msgs)
             out["lead"] = C.lead_json(o, lead)
             out["leadEditable"] = bool(admin or mine)
             out["leadOptions"] = C.lead_options()

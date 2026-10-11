@@ -2722,6 +2722,49 @@ try:
     ck("★ Run Auto ไม่เอาลีดรับซื้อไปจ่ายเบอร์", B5.id not in [int(x) for x in plan_ids], plan_ids)
     C.save_cfg(dict(C.cfg(), room_chat_auto=False))
 
+    # ── ★ 11 ต.ค.69 (ดึก) "คนที่ส่งรูปรถมาเยอะๆ หลังจาก admin พิมพ์ขอดูรูปหรือเล่ม หน้า 18" — ข้อความของเราชี้ขาด ──
+    print("[36b] ลีดรับซื้อจากข้อความของเรา (ฝ่ายจัดซื้อ/สำเนาเล่ม) + รูปที่ลูกค้าส่งหลังเราขอ")
+    t0 = timezone.now() - timedelta(minutes=30)
+    # เคสจริงในรูปที่ผู้ใช้ส่ง (Facebook): ลูกค้าส่งรูปรถ → แอดมินตอบ "จะประสานงานให้เจ้าหน้าที่ฝ่ายจัดซื้อติดต่อกลับ"
+    fpb = FbProfile.objects.create(channel="111", user_id="PSIDBUY1", thread_id="t_buy1", display_name="Bryan ทดสอบ")
+    FB1 = ChatOwner.objects.create(fb_profile=fpb, last_at=timezone.now(), last_in_at=timezone.now(), awaiting_since=t0)
+    for i, (d_, ty, tx) in enumerate([
+            ("in", "image", ""), ("in", "image", ""), ("in", "text", "สภาพดี ใช้ถนอม เข้าศูนย์เช็คระยะตลอดคับ"),
+            ("out", "text", "ขอบพระคุณครับลูกค้า แอดมินจะประสานงานให้เจ้าหน้าที่ฝ่ายจัดซื้อติดต่อกลับนะครับ"),
+            ("in", "text", "Correction: รถปี 2016 ไม่ใช่ 2015 คับ เบอร์ 0866001234")]):
+        FbChat.objects.create(thread_id="t_buy1", message_id="m_buy1_%d" % i, sender_id="PSIDBUY1" if d_ == "in" else "111",
+                              msg_type=ty, text=tx, has_media=(ty == "image"), direction=d_, channel="111",
+                              sent_at=t0 + timedelta(minutes=i))
+    ck("(ตั้งต้น) ยังไม่ได้จัดประเภท", C.lead_of(chat_of(FB1), create=False) is None)
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % FB1.id)
+    L_ = d.get("lead") or {}
+    ck("★ เปิดแชท Bryan → จัดเป็นลีดรับซื้อ (จากข้อความของเรา \"ฝ่ายจัดซื้อ\")", L_.get("deal") == "buy"
+       and "จัดซื้อ" in ((L_.get("buyLead") or {}).get("why") or ""), {k: L_.get(k) for k in ("deal", "buyLead")})
+    ck("…ให้เบอร์ในแชทแล้ว → ขึ้นแท็บรับซื้อรถ ไม่อยู่กลุ่มรอกดรับ", FB1.id in buy_ids() and FB1.id not in pend_ids(),
+       (buy_ids(), pend_ids()))
+
+    # LINE: แอดมินตอบผ่าน Connect "ขอรูปรถครับ" → ลูกค้าส่งรูปมา 3 รูป · ยังไม่จัดประเภท จนกว่าจะรันเก็บตก
+    u76 = cust(976, "ส่งรูปรถหลังขอ").user_id
+    LB = C.note_customer_message(u76, t0, "สวัสดีครับ เบอร์ 0866001235")
+    for i, (d_, ty, tx) in enumerate([("in", "text", "สวัสดีครับ เบอร์ 0866001235"), ("out", "text", "ขอรูปรถครับ"),
+                                      ("in", "image", ""), ("in", "image", ""), ("in", "image", "")]):
+        GroupChat.objects.create(chat_type="user", sender_id=u76, message_id="g_buy2_%d" % i, msg_type=ty, text=tx,
+                                 has_media=(ty == "image"), direction=d_, sent_at=t0 + timedelta(minutes=i))
+    ck("(ตั้งต้น) แชท LINE ยังเป็นลีดขาย (อยู่กลุ่มรอกดรับ)", C.deal_of(C.lead_of(chat_of(LB))) == "sell" and LB.id in pend_ids())
+    r = C.scan_deals(days=7)
+    ck("★ เก็บตก (ดูเฉยๆ): เจอแชทที่ส่งรูปรถหลังเราขอ แต่ไม่เขียน", any(x["id"] == LB.id and x["kind"] == "buy" for x in r["rows"])
+       and C.deal_of(C.lead_of(chat_of(LB))) == "sell", r["rows"])
+    import tempfile
+    from django.core.management import call_command
+    fn = os.path.join(tempfile.mkdtemp(), "deal.txt")
+    call_command("connect_deal_scan", "--apply", "--days", "7", "--out", fn)
+    rep_ = io.open(fn, encoding="utf-8").read()
+    ck("★ คำสั่งเก็บตก --apply → จัดเป็นลีดรับซื้อ + ย้ายออกจากกลุ่มรอกดรับ", C.deal_of(C.lead_of(chat_of(LB))) == "buy"
+       and LB.id in buy_ids() and LB.id not in pend_ids(), rep_)
+    ck("…รายงานไม่มีเบอร์/LINE user id", "0866001235" not in rep_ and "0866001234" not in rep_ and not leak.search(rep_), rep_)
+    ck("…รันซ้ำ = ไม่นับซ้ำ (เป็นลีดรับซื้ออยู่แล้ว)", not any(x["id"] == LB.id for x in C.scan_deals(days=7, apply=True)["rows"]))
+    ck("…แชทที่คนตั้งเป็นลีดขายไว้ ไม่ถูกเก็บตกทับ", C.deal_of(C.lead_of(chat_of(B1))) == "sell")
+
 finally:
     _runner.teardown_databases(_old)
 
