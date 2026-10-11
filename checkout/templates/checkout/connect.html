@@ -1031,6 +1031,9 @@
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
     else if (r.buyCode) tags.push(`<span class="tag" title="ลูกค้าอยากขายรถให้เรา — ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว">ส่งจัดซื้อ ${h(r.buyCode)}</span>`);
+    else if (ADMIN && r.contact && !r.nocode) tags.push(`<span class="tag wait" title="${r.contact === 'qr'
+      ? 'ลูกค้าส่งรูป QR ของ LINE มา — ระบบอ่านแล้วนับเป็นช่องทางติดต่อ · อยู่ในห้องพัก Lead'
+      : 'ลูกค้าให้เบอร์หรือ LINE แล้ว — อยู่ในห้องพัก Lead รอจ่ายเบอร์'}">${ic('phone', 12)} รอจ่ายเบอร์${r.contact === 'qr' ? ' · QR' : ''}</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);

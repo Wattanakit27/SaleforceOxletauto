@@ -24,6 +24,9 @@ type Row = Extra & {
   src: 'line' | 'fb';
   staff: boolean;
   code: string;
+  buyCode?: string;
+  contact?: '' | 'yes' | 'qr'; // ให้เบอร์/LINE แล้ว (qr = อ่านจากรูป QR) · ยังไม่มีเลข = รอจ่ายเบอร์
+  nocode?: boolean;
 };
 type Inbox = {
   view: string;
@@ -258,6 +261,9 @@ export default function ChatList() {
                   {!r.overdue && r.awaiting ? <Tag text="รอตอบ" color={C.amber} bg={C.amberBg} /> : null}
                   {r.owner ? <Tag text={'@' + r.owner} /> : null}
                   {r.code ? <Tag text={r.code} color={C.green} bg={C.greenBg} /> : null}
+                  {me?.admin && !r.code && !r.buyCode && r.contact && !r.nocode ? (
+                    <Tag text={r.contact === 'qr' ? 'รอจ่ายเบอร์ · QR' : 'รอจ่ายเบอร์'} color={C.amber} bg={C.amberBg} />
+                  ) : null}
                   {r.sim ? <Tag text="ลูกค้าจำลอง" color={C.sub} bg="#eee" /> : null}
                   {r.staff ? <Tag text="พนักงาน" color={C.sub} bg="#eee" /> : null}
                 </View>

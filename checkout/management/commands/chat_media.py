@@ -4,6 +4,7 @@
     python manage.py chat_media --fetch               # โหลดย้อนหลัง 60 วัน (ทั้งหมดที่ยังไม่มี)
     python manage.py chat_media --fetch --days 7 --limit 50
     python manage.py chat_media --cleanup             # ลบไฟล์ของแชทที่ถูกลบไปแล้ว
+    python manage.py chat_media --qr                  # อ่าน QR LINE ในรูปที่โหลดไว้แล้ว → เติม ID LINE ให้ลีด
     python manage.py chat_media --out ผล.txt          # เขียนผลลงไฟล์ (console ไทยบน Windows เพี้ยน)
 
 ปกติไม่ต้องรันเอง — รอบ cron ทุกนาทีโหลดไฟล์ 7 วันล่าสุดให้ (chatmedia.sweep_bg) และตอนมีคนเปิดดูก็โหลดให้
@@ -52,6 +53,8 @@ class Command(BaseCommand):
         p.add_argument("--days", type=int, default=60, help="ย้อนหลังกี่วัน (ค่าตั้งต้น 60 = อายุแชทลูกค้า)")
         p.add_argument("--limit", type=int, default=0, help="โหลดแค่ N ข้อความ (0 = ทั้งหมด)")
         p.add_argument("--cleanup", action="store_true", help="ลบไฟล์ของแชทที่ถูกลบไปแล้ว")
+        p.add_argument("--qr", action="store_true",
+                       help="อ่าน QR LINE ในรูปที่โหลดไว้แล้ว → เติม ID LINE ให้ลีด (ครั้งเดียวตอน deploy · ไม่เขียนไฟล์)")
         p.add_argument("--out", help="เขียนผลลงไฟล์")
 
     def handle(self, *a, **o):
@@ -74,6 +77,17 @@ class Command(BaseCommand):
 
         if o["fetch"]:
             self._fetch(CM, o, add)
+
+        if o["qr"]:
+            from checkout import lead_qr
+            r = lead_qr.scan_existing(max(1, o["days"]), max(0, o["limit"]))
+            add("")
+            if not r["lib"]:
+                add("อ่าน QR ไม่ได้ — ยังไม่ได้ติดตั้ง zxing-cpp (pip install -r requirements.txt)")
+            else:
+                add("อ่าน QR LINE ย้อนหลัง %d วัน: %d ข้อความที่มีไฟล์ · อ่านรูป %d รูป · ข้าม (มี ID LINE อยู่แล้ว) %d"
+                    % (max(1, o["days"]), r["rows"], r["images"], r["had"]))
+                add("  เติม ID LINE จากรูป QR: %d ราย%s" % (r["filled"], (" · แถวแชท " + ", ".join(r["values"][:20])) if r["values"] else ""))
 
         self._status(CM, o["days"], add)
         self._emit(L, o)

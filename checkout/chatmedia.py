@@ -405,6 +405,14 @@ def ensure(src: str, row, refresh: bool = False, now: float | None = None) -> st
     tok = _fetch_line(row) if src == LINE else _fetch_fb(row, refresh)
     _model(src).objects.filter(pk=row.pk).update(media_token=tok[:200])
     row.media_token = tok
+    # ★ 11 ต.ค.69 รูปที่เพิ่งโหลดเป็น QR ของ LINE ลูกค้าไหม → นับเป็นช่องทางติดต่อ (lead_qr · อ่านในเครื่อง)
+    #   แยก try — อ่าน QR พังต้องไม่ทำให้การโหลดรูปพัง
+    if any(e in IMAGE_EXT for e in parse(tok)[1]):
+        try:
+            from .lead_qr import scan_row
+            scan_row(src, row)
+        except Exception:
+            pass
     return tok
 
 

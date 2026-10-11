@@ -1176,6 +1176,11 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None) -> dict:
         "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
         # เลขเคสรับซื้อ (OC-…) — ลูกค้าที่อยากขายรถให้เรา ถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว
         "buyCode": ((ld.auto or {}).get(BUY_KEY) or {}).get("code", "") if ld else "",
+        # ★ 11 ต.ค.69 ให้เบอร์/LINE แล้ว แต่ยังไม่มีเลขลีด = ป้าย "รอจ่ายเบอร์" ในรายชื่อ
+        #   (เดิมรู้ได้ทางเดียวคือเปิดห้องพัก Lead — ในกล่องแชทรวมไม่มีอะไรบอกว่าแชทนี้กลายเป็นลีดแล้ว)
+        "contact": ("qr" if (ld.auto or {}).get("line_id") == QR_SRC and not ld.phone else "yes")
+                   if ld and (ld.phone or ld.line_id) else "",
+        "nocode": bool(ld and NOCODE_KEY in (ld.auto or {})),
     }
     # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้นของลีด · ความร้อน · เงียบกี่วัน · นัดถัดไป · รถใหม่ตรง (crm.py)
     try:
@@ -2372,6 +2377,12 @@ def contacts_in(msgs) -> tuple:
             v = _id_ok(t)
             if v and v not in ids:
                 ids.append(v)
+        # ★ 11 ต.ค.69 ลิงก์เพิ่มเพื่อน LINE ("ส่งข้อความและโทรฟรีด้วย LINE กันเถอะ https://line.me/ti/p/…")
+        #   เดิมไม่นับ → ลูกค้าแชร์ LINE ด้วยปุ่มแชร์ของแอปแล้วหลุดจากห้องพัก (เจอจริงบน prod)
+        from .lead_qr import line_contact
+        v = line_contact(t)
+        if v and v not in ids:
+            ids.append(v)
         asked = False
     return phones, ids
 
@@ -2403,6 +2414,30 @@ def capture_contact(o, msgs=None, extra=None) -> bool:
         lead.auto = auto
         lead.save(update_fields=got + ["auto", "updated_at"])
     return bool(got)
+
+
+QR_SRC = "รูป QR"                  # ป้ายที่มาในฟอร์มลีด ("จากรูป QR")
+
+
+def capture_qr(o, value: str, ref: str = "") -> bool:
+    """ลูกค้าส่งรูป QR ของ LINE ตัวเอง (`lead_qr.scan_row`) → เติม ID LINE ให้ลีด → เข้าห้องพักเหมือนพิมพ์ ID มา
+
+    กติกาเดียวกับ `capture_contact`: เฉพาะช่องที่ยังว่าง · คนแก้/ลบช่องนี้แล้ว = ไม่เติม
+    จดว่าได้จากข้อความไหน (`auto["_qr"]`) ให้คนกลับไปดูรูปต้นทางได้
+    """
+    v = (value or "").strip()[:LEAD_FIELDS["line_id"]]
+    if not v:
+        return False
+    lead = lead_of(o, create=False)
+    if lead and (lead.line_id or (lead.auto or {}).get("line_id") == HUMAN):
+        return False
+    lead = lead or lead_of(o)
+    auto = dict(lead.auto or {})
+    lead.line_id, auto["line_id"] = v, QR_SRC
+    auto["_qr"] = {"at": timezone.now().isoformat(timespec="seconds"), "msg": ref[:24]}
+    lead.auto = auto
+    lead.save(update_fields=["line_id", "auto", "updated_at"])
+    return True
 
 
 # ── จับ keyword จากแชท → ช่องโปรไฟล์ลีด (7 ต.ค.69 · เจ้าของสั่ง "จับ keyword … กรอกลงทุกช่องตามที่ lead ต้องการ") ──

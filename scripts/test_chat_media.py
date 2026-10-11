@@ -485,6 +485,132 @@ try:
     except Exception as e:
         ck("connect.tick ทำงานได้", False, e)
 
+    print("[12] ลูกค้าส่ง QR / ลิงก์ LINE = ช่องทางติดต่อ → เข้าห้องพัก Lead (lead_qr · อ่านในเครื่อง)")
+    import random
+
+    import qrcode
+    from PIL import Image
+
+    from checkout import lead_qr as LQ
+
+    def shot(payload=None, size=(1080, 1900), seed=1):
+        """ภาพหน้าจอมือถือจำลอง: พื้นเทา + แถบ + QR กลางจอ (ไม่มี payload = รูปถ่ายธรรมดาไม่มี QR)"""
+        rnd = random.Random(seed)
+        im = Image.new("RGB", size, (236, 236, 236))
+        px = im.load()
+        for _ in range(6000):                                  # จุดรบกวนเล็กๆ ให้ไม่ใช่ภาพเรียบเกินจริง
+            px[rnd.randrange(size[0]), rnd.randrange(size[1])] = (rnd.randrange(256),) * 3
+        if payload:
+            q = qrcode.make(payload).convert("RGB").resize((520, 520))
+            im.paste(q, ((size[0] - 520) // 2, 600))
+        b = io.BytesIO()
+        im.save(b, "PNG")
+        return b.getvalue()
+
+    ck("มีไลบรารีอ่าน QR (zxing-cpp)", LQ._lib(), "pip install zxing-cpp==3.1.1")
+    # ── อ่านลิงก์ ──
+    ck("ลิงก์ ID (~) = ได้ ID", LQ.line_contact("https://line.me/ti/p/~somchai_99") == "somchai_99")
+    ck("ลิงก์ QR (โทเคน) = ได้ลิงก์", LQ.line_contact("ส่งข้อความและโทรฟรีด้วย LINE กันเถอะ https://line.me/ti/p/AbCd3f9xYz")
+       == "line.me/ti/p/AbCd3f9xYz")
+    ck("ลิงก์บัญชีทางการ (@) ไม่นับ", LQ.line_contact("https://line.me/R/ti/p/@693tyhah") == "")
+    ck("ลิงก์บัญชีทางการ (%40) ไม่นับ", LQ.line_contact("https://line.me/R/ti/p/%40693tyhah") == "")
+    ck("ลิงก์กลุ่มไม่นับ", LQ.line_contact("https://line.me/R/ti/g/AbCdEfGh12") == "")
+    ck("lin.ee (ลิงก์ย่อของร้าน) ไม่นับ", LQ.line_contact("https://lin.ee/AbCd123") == "")
+    ck("ข้อความทั่วไปไม่นับ", LQ.line_contact("สนใจ civic ครับ line ผมเดี๋ยวส่งให้") == "")
+    ph, ids = C.contacts_in([{"dir": "in", "text": "ติดต่อมาไลน์นี้เลยครับ https://line.me/ti/p/AbCd3f9xYz"}])
+    ck("contacts_in: ลิงก์แชร์ LINE ที่ลูกค้าแปะ = ช่องทางติดต่อ", ids == ["line.me/ti/p/AbCd3f9xYz"], ids)
+    ph, ids = C.contacts_in([{"dir": "out", "text": "แอดไลน์ร้านได้ที่ https://line.me/ti/p/AbCd3f9xYz"}])
+    ck("contacts_in: ลิงก์ที่เราพิมพ์เองไม่นับ", ids == [], ids)
+    # ── อ่าน QR ในรูป ──
+    tmpq = Path(STORE) / "q_test.png"
+    tmpq.write_bytes(shot("https://line.me/ti/p/AbCd3f9xYz"))
+    ck("อ่าน QR LINE จากภาพหน้าจอได้", LQ.contact_in_image(tmpq) == "line.me/ti/p/AbCd3f9xYz", LQ.decode(tmpq))
+    tmpq.write_bytes(shot("00020101021129370016A000000677010111011300668123456785802TH53037646304ABCD"))
+    ck("QR พร้อมเพย์ (สลิป) ไม่นับ", LQ.decode(tmpq) and LQ.contact_in_image(tmpq) == "", LQ.decode(tmpq))
+    tmpq.write_bytes(shot(None))
+    ck("รูปถ่ายไม่มี QR = ไม่มีอะไร", LQ.decode(tmpq) == [])
+    tmpq.write_bytes(b"not an image")
+    ck("ไฟล์เสีย = ไม่พัง", LQ.decode(tmpq) == [])
+
+    def qr_case(name, payload, prep=None, awaiting=True):
+        o_ = line_cust(name, awaiting=awaiting)
+        if prep:
+            prep(o_)
+        mid = "qr-" + name
+        m_ = line_msg(o_, mid)
+        ROUTES[line_url(mid)] = [(200, shot(payload), "image/png")]
+        CM.ensure("l", m_)
+        o_ = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead").get(pk=o_.pk)
+        return o_, C.lead_of(o_, create=False)
+
+    def tocode_ids():
+        return set(C.to_code(ChatOwner.objects.all()).values_list("id", flat=True))
+
+    oq, lq = qr_case("ส่งQR", "https://line.me/ti/p/AbCd3f9xYz")
+    ck("★ ส่งรูป QR LINE → ได้ ID LINE ในข้อมูลลีด", lq and lq.line_id == "line.me/ti/p/AbCd3f9xYz", lq and lq.line_id)
+    ck("ป้ายที่มา = รูป QR", lq and (lq.auto or {}).get("line_id") == C.QR_SRC and (lq.auto or {}).get("_qr", {}).get("msg"),
+       lq and lq.auto)
+    ck("★ เข้าห้องพัก Lead ทันที (ไม่ต้องรอแอดมินเปิดแชท)", oq.id in tocode_ids())
+    rj = C.row_json(oq)
+    ck("รายชื่อ: contact = qr (ป้าย 'รอจ่ายเบอร์ · QR')", rj.get("contact") == "qr" and rj.get("nocode") is False, rj.get("contact"))
+    oi, li = qr_case("ส่งQRไอดี", "https://line.me/ti/p/~somchai_99")
+    ck("QR แบบมี ID = ได้ ID เปล่า", li and li.line_id == "somchai_99", li and li.line_id)
+    oa, la = qr_case("ส่งQRร้าน", "https://line.me/R/ti/p/@693tyhah")
+    ck("QR บัญชีทางการ (ลูกค้าส่ง QR ร้านกลับมา) = ไม่นับ", not (la and la.line_id) and oa.id not in tocode_ids(),
+       la and la.line_id)
+    op, lp = qr_case("ส่งรูปรถ", None)
+    ck("รูปรถ/เล่มทะเบียน (ไม่มี QR) = ไม่ใช่ลีด ไม่สร้างข้อมูลลีดเปล่า", lp is None and op.id not in tocode_ids(), lp)
+
+    def human_cleared(o_):
+        ld = C.lead_of(o_)
+        ld.auto = {"line_id": C.HUMAN}
+        ld.save()
+    oh, lh = qr_case("คนลบเอง", "https://line.me/ti/p/AbCd3f9xYz", prep=human_cleared)
+    ck("คนลบช่อง ID LINE เองแล้ว = ระบบไม่เติมกลับ", lh and lh.line_id == "", lh and lh.line_id)
+
+    def has_id(o_):
+        ld = C.lead_of(o_)
+        ld.line_id = "mine_typed"
+        ld.save()
+    ok_, lk = qr_case("มีไอดีแล้ว", "https://line.me/ti/p/AbCd3f9xYz", prep=has_id)
+    ck("มี ID LINE อยู่แล้ว = ไม่ทับ", lk and lk.line_id == "mine_typed", lk and lk.line_id)
+
+    print("     FB: ลูกค้าเพจส่ง QR LINE มา")
+    fq = FbProfile.objects.create(user_id="psid-qr", display_name="เฟซส่งQR", channel="111", thread_id="t_qr")
+    ofq = ChatOwner.objects.create(fb_profile=fq, last_at=NOW, last_in_at=NOW, team="A", awaiting_since=NOW)
+    AQ = "https://scontent.xx.fbcdn.net/v/qr.png?sig=9"
+    fm = FbChat.objects.create(thread_id="t_qr", message_id="m_fqr", sender_id="psid-qr", msg_type="image", text="",
+                               has_media=True, channel="111", direction="in", sent_at=NOW,
+                               extra={"attachments": [{"type": "image", "url": AQ}]})
+    ROUTES[AQ] = [(200, shot("https://line.me/ti/p/~fbcust_1"), "image/png")]
+    CM.ensure("f", fm)
+    lfq = C.lead_of(ChatOwner.objects.get(pk=ofq.pk), create=False)
+    ck("FB: QR ในรูป → ได้ ID LINE", lfq and lfq.line_id == "fbcust_1", lfq and lfq.line_id)
+
+    print("     ไม่มีไลบรารี = ข้ามเงียบ ไม่ทำให้การโหลดรูปพัง · แล้วย้อนอ่านด้วย chat_media --qr")
+    LQ.STATE["lib"] = False
+    ob, lb = qr_case("ก่อนติดตั้ง", "https://line.me/ti/p/Back12fill")
+    mb = GroupChat.objects.get(message_id="qr-ก่อนติดตั้ง")
+    ck("ไม่มีไลบรารี: รูปยังโหลดได้ตามปกติ", mb.media_token.startswith("ok|png"), mb.media_token)
+    ck("ไม่มีไลบรารี: ไม่เติมอะไร", not (lb and lb.line_id))
+    LQ.STATE["lib"] = None
+    out2 = os.path.join(STORE, "qr_rep.txt")
+    call_command("chat_media", qr=True, days=7, out=out2)
+    rep2 = open(out2, encoding="utf-8").read()
+    lb = C.lead_of(ChatOwner.objects.get(pk=ob.pk), create=False)
+    ck("★ chat_media --qr ย้อนอ่านรูปเก่าแล้วเติมให้", lb and lb.line_id == "line.me/ti/p/Back12fill", lb and lb.line_id)
+    ck("รายงาน --qr บอกจำนวนที่เติม", "เติม ID LINE จากรูป QR: 1 ราย" in rep2, rep2[-300:])
+    ck("รายงานไม่มีค่า ID LINE/ลิงก์ของลูกค้า", "Back12fill" not in rep2 and "line.me" not in rep2)
+    call_command("chat_media", qr=True, days=7, out=out2)
+    ck("รันซ้ำ = ไม่เติมซ้ำ", "เติม ID LINE จากรูป QR: 0 ราย" in open(out2, encoding="utf-8").read())
+
+    r_ = ADM.get("/connect/api/inbox?view=all", secure=True)
+    rows_ = {x["id"]: x for x in json.loads(r_.content).get("rows", [])}
+    ck("API รายชื่อส่ง contact/nocode", oq.id in rows_ and rows_[oq.id].get("contact") == "qr"
+       and rows_.get(op.id, {}).get("contact", "") == "", (rows_.get(oq.id, {}).get("contact"), rows_.get(op.id, {}).get("contact")))
+    ck("หน้าเว็บมีป้าย 'รอจ่ายเบอร์'", "รอจ่ายเบอร์" in open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "checkout", "templates", "checkout", "connect.html"), encoding="utf-8").read())
+
 finally:
     _runner.teardown_databases(_old)
     shutil.rmtree(STORE, ignore_errors=True)
