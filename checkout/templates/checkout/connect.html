@@ -397,7 +397,8 @@
   .lc-lead .det { font-size: 12.5px; color: var(--t2); margin-top: 3px; }
   .lc-lead .det.m { color: var(--t3); }
   .lc-lead .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; align-items: center; }
-  .lc-lead .acts { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; }
+  .lc-lead .acts { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0;
+    max-width: 440px; }   /* ปุ่มเซลล์ทุกคนในคิว (10+ คน) ต้องตัดบรรทัด ไม่ใช่ดันข้อมูลลีดจนเหลือคำละบรรทัด */
   .lc-lead .more { grid-column: 1 / -1; }
   .lc-origin { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--t1); color: var(--bg); }
   .lc-origin.direct { background: #DB2777; color: #fff; }
@@ -2877,7 +2878,7 @@
   function asgButtons(kind, id, dup) {
     const B = (S.rrBoard || []).filter(x => x.ok);
     if (!B.length) return `<div class="lc-hint">ไม่มีเซลล์ว่างในคิว — <a data-lcmore="${h(kind)}:${h(id)}">เลือกเซลล์เอง</a></div>`;
-    return `<div class="lc-asg">${B.slice(0, 9).map((x, i) => `<button style="background:${teamColor(x.team)}" class="${i === 0 ? 'next' : ''}"
+    return `<div class="lc-asg">${B.map((x, i) => `<button style="background:${teamColor(x.team)}" class="${i === 0 ? 'next' : ''}"
       data-asg="${h(kind)}:${h(id)}" data-emp="${x.id}" title="ทีม ${h(x.team)} · วันนี้ได้ ${x.today}${x.cap ? '/' + x.cap : ''} ใบ${i === 0 ? ' · คิวถัดไป' : ''}">${h(x.name)}</button>`).join('')}</div>`;
   }
   function distLeadHtml(x) {

@@ -256,6 +256,25 @@ try:
     ck("คนได้ใบน้อยสุดก่อน (เฟิร์ส 0 ใบ)", cand[0]["name"] == "เฟิร์สทดสอบ", [(r["name"], r["today"]) for r in cand])
     ck("เต็มเพดาน (มัท 2/2) = หลุดคิว", "มัททดสอบ" not in [r["name"] for r in cand])
     ck("exclude คนที่เคยได้เคสนี้", LF.rr_pick(exclude={FIRST.id}).nickname == "บิวทดสอบ")
+    # ★ 11 ต.ค.69: เซลล์รายงานผลเคสเก่า → _lazy_task สร้างงานย้อนหลังวันนี้ (created_at = วันนี้ · ใบถึงกลุ่ม 3 วันก่อน)
+    #   ต้องไม่นับเป็น "ใบวันนี้" (prod: มัท 30/12 ทั้งที่ใบวันนี้จริง 4 → หลุดคิวจ่ายวน)
+    old_at = timezone.now() - timedelta(days=3)
+    for i in range(4):
+        LeadTask.objects.create(code="NLD10-90%d" % i, run="90%d" % i, source=LeadTask.GROUP, seller=FIRST,
+                                seller_name=FIRST.nickname, posted_at=old_at, due_at=old_at,
+                                first_report_at=timezone.now())
+    cand = LF.rr_candidates()
+    ck("★ ใบเก่าที่เพิ่งสร้างงานย้อนหลัง ไม่นับเพดานวันนี้ (เฟิร์สยังได้คิวแรก)",
+       cand and cand[0]["name"] == "เฟิร์สทดสอบ" and cand[0]["today"] == 0, [(r["name"], r["today"]) for r in cand])
+    bd = {r["name"]: r for r in LF.rr_board()}
+    ck("★ มือเซลล์วันนี้: เฟิร์ส 0 ใบ (ไม่ใช่ 4)", bd["เฟิร์สทดสอบ"]["today"] == 0 and bd["เฟิร์สทดสอบ"]["ok"],
+       bd.get("เฟิร์สทดสอบ"))
+    ck("★ งานวันนี้ของเซลล์ไม่มีใบเก่า", not [t for t in LF.seller_tasks(FIRST.nickname) if t["code"].startswith("NLD10-90")])
+    ck("★ นาฬิกาโทรวันนี้ไม่มีใบเก่า", not [t for t in LF.tasks_json(1) if t["code"].startswith("NLD10-90")])
+    LeadTask.objects.create(code="NLD10-910", run="910", seller=FIRST, seller_name=FIRST.nickname)
+    ck("ใบที่จ่ายวันนี้แต่ยังส่งเข้ากลุ่มไม่สำเร็จ (posted_at ว่าง) = นับ",
+       {r["name"]: r["today"] for r in LF.rr_board()}.get("เฟิร์สทดสอบ") == 1)
+    LeadTask.objects.filter(code__in=["NLD10-900", "NLD10-901", "NLD10-902", "NLD10-903", "NLD10-910"]).delete()
     LeadTask.objects.filter(code__in=["NLD10-1", "NLD10-2", "NLD10-3"]).delete()
     LF.save_cfg(dict(LF.cfg(), cap_day=12))
     _c, errs = LF.clean_cfg({"call_min": 2, "rr_teams": ["A", "ทีมขาย"]})
@@ -612,11 +631,14 @@ try:
         ck("ไปป์ไลน์: รอผล 2 วัน ไม่ค้าง · ปล่อยเดือนนี้ 1", cols["รอผล"]["stuck"] == 0 and cols["ปล่อย"]["count"] == 1,
            (cols.get("รอผล"), cols.get("ปล่อย")))
         s_, d, raw = J(ADM, "/connect/api/team")
-        n_today = sum(1 for t in LeadTask.objects.filter(
-            created_at__gte=timezone.make_aware(datetime.combine(tday, datetime.min.time())))
-            if not (t.card or {}).get("demo"))
+        t0_ = timezone.make_aware(datetime.combine(tday, datetime.min.time()))
+        n_today = sum(1 for t in LeadTask.objects.filter(LF.slip_since(t0_)) if not (t.card or {}).get("demo"))
         ck("แดชบอร์ดทีม: ใบวันนี้ตรงกับฐานข้อมูล (ไม่นับใบทดลอง)", s_ == 200 and d["tiles"]["tasksToday"] == n_today,
            (d.get("tiles"), n_today))
+        lazy = LeadTask.objects.filter(code="NLD9-7777").first()
+        ck("★ แดชบอร์ดทีม: ใบเก่า 20 วัน (สร้างงานย้อนหลังวันนี้) ไม่นับเป็นใบวันนี้",
+           lazy is not None and lazy.created_at >= t0_ and not LeadTask.objects.filter(
+               LF.slip_since(t0_), pk=lazy.pk).exists(), lazy and (lazy.created_at, lazy.posted_at))
         ck("แดชบอร์ดทีม: จอง/ปล่อยเดือนนี้จากผลสรุป", d["tiles"]["doneMonth"] == 1 and d["tiles"]["bookingMonth"] == 1,
            d.get("tiles"))
         ck("★ ไม่มี LINE user id หลุดในแดชบอร์ดทีม", not leak.search(raw))

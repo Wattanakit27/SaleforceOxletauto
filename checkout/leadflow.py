@@ -39,6 +39,7 @@ import time
 from datetime import date, datetime, timedelta
 
 from django.db.models import Count, Max, Q
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from .models import Employee, ExtLead, GroupChat, LeadReport, LeadTask, LineProfile
@@ -215,11 +216,21 @@ def forwarded_as(code: str) -> dict | None:
 # ─────────────────────────────────────────────────────────────
 #  คิวจ่ายวน (round-robin)
 # ─────────────────────────────────────────────────────────────
+def slip_since(since) -> Q:
+    """ใบที่ "ถึงกลุ่ม" ตั้งแต่ `since` — นับตามเวลาที่ใบถึงกลุ่มจริง (posted_at) ไม่ใช่เวลาที่ระบบสร้างงาน
+
+    ★ 11 ต.ค.69: `_lazy_task` สร้างงานย้อนหลังให้ใบเก่า (ย้อนได้ 60 วัน) ตอนเซลล์รายงานผล → created_at = วันนี้
+    ทั้งที่ใบเป็นของสัปดาห์ก่อน · เดิมนับด้วย created_at → เซลล์ที่ไล่รายงานเคสเก่าเยอะ "เต็มเพดาน" หลุดคิวจ่ายวน
+    (วัด prod: มัท 30/12 แต่ใบที่ถึงกลุ่มวันนี้จริง 4) · ใบที่ระบบออกเลขแต่ยังส่งเข้ากลุ่มไม่สำเร็จ (posted_at ว่าง)
+    นับตามเวลาที่จ่าย"""
+    return Q(posted_at__gte=since) | Q(posted_at__isnull=True, created_at__gte=since)
+
+
 def _today_counts(day=None) -> dict:
     day = day or timezone.localdate()
     start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-    rows = (LeadTask.objects.filter(created_at__gte=start, seller__isnull=False)
-            .values("seller_id").annotate(n=Count("id"), last=Max("created_at")))
+    rows = (LeadTask.objects.filter(slip_since(start), seller__isnull=False)
+            .values("seller_id").annotate(n=Count("id"), last=Max(Coalesce("posted_at", "created_at"))))
     return {r["seller_id"]: (r["n"], r["last"]) for r in rows}
 
 
@@ -1447,7 +1458,7 @@ def tasks_json(days: int = 1, now=None) -> list:
     since = timezone.make_aware(datetime.combine(timezone.localdate() - timedelta(days=days - 1),
                                                  datetime.min.time()))
     out = []
-    for t in (LeadTask.objects.filter(created_at__gte=since).select_related("chat", "ext")
+    for t in (LeadTask.objects.filter(slip_since(since)).select_related("chat", "ext")
               .order_by("-posted_at", "-id")[:300]):
         s = task_state(t, now)
         out.append({"id": t.id, "code": t.code, "run": t.run, "source": t.source, "seller": t.seller_name,
@@ -1475,7 +1486,7 @@ def seller_tasks(seller_name: str, now=None) -> list:
     now = now or timezone.now()
     since = timezone.make_aware(datetime.combine(timezone.localdate() - timedelta(days=1), datetime.min.time()))
     rows = []
-    for t in (LeadTask.objects.filter(seller_name=seller_name, created_at__gte=since)
+    for t in (LeadTask.objects.filter(slip_since(since), seller_name=seller_name)
               .order_by("-posted_at", "-id")[:60]):
         if (t.card or {}).get("demo"):
             continue

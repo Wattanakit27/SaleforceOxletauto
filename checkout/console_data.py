@@ -627,7 +627,8 @@ def team(now=None) -> dict:
     msel = ms.get("sellers") or {}
 
     # ใบทดลอง (บัญชีทดสอบ/ลูกค้าจำลอง) ไม่นับ — กรองใน Python (exclude บนคีย์ JSON ตัดแถวทิ้งหมดบน SQLite)
-    tasks_today = [t for t in LeadTask.objects.filter(created_at__gte=t0)
+    from .leadflow import slip_since
+    tasks_today = [t for t in LeadTask.objects.filter(slip_since(t0))
                    .values("seller_id", "posted_at", "due_at", "first_report_at", "passed_at", "card")
                    if not (t["card"] or {}).get("demo")]
     reps = ChatOwnerLog.objects.filter(action=ChatOwnerLog.REPLY, at__gte=t0)
@@ -657,10 +658,11 @@ def team(now=None) -> dict:
     six = [today - timedelta(days=i) for i in range(5, -1, -1)]
     s0 = timezone.make_aware(datetime.combine(six[0], datetime.min.time()))
     spark = {}
-    for sid, d in (LeadTask.objects.filter(created_at__gte=s0, seller__isnull=False)
-                   .values_list("seller_id", "created_at")):
-        spark.setdefault(sid, {}).setdefault(timezone.localtime(d).date(), 0)
-        spark[sid][timezone.localtime(d).date()] += 1
+    for sid, pa, ca in (LeadTask.objects.filter(slip_since(s0), seller__isnull=False)
+                        .values_list("seller_id", "posted_at", "created_at")):
+        d = timezone.localtime(pa or ca).date()        # วันที่ใบถึงกลุ่ม (ไม่ใช่วันที่ระบบสร้างงานย้อนหลัง)
+        spark.setdefault(sid, {}).setdefault(d, 0)
+        spark[sid][d] += 1
     rep_by = {r["employee_id"]: r for r in reps.values("employee_id")
               .annotate(n=Count("id"), ok=Count("id", filter=Q(on_time=True)))}
     sellers = []
