@@ -2632,8 +2632,9 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
             if code_taken(code, chat_lead_pk=lead.pk):
                 raise _Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)
             lead.code, lead.code_demo = code, not real
-            if not lead.lead_type:               # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)
-                core = _CODE_RE.match(code).group(1).lstrip("R").lstrip("A")
+            m_code = _CODE_RE.match(code)
+            if not lead.lead_type and m_code:    # type ว่าง → เติมตามตัวหน้าของ "เลขจริงที่ได้" (NLD → Moderate ฯลฯ)
+                core = m_code.group(1).lstrip("R").lstrip("A")      # (เลขรันสั้นผิดรูป = ไม่เดา type · เดิมพัง 500)
                 lead.lead_type = dict(CODE_BASES).get(core, "")
             auto = dict(lead.auto or {})
             auto.pop(NOCODE_KEY, None)           # เคยกด "ไม่ต้องจ่ายเบอร์" ไว้แล้วเปลี่ยนใจ — จ่ายแล้วป้ายนั้นไม่ต้องค้าง

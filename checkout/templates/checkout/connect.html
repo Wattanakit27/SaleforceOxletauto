@@ -643,10 +643,23 @@
   .cn-flt { padding: 0 10px 10px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 8px; border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
   .cn-flt label { font-size: 11.5px; color: var(--t3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .cn-flt input, .cn-flt select { padding: 5px 7px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; min-width: 0; width: 100%; }
-  .cn-ra { margin: 4px 10px 8px; padding: 9px 11px; border-radius: 8px; background: var(--blue-bg); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .cn-ra .tx { flex: 1; min-width: 160px; font-size: 12.5px; color: var(--t2); line-height: 1.5; }
-  .cn-ra-res { margin: 0 10px 8px; padding: 8px 11px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; line-height: 1.6; }
-  .cn-ra-res .x { float: right; cursor: pointer; color: var(--t3); border: 0; background: none; }
+  /* ★ 11 ต.ค.69 Run Auto อยู่ในห้องพัก Lead (แท็บ "รอจ่ายเบอร์") — ดูแผนก่อน แล้วค่อยกดจ่าย */
+  .lc-ra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); background: var(--blue-bg); }
+  .lc-ra .tx { flex: 1; min-width: 220px; font-size: 12.5px; color: var(--t2); line-height: 1.5; }
+  .lc-rap { padding: 10px 14px; border-bottom: .5px solid var(--bd); background: var(--bg); font-size: 13px; }
+  .lc-rap .hd { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+  .lc-rap .hd .x { margin-left: auto; cursor: pointer; color: var(--t3); border: 0; background: none; font-size: 14px; }
+  .lc-rap .row { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-top: .5px dashed var(--bd); }
+  .lc-rap .row label { display: flex; gap: 8px; align-items: center; flex: 1 1 220px; min-width: 0; cursor: pointer; }
+  .lc-rap .row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lc-rap .row .to { font-weight: 700; white-space: nowrap; }
+  .lc-rap .row .why { color: var(--t3); font-size: 12px; }
+  .lc-rap .row.dup .why { color: var(--amber); font-weight: 700; }
+  .lc-rap .row.off { opacity: .5; }
+  .lc-rap .sk { color: var(--amber); font-size: 12.5px; padding: 3px 0; }
+  .lc-rap .ok { color: var(--green); font-size: 12.5px; padding: 2px 0; }
+  .lc-rap .bad { color: var(--red); font-size: 12.5px; padding: 2px 0; }
+  .lc-rap .acts { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; margin-top: 8px; }
   .cn-bell { position: relative; }
   .cn-bell .n { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff;
                 font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
@@ -854,7 +867,8 @@
     openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
     histOpen: false, side: true, panel: 'inbox',
     // ★ 11 ต.ค.69 หน้ารวมแชท — ตัวกรอง (crm.FILTER_KEYS) · ตัวเลือกจากเซิร์ฟเวอร์ · ร่างที่พิมพ์ค้างไว้ต่อแชท
-    f: {}, fltOpen: false, crmOpts: null, alerts: null, raResult: null,
+    f: {}, fltOpen: false, crmOpts: null, alerts: null,
+    raPlan: null, raOff: new Set(), raBusy: '', raDone: null,      // Run Auto ของห้องพัก Lead
     lostPick: 0, aiDraft: {}, sumDraft: {}, apptDraft: {}, callDraft: {}, callMedia: {},
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
@@ -1092,34 +1106,6 @@
       sync = true;
     }
     if (sync) el.querySelectorAll('[data-fk]').forEach(inp => { inp.value = S.f[inp.dataset.fk] || ''; });
-  }
-
-  // ── ★ 11 ต.ค.69 Run Auto (แอดมิน · คิวรอรับ) — จ่ายลูกค้ารอรับให้เซลล์ตามคิวจ่ายวน · เบอร์ซ้ำกลับเจ้าของเดิม ──
-  function runAutoHtml() {
-    let x = '';
-    if (ADMIN && S.view === 'queue' && S.rows.length) {
-      x += `<div class="cn-ra"><div class="tx"><b>Run Auto</b> — จ่ายลูกค้ารอรับ ${S.rows.length} คนให้เซลล์ตามคิวจ่ายวน (คนได้น้อยสุดก่อน · เบอร์เคยเป็นลีดของใครส่งกลับคนนั้น) · โอนในระบบเท่านั้น ไม่ส่ง LINE</div>
-        <button class="btn sm pri" id="cn-ra-btn">${ic('repeat', 14)} Run Auto</button></div>`;
-    }
-    const R = S.raResult;
-    if (ADMIN && R && S.view === 'queue') {           // ผลรอบล่าสุด — โชว์เฉพาะแท็บรอรับ (ที่กด Run Auto)
-      x += `<div class="cn-ra-res"><button class="x" id="cn-ra-x" title="ปิด">✕</button><b>${h(R.message || '')}</b>${(R.assigned || []).map(a =>
-        `<div>${h(a.name)} → <b>@${h(a.to)}</b> <span style="color:var(--t3)">(${h(a.why)})</span></div>`).join('')}${(R.skipped || []).map(a =>
-        `<div style="color:var(--amber)">ข้าม ${h(a.name)} — ${h(a.why)}</div>`).join('')}</div>`;
-    }
-    return x;
-  }
-  function bindRunAuto() {
-    const b = $('cn-ra-btn');
-    if (b) b.onclick = async () => {
-      if (!confirm(`จ่ายลูกค้ารอรับ ${S.rows.length} คนให้เซลล์ตามคิวจ่ายวนเลยไหม?\n(โอนในระบบ · เซลล์เห็นในแท็บ "ลูกค้าของฉัน" · ไม่ส่งข้อความ LINE)`)) return;
-      b.disabled = true;
-      const r = await api('/connect/api/crm', { action: 'run_auto' });
-      b.disabled = false;
-      if (!r.ok) { toast(r.error || 'Run Auto ไม่สำเร็จ', 6000); return; }
-      S.raResult = r; toast(r.message || 'จ่ายแล้ว', 5000); loadInbox(true);
-    };
-    const x = $('cn-ra-x'); if (x) x.onclick = () => { S.raResult = null; renderList(); };
   }
 
   // ── ★ 11 ต.ค.69 กระดิ่งแจ้งเตือน (สเปกข้อ 7) — ทุก 30 วิ ──
@@ -1486,8 +1472,7 @@
 
   function renderList() {
     if (S.panel === 'dist') { renderDist(); return; }
-    $('cn-note').innerHTML = (S.note ? `<div class="cn-note">${h(S.note)}</div>` : '') + runAutoHtml();
-    bindRunAuto();
+    $('cn-note').innerHTML = S.note ? `<div class="cn-note">${h(S.note)}</div>` : '';      // หน้าแชท = ตอบแชทอย่างเดียว (Run Auto อยู่ห้องพัก Lead)
     const el = $('cn-rows');
     const hub = hubHtml();
     if (hub) {
@@ -2871,6 +2856,7 @@
       body = `<div class="lc-bh" style="background:var(--bg2)"><span class="note">เลขลีดออกตอนกดจ่าย ต่อจากเลขรันล่าสุด <b>${h(String(ch.next || '…'))}</b> · ${
         ch.post && ch.post.on ? `ใบเข้าห้อง "${h(ch.post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(ch.post.rejectRoom || 'REJECT')}")` : 'โหมดทดลอง — เก็บในระบบอย่างเดียว ไม่ส่งเข้ากลุ่ม'}
         · ปุ่มที่มีกรอบชมพู = คิวถัดไป</span></div>
+        ${raHtml(items.length)}
         ${items.map(distLeadHtml).join('') || '<div class="cn-empty">ไม่มีลีดรอจ่ายเบอร์ 👍</div>'}
         ${skipped ? `<details class="lc-rl" style="display:block"${S.parkOpen.has('skip') ? ' open' : ''} data-pk="skip"><summary style="cursor:pointer;color:var(--t3)">ซ่อนไว้ (ไม่ต้องจ่ายเบอร์) ${(P.skipped || []).length} ราย</summary>${skipped}</details>` : ''}`;
     }
@@ -2897,6 +2883,82 @@
       </div></div>`;
     pg.scrollTop = top;
     bindDist(pg);
+  }
+  // ── ★ 11 ต.ค.69 Run Auto (ย้ายมาจากหน้าแชท · เจ้าของ "มันควรอยู่ตรงที่จ่ายลีด") ──
+  //   = กดชื่อเซลล์คิวถัดไปให้ทุกใบที่รอ · ขั้นที่ 1 ดูแผน (ไม่ทำอะไร) · ขั้นที่ 2 ติ๊กออกได้ แล้วกดจ่าย
+  //   จ่ายทีละใบผ่าน endpoint เดิม (assign_lead / park_assign) — ด่านกันเลขซ้ำ/มีเลขแล้ว/ส่งเข้ากลุ่ม ตัวเดียวกับกดเอง
+  const raKey = p => p.kind + ':' + p.id;
+  function raHtml(n) {
+    const P = S.raPlan, D = S.raDone;
+    let x = '';
+    if (!P && !S.raBusy && n) {
+      x += `<div class="lc-ra"><div class="tx"><b>Run Auto</b> — จ่ายเบอร์ทุกใบที่รอให้เซลล์ตามคิวจ่ายวน (เหมือนกดปุ่มกรอบชมพูให้ทีละใบ ·
+        แชทที่มีเซลล์ดูแลอยู่ให้คนเดิม · เบอร์เคยเป็นลีดของใครให้คนนั้น) — กดแล้ว<b>ดูแผนก่อน</b> ยังไม่ส่งอะไร</div>
+        <button class="btn sm pri" data-ra="plan">${ic('repeat', 14)} Run Auto</button></div>`;
+    }
+    if (P) {
+      const on = P.plan.filter(p => !S.raOff.has(raKey(p))).length, post = P.post || {};
+      x += `<div class="lc-rap"><div class="hd"><b>แผน Run Auto</b><span class="lc-chip">${P.plan.length} ใบ${P.total > P.plan.length ? ' จากที่รอ ' + P.total + ' (รอบละไม่เกิน ' + P.limit + ')' : ''}</span>
+          <span class="note" style="font-size:12px;color:var(--t3)">ติ๊กออกใบที่ยังไม่อยากจ่าย</span>${S.raBusy ? '' : '<button class="x" data-ra="close" title="ปิด">✕</button>'}</div>
+        ${P.plan.map(p => { const k = raKey(p), off = S.raOff.has(k);
+          return `<div class="row${p.dup ? ' dup' : ''}${off ? ' off' : ''}"><label><input type="checkbox" data-rak="${h(k)}"${off ? '' : ' checked'}${S.raBusy ? ' disabled' : ''}>
+            ${chTag(SRC_KEY[p.src] || 'other')}<span class="nm">${h(p.name)}</span></label>
+            <span class="to">→ @${h(p.to)}</span><span class="why">${h(p.why)}</span></div>`; }).join('') || '<div class="sk">ไม่มีใบที่จ่ายได้ในรอบนี้</div>'}
+        ${(P.skipped || []).map(s => `<div class="sk">ข้าม ${h(s.name)} — ${h(s.why)}</div>`).join('')}
+        <div class="acts"><span class="note" style="font-size:12px;color:var(--t3)">${post.on
+          ? `ใบละ 1 ข้อความเข้า "${h(post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(post.rejectRoom || 'REJECT')}")`
+          : 'โหมดทดลอง — เก็บในระบบอย่างเดียว ไม่ส่งเข้ากลุ่ม'}</span>
+          ${S.raBusy ? `<b>${h(S.raBusy)}</b>` : `<button class="btn sm" data-ra="close">ยกเลิก</button>
+          <button class="btn sm pri" data-ra="go"${on ? '' : ' disabled'}>จ่ายตามแผน ${on} ใบ</button>`}</div></div>`;
+    }
+    if (D && !P) {
+      x += `<div class="lc-rap"><div class="hd"><b>Run Auto เสร็จแล้ว</b><span class="lc-chip ok">จ่าย ${D.ok.length} ใบ</span>${D.bad.length ? `<span class="lc-chip">ไม่สำเร็จ ${D.bad.length}</span>` : ''}
+        <button class="x" data-ra="done" title="ปิด">✕</button></div>
+        ${D.ok.map(a => `<div class="ok">${h(a.name)} → @${h(a.to)}${a.note ? ' · ' + h(a.note) : ''}</div>`).join('')}
+        ${D.bad.map(a => `<div class="bad">${h(a.name)} — ${h(a.error)}</div>`).join('')}</div>`;
+    }
+    return x;
+  }
+  async function raPlanLoad() {
+    S.raBusy = 'กำลังจัดคิว…'; renderDist();
+    const r = await api('/connect/api/crm', { action: 'auto_plan', src: S.src || '' });
+    S.raBusy = '';
+    if (!r.ok) { toast(r.error || 'จัดแผนไม่สำเร็จ', 6000); renderDist(); return; }
+    S.raPlan = r; S.raOff = new Set(); S.raDone = null; renderDist();
+  }
+  async function raGo() {
+    const P = S.raPlan; if (!P) return;
+    const todo = P.plan.filter(p => !S.raOff.has(raKey(p)));
+    if (!todo.length) return;
+    const post = P.post || {};
+    if (!confirm(`จ่ายเบอร์ ${todo.length} ใบตามแผนเลยไหม?` + (post.on
+      ? `\nระบบจะส่งใบเข้า "${post.room || 'กลุ่มจ่ายเบอร์'}" ${todo.length} ข้อความ พร้อมแท็ก @เซลล์` : '\n(โหมดทดลอง — ไม่ส่งเข้ากลุ่ม)'))) return;
+    const ok = [], bad = [];
+    for (let i = 0; i < todo.length; i++) {
+      const p = todo[i];
+      S.raBusy = `กำลังจ่าย ${i + 1}/${todo.length}…`; renderDist();
+      const r = p.kind === 'chat'
+        ? await api('/connect/api/assign_lead', { id: +p.id, emp: p.emp })
+        : await api('/connect/api/park_assign', { mid: p.id, emp: p.emp, base: p.base, admin: !!p.admin, reject: !!p.reject });
+      if (r.ok) ok.push({ name: p.name, to: p.to, note: r.post && r.post.ok === false ? 'จ่ายในระบบแล้ว แต่ส่งเข้ากลุ่มไม่สำเร็จ (กดส่งอีกครั้งได้ที่ "จ่ายแล้ว")' : '' });
+      else bad.push({ name: p.name, error: r.error || 'ไม่สำเร็จ' });
+    }
+    S.raBusy = ''; S.raPlan = null; S.raDone = { ok, bad };
+    toast(`Run Auto: จ่าย ${ok.length} ใบ` + (bad.length ? ` · ไม่สำเร็จ ${bad.length}` : ''), 6000);
+    loadInbox(false);
+  }
+  function bindRa(pg) {
+    pg.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => {
+      const a = b.dataset.ra;
+      if (a === 'plan') raPlanLoad();
+      else if (a === 'go') raGo();
+      else if (a === 'close') { S.raPlan = null; renderDist(); }
+      else if (a === 'done') { S.raDone = null; renderDist(); }
+    });
+    pg.querySelectorAll('[data-rak]').forEach(c => c.onchange = () => {
+      c.checked ? S.raOff.delete(c.dataset.rak) : S.raOff.add(c.dataset.rak);
+      c.blur(); renderDist();
+    });
   }
   async function distAssign(kindId, emp) {
     const [kind, id] = kindId.split(/:(.*)/s);
@@ -2928,7 +2990,7 @@
       toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ')); loadInbox(false);
     });
     pg.querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
-    bindPark(pg); bindClock(pg);
+    bindPark(pg); bindClock(pg); bindRa(pg);
     pg.querySelectorAll('.hub-done[data-id]').forEach(r => r.onclick = () => { S.backTo = 'dist'; setPanel('inbox'); openChat(+r.dataset.id); });
   }
 

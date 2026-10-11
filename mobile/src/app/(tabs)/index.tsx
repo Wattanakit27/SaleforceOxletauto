@@ -1,12 +1,12 @@
 // รายชื่อลูกค้า (Connect) — ข้อมูลชุดเดียวกับหน้า /connect/ ของเว็บ · สิทธิ์เช็คที่เซิร์ฟเวอร์ทั้งหมด
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from '../../lib/api';
 import { canChat, useAuth } from '../../lib/auth';
 import { CrmTags, Extra } from '../../lib/crm';
-import { Avatar, Banner, Btn, C, fmtTime, Loading, Tag } from '../../lib/ui';
+import { Avatar, Banner, C, fmtTime, Loading, Tag } from '../../lib/ui';
 
 type Row = Extra & {
   id: number;
@@ -67,7 +67,6 @@ export default function ChatList() {
   const [q, setQ] = useState('');
   const [query, setQuery] = useState(''); // ค่าที่ส่งไปค้นจริง (รอหยุดพิมพ์ก่อน)
   const [f, setF] = useState<Record<string, string>>({}); // ตัวกรองหน้ารวมแชท
-  const [running, setRunning] = useState(false);
   const { preset } = useLocalSearchParams<{ preset?: string }>();
   const [seenPreset, setSeenPreset] = useState<string | undefined>(undefined);
 
@@ -139,35 +138,6 @@ export default function ChatList() {
       return n;
     });
 
-  // ★ Run Auto (แอดมิน · คิวรอรับ) — จ่ายลูกค้ารอรับให้เซลล์ตามคิวจ่ายวน · โอนในระบบเท่านั้น ไม่ส่ง LINE
-  const runAuto = () =>
-    Alert.alert(
-      'Run Auto',
-      `จ่ายลูกค้ารอรับ ${data?.rows.length || 0} คนให้เซลล์ตามคิวจ่ายวนเลยไหม?\n(คนได้น้อยสุดก่อน · เบอร์เคยเป็นลีดของใครส่งกลับคนนั้น)`,
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        {
-          text: 'จ่ายเลย',
-          onPress: async () => {
-            setRunning(true);
-            try {
-              const r = await api<{ message: string; assigned: { name: string; to: string; why: string }[]; skipped: { name: string; why: string }[] }>(
-                '/connect/api/crm',
-                { body: { action: 'run_auto' } },
-              );
-              const lines = r.assigned.map((a) => `${a.name} → @${a.to}`).concat(r.skipped.map((s) => `ข้าม ${s.name} — ${s.why}`));
-              Alert.alert(r.message, lines.join('\n').slice(0, 900));
-              await fetchInbox(view, query, f, () => true);
-            } catch (e: any) {
-              Alert.alert('Run Auto ไม่สำเร็จ', e?.message || '');
-            } finally {
-              setRunning(false);
-            }
-          },
-        },
-      ],
-    );
-
   if (me && !canChat(me)) return <Redirect href="/scan" />; // คนงานใช้แชทลูกค้าไม่ได้
 
   return (
@@ -229,11 +199,6 @@ export default function ChatList() {
           </Pressable>
         ) : null}
       </ScrollView>
-      {me?.admin && view === 'queue' && (data?.rows.length || 0) > 0 ? (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
-          <Btn small title={`Run Auto — จ่าย ${data?.rows.length} คนตามคิว`} busy={running} onPress={runAuto} />
-        </View>
-      ) : null}
       {data?.duty ? (
         <Text style={st.duty}>
           เวรวันนี้ ทีม {data.duty.today || '-'} · พรุ่งนี้ทีม {data.duty.tomorrow || '-'}

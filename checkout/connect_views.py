@@ -881,11 +881,11 @@ def _own_or_admin(ctx, o) -> bool:
 
 
 def api_crm(request):
-    """POST `{action, id, …}` — งานของหน้ารวมแชท (เจ้าของลูกค้าหรือแอดมิน · `run_auto` แอดมินเท่านั้น)
+    """POST `{action, id, …}` — งานของหน้ารวมแชท (เจ้าของลูกค้าหรือแอดมิน · `auto_plan` แอดมินเท่านั้น)
 
     action: `stage {stage, reason}` · `followup {kind, due, note}` · `followup_done {fid, result, cancel}` ·
     `call {result, note, media:[{id}]}` · `summary {text}` · `ai` (ร่างสรุป — ไม่บันทึก) ·
-    `release {reason}` (คืนกองกลาง) · `run_auto {ids?}`
+    `release {reason}` (คืนกองกลาง) · `auto_plan {src?}` = แผน Run Auto ของห้องพัก Lead (ไม่ทำอะไร แค่บอกว่าใบไหนจะไปใคร)
     """
     from . import crm
     ctx, body, bad = _post_guard(request)
@@ -893,11 +893,10 @@ def api_crm(request):
         return bad
     act = str(body.get("action") or "")
     who = ctx["name"] or "แอดมิน"
-    if act == "run_auto":
+    if act == "auto_plan":                      # ★ 11 ต.ค.69 Run Auto อยู่ในห้องพัก Lead (ไม่ใช่กล่องแชท) · แค่วางแผน
         if not ctx["admin"]:
             return _j({"ok": False, "error": "Run Auto ได้เฉพาะแอดมิน"}, 403)
-        ids = body.get("ids") if isinstance(body.get("ids"), list) else None
-        return _j(crm.run_auto(by=who, ids=ids))
+        return _j(crm.room_plan(src=str(body.get("src") or "")))
     o = _row(request, ctx, body.get("id"))
     if not o:
         return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)

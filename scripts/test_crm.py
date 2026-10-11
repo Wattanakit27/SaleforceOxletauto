@@ -370,35 +370,70 @@ try:
        >= {o_c.id})
 
     # ═════════════════════════════════════════════════════════════════════
-    print("[12] Run Auto")
-    ChatOwner.objects.filter(owner__isnull=True, awaiting_since__isnull=False).update(awaiting_since=None)
-    q1 = cust("คิว 1", awaiting=True, due_in=1, last_in=NOW)
-    q2 = cust("คิว 2", awaiting=True, due_in=2, last_in=NOW)
-    q3 = cust("คิว 3", awaiting=True, due_in=3, last_in=NOW, phone="0815550001")
-    qs = cust("คิวจำลอง", awaiting=True, due_in=4, last_in=NOW)
+    print("[12] Run Auto (ห้องพัก Lead · แค่วางแผน — ไม่ทำอะไรจนกว่าแอดมินกดจ่าย)")
+    for o_old in C.to_code(ChatOwner.objects.all()):         # ของจากข้อก่อนๆ ไม่ให้ปนแผน
+        C.mark_no_code(o_old, True, by="t")
+    q1 = cust("ห้องพัก 1", awaiting=True, due_in=1, last_in=NOW, phone="0815550011")
+    q2 = cust("ห้องพัก 2", awaiting=True, due_in=2, last_in=NOW, line_id="room2line")
+    q3 = cust("ห้องพัก 3", awaiting=True, due_in=3, last_in=NOW, phone="0815550001")
+    qo = cust("ห้องพัก มีเจ้าของ", owner=MAT, last_in=NOW, phone="0815550012")
+    qs = cust("ห้องพักจำลอง", awaiting=True, due_in=4, last_in=NOW, phone="0815550013")
     qs.profile.user_id = C.SIM_PREFIX + "x1"
     qs.profile.save()
+    qn = cust("ยังไม่ให้เบอร์", awaiting=True, due_in=1, last_in=NOW)
+    qc = cust("มีเลขแล้ว", awaiting=True, due_in=1, last_in=NOW, phone="0815550014", code="NLD10-7001")
     LeadPhone.objects.create(phone="0815550001", code="NLD9-4001", seller=BIW.nickname, source="sheet")
-    r = crm.run_auto(by="แอดมิน")
-    to = {a["id"]: a["to"] for a in r["assigned"]}
-    ck("จ่าย 3 คน · ข้ามลูกค้าจำลอง", len(r["assigned"]) == 3 and any(s["id"] == qs.id for s in r["skipped"]), r)
-    ck("★ เบอร์เคยเป็นลีดของบิว → ส่งกลับบิว", to.get(q3.id) == BIW.nickname, to)
-    ck("จ่ายวนเฉลี่ย (คิว 1/2 ไม่ไปคนเดียวกัน)", to.get(q1.id) != to.get(q2.id), to)
-    lg = ChatOwnerLog.objects.filter(chat=q1, action=ChatOwnerLog.ASSIGN).first()
-    ck("ประวัติจดว่า Run Auto", lg and lg.note.startswith("Run Auto"), lg and lg.note)
-    ck("ไม่ส่งอะไรเข้า LINE", not [c for c in CALLS if "/message/push" in c[1]])
-    before = crm._auto_today()
-    q4 = cust("คิว 4", awaiting=True, due_in=1, last_in=NOW)
-    r = crm.run_auto(by="แอดมิน")
-    least = min(before.items(), key=lambda kv: kv[1])[0] if before else None
-    ck("รอบสอง: นับที่จ่ายไปแล้ววันนี้ด้วย", r["assigned"] and r["assigned"][0]["id"] == q4.id, (r, before, least))
-    LF.save_cfg(dict(LF.cfg(), rr_teams=["Z"]))
-    q5 = cust("คิว 5", awaiting=True, due_in=1, last_in=NOW)
-    r = crm.run_auto(by="แอดมิน")
-    ck("ไม่มีเซลล์ในคิวจ่ายวน = ข้ามพร้อมเหตุผล", not r["assigned"] and "คิวจ่ายวน" in r["skipped"][0]["why"], r)
+    GroupChat.objects.create(chat_type="group", group_id="C" + "e" * 32, group_name="ADMIN เก็บ Lead",
+                             message_id="ra-park-1", sender_id="U%032x" % 501, sender_name="หมิว", direction="in",
+                             msg_type="text", sent_at=NOW - timedelta(minutes=30),
+                             text=("Ac Lead No.   TLD10-\nAds  :   \nชื่อ Account : คนติ๊กต็อก\nชื่อลูกค้า :   \n"
+                                   "ID LINE :   \nชื่อไลน์ :   \nเบอร์โทร : 0815550015\n"
+                                   "ช่องทาง  :    TikTok ช่องขายบอส\nรถ : Yaris ativ\nไลฟ์ :   \nเพิ่มเติม  :  "))
+    logs0, calls0 = ChatOwnerLog.objects.count(), len(CALLS)
+    r = crm.room_plan()
+    PL = {(p["kind"], str(p["id"])): p for p in r["plan"]}
+    pk = next((p for p in r["plan"] if p["kind"] == "park"), None)
+    ck("แผนมีแชทในห้องพัก + ใบร่างจากกลุ่ม ADMIN เก็บ Lead",
+       ("chat", str(q1.id)) in PL and ("chat", str(q2.id)) in PL and pk, r)
+    ck("ไม่มีคนที่ยังไม่ให้เบอร์ / มีเลขแล้ว", ("chat", str(qn.id)) not in PL and ("chat", str(qc.id)) not in PL)
+    ck("ข้ามลูกค้าจำลอง", any(x["id"] == qs.id for x in r["skipped"]), r["skipped"])
+    ck("★ แชทที่มีเซลล์ดูแลอยู่ = ให้คนเดิม", PL.get(("chat", str(qo.id)), {}).get("to") == MAT.nickname,
+       PL.get(("chat", str(qo.id))))
+    p3 = PL.get(("chat", str(q3.id)), {})
+    ck("★ เบอร์เคยเป็นลีดของบิว → บิว (ติดป้ายเบอร์ซ้ำ)", p3.get("to") == BIW.nickname and p3.get("dup"), p3)
+    ck("จ่ายวนเฉลี่ย (ห้องพัก 1/2 ไม่ไปคนเดียวกัน)",
+       PL[("chat", str(q1.id))]["to"] != PL[("chat", str(q2.id))]["to"], r["plan"])
+    ck("ใบร่างส่งตัวหน้า/ช่องทางมาด้วย", pk and pk["base"] == "TLD" and pk["src"] == "tiktok" and pk["emp"], pk)
+    ck("★ แค่แผน: ไม่โอน ไม่ออกเลข ไม่ส่ง LINE",
+       ChatOwnerLog.objects.count() == logs0 and fresh(q1).owner_id is None and not lead(q1).code
+       and len(CALLS) == calls0)
+    rt = crm.room_plan(src="tiktok")
+    ck("กรองช่องทาง (TikTok) = เฉพาะใบร่าง TikTok", rt["plan"] and all(p["src"] == "tiktok" for p in rt["plan"]), rt)
+    LF.save_cfg(dict(LF.cfg(), cap_day=1))
+    rc = crm.room_plan()
+    per = {}
+    for p in rc["plan"]:
+        if p["why"] == "คิวจ่ายวน":
+            per[p["to"]] = per.get(p["to"], 0) + 1
+    ck("เพดานต่อวัน: คิวจ่ายวนไม่เกินคนละ 1 ใบ", per and max(per.values()) <= 1, rc)
+    LF.save_cfg(dict(LF.cfg(), cap_day=12, rr_teams=["Z"]))
+    rz = crm.room_plan()
+    PZ = {(p["kind"], str(p["id"])): p for p in rz["plan"]}
+    ck("ไม่มีเซลล์ในคิว = ข้ามพร้อมเหตุผล · เจ้าของเดิม/เบอร์ซ้ำยังได้",
+       any(x["id"] == q1.id and "คิวจ่ายวน" in x["why"] for x in rz["skipped"])
+       and PZ.get(("chat", str(qo.id)), {}).get("to") == MAT.nickname
+       and PZ.get(("chat", str(q3.id)), {}).get("to") == BIW.nickname, rz)
     LF.save_cfg(dict(LF.cfg(), rr_teams=["A", "B"]))
-    r = crm.run_auto(by="แอดมิน", ids=[q5.id, q1.id])
-    ck("ระบุ id = จ่ายเฉพาะคนที่ยังไม่มีเจ้าของ", [a["id"] for a in r["assigned"]] == [q5.id], r)
+    GONE.active = False
+    GONE.save()
+    LeadPhone.objects.create(phone="0815550016", code="NLD9-4002", seller=GONE.nickname, source="sheet")
+    qg = cust("ห้องพัก เจ้าของเดิมลาออก", awaiting=True, due_in=1, last_in=NOW, phone="0815550016")
+    rg = crm.room_plan()
+    ck("★ เบอร์ซ้ำแต่เจ้าของเดิมไม่อยู่แล้ว = ข้าม ให้แอดมินเลือกเอง",
+       any(x["id"] == qg.id and "เบอร์ซ้ำ" in x["why"] for x in rg["skipped"]), rg["skipped"])
+    GONE.active = True
+    GONE.save()
+    C.mark_no_code(fresh(qg), True, by="t")
 
     # ═════════════════════════════════════════════════════════════════════
     print("[13] ดึงคืนเมื่อไม่ตอบ (ปิดโดยปริยาย)")
@@ -578,11 +613,28 @@ try:
     ck("บันทึกสรุปผ่าน API", s_ == 200 and d["crm"]["summary"] == "สรุปทดสอบ")
     s_, d, _ = J(SM, "/connect/api/crm", {"action": "ai", "id": o_ai.id})
     ck("AI ร่าง (แชทไม่มีข้อความใหม่ = ผลเดิม หรือ error ภาษาคน)", s_ in (200, 400) and ("draft" in d or d.get("error")), d)
+    s_, d, _ = J(SM, "/connect/api/crm", {"action": "auto_plan"})
+    ck("เซลล์ดูแผน Run Auto ไม่ได้ (403)", s_ == 403)
     s_, d, _ = J(SM, "/connect/api/crm", {"action": "run_auto"})
-    ck("เซลล์ Run Auto ไม่ได้ (403)", s_ == 403)
-    rq = cust("คิว API", awaiting=True, due_in=2, last_in=NOW)
-    s_, d, _ = J(ADM, "/connect/api/crm", {"action": "run_auto", "ids": [rq.id]})
-    ck("แอดมิน Run Auto ผ่าน API", s_ == 200 and d["assigned"] and d["assigned"][0]["id"] == rq.id, d)
+    ck("คำสั่ง run_auto เดิม (คิวรอรับ) เลิกแล้ว — ไม่มีใครโอนลูกค้าจากหน้าแชทได้", s_ != 200 or not d.get("assigned"), (s_, d))
+    s_, d, raw = J(ADM, "/connect/api/crm", {"action": "auto_plan"})
+    ck("แอดมินดูแผน Run Auto ผ่าน API · ไม่มี LINE user id หลุด", s_ == 200 and isinstance(d.get("plan"), list)
+       and not leak.search(raw), (s_, d))
+    pc = next((p for p in d.get("plan") or [] if p["kind"] == "chat"), None)
+    if pc:
+        GroupChat.objects.create(chat_type="group", group_id="C" + "f" * 32, group_name="ห้องจ่ายเบอร์ บ้านเก่า",
+                                 message_id="ra-slip-1", sender_id="U%032x" % 502, sender_name="หมิว", direction="in",
+                                 msg_type="text", sent_at=NOW - timedelta(minutes=20),
+                                 text="Ac Lead No.   NLD10-8400\nเบอร์โทร : 0899990000\nช่องทาง : LINE@\n@มัท")
+        _sp = C.cfg().get("slip_post")
+        C.save_cfg(dict(C.cfg(), slip_post=False))      # โหมดทดลอง — ไม่ยิงเข้ากลุ่มในเทสต์
+        s_, d2, _ = J(ADM, "/connect/api/assign_lead", {"id": pc["id"], "emp": pc["emp"]})
+        C.save_cfg(dict(C.cfg(), slip_post=_sp))
+        o_pc = fresh(ChatOwner.objects.get(pk=pc["id"]))
+        ck("จ่ายตามแผนผ่าน endpoint เดิม → ได้เลข + โอนให้คนในแผน", s_ == 200 and o_pc.owner_id == pc["emp"]
+           and lead(o_pc).code.endswith("-8401"), (s_, d2, lead(o_pc).code))
+    else:
+        ck("แผนมีแชทให้ลองจ่าย", False, d)
     s_, d, _ = J(SM, "/connect/api/crm", {"action": "boom", "id": o_k.id})
     ck("คำสั่งมั่ว = 400", s_ == 400)
     s_, d, _ = J(SM, "/connect/api/crm", {"action": "release", "id": o_k.id, "reason": "ลูกค้าย้ายจังหวัด"})

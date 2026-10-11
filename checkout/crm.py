@@ -8,7 +8,7 @@
     (คนละเรื่องกับ "สถานะลูกค้า" คอลัมน์ Z ของชีต — อันนั้นคือท่าทีลูกค้า อันนี้คืองานของเราไปถึงไหน)
   - **ความร้อน** (ร้อน/อุ่น/เย็น + คะแนน + เหตุผล) — คิดจากข้อมูลที่มีอยู่แล้ว ไม่มีช่องให้กรอกเพิ่ม
   - **นัดหมาย** (นัดติดตาม / นัดดูรถ) · **บันทึกการโทร + หลักฐาน** · **ใครเคยดูแล**
-  - **Run Auto** (แอดมินจ่ายลูกค้าในคิวรอรับให้เซลล์ตามคิวจ่ายวน) · **คืนกองกลาง** (เซลล์ปล่อยลูกค้าเอง)
+  - **Run Auto** (ห้องพัก Lead · แผนจ่ายเบอร์ตามคิวจ่ายวน — ไม่อยู่ในหน้าแชท) · **คืนกองกลาง** (เซลล์ปล่อยลูกค้าเอง)
   - **ดึงคืนเมื่อไม่ตอบ** (ปิดโดยปริยาย) · **แจ้งเตือนในระบบ** · **AI สรุปแชท** (เซลล์ตรวจก่อนบันทึก)
   - **วิเคราะห์**: ขั้นของลีดตามช่องทาง · เหตุผลที่ไม่ซื้อ · รายชื่อ "ไม่ต้องการ" ไว้ตัดออกจากโฆษณา
 
@@ -26,8 +26,9 @@ import uuid
 from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.db.models import Count, F, Q
+from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from . import connect as C
 from .models import ChatCall, ChatFollowup, ChatLead, ChatOwner, ChatOwnerLog, Employee
@@ -130,7 +131,7 @@ def on_release(o) -> None:
 
 
 def on_owner(o) -> None:
-    """มีเจ้าของใหม่ (รับ/โอน/Run Auto) → ถ้าค้างที่ "คืนกองกลาง" ให้ระบบคิดขั้นใหม่"""
+    """มีเจ้าของใหม่ (รับ/โอน/จ่ายเบอร์) → ถ้าค้างที่ "คืนกองกลาง" ให้ระบบคิดขั้นใหม่"""
     try:
         ld = C.lead_of(o, create=False)
         if ld and ld.stage == "pool":
@@ -615,67 +616,104 @@ def py_filter(objs, f: dict, now=None) -> list:
 
 
 # ─────────────────────────────────────────────────────────────
-#  Run Auto (แอดมิน) — จ่ายลูกค้าในคิวรอรับให้เซลล์ตามคิวจ่ายวน
-#    · เบอร์เคยเป็นลีดของใคร (สมุดเบอร์) = ส่งกลับเซลล์เดิม · ไม่ส่งอะไรเข้า LINE (โอนในระบบเท่านั้น)
+#  Run Auto (แอดมิน · ★ 11 ต.ค.69 ย้ายไปอยู่ "ห้องพัก Lead") — จ่ายเบอร์ลีดที่รอ ตามคิวจ่ายวน
+#    เจ้าของสั่ง: "อันนี้มันหน้าแชท ให้แอดมินตอบแชทได้เท่านั้น ไม่มีการ run auto ใดๆ ทั้งสิ้นในหน้า chat"
+#    → ไม่มี Run Auto ในกล่องแชทรวมแล้ว · ในห้องพัก Lead = "กดชื่อเซลล์คิวถัดไปให้ทุกใบ" (ตัวเดียวกับปุ่มกรอบชมพู)
+#    ฟังก์ชันนี้ **แค่วางแผน ไม่ทำอะไรเลย** — หน้าเว็บโชว์ให้แอดมินดู/ติ๊กออกก่อน แล้วยิงจ่ายทีละใบผ่าน
+#    endpoint เดิม (assign_lead / park_assign) ซึ่งมีด่านกันเลขซ้ำ/มีเลขแล้ว/ส่งเข้ากลุ่มครบอยู่แล้ว
 # ─────────────────────────────────────────────────────────────
-AUTO_NOTE = "Run Auto"
+AUTO_LIMIT = 30          # ต่อรอบ — ใบละ 1 ข้อความเข้ากลุ่มจ่ายเบอร์ · กดซ้ำได้ถ้ายังเหลือ
 
 
-def _auto_today(day=None) -> dict:
-    day = day or timezone.localdate()
-    start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-    rows = (ChatOwnerLog.objects.filter(action=ChatOwnerLog.ASSIGN, at__gte=start, note__startswith=AUTO_NOTE,
-                                        employee__isnull=False)
-            .values("employee_id").annotate(n=Count("id")))
-    return {r["employee_id"]: r["n"] for r in rows}
+def _src_key(kind, o=None, it=None) -> str:
+    if kind == "chat":
+        return "fb" if C.is_fb(o) else "line"
+    s = (it or {}).get("source") or "other"
+    return "fb" if s == "facebook" else s
 
 
-def run_auto(by: str = "", ids=None, limit: int = 40) -> dict:
+def room_plan(src: str = "", limit: int = AUTO_LIMIT) -> dict:
+    """ลีดใน "ห้องพัก Lead" ที่รอจ่ายเบอร์ → ใครจะได้ (เรียงรอนานสุดก่อน · สูงสุด `limit` ใบ)
+
+    · แชทที่มีเซลล์ดูแลอยู่แล้ว = ให้คนเดิม (ไม่ดึงลูกค้าออกจากคนที่คุยอยู่)
+    · เบอร์เคยเป็นลีดของใคร (สมุดเบอร์) = ให้เจ้าของเดิม · เจ้าของเดิมไม่อยู่แล้ว = ข้าม ให้แอดมินเลือกเอง
+    · ที่เหลือ = คิวจ่ายวน (คนได้ใบน้อยสุดวันนี้ก่อน · ข้ามคนหยุด/ยังไม่เช็คชื่อ/เต็มเพดาน — กติกาเดียวกับหน้าห้องพัก)
+    · ข้าม: ลูกค้าจำลอง · บัญชีพนักงาน
+    """
     from . import leadflow as LF
-    cand = LF.rr_candidates(LF.cfg())
-    extra = _auto_today()
-    load = {c["id"]: c["today"] + extra.get(c["id"], 0) for c in cand}
-    qs = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead").filter(owner__isnull=True)
-    if ids:
-        qs = qs.filter(pk__in=[int(x) for x in ids if str(x).isdigit()])
-    else:
-        qs = qs.filter(awaiting_since__isnull=False)
-    rows = list(qs.order_by(F("due_at").asc(nulls_last=True), "id")[:limit])
-    assigned, skipped = [], []
-    for o in rows:
-        name = C.row_json(o)["name"]
-        if C.is_sim_row(o):
-            skipped.append({"id": o.id, "name": name, "why": "ลูกค้าจำลอง"})
+    from . import leadpark
+    c = LF.cfg()
+    cand = LF.rr_candidates(c)
+    load = {x["id"]: x["today"] for x in cand}
+    cap = c.get("cap_day") or 0
+    src = (src or "").strip()
+
+    pool = []
+    for o in C.to_code(ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")):
+        k = _src_key("chat", o)
+        if src and k != src:
             continue
-        if getattr(C.cust(o), "is_employee", False):
-            skipped.append({"id": o.id, "name": name, "why": "บัญชีพนักงาน"})
+        pool.append(("chat", o, None, o.awaiting_since or o.last_in_at or o.last_at, k))
+    try:
+        waiting = leadpark.board(cache_sec=0).get("waiting") or []
+    except Exception:
+        waiting = []
+    for it in waiting:
+        if it.get("code"):
             continue
-        ld = C.lead_of(o, create=False)
-        target, why = None, ""
-        if ld and ld.phone:
-            dp = LF.dup_info(ld.phone, exclude_code=ld.code)
-            if dp and dp.get("sellerId"):
-                e = Employee.objects.filter(pk=dp["sellerId"], active=True).first()
-                if e and not C.is_test_seller(e):
-                    target, why = e, "เบอร์เคยเป็นลีด %s ของ %s" % (dp.get("code") or "-", e.nickname)
-        if not target:
-            if not cand:
-                skipped.append({"id": o.id, "name": name,
-                                "why": "ไม่มีเซลล์ในคิวจ่ายวนตอนนี้ (หยุด/ยังไม่เช็คชื่อ/เต็มเพดาน)"})
+        k = _src_key("park", it=it)
+        if src and k != src:
+            continue
+        at = parse_datetime(it.get("at") or "") if it.get("at") else None
+        pool.append(("park", None, it, at, k))
+    epoch = timezone.make_aware(datetime(2000, 1, 1))
+    pool.sort(key=lambda x: x[3] or epoch)
+    total = len(pool)
+
+    plan, skipped = [], []
+    for kind, o, it, at, k in pool[:max(1, int(limit or AUTO_LIMIT))]:
+        if kind == "chat":
+            name = C.row_json(o)["name"]
+            ref = {"kind": "chat", "id": o.id, "name": name, "src": k}
+            if C.is_sim_row(o):
+                skipped.append(dict(ref, why="ลูกค้าจำลอง"))
                 continue
-            pick = min(cand, key=lambda c: (load.get(c["id"], 0), c["_last"], c["name"]))
-            target, why = pick["emp"], "จ่ายวน"
-        ok, msg = C.assign(o.id, target, by=by or "แอดมิน", note=("%s · %s" % (AUTO_NOTE, why))[:200])
-        if ok:
-            load[target.id] = load.get(target.id, 0) + 1
-            assigned.append({"id": o.id, "name": name, "to": target.nickname, "why": why})
+            if getattr(C.cust(o), "is_employee", False):
+                skipped.append(dict(ref, why="บัญชีพนักงาน — ให้แอดมินดูเอง"))
+                continue
+            ld = C.lead_of(o, create=False)
+            phone, code = (ld.phone if ld else ""), (ld.code if ld else "")
+            owner = o.owner if (o.owner_id and o.owner.active and not C.is_test_seller(o.owner)) else None
         else:
-            skipped.append({"id": o.id, "name": name, "why": msg})
-    if not rows:
-        msg = "ไม่มีลูกค้ารอรับในคิว"
-    else:
-        msg = "จ่ายแล้ว %d คน" % len(assigned) + (" · ข้าม %d คน" % len(skipped) if skipped else "")
-    return {"ok": True, "message": msg, "assigned": assigned, "skipped": skipped}
+            name = it.get("account") or it.get("name") or it.get("lineId") or it.get("phone") or "(ไม่มีชื่อ)"
+            ref = {"kind": "park", "id": it["id"], "name": name, "src": k,
+                   "base": it.get("base") or "", "admin": bool(it.get("admin")), "reject": bool(it.get("reject"))}
+            phone, code, owner = it.get("phone") or "", "", None
+        target, why, dup = None, "", None
+        if owner:
+            target, why = owner, "ดูแลแชทนี้อยู่"
+        elif phone:
+            dup = LF.dup_info(phone, exclude_code=code)
+        if not target and dup:
+            e = Employee.objects.filter(pk=dup["sellerId"], active=True).first() if dup.get("sellerId") else None
+            if not e or C.is_test_seller(e):
+                skipped.append(dict(ref, why="เบอร์ซ้ำ — เคยเป็นลีด %s ของ %s (ไม่อยู่ในคิวแล้ว) ให้แอดมินเลือกเอง"
+                                    % (dup.get("code") or "-", dup.get("seller") or "?")))
+                continue
+            target, why = e, "เบอร์เคยเป็นลีด %s ของ %s" % (dup.get("code") or "-", e.nickname)
+        if not target:
+            if cap:
+                cand = [x for x in cand if load.get(x["id"], 0) < cap]
+            if not cand:
+                skipped.append(dict(ref, why="ไม่มีเซลล์ว่างในคิวจ่ายวน (หยุด/ยังไม่เช็คชื่อ/เต็มเพดาน)"))
+                continue
+            pick = min(cand, key=lambda x: (load.get(x["id"], 0), x["_last"], x["name"]))
+            target, why = pick["emp"], "คิวจ่ายวน"
+        load[target.id] = load.get(target.id, 0) + 1
+        plan.append(dict(ref, emp=target.id, to=target.nickname, why=why, dup=bool(dup),
+                         since=at.isoformat() if at else ""))
+    return {"ok": True, "plan": plan, "skipped": skipped, "total": total, "limit": int(limit or AUTO_LIMIT),
+            "post": C.post_help()}
 
 
 def release_by_owner(o, emp, by: str = "", reason: str = "") -> tuple:
