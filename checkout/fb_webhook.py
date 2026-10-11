@@ -135,7 +135,10 @@ def handle_payload(data: dict) -> dict:
                          sender_name="" if echo else (fp.display_name or "")[:120],
                          msg_type=_msg_type(m), text=m.get("text") or "",
                          sticker_id=str(m.get("sticker_id") or "")[:300],
-                         extra={"webhook": True, "attachments": [{"type": a.get("type")} for a in att],
+                         extra={"webhook": True,
+                                "attachments": [{"type": a.get("type"),
+                                                 "url": str(((a.get("payload") or {}).get("url")) or "")[:1000]}
+                                                for a in att if isinstance(a, dict)],
                                 "app_id": m.get("app_id")},
                          has_media=bool(att), channel=pid,
                          direction=FbChat.OUT if echo else FbChat.IN, sent_at=at)

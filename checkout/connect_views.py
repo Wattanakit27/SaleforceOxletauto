@@ -962,6 +962,57 @@ def api_upload(request):
 
 
 @require_GET
+def api_media(request):
+    """GET `?id=<ChatOwner.id>&m=<l|f><แถวแชท>.<ลำดับไฟล์>[&dl=1]` — รูป/ไฟล์ที่ลูกค้าส่งในแชท (★ 11 ต.ค.69)
+
+    สิทธิ์เดียวกับเปิดแชท (`_access`) · คิวรอรับ (preview) เปิดได้เฉพาะไฟล์ในข้อความที่ลูกค้าเพิ่งส่ง
+    · ไฟล์อยู่นอก /media/ (nginx ไม่เสิร์ฟ) · ยังไม่ได้โหลด = ลองโหลดตอนนี้ครั้งเดียว · checkout/chatmedia.py
+    """
+    import re as _re
+
+    from . import chatmedia as CM
+    from .models import FbChat, GroupChat
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    o = _row(request, ctx, request.GET.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    acc = _access(ctx, o)
+    if not acc:
+        return _j({"ok": False, "error": "ลูกค้าคนนี้ไม่ใช่ของคุณ"}, 403)
+    mm = _re.match(r"^([lf])(\d+)\.(\d{1,2})$", request.GET.get("m") or "")
+    if not mm:
+        return _j({"ok": False, "error": "ระบุไฟล์ไม่ถูกต้อง"}, 400)
+    src, pk, idx = mm.group(1), int(mm.group(2)), int(mm.group(3))
+    row = None
+    if src == CM.FB and C.is_fb(o) and o.fb_profile.thread_id:
+        row = FbChat.objects.filter(pk=pk, thread_id=o.fb_profile.thread_id).first()
+    elif src == CM.LINE and not C.is_fb(o) and o.profile_id:
+        row = (GroupChat.objects.filter(pk=pk, sender_id=o.profile.user_id)
+               .exclude(chat_type=GroupChat.GROUP).first())
+    if not row or not row.has_media or idx >= len(CM.attachments(src, row)):
+        return _j({"ok": False, "error": "ไม่พบไฟล์นี้ในแชทของลูกค้ารายนี้"}, 404)
+    if acc == "preview" and not (row.direction == "in" and o.awaiting_since and row.sent_at
+                                 and row.sent_at >= o.awaiting_since):
+        return _j({"ok": False, "error": "กด \"รับลูกค้าคนนี้\" ก่อน ถึงจะเปิดไฟล์ย้อนหลังได้"}, 403)
+    p = CM.stored(src, row, idx)
+    if not p:
+        try:
+            CM.ensure(src, row, refresh=True)
+        except Exception:
+            pass
+        p = CM.stored(src, row, idx)
+    if not p:
+        st = CM.parse(row.media_token)[0]
+        st = st if st in ("gone", "big", "none") else "pending"
+        return _j({"ok": False, "state": st, "error": CM.STATE_TEXT[st]}, 410 if st == "gone" else 404)
+    name = CM.attachments(src, row)[idx]["name"] or ("%s-%d" % (row.msg_type or "file", row.pk))
+    return CM.serve(p, name=name, download=request.GET.get("dl") == "1")
+
+
+@require_GET
 def api_alerts(request):
     """กระดิ่งแจ้งเตือน — ลูกค้าใหม่รอรับ · เลยเวลา/ใกล้หมดเวลา · นัดวันนี้ · ลูกค้าเงียบ 3/5/7 วัน · รถใหม่ตรง"""
     from . import crm

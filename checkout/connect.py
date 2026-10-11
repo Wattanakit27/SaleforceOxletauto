@@ -1004,6 +1004,13 @@ def tick(now=None) -> dict:
             out["slipSweep"] = r
     except Exception as e:
         out["slipSweepError"] = str(e)[:120]
+    try:                                     # ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่งในแชท → โหลดมาเก็บก่อนต้นทางลบ (thread แยก)
+        from .chatmedia import sweep_bg
+        r = sweep_bg()
+        if r:
+            out["chatMedia"] = r
+    except Exception as e:
+        out["chatMediaError"] = str(e)[:120]
     try:                                     # ★ 11 ต.ค.69 หน้ารวมแชท: ดึงคืนเมื่อไม่ตอบ · เตือนนัด · ลบหลักฐานของลูกค้าที่ถูกลบ
         from .crm import tick as _crm_tick
         r = _crm_tick(now)
@@ -2930,6 +2937,17 @@ def counts(me=None, admin: bool = False) -> dict:
     return out
 
 
+def _files(o, src: str, m) -> list:
+    """ไฟล์แนบของข้อความ (รูป/วิดีโอ/เสียง/ไฟล์) — โหลดไม่ได้/ไม่มี = [] · พังต้องไม่ทำให้เปิดแชทไม่ได้"""
+    if not m.has_media:
+        return []
+    try:
+        from .chatmedia import files_json
+        return files_json(o.id, src, m)
+    except Exception:
+        return []
+
+
 def messages(o, limit: int = 200, since=None) -> list:
     """บทสนทนาทั้ง 2 ฝั่ง เก่า→ใหม่ · `since` = เฉพาะข้อความลูกค้าตั้งแต่เวลานั้น (คิวรอรับ)"""
     if is_fb(o):
@@ -2952,6 +2970,8 @@ def messages(o, limit: int = 200, since=None) -> list:
         return [{
             "at": _iso(m.sent_at), "text": fb_preview(m), "type": m.msg_type or "", "media": bool(m.has_media),
             "dir": m.direction or "in", "by": _by(m),
+            # ★ 11 ต.ค.69 รูป/ไฟล์ที่ส่งในแชท — ลิงก์ผ่าน /connect/api/media (เช็คสิทธิ์) · chatmedia.py
+            "files": _files(o, "f", m),
         } for m in frows]
     qs = GroupChat.objects.filter(sender_id=o.profile.user_id).exclude(chat_type=GroupChat.GROUP)
     if since:
@@ -2965,6 +2985,7 @@ def messages(o, limit: int = 200, since=None) -> list:
         "media": bool(g.has_media),
         "dir": g.direction or "in",
         "by": g.sent_by_name or "",
+        "files": _files(o, "l", g),
     } for g in rows]
 
 

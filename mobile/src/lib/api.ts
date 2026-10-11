@@ -22,6 +22,11 @@ export async function saveToken(t: string | null): Promise<void> {
   else await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
+/** header สำหรับโหลดไฟล์ที่ต้อง login (รูปที่ลูกค้าส่งในแชท — เซิร์ฟเวอร์เช็คสิทธิ์ทุกครั้ง) */
+export function authHeaders(): Record<string, string> {
+  return token ? { Authorization: 'Bearer ' + token } : {};
+}
+
 export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn;
 }

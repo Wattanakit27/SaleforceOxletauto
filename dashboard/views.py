@@ -2680,6 +2680,29 @@ def admin_system_health(request):
     except Exception:
         pass
 
+    # ── 🖼️ 11 ต.ค.69 — รูป/ไฟล์ที่ลูกค้าส่งในแชท (checkout/chatmedia.py) · โหลดไม่ได้ทั้งรอบ = รูปไม่ขึ้นทั้งหน้า Connect ──
+    #   ต้นเหตุที่น่าจะเป็น: LINE token หมดอายุ/ผิดบัญชี · ดิสก์เต็ม · โฟลเดอร์เก็บไฟล์เป็นของ root (รันคำสั่งผิด user)
+    try:
+        from datetime import datetime as _dt_cm
+
+        from checkout import chatmedia as _cm
+
+        from .services.cache_store import get_kv as _gkv_cm
+        _raw = _gkv_cm(_cm.LAST_KEY) or {}
+        _cl = _raw.get("data", _raw) if isinstance(_raw, dict) else {}
+        _cl = _cl if isinstance(_cl, dict) else {}
+        try:
+            _cm_age = (now - _dt_cm.fromisoformat(_cl.get("at") or "")).total_seconds()
+        except (TypeError, ValueError):
+            _cm_age = 1e9
+        if _cm_age < 7200 and (_cl.get("error") or (_cl.get("err", 0) >= 5 and not _cl.get("ok"))):
+            issues.append({"level": "err",
+                           "msg": "โหลดรูป/ไฟล์ที่ลูกค้าส่งในแชทไม่สำเร็จ (พลาด %d · สำเร็จ 0)%s — รูปจะไม่ขึ้นในหน้า Connect "
+                                  "· ตรวจด้วย manage.py chat_media (มักเป็น LINE token หรือสิทธิ์โฟลเดอร์ private_media)"
+                                  % (_cl.get("err", 0), (" · " + str(_cl["error"])[:120]) if _cl.get("error") else "")})
+    except Exception:
+        pass
+
     status = "err" if any(i["level"] == "err" for i in issues) else ("warn" if issues else "ok")
 
     return JsonResponse({

@@ -5,7 +5,9 @@ import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,11 +17,30 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { api } from '../../lib/api';
+import { absUrl, api, authHeaders } from '../../lib/api';
 import { Extra, HEAT } from '../../lib/crm';
 import { Banner, Btn, C, fmtTime, Loading } from '../../lib/ui';
 
-type Msg = { at: string; text: string; type: string; media: boolean; dir: string; by: string };
+// ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่ง — url = /connect/api/media (ต้องแนบ token · เซิร์ฟเวอร์เช็คสิทธิ์)
+type MFile = { url: string; kind: string; state: string; name: string; size: number; ext: string };
+type Msg = { at: string; text: string; type: string; media: boolean; dir: string; by: string; files?: MFile[] };
+
+const FILE_NOTE: Record<string, string> = {
+  gone: 'ไฟล์นี้หมดอายุที่ต้นทางแล้ว — เปิดดูในแอป LINE OA / Facebook',
+  big: 'ไฟล์ใหญ่เกินที่ระบบเก็บ — เปิดดูในแอป LINE OA / Facebook',
+  none: 'ข้อความนี้ไม่มีไฟล์ให้โหลด',
+};
+
+/** รูปในบับเบิล — โหลดไม่ขึ้น (หมดอายุที่ต้นทาง) = บอกเหตุผลแทนกรอบว่าง */
+function ChatImage({ uri, onOpen }: { uri: string; onOpen: () => void }) {
+  const [bad, setBad] = useState(false);
+  if (bad) return <Text style={st.note}>เปิดรูปนี้ไม่ได้ — ไฟล์อาจหมดอายุที่ต้นทางแล้ว</Text>;
+  return (
+    <Pressable onPress={onOpen}>
+      <Image source={{ uri, headers: authHeaders() }} style={st.img} resizeMode="cover" onError={() => setBad(true)} />
+    </Pressable>
+  );
+}
 type Chat = {
   row: Extra & { id: number; name: string; owner: string; sim: boolean; src: string; overdue: boolean; awaiting: boolean };
   access: 'full' | 'preview';
@@ -39,6 +60,7 @@ export default function ChatScreen() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [viewer, setViewer] = useState('');
   const confirmed = useRef(false); // ถามยืนยันครั้งแรกที่ตอบลูกค้าจริง (เวอร์ชันทดลอง)
 
   const load = useCallback(async () => {
@@ -165,12 +187,28 @@ export default function ChatScreen() {
               contentContainerStyle={{ padding: 12, gap: 8 }}
               renderItem={({ item: m }) => {
                 const out = m.dir === 'out';
+                const files = m.files || [];
+                // "[รูป]" คือคำแทนตอนไม่มีไฟล์ให้ดู — มีไฟล์แล้วไม่ต้องโชว์ (ข้อความจริงที่พิมพ์มาพร้อมรูปยังโชว์)
+                const showText = !files.length || !/^\[[^\]]*\]$/.test((m.text || '').trim());
                 return (
                   <View style={[st.bubbleWrap, out ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-                    <View style={[st.bubble, out ? st.out : st.in]}>
-                      <Text style={[st.msg, out && { color: '#fff' }, m.media && { fontStyle: 'italic' }]}>
-                        {m.text || (m.media ? '[รูป/ไฟล์]' : '')}
-                      </Text>
+                    <View style={[st.bubble, out ? st.out : st.in, files.length ? st.withFile : null]}>
+                      {showText ? (
+                        <Text style={[st.msg, out && { color: '#fff' }, m.media && !files.length && { fontStyle: 'italic' }]}>
+                          {m.text || (m.media ? '[รูป/ไฟล์]' : '')}
+                        </Text>
+                      ) : null}
+                      {files.map((f, i) =>
+                        FILE_NOTE[f.state] ? (
+                          <Text key={i} style={[st.note, out && { color: '#fff' }]}>{FILE_NOTE[f.state]}</Text>
+                        ) : f.kind === 'image' ? (
+                          <ChatImage key={i} uri={absUrl(f.url)} onOpen={() => setViewer(absUrl(f.url))} />
+                        ) : (
+                          <Text key={i} style={[st.note, out && { color: '#fff' }]}>
+                            {f.kind === 'video' ? 'วิดีโอ' : f.kind === 'audio' ? 'ข้อความเสียง' : 'ไฟล์ ' + (f.name || '')} — เปิดดูได้ที่หน้าเว็บ Connect
+                          </Text>
+                        ),
+                      )}
                     </View>
                     <Text style={st.meta}>
                       {fmtTime(m.at)}
@@ -210,6 +248,14 @@ export default function ChatScreen() {
           </>
         )}
       </KeyboardAvoidingView>
+      <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer('')}>
+        <Pressable style={st.viewer} onPress={() => setViewer('')}>
+          {viewer ? (
+            <Image source={{ uri: viewer, headers: authHeaders() }} style={st.viewerImg} resizeMode="contain" />
+          ) : null}
+          <Text style={st.viewerHint}>แตะเพื่อปิด</Text>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -222,6 +268,12 @@ const st = StyleSheet.create({
   in: { backgroundColor: '#fff', borderWidth: StyleSheet.hairlineWidth, borderColor: C.line, borderBottomLeftRadius: 4 },
   out: { backgroundColor: C.purple, borderBottomRightRadius: 4 },
   msg: { fontSize: 16, color: C.text, lineHeight: 22 },
+  withFile: { paddingHorizontal: 5, paddingVertical: 5, gap: 4 },
+  img: { width: 220, height: 220, borderRadius: 10, backgroundColor: C.bg },
+  note: { fontSize: 13, color: C.sub, fontStyle: 'italic', paddingHorizontal: 6, paddingVertical: 3 },
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  viewerImg: { width: '100%', height: '85%' },
+  viewerHint: { color: '#ddd', marginTop: 10, fontSize: 14 },
   meta: { fontSize: 11, color: C.sub, marginTop: 2, marginHorizontal: 4 },
   bar: { padding: 10, backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },

@@ -326,6 +326,10 @@ LOGOUT_REDIRECT_URL = "/login/"
 
 MEDIA_URL = "/media/"   # leading slash — nginx เสิร์ฟ location /media/ (รูป/วิดีโอรถเก็บลงดิสก์ VPS)
 MEDIA_ROOT = BASE_DIR / "media"
+# ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่งในแชท (LINE/Facebook) — เก็บ **นอก** MEDIA_ROOT เพราะ nginx เสิร์ฟ /media/ ให้ทุกคน
+#   (มีบัตรประชาชน/สลิป/รายงานเครดิต) · เปิดได้ทางเดียวคือ /connect/api/media ที่เช็คสิทธิ์ · checkout/chatmedia.py
+CHAT_MEDIA_ROOT = Path(os.getenv("CHAT_MEDIA_ROOT") or (BASE_DIR / "private_media" / "chat"))
+CHAT_MEDIA_MAX_MB = int(os.getenv("CHAT_MEDIA_MAX_MB", "25") or 25)
 
 # ──────────────────────────────────────────────────────────────────────
 # รูป/วิดีโอของ cars/ (tracking) — เก็บที่ไหน (เลือกตามลำดับ Drive > Supabase > local)

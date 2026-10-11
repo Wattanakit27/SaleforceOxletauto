@@ -27,6 +27,7 @@ urlpatterns = [
     # ★ 11 ต.ค.69 หน้ารวมแชท (crm.py)
     path("api/crm", V.api_crm, name="connect_crm"),             # ขั้น/นัด/โทร/สรุป/AI/คืนกองกลาง/Run Auto
     path("api/upload", V.api_upload, name="connect_upload"),    # รูปหลักฐานการโทร
+    path("api/media", V.api_media, name="connect_media"),       # รูป/ไฟล์ที่ลูกค้าส่งในแชท (เช็คสิทธิ์ทุกครั้ง)
     path("api/alerts", V.api_alerts, name="connect_alerts"),    # กระดิ่งแจ้งเตือน
     path("api/insights", V.api_insights, name="connect_insights"),   # วิเคราะห์ (แอดมิน)
 ]

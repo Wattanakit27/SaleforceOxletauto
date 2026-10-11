@@ -143,6 +143,20 @@
   .bub .meta { font-size: 11px; opacity: .7; margin-top: 3px; }
   .bub.out .meta { text-align: right; }
   .bub.media { font-style: italic; opacity: .85; }
+  /* ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่ง (โหลดผ่าน /connect/api/media — เช็คสิทธิ์ทุกครั้ง) */
+  .bub.has-file { padding: 5px; }
+  .bub.has-file .meta { padding: 0 6px 2px; }
+  .bub .cn-mtxt { display: block; padding: 3px 7px 4px; }
+  .cn-mimg { display: block; margin: 2px 0; }
+  .cn-mimg img { display: block; max-width: min(260px, 100%); max-height: 320px; min-width: 90px; min-height: 70px;
+                 border-radius: 8px; background: var(--bg2); object-fit: cover; cursor: zoom-in; }
+  .cn-mvid { display: block; max-width: min(300px, 100%); max-height: 320px; border-radius: 8px; background: #000; margin: 2px 0; }
+  .cn-maud { display: block; max-width: 100%; margin: 2px 0; }
+  .cn-mfile { display: inline-flex; gap: 6px; align-items: center; margin: 2px 2px 2px 0; padding: 6px 10px; border-radius: 8px;
+              background: var(--bg2); color: var(--t1); text-decoration: none; font-size: 13px; font-style: normal; }
+  .cn-mfile:hover { background: var(--bg3); }
+  .bub.out .cn-mfile { background: rgba(255,255,255,.18); color: var(--on-blue); }
+  .cn-mnote { display: block; font-size: 12px; font-style: italic; opacity: .8; padding: 4px 7px; white-space: normal; }
   .cn-lock { margin: 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--blue-bg); color: var(--blue); line-height: 1.6; }
   .cn-comp { display: flex; gap: 8px; padding: 8px 16px 10px; background: var(--bg); border-top: .5px solid var(--bd2); align-items: flex-end; }
   .cn-comp textarea { flex: 1; resize: none; min-height: 40px; max-height: 160px; padding: 9px 12px; border-radius: 10px;
@@ -785,6 +799,7 @@
     'sliders': '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
     'repeat': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
     'check': '<path d="M20 6 9 17l-5-5"/>',
+    'paperclip': '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
     'hash': '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
     'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     'calendar': '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
@@ -2272,10 +2287,31 @@
     if (field === 'customer_name' || field === 'tags') loadInbox(false);   // ชื่อ/แท็กโชว์ในรายชื่อด้วย
   }
 
+  // ★ 11 ต.ค.69 รูป/วิดีโอ/เสียง/ไฟล์ที่ลูกค้าส่ง — เปิดผ่าน /connect/api/media (เซิร์ฟเวอร์เช็คสิทธิ์ทุกครั้ง)
+  //   ไฟล์อยู่นอกโฟลเดอร์สาธารณะ · ยังไม่ได้โหลด = เซิร์ฟเวอร์ลองโหลดตอนเปิด · หมดอายุ/ใหญ่เกิน = บอกเหตุผลแทนรูปแตก
+  const FILE_NOTE = { gone: 'ไฟล์นี้หมดอายุที่ต้นทางแล้ว — เปิดดูในแอป LINE OA / Facebook',
+                      big: 'ไฟล์ใหญ่เกินที่ระบบเก็บ — เปิดดูในแอป LINE OA / Facebook', none: 'ข้อความนี้ไม่มีไฟล์ให้โหลด' };
+  const fmtSize = n => !n ? '' : (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+  function filesHtml(m) {
+    return (m.files || []).map(f => {
+      if (FILE_NOTE[f.state]) return `<span class="cn-mnote">${FILE_NOTE[f.state]}</span>`;
+      const u = h(f.url);
+      if (f.kind === 'image') return `<a class="cn-mimg" href="${u}" target="_blank" rel="noopener" title="เปิดรูปเต็ม"><img src="${u}" alt="รูปที่ลูกค้าส่ง" loading="lazy"></a>`;
+      if (f.kind === 'video') return `<video class="cn-mvid" controls preload="none" src="${u}"></video>`;
+      if (f.kind === 'audio') return `<audio class="cn-maud" controls preload="none" src="${u}"></audio>`;
+      return `<a class="cn-mfile" href="${u}&dl=1">${ic('paperclip', 14)} ${h(f.name || 'ไฟล์แนบ')}${f.size ? ' · ' + fmtSize(f.size) : ''}</a>`
+        + (f.ext === 'pdf' ? `<a class="cn-mfile" href="${u}" target="_blank" rel="noopener">เปิดดู</a>` : '');
+    }).join('');
+  }
+  let _msgSig = '';
   function paintMsgs(keepScroll) {
     const el = $('cn-msgs'); if (!el) return;
     const d = S.chat;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    // รีเฟรชทุก 6 วิ แต่ข้อความไม่เปลี่ยน = ไม่วาดใหม่ (ไม่งั้นรูปกะพริบ/โหลดซ้ำ และเลื่อนดูรูปเก่าแล้วถูกดีดลงล่าง)
+    const sig = JSON.stringify([d.row && d.row.id, d.access, d.messages]);
+    if (keepScroll && sig === _msgSig && el.childElementCount) return;
+    _msgSig = sig;
     let html = '';
     if (d.access === 'preview') {
       html += `<div class="cn-lock">เห็นเฉพาะข้อความที่ลูกค้าเพิ่งส่ง — กด "รับลูกค้าคนนี้" ก่อน ถึงจะเห็นแชทย้อนหลังและตอบได้</div>`;
@@ -2288,10 +2324,23 @@
       if (day && day !== lastDay) { html += `<div class="cn-day">${h(day)}</div>`; lastDay = day; }
       const t = dt ? pad(dt.getHours()) + ':' + pad(dt.getMinutes()) : '';
       const out = m.dir === 'out';
-      html += `<div class="bub ${out ? 'out' : 'in'}${m.media ? ' media' : ''}">${h(m.text)}${m.media ? '<br><small>(รูป/ไฟล์ยังเปิดในระบบไม่ได้)</small>' : ''}<div class="meta">${out && m.by ? h(m.by) + ' · ' : ''}${t}</div></div>`;
+      const hasF = !!(m.files && m.files.length);
+      // "[รูป]" "[วิดีโอ]" คือคำแทนตอนไม่มีไฟล์ให้ดู — มีไฟล์แล้วไม่ต้องโชว์ (ข้อความจริงที่พิมพ์มาพร้อมรูปยังโชว์)
+      const txt = hasF && /^\[[^\]]*\]$/.test((m.text || '').trim()) ? '' : h(m.text);
+      html += `<div class="bub ${out ? 'out' : 'in'}${m.media && !hasF ? ' media' : ''}${hasF ? ' has-file' : ''}">`
+        + (hasF ? (txt ? `<span class="cn-mtxt">${txt}</span>` : '') + filesHtml(m) : txt + (m.media ? '<br><small>(ไฟล์แนบ)</small>' : ''))
+        + `<div class="meta">${out && m.by ? h(m.by) + ' · ' : ''}${t}</div></div>`;
     });
     el.innerHTML = html;
-    if (!keepScroll || atBottom) el.scrollTop = el.scrollHeight;
+    const stick = !keepScroll || atBottom;
+    if (stick) el.scrollTop = el.scrollHeight;
+    el.querySelectorAll('.cn-mimg img').forEach(img => {
+      img.addEventListener('load', () => { if (stick) el.scrollTop = el.scrollHeight; }, { once: true });   // รูปโหลดเสร็จแล้วสูงขึ้น
+      img.addEventListener('error', () => {
+        const a = img.closest('a');
+        if (a) a.outerHTML = '<span class="cn-mnote">เปิดรูปนี้ไม่ได้ — ไฟล์อาจหมดอายุที่ต้นทางแล้ว (เปิดดูในแอป LINE OA / Facebook)</span>';
+      }, { once: true });
+    });
   }
 
   // ลูกค้าจำลอง: ให้คนทดสอบพิมพ์แทนลูกค้าได้ (ทดสอบรอบรอ 5 นาที / ข้อความใหม่จากลูกค้าของฉัน)
