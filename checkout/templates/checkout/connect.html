@@ -64,16 +64,29 @@
   .cn-tool.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
   html:not(.embed) .embed-only { display: none; }
   .cn-list { display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-right: .5px solid var(--bd2); }
-  .cn-tabs { display: flex; gap: 4px; padding: 8px 10px 6px; flex-wrap: wrap; }
   .cn-tab { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 8px; border: .5px solid var(--bd2);
             background: var(--bg2); color: var(--t2); cursor: pointer; font-weight: 600; }
   .cn-tab.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
   .cn-tab .n { min-width: 18px; padding: 0 5px; border-radius: 5px; background: var(--bg3); color: var(--t2); font-size: 12px; text-align: center; }
   .cn-tab.on .n { background: rgba(255,255,255,.25); color: var(--on-blue); }
   .cn-tab .n.hot { background: var(--red); color: #fff; }
-  .cn-tools { display: flex; gap: 6px; padding: 0 10px 8px; }
+  /* ★ 11 ต.ค.69 รอบ 6 เจ้าของ "กรอบแดงซ้ำซ้อนกัน ลดอันล่างออก" — แท็บรายชื่อ (รอรับ/มีเจ้าของ/ทั้งหมด) เป็นแถบที่มีตัวเลข
+     ซ้อนกับเมนูด้านบนซึ่งบอกตัวเลขเดียวกันอยู่แล้ว → หัวรายชื่อเหลือแถวเดียว: มุมมอง (dropdown) + ค้นหา + ปุ่มตัวกรอง
+     · ช่องทาง/เซลล์/ปุ่มลัด/ตัวกรองเพิ่ม อยู่ในกล่องที่กางจากปุ่ม "ตัวกรอง" · กรองอยู่ = ขึ้นบรรทัดสรุปให้เห็นเสมอ */
+  .cn-tools { display: flex; gap: 6px; padding: 8px 10px 8px; align-items: center; }
   .cn-tools input, .cn-tools select { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2);
                                       background: var(--bg2); }
+  .cn-tools select.cn-view { flex: 0 1 auto; max-width: 42%; font-weight: 700; color: var(--t1); cursor: pointer; }
+  .cn-fbtn { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: .5px solid var(--bd2);
+             background: var(--bg2); color: var(--t2); font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .cn-fbtn.on, .cn-fbtn.act { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .cn-fbox { border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
+  .cn-frow { display: flex; gap: 6px; padding: 0 10px 6px; }
+  .cn-frow select { flex: 1; min-width: 0; padding: 6px 9px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); }
+  .cn-active { display: flex; align-items: center; gap: 6px; padding: 0 10px 6px; font-size: 12px; font-weight: 700; color: var(--blue); min-width: 0; }
+  .cn-active span { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cn-active button { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: .5px solid var(--bd2);
+                      background: var(--bg2); color: var(--red); cursor: pointer; }
   .cn-note { margin: 4px 10px 8px; padding: 10px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); line-height: 1.6; }
   .cn-rows { flex: 1; overflow-y: auto; border-top: .5px solid var(--bd); }
   .cn-row { display: flex; gap: 10px; padding: 11px 12px; border-bottom: .5px solid var(--bd); cursor: pointer; align-items: flex-start; }
@@ -343,13 +356,13 @@
   .lc-st .cn-bell { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #EEEAF8; flex: none; }
   /* กล่องแชทรวม = 3 การ์ด (รายชื่อ · แชท · ข้อมูลลูกค้า) */
   .lc-shell .cn-main { flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: 340px minmax(0,1fr); gap: 10px; padding: 8px 12px 10px; }
-  /* แท็บรายชื่อแถวเดียว (เดิมขึ้น 2 บรรทัด) — ไม่มีไอคอน · เกินกว่ากล่องก็เลื่อนแนวนอนได้ */
-  .lc-shell .cn-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 3px; padding: 6px 8px 5px; }
-  .lc-shell .cn-tabs::-webkit-scrollbar { display: none; }
+  /* แท็บของห้องพัก Lead (รอจ่ายเบอร์/จ่ายแล้ว/นาฬิกาโทร) ยังใช้ .cn-tab */
   .lc-shell .cn-tab { padding: 4px 8px; gap: 4px; white-space: nowrap; flex: none; }
   .lc-shell .cn-tab svg { display: none; }
-  .lc-shell .cn-tools { padding: 0 8px 6px; }
+  .lc-shell .cn-tools { padding: 6px 8px 6px; }
   .lc-shell .cn-tools input, .lc-shell .cn-tools select { padding: 6px 9px; }
+  .lc-shell .cn-frow { padding: 0 8px 6px; }
+  .lc-shell .cn-active { padding: 0 8px 6px; }
   .lc-shell .cn-list, .lc-shell .cn-pane { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; overflow: hidden; }
   .lc-shell .cn-list { border-right: .5px solid var(--bd2); }
   .lc-shell .cn-row.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 #DB2777; }
@@ -647,6 +660,8 @@
                      background: var(--bg2); color: var(--t2); cursor: pointer; flex: none; }
   .cn-quick button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
   .cn-quick button.clr { color: var(--red); }
+  .cn-fbox .cn-quick { flex-wrap: wrap; overflow: visible; }
+  .cn-fbox .cn-flt { border-bottom: 0; margin-bottom: 0; }
   .cn-flt { padding: 0 10px 10px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 8px; border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
   .cn-flt label { font-size: 11.5px; color: var(--t3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .cn-flt input, .cn-flt select { padding: 5px 7px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; min-width: 0; width: 100%; }
@@ -738,16 +753,22 @@
   <div class="cn-banners" id="cn-banners"></div>
   <div class="cn-main" id="cn-main">
     <aside class="cn-list">
-      <div class="cn-tabs" id="cn-tabs"></div>
       <div class="cn-tools" id="cn-tools">
-        <input id="cn-q" type="search" placeholder="ค้นหาชื่อลูกค้า / ข้อความ" autocomplete="off">
-        <select id="cn-src" title="ช่องทางที่ลูกค้าทักมา" style="flex:0 0 auto;width:auto">
-          <option value="">ทุกช่องทาง</option><option value="line">LINE</option><option value="fb">Facebook</option>
-        </select>
-        <select id="cn-seller" style="display:none"></select>
+        <select id="cn-view" class="cn-view" title="มุมมองรายชื่อ"></select>
+        <input id="cn-q" type="search" placeholder="ค้นหาชื่อ / เบอร์" title="ค้นหาชื่อลูกค้า เบอร์โทร เลขลีด หรือข้อความ" autocomplete="off">
+        <button type="button" class="cn-fbtn" id="cn-fbtn" title="ช่องทาง · เซลล์ · ปุ่มลัด · ตัวกรองเพิ่ม">ตัวกรอง</button>
       </div>
-      <div class="cn-quick" id="cn-quick"></div>
-      <div class="cn-flt" id="cn-flt" hidden></div>
+      <div class="cn-fbox" id="cn-fbox" hidden>
+        <div class="cn-frow">
+          <select id="cn-src" title="ช่องทางที่ลูกค้าทักมา">
+            <option value="">ทุกช่องทาง</option><option value="line">LINE</option><option value="fb">Facebook</option>
+          </select>
+          <select id="cn-seller" style="display:none"></select>
+        </div>
+        <div class="cn-quick" id="cn-quick"></div>
+        <div class="cn-flt" id="cn-flt"></div>
+      </div>
+      <div class="cn-active" id="cn-active" hidden></div>
       <div id="cn-note"></div>
       <div class="cn-rows" id="cn-rows"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>
     </aside>
@@ -946,18 +967,19 @@
     const all = (ADMIN ? TABS_ADMIN : TABS_SELLER).filter(t => !t.needEmp || ME.empId);
     // ★ 10 ต.ค.69 ห้องพัก Lead / สถิติ / ตั้งค่า ย้ายไปเมนูซ้าย (ห้องพัก Lead · แดชบอร์ดทีม · กฎและเส้นทาง)
     const tabs = all.filter(t => !t.v.startsWith('_') && t.v !== 'tocode');
-    const cur = S.pane === 'stats' ? '_stats' : (S.pane === 'cfg' ? '_cfg' : S.view);
-    $('cn-tabs').innerHTML = tabs.map(t => {
-      let n = '';
-      if (t.c) {
-        // แท็บจ่ายเบอร์ = ลูกค้าแชทที่ยังไม่มีเลข + ลีดในห้องพัก Lead ที่ยังรอเลข
-        const v = ((S.counts || {})[t.c] || 0) + (t.c === 'tocode' ? ((S.counts || {}).parked || 0) : 0);
-        const hv = t.hotKey ? (S.counts || {})[t.hotKey] || 0 : v;
-        n = `<span class="n${t.hot || t.hotKey ? (hv ? ' hot' : '') : ''}">${t.hotKey && hv ? hv + '/' + v : v}</span>`;
-      }
-      return `<button class="cn-tab${cur === t.v ? ' on' : ''}" data-v="${t.v}">${ic(t.i)} ${h(t.l)} ${n}</button>`;
-    }).join('');
-    $('cn-tabs').querySelectorAll('.cn-tab').forEach(b => b.onclick = () => pickTab(b.dataset.v));
+    // ★ 11 ต.ค.69 รอบ 6 แท็บ → dropdown (ตัวเลขยังอยู่ในชื่อตัวเลือก) · ไม่วาดทับตอนกำลังเปิดเลือกอยู่ (รายชื่อรีเฟรชทุก 8 วิ)
+    const vs = $('cn-view'), c0 = S.counts || {};
+    const opts = tabs.map(t => {
+      if (!t.c) return [t.v, t.l];
+      const v = c0[t.c] || 0, hv = t.hotKey ? (c0[t.hotKey] || 0) : 0;
+      return [t.v, t.l + (t.hotKey && hv ? ` (รอตอบ ${hv}/${v})` : ` (${v})`)];
+    });
+    const sig = opts.map(o => o.join('=')).join('|') + '#' + S.view;
+    if (vs.dataset.sig !== sig && document.activeElement !== vs) {
+      vs.dataset.sig = sig;
+      vs.innerHTML = opts.map(o => `<option value="${h(o[0])}">${h(o[1])}</option>`).join('');
+      vs.value = S.view;
+    }
     // ตัวกรองช่องทาง: ห้องพัก Lead มี TikTok/อื่นๆ ด้วย (ใบร่างจากห้องพัก) · แท็บอื่นมีแต่แชท LINE/Facebook
     const srcSel = $('cn-src'), hubView = ADMIN && S.view === 'tocode', sk = hubView ? 'hub' : 'std';
     if (srcSel.dataset.k !== sk) {
@@ -1045,14 +1067,40 @@
   ];
   const FLT_PANEL = ['stage', 'heat', 'reason', 'car', 'pmin', 'pmax', 'dfrom', 'dto'];
   function fltCount() { return Object.keys(S.f).length; }
+  // ตัวกรองที่ใช้อยู่ทั้งหมด (ปุ่มลัด · ตัวกรองเพิ่ม · ช่องทาง · เซลล์) — โชว์เป็นบรรทัดสรุปตอนกล่องตัวกรองพับอยู่
+  function activeFilters() {
+    const out = [];
+    QUICK.forEach(q => { if (S.f[q.k] === q.v) out.push(q.l); });
+    const more = FLT_PANEL.filter(k => S.f[k] != null && S.f[k] !== '').length;
+    if (more) out.push('ตัวกรองเพิ่ม ' + more);
+    if (S.src) { const o = $('cn-src').selectedOptions[0]; out.push(o ? o.textContent : S.src); }
+    if (S.seller && $('cn-seller').style.display !== 'none') {
+      const s = (S.sellers || []).find(x => x.id === S.seller); out.push('เซลล์ ' + (s ? s.name : S.seller));
+    }
+    return out;
+  }
+  function clearFilters() {
+    S.f = {}; S.src = ''; S.seller = 0;
+    $('cn-src').value = ''; $('cn-seller').value = '0';
+    renderFltPanel(true); renderQuick(); loadInbox(true);
+  }
   function renderQuick() {
     const el = $('cn-quick'); if (!el) return;
     const show = S.panel === 'inbox';
-    el.hidden = !show; if (!show) { $('cn-flt').hidden = true; return; }
-    const n = fltCount();
-    el.innerHTML = `<button data-q="more" class="${S.fltOpen ? 'on' : ''}">ตัวกรองเพิ่ม${n ? ' (' + n + ')' : ''} ▾</button>`
-      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '')
-      + QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('');
+    const act = activeFilters();
+    const fb = $('cn-fbtn');
+    fb.className = 'cn-fbtn' + (S.fltOpen ? ' on' : (act.length ? ' act' : ''));
+    fb.textContent = 'ตัวกรอง' + (act.length ? ' (' + act.length + ')' : '') + (S.fltOpen ? ' ▴' : ' ▾');
+    const ab = $('cn-active');
+    ab.hidden = !show || S.fltOpen || !act.length;
+    if (!ab.hidden) {
+      ab.innerHTML = `<span title="${h(act.join(' · '))}">กรองอยู่: ${h(act.join(' · '))}</span><button type="button">ล้าง</button>`;
+      ab.querySelector('button').onclick = clearFilters;
+    }
+    if (!show) { $('cn-fbox').hidden = true; return; }
+    const n = act.length;
+    el.innerHTML = QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('')
+      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '');
     if (!el.dataset.wheel) {
       el.dataset.wheel = '1';
       // ล้อเมาส์ = เลื่อนแนวนอน (ปุ่มกรองยาวเกินกล่อง และไม่มีแถบเลื่อนให้เห็นแล้ว)
@@ -1065,8 +1113,7 @@
     requestAnimationFrame(() => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
     el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
       const q = b.dataset.q;
-      if (q === 'more') { S.fltOpen = !S.fltOpen; renderFltPanel(); renderQuick(); return; }
-      if (q === 'clear') { S.f = {}; renderFltPanel(true); renderQuick(); loadInbox(true); return; }
+      if (q === 'clear') { clearFilters(); return; }
       const it = QUICK[+q];
       if (S.f[it.k] === it.v) delete S.f[it.k]; else S.f[it.k] = it.v;
       renderFltPanel(true); renderQuick(); loadInbox(true);
@@ -1075,7 +1122,7 @@
   // แผงวาดครั้งเดียว (ไม่วาดทับตอนรายชื่อรีเฟรชทุก 8 วิ — คนกำลังพิมพ์รุ่นรถ/ราคาอยู่) · `sync` = ตั้งค่าในช่องตาม S.f
   function renderFltPanel(sync) {
     const el = $('cn-flt'); if (!el) return;
-    el.hidden = !S.fltOpen || S.panel !== 'inbox';
+    $('cn-fbox').hidden = !S.fltOpen || S.panel !== 'inbox';
     const O = S.crmOpts; if (!O) return;
     if (!el.dataset.built) {
       el.dataset.built = '1';
@@ -3339,8 +3386,10 @@
   // ── ค้นหา / เลือกเซลล์ ──
   let _qT = null;
   $('cn-q').addEventListener('input', () => { clearTimeout(_qT); _qT = setTimeout(() => { S.q = $('cn-q').value.trim(); loadInbox(true); }, 350); });
-  $('cn-seller').addEventListener('change', () => { S.seller = +$('cn-seller').value || 0; loadInbox(true); });
-  $('cn-src').addEventListener('change', () => { S.src = $('cn-src').value; loadInbox(true); });
+  $('cn-seller').addEventListener('change', () => { S.seller = +$('cn-seller').value || 0; renderQuick(); loadInbox(true); });
+  $('cn-src').addEventListener('change', () => { S.src = $('cn-src').value; renderQuick(); loadInbox(true); });
+  $('cn-view').addEventListener('change', () => { $('cn-view').blur(); pickTab($('cn-view').value); });
+  $('cn-fbtn').addEventListener('click', () => { S.fltOpen = !S.fltOpen; renderFltPanel(); renderQuick(); });
 
   // ── นาฬิกาทุกวินาที (ไม่ยิงเซิร์ฟเวอร์) ──
   setInterval(() => {
