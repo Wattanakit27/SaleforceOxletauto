@@ -409,7 +409,7 @@ function AdminBody({ d }: { d: Home }) {
           <Kpis
             items={[
               { label: 'ลูกค้ารอรับ', value: ch.queue, color: ch.queue ? C.amber : undefined, onPress: () => router.navigate('/') },
-              { label: 'รอจ่ายเบอร์', value: (ch.tocode || 0) + (ch.parked || 0) + (ch.pending || 0), color: (ch.tocode || 0) + (ch.parked || 0) + (ch.pending || 0) ? C.red : undefined, onPress: () => router.navigate('/hub') },
+              { label: 'รอจ่ายเบอร์', value: (ch.tocode || 0) + (ch.parked || 0) + (ch.pending || 0), color: (ch.tocode || 0) + (ch.parked || 0) + (ch.pending || 0) ? C.red : undefined, sub: ch.buyroom ? `ลีดรับซื้อรถ ${ch.buyroom}` : '', onPress: () => router.navigate('/hub') },
               { label: 'ใบจ่ายลีดวันนี้', value: ch.slipsToday ?? '-', sub: ch.callLate ? `เลยเวลารายงาน ${ch.callLate}` : '' },
             ]}
           />

@@ -289,6 +289,7 @@ def _admin_chats() -> dict:
     cnt = C.counts(None, True)
     out = {"queue": cnt.get("queue", 0), "tocode": cnt.get("tocode", 0),
            "pending": cnt.get("pending", 0),          # ให้เบอร์แล้ว รอแอดมินกดรับ lead (กลุ่มบนสุดของห้องพัก)
+           "buyroom": cnt.get("buyroom", 0),          # ★ 11 ต.ค.69 ลีดรับซื้อรถ รอส่งใบเคสรับซื้อให้จัดซื้อ
            "dutyToday": C.today_team()}
     try:
         from checkout.leadpark import board

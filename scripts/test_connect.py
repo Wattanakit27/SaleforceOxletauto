@@ -1918,7 +1918,10 @@ try:
     B3 = C.note_customer_message(cust(503, "Supamard").user_id, timezone.now(), "ไอดีไลน์ supa_m ค่ะ")
     B4 = C.note_customer_message(cust(504, "ชื่อซ้ำเพจ").user_id, timezone.now(), "ไอดีไลน์ dup_pg ค่ะ")
     B5 = C.note_customer_message(cust(505, "ทั้งขายทั้งซื้อ").user_id, timezone.now(), "เบอร์ 0866660005")
-    ck("(ก่อนส่ง) ทั้ง 5 คนอยู่ในห้องพัก", {B1.id, B2.id, B3.id, B4.id, B5.id} <= set(tocode_ids()), tocode_ids())
+    # ★ 11 ต.ค.69 B1 บอกเองว่า "อยากขายมาสด้า" = ลีดรับซื้อ → อยู่แท็บ "รับซื้อรถ" ไม่ใช่ห้องพักขาย (ดู [36])
+    ck("(ก่อนส่ง) 4 คนอยู่ในห้องพัก · คนที่บอกอยากขายรถอยู่แท็บรับซื้อรถ",
+       {B2.id, B3.id, B4.id, B5.id} <= set(tocode_ids()) and B1.id not in tocode_ids()
+       and B1.id in [r["id"] for r in C.inbox("buyroom", admin=True)], tocode_ids())
     buy_slip(BUY_HOT_MEE, "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์", "buy-1", "OC-7436", "0866660001",
              "New_matter", "LINE@", tag="หมีน้อย")
     buy_slip(BUY_HOT_TARD, "เคสHOT (พี่ต๊าด) ซื้อ-ขายรถช่องทางออนไลน์", "buy-2", "OC-7440", "086-666-0002",
@@ -2616,6 +2619,107 @@ try:
     ck("เปิดสวิตช์เข้าเอง → กลุ่มรอกดรับว่าง (อยู่ในรายการรอจ่ายเบอร์แล้ว)", pend_ids() == [] and C.counts(admin=True)["pending"] == 0
        and P5.id in tocode_ids())
     ck("…ป้าย pendingPark = ไม่", C.row_json(ChatOwner.objects.get(pk=P5.id))["pendingPark"] is False)
+    C.save_cfg(dict(C.cfg(), room_chat_auto=False))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[36] ลีดรับซื้อรถ vs ลีดขายรถ — แยกแท็บในห้องพัก Lead (11 ต.ค.69 · \"มี lead รับซื้อรถกับ lead ขายรถ แยกไว้ด้วย\")")
+    buy_ids = lambda: [r["id"] for r in C.inbox("buyroom", admin=True)]
+    chat_of = lambda x: ChatOwner.objects.get(pk=x.id)
+    u71 = cust(971, "อยากขายมาสด้า").user_id
+    B1 = C.note_customer_message(u71, timezone.now(), "สนใจขายรถมาสด้า 2 ปี 2020 ครับ")
+    lb1 = C.lead_of(chat_of(B1))
+    ck("★ ลูกค้าบอกอยากขายรถ → ระบบจัดเป็นลีดรับซื้อทันที (จับจากแชท)", C.deal_of(lb1) == "buy"
+       and ((lb1.auto or {}).get(C.BUYLEAD_KEY) or {}).get("by") == C.SYSTEM, lb1.auto)
+    ck("…ยังไม่ให้เบอร์ = ยังไม่ขึ้นแท็บรับซื้อรถ", B1.id not in buy_ids())
+    C.note_customer_message(u71, timezone.now(), "0839990001 ครับ")
+    ck("★ ให้เบอร์แล้ว → ขึ้นแท็บรับซื้อรถเอง (ไม่ต้องกดรับ)", B1.id in buy_ids(), buy_ids())
+    ck("★ ไม่ปนกับลีดขาย: ไม่อยู่กลุ่มรอกดรับ / ไม่อยู่ห้องพักขาย", B1.id not in pend_ids() and B1.id not in tocode_ids())
+    ok_, msg_ = C.mark_park(chat_of(B1), True, by="กวาง")
+    ck("กด \"รับ lead\" (ลีดขาย) กับลีดรับซื้อไม่ได้ — บอกให้เปลี่ยนเป็นลีดขายก่อน", not ok_ and "ลีดรับซื้อ" in msg_, msg_)
+
+    u72 = cust(972, "ซื้อแลกเทิร์น").user_id
+    B2 = C.note_customer_message(u72, timezone.now(), "อยากได้ civic มีรถเก่ามาเทิร์น เบอร์ 0839990002")
+    lb2 = C.lead_of(chat_of(B2))
+    ck("★ มีรถเทิร์น = ลีดขาย (เขาจะซื้อรถเรา) + ป้ายมีรถเทิร์น", C.deal_of(lb2) == "sell" and C.TRADE_KEY in (lb2.auto or {})
+       and B2.id in pend_ids() and B2.id not in buy_ids(), lb2.auto)
+    u73 = cust(973, "สมัครงานเซล").user_id
+    B3 = C.note_customer_message(u73, timezone.now(), "สนใจสมัครงานเซลขายรถครับ เบอร์ 0839990003")
+    ck("คนสมัครงานเซลขายรถ ≠ ลีดรับซื้อ", C.deal_of(C.lead_of(chat_of(B3))) == "sell")
+    u74 = cust(974, "ถามรถเฉยๆ").user_id
+    B4 = C.note_customer_message(u74, timezone.now(), "มี city ไหมครับ")
+    ck("ถามรถเฉยๆ ไม่สร้างข้อมูลลีดเปล่า (ไม่ได้อะไร = ไม่มีแถว)", C.lead_of(chat_of(B4), create=False) is None
+       or C.deal_of(C.lead_of(chat_of(B4))) == "sell")
+
+    rw = {r["id"]: r for r in C.inbox("all", admin=True)}
+    ck("รายชื่อแชท: deal / buyRoom / trade ถูก", rw[B1.id]["deal"] == "buy" and rw[B1.id]["buyRoom"] is True
+       and rw[B1.id]["pendingPark"] is False and rw[B2.id]["deal"] == "sell" and rw[B2.id]["trade"] is True
+       and rw[B2.id]["buyRoom"] is False, {k: (rw[k]["deal"], rw[k]["buyRoom"], rw[k]["trade"]) for k in (B1.id, B2.id)})
+    ck("ตัวเลขเมนูนับแท็บรับซื้อรถ", C.counts(admin=True)["buyroom"] == len(buy_ids()) >= 1, C.counts(admin=True))
+
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    d = json.loads(r_.content.decode("utf-8"))
+    br = {x["id"]: x for x in d.get("buyRoom") or []}
+    b1 = br.get(B1.id) or {}
+    ck("★ API ห้องพักส่งแท็บรับซื้อรถ + เบอร์ + ใบเคสรับซื้อ", b1.get("phone") == "0839990001"
+       and "โค้ด : OC-" in (b1.get("slip") or "") and "0839990001" in (b1.get("slip") or "")
+       and b1.get("dealBy") == C.SYSTEM and "ขาย" in (b1.get("dealWhy") or ""), b1)
+    from checkout.leadgroup import parse_buycase
+    ps = parse_buycase((b1.get("slip") or "").replace("OC-", "OC-7700", 1)) or {}
+    ck("ใบเคสรับซื้อที่คัดลอก (เติมเลขแล้ว) อ่านกลับได้ด้วยตัวอ่านใบของจริง", ps.get("case_code") == "OC-7700"
+       and ps.get("phone") == "0839990001" and ps.get("name") == "อยากขายมาสด้า", ps)
+    ck("ลีดรับซื้อไม่อยู่กลุ่มรอกดรับของ API", B1.id not in {x["id"] for x in d.get("pending") or []})
+    ck("★ API (แท็บรับซื้อรถ): ไม่มี LINE user id หลุด", not leak.search(r_.content.decode()))
+    s_, d = J(ADM, "/connect/api/summary")
+    ck("ป้ายเมนู (summary) นับแท็บรับซื้อรถ", (d.get("counts") or {}).get("buyroom") == len(buy_ids()), d.get("counts"))
+    s_, d = J(SA1, "/connect/api/inbox?view=tocode")
+    ck("เซลล์ไม่ได้แท็บรับซื้อรถ", "buyRoom" not in d and "buyroom" not in (d.get("counts") or {}), list(d))
+    s_, d = J(SA1, "/connect/api/inbox?view=buyroom")
+    ck("เซลล์ขอ view=buyroom ไม่ได้", d.get("view") != "buyroom", d.get("view"))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % B1.id)
+    L_ = d.get("lead") or {}
+    ck("★ แผงขวา: lead_json บอกลีดรับซื้อ + ใบเคสรับซื้อ", L_.get("deal") == "buy" and (L_.get("buyLead") or {}).get("by") == C.SYSTEM
+       and "โค้ด : OC-" in (L_.get("buySlipText") or ""), {k: L_.get(k) for k in ("deal", "buyLead")})
+
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B1.id, "kind": "sell"})
+    ck("★ แอดมินกด \"เป็นลีดขายรถ\" → ออกจากแท็บรับซื้อ เข้ากลุ่มรอกดรับ", s_ == 200 and B1.id not in buy_ids()
+       and B1.id in pend_ids(), (s_, d))
+    C.note_customer_message(u71, timezone.now(), "อยากขายรถคันนี้ครับ")
+    ck("…ลูกค้าพิมพ์อยากขายอีก ระบบไม่เดาทับสิ่งที่คนตั้ง", C.deal_of(C.lead_of(chat_of(B1))) == "sell")
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B3.id, "kind": "buy"})
+    ck("★ แอดมินตั้ง \"ลีดรับซื้อ\" เอง → เข้าแท็บรับซื้อ ออกจากรอกดรับ", s_ == 200 and B3.id in buy_ids()
+       and B3.id not in pend_ids(), (s_, d))
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B3.id, "kind": "xx"})
+    ck("ประเภทลีดมั่ว = ปฏิเสธพร้อมบอกเหตุ", s_ == 400 and d.get("error"), (s_, d))
+    s_, d = J(SA1, "/connect/api/assign_lead", {"id": B3.id, "kind": "sell"})
+    ck("เซลล์ตั้งประเภทลีดไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B2.id, "park": True})
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B2.id, "kind": "buy"})
+    ck("ตั้งเป็นลีดรับซื้อ = ล้างติ๊กรับ lead (ออกจากห้องพักขาย)", s_ == 200 and B2.id not in tocode_ids()
+       and B2.id in buy_ids(), (s_, d))
+    J(ADM, "/connect/api/assign_lead", {"id": B2.id, "kind": "sell"})
+
+    # แอดมินโพสต์ใบเคสรับซื้อในกลุ่มเคสHOT → ระบบเจอใบ = ออกจากแท็บเอง (ไม่ต้องกดอะไร)
+    buy_slip(BUY_HOT_MEE, "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์", "buy-36", "OC-7701", "0839990003", "สมัครงานเซล", "LINE@", "หมีน้อย")
+    l3 = C.lead_of(chat_of(B3))
+    ChatLead.objects.filter(pk=l3.pk).update(auto={k: v for k, v in (l3.auto or {}).items() if k != "_slip_at"})
+    C._SWEEP["at"] = 0.0
+    C.slip_sweep(force=True)
+    l3 = C.lead_of(chat_of(B3))
+    ck("★ โพสต์ใบเคสรับซื้อในกลุ่มแล้ว → ออกจากแท็บเอง", ((l3.auto or {}).get(C.BUY_KEY) or {}).get("code") == "OC-7701"
+       and B3.id not in buy_ids(), l3.auto)
+    ck("…ขึ้นใน \"จ่ายแล้ว\" เป็นส่งจัดซื้อ", any(x["id"] == B3.id and x["kind"] == "buy" for x in C.assigned_list()))
+    ck("เลขใบเคสรับซื้อล่าสุดในกลุ่ม (บอกเลขถัดไป · ไม่ออกเลขให้เอง)", C.last_buy_code().get("OC") == "OC-7701", C.last_buy_code())
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": B3.id, "kind": "sell"})
+    ck("ส่งจัดซื้อแล้ว ย้ายเป็นลีดขายไม่ได้", s_ == 400, (s_, d))
+
+    # Run Auto / สวิตช์เข้าเอง ต้องไม่เอาลีดรับซื้อไปจ่ายเบอร์ให้เซลล์
+    u75 = cust(975, "ขายฟอร์จูนเนอร์").user_id
+    B5 = C.note_customer_message(u75, timezone.now(), "รับซื้อฟอร์จูนเนอร์ไหมครับ 0839990005")
+    C.save_cfg(dict(C.cfg(), room_chat_auto=True))
+    ck("เปิดสวิตช์เข้าเอง: ลีดรับซื้อไม่เข้าห้องพักขาย", B5.id in buy_ids() and B5.id not in tocode_ids(), (buy_ids(), tocode_ids()))
+    from checkout import crm as _crm
+    plan_ids = [x["id"] for x in (_crm.room_plan() or {}).get("plan") or [] if x.get("kind") == "chat"]
+    ck("★ Run Auto ไม่เอาลีดรับซื้อไปจ่ายเบอร์", B5.id not in [int(x) for x in plan_ids], plan_ids)
     C.save_cfg(dict(C.cfg(), room_chat_auto=False))
 
 finally:

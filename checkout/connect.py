@@ -1211,6 +1211,10 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None, pend=None) -> di
         "parkedBy": ((ld.auto or {}).get(PARK_KEY) or {}).get("by", "") if ld else "",
         # ★ 11 ต.ค.69 (ค่ำ) ให้เบอร์/ID แล้ว รอแอดมินกด "รับ lead" — อยู่กลุ่ม "รอกดรับ" บนสุดของห้องพัก Lead (ป้ายเด่นในรายชื่อ)
         "pendingPark": (o.id in pend) if pend is not None else pending_one(o, ld),
+        # ★ 11 ต.ค.69 ลีดรับซื้อรถ (ลูกค้าอยากขายรถให้เรา) vs ลีดขายรถ · มีรถเทิร์น (ยังเป็นลีดขาย)
+        "deal": deal_of(ld),
+        "buyRoom": buy_one(ld),
+        "trade": bool(ld and TRADE_KEY in (ld.auto or {})),
     }
     # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้นของลีด · ความร้อน · เงียบกี่วัน · นัดถัดไป · รถใหม่ตรง (crm.py)
     try:
@@ -2013,6 +2017,9 @@ def slip_sweep(limit: int = 300, force: bool = False) -> dict:
     # ★ 11 ต.ค.69 กลุ่ม "รอกดรับ" ด้วย — ลีดที่จ่ายในชีต/ใบในกลุ่มไปแล้ว ไม่ต้องรอแอดมินกดรับก่อนถึงจะหายจากห้องพัก
     seen = {o.id for o in rows}
     rows += [o for o in pending_park(base).order_by(F("last_in_at").desc(nulls_last=True))[:limit] if o.id not in seen]
+    # ★ 11 ต.ค.69 แท็บรับซื้อรถ — แอดมินโพสต์ใบเคสรับซื้อในกลุ่มเคสHOT แล้ว = ออกจากแท็บเอง (find_buy_slip ใน autofill)
+    seen = {o.id for o in rows}
+    rows += [o for o in buy_room(base).order_by(F("last_in_at").desc(nulls_last=True))[:limit] if o.id not in seen]
     for o in rows:
         if is_sim_row(o):
             continue
@@ -2287,6 +2294,9 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
 
     # ★ 7 ต.ค.69 — อาชีพ/รายได้/อายุงาน/ประวัติผ่อน/ประเภทลูกค้า/สถานะลูกค้า จับ keyword จากแชท + โน้ตในฟอร์ม
     changed += apply_keywords(lead, auto, msgs, _lead_notes(lead))
+    # ★ 11 ต.ค.69 ลีดรับซื้อรถ vs ลีดขายรถ (+ มีรถเทิร์น) — คนตั้งไว้แล้วไม่เดาทับ
+    if apply_deal_kind(lead, auto, msgs):
+        changed.append(BUYLEAD_KEY)
     # type = ตามตัวหน้าของเลขลีด (เลขจากใบจ่ายลีด/คนกรอก) — NLD=Moderate · WLD=Hot · HLD=Very Hot · BLD · TLD
     #   ปุ่มจ่ายเบอร์เติมให้อยู่แล้ว · ตรงนี้สำหรับเลขที่มาทางอื่น (ใบในกลุ่ม/คนพิมพ์) · R/A นำหน้า = type เดียวกับตัวหน้า
     if lead.code and not lead.lead_type:
@@ -2338,8 +2348,15 @@ def lead_json(o, lead=None) -> dict:
         "roomAuto": room_auto(),
         # ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว ({code, at, group, seller, by}) — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย
         "buy": (lead.auto or {}).get(BUY_KEY) or None,
+        # ★ 11 ต.ค.69 ลีดรับซื้อรถ vs ลีดขายรถ — buyLead/sellLead = {by, at, why} (by "ระบบ" = จับจากแชท) · trade = มีรถเทิร์น
+        "deal": deal_of(lead),
+        "buyLead": (lead.auto or {}).get(BUYLEAD_KEY) or None,
+        "sellLead": (lead.auto or {}).get(SELLLEAD_KEY) or None,
+        "trade": (lead.auto or {}).get(TRADE_KEY) or None,
     })
     out["slipText"] = slip_text(o, lead)
+    if out["deal"] == "buy" and not out["buy"]:
+        out["buySlipText"] = buy_slip_text(o, lead)
     return out
 
 
@@ -2436,13 +2453,18 @@ def to_code(qs):
       · ติ๊กแล้ว = คนตัดสินแล้ว ไม่ต้องรอเบอร์/ประวัติคุย · เปิดสวิตช์ = กติกาเดิม (ให้เบอร์/ID แล้วเข้าห้องเอง)
     """
     if not room_auto():
-        return qs.filter(lead__auto__has_key=PARK_KEY).filter(_no_code_q())
-    return qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q())
+        return qs.filter(lead__auto__has_key=PARK_KEY).filter(_no_code_q()).filter(_sell_q())
+    return qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(_sell_q())
 
 
 def _no_code_q():
-    """ยังไม่มีเลขลีด · แอดมินไม่ได้กด "ไม่ต้องจ่ายเบอร์" · ไม่ใช่เคสรับซื้อ"""
+    """ยังไม่มีเลขลีด · แอดมินไม่ได้กด "ไม่ต้องจ่ายเบอร์" · ยังไม่ได้ส่งใบเคสรับซื้อเข้ากลุ่มจัดซื้อ"""
     return Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
+
+
+def _sell_q():
+    """ลีดขายรถ = ไม่ได้ถูกจัดเป็นลีดรับซื้อ (`BUYLEAD_KEY`) — ห้องพัก Lead / กลุ่มรอกดรับ / Run Auto ใช้ตัวนี้"""
+    return ~Q(lead__auto__has_key=BUYLEAD_KEY)
 
 
 def _engaged_q():
@@ -2470,7 +2492,8 @@ def pending_park(qs, days: int = PENDING_DAYS):
     """
     if room_auto():
         return qs.none()
-    qs = qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(~Q(lead__auto__has_key=PARK_KEY))
+    qs = (qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(_sell_q())
+          .filter(~Q(lead__auto__has_key=PARK_KEY)))
     if days:
         qs = qs.filter(last_in_at__gte=timezone.now() - timedelta(days=days))
     return qs
@@ -2481,7 +2504,7 @@ def pending_one(o, lead) -> bool:
     if not lead or room_auto() or (lead.code or "").strip() or not (lead.phone or lead.line_id):
         return False
     auto = lead.auto or {}
-    if NOCODE_KEY in auto or BUY_KEY in auto or PARK_KEY in auto:
+    if NOCODE_KEY in auto or BUY_KEY in auto or PARK_KEY in auto or BUYLEAD_KEY in auto:
         return False
     if not o.last_in_at or o.last_in_at < timezone.now() - timedelta(days=PENDING_DAYS):
         return False
@@ -2493,7 +2516,7 @@ def in_room(lead) -> bool:
     if not lead or (lead.code or "").strip():
         return False
     auto = lead.auto or {}
-    if NOCODE_KEY in auto or BUY_KEY in auto:
+    if NOCODE_KEY in auto or BUY_KEY in auto or BUYLEAD_KEY in auto:
         return False
     return PARK_KEY in auto or (room_auto() and bool(lead.phone or lead.line_id))
 
@@ -2508,6 +2531,8 @@ def mark_park(o, on: bool, by: str = ""):
     if on:
         if BUY_KEY in auto:
             return False, "ลูกค้ารายนี้ส่งจัดซื้อแล้ว (%s) — ไม่ใช่ลีดขาย" % ((auto.get(BUY_KEY) or {}).get("code") or "เคสรับซื้อ")
+        if BUYLEAD_KEY in auto:
+            return False, "ลูกค้ารายนี้เป็นลีดรับซื้อรถ (อยากขายรถให้เรา) — ถ้าจะซื้อรถเรา กด \"เป็นลีดขายรถ\" ก่อน"
         auto[PARK_KEY] = {"by": (by or "")[:80], "at": _iso(timezone.now())}
         auto.pop(NOCODE_KEY, None)
         msg = "ส่งเข้าห้องพัก Lead แล้ว — รอจ่ายเบอร์"
@@ -2522,6 +2547,149 @@ def mark_park(o, on: bool, by: str = ""):
     lead.updated_by = (by or "")[:80]
     lead.save(update_fields=["auto", "updated_by", "updated_at"])
     return True, msg
+
+
+# ── ลีดรับซื้อรถ vs ลีดขายรถ (★ 11 ต.ค.69 เจ้าของ "มันจะมี lead รับซื้อรถกับ lead ขายรถด้วยนะ แยกไว้ด้วย") ──
+#   ลีดขาย  = ลูกค้าอยากซื้อรถเรา → ห้องพัก Lead → จ่ายเบอร์ (NLD…) ให้เซลล์ (ของเดิมทั้งหมด)
+#   ลีดรับซื้อ = ลูกค้าอยากขายรถให้เรา → แท็บ "รับซื้อรถ" → แอดมินโพสต์ใบเคสรับซื้อ (โค้ด : OC-…) ในกลุ่มเคสHOT ของจัดซื้อ
+#     → ระบบเจอใบในกลุ่ม (`find_buy_slip` · `BUY_KEY`) = ส่งจัดซื้อแล้ว ออกจากแท็บเอง
+#   จับจากแชทด้วย `lead_keywords.deal_kind` (ไม่ใช้ AI) · คนตั้งเองได้ทั้ง 2 ทาง และระบบไม่เดาทับสิ่งที่คนตั้ง
+#   ★ รถเทิร์น = ลีดขาย (เขาจะซื้อรถเรา) — ติดป้าย "มีรถเทิร์น" ให้เซลล์รู้ (`TRADE_KEY`)
+BUYLEAD_KEY = "_buylead"          # auto[...] = {by, at, why} · by = "ระบบ" (จับจากแชท) หรือชื่อคนที่ตั้ง
+SELLLEAD_KEY = "_selllead"        # auto[...] = {by, at} · คนยืนยันว่าเป็นลีดขาย → ระบบไม่จัดเป็นรับซื้ออีก
+TRADE_KEY = "_trade"              # auto[...] = {why, at} · ลูกค้ามีรถเทิร์น (ยังเป็นลีดขาย)
+BUY_ROOM_DAYS = 14                # แท็บ "รับซื้อรถ" — ลูกค้าทักภายในกี่วัน (เก่ากว่านี้ยังมีป้ายในรายชื่อแชท)
+
+
+def deal_of(lead) -> str:
+    """"buy" = ลีดรับซื้อรถ (จับได้/คนตั้ง/ส่งจัดซื้อแล้ว) · "sell" = ลีดขายรถ (ค่าตั้งต้น)"""
+    auto = (lead.auto or {}) if lead else {}
+    return "buy" if (BUY_KEY in auto or BUYLEAD_KEY in auto) else "sell"
+
+
+def apply_deal_kind(lead, auto: dict, texts_in, texts_out=()) -> bool:
+    """จับว่าเป็นลีดรับซื้อ/มีรถเทิร์นจากแชท → แก้ `auto` (ยังไม่ save) · คืนว่าเปลี่ยนไหม
+    · มีเลขลีดขายแล้ว / คนยืนยันว่าเป็นลีดขาย / แอดมินติ๊กรับ lead (ห้องพักขาย) = ไม่จัดเป็นรับซื้อ
+    · ระบบจัดเป็นรับซื้อไว้ แล้วลูกค้าพูดถึงรถเทิร์นทีหลัง = กลับเป็นลีดขาย (คนตั้งไว้ = ไม่แตะ)"""
+    from . import lead_keywords as K
+    r = K.deal_kind(texts_in, texts_out)
+    changed = False
+    now = _iso(timezone.now())
+    if r["trade"] and TRADE_KEY not in auto:
+        auto[TRADE_KEY] = {"why": r["trade"], "at": now}
+        changed = True
+    cur = auto.get(BUYLEAD_KEY)
+    if cur and r["trade"] and (cur.get("by") or "") == SYSTEM:
+        auto.pop(BUYLEAD_KEY, None)
+        changed = True
+    elif (r["kind"] == "buy" and not cur and not (lead.code or "").strip()
+          and not any(k in auto for k in (SELLLEAD_KEY, PARK_KEY, BUY_KEY))):
+        auto[BUYLEAD_KEY] = {"by": SYSTEM, "at": now, "why": r["why"]}
+        changed = True
+    return changed
+
+
+def buy_room(qs, days: int = BUY_ROOM_DAYS):
+    """แท็บ **"รับซื้อรถ"** ของห้องพัก Lead — ลีดรับซื้อที่คุยในระบบแล้ว + ให้เบอร์/ID LINE แล้ว + ยังไม่ส่งจัดซื้อ
+    ไม่ต้องให้แอดมินกดรับก่อน (ไม่มีการจ่ายให้เซลล์ในระบบ — แอดมินคัดลอกใบไปโพสต์ในกลุ่มเคสHOT เอง)"""
+    qs = (qs.filter(lead__auto__has_key=BUYLEAD_KEY).filter(_engaged_q()).filter(_no_code_q())
+          .filter(_contact_q()))
+    if days:
+        qs = qs.filter(last_in_at__gte=timezone.now() - timedelta(days=days))
+    return qs
+
+
+def buy_one(lead) -> bool:
+    """แชทนี้อยู่ในแท็บรับซื้อรถไหม (ป้ายในรายชื่อ · ไม่เช็คประวัติคุย/วันที่ — ใช้บอกคน ไม่ใช่นับ)"""
+    if not lead or (lead.code or "").strip():
+        return False
+    auto = lead.auto or {}
+    return BUYLEAD_KEY in auto and NOCODE_KEY not in auto and BUY_KEY not in auto and bool(lead.phone or lead.line_id)
+
+
+def set_deal_kind(o, kind: str, by: str = ""):
+    """แอดมินตั้งประเภทลีดเอง → (ok, ข้อความ) · `kind` = "buy" (ลีดรับซื้อรถ) / "sell" (ลีดขายรถ)
+    ตั้งแล้วระบบไม่เดาทับ · เป็นลีดรับซื้อ = ออกจากห้องพักขาย (ล้างติ๊กรับ lead) · เป็นลีดขาย = ออกจากแท็บรับซื้อ"""
+    if kind not in ("buy", "sell"):
+        return False, "ไม่รู้จักประเภทลีด %s" % kind
+    lead = lead_of(o)
+    auto = dict(lead.auto or {})
+    now = _iso(timezone.now())
+    who = (by or "")[:80]
+    if kind == "buy":
+        if (lead.code or "").strip():
+            return False, "ลูกค้ารายนี้ได้เลขลีดขาย %s แล้ว — เป็นลีดขายรถ" % lead.code
+        auto[BUYLEAD_KEY] = {"by": who or "แอดมิน", "at": now, "why": "คนตั้ง"}
+        auto.pop(SELLLEAD_KEY, None)
+        auto.pop(PARK_KEY, None)
+        auto.pop(NOCODE_KEY, None)
+        msg = "ตั้งเป็นลีดรับซื้อรถแล้ว — อยู่แท็บ \"รับซื้อรถ\" ของห้องพัก Lead"
+        if not (lead.phone or lead.line_id):
+            msg += " (ยังไม่มีเบอร์/ID LINE ในข้อมูลลีด)"
+    else:
+        if BUY_KEY in auto:
+            return False, "ลูกค้ารายนี้ส่งจัดซื้อแล้ว (%s)" % ((auto.get(BUY_KEY) or {}).get("code") or "เคสรับซื้อ")
+        auto.pop(BUYLEAD_KEY, None)
+        auto[SELLLEAD_KEY] = {"by": who or "แอดมิน", "at": now}
+        msg = "ตั้งเป็นลีดขายรถแล้ว — กด \"รับ lead\" เพื่อส่งเข้าห้องพักรอจ่ายเบอร์"
+        if room_auto() or PARK_KEY in auto:
+            msg = "ตั้งเป็นลีดขายรถแล้ว"
+    lead.auto = auto
+    lead.updated_by = who
+    lead.save(update_fields=["auto", "updated_by", "updated_at"])
+    return True, msg
+
+
+def last_buy_code() -> dict:
+    """เลขใบเคสรับซื้อล่าสุดในกลุ่มเคสHOT (OC ใช้เลขรันร่วมกันทุกกลุ่ม · SC = เคสVERY HOT) → {"OC": "OC-7691", …}
+    ไว้บอกแอดมินว่าเลขถัดไปน่าจะเป็นเท่าไหร่ · **ไม่ออกเลขให้เอง** (tradein.py กันเลขซ้ำด้วยรหัส — เลขชน = เคสหาย)"""
+    from .leadgroup import parse_buycase
+    gids = _buy_group_ids()
+    out = {}
+    if not gids:
+        return out
+    for t in (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=gids, text__contains="โค้ด")
+              .order_by("-sent_at").values_list("text", flat=True)[:60]):
+        d = parse_buycase(t or "")
+        if not d:
+            continue
+        pre, _, num = d["case_code"].partition("-")
+        try:
+            n = int(num)
+        except Exception:
+            continue
+        if n > int((out.get(pre) or "-0").partition("-")[2] or 0):
+            out[pre] = d["case_code"]
+    return out
+
+
+def buy_slip_text(o, lead=None) -> str:
+    """ใบเคสรับซื้อ (ปุ่มคัดลอก) — หน้าตาเดียวกับที่แอดมินโพสต์ในกลุ่มเคสHOT (`leadgroup.parse_buycase` อ่านกลับได้)
+    เลขโค้ดเว้นว่างให้แอดมินเติมเอง · ข้อมูลรถ (รุ่น/ไมล์/ทะเบียน) เป็นรถของลูกค้า — ที่จับได้จากแชทคือ "รถที่ลูกค้าพูดถึง" """
+    lead = lead or lead_of(o)
+    p, fb = cust(o), is_fb(o)
+    ch = "เพจ Facebook" if fb else (dd_pick("channel", lead.channel) or lead.channel or "LINE@")
+    name = lead.customer_name or p.display_name or "-"
+    more = []
+    if lead.line_id and not lead.line_id.startswith("line.me/"):
+        more.append("ID LINE %s" % lead.line_id)
+    if lead.more:
+        more.append(lead.more)
+
+    def v(x):
+        return str(x or "").strip() or "-"
+    return "\n".join([
+        "โค้ด : OC-",
+        "ADS : %s" % v(lead.ads),
+        "รุ่น : %s" % v(lead.car_text or lead.car_model),
+        "เลขไมล์ : -",
+        "ทะเบียน : -",
+        "เบอร์ติดต่อ : %s" % v(lead.phone),
+        "ชื่อลูกค้า : %s / %s" % (name, ch),
+        "เพิ่มเติม : %s" % v(" · ".join(more)),
+        "ขายเพราะ : -",
+        "ราคากลางรับซื้อจากตาราง : -",
+    ])
 
 
 # ── ช่องทางติดต่อที่ลูกค้าให้มาในแชท (เบอร์ / ID LINE) — ตัวตัดสินว่าเข้าห้องพัก Lead หรือยัง ──
@@ -2670,19 +2838,25 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
     ไม่เจออะไรเลย = ไม่สร้างแถว ChatLead ให้เปล่าๆ (กติกาเดียวกับ `capture_contact`)"""
     if msgs is None:
         msgs = messages(o, limit=80)
-    texts = [m["text"] for m in list(msgs) + list(extra or [])
+    allm = list(msgs) + list(extra or [])
+    texts = [m["text"] for m in allm
              if m.get("dir") == "in" and m.get("text") and not m["text"].startswith("[")]
+    outs = [m["text"] for m in allm if m.get("dir") == "out" and m.get("text")]
     lead = lead_of(o, create=False)
     from . import lead_keywords as K
-    if not lead and not K.extract(texts):
-        return False
+    if not lead:
+        dk = K.deal_kind(texts, outs)
+        if not K.extract(texts) and not dk["kind"] and not dk["trade"]:
+            return False
     lead = lead or lead_of(o)
     auto = dict(lead.auto or {})
     got = apply_keywords(lead, auto, texts, _lead_notes(lead))
-    if got:
+    # ★ 11 ต.ค.69 ลีดรับซื้อ (ลูกค้าอยากขายรถให้เรา) / มีรถเทิร์น — จับตอนข้อความเข้า ลีดแยกแท็บทันที
+    deal = apply_deal_kind(lead, auto, texts, outs)
+    if got or deal:
         lead.auto = auto
         lead.save(update_fields=got + ["auto", "updated_at"])
-    return bool(got)
+    return bool(got or deal)
 
 
 CSCAN_KEY = "connect_cscan"        # KV {chat id: เวลาข้อความล่าสุดที่สแกนแล้ว} — จำข้าม worker/รีสตาร์ท
@@ -3172,6 +3346,8 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
         qs = to_code(qs).order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
     elif view == "pending":                  # กลุ่ม "รอกดรับ" ของห้องพัก Lead (แอดมิน · ไม่อยู่ใน VIEWS — เรียกจาก api_inbox เท่านั้น)
         qs = pending_park(qs).order_by(F("last_in_at").desc(nulls_last=True))
+    elif view == "buyroom":                  # ★ 11 ต.ค.69 แท็บ "รับซื้อรถ" ของห้องพัก Lead (แอดมิน · เรียกจาก api_inbox เท่านั้น)
+        qs = buy_room(qs).order_by(F("last_in_at").desc(nulls_last=True))
     elif view == "mine":
         qs = qs.filter(owner=me) if me else qs.none()
         qs = qs.order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
@@ -3230,6 +3406,7 @@ def counts(me=None, admin: bool = False) -> dict:
             "all": base.count(),
             "tocode": to_code(base.all()).count(),
             "pending": pending_park(base.all()).count(),     # ให้เบอร์แล้ว รอกดรับ (ป้ายเมนูห้องพัก Lead)
+            "buyroom": buy_room(base.all()).count(),         # ★ 11 ต.ค.69 ลีดรับซื้อรถ รอส่งจัดซื้อ (แท็บ "รับซื้อรถ")
         })
     return out
 

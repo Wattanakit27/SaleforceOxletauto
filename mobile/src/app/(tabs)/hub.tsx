@@ -3,11 +3,13 @@
 //   แชท LINE/FB → POST /connect/api/assign_lead {id, emp} · ใบร่างจากกลุ่ม → POST /connect/api/park_assign {mid, emp, …}
 // ★ 11 ต.ค.69 กลุ่ม "ลูกค้าให้เบอร์/ID LINE แล้ว — รอแอดมินกดรับ" บนสุด (d.pending) · กด "รับ lead" = assign_lead {id, park:true}
 //   แล้วลีดลงไปรายการรอจ่ายเบอร์ข้างล่าง (กดชื่อเซลล์จ่ายต่อ) — กติกาเดียวกับเว็บ
+// ★ 11 ต.ค.69 แท็บ "รับซื้อรถ" (d.buyRoom) — ลูกค้าอยากขายรถให้เรา แยกจากลีดขาย · ไม่จ่ายเบอร์ให้เซลล์
+//   ส่งใบเคสรับซื้อ (Share → LINE กลุ่มเคสHOT) · "เป็นลีดขายรถ" = assign_lead {id, kind:'sell'} · กลุ่มรอกดรับมี "ลีดรับซื้อ" ({kind:'buy'})
 // ★ ใบจ่ายลีดถูกส่งเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ถ้าเปิดสวิตช์ไว้) → ถามยืนยันทุกครั้ง เหมือนเว็บ
 //   เบอร์ซ้ำ (เคยเป็นลีดของคนอื่น) → ถามซ้ำอีกชั้นก่อนจ่ายให้คนใหม่
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { api } from '../../lib/api';
 import { Banner, C, Card, fmtTime, Loading, Tag } from '../../lib/ui';
@@ -28,6 +30,10 @@ type ChatRow = {
   lineId?: string;
   contact?: string;
   lastDir?: string;
+  trade?: boolean;
+  slip?: string;
+  dealWhy?: string;
+  dealBy?: string;
 };
 type Park = {
   id: string;
@@ -58,6 +64,9 @@ type Inbox = {
   rows: ChatRow[];
   pending?: ChatRow[];
   pendingDays?: number;
+  buyRoom?: ChatRow[];
+  buyRoomDays?: number;
+  buyLast?: Record<string, string>;
   parked?: { waiting?: Park[]; assigned?: Park[]; room?: string; codeHelp?: { next?: number; post?: { on?: boolean; room?: string; rejectRoom?: string } } };
   rrBoard?: Board[];
   sellers?: { id: number; name: string; team: string }[];
@@ -101,7 +110,7 @@ function waited(since: string): [string, boolean] {
 export default function Hub() {
   const [d, setD] = useState<Inbox | null>(null);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState<'wait' | 'done'>('wait');
+  const [tab, setTab] = useState<'wait' | 'buy' | 'done'>('wait');
   const [busy, setBusy] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -266,6 +275,26 @@ export default function Hub() {
   };
   const pend = d?.pending || [];
   const [pendAll, setPendAll] = useState(false);
+  const buys = d?.buyRoom || [];
+
+  // ลีดรับซื้อรถ / ลีดขายรถ — แอดมินตั้งเอง (ระบบไม่เดาทับ)
+  const setDeal = async (r: ChatRow, kind: 'buy' | 'sell') => {
+    setBusy('deal:' + r.id);
+    try {
+      const x = await api<{ message?: string }>('/connect/api/assign_lead', { body: { id: r.id, kind } });
+      if (x.message) Alert.alert(kind === 'buy' ? 'ย้ายเป็นลีดรับซื้อแล้ว' : 'ย้ายเป็นลีดขายแล้ว', x.message);
+    } catch (e: any) {
+      Alert.alert('ทำไม่สำเร็จ', e?.message || '');
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+  const shareSlip = async (r: ChatRow) => {
+    try {
+      await Share.share({ message: r.slip || '' });
+    } catch {}
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -284,6 +313,7 @@ export default function Hub() {
         {(
           [
             ['wait', `รอจ่ายเบอร์ ${items.length}${pend.length ? ' +' + pend.length : ''}`],
+            ['buy', `รับซื้อรถ ${buys.length}`],
             ['done', `จ่ายแล้ววันนี้ ${done.length}`],
           ] as const
         ).map(([k, l]) => (
@@ -333,6 +363,7 @@ export default function Hub() {
                       {r.lineId ? <Tag text={'ID LINE ' + r.lineId} color={C.green} bg={C.greenBg} />
                         : r.contact === 'qr' ? <Tag text="QR LINE" color={C.green} bg={C.greenBg} /> : null}
                       {r.dup ? <Tag text={'เบอร์ซ้ำ @' + (r.dup.seller || '?')} color={C.red} bg={C.redBg} /> : null}
+                      {r.trade ? <Tag text="มีรถเทิร์น" color={C.sub} bg="#eee" /> : null}
                     </View>
                     {r.preview ? <Text style={st.sub} numberOfLines={1}>{r.lastDir === 'out' ? 'เรา: ' : ''}{r.preview}</Text> : null}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -341,6 +372,9 @@ export default function Hub() {
                         onPress={() => accept(r)}
                         style={({ pressed }) => [st.acc, (pressed || busy === 'pend:' + r.id) && { opacity: 0.5 }]}>
                         <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>รับ lead</Text>
+                      </Pressable>
+                      <Pressable disabled={!!busy} onPress={() => setDeal(r, 'buy')} hitSlop={6}>
+                        <Text style={st.link}>ลีดรับซื้อ</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => skip({ kind: 'chat', id: String(r.id), name: r.name } as Item)}
@@ -431,6 +465,49 @@ export default function Hub() {
                       <Text style={st.link}>เปิดแชท</Text>
                     </Pressable>
                   ) : null}
+                </View>
+              </Card>
+            );
+          })}
+        </>
+      ) : tab === 'buy' ? (
+        <>
+          <Text style={st.note}>
+            {`ลูกค้าอยากขายรถให้เรา (ให้เบอร์/ID LINE แล้ว · ทักภายใน ${d?.buyRoomDays || 14} วัน) — ส่งใบเคสรับซื้อเข้ากลุ่มเคสHOT ของจัดซื้อ แล้วเติมเลขโค้ด · ระบบเจอใบในกลุ่มแล้วย้ายไป "จ่ายแล้ว" เอง`}
+            {Object.values(d?.buyLast || {}).length ? ' · เลขล่าสุดในกลุ่ม ' + Object.values(d?.buyLast || {}).join(', ') : ''}
+          </Text>
+          {!buys.length ? <Text style={st.empty}>ไม่มีลีดรับซื้อรถรอส่งจัดซื้อ 👍</Text> : null}
+          {buys.map((r) => {
+            const [sl, sfg, sbg] = SRC[r.src === 'fb' ? 'fb' : 'line'];
+            return (
+              <Card key={r.id} style={{ gap: 6, borderColor: C.green }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                  <Text style={st.name} numberOfLines={1}>{r.name || '(ไม่มีชื่อ)'}</Text>
+                  <Text style={st.sub}>{fmtTime(r.lastAt)}</Text>
+                </View>
+                <View style={st.tags}>
+                  <Tag text={sl} color={sfg} bg={sbg} />
+                  {r.phone ? <Tag text={'เบอร์ ' + r.phone} color={C.green} bg={C.greenBg} /> : null}
+                  {r.lineId ? <Tag text={'ID LINE ' + r.lineId} color={C.green} bg={C.greenBg} />
+                    : r.contact === 'qr' ? <Tag text="QR LINE" color={C.green} bg={C.greenBg} /> : null}
+                  {r.car ? <Tag text={r.car} color={C.sub} bg="#eee" /> : null}
+                </View>
+                <Text style={st.sub} numberOfLines={2}>
+                  {r.dealBy === 'ระบบ' ? `จับจากแชท: "${r.dealWhy || ''}"` : `ตั้งโดย ${r.dealBy || '-'}`}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                  <Pressable onPress={() => shareSlip(r)} style={({ pressed }) => [st.acc, { backgroundColor: C.green }, pressed && { opacity: 0.5 }]}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>ส่งใบเคสรับซื้อ</Text>
+                  </Pressable>
+                  <Pressable disabled={!!busy} onPress={() => setDeal(r, 'sell')} hitSlop={6}>
+                    <Text style={st.link}>เป็นลีดขายรถ</Text>
+                  </Pressable>
+                  <Pressable onPress={() => skip({ kind: 'chat', id: String(r.id), name: r.name } as Item)} hitSlop={6}>
+                    <Text style={st.link}>ไม่ใช่ลีด</Text>
+                  </Pressable>
+                  <Pressable onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(r.id) } })} hitSlop={6}>
+                    <Text style={st.link}>เปิดแชท</Text>
+                  </Pressable>
                 </View>
               </Card>
             );

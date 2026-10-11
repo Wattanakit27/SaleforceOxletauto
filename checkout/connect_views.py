@@ -279,6 +279,31 @@ def api_inbox(request):
                 out["pendingDays"] = C.PENDING_DAYS
             except Exception as e:
                 out["pendingError"] = str(e)[:120]
+            # ★ 11 ต.ค.69 แท็บ "รับซื้อรถ" — ลูกค้าอยากขายรถให้เรา (แยกจากลีดขาย · เจ้าของ "แยกไว้ด้วย")
+            #   แอดมินคัดลอกใบเคสรับซื้อไปโพสต์ในกลุ่มเคสHOT ของจัดซื้อ → ระบบเจอใบ = ออกจากแท็บเอง
+            try:
+                from .models import ChatLead
+                br = C.inbox("buyroom", me=emp, admin=True, q=request.GET.get("q", ""),
+                             src=(request.GET.get("src") or "").strip())
+                bl = {x.chat_id: x for x in ChatLead.objects.filter(chat_id__in=[r["id"] for r in br])}
+                bo = ChatOwner.objects.select_related("profile", "fb_profile").in_bulk([r["id"] for r in br])
+                for r in br:                     # เบอร์/ID ของลูกค้า (ไม่ใช่ id พนักงาน) · รถที่ลูกค้าพูดถึง · ทำไมระบบจัดเป็นรับซื้อ
+                    ld = bl.get(r["id"])
+                    if not ld:
+                        continue
+                    if bo.get(r["id"]):
+                        r["slip"] = C.buy_slip_text(bo[r["id"]], ld)    # ใบเคสรับซื้อ (ปุ่มคัดลอก · เลขโค้ดเว้นให้แอดมินเติม)
+                    bk = (ld.auto or {}).get(C.BUYLEAD_KEY) or {}
+                    r["phone"] = ld.phone
+                    r["lineId"] = "" if r.get("contact") == "qr" else ld.line_id
+                    r["car"] = ld.car_text or ld.car_model or ""
+                    r["dealWhy"] = bk.get("why") or ""
+                    r["dealBy"] = bk.get("by") or ""
+                out["buyRoom"] = br
+                out["buyRoomDays"] = C.BUY_ROOM_DAYS
+                out["buyLast"] = C.last_buy_code()
+            except Exception as e:
+                out["buyRoomError"] = str(e)[:120]
             # "จ่ายแล้ว" — ลูกค้าแชทที่ได้เลขแล้ว 7 วันล่าสุด จ่ายให้ใคร/โดยใคร (เจ้าของ: "อยากรู้ว่าจ่ายให้ใครบ้าง")
             try:
                 out["assigned"] = C.assigned_list(emp)
@@ -399,6 +424,7 @@ def api_assign_lead(request):
     """ปุ่ม **"จ่ายเบอร์"** (แอดมิน) — POST `{id, emp, base, admin, reject, code?}`
     · `{id, skip: true|false}` = ปุ่ม "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย → ออกจากแท็บจ่ายเบอร์) / เอากลับเข้าแท็บ
     · `{id, park: true|false}` = ติ๊ก "รับ lead จากแชทนี้แล้ว" → เข้าห้องพัก Lead / เอาออก (11 ต.ค.69)
+    · `{id, kind: "buy"|"sell"}` = ตั้งเป็นลีดรับซื้อรถ / ลีดขายรถ เอง (11 ต.ค.69 · ระบบไม่เดาทับ)
     · `{id, resend: true}` = ปุ่ม "ส่งเข้ากลุ่มอีกครั้ง" (รอบแรกส่งไม่สำเร็จ)
 
     ออกเลขลีดตามกติกาจริง + โอนลูกค้าให้เซลล์ + จดว่าใครจ่ายเมื่อไหร่
@@ -417,6 +443,9 @@ def api_assign_lead(request):
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
     if "park" in body:                            # ★ 11 ต.ค.69 ติ๊ก "รับ lead จากแชทนี้แล้ว" → เข้าห้องพัก Lead / เอาออก
         ok, msg = C.mark_park(o, bool(body.get("park")), by=ctx["name"] or "แอดมิน")
+        return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    if "kind" in body:                            # ★ 11 ต.ค.69 ลีดรับซื้อรถ ("buy") / ลีดขายรถ ("sell") — แอดมินตั้งเอง
+        ok, msg = C.set_deal_kind(o, str(body.get("kind") or ""), by=ctx["name"] or "แอดมิน")
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
     if body.get("resend"):
         ok, msg = C.repost_lead(o, by=ctx["name"] or "แอดมิน")

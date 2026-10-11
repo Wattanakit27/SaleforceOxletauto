@@ -116,6 +116,7 @@
   .tag.team { color: #fff; }
   .tag.wait { background: var(--amber-bg); color: var(--amber); }
   .tag.lead { background: var(--amber); color: #fff; }
+  .tag.buy { background: var(--green-bg); color: var(--green); border: .5px solid var(--green); }
   .tag.late { background: var(--red); color: #fff; }
   .tag.ok { background: var(--green-bg); color: var(--green); }
   .tag.q { background: var(--blue-bg); color: var(--blue); }
@@ -242,6 +243,9 @@
   .pf-skip { font-size: 12px; color: var(--t2); background: var(--bg2); border-radius: 7px; padding: 6px 8px; margin: 6px 0;
              display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .pf-assign.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .pf-buy { border: 1px dashed var(--green); border-radius: 10px; padding: 10px; margin: 10px 0; background: var(--bg); }
+  .pf-buy .pf-slip-text { margin: 8px 0; }
+  .pf-buy-a { display: flex; gap: 6px; flex-wrap: wrap; }
   /* ★ 10 ต.ค.69 งานจ่ายเบอร์ (leadflow.py): เบอร์ซ้ำ · คิวจ่ายวน · นาฬิกาโทร · ส่งต่อไม้ 2 */
   .pf-dup { font-size: 12px; line-height: 1.55; color: var(--amber); background: var(--amber-bg); border-radius: 7px;
             padding: 6px 8px; margin: 0 0 8px; }
@@ -832,6 +836,7 @@
     'hash': '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
     'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     'calendar': '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+    'copy': '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
     'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
   };
   const ic = (n, sz) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${sz ? ` style="width:${sz}px;height:${sz}px"` : ''}>${ICONS[n] || ''}</svg>`;
@@ -1051,6 +1056,9 @@
     else tags.push(`<span class="tag q">ยังไม่มีคนรับ</span>`);
     if (r.code) tags.push(`<span class="tag code" title="เลขลีด">${ic('hash', 12)} ${h(r.code)}</span>`);
     else if (r.buyCode) tags.push(`<span class="tag" title="ลูกค้าอยากขายรถให้เรา — ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว">ส่งจัดซื้อ ${h(r.buyCode)}</span>`);
+    // ★ 11 ต.ค.69 ลีดรับซื้อรถ (ลูกค้าอยากขายรถให้เรา) — แยกจากลีดขาย · อยู่แท็บ "รับซื้อรถ" ของห้องพัก Lead (ไม่จ่ายเบอร์ให้เซลล์)
+    else if (r.deal === 'buy') tags.push(`<span class="tag buy" title="ลูกค้าอยากขายรถให้เรา — ${r.buyRoom
+      ? 'อยู่แท็บ &quot;รับซื้อรถ&quot; ในห้องพัก Lead รอส่งใบเคสรับซื้อให้ทีมจัดซื้อ' : 'ยังไม่มีเบอร์/ID LINE (หรือเก่าเกิน) — ยังไม่ขึ้นแท็บรับซื้อรถ'}">ลีดรับซื้อ${r.buyRoom ? ' · รอส่งจัดซื้อ' : ''}</span>`);
     // ★ 11 ต.ค.69 "รอจ่ายเบอร์" = อยู่ในห้องพัก Lead จริง (แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว" · หรือเปิดสวิตช์เข้าเอง)
     //   ให้เบอร์/ID แล้วแต่ยังไม่ติ๊ก = ป้าย "ให้เบอร์แล้ว" ไว้บอกว่าเปิดแชทไปติ๊กได้ · server รุ่นเก่าไม่มี inRoom = ดู contact แบบเดิม
     else if (ADMIN && !r.nocode && (r.inRoom !== undefined ? r.inRoom : r.contact)) tags.push(`<span class="tag wait" title="${r.contact === 'qr'
@@ -1059,6 +1067,7 @@
     // ★ 11 ต.ค.69 (ค่ำ) เจ้าของ "ลูกค้าให้เบอร์แล้วไม่เด่นเลย" → ป้ายสีส้มทึบ + ขีดส้มหน้าแถว · แชทนี้อยู่กลุ่ม "รอกดรับ" ในห้องพัก Lead
     else if (ADMIN && r.pendingPark) tags.push(`<span class="tag lead" title="ลูกค้าให้${r.contact === 'qr' ? 'รูป QR ของ LINE' : 'เบอร์/ID LINE'}แล้ว — ขึ้นในห้องพัก Lead กลุ่ม &quot;รอกดรับ&quot; · กด &quot;รับ lead&quot; ที่นั่นหรือบนหัวแชท แล้วจ่ายเบอร์ต่อ">${ic('phone', 12)} ให้${r.contact === 'qr' ? ' QR' : 'เบอร์'}แล้ว · รอรับ lead</span>`);
     else if (ADMIN && !r.nocode && r.contact) tags.push(`<span class="tag" title="ลูกค้าให้${r.contact === 'qr' ? 'รูป QR ของ LINE' : 'เบอร์/ID LINE'}ในแชทแล้ว แต่ยังไม่อยู่ในห้องพัก Lead — เปิดแชทแล้วกด &quot;รับ lead จากแชทนี้แล้ว&quot;">${ic('phone', 12)} ให้${r.contact === 'qr' ? ' QR' : 'เบอร์'}แล้ว</span>`);
+    if (r.trade && r.deal !== 'buy') tags.push(`<span class="tag" title="ลูกค้ามีรถเก่ามาเทิร์น — ยังเป็นลีดขายรถ">มีรถเทิร์น</span>`);
     if (r.sim) tags.push(`<span class="tag sim">ลูกค้าจำลอง</span>`);
     (r.tags || []).forEach(t => tags.push(`<span class="tag ok">${h(t)}</span>`));
     if (ck && ck.text) tags.push(`<span class="tag ${ck.cls}" data-due="${h(r.due)}">${ic('clock', 12)} <span class="ck">${h(ck.text)}</span></span>`);
@@ -1606,6 +1615,7 @@
                        status: d.status || [], note: d.note || '', sellers: d.sellers || S.sellers, loaded: true,
                        parked: d.parked || null, assigned: d.assigned || [], leadflow: d.leadflow || S.leadflow || null,
                        pending: d.pending || [], pendingDays: d.pendingDays || S.pendingDays || 3,
+                       buyRoom: d.buyRoom || [], buyRoomDays: d.buyRoomDays || S.buyRoomDays || 14, buyLast: d.buyLast || S.buyLast || {},
                        lfStrip: d.lfStrip || S.lfStrip || null, rrBoard: d.rrBoard || S.rrBoard || [],
                        roomAuto: d.roomAuto !== undefined ? !!d.roomAuto : !!S.roomAuto });
     if (d.crm && !S.crmOpts) { S.crmOpts = d.crm; renderFltPanel(true); }
@@ -1688,7 +1698,7 @@
     const acts = [];
     // ปุ่มลัดไปกล่อง "จ่ายเบอร์" — กล่องอยู่ในแผงข้อมูลลูกค้า (ด้านขวา/แบบพับ) ซึ่งอาจซ่อนอยู่
     const L = d.lead;
-    if (ADMIN && d.codeHelp && L && !L.code && !L.noCode && !L.buy) {
+    if (ADMIN && d.codeHelp && L && !L.code && !L.noCode && !L.buy && L.deal !== 'buy') {
       // ★ 11 ต.ค.69 โหมดติ๊ก: แชทเข้าห้องพัก Lead เมื่อแอดมินกด "รับ lead" (ปุ่มในแผงขวาอยู่ลึก ต้องเลื่อนหา → มีที่หัวแชทด้วย)
       if (!L.park && !L.roomAuto)
         acts.push(`<button class="btn" id="cn-park-btn" title="รับ lead จากแชทนี้แล้ว — ส่งเข้าห้องพัก Lead รอจ่ายเบอร์">${ic('check')} รับ lead</button>`);
@@ -1879,9 +1889,12 @@
       const B = L.buy;
       x += `<div class="pf-done">ส่งจัดซื้อแล้ว <b>${h(B.code)}</b>${B.seller ? ' → @' + h(B.seller) : ''}
         · ${h(fmtFull(B.at))}${B.by ? ' โดย ' + h(B.by) : ''}<br><span style="color:var(--t2)">ใน "${h(B.group || 'เคสHOT')}" — ลูกค้าอยากขายรถให้เรา</span></div>`;
+    } else if (L.deal === 'buy' && !L.code) {
+      x += buyLeadBoxHtml(L, !!d.codeHelp);
     } else if (d.codeHelp && !L.code) {
-      x += parkRowHtml(L) + assignBoxHtml(d, sfx);
+      x += parkRowHtml(L) + assignBoxHtml(d, sfx) + `<div class="pf-note" style="margin:-4px 0 8px">ลูกค้าอยากขายรถให้เรา? <a href="#" data-act="deal-buy">ย้ายไปเป็นลีดรับซื้อรถ</a></div>`;
     }
+    if (L.trade && L.deal !== 'buy') x += `<div class="pf-src">ลูกค้ามีรถเทิร์น — "${h(L.trade.why || '')}" (ยังเป็นลีดขายรถ)</div>`;
     if (d.codeHelp && L.code) x += lfBoxHtml(d);
     LEAD_UI.forEach(sec => {
       x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}`;
@@ -1940,6 +1953,21 @@
   }
   // ★ 11 ต.ค.69 ติ๊ก "รับ lead จากแชทนี้แล้ว" → ส่งเข้าห้องพัก Lead
   //   (เจ้าของสั่ง: ข้อมูลยังไม่ครบ ยังไม่ให้แชทเข้าห้องเอง 100% — รอคนติ๊กก่อน · สวิตช์ room_chat_auto ในหน้ากฎ)
+  // ★ 11 ต.ค.69 ลีดรับซื้อรถ (ลูกค้าอยากขายรถให้เรา) — ไม่จ่ายเบอร์ให้เซลล์ · คัดลอกใบเคสรับซื้อไปโพสต์ในกลุ่มเคสHOT ของจัดซื้อ
+  //   ระบบเจอใบในกลุ่ม = "ส่งจัดซื้อแล้ว" ออกจากแท็บรับซื้อรถเอง · เจ้าของ "มันจะมี lead รับซื้อรถกับ lead ขายรถ แยกไว้ด้วย"
+  function buyLeadBoxHtml(L, admin) {
+    const B = L.buyLead || {}, sys = (B.by || '') === 'ระบบ';
+    let x = `<div class="pf-buy"><div class="pf-h" style="margin-bottom:4px">ลีดรับซื้อรถ <span class="pf-auto">ลูกค้าอยากขายรถให้เรา</span></div>
+      <div class="pf-note">${sys ? 'ระบบจับจากแชท: "' + h(B.why || '') + '"' : 'ตั้งโดย ' + h(B.by || '-')}${B.at ? ' · ' + h(fmtFull(B.at)) : ''}</div>`;
+    if (admin) {
+      x += `<div class="pf-note" style="margin-top:6px">คัดลอกใบเคสรับซื้อ → เติมเลขโค้ด → โพสต์ในกลุ่มเคสHOT ของจัดซื้อ · ระบบเจอใบในกลุ่มแล้วจะขึ้น "ส่งจัดซื้อแล้ว" เอง</div>
+        <pre class="pf-slip-text" data-buyslip="1">${h(L.buySlipText || '')}</pre>
+        <div class="pf-buy-a"><button class="btn sm pri" data-act="copy-buyslip">คัดลอกใบเคสรับซื้อ</button>
+          <button class="btn sm" data-act="deal-sell" title="ลูกค้าจะซื้อรถเรา (ไม่ใช่ขายรถให้เรา) — ย้ายไปห้องพัก Lead ขาย">เป็นลีดขายรถ</button>
+          <button class="btn sm" data-act="nocode" title="ไม่ใช่ลีด (สมัครงาน/ถามเรื่องอื่น) — ออกจากแท็บรับซื้อรถ">ไม่ใช่ลีด</button></div>`;
+    }
+    return x + '</div>';
+  }
   function parkRowHtml(L) {
     if (L.park) return `<div class="pf-done">อยู่ในห้องพัก Lead · ติ๊กรับ lead${L.park.by ? ' โดย ' + h(L.park.by) : ''}${L.park.at ? ' ' + h(fmtFull(L.park.at)) : ''}
       <div style="margin-top:6px"><button class="btn sm" data-act="park-undo">เอาออกจากห้องพัก</button></div></div>`;
@@ -2146,6 +2174,23 @@
     el.querySelectorAll('[data-act=park]').forEach(b => b.onclick = ev => parkLead(ev, true));
     el.querySelectorAll('[data-act=park-undo]').forEach(b => b.onclick = ev => parkLead(ev, false));
     el.querySelectorAll('[data-act=nocode-undo]').forEach(b => b.onclick = ev => skipLead(ev, false));
+    // ★ 11 ต.ค.69 ลีดรับซื้อรถ / ลีดขายรถ — แอดมินตั้งเอง (ระบบไม่เดาทับ)
+    const dealLead = async (ev, kind) => {
+      ev.preventDefault();
+      const id = S.chat.row.id;
+      ev.target.disabled = true;
+      const r = await api('/connect/api/assign_lead', { id, kind });
+      ev.target.disabled = false;
+      toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'), 4500);
+      if (r.ok) { S.assignDraft = null; openChat(id, true); loadInbox(false); }
+    };
+    el.querySelectorAll('[data-act=deal-buy]').forEach(b => b.onclick = ev => dealLead(ev, 'buy'));
+    el.querySelectorAll('[data-act=deal-sell]').forEach(b => b.onclick = ev => dealLead(ev, 'sell'));
+    const cpb = el.querySelector('[data-act=copy-buyslip]');
+    if (cpb) cpb.onclick = () => {
+      const t = (S.chat.lead || {}).buySlipText || '';
+      try { navigator.clipboard.writeText(t); toast('คัดลอกใบเคสรับซื้อแล้ว — เติมเลขโค้ดแล้ววางในกลุ่มเคสHOT'); } catch (e) { toast('คัดลอกไม่ได้'); }
+    };
     const cp = el.querySelector('[data-act=copy-slip]');
     if (cp) cp.onclick = () => {
       const t = (S.chat.lead || {}).slipText || '';
@@ -2839,7 +2884,7 @@
   function rail() { return ADMIN ? RAIL_ADMIN : RAIL_SELLER; }
   function renderRail() {
     const c = S.counts || {};
-    const cnt = { inbox: ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0)), dist: (c.tocode || 0) + (c.parked || 0) + (c.pending || 0) };
+    const cnt = { inbox: ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0)), dist: (c.tocode || 0) + (c.parked || 0) + (c.pending || 0) + (c.buyroom || 0) };
     $('lc-nav').innerHTML = rail().map(r => `<button class="lc-nb${S.panel === r.p ? ' on' : ''}" data-p="${r.p}" title="${h(r.sub || '')}">${ic(r.i)} ${h(r.l)}${
       cnt[r.p] != null ? `<span class="count${cnt[r.p] ? '' : ' z'}">${cnt[r.p]}</span>` : ''}</button>`).join('');
     $('lc-nav').querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
@@ -2956,17 +3001,46 @@
       else if (r.contact === 'qr') ids.push('<span class="lc-id has">QR LINE</span>');
       const dup = r.dup ? `<span class="lc-chip warn" title="เบอร์นี้เคยเป็นลีด ${h(r.dup.code || '-')} ของ @${h(r.dup.seller || '?')}">เบอร์ซ้ำ @${h(r.dup.seller || '?')}</span>` : '';
       return `<div class="lc-pr" data-pend="${r.id}">${avHtml(r.name, r.pic)}
-        <div style="min-width:0"><div class="n">${h(r.name)} ${chTag(SRC_KEY[r.src] || 'line')} <span class="lc-ids">${ids.join('')}</span>${dup}${r.staff ? '<span class="tag wait">พนักงาน</span>' : ''}</div>
+        <div style="min-width:0"><div class="n">${h(r.name)} ${chTag(SRC_KEY[r.src] || 'line')} <span class="lc-ids">${ids.join('')}</span>${dup}${r.trade ? '<span class="lc-chip" title="ลูกค้ามีรถเก่ามาเทิร์น — ยังเป็นลีดขาย">มีรถเทิร์น</span>' : ''}${r.staff ? '<span class="tag wait">พนักงาน</span>' : ''}</div>
           <div class="p">${r.lastDir === 'out' ? 'เรา: ' : ''}${h(r.preview || '')}</div></div>
         <div class="a"><span class="t" title="ลูกค้าทักล่าสุด">${h(fmtWhen(r.lastAt))}</span>
           <button class="btn pri sm" data-pacc="${r.id}">${ic('user-check', 14)} รับ lead</button>
-          <a data-lcskip="chat:${r.id}" title="ไม่ใช่ลีดขาย (ถามศูนย์ / อยากขายรถ / ลูกค้าเก่า) — ออกจากห้องพัก">ไม่ใช่ลีด</a>
+          <a data-pbuy="${r.id}" title="ลูกค้าอยากขายรถให้เรา — ย้ายไปแท็บรับซื้อรถ">ลีดรับซื้อ</a>
+          <a data-lcskip="chat:${r.id}" title="ไม่ใช่ลีด (ถามศูนย์ / ลูกค้าเก่า / สมัครงาน) — ออกจากห้องพัก">ไม่ใช่ลีด</a>
           <a data-lcopen="${r.id}">เปิดแชท</a></div></div>`;
     }).join('');
     const rest = L.length - PEND_SHOW;
     return `<div class="lc-pend"><div class="lc-pend-h">${ic('phone', 15)} <b>ลูกค้าให้เบอร์/ID LINE แล้ว — รอแอดมินกดรับ ${L.length} ราย</b>
         <small>กด "รับ lead" แล้วลีดจะลงไปรายการรอจ่ายเบอร์ข้างล่าง · เฉพาะที่ทักภายใน ${S.pendingDays || 3} วัน</small></div>${rows}
       ${rest > 0 ? `<div class="lc-pend-f"><a data-pall="1">${S.pendAll ? 'ย่อเหลือ ' + PEND_SHOW + ' ราย' : 'ดูอีก ' + rest + ' ราย'}</a></div>` : ''}</div>`;
+  }
+  // ★ 11 ต.ค.69 แท็บ "รับซื้อรถ" — ลีดรับซื้อ (ลูกค้าอยากขายรถให้เรา) แยกจากลีดขาย · ไม่จ่ายเบอร์ให้เซลล์
+  //   แอดมินคัดลอกใบเคสรับซื้อ → โพสต์ในกลุ่มเคสHOT ของจัดซื้อ → ระบบเจอใบในกลุ่ม = ออกจากแท็บ + ขึ้นใน "จ่ายแล้ว" (ส่งจัดซื้อ)
+  function buyHubHtml() {
+    const L = S.buyRoom || [], last = S.buyLast || {};
+    const nx = Object.entries(last).map(([k, v]) => {
+      const n = +String(v).split('-')[1] || 0;
+      return `${h(v)} → ถัดไป <b>${h(k)}-${n + 1}</b>`;
+    }).join(' · ');
+    const rows = L.map(r => {
+      const ids = [];
+      if (r.phone) ids.push(`<span class="lc-id has">เบอร์ ${h(r.phone)}</span>`);
+      if (r.lineId) ids.push(`<span class="lc-id has">ID LINE ${h(r.lineId)}</span>`);
+      else if (r.contact === 'qr') ids.push('<span class="lc-id has">QR LINE</span>');
+      const why = r.dealBy === 'ระบบ' ? 'จับจากแชท: "' + (r.dealWhy || '') + '"' : 'ตั้งโดย ' + (r.dealBy || '-');
+      return `<div class="lc-pr" data-buy="${r.id}">${avHtml(r.name, r.pic)}
+        <div style="min-width:0"><div class="n">${h(r.name)} ${chTag(SRC_KEY[r.src] || 'line')} <span class="lc-ids">${ids.join('')}</span>${r.car ? `<span class="lc-chip">${h(r.car)}</span>` : ''}${r.staff ? '<span class="tag wait">พนักงาน</span>' : ''}</div>
+          <div class="p" title="${h(why)}">${h(why)}</div>
+          <div class="p">${r.lastDir === 'out' ? 'เรา: ' : ''}${h(r.preview || '')}</div></div>
+        <div class="a"><span class="t" title="ลูกค้าทักล่าสุด">${h(fmtWhen(r.lastAt))}</span>
+          <button class="btn pri sm" data-bslip="${r.id}">${ic('copy', 14)} คัดลอกใบเคสรับซื้อ</button>
+          <a data-bsell="${r.id}" title="ลูกค้าจะซื้อรถเรา — ย้ายไปลีดขาย">เป็นลีดขายรถ</a>
+          <a data-lcskip="chat:${r.id}" title="ไม่ใช่ลีด (สมัครงาน/ถามเรื่องอื่น) — ออกจากแท็บ">ไม่ใช่ลีด</a>
+          <a data-lcopen="${r.id}">เปิดแชท</a></div></div>`;
+    }).join('');
+    return `<div class="lc-bh" style="background:var(--bg2)"><span class="note">ลูกค้าอยากขายรถให้เรา (ให้เบอร์/ID LINE แล้ว · ทักภายใน ${S.buyRoomDays || 14} วัน) —
+        คัดลอกใบเคสรับซื้อ → เติมเลขโค้ด → โพสต์ในกลุ่มเคสHOT ของจัดซื้อ · ระบบเจอใบในกลุ่มแล้วย้ายไป "จ่ายแล้ว" เอง${nx ? ' · เลขล่าสุดในกลุ่ม ' + nx : ''}</span></div>
+      ${rows || '<div class="cn-empty">ไม่มีลีดรับซื้อรถรอส่งจัดซื้อ 👍</div>'}`;
   }
   function capHtml() {
     const B = S.rrBoard || [];
@@ -2991,10 +3065,12 @@
     const seg = `<span class="lc-seg">
       <button class="${S.hubTab === 'wait' ? 'on' : ''}" data-hub="wait">รอจ่ายเบอร์<span class="n">${items.length}</span>${
         !S.roomAuto && (S.pending || []).length ? `<span class="n" style="background:var(--amber);color:#fff" title="ให้เบอร์แล้ว รอแอดมินกดรับ">+${(S.pending || []).length}</span>` : ''}</button>
+      <button class="${S.hubTab === 'buy' ? 'on' : ''}" data-hub="buy" title="ลูกค้าอยากขายรถให้เรา — ส่งใบเคสรับซื้อให้ทีมจัดซื้อ (แยกจากลีดขาย)">รับซื้อรถ<span class="n"${(S.buyRoom || []).length ? ' style="background:var(--green);color:#fff"' : ''}>${(S.buyRoom || []).length}</span></button>
       <button class="${S.hubTab === 'done' ? 'on' : ''}" data-hub="done">จ่ายแล้ว${S.doneRange === 'today' ? 'วันนี้' : ' 7 วัน'}<span class="n">${done.length}</span></button>
       <button class="${S.hubTab === 'clock' ? 'on' : ''}" data-hub="clock">นาฬิกาโทร<span class="n">${lateN}</span></button></span>`;
     let body;
     if (S.hubTab === 'clock') body = clockHubHtml('');
+    else if (S.hubTab === 'buy') body = buyHubHtml();
     else if (S.hubTab === 'done') {
       const by = {};
       done.forEach(x => { const k = x.seller || UNKNOWN_SELLER; by[k] = (by[k] || 0) + 1; });
@@ -3152,6 +3228,17 @@
       loadInbox(false);
     });
     pg.querySelectorAll('[data-pall]').forEach(a => a.onclick = () => { S.pendAll = !S.pendAll; renderDist(); });
+    // ★ 11 ต.ค.69 ลีดรับซื้อรถ / ลีดขายรถ
+    const setDeal = async (id, kind) => {
+      const r = await api('/connect/api/assign_lead', { id: +id, kind });
+      toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ'), 4500); loadInbox(false);
+    };
+    pg.querySelectorAll('[data-pbuy]').forEach(a => a.onclick = () => setDeal(a.dataset.pbuy, 'buy'));
+    pg.querySelectorAll('[data-bsell]').forEach(a => a.onclick = () => setDeal(a.dataset.bsell, 'sell'));
+    pg.querySelectorAll('[data-bslip]').forEach(b => b.onclick = () => {
+      const r = (S.buyRoom || []).find(x => String(x.id) === b.dataset.bslip);
+      try { navigator.clipboard.writeText((r && r.slip) || ''); toast('คัดลอกใบเคสรับซื้อแล้ว — เติมเลขโค้ดแล้ววางในกลุ่มเคสHOT'); } catch (e) { toast('คัดลอกไม่ได้'); }
+    });
     pg.querySelectorAll('[data-lcunpark]').forEach(a => a.onclick = async () => {
       const r = await api('/connect/api/assign_lead', { id: +a.dataset.lcunpark, park: false });
       toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ')); loadInbox(false);

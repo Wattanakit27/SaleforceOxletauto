@@ -96,6 +96,7 @@ export type Home = {
     tocode?: number;
     parked?: number;
     pending?: number;
+    buyroom?: number;
     slipsToday?: number;
     callLate?: number;
   };
