@@ -113,7 +113,7 @@ python manage.py runserver
 | `/checkout/api/customers` | `api_customers` | **admin/ผู้บริหาร** GET: **แชทลูกค้าที่ทักเข้า LINE OA** — ไม่ใส่อะไร = รายชื่อลูกค้า (ชื่อ · LINE id · จำนวนข้อความ · ทักครั้งแรก/ล่าสุด · เข้ามาทางบัญชีไหน) · `?q=` ค้นหาชื่อ · `?user_id=` = บทสนทนาย้อนหลังของคนนั้น · **ซ่อน LINE id ของพนักงาน** (`LineProfile.is_employee`) แต่โชว์ของลูกค้า (เจ้าของขอไว้ทักกลับ) |
 | `/checkout/api/reply` | `api_reply` | **admin/ผู้บริหาร** POST `{user_id, text}`: **ตอบแชทลูกค้า** — ส่งผ่าน LINE push ด้วย token ของบัญชี OA ที่ลูกค้าคุยอยู่ + บันทึกลง `GroupChat` เป็น `direction=out` พร้อมชื่อคนตอบ · **ส่งสำเร็จเท่านั้นถึงบันทึก** (ดู section "ตอบแชทลูกค้า") |
 | `/connect/` | `connect_views.page` | **หน้า Connect — แชทลูกค้า LINE OA รวมที่เดียว** (3 ต.ค.69 · **11 ต.ค.69 หน้าตาใหม่ "ศูนย์ควบคุมลีด"** · `?p=dist\|db\|pipe\|dash\|rules` เปิดหน้านั้น · `?classic=1` = หน้าเดิม) · แอดมิน/ผู้บริหาร = เห็นทุกแชท + โอน/ปล่อยคืนคิว + ตั้งค่า · เซลล์ = เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ + คิวรอรับ (เฉพาะวันเวรทีม) · คนงาน = 403 · ไม่ login → `/login/?next=/connect/` · `?id=` เปิดแชทนั้นเลย · `?embed=1` = ฝังในแท็บแดชบอร์ด · ดู section "Connect" |
-| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
+| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `assign_lead {id, park}` = "รับ lead จากแชทนี้แล้ว" (ส่งเข้าห้องพัก · 11 ต.ค.69) · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -1774,6 +1774,8 @@ sender_id)` ≠ จำนวนคน**
     · ใบร่างในห้องพัก (กลุ่ม ADMIN เก็บ Lead) **ไม่ใช้กติกานี้** — แอดมินคัดมาแล้ว
     · **11 ต.ค.69: ลิงก์เพิ่มเพื่อน LINE + รูป QR ของ LINE ก็นับเป็น ID LINE แล้ว** + ป้าย "รอจ่ายเบอร์" ในรายชื่อแชท
       (ดูหัวข้อ "ลูกค้าให้ LINE เป็นรูป QR")
+    · **⚠️★ 11 ต.ค.69 (ค่ำ) กติกานี้ถูก "ปิดไว้" แล้ว — แชทเข้าห้องพักเมื่อแอดมินกด "รับ lead" เท่านั้น** (สวิตช์ `room_chat_auto`
+      · ดูหัวข้อ "ห้องพัก Lead รับแชทเมื่อแอดมินกดรับ lead") · เปิดสวิตช์ = กลับมาใช้กติกาข้อนี้
   - **`capture_contact(o)`** จับจากแชทลงข้อมูลลีด **ตอนข้อความเข้า** (LINE: `note_customer_message` · FB: `note_fb_batch`)
     + ตอนเปิดแชท → ลีดเข้าห้องทันทีไม่ต้องรอแอดมินเปิด · ไม่มีช่องทางติดต่อ = ไม่สร้างแถว ChatLead เปล่า ·
     ช่องที่คนแก้/ลบแล้ว (`auto[...] == "คน"`) ไม่เติมกลับ · `scan_contacts()` เก็บตกแชทเดิมครั้งเดียวต่อ process (ใน `sync_rows`)
@@ -2206,6 +2208,31 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
 - **ที่ยังต้องให้แอดมินกด**: ลีดที่มีแต่ **รูป QR / ID LINE ไม่มีเบอร์** (สมุดเบอร์เก็บแค่เบอร์ · ชีตไม่มีช่องชื่อ) ·
   ลูกค้าเก่ากลับมาเกิน 14 วัน · เบอร์เดียวกับลูกค้าอีกรายในระบบที่ได้เลขแล้ว
 - **ไม่มี migration** · เทสต์ `test_connect.py` [33] · ตัวชี้วัดหลังขึ้น prod: จำนวนลีดที่รอจ่ายในห้องพักควรลดลงเองภายในไม่กี่นาที
+
+### ✋ ห้องพัก Lead รับแชทเมื่อแอดมินกด "รับ lead จากแชทนี้แล้ว" — `connect.mark_park` · 11 ต.ค.69 (ค่ำ)
+ผู้ใช้ *"ตอนนี้อยากให้เอามาจากกลุ่ม admin เก็บ lead ก่อน เพราะข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100
+อย่างน้อยก็รอคนไปติ๊กว่าไปรับ lead มาจากแชทนี้แล้ว"* — ห้องพักเต็มไปด้วยแชทที่ระบบจับเบอร์/ID LINE/QR ได้เอง
+(ส่วนใหญ่แชท Facebook ที่มีแต่ ID LINE → `sheet_match` เคลียร์ไม่ได้) แต่แอดมินยังไม่ได้ดู
+- **สวิตช์ `connect_config.room_chat_auto` — ปิดโดยปริยาย** (หน้า "กฎและเส้นทาง" → "แชทที่ให้เบอร์/ID LINE เข้าห้องพักเอง")
+  · ปิด = ห้องพักรับ **ใบร่างจากกลุ่ม ADMIN เก็บ Lead** (เหมือนเดิม ไม่ต้องกด) + **แชทที่แอดมินกดรับ lead**
+  · เปิด = กติกาเดิม 4 ต.ค. (ให้เบอร์/ID LINE แล้วเข้าห้องเอง)
+  · `room_auto()` จำค่า 20 วิต่อ process (`to_code` ถูกเรียกบ่อย) · `save_cfg` ล้างค่าที่จำใน worker ที่บันทึก · worker อื่นตามภายใน 20 วิ
+- **ติ๊ก = `ChatLead.auto["_park"]` = `{by, at}`** (`PARK_KEY` · ไม่ต้อง migrate · เหมือน `_nocode`/`_buy`)
+  · `mark_park(o, on, by)` → (ok, ข้อความ) · มีเลขลีดแล้ว/ส่งจัดซื้อแล้ว = ปฏิเสธ · ติ๊กแชทที่เคยกด "ไม่ต้องจ่ายเบอร์" = ล้างป้ายนั้น
+    · ติ๊กแชทที่ยังไม่มีเบอร์ได้ (แอดมินตัดสินแล้ว) แต่ข้อความบอกว่ายังไม่มีเบอร์ · เอาออกซ้ำ = ไม่พัง
+  · API `POST /connect/api/assign_lead {id, park: true|false}` (แอดมินเท่านั้น — endpoint เดิม)
+  · `in_room(lead)` = ตัวตัดสินเดียวกับ `to_code` สำหรับแถวเดี่ยว → `row_json.inRoom` / `parkedAt` / `parkedBy` ·
+    `lead_json.park` / `roomAuto` · `inbox?view=tocode` ส่ง `roomAuto`
+- **ระบบยังจับเบอร์/ID LINE/QR จากแชทลงข้อมูลลีดเหมือนเดิม** (`capture_contact`) — แค่ไม่ดันแชทเข้าห้องพักเอง
+- **ทุกอย่างที่ใช้ `to_code` ตามไปเอง**: ตัวเลขแท็บ (`counts.tocode`) · แผน Run Auto (`crm.room_plan`) · `slip_sweep`
+  (แชทที่ติ๊กแล้วได้เลขในชีต/ใบในกลุ่ม → ออกจากห้องเอง) · แท็บห้องพักในแอปมือถือ
+- **หน้าเว็บ**: หัวแชทมีปุ่ม **"รับ lead"** (ไม่ต้องเลื่อนหาในแผงขวา) + ในแผงขวาเหนือกล่องจ่ายเบอร์ · ติ๊กแล้วขึ้น
+  "อยู่ในห้องพัก Lead · ติ๊กรับ lead โดย …" + ปุ่ม "เอาออกจากห้องพัก" · รายชื่อแชท: ติ๊กแล้ว = **"รอจ่ายเบอร์"** ·
+  ให้เบอร์แล้วแต่ยังไม่ติ๊ก = **"ให้เบอร์แล้ว"** (สีเทา) · การ์ดในห้องพัก: เวลาพักนับจากตอนติ๊ก + "ติ๊กรับ lead โดย …" +
+  ลิงก์ "เอาออกจากห้องพัก" · แอปมือถือใช้ `inRoom` กับป้ายเดียวกัน (กดรับ lead ในแอปยังไม่มี — ใช้หน้าเว็บ)
+- **ไม่มี migration** · deploy = `git pull` + restart · เทสต์ `test_connect.py` [34] (เทสต์เดิมที่ทดสอบกติกา 4 ต.ค.
+  ตั้ง `room_chat_auto=True` ไว้ตอนต้น: test_connect / test_crm / test_chat_media)
+- **แก้ไปพร้อมกัน**: `test_connect.py` ปิด `chatmedia.BG` — `tick()` เคยแตก thread โหลดรูปชน SQLite ("database table is locked" ใน [8] แบบสุ่ม)
 
 ### 🚗 ความต้องการลูกค้า (`CustomerNeed`) — "หารถอะไร งบเท่าไหร่" · ก.ย.69
 *"เก็บทุกอย่างที่คิดว่าเป็นข้อมูล ทั้งลูกค้าหารถราคาเท่านี้ แท็กลูกค้าคนนี้เป็น lead

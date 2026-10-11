@@ -85,6 +85,10 @@ DEFAULTS = {
     "pull_min": 0,
     # เตือนนัดลูกค้า (นัดติดตาม/นัดดูรถ) ทาง LINE แชทส่วนตัวเซลล์ 30 นาทีก่อนถึงเวลา — ปิดโดยปริยาย
     "appt_line": False,
+    # ★ 11 ต.ค.69 แชทเข้าห้องพัก Lead ยังไง — False (ค่าตั้งต้น) = เฉพาะแชทที่แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว"
+    #   (เจ้าของสั่ง "ข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100 · อย่างน้อยก็รอคนไปติ๊ก") · ใบร่างจากกลุ่ม
+    #   ADMIN เก็บ Lead เข้าห้องเองเหมือนเดิม · True = แชทที่ให้เบอร์/ID LINE เข้าห้องเอง (แบบ 4 ต.ค.69)
+    "room_chat_auto": False,
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -155,6 +159,7 @@ def cfg() -> dict:
     except Exception:
         c["fb_poll_min"] = DEFAULTS["fb_poll_min"]
     c["slip_post"] = bool(c.get("slip_post"))
+    c["room_chat_auto"] = bool(c.get("room_chat_auto"))
     c["test_accounts"] = list(dict.fromkeys(
         str(x).strip() for x in (c.get("test_accounts") or []) if str(x).strip()))[:10]
     for k in ("slip_group", "slip_group_reject"):
@@ -255,6 +260,8 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
             errs.append("ดึงลูกค้าคืนเมื่อไม่ตอบ ต้องเป็น 0 (ปิด) หรือ 5–240 นาที")
     if "appt_line" in body:
         out["appt_line"] = bool(body.get("appt_line"))
+    if "room_chat_auto" in body:
+        out["room_chat_auto"] = bool(body.get("room_chat_auto"))
     for key, label in (("slip_group", "กลุ่มจ่ายเบอร์ (เลขปกติ)"), ("slip_group_reject", "กลุ่มจ่ายเบอร์ (เลข R…)")):
         if key in body:
             g = str(body.get(key) or "").strip()
@@ -268,12 +275,29 @@ def clean_cfg(body: dict) -> tuple[dict, list]:
 
 
 def save_cfg(c: dict) -> bool:
+    _ROOM_AUTO["at"] = 0.0
     try:
         from dashboard.services import cache_store
         cache_store.set_kv(CFG_KEY, {k: c[k] for k in DEFAULTS if k in c})
         return True
     except Exception:
         return False
+
+
+_ROOM_AUTO = {"at": 0.0, "val": False}
+
+
+def room_auto() -> bool:
+    """แชทที่ให้เบอร์/ID LINE เข้าห้องพัก Lead เอง (`room_chat_auto`) — จำ 20 วิ
+    (รายชื่อเรียกต่อแถว ห้ามอ่าน KV ทุกแถว) · อ่านไม่ได้ = ไม่เข้าเอง (ต้องติ๊ก)"""
+    import time as _t
+    if _t.monotonic() - _ROOM_AUTO["at"] > 20:
+        try:
+            _ROOM_AUTO["val"] = bool(cfg().get("room_chat_auto"))
+        except Exception:
+            _ROOM_AUTO["val"] = False
+        _ROOM_AUTO["at"] = _t.monotonic()
+    return _ROOM_AUTO["val"]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1181,6 +1205,10 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None) -> dict:
         "contact": ("qr" if (ld.auto or {}).get("line_id") == QR_SRC and not ld.phone else "yes")
                    if ld and (ld.phone or ld.line_id) else "",
         "nocode": bool(ld and NOCODE_KEY in (ld.auto or {})),
+        # ★ 11 ต.ค.69 อยู่ในห้องพัก Lead แล้วไหม (ติ๊ก "รับ lead จากแชทนี้แล้ว" · หรือสวิตช์ให้เข้าเอง) — ป้าย "รอจ่ายเบอร์"
+        "inRoom": in_room(ld),
+        "parkedAt": ((ld.auto or {}).get(PARK_KEY) or {}).get("at", "") if ld else "",
+        "parkedBy": ((ld.auto or {}).get(PARK_KEY) or {}).get("by", "") if ld else "",
     }
     # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้นของลีด · ความร้อน · เงียบกี่วัน · นัดถัดไป · รถใหม่ตรง (crm.py)
     try:
@@ -2300,6 +2328,9 @@ def lead_json(o, lead=None) -> dict:
         "post": {k: v for k, v in (lead.post_info or {}).items() if k != "mid"} or None,
         # แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ ({by, at}) — ไม่ใช่ลีดขาย ออกจากแท็บจ่ายเบอร์
         "noCode": (lead.auto or {}).get(NOCODE_KEY) or None,
+        # ★ 11 ต.ค.69 แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว" ({by, at}) → อยู่ในห้องพัก Lead · roomAuto = ไม่ต้องติ๊ก (สวิตช์)
+        "park": (lead.auto or {}).get(PARK_KEY) or None,
+        "roomAuto": room_auto(),
         # ส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว ({code, at, group, seller, by}) — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย
         "buy": (lead.auto or {}).get(BUY_KEY) or None,
     })
@@ -2393,12 +2424,58 @@ def to_code(qs):
     ★ 4 ต.ค.69 เจ้าของสั่ง *"ลูกค้าทุกคนไม่ได้เข้าห้องพักลีด ต้องเป็นลูกค้าที่ให้เบอร์หรือช่องทางติดต่อแล้วเท่านั้น"*
       → ต้องมี **เบอร์โทร หรือ ID LINE** ในข้อมูลลีด (ระบบจับจากแชทให้เอง `capture_contact` · หรือแอดมินพิมพ์เอง)
       ลูกค้าที่ยังแค่ถามรถ (แอดมินยังขอเบอร์อยู่) อยู่ในคิว "รอรับ"/"ทั้งหมด" ตามเดิม แต่ยังไม่เข้าห้องพัก
+
+    ★ 11 ต.ค.69 เจ้าของสั่ง *"เอามาจากกลุ่ม admin เก็บ lead ก่อน เพราะข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100
+      อย่างน้อยก็รอคนไปติ๊กว่าไปรับ lead มาจากแชทนี้แล้ว"* → ค่าตั้งต้น (`room_chat_auto` ปิด) = **เฉพาะแชทที่
+      แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว"** (`PARK_KEY`) · ระบบยังจับเบอร์/ID ลงข้อมูลลีดให้เหมือนเดิม แค่ไม่ส่งเข้าห้องเอง
+      · ติ๊กแล้ว = คนตัดสินแล้ว ไม่ต้องรอเบอร์/ประวัติคุย · เปิดสวิตช์ = กติกาเดิม (ให้เบอร์/ID แล้วเข้าห้องเอง)
     """
+    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
+    if not room_auto():
+        return qs.filter(lead__auto__has_key=PARK_KEY).filter(no_code)
     engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
                | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
-    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
     contact = Q(lead__phone__gt="") | Q(lead__line_id__gt="")
     return qs.filter(engaged).filter(no_code).filter(contact)
+
+
+PARK_KEY = "_park"                # ChatLead.auto[...] = แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว" ({by, at}) → เข้าห้องพัก Lead
+
+
+def in_room(lead) -> bool:
+    """แชทนี้อยู่ในห้องพัก Lead ไหม (ป้ายในรายชื่อ · ไม่เช็ค "คุยในระบบแล้ว" แบบ `to_code` — ใช้บอกคน ไม่ใช่นับ)"""
+    if not lead or (lead.code or "").strip():
+        return False
+    auto = lead.auto or {}
+    if NOCODE_KEY in auto or BUY_KEY in auto:
+        return False
+    return PARK_KEY in auto or (room_auto() and bool(lead.phone or lead.line_id))
+
+
+def mark_park(o, on: bool, by: str = ""):
+    """ติ๊ก **"รับ lead จากแชทนี้แล้ว"** (แอดมิน) → (ok, ข้อความ) — ส่งแชทนี้เข้าห้องพัก Lead · `on=False` = เอาออก
+    เก็บใน `ChatLead.auto["_park"]` = {by, at} (ไม่ต้อง migrate) · ติ๊ก = ยืนยันว่าเป็นลีดขาย → ล้างป้าย "ไม่ต้องจ่ายเบอร์" ด้วย"""
+    lead = lead_of(o)
+    if (lead.code or "").strip():
+        return False, "ลูกค้ารายนี้มีเลขลีด %s แล้ว" % lead.code
+    auto = dict(lead.auto or {})
+    if on:
+        if BUY_KEY in auto:
+            return False, "ลูกค้ารายนี้ส่งจัดซื้อแล้ว (%s) — ไม่ใช่ลีดขาย" % ((auto.get(BUY_KEY) or {}).get("code") or "เคสรับซื้อ")
+        auto[PARK_KEY] = {"by": (by or "")[:80], "at": _iso(timezone.now())}
+        auto.pop(NOCODE_KEY, None)
+        msg = "ส่งเข้าห้องพัก Lead แล้ว — รอจ่ายเบอร์"
+        if not (lead.phone or lead.line_id):
+            msg += " (ยังไม่มีเบอร์/ID LINE ในข้อมูลลีด)"
+    else:
+        if PARK_KEY not in auto:
+            return True, "แชทนี้ไม่ได้อยู่ในห้องพัก Lead อยู่แล้ว"
+        auto.pop(PARK_KEY, None)
+        msg = "เอาออกจากห้องพัก Lead แล้ว"
+    lead.auto = auto
+    lead.updated_by = (by or "")[:80]
+    lead.save(update_fields=["auto", "updated_by", "updated_at"])
+    return True, msg
 
 
 # ── ช่องทางติดต่อที่ลูกค้าให้มาในแชท (เบอร์ / ID LINE) — ตัวตัดสินว่าเข้าห้องพัก Lead หรือยัง ──

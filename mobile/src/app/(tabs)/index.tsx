@@ -27,6 +27,7 @@ type Row = Extra & {
   buyCode?: string;
   contact?: '' | 'yes' | 'qr'; // ให้เบอร์/LINE แล้ว (qr = อ่านจากรูป QR) · ยังไม่มีเลข = รอจ่ายเบอร์
   nocode?: boolean;
+  inRoom?: boolean; // อยู่ในห้องพัก Lead แล้ว (แอดมินกด "รับ lead จากแชทนี้แล้ว" · หรือเปิดสวิตช์เข้าเอง)
 };
 type Inbox = {
   view: string;
@@ -261,8 +262,10 @@ export default function ChatList() {
                   {!r.overdue && r.awaiting ? <Tag text="รอตอบ" color={C.amber} bg={C.amberBg} /> : null}
                   {r.owner ? <Tag text={'@' + r.owner} /> : null}
                   {r.code ? <Tag text={r.code} color={C.green} bg={C.greenBg} /> : null}
-                  {me?.admin && !r.code && !r.buyCode && r.contact && !r.nocode ? (
+                  {me?.admin && !r.code && !r.buyCode && !r.nocode && (r.inRoom ?? !!r.contact) ? (
                     <Tag text={r.contact === 'qr' ? 'รอจ่ายเบอร์ · QR' : 'รอจ่ายเบอร์'} color={C.amber} bg={C.amberBg} />
+                  ) : me?.admin && !r.code && !r.buyCode && !r.nocode && r.contact ? (
+                    <Tag text={r.contact === 'qr' ? 'ให้ QR แล้ว' : 'ให้เบอร์แล้ว'} color={C.sub} bg="#eee" />
                   ) : null}
                   {r.sim ? <Tag text="ลูกค้าจำลอง" color={C.sub} bg="#eee" /> : null}
                   {r.staff ? <Tag text="พนักงาน" color={C.sub} bg="#eee" /> : null}

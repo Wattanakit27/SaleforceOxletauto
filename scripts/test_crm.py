@@ -174,7 +174,7 @@ try:
     for e in (MAT, FIRST, BIW, GONE):
         LineProfile.objects.create(user_id="U" + ("%032x" % (0xe00000 + e.id)), display_name=e.nickname,
                                    is_employee=True, employee=e, nickname=e.nickname, channel="push")
-    C.save_cfg(dict(C.cfg(), anchor_date=timezone.localdate().isoformat(), anchor_team="A", overrides={}))
+    C.save_cfg(dict(C.cfg(), anchor_date=timezone.localdate().isoformat(), anchor_team="A", overrides={}, room_chat_auto=True))
     LF.save_cfg(dict(LF.cfg(), rr_teams=["A", "B"], cap_day=12, need_checkin=False))
 
     # ═════════════════════════════════════════════════════════════════════

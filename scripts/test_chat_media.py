@@ -166,7 +166,7 @@ def body_of(r):
 
 
 try:
-    C.save_cfg(dict(C.cfg(), anchor_date=timezone.localdate().isoformat(), anchor_team="A", overrides={}))
+    C.save_cfg(dict(C.cfg(), anchor_date=timezone.localdate().isoformat(), anchor_team="A", overrides={}, room_chat_auto=True))
     MAT = Employee.objects.create(nickname="มัทไฟล์", position="ทีม A", work_start="9:00")
     BIW = Employee.objects.create(nickname="บิวไฟล์", position="ทีม A", work_start="9:00")
     ADM = client({"user_id": "admin", "nickname": "admin", "position": "admin"})

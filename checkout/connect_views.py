@@ -270,6 +270,8 @@ def api_inbox(request):
         except Exception as e:
             out["parkedError"] = str(e)[:120]
         if view == "tocode":
+            # ★ 11 ต.ค.69 แชทเข้าห้องพักเองไหม (ปิด = เฉพาะที่แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว") — หัวการ์ดบอกที่มา
+            out["roomAuto"] = C.room_auto()
             # "จ่ายแล้ว" — ลูกค้าแชทที่ได้เลขแล้ว 7 วันล่าสุด จ่ายให้ใคร/โดยใคร (เจ้าของ: "อยากรู้ว่าจ่ายให้ใครบ้าง")
             try:
                 out["assigned"] = C.assigned_list(emp)
@@ -383,6 +385,7 @@ def api_chat(request):
 def api_assign_lead(request):
     """ปุ่ม **"จ่ายเบอร์"** (แอดมิน) — POST `{id, emp, base, admin, reject, code?}`
     · `{id, skip: true|false}` = ปุ่ม "ไม่ต้องจ่ายเบอร์" (ไม่ใช่ลีดขาย → ออกจากแท็บจ่ายเบอร์) / เอากลับเข้าแท็บ
+    · `{id, park: true|false}` = ติ๊ก "รับ lead จากแชทนี้แล้ว" → เข้าห้องพัก Lead / เอาออก (11 ต.ค.69)
     · `{id, resend: true}` = ปุ่ม "ส่งเข้ากลุ่มอีกครั้ง" (รอบแรกส่งไม่สำเร็จ)
 
     ออกเลขลีดตามกติกาจริง + โอนลูกค้าให้เซลล์ + จดว่าใครจ่ายเมื่อไหร่
@@ -398,6 +401,9 @@ def api_assign_lead(request):
         return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
     if "skip" in body:                            # ปุ่ม "ไม่ต้องจ่ายเบอร์" (true) / "เอากลับเข้าแท็บจ่ายเบอร์" (false)
         ok, msg = C.mark_no_code(o, bool(body.get("skip")), by=ctx["name"] or "แอดมิน")
+        return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    if "park" in body:                            # ★ 11 ต.ค.69 ติ๊ก "รับ lead จากแชทนี้แล้ว" → เข้าห้องพัก Lead / เอาออก
+        ok, msg = C.mark_park(o, bool(body.get("park")), by=ctx["name"] or "แอดมิน")
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
     if body.get("resend"):
         ok, msg = C.repost_lead(o, by=ctx["name"] or "แอดมิน")

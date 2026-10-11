@@ -46,6 +46,8 @@ import checkout.people as _people  # noqa: E402
 _people.BG = False             # แคชชื่อหมดอายุ = โหลดตรง (ไม่แตก thread ชนฐานข้อมูลทดสอบ)
 from checkout import leadflow as _LF  # noqa: E402
 _LF.BG_SLOW = False          # งานจ่ายเบอร์: ไม่ให้ thread งานช้าวิ่งชนฐานข้อมูลทดสอบ
+from checkout import chatmedia as _CM  # noqa: E402
+_CM.BG = False               # โหลดรูปในแชท: tick() เคยแตก thread ชน SQLite ("database table is locked" ใน [8])
 from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
 from dashboard.services import cache_store  # noqa: E402
 
@@ -177,7 +179,7 @@ try:
     # ── ข้อมูลตั้งต้น: วันนี้ = เวรทีม A · นับ 24 ชม. (เทสต์ไม่ขึ้นกับเวลาที่รัน) ──
     TODAY = timezone.localdate()
     ck("บันทึกค่าตั้งได้", C.save_cfg(dict(C.DEFAULTS, anchor_date=TODAY.isoformat(), anchor_team="A",
-                                            open="00:00", close="00:00")))
+                                            open="00:00", close="00:00", room_chat_auto=True)))
     ck("วันนี้เวรทีม A ตามที่ตั้ง", C.today_team() == "A", C.today_team())
 
     A1 = Employee.objects.create(nickname="เอหนึ่ง", position="ทีม A")
@@ -2454,6 +2456,102 @@ try:
     got = next((i for i in LP.board(cache_sec=0)["assigned"] if i["account"] == "ร่างระบบ"), {})
     ck("ป้ายบอกที่มาของเลขตามสมุดเบอร์ (ปุ่มในระบบ ≠ ชีต)", got.get("code") == "NLD10-9306"
        and got.get("assignedRoom") == LP.SHEET_SRC_LABEL["system"], got)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[34] ห้องพัก Lead รับแชทเมื่อแอดมินติ๊ก \"รับ lead จากแชทนี้แล้ว\" (11 ต.ค.69 · \"ข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100\")")
+    from checkout import crm as CRM
+    ck("ค่าตั้งต้น = ต้องติ๊ก (ไม่เข้าห้องเอง)", C.DEFAULTS["room_chat_auto"] is False)
+    _cc, _ce = C.clean_cfg({"room_chat_auto": True})
+    ck("ตั้งสวิตช์ผ่านหน้ากฎได้", _cc.get("room_chat_auto") is True and not _ce, _ce)
+    C.save_cfg(dict(C.cfg(), room_chat_auto=False))
+    ck("บันทึกแล้วอ่านค่าใหม่ทันที (ไม่ติดค่าที่จำไว้ 20 วิ)", C.room_auto() is False)
+
+    Q1 = C.note_customer_message(cust(951, "ติ๊กหนึ่ง").user_id, timezone.now(), "เบอร์ 0827770001 ครับ")
+    Q2 = C.note_customer_message(cust(952, "ติ๊กสอง").user_id, timezone.now(), "ไลน์ไอดี tick_two ครับ")
+    Q3 = C.note_customer_message(cust(953, "ติ๊กสาม").user_id, timezone.now(), "มีแคมรี่ไหมครับ")
+    ids = set(tocode_ids())
+    ck("★ ให้เบอร์แล้วแต่ยังไม่ติ๊ก = ไม่เข้าห้องพัก", Q1.id not in ids and Q2.id not in ids, ids)
+    ck("…แต่ระบบยังเก็บเบอร์/ID ลงข้อมูลลีดให้", C.lead_of(ChatOwner.objects.get(pk=Q1.id)).phone == "0827770001"
+       and C.lead_of(ChatOwner.objects.get(pk=Q2.id)).line_id == "tick_two")
+    ck("แชทที่ยังไม่ได้ติ๊กหายจากห้องพักทั้งหมด (ห้องเหลือแต่ใบร่าง)", tocode_ids() == [], tocode_ids())
+    rw = {r["id"]: r for r in C.inbox("all", admin=True)}
+    ck("รายชื่อแชท: ให้เบอร์แล้ว แต่ inRoom = ไม่", rw[Q1.id].get("contact") == "yes" and rw[Q1.id].get("inRoom") is False,
+       rw.get(Q1.id))
+
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q1.id), True, by="กวาง")
+    ck("★ ติ๊ก \"รับ lead จากแชทนี้แล้ว\" → เข้าห้องพัก", ok_ and "ห้องพัก" in msg_ and Q1.id in tocode_ids(), msg_)
+    rw = {r["id"]: r for r in C.inbox("tocode", admin=True)}
+    ck("แถวในห้องพักบอกว่าใครติ๊ก + เมื่อไหร่", rw[Q1.id].get("inRoom") is True and rw[Q1.id].get("parkedBy") == "กวาง"
+       and rw[Q1.id].get("parkedAt"), rw.get(Q1.id))
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q3.id), True, by="กวาง")
+    ck("ติ๊กแชทที่ยังไม่มีเบอร์ได้ (แอดมินตัดสินแล้ว) + บอกว่ายังไม่มีเบอร์", ok_ and "ยังไม่มีเบอร์" in msg_
+       and Q3.id in tocode_ids(), msg_)
+    ck("ตัวเลขแท็บตรงกับรายการ (โหมดติ๊ก)", C.counts(admin=True)["tocode"] == len(tocode_ids()),
+       (C.counts(admin=True)["tocode"], tocode_ids()))
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q3.id), False, by="กวาง")
+    ck("เอาออกจากห้องพัก", ok_ and Q3.id not in tocode_ids(), msg_)
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q3.id), False, by="กวาง")
+    ck("เอาออกซ้ำ = ไม่พัง บอกว่าไม่ได้อยู่ในห้อง", ok_ and "ไม่ได้อยู่" in msg_, msg_)
+
+    # มีเลขแล้ว / ส่งจัดซื้อแล้ว = ติ๊กไม่ได้ · ติ๊กแชทที่เคยกด "ไม่ต้องจ่ายเบอร์" = ล้างป้ายนั้น
+    l3 = C.lead_of(ChatOwner.objects.get(pk=Q3.id))
+    ChatLead.objects.filter(pk=l3.pk).update(code="NLD10-9401")
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q3.id), True, by="กวาง")
+    ck("มีเลขลีดแล้ว = ติ๊กไม่ได้", not ok_ and "NLD10-9401" in msg_, msg_)
+    l2 = C.lead_of(ChatOwner.objects.get(pk=Q2.id))
+    ChatLead.objects.filter(pk=l2.pk).update(auto=dict(l2.auto or {}, **{C.BUY_KEY: {"code": "OC-9001"}}))
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q2.id), True, by="กวาง")
+    ck("ส่งจัดซื้อแล้ว = ติ๊กไม่ได้", not ok_ and "OC-9001" in msg_ and Q2.id not in tocode_ids(), msg_)
+    ChatLead.objects.filter(pk=l2.pk).update(auto={k: v for k, v in (l2.auto or {}).items() if k != C.BUY_KEY}
+                                             | {C.NOCODE_KEY: {"by": "กวาง"}})
+    ok_, msg_ = C.mark_park(ChatOwner.objects.get(pk=Q2.id), True, by="กวาง")
+    ck("ติ๊กแชทที่เคยกด \"ไม่ต้องจ่ายเบอร์\" = ล้างป้ายนั้น + เข้าห้อง", ok_ and Q2.id in tocode_ids()
+       and C.NOCODE_KEY not in (C.lead_of(ChatOwner.objects.get(pk=Q2.id)).auto or {}))
+
+    # API (เฉพาะแอดมิน)
+    Q4 = C.note_customer_message(cust(954, "ติ๊กสี่").user_id, timezone.now(), "เบอร์ 0827770004 ครับ")
+    s_, d = J(SA1, "/connect/api/assign_lead", {"id": Q4.id, "park": True})
+    ck("★ เซลล์ติ๊กไม่ได้ (403)", s_ == 403 and Q4.id not in tocode_ids(), (s_, d))
+    s_, d = J(NOB, "/connect/api/assign_lead", {"id": Q4.id, "park": True})
+    ck("ไม่ login ติ๊กไม่ได้", s_ in (401, 403) and Q4.id not in tocode_ids(), s_)
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": Q4.id, "park": True})
+    ck("★ แอดมินติ๊กผ่าน API → เข้าห้องพัก", s_ == 200 and d.get("ok") and Q4.id in tocode_ids(), (s_, d))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % Q4.id)
+    L_ = d.get("lead") or {}
+    ck("หน้าแชทได้สถานะติ๊ก (park + roomAuto)", (L_.get("park") or {}).get("by") and L_.get("roomAuto") is False, L_)
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    d = json.loads(r_.content.decode("utf-8"))
+    ck("API ห้องพักบอกโหมด (roomAuto = ไม่)", d.get("roomAuto") is False and Q4.id in [x["id"] for x in d.get("rows") or []])
+    ck("★ API ห้องพัก (โหมดติ๊ก): ไม่มี LINE user id หลุด", not leak.search(r_.content.decode()))
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": Q4.id, "park": False})
+    ck("แอดมินเอาออกผ่าน API", s_ == 200 and d.get("ok") and Q4.id not in tocode_ids(), (s_, d))
+
+    # ใบร่างจากกลุ่ม ADMIN เก็บ Lead ไม่ต้องติ๊ก (แอดมินคัดมาแล้ว)
+    post(PARK, 120, slip("TLD10-", acc="ร่างโหมดติ๊ก", phone="0827770099"))
+    LP.forget()
+    ck("★ ใบร่างจากกลุ่ม ADMIN เก็บ Lead ยังเข้าห้องพักเองเหมือนเดิม",
+       "ร่างโหมดติ๊ก" in {i["account"] for i in LP.board(cache_sec=0)["waiting"]})
+
+    # Run Auto (แผน) ใช้เฉพาะแชทที่ติ๊กแล้ว
+    plan = CRM.room_plan()
+    pids = {x.get("id") for x in (plan.get("plan") or []) + (plan.get("skipped") or []) if x.get("kind") == "chat"}
+    ck("แผน Run Auto: เฉพาะแชทที่ติ๊กแล้ว", Q1.id in pids and Q4.id not in pids and pids <= set(tocode_ids()),
+       (pids, tocode_ids()))
+
+    # จ่ายในชีตลีดตรง → แชทที่ติ๊กไว้ออกจากห้องเองเหมือนเดิม
+    Q5 = C.note_customer_message(cust(955, "ติ๊กห้า").user_id, timezone.now(), "เบอร์ 0827770005 ครับ")
+    C.mark_park(ChatOwner.objects.get(pk=Q5.id), True, by="กวาง")
+    sheet_row("0827770005", "NLD10-9405", "เอหนึ่ง")
+    C._SWEEP["at"] = 0.0
+    C.slip_sweep(force=True)
+    ck("แชทที่ติ๊กแล้วได้เลขในชีต → ออกจากห้องเอง", C.lead_of(ChatOwner.objects.get(pk=Q5.id)).code == "NLD10-9405"
+       and Q5.id not in tocode_ids())
+
+    # เปิดสวิตช์ = แบบเดิม (ให้เบอร์/ID แล้วเข้าห้องเอง)
+    C.save_cfg(dict(C.cfg(), room_chat_auto=True))
+    ck("เปิดสวิตช์ → แชทที่ให้เบอร์แล้วเข้าห้องเอง (ไม่ต้องติ๊ก)", C.room_auto() is True and Q4.id in tocode_ids())
+    rw = {r["id"]: r for r in C.inbox("tocode", admin=True)}
+    ck("…รายชื่อบอก inRoom = ใช่", (rw.get(Q4.id) or {}).get("inRoom") is True, rw.get(Q4.id))
 
 finally:
     _runner.teardown_databases(_old)
