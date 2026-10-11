@@ -1170,8 +1170,8 @@ def _iso(dt):
     return timezone.localtime(dt).isoformat(timespec="seconds") if dt else ""
 
 
-def row_json(o, me=None, now=None, appt_map=None, matches=None) -> dict:
-    """`appt_map`/`matches` = ส่งมาจาก inbox() (ถามฐานข้อมูลครั้งเดียวทั้งหน้า) · ไม่ส่ง = ถามเองทีละแถว"""
+def row_json(o, me=None, now=None, appt_map=None, matches=None, pend=None) -> dict:
+    """`appt_map`/`matches`/`pend` = ส่งมาจาก inbox() (ถามฐานข้อมูลครั้งเดียวทั้งหน้า) · ไม่ส่ง = ถามเองทีละแถว"""
     now = now or timezone.now()
     p = cust(o)
     ld = lead_of(o, create=False)
@@ -1209,6 +1209,8 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None) -> dict:
         "inRoom": in_room(ld),
         "parkedAt": ((ld.auto or {}).get(PARK_KEY) or {}).get("at", "") if ld else "",
         "parkedBy": ((ld.auto or {}).get(PARK_KEY) or {}).get("by", "") if ld else "",
+        # ★ 11 ต.ค.69 (ค่ำ) ให้เบอร์/ID แล้ว รอแอดมินกด "รับ lead" — อยู่กลุ่ม "รอกดรับ" บนสุดของห้องพัก Lead (ป้ายเด่นในรายชื่อ)
+        "pendingPark": (o.id in pend) if pend is not None else pending_one(o, ld),
     }
     # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้นของลีด · ความร้อน · เงียบกี่วัน · นัดถัดไป · รถใหม่ตรง (crm.py)
     try:
@@ -2006,8 +2008,11 @@ def slip_sweep(limit: int = 300, force: bool = False) -> dict:
     now = timezone.now()
     out = {"matched": 0, "seller": 0}
     from datetime import datetime as _dt
-    rows = (to_code(ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead"))
-            .order_by(F("last_at").desc(nulls_last=True))[:limit])
+    base = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
+    rows = list(to_code(base).order_by(F("last_at").desc(nulls_last=True))[:limit])
+    # ★ 11 ต.ค.69 กลุ่ม "รอกดรับ" ด้วย — ลีดที่จ่ายในชีต/ใบในกลุ่มไปแล้ว ไม่ต้องรอแอดมินกดรับก่อนถึงจะหายจากห้องพัก
+    seen = {o.id for o in rows}
+    rows += [o for o in pending_park(base).order_by(F("last_in_at").desc(nulls_last=True))[:limit] if o.id not in seen]
     for o in rows:
         if is_sim_row(o):
             continue
@@ -2430,16 +2435,57 @@ def to_code(qs):
       แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว"** (`PARK_KEY`) · ระบบยังจับเบอร์/ID ลงข้อมูลลีดให้เหมือนเดิม แค่ไม่ส่งเข้าห้องเอง
       · ติ๊กแล้ว = คนตัดสินแล้ว ไม่ต้องรอเบอร์/ประวัติคุย · เปิดสวิตช์ = กติกาเดิม (ให้เบอร์/ID แล้วเข้าห้องเอง)
     """
-    no_code = Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
     if not room_auto():
-        return qs.filter(lead__auto__has_key=PARK_KEY).filter(no_code)
-    engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
-               | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
-    contact = Q(lead__phone__gt="") | Q(lead__line_id__gt="")
-    return qs.filter(engaged).filter(no_code).filter(contact)
+        return qs.filter(lead__auto__has_key=PARK_KEY).filter(_no_code_q())
+    return qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q())
+
+
+def _no_code_q():
+    """ยังไม่มีเลขลีด · แอดมินไม่ได้กด "ไม่ต้องจ่ายเบอร์" · ไม่ใช่เคสรับซื้อ"""
+    return Q(lead__code="") & ~Q(lead__auto__has_key=NOCODE_KEY) & ~Q(lead__auto__has_key=BUY_KEY)
+
+
+def _engaged_q():
+    """คุยในระบบแล้ว = รอคำตอบอยู่ · มีเซลล์ดูแล · หรือมีประวัติใน Connect (ลูกค้าเก่าก่อนเปิด Connect ไม่นับ)"""
+    return (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
+            | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
+
+
+def _contact_q():
+    return Q(lead__phone__gt="") | Q(lead__line_id__gt="")
 
 
 PARK_KEY = "_park"                # ChatLead.auto[...] = แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว" ({by, at}) → เข้าห้องพัก Lead
+PENDING_DAYS = 3                  # กลุ่ม "รอกดรับ" — ลูกค้าทักภายในกี่วัน (เก่ากว่านี้ยังมีป้ายในรายชื่อ แต่ไม่ขึ้นห้องพัก)
+
+
+def pending_park(qs, days: int = PENDING_DAYS):
+    """กลุ่ม **"ให้เบอร์แล้ว · รอแอดมินกดรับ"** บนสุดของห้องพัก Lead (★ 11 ต.ค.69 ค่ำ)
+
+    เจ้าของ *"ลูกค้าให้เบอร์แล้วไม่เด่นเลย เอางี้เด้งไปหน้าพักหลีดรอแอดมินกดรับละจ่ายต่อ"* — เดิมโหมดติ๊ก
+    แชทที่ให้เบอร์/ID LINE แล้วมีแค่ป้ายเทาในรายชื่อแชท ต้องเปิดแชทไปกดเอง ไม่มีใครเห็น
+    = เงื่อนไขชุดเดียวกับกติกาเข้าเอง (คุยในระบบแล้ว + ยังไม่มีเลข + มีเบอร์/ID LINE) ที่ **ยังไม่ติ๊กรับ lead**
+    · กด "รับ lead" (`mark_park`) → ย้ายไปรายการรอจ่ายเบอร์ข้างล่าง · เปิดสวิตช์เข้าเอง (`room_auto`) = ว่างเสมอ (อยู่ใน to_code แล้ว)
+    · เฉพาะลูกค้าที่ทักภายใน `days` วัน — แชทเก่าที่ไม่มีใครกดรับ ไม่กองค้างบนสุดตลอดไป (ทักกลับมาเมื่อไหร่ก็ขึ้นใหม่)
+    """
+    if room_auto():
+        return qs.none()
+    qs = qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(~Q(lead__auto__has_key=PARK_KEY))
+    if days:
+        qs = qs.filter(last_in_at__gte=timezone.now() - timedelta(days=days))
+    return qs
+
+
+def pending_one(o, lead) -> bool:
+    """แชทนี้อยู่ในกลุ่ม "รอกดรับ" ไหม (แถวเดียว · ป้ายในรายชื่อ/หัวแชท) — ตรงกับ `pending_park`"""
+    if not lead or room_auto() or (lead.code or "").strip() or not (lead.phone or lead.line_id):
+        return False
+    auto = lead.auto or {}
+    if NOCODE_KEY in auto or BUY_KEY in auto or PARK_KEY in auto:
+        return False
+    if not o.last_in_at or o.last_in_at < timezone.now() - timedelta(days=PENDING_DAYS):
+        return False
+    return bool(o.awaiting_since or o.owner_id or ChatOwnerLog.objects.filter(chat=o).exists())
 
 
 def in_room(lead) -> bool:
@@ -3124,6 +3170,8 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
         qs = qs.filter(owner__isnull=True, awaiting_since__isnull=False).order_by("due_at")
     elif view == "tocode":                   # แอดมินเท่านั้น (เช็คที่ view) — คนที่รอคำตอบขึ้นก่อน ตามเส้นตาย
         qs = to_code(qs).order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
+    elif view == "pending":                  # กลุ่ม "รอกดรับ" ของห้องพัก Lead (แอดมิน · ไม่อยู่ใน VIEWS — เรียกจาก api_inbox เท่านั้น)
+        qs = pending_park(qs).order_by(F("last_in_at").desc(nulls_last=True))
     elif view == "mine":
         qs = qs.filter(owner=me) if me else qs.none()
         qs = qs.order_by(F("due_at").asc(nulls_last=True), F("last_at").desc(nulls_last=True))
@@ -3155,7 +3203,11 @@ def inbox(view: str, me=None, admin: bool = False, q: str = "", seller_id: int =
         objs = list(qs[:limit])
     amap = crm.next_appt_map([o.id for o in objs])
     mm = crm.match_map()
-    return [row_json(o, me, now, appt_map=amap, matches=mm) for o in objs]
+    pend = None
+    if admin:
+        pend = (set(o.id for o in objs) if view == "pending" else
+                set(pending_park(ChatOwner.objects.filter(id__in=[o.id for o in objs])).values_list("id", flat=True)))
+    return [row_json(o, me, now, appt_map=amap, matches=mm, pend=pend) for o in objs]
 
 
 def counts(me=None, admin: bool = False) -> dict:
@@ -3177,6 +3229,7 @@ def counts(me=None, admin: bool = False) -> dict:
             "owned": base.filter(owner__isnull=False).count(),
             "all": base.count(),
             "tocode": to_code(base.all()).count(),
+            "pending": pending_park(base.all()).count(),     # ให้เบอร์แล้ว รอกดรับ (ป้ายเมนูห้องพัก Lead)
         })
     return out
 

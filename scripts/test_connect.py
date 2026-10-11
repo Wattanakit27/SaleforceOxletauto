@@ -2553,6 +2553,71 @@ try:
     rw = {r["id"]: r for r in C.inbox("tocode", admin=True)}
     ck("…รายชื่อบอก inRoom = ใช่", (rw.get(Q4.id) or {}).get("inRoom") is True, rw.get(Q4.id))
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[35] ให้เบอร์แล้ว → เด้งขึ้นห้องพัก Lead กลุ่ม \"รอกดรับ\" (11 ต.ค.69 · \"ลูกค้าให้เบอร์แล้วไม่เด่นเลย\")")
+    C.save_cfg(dict(C.cfg(), room_chat_auto=False))
+    pend_ids = lambda: [r["id"] for r in C.inbox("pending", admin=True)]
+    P1 = C.note_customer_message(cust(961, "รอรับหนึ่ง").user_id, timezone.now(), "เบอร์ 0828880001 ครับ")
+    P2 = C.note_customer_message(cust(962, "รอรับสอง").user_id, timezone.now(), "มีซีวิคไหมครับ")
+    P3 = C.note_customer_message(cust(963, "รอรับเก่า").user_id, timezone.now() - timedelta(days=5), "เบอร์ 0828880003 ครับ")
+    P4 = C.note_customer_message(cust(964, "รอรับไม่ใช่ลีด").user_id, timezone.now(), "เบอร์ 0828880004 ครับ")
+    l4 = C.lead_of(ChatOwner.objects.get(pk=P4.id))
+    ChatLead.objects.filter(pk=l4.pk).update(auto=dict(l4.auto or {}, **{C.NOCODE_KEY: {"by": "กวาง"}}))
+    P5 = C.note_customer_message(cust(965, "รอรับQR").user_id, timezone.now(), "แอดไลน์ตาม QR นะครับ")
+    l5 = C.lead_of(ChatOwner.objects.get(pk=P5.id))
+    ChatLead.objects.filter(pk=l5.pk).update(line_id="line.me/ti/p/AbCdEf123", auto=dict(l5.auto or {}, line_id=C.QR_SRC))
+    pids = pend_ids()
+    ck("★ ให้เบอร์แล้ว (ยังไม่ติ๊ก) = อยู่กลุ่มรอกดรับ", P1.id in pids and P1.id not in tocode_ids(), pids)
+    ck("แค่ถามรถ (ยังไม่มีเบอร์) = ไม่อยู่", P2.id not in pids)
+    ck("ทักครั้งสุดท้ายเกิน %d วัน = ไม่อยู่ (ไม่กองค้างบนสุด)" % C.PENDING_DAYS, P3.id not in pids)
+    ck("กด \"ไม่ต้องจ่ายเบอร์\" แล้ว = ไม่อยู่", P4.id not in pids)
+    ck("รูป QR ของ LINE = อยู่", P5.id in pids)
+    ck("เรียงลูกค้าทักล่าสุดก่อน", pids.index(P5.id) < pids.index(P1.id), pids)
+    rw = {r["id"]: r for r in C.inbox("all", admin=True)}
+    ck("รายชื่อแชท: pendingPark ตรงกับกลุ่มรอกดรับ", rw[P1.id]["pendingPark"] is True and rw[P5.id]["pendingPark"] is True
+       and rw[P2.id]["pendingPark"] is False and rw[P3.id]["pendingPark"] is False and rw[P4.id]["pendingPark"] is False,
+       {k: rw[k]["pendingPark"] for k in (P1.id, P2.id, P3.id, P4.id, P5.id)})
+    ck("…ของเก่าเกินวันยังมีป้ายเทา (contact) ไว้บอก", rw[P3.id]["contact"] == "yes")
+    one = C.row_json(ChatOwner.objects.get(pk=P1.id))
+    ck("row_json แถวเดียว (หัวแชท) คิดเหมือนกัน", one["pendingPark"] is True
+       and C.row_json(ChatOwner.objects.get(pk=P3.id))["pendingPark"] is False)
+    ck("ตัวเลขเมนูนับกลุ่มรอกดรับ", C.counts(admin=True)["pending"] == len(pids), (C.counts(admin=True), pids))
+
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    d = json.loads(r_.content.decode("utf-8"))
+    pr = {x["id"]: x for x in d.get("pending") or []}
+    ck("★ API ห้องพักส่งกลุ่มรอกดรับ + เบอร์ที่ลูกค้าให้", (pr.get(P1.id) or {}).get("phone") == "0828880001"
+       and pr[P1.id].get("hasPhone") is True and d.get("pendingDays") == C.PENDING_DAYS, pr.get(P1.id))
+    ck("รูป QR = บอกแค่ว่ามี ไม่ส่งลิงก์ QR ออกหน้าเว็บ", P5.id in pr and pr[P5.id].get("lineId") == ""
+       and pr[P5.id].get("contact") == "qr", pr.get(P5.id))
+    ck("★ API ห้องพัก (กลุ่มรอกดรับ): ไม่มี LINE user id หลุด", not leak.search(r_.content.decode()))
+    s_, d = J(ADM, "/connect/api/summary")
+    ck("ป้ายเมนู (summary) นับกลุ่มรอกดรับ", (d.get("counts") or {}).get("pending") == len(pids), d.get("counts"))
+    r_ = SA1.get("/connect/api/inbox?view=pending", secure=True)
+    d = json.loads(r_.content.decode("utf-8"))
+    ck("เซลล์ขอ view=pending ไม่ได้ (ได้แท็บของตัวเอง ไม่มีกลุ่มรอกดรับ)", d.get("view") != "pending" and "pending" not in d
+       and "pending" not in (d.get("counts") or {}), (d.get("view"), list(d.keys())))
+
+    s_, d = J(ADM, "/connect/api/assign_lead", {"id": P1.id, "park": True})
+    ck("★ กด \"รับ lead\" → ออกจากกลุ่มรอกดรับ ลงรายการรอจ่ายเบอร์", s_ == 200 and P1.id not in pend_ids()
+       and P1.id in tocode_ids(), (s_, d))
+    ck("…ตัวเลขเมนูลดตาม", C.counts(admin=True)["pending"] == len(pids) - 1)
+
+    # ได้เลขในชีตลีดแล้ว → หายจากกลุ่มรอกดรับเอง (ไม่ต้องรอแอดมินกดรับ)
+    P6 = C.note_customer_message(cust(966, "รอรับจ่ายในชีต").user_id, timezone.now(), "เบอร์ 0828880006 ครับ")
+    ck("(ตั้งต้น) อยู่กลุ่มรอกดรับ", P6.id in pend_ids())
+    sheet_row("0828880006", "NLD10-9506", "เอหนึ่ง")
+    C._SWEEP["at"] = 0.0
+    C.slip_sweep(force=True)
+    ck("★ จ่ายในชีตลีดแล้ว → ได้เลข + ออกจากกลุ่มรอกดรับเอง", C.lead_of(ChatOwner.objects.get(pk=P6.id)).code == "NLD10-9506"
+       and P6.id not in pend_ids())
+
+    C.save_cfg(dict(C.cfg(), room_chat_auto=True))
+    ck("เปิดสวิตช์เข้าเอง → กลุ่มรอกดรับว่าง (อยู่ในรายการรอจ่ายเบอร์แล้ว)", pend_ids() == [] and C.counts(admin=True)["pending"] == 0
+       and P5.id in tocode_ids())
+    ck("…ป้าย pendingPark = ไม่", C.row_json(ChatOwner.objects.get(pk=P5.id))["pendingPark"] is False)
+    C.save_cfg(dict(C.cfg(), room_chat_auto=False))
+
 finally:
     _runner.teardown_databases(_old)
 

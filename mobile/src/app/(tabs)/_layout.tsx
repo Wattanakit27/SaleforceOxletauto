@@ -14,7 +14,7 @@ import { canChat, roleOf, useAuth } from '../../lib/auth';
 import { BellButton } from '../../lib/crm';
 import { C, Loading } from '../../lib/ui';
 
-type Summary = { counts: { queue: number; mineWaiting: number; tocode?: number; parked?: number }; admin: boolean };
+type Summary = { counts: { queue: number; mineWaiting: number; tocode?: number; parked?: number; pending?: number }; admin: boolean };
 
 export default function TabsLayout() {
   const { ready, me } = useAuth();
@@ -33,7 +33,7 @@ export default function TabsLayout() {
         .then((r) => {
           if (!on) return;
           setBadge(r.admin ? r.counts.queue : r.counts.mineWaiting + r.counts.queue);
-          if (r.admin) setHubBadge((r.counts.tocode || 0) + (r.counts.parked || 0));
+          if (r.admin) setHubBadge((r.counts.tocode || 0) + (r.counts.parked || 0) + (r.counts.pending || 0));
         })
         .catch(() => undefined);
     tick();

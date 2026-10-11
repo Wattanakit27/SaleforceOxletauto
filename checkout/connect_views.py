@@ -272,6 +272,13 @@ def api_inbox(request):
         if view == "tocode":
             # ★ 11 ต.ค.69 แชทเข้าห้องพักเองไหม (ปิด = เฉพาะที่แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว") — หัวการ์ดบอกที่มา
             out["roomAuto"] = C.room_auto()
+            # ★ 11 ต.ค.69 (ค่ำ) ลูกค้าให้เบอร์/ID LINE แล้ว รอแอดมินกด "รับ lead" — กลุ่มบนสุดของห้องพัก (ว่างเมื่อเปิดสวิตช์เข้าเอง)
+            try:
+                out["pending"] = C.inbox("pending", me=emp, admin=True, q=request.GET.get("q", ""),
+                                         src=(request.GET.get("src") or "").strip())
+                out["pendingDays"] = C.PENDING_DAYS
+            except Exception as e:
+                out["pendingError"] = str(e)[:120]
             # "จ่ายแล้ว" — ลูกค้าแชทที่ได้เลขแล้ว 7 วันล่าสุด จ่ายให้ใคร/โดยใคร (เจ้าของ: "อยากรู้ว่าจ่ายให้ใครบ้าง")
             try:
                 out["assigned"] = C.assigned_list(emp)
@@ -286,14 +293,20 @@ def api_inbox(request):
                                            "capDay": lc["cap_day"], "reportOn": lc["report_on"]}}
                 # ★ แถวลูกค้าแชทในห้องพัก: มีเบอร์/ID LINE ไหม · รถที่ถาม · เบอร์ซ้ำ — กล่องจ่ายเบอร์แบบกดชื่อเดียว
                 from .models import ChatLead
-                leads = {x.chat_id: x for x in ChatLead.objects.filter(chat_id__in=[r["id"] for r in rows])}
-                for r in rows:
+                pend = out.get("pending") or []
+                leads = {x.chat_id: x for x in ChatLead.objects.filter(chat_id__in=[r["id"] for r in rows + pend])}
+                for r in rows + pend:
                     ld = leads.get(r["id"])
                     if not ld:
                         continue
                     r["hasPhone"], r["hasLine"] = bool(ld.phone), bool(ld.line_id)
                     r["car"] = ld.car_model or ld.car_text or ""
                     r["dup"] = LF.dup_info(ld.phone, exclude_code=ld.code) if ld.phone else None
+                for r in pend:                   # กลุ่ม "รอกดรับ" โชว์เบอร์/ID ที่ลูกค้าให้ (ลูกค้า ไม่ใช่ id พนักงาน · รูป QR = แค่บอกว่ามี)
+                    ld = leads.get(r["id"])
+                    if ld:
+                        r["phone"] = ld.phone
+                        r["lineId"] = "" if r.get("contact") == "qr" else ld.line_id
             except Exception as e:
                 out["leadflowError"] = str(e)[:120]
     return _j(out)

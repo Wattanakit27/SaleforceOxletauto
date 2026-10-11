@@ -1,6 +1,8 @@
 // ห้องพัก Lead (แอดมิน) — ลีดที่รอจ่ายเบอร์จากทุกช่องทาง (GET /connect/api/inbox?view=tocode · ตัวเดียวกับเว็บ)
 // กดชื่อเซลล์ = จ่ายเบอร์เลย (ปุ่มแรก = คิวถัดไปของคิวจ่ายวน) — ยิง endpoint เดิมของเว็บ:
 //   แชท LINE/FB → POST /connect/api/assign_lead {id, emp} · ใบร่างจากกลุ่ม → POST /connect/api/park_assign {mid, emp, …}
+// ★ 11 ต.ค.69 กลุ่ม "ลูกค้าให้เบอร์/ID LINE แล้ว — รอแอดมินกดรับ" บนสุด (d.pending) · กด "รับ lead" = assign_lead {id, park:true}
+//   แล้วลีดลงไปรายการรอจ่ายเบอร์ข้างล่าง (กดชื่อเซลล์จ่ายต่อ) — กติกาเดียวกับเว็บ
 // ★ ใบจ่ายลีดถูกส่งเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ถ้าเปิดสวิตช์ไว้) → ถามยืนยันทุกครั้ง เหมือนเว็บ
 //   เบอร์ซ้ำ (เคยเป็นลีดของคนอื่น) → ถามซ้ำอีกชั้นก่อนจ่ายให้คนใหม่
 import { router, useFocusEffect } from 'expo-router';
@@ -22,6 +24,10 @@ type ChatRow = {
   hasLine?: boolean;
   car?: string;
   dup?: Dup;
+  phone?: string;
+  lineId?: string;
+  contact?: string;
+  lastDir?: string;
 };
 type Park = {
   id: string;
@@ -50,6 +56,8 @@ type Park = {
 type Board = { id: number; name: string; team: string; today: number; cap: number; ok: boolean; why: string };
 type Inbox = {
   rows: ChatRow[];
+  pending?: ChatRow[];
+  pendingDays?: number;
   parked?: { waiting?: Park[]; assigned?: Park[]; room?: string; codeHelp?: { next?: number; post?: { on?: boolean; room?: string; rejectRoom?: string } } };
   rrBoard?: Board[];
   sellers?: { id: number; name: string; team: string }[];
@@ -244,6 +252,21 @@ export default function Hub() {
       },
     ]);
 
+  const accept = async (r: ChatRow) => {
+    const key = 'pend:' + r.id;
+    setBusy(key);
+    try {
+      await api('/connect/api/assign_lead', { body: { id: r.id, park: true } });
+    } catch (e: any) {
+      Alert.alert('รับ lead ไม่สำเร็จ', e?.message || '');
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+  const pend = d?.pending || [];
+  const [pendAll, setPendAll] = useState(false);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
@@ -260,7 +283,7 @@ export default function Hub() {
       <View style={st.seg}>
         {(
           [
-            ['wait', `รอจ่ายเบอร์ ${items.length}`],
+            ['wait', `รอจ่ายเบอร์ ${items.length}${pend.length ? ' +' + pend.length : ''}`],
             ['done', `จ่ายแล้ววันนี้ ${done.length}`],
           ] as const
         ).map(([k, l]) => (
@@ -286,7 +309,61 @@ export default function Hub() {
                 .join(' · ')}
             </Text>
           ) : null}
-          {!items.length ? <Text style={st.empty}>ไม่มีลีดรอจ่ายเบอร์ 👍</Text> : null}
+          {pend.length ? (
+            <Card style={{ gap: 0, padding: 0, overflow: 'hidden', borderColor: C.amber }}>
+              <View style={{ backgroundColor: C.amberBg, padding: 12, gap: 2 }}>
+                <Text style={{ color: C.amber, fontWeight: '800', fontSize: 15 }}>
+                  ลูกค้าให้เบอร์/ID LINE แล้ว — รอแอดมินกดรับ {pend.length} ราย
+                </Text>
+                <Text style={st.sub}>
+                  {`กด "รับ lead" แล้วลีดจะลงไปรายการรอจ่ายเบอร์ข้างล่าง · เฉพาะที่ทักภายใน ${d?.pendingDays || 3} วัน`}
+                </Text>
+              </View>
+              {(pendAll ? pend : pend.slice(0, 8)).map((r) => {
+                const [sl, sfg, sbg] = SRC[r.src === 'fb' ? 'fb' : 'line'];
+                return (
+                  <View key={r.id} style={st.pend}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                      <Text style={st.name} numberOfLines={1}>{r.name || '(ไม่มีชื่อ)'}</Text>
+                      <Text style={st.sub}>{fmtTime(r.lastAt)}</Text>
+                    </View>
+                    <View style={st.tags}>
+                      <Tag text={sl} color={sfg} bg={sbg} />
+                      {r.phone ? <Tag text={'เบอร์ ' + r.phone} color={C.green} bg={C.greenBg} /> : null}
+                      {r.lineId ? <Tag text={'ID LINE ' + r.lineId} color={C.green} bg={C.greenBg} />
+                        : r.contact === 'qr' ? <Tag text="QR LINE" color={C.green} bg={C.greenBg} /> : null}
+                      {r.dup ? <Tag text={'เบอร์ซ้ำ @' + (r.dup.seller || '?')} color={C.red} bg={C.redBg} /> : null}
+                    </View>
+                    {r.preview ? <Text style={st.sub} numberOfLines={1}>{r.lastDir === 'out' ? 'เรา: ' : ''}{r.preview}</Text> : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                      <Pressable
+                        disabled={busy === 'pend:' + r.id}
+                        onPress={() => accept(r)}
+                        style={({ pressed }) => [st.acc, (pressed || busy === 'pend:' + r.id) && { opacity: 0.5 }]}>
+                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>รับ lead</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => skip({ kind: 'chat', id: String(r.id), name: r.name } as Item)}
+                        hitSlop={6}>
+                        <Text style={st.link}>ไม่ใช่ลีด</Text>
+                      </Pressable>
+                      <Pressable onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(r.id) } })} hitSlop={6}>
+                        <Text style={st.link}>เปิดแชท</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+              {pend.length > 8 ? (
+                <Pressable onPress={() => setPendAll(!pendAll)} style={{ padding: 12 }}>
+                  <Text style={st.link}>{pendAll ? 'ย่อเหลือ 8 ราย' : `ดูอีก ${pend.length - 8} ราย`}</Text>
+                </Pressable>
+              ) : null}
+            </Card>
+          ) : null}
+          {!items.length ? (
+            <Text style={st.empty}>{pend.length ? 'ยังไม่มีลีดที่กดรับแล้ว — กด "รับ lead" ข้างบนก่อน แล้วค่อยจ่ายเบอร์' : 'ไม่มีลีดรอจ่ายเบอร์ 👍'}</Text>
+          ) : null}
           {items.map((it) => {
             const [w, longWait] = waited(it.since);
             const [sl, sfg, sbg] = SRC[it.src] || SRC.other;
@@ -432,4 +509,6 @@ const st = StyleSheet.create({
   selText: { fontSize: 15, fontWeight: '800', color: C.text },
   selSub: { fontSize: 11, color: C.sub },
   link: { color: C.purple, fontWeight: '700', fontSize: 14 },
+  pend: { padding: 12, gap: 6, borderTopWidth: 1, borderTopColor: C.line },
+  acc: { backgroundColor: C.amber, borderRadius: 8, minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
 });

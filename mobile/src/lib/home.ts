@@ -95,6 +95,7 @@ export type Home = {
     onDuty?: boolean;
     tocode?: number;
     parked?: number;
+    pending?: number;
     slipsToday?: number;
     callLate?: number;
   };

@@ -288,6 +288,7 @@ def _admin_chats() -> dict:
     from checkout import leadflow as LF
     cnt = C.counts(None, True)
     out = {"queue": cnt.get("queue", 0), "tocode": cnt.get("tocode", 0),
+           "pending": cnt.get("pending", 0),          # ให้เบอร์แล้ว รอแอดมินกดรับ lead (กลุ่มบนสุดของห้องพัก)
            "dutyToday": C.today_team()}
     try:
         from checkout.leadpark import board
