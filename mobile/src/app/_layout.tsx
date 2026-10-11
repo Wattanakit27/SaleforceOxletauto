@@ -5,8 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../lib/auth';
 import { C } from '../lib/ui';
 
-// โครงหน้า: (tabs) = แชท · สแกน QR · ฉัน (หน้าแรกหลัง login = แชท)
-//           chat/[id] · lead/[id] (งานกับลูกค้า) · alerts · car/[code] เปิดซ้อนเต็มจอเหนือแถบด้านล่าง
+// โครงหน้า: (tabs) = แชท · วันนี้ · ห้องพัก (แอดมิน) · รถ · ฉัน — จัดตามบทบาท (ดู (tabs)/_layout.tsx)
+//           chat/[id] · lead/[id] (งานกับลูกค้า) · alerts · scan · car/[code] เปิดซ้อนเต็มจอเหนือแถบด้านล่าง
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -25,6 +25,7 @@ export default function RootLayout() {
           <Stack.Screen name="lead/[id]" options={{ title: 'งานกับลูกค้า' }} />
           <Stack.Screen name="alerts" options={{ title: 'แจ้งเตือน' }} />
           <Stack.Screen name="car/[code]" options={{ title: 'รถ' }} />
+          <Stack.Screen name="scan" options={{ title: 'สแกน QR รถ' }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
         </Stack>
       </AuthProvider>

@@ -1152,6 +1152,22 @@ def cars_api(request):
     ]
     t2ls = [c.t2l for c in all_cars if c.t2l is not None]
     avg = round(sum(t2ls) / len(t2ls), 1) if t2ls else None
+    # ★ 11 ต.ค.69 ใครเบิกรถคันนี้ออกไปอยู่ (แท็บ "รถ" ของแอป: ป้ายออกนอกลาน + "รถที่ฉันเบิก") — ชื่อเล่นเท่านั้น
+    outs = out_now_codes()
+    try:
+        from checkout import people as _people
+        from checkout.views import _actor_name
+        me_name = _actor_name(request)
+    except Exception:
+        _people, me_name = None, ""
+
+    def _out(code):
+        m = outs.get(code)
+        if not m:
+            return None
+        who = _people.safe_name(m.borrower_name) if _people else (m.borrower_name or "")
+        return {"who": who, "purpose": m.purpose or "", "mine": bool(me_name) and m.borrower_name == me_name,
+                "since": timezone.localtime(m.checked_out_at).isoformat(timespec="seconds") if m.checked_out_at else ""}
     cars = []
     for c in all_cars:
         ex = c.extra or {}
@@ -1175,6 +1191,7 @@ def cars_api(request):
             "year": c.year or 0, "km": c.km or 0,
             "dateInTs": c.date_in.timestamp() if c.date_in else 0,
             "updatedTs": c.updated_at.timestamp() if c.updated_at else 0,
+            "out": _out(c.code),
         })
     return JsonResponse({
         "total": len(all_cars), "flags": flags, "phaseRows": phase_rows,

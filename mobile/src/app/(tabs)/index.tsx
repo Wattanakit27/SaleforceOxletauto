@@ -138,7 +138,7 @@ export default function ChatList() {
       return n;
     });
 
-  if (me && !canChat(me)) return <Redirect href="/scan" />; // คนงานใช้แชทลูกค้าไม่ได้
+  if (me && !canChat(me)) return <Redirect href="/today" />; // คนงาน/จัดซื้อไม่มีแชท → หน้า "วันนี้"
 
   return (
     <View style={{ flex: 1 }}>

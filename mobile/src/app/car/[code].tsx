@@ -1,9 +1,9 @@
 // หน้ารถ 1 คัน (เปิดจากสแกน QR) — ข้อมูลชุดเดียวกับป๊อปอัปรถบนบอร์ดของเว็บ
 // เปลี่ยนสเตป: เลือกสเตป → หมายเหตุ + รูป (+ เช็คลิสต์ตรวจรถ ถ้าเป็นสเตปตรวจ) → ยืนยัน
 // กติกา "ต้องแนบรูป/หมายเหตุ" มาจากเซิร์ฟเวอร์ (rules) และเซิร์ฟเวอร์ตรวจซ้ำอีกชั้นเสมอ
-import * as ImagePicker from 'expo-image-picker';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+// ★ 11 ต.ค.69 เบิก-คืนรถจากหน้านี้ได้ (lib/checkout.tsx · ข้อมูลจาก checkout ใน /track/api/m/car)
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   Image,
@@ -22,6 +22,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { absUrl, api } from '../../lib/api';
+import { CheckoutCard, CkInfo } from '../../lib/checkout';
+import { MediaPicker, useUploads } from '../../lib/media';
 import { Banner, Btn, C, Card, Loading, Tag } from '../../lib/ui';
 
 type Media = { url: string; video: boolean };
@@ -50,8 +52,8 @@ type Car = {
   direct: Direct[];
   role: string;
   rules: { forceMedia: string[]; forceNote: string[]; checklistStages: string[]; checklistItems: string[] };
+  checkout: CkInfo | null;
 };
-type Shot = { uri: string; video: boolean; id?: string; err?: string; uploading: boolean };
 
 const PHASE_NAME: Record<string, string> = {
   intake_phase: 'รับเข้า',
@@ -67,7 +69,7 @@ export default function CarScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [pick, setPick] = useState<Direct | null>(null);
   const [note, setNote] = useState('');
-  const [shots, setShots] = useState<Shot[]>([]);
+  const u = useUploads(String(code));
   const [chk, setChk] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
@@ -81,55 +83,19 @@ export default function CarScreen() {
     }
   }, [code]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // เปิดหน้า/กลับมาหน้านี้ = โหลดใหม่ (เช่น เพิ่งเบิก/คืนรถ หรือกลับจากหน้าอื่น)
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const choose = (d: Direct) => {
     setPick(d);
     setNote('');
-    setShots([]);
+    u.clear();
     const items = car?.rules.checklistItems || [];
     setChk(Object.fromEntries(items.map((i) => [i, true]))); // ค่าตั้งต้น = ผ่านทุกข้อ เอาออกเฉพาะข้อที่มีปัญหา (เหมือนเว็บ)
-  };
-
-  const upload = async (a: ImagePicker.ImagePickerAsset) => {
-    const video = a.type === 'video';
-    const shot: Shot = { uri: a.uri, video, uploading: true };
-    setShots((cur) => [...cur, shot]);
-    const form = new FormData();
-    const name = a.fileName || `${video ? 'video' : 'photo'}-${Date.now()}.${video ? 'mp4' : 'jpg'}`;
-    // React Native รับไฟล์ใน FormData เป็น {uri, name, type}
-    form.append('file', { uri: a.uri, name, type: a.mimeType || (video ? 'video/mp4' : 'image/jpeg') } as any);
-    form.append('code', String(code));
-    try {
-      const r = await api<{ id: string }>('/track/api/upload', { form, timeoutMs: 180000 });
-      setShots((cur) => cur.map((s) => (s.uri === a.uri ? { ...s, id: r.id, uploading: false } : s)));
-    } catch (e: any) {
-      setShots((cur) =>
-        cur.map((s) => (s.uri === a.uri ? { ...s, err: e?.message || 'อัปไม่สำเร็จ', uploading: false } : s)),
-      );
-    }
-  };
-
-  const takePhoto = async () => {
-    const p = await ImagePicker.requestCameraPermissionsAsync();
-    if (!p.granted) {
-      Alert.alert('ต้องอนุญาตใช้กล้องก่อน');
-      return;
-    }
-    const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
-    if (!r.canceled) r.assets.forEach(upload);
-  };
-
-  const fromLibrary = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      selectionLimit: 10,
-      quality: 0.6,
-    });
-    if (!r.canceled) r.assets.forEach(upload);
   };
 
   if (err && !car) {
@@ -146,8 +112,8 @@ export default function CarScreen() {
   const needMedia = !!pick && car.rules.forceMedia.includes(pick.key);
   const needNote = !!pick && car.rules.forceNote.includes(pick.key);
   const showChk = !!pick && car.rules.checklistStages.includes(pick.key);
-  const ready = shots.filter((s) => s.id);
-  const busyUp = shots.some((s) => s.uploading);
+  const ready = u.ready;
+  const busyUp = u.busy;
   const missing: string[] = [];
   if (needMedia && !ready.length) missing.push('แนบรูป');
   if (needNote && !note.trim()) missing.push('ใส่หมายเหตุ'); // เช็คก่อนต่อผลเช็คลิสต์ (ไม่งั้นนับเป็นหมายเหตุหลอก)
@@ -175,10 +141,10 @@ export default function CarScreen() {
     setSaving(true);
     try {
       await api('/track/api/seller_set_stage', {
-        body: { code: car.code, stage: pick.key, note: full, media: ready.map((s) => ({ id: s.id, video: s.video })) },
+        body: { code: car.code, stage: pick.key, note: full, media: u.media },
       });
       setPick(null);
-      setShots([]);
+      u.clear();
       setNote('');
       await load();
       Alert.alert('บันทึกแล้ว', `เปลี่ยนเป็น "${pick.name}"`);
@@ -245,13 +211,15 @@ export default function CarScreen() {
                 <Tag key={f.key} text={f.name} color="#fff" bg={f.color} />
               ))}
             </View>
-            {car.outNow ? (
+            {car.outNow && !car.checkout ? (
               <Banner
                 kind="warn"
                 text={`🚗 ออกนอกลาน — ${car.outNow.who} · ${car.outNow.why}${car.outNow.where ? ' · ' + car.outNow.where : ''} (ตั้งแต่ ${car.outNow.since})`}
               />
             ) : null}
           </Card>
+
+          {car.checkout?.open ? <CheckoutCard code={car.code} info={car.checkout} onDone={load} /> : null}
 
           <Card style={{ gap: 12 }}>
             <Text style={st.h2}>เปลี่ยนสเตป</Text>
@@ -289,31 +257,7 @@ export default function CarScreen() {
                 <Text style={st.label}>
                   รูป / วิดีโอ {needMedia ? <Text style={{ color: C.red }}>(ต้องแนบ)</Text> : '(ถ้ามี)'}
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Btn title="📷 ถ่ายรูป" small onPress={takePhoto} style={{ flex: 1 }} />
-                  <Btn title="🖼 เลือกจากเครื่อง" small outline onPress={fromLibrary} style={{ flex: 1 }} />
-                </View>
-                {shots.length ? (
-                  <View style={st.thumbs}>
-                    {shots.map((s) => (
-                      <View key={s.uri} style={st.thumbBox}>
-                        {s.video ? (
-                          <View style={[st.thumb, st.videoThumb]}>
-                            <Text style={{ color: '#fff', fontSize: 22 }}>▶</Text>
-                          </View>
-                        ) : (
-                          <Image source={{ uri: s.uri }} style={st.thumb} />
-                        )}
-                        <Text style={[st.thumbState, s.err ? { color: C.red } : s.id ? { color: C.green } : null]}>
-                          {s.uploading ? 'กำลังอัป…' : s.err ? 'ไม่สำเร็จ' : 'อัปแล้ว'}
-                        </Text>
-                        <Pressable onPress={() => setShots((cur) => cur.filter((x) => x.uri !== s.uri))} hitSlop={8}>
-                          <Text style={{ color: C.sub, fontSize: 12 }}>ลบ</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
+                <MediaPicker u={u} />
 
                 <Text style={st.label}>
                   หมายเหตุ {needNote ? <Text style={{ color: C.red }}>(ต้องใส่)</Text> : '(ถ้ามี)'}
@@ -349,6 +293,10 @@ export default function CarScreen() {
               </View>
             ) : null}
           </Card>
+
+          {car.checkout && !car.checkout.open ? (
+            <CheckoutCard code={car.code} info={car.checkout} onDone={load} />
+          ) : null}
 
           <Card style={{ gap: 12 }}>
             <Text style={st.h2}>ประวัติ</Text>
@@ -426,10 +374,7 @@ const st = StyleSheet.create({
     textAlignVertical: 'top',
   },
   thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  thumbBox: { alignItems: 'center', gap: 2 },
-  thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: C.purpleSoft },
   videoThumb: { backgroundColor: '#1f1147', alignItems: 'center', justifyContent: 'center' },
-  thumbState: { fontSize: 11, color: C.sub },
   chkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 2 },
   chkText: { flex: 1, fontSize: 15, color: C.text },
   log: { gap: 3, borderLeftWidth: 3, borderLeftColor: C.purpleSoft, paddingLeft: 10 },

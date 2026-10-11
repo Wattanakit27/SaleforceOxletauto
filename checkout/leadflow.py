@@ -1467,3 +1467,20 @@ def summary(now=None) -> dict:
     for r in rows:
         cnt[r["kind"]] = cnt.get(r["kind"], 0) + 1
     return {"total": len(rows), "counts": cnt}
+
+
+def seller_tasks(seller_name: str, now=None) -> list:
+    """ใบจ่ายลีดของเซลล์คนเดียว 2 วันล่าสุด + นาฬิกาโทร — หน้าเซลล์ (/api/seller/today) + แอปมือถือ
+    เห็นเฉพาะใบของตัวเอง · ไม่มี LINE id · ใบทดลอง (demo) ไม่นับ"""
+    now = now or timezone.now()
+    since = timezone.make_aware(datetime.combine(timezone.localdate() - timedelta(days=1), datetime.min.time()))
+    rows = []
+    for t in (LeadTask.objects.filter(seller_name=seller_name, created_at__gte=since)
+              .order_by("-posted_at", "-id")[:60]):
+        if (t.card or {}).get("demo"):
+            continue
+        rows.append({"code": t.code, "customer": t.customer, "car": t.car, "phone": t.phone,
+                     "postedAt": _iso(t.posted_at), "dueAt": _iso(t.due_at),
+                     "reportAt": _iso(t.first_report_at), "reports": t.reports, "lastReport": t.last_report,
+                     "by": t.by, "chatId": t.chat_id, **task_state(t, now)})
+    return rows

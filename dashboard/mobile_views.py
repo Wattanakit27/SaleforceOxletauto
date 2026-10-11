@@ -74,9 +74,12 @@ def m_handoff(request, pid):
 
 def _me(user: dict) -> dict:
     """ข้อมูลคนที่ login ที่ส่งให้แอป — **ไม่ส่ง LINE user id ออก** (กติกาเดิมทั้งโปรเจกต์)"""
+    from .services.mobile_home import role_of
     pos = (user.get("position") or "").strip().lower()
     return {"nickname": user.get("nickname") or user.get("display_name") or "",
-            "position": pos, "admin": pos in ("admin", "executive", "ผู้บริหาร", "manager", "exec")}
+            "position": pos, "admin": pos in ("admin", "executive", "ผู้บริหาร", "manager", "exec"),
+            # admin · seller · worker · buyer — แอปใช้จัดแท็บ (★ 11 ต.ค.69)
+            "role": role_of(user)}
 
 
 @csrf_exempt
@@ -105,6 +108,20 @@ def m_me(request):
     if bad:
         return bad
     return _j({"ok": True, "me": _me(tok.user)})
+
+
+@require_GET
+def m_home(request):
+    """หน้า "วันนี้" ของแอป — ข้อมูลจริงก้อนเดียวต่อบทบาท (services/mobile_home.py · ★ 11 ต.ค.69)
+    ไม่มีสูตรใหม่ — ประกอบจากตัวเดียวกับเว็บ/ข้อความ LINE · ส่วนไหนพังขึ้นใน `errors` ไม่ทำให้ทั้งหน้าพัง"""
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from .services import mobile_home
+    user = dict(tok.user)
+    if request.GET.get("part") == "follow":          # ตามด่วนแยกคำขอ (อ่านชีตลีดทั้งก้อน · ไม่ให้หน้าแรกรอ)
+        return _j(mobile_home.follow_part(request, user))
+    return _j(mobile_home.build(request, user, lazy=request.GET.get("lazy") == "1"))
 
 
 @csrf_exempt
@@ -144,4 +161,38 @@ def m_car(request, code):
         "forceMedia": sorted(C.STAGE_FORCE_MEDIA), "forceNote": sorted(C.STAGE_FORCE_NOTE),
         "checklistStages": roles.checklist_stages_for(request.user), "checklistItems": C.CHECKLIST_ITEMS,
     }
+    data["checkout"] = _checkout_info(request, code)
     return _j(data)
+
+
+def _checkout_info(request, code):
+    """เบิก-คืนรถของคันนี้ — ตัวเดียวกับหน้าสแกน (cars.views._checkout_ctx) แต่เป็น JSON ให้แอป
+    ยิงจริงผ่าน API เดิม `/checkout/api/car_out` · `car_return` (เซิร์ฟเวอร์ตรวจจำนวนรูปซ้ำอีกชั้น)
+    checkout ยังไม่ migrate/ล่ม = None (แอปซ่อนส่วนนี้ · หน้ารถยังเปิดได้)"""
+    try:
+        from django.utils import timezone
+        from checkout import constants as CK
+        from checkout import people
+        from checkout.views import _actor_name, open_movement_for, web_checklist
+        mv = open_movement_for(code)
+        out_items, in_items = web_checklist("out"), web_checklist("in")
+        cur = None
+        if mv:
+            hrs = ((timezone.now() - mv.checked_out_at).total_seconds() / 3600) if mv.checked_out_at else 0
+            cur = {"who": people.safe_name(mv.borrower_name), "mine": mv.borrower_name == _actor_name(request),
+                   "purpose": mv.purpose or "", "destination": mv.destination or "",
+                   "since": timezone.localtime(mv.checked_out_at).isoformat(timespec="seconds")
+                   if mv.checked_out_at else "", "hours": round(hrs, 1), "fuel": bool(mv.fuel_requested)}
+        return {
+            "open": cur,
+            "purposes": [{"key": k, "name": n} for k, n, _i in CK.PURPOSES],
+            "outMin": sum(i["min_count"] for i in out_items if i.get("required")),
+            "inMin": sum(i["min_count"] for i in in_items if i.get("required")),
+            "outItems": [i["label"] for i in out_items if i.get("required")],
+            "inItems": [i["label"] for i in in_items if i.get("required")],
+            "shotsOut": [{"key": k, "name": n} for k, n in CK.SHOT_ANGLES_OUT],
+            "shotsIn": [{"key": k, "name": n} for k, n in CK.SHOT_ANGLES_IN],
+            "overdueHours": CK.OVERDUE_HOURS,
+        }
+    except Exception:
+        return None

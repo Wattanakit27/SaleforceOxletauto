@@ -145,8 +145,9 @@ python manage.py runserver
 | `/api/v1/employees` | `api_v1_employees` | **API สาธารณะ** GET: รายชื่อพนักงาน — `userId`(LINE) · `displayName` · `nickname` · `position` · `groupId` · กรองได้ `?nickname=` `?user_id=` `?position=` `?q=` |
 | `/api/v1/groups` | `api_v1_groups` | **API สาธารณะ** GET: กลุ่ม LINE — **รวม 2 ที่**: KVStore `line_groups` (บอทจำเอง มีชื่อกลุ่ม) + **คอลัมน์ group id ในชีตพนักงาน** (ใช้ได้ทันทีไม่ต้องรอบอท) · คืน `groupId`/`name`/`lastSeen`/`source`(bot\|sheet\|both)/`employeeCount` |
 | `/m/login` · `/m/handoff/<pid>` | `mobile_views.m_login` · `m_handoff` | **login ของแอปมือถือ** (9 ต.ค.69) — แอปเปิดเบราว์เซอร์ที่ `/m/login?r=<ที่อยู่กลับเข้าแอป>&c=<PKCE challenge>&via=line\|pw` → LINE Login / หน้า `/login/` (คนงานใช้ชื่อผู้ใช้+รหัส) → `/m/handoff/<pid>` ส่งรหัสใช้ครั้งเดียวกลับเข้าแอป · ดู section "แอปมือถือ" |
-| `/api/m/token` · `/api/m/me` · `/api/m/logout` | `mobile_views.*` | แอปแลกรหัส+PKCE verifier เป็น token (30 วัน · เก็บแฮช) · ดูตัวเอง · ยกเลิก token · **ไม่คืน LINE user id** |
-| `/track/api/m/car/<code>` | `mobile_views.m_car` | แอปเปิดรถจาก QR = `car_json` + `role` + `rules` (สเตปไหนต้องแนบรูป/หมายเหตุ · เช็คลิสต์) · อยู่ใต้ `/track/` ให้ bridge login ระบบรถทำงาน |
+| `/api/m/token` · `/api/m/me` · `/api/m/logout` | `mobile_views.*` | แอปแลกรหัส+PKCE verifier เป็น token (30 วัน · เก็บแฮช) · ดูตัวเอง (`me.role` = admin\|seller\|worker\|buyer · แอปใช้จัดแท็บ) · ยกเลิก token · **ไม่คืน LINE user id** |
+| `/api/m/home` | `mobile_views.m_home` | **หน้า "วันนี้" ของแอป** (11 ต.ค.69 · `services/mobile_home.py`) — ข้อมูลจริงก้อนเดียวต่อบทบาท · `?lazy=1` = ไม่รวม "ตามด่วน" (แอปขอแยก) · `?part=follow` = เฉพาะตามด่วนของเซลล์ · ส่วนไหนพังขึ้นใน `errors` · ดู section "แอปมือถือ" |
+| `/track/api/m/car/<code>` | `mobile_views.m_car` | แอปเปิดรถจาก QR = `car_json` + `role` + `rules` (สเตปไหนต้องแนบรูป/หมายเหตุ · เช็คลิสต์) + **`checkout`** (เบิก-คืนรถ: ใครเบิกอยู่/ของฉันไหม · ประเภทงาน · รูปขั้นต่ำ · มุมที่ต้องถ่าย · 11 ต.ค.69) · อยู่ใต้ `/track/` ให้ bridge login ระบบรถทำงาน |
 | `/api/cron/sync` | `cron_sync` | public (`?secret=xxx`) — sync sheets → Supabase `sheet_cache` + precompute dashboard (cron tick ตัวเดียวก็พอ · นี่เป็น endpoint แยกสำรอง) |
 | `/api/cron/send_line` | `cron_send_line` | public (`?secret=xxx`) — ส่ง Flex แบบ one-shot, manual params |
 | `/api/cron/tick` | `cron_tick` | public (`?secret=xxx`) — (1) sync mirror+precompute **ทุก ~3-4 นาที** (ผลเก่า >180วิ · ห้ามลดต่ำ — ดู "บทเรียน server ล่ม") (2) ส่งแจ้งเตือน **"ตามด่วน" รายเซลล์ ตามเวลาในชีต "ตั้งเวลาส่ง"** (default 09:00/13:00 · แก้เวลา/ผู้รับ/test ในหน้า "ตารางเวลา (Auto)") — cron อ่าน `load_schedules`+`schedule_matches_now` แล้วยิง `build_followup_messages` (3) เขียน heartbeat `cron_tick` + followup log `cron_followup` (Supabase kv) → หน้าสถานะระบบโชว์ "cron ทำงานล่าสุด" |
@@ -4468,8 +4469,8 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   · `via=pw` → `/login/` (คนงานกรอกชื่อผู้ใช้+รหัส) · `login_view` อนุญาต next `/m/handoff/` แล้ว
   · ตาราง **`dash_mobile_login`** (ใบผ่านทาง · ลบเองเกิน 1 วัน) + **`dash_mobile_token`** (เก็บแฮช · 30 วัน)
     — dashboard migration **0015** · เติมใน `db_inventory.TABLES` แล้ว · login จดใน `dash_event_log` kind=`mobile`
-- **ในแอป** (แถบล่าง 3 แท็บ `src/app/(tabs)/` · **หน้าแรกหลัง login = แชท** ตามที่เจ้าของสั่ง "ระบบที่อยากให้เห็นก่อนคือแชท" ·
-  คนงานซ่อนแท็บแชท เปิดมาที่สแกน · ตัวเลขบนแท็บแชทจาก `/connect/api/summary` ทุก 30 วิ · ค้นหา ชื่อ/เบอร์/เลขลีด ผ่าน `inbox?q=`):
+- **ในแอป** (แถบล่าง `src/app/(tabs)/` · จัดตามบทบาท — ดู "11 ต.ค.69 ข้อมูลจริง" ข้างล่าง · **หน้าแรกหลัง login = แชท** ตามที่เจ้าของสั่ง "ระบบที่อยากให้เห็นก่อนคือแชท" ·
+  คนงาน/จัดซื้อซ่อนแท็บแชท เปิดมาที่ "วันนี้" · ตัวเลขบนแท็บแชทจาก `/connect/api/summary` ทุก 30 วิ · ค้นหา ชื่อ/เบอร์/เลขลีด ผ่าน `inbox?q=`):
   แชทลูกค้า (คิวรอรับ/ลูกค้าของฉัน · แอดมิน: รอรับ/มีเจ้าของ/ทั้งหมด · รีเฟรชทุก 5–10 วิ · ตอบ/รับลูกค้า ·
   **ถามยืนยันครั้งแรกก่อนตอบลูกค้าจริงในแต่ละแชท**) · สแกน QR → หน้ารถ → เปลี่ยนสเตป (ปุ่มตามบทบาท แยกเฟส ·
   ถ่าย/เลือกรูป อัปทันทีเข้า `/track/api/upload` · เช็คลิสต์ตรวจรถรูปแบบเดียวกับเว็บ `[ตรวจรถ] ❌/✅`)
@@ -4480,7 +4481,34 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   · ตัวกรองจากหน้าแจ้งเตือนส่งผ่าน param `preset` (ปรับ state ตอน render ไม่ใช้ effect — กฎ lint ของ React) · ดู section "หน้ารวมแชท"
 - **★ 11 ต.ค.69 รูปที่ลูกค้าส่งขึ้นในแชทแล้ว** — `<Image source={{uri, headers: authHeaders()}}>` (ลิงก์ `/connect/api/media` ต้องแนบ token ·
   `authHeaders()` ใน `src/lib/api.ts`) · แตะรูป = ดูเต็มจอ · **วิดีโอ/เสียง/ไฟล์อื่น = บอกให้เปิดในหน้าเว็บ** (เบราว์เซอร์ของระบบแนบ token ไม่ได้)
-- **ยังไม่มี**: push แจ้งเตือน · ส่งรูปหาลูกค้า · จ่ายเบอร์ · ตั้งความด่วน/ธง (ใช้เว็บ) · เล่นวิดีโอ/เปิดไฟล์ที่ลูกค้าส่งในแอป
+- **★★ 11 ต.ค.69 — เอาหน้าจอของต้นแบบมาใส่ข้อมูลจริง** (*"อยากให้คุณเอาข้อมูลจริงลงในหน้าแอปเลย"* — ต้นแบบใช้ข้อมูลสมมติ)
+  - **แท็บตามบทบาท** (`(tabs)/_layout.tsx` · บทบาทจาก `me.role` ของ `/api/m/me` · ของที่จำไว้รุ่นเก่าไม่มี role → `roleOf()` เดาจากตำแหน่ง):
+    เซลล์ **แชท · วันนี้ · รถ · ฉัน** · แอดมิน **แชท · ภาพรวม · ห้องพัก · รถ · ฉัน** · คนงาน **งานวันนี้ · รถ · ฉัน** · จัดซื้อ **วันนี้ · รถ · ฉัน**
+    · **login แล้วยังเปิดมาที่แชท** (เจ้าของสั่ง 9 ต.ค.) — ต้นแบบวาง "วันนี้" ไว้แรก ถ้าจะสลับ แก้ลำดับ `Tabs.Screen` + Redirect ใน `(tabs)/index.tsx`
+    · **สแกน QR ย้ายจากแท็บมาเป็นหน้าซ้อน `app/scan.tsx`** (ปุ่มบนแท็บ "รถ" + หน้า "งานวันนี้" ของคนงาน) · จัดซื้อไม่มีแท็บแชท (`canChat`)
+  - **`GET /api/m/home`** ([mobile_home.py](dashboard/services/mobile_home.py)) — **ไม่มีสูตรใหม่สักตัว** ประกอบจากตัวเดียวกับเว็บ/LINE:
+    ตามด่วน+ดีลค้าง = `fetch_dashboard.seller_followups` · ยอดเดือน = `monthlySummary` ที่ cron อุ่นไว้ · คะแนน = `compute_diligence_scores` ·
+    ใบจ่ายลีด = `leadflow.seller_tasks` · งานจัดซื้อ = `purchase_page.summary` · เช็คชื่อ = `CheckIn` (ของตัวเอง `checkin` · แอดมินทั้งบริษัท `staff`
+    — "ยังไม่มา" นับเฉพาะคนที่**เลยเวลาเข้างานของตัวเองแล้ว**) · คิวรถคนงาน = รถในสเตปที่ `STAGE_OWNER` เป็นทีมเขา (เรียงแบบบอร์ด) · รถที่ฉันเบิก = `CarMovement` ค้างของชื่อเล่นฉัน
+    · **ทุกส่วนห่อ try แยก** (พัง = `errors[<ส่วน>]` · ส่วนอื่นยังมา) · จำผลส่วนหนัก 60 วิ/process
+  - **★ แยกสมอง "ตามด่วน" ออกจาก `build_followup_messages` เป็นฟังก์ชันระดับโมดูล** (`fu_idle/fu_cadence/fu_skip/fu_booked/fu_urgency/
+    fu_reason/fu_stuck/fu_collect/fu_rank` · `FU_WINDOW_DAYS`=14) → แอปกับข้อความ LINE ใช้สูตรเดียว · **ตรวจกับชีตจริงแล้ว: ข้อความ LINE
+    ทั้ง 13 ข้อความเหมือนเดิมทุกตัวอักษร** + ลำดับลีดของ `seller_followups` ตรงกับข้อความของเซลล์คนนั้น · แก้สูตร = แก้ที่ฟังก์ชันเหล่านี้ที่เดียว
+  - **ตามด่วนโหลดแยกคำขอ** (`?lazy=1` แล้ว `?part=follow`) — ต้องอ่านชีตลีดทั้งก้อน (`fetch_all_sheets` จำแค่ 60 วิต่อ worker · เย็น ~8 วิบน VPS)
+    หน้าจอขึ้นส่วนอื่นทันที · ตอนรีเฟรชทุก 60 วิโชว์ตามด่วนรอบก่อนไว้ (ไม่กะพริบ) · วัดจริง: อุ่นแล้ว 0.04–3 วิ
+  - **ห้องพัก Lead (แอดมิน · `(tabs)/hub.tsx`)** = `inbox?view=tocode` ตัวเดียวกับเว็บ · กดชื่อเซลล์ = `assign_lead`/`park_assign` เดิม
+    (ปุ่มแรก = คิวถัดไป) · **ถามยืนยันทุกครั้งก่อนส่งใบเข้ากลุ่ม** + **เบอร์ซ้ำถามอีกชั้น** (เหมือนเว็บ) · "ไม่ต้องจ่ายเบอร์" · จ่ายแล้ววันนี้
+    · ไม่มี Run Auto / ตั้งเลขเอง / ไม้ 2 (ใช้เว็บ) · ป้ายแท็บ = `summary.counts.tocode + parked` (**`/connect/api/summary` ของแอดมินเพิ่ม `parked`**)
+  - **รถ (`(tabs)/cars.tsx`)** = `/track/api/cars` · ค้นหา · กรอง พร้อมขาย/ค้างนาน/ออกนอกลาน/ฉันเบิกอยู่/รายเฟส · **`cars_api` เพิ่ม `out`
+    ต่อคัน** (`{who, purpose, mine, since}` — ชื่อเล่นเท่านั้น · เว็บไม่ได้ใช้ ไม่กระทบบอร์ด)
+  - **เบิก-คืนรถในหน้ารถ** ([lib/checkout.tsx](mobile/src/lib/checkout.tsx)) = `/checkout/api/car_out` · `car_return` เดิม · รูปขั้นต่ำ + ติ๊กมุม
+    (ไม่ครบยังบันทึกได้ กติกาเดียวกับเว็บ) · คืนรถแทนคนอื่นถามก่อน · ตัวอัปโหลดรูปย้ายมา [lib/media.tsx](mobile/src/lib/media.tsx) ใช้ร่วมกับเปลี่ยนสเตป
+  - **ฉัน** = เช็คชื่อวันนี้ + คะแนนแยก 6 ด้าน (เซลล์) · **ออกจากระบบ/หมดเวลา = ล้างข้อมูลหน้า "วันนี้" ในเครื่อง** (`clearHome` — เครื่องเดียวใช้หลายคน)
+  - **เช็คชื่อด้วยเซลฟี่+พิกัดแบบในต้นแบบ ไม่ได้ทำ** — ระบบจริงเช็คชื่อด้วยรูปในกลุ่ม LINE ผ่าน n8n (แอปแค่โชว์ผล)
+  - **เทสต์**: `python scripts/test_mobile_home.py` (66 ข้อ · test client จริง · ปลอมแค่ชีต/ผลแดชบอร์ด) — ตามด่วน/ดีลค้าง/ใบจ่ายลีดไม่มีของคนอื่น ·
+    ปุ่มเปิดแชทเฉพาะแชทของตัวเอง · เช็คชื่อ (สาย X นาที · ยังไม่ถึงเวลา/วันหยุด/ผู้บริหารไม่นับ) · คิวรถตามบทบาท · จัดซื้อเห็นเฉพาะของตัวเอง ·
+    ส่วนหนึ่งพังไม่ลากทั้งหน้า · **ไม่มี LINE user id หลุด** · `seller_today` เดิมยังได้ผลเดิม · แอป `tsc` + `expo lint` + bundle iOS ผ่าน
+- **ยังไม่มี**: push แจ้งเตือน · ส่งรูปหาลูกค้า · ตั้งความด่วน/ธง (ใช้เว็บ) · เล่นวิดีโอ/เปิดไฟล์ที่ลูกค้าส่งในแอป · Run Auto/ไม้ 2/ตั้งเลขเอง ในห้องพัก (ใช้เว็บ)
 - **ต้นแบบ + วิดีโอสอน** (9 ต.ค.69 · **ย้ายออกจากโปรเจกต์แล้ว 10 ต.ค.69** → `Downloads/oxlet-mobile-prototype/` เครื่องผู้พัฒนา · ต้นแบบ https://claude.ai/artifact/XEmbwUNwLcbPEz2fj1iADH · คู่มือวิดีโอมีเสียงพากย์ https://claude.ai/artifact/9Rrspbmts7eZV1GGsKHoec): ต้นแบบ HTML 4 บทบาท (ข้อมูลสมมติ) + หัวข้อทรัพยากร/ค่าใช้จ่าย (50–60 คน: เซิร์ฟเวอร์เดิมพอ · ปีแรก ~4,400 บาท) · วิดีโอสอนเซลล์/แอดมิน (Playwright + เสียงพากย์ — ชุดแรกทำด้วย Gemini TTS · **10 ต.ค.69 ห้ามใช้ API พากย์เสียงแล้ว** `tts.py` เปลี่ยนเป็นเสียง Windows ออฟไลน์ "Microsoft Pattara") · **ข้อค้นพบจากการวัด: nginx ไม่บีบอัด JSON (`gzip_types` ถูกคอมเมนต์ไว้ = บีบแค่ HTML)** · worker 5 ตัวตึงตอนอัปรูปพร้อมกัน 8 โมง
 - **เทสต์**: `python scripts/test_mobile_api.py` (67 ข้อ · test client จริงทั้งสาย middleware · ปลอมแค่ชีตพนักงาน)
   · แอป: `cd mobile && npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)

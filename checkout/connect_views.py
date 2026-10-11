@@ -177,6 +177,12 @@ def api_summary(request):
     on_duty = bool(ctx["team"]) and ctx["team"] == duty["today"]
     if not ctx["admin"] and not on_duty:
         cnt["queue"] = 0                        # ไม่ใช่วันเวร = ไม่ต้องเห็นคิว
+    if ctx["admin"]:
+        try:                                    # ★ 11 ต.ค.69 ใบร่างในห้องพัก Lead (ป้ายแท็บ "ห้องพัก" ของแอป · จำผล 30 วิ)
+            from .leadpark import board
+            cnt["parked"] = board()["stats"]["waiting"]
+        except Exception:
+            pass
     return _j({"ok": True, "counts": cnt, "duty": duty, "onDuty": on_duty,
                "admin": ctx["admin"]})
 

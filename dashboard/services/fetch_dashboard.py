@@ -2756,114 +2756,135 @@ def _flat_rounds(kv):
     return out
 
 
-def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: bool = False) -> list[dict]:
-    """ข้อความ "ตามด่วน" รายเซลล์ (ข้อความธรรมดา) — สมองเดียวกับ seller.html (followUrgency + cadence + ดีลค้าง)
-    คืน [{"seller", "user_id", "text"}] เฉพาะเซลล์ที่มีเคส + มี user_id · กรองเฉพาะลีดย้อนหลัง 14 วัน (rolling)
-    """
-    from collections import defaultdict
-    from datetime import timedelta
-    from .google_sheets import fetch_all_sheets, cell, cell_num, LEADS_COL as L, SALES_COL as S
-    from .constants import (normalize_seller, ALL_SELLERS, refresh_from_sheet,
-                            ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids,
-                            TELE_USER_IDS, load_tele_user_ids, TEAM_ID)
-    from .line_notify import get_nickname_to_user_id
+# ── สมอง "ตามด่วน" (ระดับโมดูล) — ใช้ร่วม 2 ที่: ข้อความ LINE ทุกเช้า (build_followup_messages)
+#    และหน้า "วันนี้" ของแอปมือถือ (seller_followups) → สูตรเดียว ตัวเลขตรงกันเสมอ (★ 11 ต.ค.69)
+#    lead dict ต้องมี: leadScore leadTier updateCount customerStatus followPriority lastUpdate dateIn adminStatus salesStatus
+def _fu_days(s, today):
+    d = parse_date(str(s or "").split(" ")[0].strip())
+    return (today - d).days if d else None
 
-    refresh_from_sheet()
-    load_admin_user_ids()
-    load_tele_user_ids()
-    raw = fetch_all_sheets()
-    raw_leads = raw.get("leads") or []
-    sales_reports = raw.get("sales_reports") or []
-    ctx = prepare_lead_score_context(raw_leads, sales_reports)
-    nick2uid = get_nickname_to_user_id()
-    today = bangkok_now().date()
-    win_start = today - timedelta(days=14)   # ทวงเฉพาะลีดย้อนหลัง 14 วัน (rolling · ไม่บวมตามเดือน)
-    date_str = f"{today.day} {_FU_TH_MON[today.month]} {(today.year + 543) % 100:02d}"  # เช่น "13 มิ.ย. 69"
 
-    def _ds(s):
-        d = parse_date(str(s or "").split(" ")[0].strip())
-        return (today - d).days if d else None
+def _fu_in_window(s, win_start) -> bool:
+    d = parse_date(str(s or "").split(" ")[0].strip())
+    return bool(d) and d >= win_start
 
-    def _inwin(s):
-        d = parse_date(str(s or "").split(" ")[0].strip())
-        return bool(d) and d >= win_start
 
-    def _idle(l):
-        d = _ds(l["lastUpdate"])
-        if d is None:
-            d = _ds(l["dateIn"])
-        return max(0, d) if d is not None else 0
+def fu_idle(l, today) -> int:
+    """ลีดนี้ไม่มีใครแตะมากี่วัน — นับจากอัปเดตล่าสุด ไม่มีค่อยนับจากวันรับลีด"""
+    d = _fu_days(l["lastUpdate"], today)
+    if d is None:
+        d = _fu_days(l["dateIn"], today)
+    return max(0, d) if d is not None else 0
 
-    def _cad(l):
-        z = l["customerStatus"] or ""
-        for k, v in _FU_CADENCE.items():
-            if k in z:
-                return v
-        return 2
 
-    # ── "ไม่ต้องตาม" = ดูคอลัม Z (สถานะลูกค้า) ร่วมกับ AB (Status แอดมิน) + เซลล์ — อันใดอันหนึ่งเข้าเงื่อนไข = ตัด ──
-    # (เดิม _booked ดูแค่ Z ถ้า Z มีค่า → เคส Z=ติดตาม แต่ AB=จอง/ปล่อย หลุดมาโดนตามผิด)
-    # ตัวอย่าง: Z ว่าง·AB=ยกเลิก → ตัด · Z=คืนเคส·AB=ติดตาม → ตัด (คำเสียใน Z ชนะ) · Z=ติดตาม·AB=จอง → ตัด (booked จาก AB)
-    def _skip(l):
-        z = l["customerStatus"] or ""
-        if any(k in z for k in _FU_DEAD):            # คำ "เคสเสีย" ของ Z (controlled vocab)
-            return True
-        # ยกเลิก/คืนเคส/จ่ายใหม่/จบ/ส่งมอบ... ที่ไหนก็ตาม (Z หรือ AB หรือเซลล์)
-        st = (z + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")).lower()
-        return any(k.lower() in st for k in _FU_SKIP)
+def fu_cadence(l) -> int:
+    z = l["customerStatus"] or ""
+    for k, v in _FU_CADENCE.items():
+        if k in z:
+            return v
+    return 2
 
-    def _booked(l):
-        # จอง/ปล่อย/ส่งมอบ/ได้รถแล้ว ที่คอลัมไหนก็ตาม (Z + AB + เซลล์) = ไม่ตามเป็นลีดใหม่
-        blob = (l["customerStatus"] or "") + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")
-        return any(k in blob for k in ("จอง", "ส่งมอบ", "ได้รถแล้ว", "ปล่อย"))
 
-    def _urg(l):
-        score = l["leadScore"] or 0
-        updates = l["updateCount"] or 0
-        cp = l["followPriority"] or 0
-        idle = min(_idle(l), 21)
-        z = l["customerStatus"] or ""
-        if "ไม่รับสาย" in z and updates >= _FU_NOANS_CAP:
-            return -1
-        if updates == 0:
-            return 120 + (score / 100) * idle * 9 + cp * 6 + idle * 2
-        over = idle - _cad(l)
-        u = cp * 6
-        if over >= 0:
-            u += 40 + (score / 100) * over * 9 + over * 2
+# ── "ไม่ต้องตาม" = ดูคอลัม Z (สถานะลูกค้า) ร่วมกับ AB (Status แอดมิน) + เซลล์ — อันใดอันหนึ่งเข้าเงื่อนไข = ตัด ──
+# (เดิม _booked ดูแค่ Z ถ้า Z มีค่า → เคส Z=ติดตาม แต่ AB=จอง/ปล่อย หลุดมาโดนตามผิด)
+# ตัวอย่าง: Z ว่าง·AB=ยกเลิก → ตัด · Z=คืนเคส·AB=ติดตาม → ตัด (คำเสียใน Z ชนะ) · Z=ติดตาม·AB=จอง → ตัด (booked จาก AB)
+def fu_skip(l) -> bool:
+    z = l["customerStatus"] or ""
+    if any(k in z for k in _FU_DEAD):            # คำ "เคสเสีย" ของ Z (controlled vocab)
+        return True
+    # ยกเลิก/คืนเคส/จ่ายใหม่/จบ/ส่งมอบ... ที่ไหนก็ตาม (Z หรือ AB หรือเซลล์)
+    st = (z + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")).lower()
+    return any(k.lower() in st for k in _FU_SKIP)
+
+
+def fu_booked(l) -> bool:
+    # จอง/ปล่อย/ส่งมอบ/ได้รถแล้ว ที่คอลัมไหนก็ตาม (Z + AB + เซลล์) = ไม่ตามเป็นลีดใหม่
+    blob = (l["customerStatus"] or "") + " " + (l["adminStatus"] or "") + " " + (l["salesStatus"] or "")
+    return any(k in blob for k in ("จอง", "ส่งมอบ", "ได้รถแล้ว", "ปล่อย"))
+
+
+def fu_urgency(l, today) -> float:
+    score = l["leadScore"] or 0
+    updates = l["updateCount"] or 0
+    cp = l["followPriority"] or 0
+    idle = min(fu_idle(l, today), 21)
+    z = l["customerStatus"] or ""
+    if "ไม่รับสาย" in z and updates >= _FU_NOANS_CAP:
+        return -1
+    if updates == 0:
+        return 120 + (score / 100) * idle * 9 + cp * 6 + idle * 2
+    over = idle - fu_cadence(l)
+    u = cp * 6
+    if over >= 0:
+        u += 40 + (score / 100) * over * 9 + over * 2
+    else:
+        u *= 0.35
+    return u
+
+
+def fu_reason(l, today) -> str:
+    updates = l["updateCount"] or 0
+    idle = fu_idle(l, today)
+    hot = "hot" in (l["leadTier"] or "")
+    over = idle - fu_cadence(l)
+    z = l["customerStatus"] or ""
+    if updates == 0:
+        return "ยังไม่โทรเลย"
+    if "ไม่รับสาย" in z:
+        return f"ไม่รับสาย ลองครั้งที่ {updates + 1}"
+    if hot and over >= 0:
+        return f"ฮอท ค้าง {idle} วัน"
+    if over >= 2:
+        return f"เลยรอบตาม {over} วัน"
+    if over >= 0:
+        return "ถึงรอบตาม"
+    if (l["followPriority"] or 0) >= 7:
+        return "ลูกค้าสนใจมาก"
+    return "ตามต่อ"
+
+
+def fu_stuck(bcs, today, win_start) -> list:
+    """ดีลค้าง (จองแล้วยังไม่เซ็น · รอผลนาน · รอปล่อยค้าง) → [(ดีล, เหตุผล, กี่วัน)] ค้างนานสุดก่อน"""
+    out = []; seen = set()
+    for b in bcs:
+        st = b.get("status", "") or ""
+        if not _fu_in_window(b.get("date"), win_start):
+            continue
+        key = (b.get("customer", ""), b.get("plate", ""), st, b.get("date", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        sd = b.get("signDate"); sd = sd if sd and sd != "-" else None
+        if "รอเซ็น" in st or ("จอง" in st and not sd):
+            d = _fu_days(b.get("date"), today); rs, lo = "ค้างเซ็น", 3
+        elif "รอผล" in st:
+            d = _fu_days(sd or b.get("date"), today); rs, lo = "รอผลไฟแนนซ์นาน", 5
+        elif "รอปล่อย" in st:
+            d = _fu_days(b.get("resultDate") or sd or b.get("date"), today); rs, lo = "รอปล่อยค้าง", 3
         else:
-            u *= 0.35
-        return u
+            continue
+        if d is None or d <= lo:
+            continue
+        out.append((b, rs, d))
+    out.sort(key=lambda x: -x[2])
+    return out
 
-    def _reason(l):
-        updates = l["updateCount"] or 0
-        idle = _idle(l)
-        hot = "hot" in (l["leadTier"] or "")
-        over = idle - _cad(l)
-        z = l["customerStatus"] or ""
-        if updates == 0:
-            return "ยังไม่โทรเลย"
-        if "ไม่รับสาย" in z:
-            return f"ไม่รับสาย ลองครั้งที่ {updates + 1}"
-        if hot and over >= 0:
-            return f"ฮอท ค้าง {idle} วัน"
-        if over >= 2:
-            return f"เลยรอบตาม {over} วัน"
-        if over >= 0:
-            return "ถึงรอบตาม"
-        if (l["followPriority"] or 0) >= 7:
-            return "ลูกค้าสนใจมาก"
-        return "ตามต่อ"
 
+def fu_collect(raw_leads, sales_reports, score_cfg, win_start, only: str = ""):
+    """ลีด (ย้อนหลังถึง win_start) + ดีลจากชีตยอดขาย แยกตามเซลล์ — เฉพาะเซลล์ในทีม + ADMIN
+    `only` = เอาเซลล์คนเดียว (แอปมือถือ · ไม่ต้องคำนวณคะแนนลีดของทุกคน)"""
+    from collections import defaultdict
     leads_by_seller = defaultdict(list)
     for r in raw_leads:
         name = normalize_seller(cell(r, L.sales_rep))
         if not name or (name not in ALL_SELLERS and name != "ADMIN"):
             continue
-        if not _inwin(cell(r, L.received_date)):
+        if only and name != only:
+            continue
+        if not _fu_in_window(cell(r, L.received_date), win_start):
             continue
         try:
-            ls = compute_lead_score(r, ctx["cfg"])
+            ls = compute_lead_score(r, score_cfg)
         except Exception:
             ls = {"score": 0, "tier": "❄cold"}
         leads_by_seller[name].append({
@@ -2873,12 +2894,17 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: b
             "followPriority": customer_status_priority(cell(r, L.customer_status)),
             "lastUpdate": cell(r, L.last_updated_at), "dateIn": cell(r, L.received_date),
             "adminStatus": cell(r, L.admin_status), "salesStatus": cell(r, L.sales_status),
+            # ใช้แค่ในแอป (ข้อความ LINE ใช้แค่ code) — ลีดของเซลล์คนนั้นเอง
+            "car": cell(r, L.car_inquiry) or cell(r, L.car_formula), "phone": cell(r, L.phone),
+            "leadType": cell(r, L.type),
         })
 
     bookings_by_seller = defaultdict(list)
     for r in sales_reports:
         seller = normalize_seller(cell(r, S.sales_rep).replace("ชื่อเซลล์ ", "").replace("ชื่อเซลล์", "").strip())
         if not seller or (seller not in ALL_SELLERS and seller != "ADMIN"):
+            continue
+        if only and seller != only:
             continue
         seq = cell(r, S.order_num)
         if not seq or seq == "ลำดับ":
@@ -2894,48 +2920,82 @@ def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: b
             "status": status.replace(" (ซื้อสด)", "").strip(),
             "customer": cell(r, S.customer_name), "plate": cell(r, S.license_plate),
             "date": cell(r, S.date), "signDate": cell(r, S.sign_date), "resultDate": result_date_for(r),
+            "car": cell(r, S.car_detail), "leadCode": cell(r, S.lead_code).strip(),
         })
+    return leads_by_seller, bookings_by_seller
 
-    def _stuck(bcs):
-        out = []; seen = set()
-        for b in bcs:
-            st = b.get("status", "") or ""
-            if not _inwin(b.get("date")):
-                continue
-            key = (b.get("customer", ""), b.get("plate", ""), st, b.get("date", ""))
-            if key in seen:
-                continue
-            seen.add(key)
-            sd = b.get("signDate"); sd = sd if sd and sd != "-" else None
-            if "รอเซ็น" in st or ("จอง" in st and not sd):
-                d = _ds(b.get("date")); rs, lo = "ค้างเซ็น", 3
-            elif "รอผล" in st:
-                d = _ds(sd or b.get("date")); rs, lo = "รอผลไฟแนนซ์นาน", 5
-            elif "รอปล่อย" in st:
-                d = _ds(b.get("resultDate") or sd or b.get("date")); rs, lo = "รอปล่อยค้าง", 3
-            else:
-                continue
-            if d is None or d <= lo:
-                continue
-            out.append((b, rs, d))
-        out.sort(key=lambda x: -x[2])
-        return out
+
+def fu_rank(leads, bookings, today, win_start) -> dict:
+    """ของเซลล์ 1 คน: ลีดที่ต้องตาม (เรียงด่วนสุดก่อน) · ดีลค้าง · ตัวนับ ยังไม่โทร/ค้างเกิน 7 วัน/ไม่มีสถานะ"""
+    active = [l for l in leads if not fu_skip(l) and not fu_booked(l)]
+    urgent = [l for l in active if fu_urgency(l, today) > 0]
+    urgent.sort(key=lambda l: fu_urgency(l, today), reverse=True)
+    return {
+        "urgent": urgent,
+        "deals": fu_stuck(bookings, today, win_start),
+        "notCalled": sum(1 for l in active if (l["updateCount"] or 0) == 0),       # ยังไม่โทร
+        "stale": sum(1 for l in active if fu_idle(l, today) > 7),                   # ค้างเกิน 7 วัน
+        "noStatus": sum(1 for l in active if not (l["customerStatus"] or "").strip()
+                        and not (l["adminStatus"] or "").strip()
+                        and not (l["salesStatus"] or "").strip()),                  # ไม่มีสถานะเลย
+    }
+
+
+FU_WINDOW_DAYS = 14     # ทวงเฉพาะลีดย้อนหลัง 14 วัน (rolling · ไม่บวมตามเดือน)
+
+
+def seller_followups(seller_name: str) -> dict:
+    """"ตามด่วน" ของเซลล์คนเดียว — สูตรเดียวกับข้อความ LINE ทุกเช้า (แอปมือถือ · หน้า "วันนี้")"""
+    from datetime import timedelta
+    from .constants import refresh_from_sheet
+    refresh_from_sheet()
+    raw = fetch_all_sheets()
+    raw_leads = raw.get("leads") or []
+    sales_reports = raw.get("sales_reports") or []
+    ctx = prepare_lead_score_context(raw_leads, sales_reports)
+    today = bangkok_now().date()
+    win_start = today - timedelta(days=FU_WINDOW_DAYS)
+    lbs, bbs = fu_collect(raw_leads, sales_reports, ctx["cfg"], win_start, only=seller_name)
+    out = fu_rank(lbs.get(seller_name, []), bbs.get(seller_name, []), today, win_start)
+    out["today"] = today
+    return out
+
+
+def build_followup_messages(max_leads: int = 5, max_deals: int = 5, log_daily: bool = False) -> list[dict]:
+    """ข้อความ "ตามด่วน" รายเซลล์ (ข้อความธรรมดา) — สมองเดียวกับ seller.html (followUrgency + cadence + ดีลค้าง)
+    คืน [{"seller", "user_id", "text"}] เฉพาะเซลล์ที่มีเคส + มี user_id · กรองเฉพาะลีดย้อนหลัง 14 วัน (rolling)
+    """
+    from datetime import timedelta
+    from .constants import (ALL_SELLERS, refresh_from_sheet,
+                            ADMIN_SELLERS, ADMIN_USER_IDS, load_admin_user_ids,
+                            TELE_USER_IDS, load_tele_user_ids, TEAM_ID)
+    from .line_notify import get_nickname_to_user_id
+
+    refresh_from_sheet()
+    load_admin_user_ids()
+    load_tele_user_ids()
+    raw = fetch_all_sheets()
+    raw_leads = raw.get("leads") or []
+    sales_reports = raw.get("sales_reports") or []
+    ctx = prepare_lead_score_context(raw_leads, sales_reports)
+    nick2uid = get_nickname_to_user_id()
+    today = bangkok_now().date()
+    win_start = today - timedelta(days=FU_WINDOW_DAYS)
+    date_str = f"{today.day} {_FU_TH_MON[today.month]} {(today.year + 543) % 100:02d}"  # เช่น "13 มิ.ย. 69"
+
+    def _reason(l):
+        return fu_reason(l, today)
+
+    leads_by_seller, bookings_by_seller = fu_collect(raw_leads, sales_reports, ctx["cfg"], win_start)
 
     out = []
     # summary: (name, n_follow, n_stuck, n_notcalled, n_stale7, n_nostatus) — กลุ่มที่มีงานค้าง (รวม ADMIN)
     summary = []
     admin_recip = sorted(r for r in TELE_USER_IDS if r)  # ไอดีเทเลเซลล์ (ชีต "ตั้งค่าเทเลเซลล์") — ผู้รับ followup กลุ่ม ADMIN
     for name in sorted(ALL_SELLERS) + ["ADMIN"]:
-        leads = leads_by_seller.get(name, [])
-        _active = [l for l in leads if not _skip(l) and not _booked(l)]
-        n_nc = sum(1 for l in _active if (l["updateCount"] or 0) == 0)            # ยังไม่โทร
-        n_st = sum(1 for l in _active if _idle(l) > 7)                            # ค้างเกิน 7 วัน
-        n_ns = sum(1 for l in _active if not (l["customerStatus"] or "").strip()
-                   and not (l["adminStatus"] or "").strip()
-                   and not (l["salesStatus"] or "").strip())  # ไม่มีสถานะเลย (Z + คอลัมเก่าว่างหมด)
-        urgent_all = [l for l in _active if _urg(l) > 0]
-        urgent_all.sort(key=_urg, reverse=True)
-        sd_all = _stuck(bookings_by_seller.get(name, []))
+        rk = fu_rank(leads_by_seller.get(name, []), bookings_by_seller.get(name, []), today, win_start)
+        urgent_all, sd_all = rk["urgent"], rk["deals"]
+        n_nc, n_st, n_ns = rk["notCalled"], rk["stale"], rk["noStatus"]
         if urgent_all or sd_all:
             summary.append((name, len(urgent_all), len(sd_all), n_nc, n_st, n_ns))
         # ผู้รับ: เซลล์ปกติ = uid ตัวเอง · "ADMIN" (เทเลเซลล์) = 5 ไอดีในชีต "ตั้งค่าแอดมิน"

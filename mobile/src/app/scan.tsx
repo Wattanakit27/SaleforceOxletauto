@@ -1,11 +1,12 @@
 // สแกน QR ที่ติดรถ → เปิดหน้ารถ · QR ของระบบเป็นลิงก์ …/track/scan/<รหัสรถ>/
+// ★ 11 ต.ค.69 ย้ายจากแท็บล่างมาเป็นหน้าซ้อน — เปิดจากแท็บ "รถ" และหน้า "วันนี้" ของคนงาน
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Btn, C, Card, Loading } from '../../lib/ui';
+import { Btn, C, Card, Loading } from '../lib/ui';
 
 /** ข้อความใน QR → รหัสรถ (ไม่ใช่ QR ของระบบ = '') */
 function codeFrom(data: string): string {

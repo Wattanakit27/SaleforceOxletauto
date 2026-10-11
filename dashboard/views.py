@@ -4225,22 +4225,10 @@ def seller_today(request):
     me = _seller_of(request, (request.GET.get("token") or "").strip())
     if not me:
         return JsonResponse({"error": "ต้องเข้าสู่ระบบด้วยบัญชีเซลล์"}, status=401)
-    from datetime import datetime as _dt, timedelta as _td
     from django.utils import timezone as _tz
     from checkout import leadflow as LF
-    from checkout.models import LeadTask
-    since = _tz.make_aware(_dt.combine(_tz.localdate() - _td(days=1), _dt.min.time()))
     now = _tz.now()
-    rows = []
-    for t in (LeadTask.objects.filter(seller_name=me, created_at__gte=since)
-              .order_by("-posted_at", "-id")[:60]):
-        if (t.card or {}).get("demo"):
-            continue
-        st = LF.task_state(t, now)
-        rows.append({"code": t.code, "customer": t.customer, "car": t.car, "phone": t.phone,
-                     "postedAt": LF._iso(t.posted_at), "dueAt": LF._iso(t.due_at),
-                     "reportAt": LF._iso(t.first_report_at), "reports": t.reports, "lastReport": t.last_report,
-                     "by": t.by, "chatId": t.chat_id, **st})
+    rows = LF.seller_tasks(me, now)     # ตัวเดียวกับหน้า "วันนี้" ของแอปมือถือ
     return JsonResponse({"ok": True, "seller": me, "tasks": rows, "callMin": LF.cfg()["call_min"],
                          "now": _tz.localtime(now).isoformat(timespec="seconds")},
                         json_dumps_params={"ensure_ascii": False})

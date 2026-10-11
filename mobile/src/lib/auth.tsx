@@ -9,8 +9,10 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useState 
 import { Platform } from 'react-native';
 
 import { api, BASE, loadToken, saveToken, setUnauthorizedHandler } from './api';
+import { clearHome } from './home';
 
-export type Me = { nickname: string; position: string; admin: boolean };
+export type Role = 'admin' | 'seller' | 'worker' | 'buyer';
+export type Me = { nickname: string; position: string; admin: boolean; role?: Role };
 
 type AuthState = {
   ready: boolean;
@@ -37,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('');
 
   const clear = useCallback(async () => {
+    clearHome(); // ข้อมูลหน้า "วันนี้" ของคนก่อนหน้า ห้ามค้างให้คนถัดไปเห็น (เครื่องเดียวใช้หลายคนได้)
     await saveToken(null);
     await SecureStore.deleteItemAsync(ME_KEY);
     setMe(null);
@@ -126,7 +129,16 @@ export function useAuth(): AuthState {
   return v;
 }
 
-/** คนงาน (ช่าง/ฝ่ายทะเบียน/ล้างรถ) ใช้แชทลูกค้าไม่ได้ — เว็บก็บล็อกเหมือนกัน */
+/** บทบาทที่แอปใช้จัดแท็บ — เซิร์ฟเวอร์ส่งมาใน /api/m/me (ข้อมูลที่จำไว้รุ่นเก่ายังไม่มี → เดาจากตำแหน่ง) */
+export function roleOf(me: Me | null): Role {
+  if (!me) return 'seller';
+  if (me.role) return me.role;
+  if (me.admin) return 'admin';
+  return me.position === 'worker' ? 'worker' : 'seller';
+}
+
+/** แชทลูกค้า = เซลล์/แอดมิน · คนงาน (ช่าง/ฝ่ายทะเบียน/ล้างรถ) และจัดซื้อไม่มีแท็บแชท (เว็บก็บล็อกคนงาน) */
 export function canChat(me: Me | null): boolean {
-  return !!me && me.position !== 'worker';
+  const r = roleOf(me);
+  return !!me && r !== 'worker' && r !== 'buyer';
 }
