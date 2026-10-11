@@ -1308,7 +1308,7 @@
         code: real || (sys && sys.code) || '',
         seller: real ? (i.sellerNick || i.seller || '') : ((sys && sys.seller) || ''),
         by: real ? (i.assignedBy || '') : ((sys && sys.by) || ''), at: i.doneAt || '',
-        how: sp && sp.ok ? 'ระบบ → ส่งเข้ากลุ่มแล้ว' : real ? 'ใบในห้องจ่ายเบอร์'
+        how: sp && sp.ok ? 'ระบบ → ส่งเข้ากลุ่มแล้ว' : i.sheetMatch ? (i.assignedRoom || 'ชีตลีด (จ่ายนอกระบบ)') : real ? 'ใบในห้องจ่ายเบอร์'
           : failed ? 'ระบบ (ส่งเข้ากลุ่มไม่สำเร็จ)' : ('ระบบ' + (sys && sys.demo ? ' (ทดลอง)' : '')),
         slip: sys && !real ? i.id : '', repost: failed ? i.id : '', err: failed ? (sp.error || '') : '',
         extra: sys && real && sys.code !== real ? 'เลขทดลอง ' + sys.code : '' });
@@ -1823,6 +1823,12 @@
       src.fallback ? ' (ชุดที่จำไว้ ยังอ่านชีตล่าสุดไม่ได้)' : ''}</div>`;
     if (L.slip) {
       x += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
+    } else if (L.sheet && L.code === L.sheet.code) {
+      // ★ 11 ต.ค.69 เบอร์นี้ได้เลขในชีตลีดแล้ว (จ่ายนอกระบบ) → ระบบเติมเลขให้เองแล้วเอาออกจากห้องพัก
+      const sv = L.sheet.seller === 'ADMIN' ? 'เทเลเซลล์' : (L.sheet.seller || '');
+      const other = (L.sheet.codes || []).filter(c => c !== L.sheet.code);
+      x += `<div class="pf-src">จ่ายเบอร์ในชีตลีดแล้ว — เบอร์นี้คือเลข <b>${h(L.sheet.code)}</b>${sv ? ' ของ @' + h(sv) : ''} (${h(String(L.sheet.date || ''))})${
+        other.length ? ' · เลขอื่นของเบอร์นี้ในรอบเดียวกัน: ' + h(other.join(', ')) : ''}</div>`;
     }
     if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
     if (L.assignedAt) {

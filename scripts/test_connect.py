@@ -270,7 +270,8 @@ try:
     res = C.tick()
     ck("ติดธงเลยเวลา 1 คน", res.get("escalated") == 1, res)
     ck("ไม่ได้เปิดแจ้ง LINE = ไม่ยิง LINE", not pushes(), pushes())
-    ck("เรียกซ้ำ = ไม่แจ้งซ้ำ", C.tick() == {})
+    _t2 = C.tick()
+    ck("เรียกซ้ำ = ไม่แจ้งซ้ำ", _t2 == {}, _t2)
     ck("ประวัติเลยเวลา (ยังไม่มีเจ้าของ)", ChatOwnerLog.objects.filter(
         chat_id=o2.id, action="escalate", note__contains="ยังไม่มีเซลล์").count() == 1)
     C.note_reply(P2.user_id, None, timezone.now(), "มีครับ", by="admin")
@@ -2349,6 +2350,110 @@ try:
     else:
         cache_store.set_kv(C.DD_KEY, _dd_saved.get("data", _dd_saved) if isinstance(_dd_saved, dict) else _dd_saved)
     C._DD.update(at=0.0, val=None)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[33] จ่ายเบอร์นอกระบบ (ลงชีตลีดตรง ไม่มีใบในกลุ่ม) → ออกจากห้องพักเอง (11 ต.ค.69 · \"lead ทุกอย่างต้องออโต้\")")
+    from checkout.models import LeadPhone
+    today = timezone.localdate()
+    C._SWEEP["at"] = 0.0
+
+    def sheet_row(phone, code, seller, days_ago=0):
+        return LeadPhone.objects.create(phone=phone, code=code, seller=seller, seen_on=today - timedelta(days=days_ago),
+                                        source=LeadPhone.SHEET)
+
+    S1 = C.note_customer_message(cust(801, "ชีตหนึ่ง").user_id, timezone.now(), "เบอร์ 0877770001 ครับ")
+    S2 = C.note_customer_message(cust(802, "ชีตสอง").user_id, timezone.now(), "เบอร์ 0877770002 ครับ")
+    S3 = C.note_customer_message(cust(803, "ชีตสาม").user_id, timezone.now(), "เบอร์ 0877770003 ครับ")
+    S4 = C.note_customer_message(cust(804, "ชีตสี่").user_id, timezone.now(), "เบอร์ 0877770004 ครับ")
+    S5 = C.note_customer_message(cust(805, "ชีตห้า").user_id, timezone.now(), "เบอร์ 0877770005 ครับ")
+    ck("(ก่อน) ทั้ง 5 รายอยู่ในห้องพัก", {S1.id, S2.id, S3.id, S4.id, S5.id} <= set(tocode_ids()), tocode_ids())
+    sheet_row("0877770001", "NLD10-9301", "เอหนึ่ง")                         # วันเดียวกับที่คุย
+    sheet_row("0877770002", "NLD10-9302", "เอสอง", days_ago=3)              # จ่ายไป 3 วันก่อน ลูกค้ายังทักต่อ
+    sheet_row("0877770002", "TLD10-9310", "บีหนึ่ง", days_ago=2)             # จ่ายใหม่เลขใหม่
+    sheet_row("0877770002", "RTLD10-9310/1", "ADMIN", days_ago=1)           # แล้วส่งต่อไม้ 2 → ล่าสุด
+    sheet_row("0877770003", "NLD5-1203", "เอหนึ่ง", days_ago=150)           # ลูกค้าเก่ากลับมา (5 เดือนก่อน)
+    sheet_row("0877770004", "", "เอหนึ่ง")                                  # แถวชีตไม่มีเลข
+    # S5: คนลบเลขเองไว้ (auto code = คน) → ห้ามเติมกลับ
+    sheet_row("0877770005", "NLD10-9305", "เอหนึ่ง")
+    l5 = C.lead_of(ChatOwner.objects.get(pk=S5.id))
+    ChatLead.objects.filter(pk=l5.pk).update(auto=dict(l5.auto or {}, code=C.HUMAN))
+
+    sh = C.sheet_match("087-777-0001", ChatOwner.objects.get(pk=S1.id).last_in_at)
+    ck("sheet_match: เลขวันเดียวกัน", sh and sh["code"] == "NLD10-9301" and sh["seller"] == "เอหนึ่ง", sh)
+    sh = C.sheet_match("0877770002", ChatOwner.objects.get(pk=S2.id).last_in_at)
+    ck("★ หลายเลขในรอบเดียวกัน = เลขล่าสุด (ไม้ 2) + จดเลขอื่น",
+       sh and sh["code"] == "RTLD10-9310/1" and set(sh["codes"]) == {"RTLD10-9310/1", "TLD10-9310", "NLD10-9302"}, sh)
+    ck("★ เลขเก่ากว่า 14 วัน (ลูกค้าเก่ากลับมา) = ไม่นับ", C.sheet_match("0877770003", timezone.now()) is None)
+    ck("แถวชีตไม่มีเลข = ไม่นับ", C.sheet_match("0877770004", timezone.now()) is None)
+    ck("เบอร์ไม่ครบ/ไม่ใช่เบอร์ = ไม่นับ", C.sheet_match("1234", timezone.now()) is None
+       and C.sheet_match("", timezone.now()) is None)
+
+    # S6: เบอร์เดียวกับลูกค้าอีกราย (S7) ที่จ่ายเบอร์จากปุ่มในระบบไปแล้ว → เลขนั้น S7 ถืออยู่ ห้ามก๊อปมาให้ S6 (เลขซ้ำ 2 ที่)
+    S6 = C.note_customer_message(cust(806, "ชีตหก").user_id, timezone.now(), "เบอร์ 0877770006 ครับ")
+    S7 = C.note_customer_message(cust(807, "ชีตเจ็ด").user_id, timezone.now(), "สวัสดีครับ")
+    ChatLead.objects.filter(pk=C.lead_of(ChatOwner.objects.get(pk=S7.id)).pk).update(
+        code="NLD10-9306", phone="0877770006", assigned_at=timezone.now())
+    LeadPhone.objects.create(phone="0877770006", code="NLD10-9306", seller="เอหนึ่ง", seen_on=today,
+                             source=LeadPhone.SYSTEM)
+    l6 = C.lead_of(ChatOwner.objects.get(pk=S6.id))
+    ck("★ เลขที่ลูกค้าอีกรายในระบบถืออยู่ = sheet_match ไม่คืน (ไม่ก๊อปเลขไป 2 ที่)",
+       C.sheet_match("0877770006", timezone.now(), chat_lead_pk=l6.pk) is None)
+
+    out = C.slip_sweep(force=True)
+    ld = {o: C.lead_of(ChatOwner.objects.get(pk=o)) for o in (S1.id, S2.id, S3.id, S4.id, S5.id, S6.id)}
+    ids = set(tocode_ids())
+    ck("★ เบอร์มีเลขในชีตแล้ว → ได้เลขเอง + ออกจากห้องพัก (ไม่ต้องมีใครกด)",
+       ld[S1.id].code == "NLD10-9301" and S1.id not in ids and out.get("matched", 0) >= 2, (ld[S1.id].code, out))
+    ck("★ จ่ายใหม่/ไม้ 2 → ได้เลขล่าสุด", ld[S2.id].code == "RTLD10-9310/1" and S2.id not in ids, ld[S2.id].code)
+    ck("ที่มาของเลข = ชีตลีด (ไม่ใช่คน)", (ld[S1.id].auto or {}).get("code") == "ชีตลีด"
+       and (ld[S1.id].auto or {}).get(C.SHEET_KEY, {}).get("code") == "NLD10-9301", ld[S1.id].auto)
+    ck("★ ลูกค้าเก่ากลับมา (เลข 5 เดือนก่อน) = ยังอยู่ในห้องพักให้คนตัดสิน", ld[S3.id].code == "" and S3.id in ids,
+       ld[S3.id].code)
+    ck("แถวชีตไม่มีเลข = ยังอยู่ในห้องพัก", ld[S4.id].code == "" and S4.id in ids)
+    ck("★ คนลบเลขเองไว้ = ระบบไม่เติมกลับ", ld[S5.id].code == "" and S5.id in ids, ld[S5.id].code)
+    ck("★ เบอร์ซ้ำกับลูกค้าอีกรายที่ได้เลขในระบบแล้ว = ไม่ได้เลขซ้ำ (ยังอยู่ให้แอดมินดูกล่องเบอร์ซ้ำ)",
+       ld[S6.id].code == "" and S6.id in ids and ChatLead.objects.filter(code="NLD10-9306").count() == 1,
+       (ld[S6.id].code, ChatLead.objects.filter(code="NLD10-9306").count()))
+    ck("type เติมตามตัวหน้าของเลขที่ได้ (NLD → Moderate)", ld[S1.id].lead_type == "Moderate", ld[S1.id].lead_type)
+
+    al = {r["id"]: r for r in C.assigned_list()}
+    a1, a2 = al.get(S1.id) or {}, al.get(S2.id) or {}
+    ck("★ รายการจ่ายแล้ว: บอกว่าจ่ายในชีต + ให้ใคร", a1.get("how") == "ชีตลีด (จ่ายนอกระบบ)"
+       and a1.get("seller") == "เอหนึ่ง" and a1.get("code") == "NLD10-9301", a1)
+    ck("ผู้รับ ADMIN ในชีต = โชว์ \"เทเลเซลล์\"", a2.get("seller") == "เทเลเซลล์", a2)
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % S2.id)
+    shj = (d.get("lead") or {}).get("sheet") or {}
+    ck("หน้าแชทได้ข้อมูลว่ามาจากชีต (โชว์ในแผงขวา)", shj.get("code") == "RTLD10-9310/1", shj)
+    r_ = ADM.get("/connect/api/inbox?view=tocode", secure=True)
+    ck("★ API ห้องพัก: ไม่มี LINE user id หลุด", not leak.search(r_.content.decode()))
+
+    # คนแก้เลขเองทีหลัง → ป้าย "จ่ายในชีต" เดิมไม่ตรง = ไม่โชว์ว่ามาจากชีต
+    ChatLead.objects.filter(pk=ld[S1.id].pk).update(code="NLD10-9399")
+    a1 = {r["id"]: r for r in C.assigned_list()}.get(S1.id) or {}
+    ck("คนแก้เลขเองทีหลัง → ไม่อ้างว่ามาจากชีตอีก", a1.get("how") != "ชีตลีด (จ่ายนอกระบบ)", a1)
+
+    # ใบร่างในห้องพัก (กลุ่ม ADMIN เก็บ Lead) ที่แอดมินจ่ายในชีตตรง ไม่โพสต์ใบจริงในกลุ่ม
+    post(PARK, 110, slip("TLD10-", acc="ร่างชีต", phone="0877770011"))
+    post(PARK, 111, slip("TLD10-", acc="ร่างเก่า", phone="0877770012"))
+    sheet_row("0877770011", "TLD10-9311", "บีหนึ่ง")
+    sheet_row("0877770012", "TLD9-7012", "บีหนึ่ง", days_ago=40)          # เลขเก่ามาก = คนละรอบ
+    LP.forget()
+    bd = LP.board(cache_sec=0)
+    wacc = {i["account"] for i in bd["waiting"]}
+    got = next((i for i in bd["assigned"] if i["account"] == "ร่างชีต"), {})
+    ck("★ ใบร่างที่จ่ายในชีตแล้ว → ย้ายไป \"จ่ายแล้ว\" เอง", "ร่างชีต" not in wacc and got.get("code") == "TLD10-9311"
+       and got.get("sheetMatch") is True and got.get("seller") == "บีหนึ่ง"
+       and got.get("assignedRoom") == "ชีตลีด (จ่ายนอกระบบ)", (wacc, got))
+    ck("ใบร่างที่เลขในชีตเก่ามาก = ยังรอจ่าย", "ร่างเก่า" in wacc, wacc)
+    mid = next(i["id"] for i in bd["assigned"] if i["account"] == "ร่างชีต")
+    ok_, msg_, _e = LP.assign(mid, Employee.objects.get(nickname="บีหนึ่ง"), "TLD", by="กวาง")
+    ck("★ กดจ่ายซ้ำใบร่างที่จ่ายในชีตแล้ว = ปฏิเสธ ไม่ออกเลขซ้อน", not ok_ and "TLD10-9311" in msg_, msg_)
+    # ใบร่างที่เบอร์ได้เลขจากปุ่มในระบบ (แชทเบอร์เดียวกัน) → ป้ายบอกที่มาให้ถูก ไม่เหมาว่าเป็นชีต
+    post(PARK, 112, slip("TLD10-", acc="ร่างระบบ", phone="0877770006"))
+    LP.forget()
+    got = next((i for i in LP.board(cache_sec=0)["assigned"] if i["account"] == "ร่างระบบ"), {})
+    ck("ป้ายบอกที่มาของเลขตามสมุดเบอร์ (ปุ่มในระบบ ≠ ชีต)", got.get("code") == "NLD10-9306"
+       and got.get("assignedRoom") == LP.SHEET_SRC_LABEL["system"], got)
 
 finally:
     _runner.teardown_databases(_old)

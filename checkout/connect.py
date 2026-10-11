@@ -1773,6 +1773,47 @@ def find_slip(phone: str = "", line_name: str = ""):
     return None
 
 
+# ── จ่ายเบอร์ "นอกระบบ" ลงชีตลีดไปแล้ว (11 ต.ค.69 · เจ้าของ: "lead ทุกอย่างต้องออโต้") ──
+#   วัดจริง: ลีดแชทที่รอจ่ายเบอร์และมีเบอร์ 72 ราย → **35 รายเบอร์เดียวกันได้เลขในชีตลีดวันเดียวกับที่คุยกันแล้ว**
+#   (ใบในกลุ่มจับคู่ไม่ได้ เพราะแอดมินลงชีตตรง/ใบไม่มีเบอร์) → ค้างในห้องพักทั้งที่จ่ายไปแล้ว
+#   ตัวจับ = **สมุดเบอร์** (`LeadPhone` · สร้างจากชีตลีดใหม่ทุก 6 ชม.) · เบอร์เต็มเท่านั้น (ไม่ใช่ชื่อ — ไม่ fuzzy)
+#   ★ นับเฉพาะเลขที่ "วันที่รับลีด" อยู่ในรอบที่ลูกค้าคุยกับเราอยู่ (≤ SHEET_MATCH_DAYS วันก่อนข้อความล่าสุด)
+#     เลขเก่ากว่านั้น = ลูกค้าเก่ากลับมาใหม่ → ไม่เดาให้ ยังอยู่ในห้องพักพร้อมป้าย "เบอร์ซ้ำ" ให้คนตัดสิน
+SHEET_KEY = "_sheet"
+SHEET_MATCH_DAYS = 14
+
+
+def sheet_match(phone: str, last_in=None, chat_lead_pk=None) -> dict | None:
+    """เบอร์นี้ได้เลขลีด (ชีตลีด/ใบในกลุ่ม/ปุ่มในระบบ) ในรอบที่คุยกันอยู่หรือยัง → `{code, seller, date, codes, at}` หรือ None
+    หลายเลขในรอบเดียวกัน (จ่ายใหม่/ไม้ 2) = ใช้เลขล่าสุด · เลขอื่นจดไว้ใน `codes`
+    ★ เลขในรอบนี้มีลูกค้าอีกรายในระบบถืออยู่แล้ว (แชทอีกบัญชี/ใบร่างที่จ่ายจากห้องพัก) = None
+      ไม่ก๊อปเลขเดียวไปไว้ 2 ที่ (เลขซ้ำ = นับซ้ำ + ส่งต่อไม้ 2 พัง) → ให้แอดมินตัดสินจากกล่องเตือนเบอร์ซ้ำเหมือนเดิม"""
+    from datetime import datetime as _dt, time as _time
+    from . import phonebook
+    p = phonebook.norm(phone)
+    if not p:
+        return None
+    ref = timezone.localtime(last_in).date() if last_in else timezone.localdate()
+    cut = ref - timedelta(days=SHEET_MATCH_DAYS)
+    hits = [x for x in phonebook.lookup(p, days=400)
+            if x.get("code") and x.get("date") and x["date"] >= cut.isoformat()]
+    if not hits:
+        return None
+    held = Q()
+    for c in {x["code"].upper() for x in hits}:
+        held |= Q(code__iexact=c)
+    if ChatLead.objects.filter(held).exclude(pk=chat_lead_pk).exists() or ExtLead.objects.filter(held).exists():
+        return None
+    hits.sort(key=lambda x: (x["date"], "/" in x["code"], x["code"]), reverse=True)
+    top = hits[0]
+    try:
+        at = timezone.make_aware(_dt.combine(_dt.fromisoformat(top["date"]).date(), _time(9, 0)))
+    except Exception:
+        at = timezone.now()
+    return {"code": top["code"].upper(), "seller": top.get("seller") or "", "date": top["date"],
+            "src": top.get("source") or "", "codes": [x["code"].upper() for x in hits][:6], "at": _iso(at)}
+
+
 # ── ลูกค้าที่ "อยากขายรถให้เรา" — แอดมินส่งเข้ากลุ่มเคสHOT ของจัดซื้อ ไม่ใช่ห้องจ่ายเบอร์ (4 ต.ค.69) ──
 #   ใบหน้าตาคนละแบบ (`leadgroup.parse_buycase` · "โค้ด : OC-7436") · เลขเป็นของงานรับซื้อ **ไม่ใช่เลขลีดขาย**
 #   → ไม่ใส่ลงช่อง Code ของฟอร์ม · จดไว้ที่ `ChatLead.auto[BUY_KEY]` แล้วถือว่า "จ่ายแล้ว" (ออกจากห้องพัก)
@@ -1923,7 +1964,7 @@ SLIP_SWEEP_MIN = 3                 # ลีดในห้องพัก: ห�
 _SWEEP = {"at": 0.0}
 
 
-def slip_sweep(limit: int = 60, force: bool = False) -> dict:
+def slip_sweep(limit: int = 300, force: bool = False) -> dict:
     """ลีดในห้องพักที่แอดมิน **จ่ายเบอร์ในกลุ่มไปแล้ว** → จับคู่ใบให้เอง (ได้เลข + จ่ายให้ใคร) แล้วออกจากห้องพัก
 
     เดิมจับคู่ใบจ่ายลีดเฉพาะตอนมีคนเปิดแชทนั้น → ลีดที่จ่ายในกลุ่มแล้วค้างในห้องพักไปเรื่อยๆ
@@ -2010,7 +2051,8 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
     since = now - timedelta(days=days)
     out = []
     qs = (ChatLead.objects.select_related("chat", "chat__profile", "chat__fb_profile", "chat__owner", "chat__lead")
-          .filter((~Q(code="") & (Q(assigned_at__gte=since) | Q(auto__has_key="_slip")))
+          .filter((~Q(code="") & (Q(assigned_at__gte=since) | Q(auto__has_key="_slip")
+                                   | Q(auto__has_key=SHEET_KEY)))
                   | Q(auto__has_key=BUY_KEY)))
     from datetime import datetime as _dt
     for lead in qs[:600]:
@@ -2024,8 +2066,15 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
             seller = o.owner.nickname if o.owner_id else ""
             by = lead.assigned_by or ""
         else:
-            # ใบลีดขาย (`_slip`) ก่อน · ไม่มีเลขลีดขาย = ส่งเข้ากลุ่มเคสHOT ของจัดซื้อ (`BUY_KEY`)
+            # ใบลีดขาย (`_slip`) ก่อน · แล้วเลขจากชีตลีด (`_sheet` · จ่ายนอกระบบ)
+            #   · ไม่มีเลขลีดขาย = ส่งเข้ากลุ่มเคสHOT ของจัดซื้อ (`BUY_KEY`)
             sl = auto.get("_slip") if lead.code else None
+            sheet = None if sl or not lead.code else auto.get(SHEET_KEY)
+            if sheet and (sheet.get("code") or "") != lead.code:
+                sheet = None                        # คนแก้เลขเองทีหลัง — ป้ายชีตเดิมไม่ตรงแล้ว
+            if sheet:
+                sl = dict(sheet, seller=("เทเลเซลล์" if sheet.get("seller") == "ADMIN" else sheet.get("seller", "")),
+                          by="")
             if not sl:
                 sl, kind, code = auto.get(BUY_KEY) or {}, "buy", (auto.get(BUY_KEY) or {}).get("code", "")
             try:
@@ -2034,7 +2083,8 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
                 continue
             # "เคสHOT (พี่หมี) ซื้อ-ขายรถช่องทางออนไลน์" → "เคสHOT (พี่หมี)" (การ์ดแคบ ชื่อเต็มยาวเกิน)
             short = re.sub(r"\s*ซื้อ-?ขายรถ.*$", "", sl.get("group") or "") or "เคสHOT"
-            how = ("ส่งจัดซื้อ · " + short) if kind == "buy" else "ใบในห้องจ่ายเบอร์"
+            how = (("ส่งจัดซื้อ · " + short) if kind == "buy" else
+                   "ชีตลีด (จ่ายนอกระบบ)" if sheet else "ใบในห้องจ่ายเบอร์")
             seller, by = sl.get("seller") or sl.get("tag") or "", sl.get("by") or ""
         if at < since or not code:
             continue
@@ -2145,6 +2195,14 @@ def autofill(o, msgs=None, slip_min=None) -> ChatLead:
             # จ่ายให้ใคร = คนที่ถูกแท็กท้ายใบ (ชื่อ LINE คำแรก → ชื่อเล่นในทะเบียน) · ใครโพสต์ใบ = แอดมินที่จ่าย
             auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or "", "tag": d.get("assigned", ""),
                              "seller": tag_nick(d.get("assigned", "")), "by": _poster(g)}
+        elif "code" not in auto and (sh := sheet_match(lead.phone or (ph[0] if ph else ""), o.last_in_at,
+                                                       chat_lead_pk=lead.pk)):
+            # ★ 11 ต.ค.69 ไม่มีใบในกลุ่ม แต่เบอร์นี้ได้เลขในชีตลีดแล้วในรอบที่คุยกันอยู่ = จ่ายนอกระบบไปแล้ว
+            #   (ช่อง code ที่คนเคยแก้/ลบเอง = "คน" → ไม่เติมกลับ)
+            put("code", sh["code"], "ชีตลีด")
+            if lead.code == sh["code"]:
+                auto[SHEET_KEY] = sh
+                changed.append(SHEET_KEY)
         elif BUY_KEY not in auto:
             # ไม่มีใบจ่ายลีดขาย → ลูกค้าอาจ "อยากขายรถให้เรา" แล้วถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแทน
             #   ข้อมูลในใบเป็นรถของลูกค้า (รุ่น/ทะเบียน/เลขไมล์) ไม่ใช่รถที่เขาจะซื้อ → ไม่เอามาเติมช่องรถของฟอร์ม
@@ -2226,6 +2284,7 @@ def lead_json(o, lead=None) -> dict:
         "auto": {k: v for k, v in (lead.auto or {}).items() if not k.startswith("_")},
         "autoWhy": dict((lead.auto or {}).get(KW_KEY) or {}),   # ช่องที่จับจาก keyword → จับจากคำไหน (โชว์ในป้าย)
         "slip": (lead.auto or {}).get("_slip") or None,
+        "sheet": (lead.auto or {}).get(SHEET_KEY) or None,     # ★ 11 ต.ค.69 เลขที่ได้จากชีตลีด (จ่ายนอกระบบ)
         # ช่องอัตโนมัติ (คำนวณจากระบบ ไม่ให้แก้มือ — แก้แล้วจะไม่ตรงกับของจริง)
         "leadAt": _iso(p.first_seen),
         "seller": o.owner.nickname if o.owner_id else "",

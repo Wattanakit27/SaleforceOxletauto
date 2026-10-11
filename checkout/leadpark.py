@@ -213,11 +213,18 @@ def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
     from .models import ExtLead
     mids = [m for it in raw for m in it["_mids"]]
     ext = {e.message_id: e for e in ExtLead.objects.filter(message_id__in=mids)} if mids else {}
+    sheet = _sheet_hits(raw, ext)
     items = []
     for r in raw:
         it = {k: v for k, v in r.items() if not k.startswith("_")}
         e = next((ext[m] for m in r["_mids"] if m in ext), None)
         sys_at = None
+        sh = sheet.get(r["id"])
+        if sh:
+            # ★ 11 ต.ค.69 ไม่มีใบจริงในกลุ่ม แต่เบอร์นี้ได้เลขในชีตลีดแล้ว (จ่ายนอกระบบ) → ถือว่าจ่ายแล้ว
+            it.update(code=sh["code"], seller=sh["seller"], assignedAt=sh["at_iso"], assignedBy="",
+                      assignedRoom=sh["how"], sheetMatch=True)
+            sys_at = sh["at"]
         if e and e.code:
             sys_at = e.assigned_at
             it["sys"] = {"code": e.code, "seller": e.seller_name, "at": _iso(e.assigned_at), "by": e.assigned_by,
@@ -237,14 +244,60 @@ def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
     skipped = [i for i in items if i.get("skipped") and not i["doneAt"]]
     today = timezone.localdate(now).isoformat()
     done_today = [i for i in assigned if i["doneAt"][:10] == today]
+    timed = [i for i in done_today if not i.get("sheetMatch")]     # ชีตบอกแค่วันที่ ไม่รู้เวลาจ่ายจริง — ไม่เอามาเฉลี่ย
     return {
         "room": room, "days": days, "warnMin": WARN_MIN,
         "waiting": waiting, "assigned": assigned[:30], "skipped": skipped[:30],
         "stats": {"waiting": len(waiting), "late": sum(1 for i in waiting if i["waitMin"] >= WARN_MIN),
                   "assignedToday": len(done_today), "skipped": len(skipped),
-                  "avgWaitMinToday": (round(sum(i["waitMin"] for i in done_today) / len(done_today))
-                                      if done_today else None)},
+                  "avgWaitMinToday": (round(sum(i["waitMin"] for i in timed) / len(timed))
+                                      if timed else None)},
     }
+
+
+SHEET_DRAFT_DAYS = 1       # ใบร่างค้าง: เลขในชีตต้อง "วันที่รับลีด" ไม่เก่ากว่าวันที่พักใบร่างเกิน 1 วัน (กันลูกค้าเก่ากลับมา)
+
+
+# สมุดเบอร์จดว่าเลขมาจากไหน → ป้ายบอกแอดมินว่าใบร่างนี้ "จ่ายแล้ว" เพราะอะไร
+SHEET_SRC_LABEL = {"sheet": "ชีตลีด (จ่ายนอกระบบ)", "slip": "ใบในห้องจ่ายเบอร์ (เบอร์เดียวกัน)",
+                   "system": "ปุ่มจ่ายเบอร์ (แชทเบอร์เดียวกัน)"}
+
+
+def _sheet_hits(raw, ext) -> dict:
+    """ใบร่างที่ยังไม่ได้เลข (ไม่มีใบจริงในกลุ่ม/ไม่ได้กดในระบบ) แต่เบอร์ได้เลขในชีตลีดแล้ว → {id: {code, seller, at, at_iso}}
+    ค้นสมุดเบอร์ครั้งเดียวทั้งรายการ (ไม่ยิงทีละใบ) · เบอร์เต็มเท่านั้น"""
+    from datetime import datetime as _dt, time as _time
+    from . import phonebook
+    from .models import LeadPhone
+    want = {}
+    for r in raw:
+        if r.get("_asgAt") or not r.get("phone"):
+            continue
+        e = next((ext[m] for m in r["_mids"] if m in ext), None)
+        if e and (e.code or e.no_code):
+            continue
+        p = phonebook.norm(r["phone"])
+        if p:
+            want[r["id"]] = (p, timezone.localtime(r["_at"]).date() - timedelta(days=SHEET_DRAFT_DAYS), r["_at"])
+    if not want:
+        return {}
+    try:
+        cut = min(v[1] for v in want.values())
+        rows = list(LeadPhone.objects.filter(phone__in={v[0] for v in want.values()}, seen_on__gte=cut)
+                    .exclude(code="").values("phone", "code", "seller", "seen_on", "source"))
+    except Exception:
+        return {}
+    out = {}
+    for rid, (p, since, at) in want.items():
+        hits = sorted([x for x in rows if x["phone"] == p and x["seen_on"] and x["seen_on"] >= since],
+                      key=lambda x: (x["seen_on"], "/" in x["code"], x["code"]), reverse=True)
+        if not hits:
+            continue
+        h = hits[0]
+        done = max(at, timezone.make_aware(_dt.combine(h["seen_on"], _time(9, 0))))
+        out[rid] = {"code": h["code"].upper(), "seller": "เทเลเซลล์" if h["seller"] == "ADMIN" else h["seller"],
+                    "at": done, "at_iso": _iso(done), "how": SHEET_SRC_LABEL.get(h["source"], SHEET_SRC_LABEL["sheet"])}
+    return out
 
 
 def forget():
@@ -293,7 +346,8 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
         return False, "ไม่พบใบร่างนี้ในห้องพัก Lead (อาจหมดอายุแล้ว)", None
     it = next((i for i in board(cache_sec=0)["assigned"] if i["id"] == g.message_id and i.get("code")), None)
     if it:
-        return False, "ลีดนี้ได้เลข %s ในห้องจ่ายเบอร์แล้ว (โดย %s)" % (it["code"], it["assignedBy"] or "-"), None
+        where = ("จาก" + it["assignedRoom"]) if it.get("sheetMatch") else "ในห้องจ่ายเบอร์"
+        return False, "ลีดนี้ได้เลข %s %sแล้ว (โดย %s)" % (it["code"], where, it["assignedBy"] or it.get("seller") or "-"), None
     c = C.cfg()
     real = C.slip_post_on(c) and not C.is_test_seller(emp)
     e = _ext_for(g, d)                            # สร้างแถวก่อนเข้าล็อก
