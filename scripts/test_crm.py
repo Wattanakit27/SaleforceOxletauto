@@ -58,6 +58,8 @@ from checkout.models import (ChatFollowup, ChatLead, ChatOwner, ChatOwnerLog,  #
 from dashboard.services import cache_store  # noqa: E402
 
 C.BG_FILL = False
+import checkout.people as _people  # noqa: E402
+_people.BG = False             # แคชชื่อหมดอายุ = โหลดตรง (ไม่แตก thread ชนฐานข้อมูลทดสอบ)
 LF.BG_SLOW = False
 
 # ── ขอบระบบ ─────────────────────────────────────────────────────────

@@ -294,7 +294,10 @@ class GroupChat(models.Model):
 
     class Meta:
         ordering = ["-sent_at", "-id"]
-        indexes = [models.Index(fields=["group_id", "-sent_at"])]
+        # ★ 11 ต.ค.69 (sender_id) — เปิดแชทลูกค้า/เก็บตกเบอร์ ค้นด้วย sender_id ทุกครั้ง · เดิมไม่มี index
+        #   = อ่านทั้งตาราง (33k แถว) ทุกครั้งที่หน้าแชทรีเฟรช 6 วิ
+        indexes = [models.Index(fields=["group_id", "-sent_at"]),
+                   models.Index(fields=["sender_id", "-sent_at"])]
         verbose_name = "แชทในกลุ่ม LINE"
         verbose_name_plural = "แชทในกลุ่ม LINE"
 

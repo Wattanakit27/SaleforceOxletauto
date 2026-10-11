@@ -42,6 +42,8 @@ from django.utils import timezone  # noqa: E402
 
 from checkout import connect as C  # noqa: E402
 C.BG_FILL = False            # ไม่ให้ thread เติมรูปวิ่งชนฐานข้อมูลทดสอบ (เรียก fill_pictures ตรงๆ แทน)
+import checkout.people as _people  # noqa: E402
+_people.BG = False             # แคชชื่อหมดอายุ = โหลดตรง (ไม่แตก thread ชนฐานข้อมูลทดสอบ)
 from checkout import leadflow as _LF  # noqa: E402
 _LF.BG_SLOW = False          # งานจ่ายเบอร์: ไม่ให้ thread งานช้าวิ่งชนฐานข้อมูลทดสอบ
 from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
@@ -1593,6 +1595,53 @@ try:
     ck("★ เก็บตกแชทเดิม: เจอไอดีไลน์ → เข้าห้องพัก", oc.id in tocode_ids()
        and ChatLead.objects.get(chat=oc).line_id == "oldc_99")
     ck("ตัวเลขแท็บตรงกับรายการ (หลังกติกาใหม่)", C.counts(admin=True)["tocode"] == len(tocode_ids()))
+    # ★ 11 ต.ค.69 "โหลดนานเพราะอะไร" — จำว่าสแกนแล้วใน KV (ข้าม worker/รีสตาร์ท) ไม่ใช่แค่ในหน่วยความจำ
+    from dashboard.services import cache_store as _cs
+    _seen = (_cs.get_kv(C.CSCAN_KEY) or {}).get("data") or {}
+    ck("เก็บตก: จำว่าสแกนแล้วใน KV", str(oc.id) in _seen)
+    _calls, _cap0 = [], C.capture_contact
+    C.capture_contact = lambda o, *a, **k: _calls.append(o.id) or _cap0(o, *a, **k)
+    try:
+        C.scan_contacts()
+        ck("★ รีสตาร์ทแล้ว (หน่วยความจำว่าง) = ไม่อ่านแชทเดิมซ้ำ", oc.id not in _calls)
+        OLDD = cust(303, "คุยไว้ก่อน 2")
+        od = C._row_for(OLDD)
+        ChatOwner.objects.filter(pk=od.id).update(awaiting_since=timezone.now(), due_at=timezone.now())
+        ChatOwner.objects.filter(pk=oc.id).update(last_in_at=timezone.now() + timedelta(seconds=5))
+        ChatLead.objects.filter(chat_id=oc.id).update(phone="")
+        _calls.clear()
+        C.scan_contacts(limit=1)
+        ck("ทีละ limit: รอบแรกได้แถวที่มีข้อความใหม่ก่อน", _calls == [oc.id])
+        _calls.clear()
+        C.scan_contacts(limit=1)
+        ck("★ รอบถัดไปไปต่อแถวที่ยังไม่เคยสแกน (เดิมติดอยู่ที่แถวบนสุดตลอด)", _calls == [od.id])
+        _calls.clear()
+        C.scan_contacts()
+        ck("สแกนครบแล้ว = ไม่อ่านอะไรอีก", _calls == [])
+    finally:
+        C.capture_contact = _cap0
+    ck("sync_rows (เทสต์) ยังเรียกเก็บตกได้", C.scan_contacts_bg() is True)
+    # ชีตพนักงาน: แคชหมดอายุ = ใช้ของเดิมไปก่อน แล้วโหลดใหม่ใน thread (ไม่ให้คำขอรอ 1–4 วิ)
+    import threading as _th
+    import time as _tm
+    from checkout import people as _pp
+    _pp._load(force=True)
+    _bg, _rel0, _hit = _pp.BG, _pp._bg_reload, _th.Event()
+    _pp.BG, _pp._bg_reload = True, (lambda: (_hit.set(), _pp._RELOAD.update(busy=False)))
+    _pp._CACHE["by_uid"]["Uswr" + "0" * 28] = "ของเดิม"
+    _pp._CACHE["at"] = _tm.time() - _pp._TTL - 5
+    try:
+        _t0 = _tm.time()
+        _nm = _pp.nickname_for("Uswr" + "0" * 28)
+        ck("★ แคชชื่อหมดอายุ = ตอบด้วยของเดิมทันที", _nm == "ของเดิม" and _tm.time() - _t0 < 0.5)
+        ck("★ ...แล้วโหลดใหม่ใน thread", _hit.wait(2))
+        _pp._CACHE["at"] = 0.0
+        _hit.clear()
+        _pp.nickname_for("Uswr" + "0" * 28)
+        ck("ยังไม่เคยโหลด (invalidate) = โหลดตรง ไม่แตก thread", not _hit.is_set() and _pp._CACHE["at"] > 0)
+    finally:
+        _pp.BG, _pp._bg_reload = _bg, _rel0
+        _pp._CACHE["at"] = 0.0
 
     # ═════════════════════════════════════════════════════════════════════
     print("[27] Messenger webhook — Facebook ส่งแชทมาเอง (แทนการถาม API ทุกนาที · เจ้าของห่วงติด token)")

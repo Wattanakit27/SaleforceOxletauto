@@ -14,6 +14,8 @@ import time
 
 _TTL = 600
 _CACHE = {"at": 0.0, "by_uid": {}, "by_name": {}, "uid_of_name": {}}
+BG = True                     # แคชหมดอายุ = โหลดใหม่ใน thread · เทสต์ปิดได้
+_RELOAD = {"busy": False}
 
 # LINE user id = 'U' + hex 32 ตัว — ใช้ตรวจว่าค่าที่ได้มาเป็น id ดิบไหม (จะได้ไม่เผลอโชว์)
 _UID_RE = re.compile(r"^U[0-9a-fA-F]{32}$")
@@ -47,7 +49,33 @@ def _load(force=False):
     now = time.time()
     if not force and _CACHE["at"] and (now - _CACHE["at"]) < _TTL:
         return
+    # ★ 11 ต.ค.69 (เจ้าของถาม "โหลดนานเพราะอะไร") — อ่านชีตพนักงานใช้ 1–4 วิ (วัดจริง ตอน token เย็น)
+    #   เดิมทำในคำขอทุก 10 นาทีต่อ worker = ใครเปิดแชทจังหวะนั้นรอ · ตอนนี้ **แคชหมดอายุแต่ยังมีของเดิม
+    #   = ใช้ของเดิมไปก่อน แล้วโหลดใหม่ใน thread** · ยังไม่เคยโหลด/สั่ง force (`invalidate`) = โหลดตรงเหมือนเดิม
+    if not force and _CACHE["at"] and BG:
+        if not _RELOAD["busy"]:
+            _RELOAD["busy"] = True
+            import threading
+            threading.Thread(target=_bg_reload, daemon=True).start()
+        return
+    _reload(now)
 
+
+def _bg_reload():
+    try:
+        _reload(time.time())
+    except Exception:
+        pass
+    finally:
+        _RELOAD["busy"] = False
+        try:
+            from django.db import connection
+            connection.close()                # thread แยกมี connection ของตัวเอง ต้องปิดเอง
+        except Exception:
+            pass
+
+
+def _reload(now):
     by_uid, by_name, uid_of = {}, {}, {}
     try:                                  # ── ฐานข้อมูลเรา (ตัวหลัก) ──
         from .models import Employee, LineProfile

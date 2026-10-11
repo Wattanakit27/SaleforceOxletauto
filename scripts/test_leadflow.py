@@ -50,6 +50,8 @@ from checkout.models import (ChatLead, ChatOwner, Employee, ExtLead, GroupChat, 
 from dashboard.services import cache_store  # noqa: E402
 
 C.BG_FILL = False
+import checkout.people as _people  # noqa: E402
+_people.BG = False             # แคชชื่อหมดอายุ = โหลดตรง (ไม่แตก thread ชนฐานข้อมูลทดสอบ)
 LF.BG_SLOW = False           # ไม่ให้ thread งานช้าวิ่งชนฐานข้อมูลทดสอบ
 
 # ── ขอบระบบ ─────────────────────────────────────────────────────────

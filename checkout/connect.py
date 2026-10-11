@@ -1133,7 +1133,7 @@ def sync_rows(force: bool = False) -> int:
     if made:
         ChatOwner.objects.bulk_create(made, ignore_conflicts=True)
     try:
-        scan_contacts()
+        scan_contacts_bg()                 # thread แยก — เดิมทำในคำขอ ทำให้หน้าแรกหลังรีสตาร์ทช้า 2–3 วิ
     except Exception:
         pass
     return len(made)
@@ -2468,28 +2468,101 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
     return bool(got)
 
 
-_CSCAN: dict = {}
+CSCAN_KEY = "connect_cscan"        # KV {chat id: เวลาข้อความล่าสุดที่สแกนแล้ว} — จำข้าม worker/รีสตาร์ท
+CSCAN_CANDIDATES = 2000            # ดูผู้สมัครกี่แถว (อ่านแค่ id+เวลา ถูก) — ไม่ติดอยู่ที่ 150 แถวบนสุดตลอดไป
+_CSCAN_LOCK = 7_406_063            # Postgres advisory lock — worker เดียวสแกนทีละรอบ (เลขไม่ชนของ connect/leadflow/tradein)
+_CSCAN_RUN = {"busy": False}
+
+
+def _cscan_key(dt) -> str:
+    return dt.isoformat() if dt else ""
 
 
 def scan_contacts(limit: int = 150) -> int:
-    """เก็บตกครั้งเดียวต่อ process: แถวที่คุยในระบบแล้วแต่ข้อมูลลีดยังไม่มีเบอร์/ไอดี → อ่านแชทหาให้
-    (ลูกค้าที่คุยก่อนมีกติกานี้ · ของใหม่จับตอนข้อความเข้าอยู่แล้ว) · จำว่าสแกนแล้วถึงข้อความไหน ไม่สแกนซ้ำ"""
+    """เก็บตก: แถวที่คุยในระบบแล้วแต่ข้อมูลลีดยังไม่มีเบอร์/ไอดี → อ่านแชทหาให้
+    (ลูกค้าที่คุยก่อนมีกติกานี้ · ของใหม่จับตอนข้อความเข้าอยู่แล้ว) · จำว่าสแกนแล้วถึงข้อความไหน ไม่สแกนซ้ำ
+
+    ★ 11 ต.ค.69 (เจ้าของถาม "โหลดนานเพราะอะไร") — เดิมจำแค่ในหน่วยความจำของ process (`_CSCAN`)
+      แล้วเรียกจาก `sync_rows` **ในคำขอของหน้า Connect** → รีสตาร์ท/deploy ทีไร ทุก worker อ่านแชทซ้ำ
+      150 ห้องทีละห้องก่อนตอบรายชื่อ (วัด: คำขอแรก 2–3 วิ · ปกติ 0.1 วิ · prod เข้าเงื่อนไข 983 ห้อง)
+      และไม่เคยไปถึงแถวที่ 151 เป็นต้นไป · ตอนนี้จำใน KV `connect_cscan` + เรียกจาก thread (`scan_contacts_bg`)
+    """
+    from dashboard.services import cache_store
     engaged = (Q(awaiting_since__isnull=False) | Q(owner__isnull=False)
                | Exists(ChatOwnerLog.objects.filter(chat=OuterRef("pk"))))
-    rows = (ChatOwner.objects.select_related("profile", "fb_profile", "lead").filter(engaged)
-            .filter(Q(lead__isnull=True) | (Q(lead__phone="") | Q(lead__line_id="")))
-            .order_by(F("last_in_at").desc(nulls_last=True))[:limit])
+    cand = list(ChatOwner.objects.filter(engaged)
+                .filter(Q(lead__isnull=True) | (Q(lead__phone="") | Q(lead__line_id="")))
+                .order_by(F("last_in_at").desc(nulls_last=True))
+                .values_list("id", "last_in_at", "last_at")[:CSCAN_CANDIDATES])
+    try:
+        seen = dict((cache_store.get_kv(CSCAN_KEY) or {}).get("data") or {})
+    except Exception:
+        seen = {}
+    # ★ เช็ค "มีในตาราง" ก่อน — แถวที่ไม่มีเวลาข้อความ (ค่าว่าง) ต้องไม่ถูกนับว่าสแกนแล้วตั้งแต่ยังไม่เคยสแกน
+    todo = [(i, _cscan_key(a or b)) for i, a, b in cand
+            if not (str(i) in seen and seen[str(i)] == _cscan_key(a or b))][:limit]
+    keep = {str(i) for i, _a, _b in cand}
+    changed = len(seen) != len([k for k in seen if k in keep])
+    seen = {k: v for k, v in seen.items() if k in keep}   # แถวที่ได้เบอร์+ไอดีครบ/ถูกลบ = ไม่ต้องจำ (กัน KV โตไม่หยุด)
     n = 0
-    for o in rows:
-        key = (o.last_in_at or o.last_at)
-        if o.id in _CSCAN and _CSCAN[o.id] == key:      # ★ เช็ค "มีในตาราง" ก่อน — แถวที่ไม่มีเวลาข้อความ (None)
-            continue                                    #   ต้องไม่ถูกนับว่าสแกนแล้ว
-        _CSCAN[o.id] = key
+    objs = ChatOwner.objects.select_related("profile", "fb_profile", "lead").in_bulk([i for i, _k in todo])
+    for oid, key in todo:
+        o = objs.get(oid)
+        seen[str(oid)] = key
+        changed = True
+        if not o:
+            continue
         try:
             n += 1 if capture_contact(o) else 0
         except Exception:
             pass
+    if changed:
+        try:
+            cache_store.set_kv(CSCAN_KEY, seen)
+        except Exception:
+            pass
     return n
+
+
+def scan_contacts_bg(limit: int = 150) -> bool:
+    """เรียก `scan_contacts` ใน thread แยก (ห้ามหน่วงหน้าเว็บ) · Postgres = worker เดียวทำทีละรอบ
+    เทสต์ (`BG_FILL=False`) = ทำในที่เลย"""
+    import threading
+    if not BG_FILL:
+        scan_contacts(limit)
+        return True
+    if _CSCAN_RUN["busy"]:
+        return False
+
+    def _work():
+        from django.db import connection
+        got = False
+        try:
+            if connection.vendor == "postgresql":
+                with connection.cursor() as cur:
+                    cur.execute("SELECT pg_try_advisory_lock(%s)", [_CSCAN_LOCK])
+                    got = bool(cur.fetchone()[0])
+                if not got:
+                    return                              # worker อื่นกำลังสแกนอยู่
+            scan_contacts(limit)
+        except Exception:
+            pass
+        finally:
+            _CSCAN_RUN["busy"] = False
+            try:
+                if got:
+                    with connection.cursor() as cur:
+                        cur.execute("SELECT pg_advisory_unlock(%s)", [_CSCAN_LOCK])
+            except Exception:
+                pass
+            try:
+                connection.close()                    # thread แยกมี connection ของตัวเอง ต้องปิดเอง
+            except Exception:
+                pass
+
+    _CSCAN_RUN["busy"] = True
+    threading.Thread(target=_work, daemon=True).start()
+    return True
 
 
 def suggest_prefix(lead, assignee_team: str = "") -> dict:

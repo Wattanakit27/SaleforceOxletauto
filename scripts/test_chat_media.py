@@ -59,6 +59,8 @@ from checkout import leadflow as LF  # noqa: E402
 from checkout.models import ChatOwner, Employee, FbChat, FbProfile, GroupChat, LineProfile  # noqa: E402
 
 C.BG_FILL = False
+import checkout.people as _people  # noqa: E402
+_people.BG = False             # แคชชื่อหมดอายุ = โหลดตรง (ไม่แตก thread ชนฐานข้อมูลทดสอบ)
 LF.BG_SLOW = False
 CM.BG = False
 
