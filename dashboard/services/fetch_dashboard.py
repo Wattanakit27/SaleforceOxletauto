@@ -339,10 +339,12 @@ def parse_month_day(date_str: str):
     เหตุผล: daily bucket (กราฟ + KPI "ปิดได้") เคยใช้ parse_date() ตรงๆ ซึ่งบังคับต้องมีปี (3 ส่วน) →
     วันปล่อยที่แอดมินกรอกแบบ "10/06" (ไม่ใส่ปี) จะ parse ไม่ได้ → เคสตกไปนับตามวันจอง (คนละเดือน) หรือถูกทิ้ง
     ทำให้ KPI ปิดได้ (รายวัน) ไม่ตรงกับ monthlySummary/ตารางละเอียด (ที่ใช้ get_month ซึ่งดึงเดือนได้แม้ไม่มีปี).
-    helper นี้ทำให้ทั้งสองทางนับเดือนเดียวกัน. ปีไม่จำเป็น — bucket อยู่ในปีของ dashboard อยู่แล้ว."""
-    d = parse_date(date_str)
-    if d and 1 <= d.day <= 31:
-        return (d.month, d.day)
+    helper นี้ทำให้ทั้งสองทางนับเดือนเดียวกัน. ปีไม่จำเป็น — bucket อยู่ในปีของ dashboard อยู่แล้ว.
+
+    ★ 13 ต.ค.69 แก้บั๊ก — "d/m" ต้องเช็ค **ก่อน** parse_date: parse_date มีทางสำรอง dateutil ซึ่งอ่าน 2 ส่วน
+      แบบอเมริกัน (เดือนขึ้นก่อน) → "9/8" (9 ส.ค.) กลายเป็น 8 ก.ย. · "10/2" (10 ก.พ.) กลายเป็น 2 ต.ค.
+      (วันที่ > 12 ไม่โดน เพราะ dateutil สลับให้เอง) — เคสปล่อยถูกนับผิดวัน/ผิดเดือนในกราฟรายวัน + ตัวกรองช่วงวันที่
+      · ห้ามแก้ที่ parse_date เป็น dayfirst: "2026-10-12" จะกลายเป็น 10 ธ.ค. (ทดสอบแล้ว)"""
     s = (date_str or "").strip()
     if s and s != "-":
         parts = s.split("/")
@@ -353,6 +355,9 @@ def parse_month_day(date_str: str):
                     return (mo, day)
             except ValueError:
                 pass
+    d = parse_date(date_str)
+    if d and 1 <= d.day <= 31:
+        return (d.month, d.day)
     return None
 
 

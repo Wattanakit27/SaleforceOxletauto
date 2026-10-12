@@ -4145,7 +4145,16 @@ def update_lead_note(request):
     if not isinstance(value, str):
         value = str(value)
 
-    seller_name = seller_from_token(token)   # คืนชื่อ normalize แล้ว
+    seller_name = seller_from_token(token) if token else None   # คืนชื่อ normalize แล้ว
+    if not seller_name and not token:
+        # ★ 13 ต.ค.69 แก้บั๊ก — หน้า /me/ ไม่มี token ใน URL (หน้าเว็บส่ง token="") → เดิมตอบ 401 ทุกครั้ง
+        #   = เซลล์ที่เข้าผ่าน LINE Login บันทึกหมายเหตุ/สถานะลูกค้าลงชีตจากหน้าตัวเองไม่ได้เลย
+        #   → ใช้เซลล์ที่ login อยู่ (เขียนได้เฉพาะแถวของตัวเอง — expected_seller ด้านล่างคุมอยู่แล้ว)
+        u = _session_user(request)
+        if u and not _can_view_all(u):
+            from .services.constants import normalize_seller
+            raw = (u.get("seller_name") or u.get("nickname") or "").strip()
+            seller_name = normalize_seller(raw) or raw or None
     if not seller_name:
         return JsonResponse({"error": "token ไม่ถูกต้อง"}, status=401)
     if not code:
