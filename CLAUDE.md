@@ -79,6 +79,7 @@ python manage.py runserver
 | `/dashboard/` | `dashboard_page` | **ต้อง login (admin/ผู้บริหาร)** — เซลล์ → redirect ไป `/me/` · ไม่ login → `/login/` |
 | `/admin/` | `admin_page` | **ต้อง login admin** เท่านั้น (ไม่งั้น → `/login/`) |
 | `/me/` | `me_dashboard` | หน้าส่วนตัวของเซลล์ที่ login — ดึง `seller_name` จาก session, render `seller.html` (data แยกเฉพาะตัว) |
+| `/crm/` | `crm_views.page` | **หน้า Oxlet CRM** (13 ต.ค.69 · แบบ "Oxlet CRM.html" · **หน้าใหม่แยก ไม่แตะหน้าเดิม**) — แดชบอร์ด · ไปป์ไลน์ลีด · ลูกค้า · แชท · สต็อกรถ · รายงาน · `?p=dash\|pipe\|cust\|chat\|stock\|report` · เซลล์เห็นของตัวเอง · แอดมิน `?seller=` เลือกดูได้ · คนงาน → /track/ · จัดซื้อ → /buy/ · ดู section "Oxlet CRM" |
 | `/login/` | `login_view` | GET = หน้า login (เหลือปุ่ม **LINE Login** อย่างเดียว) · POST = admin user/pass (env, break-glass — ฟอร์มซ่อนหลัง `?bg=1`). **ตัด path "LINE user_id + รหัสรวม" ออกแล้ว (มิ.ย.69)** กันคนนอก |
 | `/logout/` | `logout_view` | clear session → กลับ `/login/` |
 | `/u/<token>/` | `magic_link` | login เซลล์ผ่าน LINE user_id (จาก employees sheet) |
@@ -135,7 +136,8 @@ python manage.py runserver
 | `/connect/api/crm` · `upload` · `alerts` · `insights` | `connect_views.api_crm` · `api_upload` · `api_alerts` · `api_insights` | **หน้ารวมแชท (Chat Inbox · 11 ต.ค.69 · `checkout/crm.py`)** — `crm` POST `{action, id, …}`: `stage {stage, reason}` · `followup {kind, due, note}` · `followup_done {fid, result, cancel}` · `call {result, note, media}` · `summary {text}` · `ai` (ร่าง ไม่บันทึก) · `release {reason}` (คืนกองกลาง) = **เจ้าของลูกค้า/แอดมิน** · `auto_plan {src?}` = แผน Run Auto ของห้องพัก Lead (**แอดมินเท่านั้น · แค่วางแผน ไม่เขียนอะไร** · `run_auto` เดิมเลิกแล้ว) · `upload` = รูปหลักฐานการโทร (multipart · ดิสก์ `media/connect/<id>/`) · `alerts` = กระดิ่ง (ทุกคนที่เข้า Connect ได้) · `insights` = วิเคราะห์ (แอดมิน · `?csv=unwanted` = รายชื่อไม่ต้องการ มีเบอร์) · `inbox` รับตัวกรองเพิ่ม `stage heat awaiting noreply silent follow dfrom dto car pmin pmax carmatch reason` · ดู section "หน้ารวมแชท" |
 | `/api/seller/today` | `seller_today` | **ต้อง login** (เซลล์) GET `?token=` → ใบจ่ายลีดของฉัน 2 วันล่าสุด + นาฬิกาโทร (`kind`/`dueAt`) · เห็นเฉพาะของตัวเอง · ใบทดลองไม่นับ — หน้าเซลล์แบบใหม่ "งานวันนี้" |
 | `/api/seller/car_matches` | `seller_car_matches` | **ต้อง login** (เซลล์) GET `?token=` → ลูกค้าของฉันที่รอรถ + รถพร้อมขายที่ตรงรุ่น/งบ (`leadflow.seller_matches` · คำนวณทุก 30 นาที) · ระบบไม่ทักลูกค้าเอง |
-| `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership |
+| `/api/seller/update_note` | `update_lead_note` | เซลล์ (token) เขียนกลับ Google Sheet จาก lead detail — รับ `field` (S=`fill_sheet_note` / Z=`customer_status` / N=`call_proof`) + `value` (back-compat: `note`) → header-aware + ตรวจ ownership · **★ 13 ต.ค.69 token ว่าง (หน้า /me/) = ใช้เซลล์ที่ login อยู่** (เดิม 401 ทุกครั้ง — เซลล์ที่เข้าผ่าน LINE Login บันทึกจาก /me/ ไม่ได้เลย) · แอดมินยังต้องใช้ token |
+| `/crm/api/data` · `customer` · `lead_status` | `crm_views.*` | API ของหน้า Oxlet CRM — `data?seller=&fresh=1` = ข้อมูลทั้งหน้าก้อนเดียว (จำ 20 วิ) · `customer?id=<ChatOwner.id>` = แผงลูกค้าแชท (**ไม่นับว่าอ่านแชทแล้ว**) · `lead_status` POST `{code, value, seller?}` = เขียนสถานะลูกค้า (Z) ให้ลีดจากชีต (CSRF จริง · เฉพาะแถวของเซลล์คนนั้น) |
 | `/api/seller/scan_doc` | `scan_doc` | **ต้อง login (any)** POST: รับรูปเอกสาร (base64, ≤8MB) + `form` (`finance`\|`loan`) → Gemini OCR (`gemini_ocr.extract_finance_fields`/`extract_loan_fields`) → คืน `{ok, fields}` ให้ฟอร์มกรอกอัตโนมัติ (ฉบับร่างให้เซลล์ตรวจก่อนส่ง) |
 | `/api/seller/finance_check` | `finance_check_submit` | เซลล์ (token) POST: ส่งฟอร์ม "เช็คไฟแนนซ์ก่อนเซ็น" → สร้าง Flex (`build_finance_check_flex`) push เข้า `FINANCE_TEST_LINE_ID` (ช่วง test) + เก็บ Supabase `finance_checks` (best-effort) |
 | `/api/seller/loan_submit` | `loan_submit` | เซลล์ (token) POST: ส่งฟอร์มขอสินเชื่อ → สร้าง Flex (`build_loan_flex`) push เข้า `FINANCE_TEST_LINE_ID` + เก็บ Supabase `loan_applications` (best-effort) |
@@ -416,6 +418,12 @@ cron ตอนส่ง followup (`build_followup_messages(log_daily=True)` ใ�
 - "d/m/yy" หรือ "d/m/yyyy" (รองรับ พ.ศ. แปลงเป็น ค.ศ. ถ้า year > 2500) — **ต้องมี 3 ส่วน (มีปี)** ไม่งั้นคืน None
 - **⚠️ ต้นเหตุ "วันที่ไม่มีปี" = `FORMATTED_VALUE` (ไม่ใช่แอดมินลืมพิมพ์ปี)**: ทุกการอ่านชีตใช้ `valueRenderOption=FORMATTED_VALUE` ([google_sheets.py](dashboard/services/google_sheets.py)) = คืนค่า **ตามที่แสดงในชีต**. เซลล์วันปล่อย (W/X) ของบางเซลล์เป็น **วันที่จริง (serial)** แต่ตั้ง custom format ให้โชว์แค่ `d/m` → API คืน `"10/2"` ปีหายไป (ค่าจริงคือ serial 46063 = 2026-02-10 · กดเข้าไปในชีตเห็นปีครบ). พิสูจน์ด้วย `UNFORMATTED_VALUE`. **ไม่ใช่ data เสีย** — แค่รูปแบบเซลล์
 - **`parse_month_day(s)` → `(month, day)` หรือ None** — รองรับทั้งวันเต็ม (ผ่าน `parse_date`) **และแบบไม่มีปี `"d/m"` (เช่น `"10/2"` ที่ได้จาก FORMATTED date)**. ใช้ใน daily bucket (กราฟ + KPI "ปิดได้") ให้นับเดือนเดียวกับ `get_month()` (ที่ใช้ใน monthlySummary) — **กันบั๊ก "9 vs 10"**: เดิม daily ใช้ `parse_date` ตรงๆ ซึ่งต้องมีปี → `"10/2"` parse ไม่ได้ → ตกไปนับตามวันจอง (คนละเดือน) ทำให้ KPI/`buildRangeMs` ≠ ตารางรายเดือน. `_parse_day()` (nested 2 จุด: daily หลัก + `fetch_seller_stats`) เรียก `parse_month_day` แล้ว · frontend `_effDate` (renderBookings) ก็เติมปีของช่วงให้วันปล่อย "d/m" เช่นกัน
+- **⚠️★ 13 ต.ค.69 แก้บั๊กใน `parse_month_day` — "d/m" ถูกอ่านเป็นเดือนขึ้นก่อน**: ฟังก์ชันเดิมเรียก `parse_date` ก่อน
+  ซึ่งมีทางสำรอง **dateutil (รูปแบบอเมริกัน)** → `"9/8"` (9 ส.ค.) กลายเป็น **8 ก.ย.** · `"10/2"` (10 ก.พ.) กลายเป็น **2 ต.ค.**
+  (วันที่ > 12 ไม่โดน เพราะ dateutil สลับให้เอง) — สาขาที่อ่าน "d/m" ไม่เคยถูกใช้เลย · **กระทบกราฟรายวัน/ตัวเลข "ปิดได้"
+  ตามช่วงวันที่ของเคสที่วันปล่อยไม่มีปี** (ยอดรายเดือนไม่กระทบ เพราะนับตามแท็บ) · แก้: เช็ค "d/m" ก่อน parse_date
+  · **⚠️ ห้ามแก้ที่ `parse_date` เป็น `dayfirst=True`** — ทดสอบแล้ว `"2026-10-12"` จะกลายเป็น 10 ธ.ค.
+  · `parse_date("10/2")` ตัวมันเองยังคืน 2 ต.ค. อยู่ (ไม่ได้แก้ เพราะใช้กว้าง) → **วันที่ 2 ส่วนให้ใช้ `parse_month_day` เสมอ**
 - **`get_month(s)`** lenient ดึงเลขเดือนจาก `parts[1]` ตรงๆ (ไม่ต้องมีปี/วันถูก) → ใช้ใน monthlySummary · ต่างจาก `parse_date` (strict) — 2 ตัวนี้เคยไม่ sync กันจนเกิด "9 vs 10" · **กฎ: daily ต้อง parse เดือนได้เท่า `get_month` เสมอ**
 - **ทางแก้ถาวร (ถ้าอยากได้ปีจริง)**: อ่านคอลัมน์วันที่แบบ `UNFORMATTED_VALUE` (ได้ serial → `parse_date` แปลงพร้อมปีจริง) แต่กระทบการ parse คอลัมน์อื่น (string/number) → ยังไม่ทำ · ตอนนี้ `parse_month_day` พอสำหรับการนับ (dashboard เป็น single-year อยู่แล้ว)
 
@@ -480,6 +488,8 @@ cron ตอนส่ง followup (`build_followup_messages(log_daily=True)` ใ�
 
 **★ ตาราง "Lead → จอง → จบ (แยกช่องทาง)" (ส.ค.69 · การ์ด `#leadconv-card` แท็บ LEAD)** — ช่องทางไหนได้ลีดเยอะ ปิดจองกี่ % จบจริงกี่ % · คอลัมน์: ช่องทาง | Lead | จอง | จบ | จอง/Lead | จบ/จอง | จบ/Lead · นับตามช่วงวันที่ (Lead=วันรับลีด · จอง=วันจอง · จบ=วันปล่อย)
 - **⚠️ ชื่อช่องทาง 2 ฝั่งไม่ตรงกัน**: ฝั่งลีดเป็น dropdown (26 ค่าสะอาด) แต่**ฝั่งจองพิมพ์มือ 198 แบบ ตรงกันเป๊ะแค่ 8** (`Line@`/`line@`/`LINE@`/`": line@"` · `Live tiktok ช่องขายบอส`/`Tiktok ช่องขายบอส`/`ไลฟ์ TT ช่องขายบอส`) → นับตรงๆ ไม่ได้
+- **⚠️ 13 ต.ค.69 แก้ข้อมูลในบันทึก**: `_attach_clean_channel` **ไม่ได้ถูกเรียกจากตัวคำนวณแดชบอร์ด** — `bookingCases[]` จึง **ไม่มี** `channelClean`
+  (ตาราง Lead → จอง → จบ ใช้ `doneChannelByMonth` ที่เทียบช่องทางด้วยกติกาเดียวกันแทน) · ตอนนี้หน้า /crm/ เรียกฟังก์ชันนี้เองกับเคสของเซลล์ (`crm_page._done_channels`)
 - **วิธีเทียบ (`_attach_clean_channel` ใน [fetch_dashboard.py](dashboard/services/fetch_dashboard.py))**: (1) ใช้ **รหัสลีด** หาช่องทางจากชีตลีดก่อน (แม่นสุด · ครอบคลุม ~55%) → (2) ไม่มีก็ **ล้างชื่อ** (`_norm_channel` ตัดตัวพิมพ์/ช่องว่าง/`":"` นำหน้า + รวม live tiktok↔tiktok) แล้วเทียบกับชื่อฝั่งลีด → **รวมครอบคลุม 94-95%** · เก็บผลใน `bookingCases[].channelClean` (`''` = จับไม่ได้ → แถว "ไม่ระบุ")
 - **★ ยอด Lead ในตารางนี้น้อยกว่า "ลีดรวม" ของแดชบอร์ด — ตั้งใจ ไม่ใช่บั๊ก** (วัดจริง ส.ค.69: ชีต 22,275 แถว → เข้าตาราง 14,790): ตัด **RJ/RB 6,857** (ไม่ใช่ลีดขายรถ) + **รหัสลีดซ้ำ 626** (นับครั้งเดียว) · **ลีดที่ไม่ได้กรอกช่องทางมีแค่ 2 แถว** (เดิม `continue` ทิ้ง → ตอนนี้เก็บใน `leadNoChannelByMonth` แล้วลงแถว "ไม่ระบุ") · เขียนอธิบายไว้ใน tooltip ของการ์ดแล้ว
 - **ช่องทางที่ Lead=0 แต่มีจอง/จบ ถือว่าปกติ** (เช่น "หน้าร้าน" = ลูกค้าเดินเข้ามาเอง ไม่มีลีด) — % จะโชว์ `–`
@@ -4751,6 +4761,37 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   · แอป: `cd mobile && npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)
 - **⚠️ `npx expo lint` ครั้งแรกติด peer dependency** (npm ดึง react-dom 19.3 ที่ไม่ตรง react 19.2.3) →
   ติดตั้ง eslint เองด้วย `--legacy-peer-deps` แล้ว (อยู่ใน devDependencies แล้ว)
+
+### 🧭 Oxlet CRM (`/crm/`) — หน้าใหม่แยกตามแบบ "Oxlet CRM.html" · 13 ต.ค.69
+ผู้ใช้ส่งไฟล์แบบหน้าจอ (Claude Design · 5 หน้า ข้อมูลสมมติ) แล้วสั่ง "ปรับระบบตามนี้" → เลือก **ทำเป็นหน้าใหม่แยก** (ไม่แตะ /me/ · /connect/ · /dashboard/)
+และไปป์ไลน์ใช้ **"แชท + ลีดจากชีต"** · ไฟล์: [crm_views.py](dashboard/crm_views.py) · [services/crm_page.py](dashboard/services/crm_page.py) ·
+[crm.html](dashboard/templates/dashboard/crm.html) (**CSS/JS ฝังในหน้า — ไม่ต้อง collectstatic** · ไม่มี migration)
+- **6 เมนู** (แถบซ้ายสีม่วงเข้ม · จอ ≤900px เป็นแถบบน) — แดชบอร์ด · ไปป์ไลน์ลีด · ลูกค้า · แชทลูกค้า (iframe `/connect/?embed=1`) ·
+  สต็อกรถ (`/track/api/cars` · พร้อมขาย/จอง/ทำสภาพ) · รายงาน · ธีมสว่างเป็นค่าเริ่มต้น สลับเข้มได้ (คีย์ `oxlet_theme` ชุดเดียวกับหน้าอื่น)
+- **ไม่มีสูตรนับใหม่** (ตัวเลขตรงกับหน้าเซลล์/ข้อความ LINE): ยอดไตรมาส/เดือน/รายวัน = `fetch_seller_stats` · ผู้ช่วย "เสี่ยงหลุด" = `mobile_home._follow`
+  (สูตรตามด่วน) · นาฬิกาโทร = `mobile_home._tasks` (`leadflow.seller_tasks`) · ขั้น/ความร้อนลูกค้าแชท = `crm.stage_of/heat_of` ·
+  เป้าทีม/อันดับ = `monthlySummary`/`dailyBySeller` ที่ cron อุ่นไว้ (ส่งแค่ชื่อ+ตัวเลข — ข้อยกเว้นเดียวกับตารางคะแนน)
+- **ไปป์ไลน์ 5 คอลัมน์** ลีดใหม่ · ติดต่อแล้ว · นัดดูรถ · ยื่นไฟแนนซ์ · จอง/ปิดการขาย (`COLS`)
+  · **ลูกค้าแชท** = ขั้นใน Connect (`CHAT_COL`) · **ลากได้** → `POST /connect/api/crm {action:"stage"}` ตัวเดิม (`COL_STAGE` · คอลัมน์ลีดใหม่ = "รอติดต่อ")
+  · **ลีดจากชีต** (`PIPE_DAYS`=60 วัน) วางตาม `sheet_stage()` — `fu_booked` → จอง (**เช็คก่อน** fu_skip เพราะ "ส่งมอบ" อยู่ในคำไม่ต้องตามด้วย) ·
+    `fu_skip` = ไม่อยู่บนกระดาน · Z "รอเช็คเครดิต" = ยื่นไฟแนนซ์ · Z "รอมาดูรถ" = นัดดูรถ · ไม่มี Z + ไม่เคยอัปเดต = ลีดใหม่ · นอกนั้น = ติดต่อแล้ว
+    · **ลากไม่ได้** → กดแล้วเลือกสถานะ Z ในหน้าลูกค้า → `POST /crm/api/lead_status` (คืนคอลัมน์ใหม่จาก `sheet_stage` ฝั่งเซิร์ฟเวอร์ — หน้าเว็บไม่มีสูตรของตัวเอง)
+  · **เคสจองที่ยังไม่ปล่อย** (ชีตยอดขาย · จองไม่เกิน `DEAL_DAYS`=90 วัน) อยู่คอลัมน์จอง · ลีดที่มีเคสจองแล้วไม่ขึ้นซ้ำ (ใบเคสจองแทน)
+  · ลูกค้าแชทที่มีเลขลีดตรงกับลีดในชีต = ใบแชทใบเดียว (ใบแชทชนะเพราะลากได้)
+- **หน้าลูกค้า** = ลูกค้าแชท + ลีดจากชีต `CUST_DAYS`=90 วัน · **เคสเสีย/คืนเคสที่เก่ากว่า `DEAD_DAYS`=14 วันไม่ส่ง** (บอกเป็นจำนวน — ~90% ของลีดเป็นแบบนี้ · ทั้งปีหนัก ~600 KB)
+  · แผงขวา (ไม่ใช่หน้าต่างลอย): ลูกค้าแชท = `/crm/api/customer` (ขั้น · นัด · บันทึกการโทร ผ่าน `/connect/api/crm` ตัวเดิม · ประวัติไม่รวมการตอบ ·
+    **ไม่แตะ `read_at`** — ดูโปรไฟล์ไม่ใช่อ่านแชท) · ลีดจากชีต = เลือกสถานะ Z · เคสจอง = อ่านอย่างเดียว
+- **รายงาน** 30 วัน / 90 วัน / ปีนี้ คิดฝั่งเซิร์ฟเวอร์ (`report()`): ยอดปล่อย · ปล่อยรถ · จองถึงปล่อยเฉลี่ย · ลีด→ปล่อย (เทียบช่วงก่อน · **ปีนี้ไม่มีช่วงก่อน**
+  เพราะแดชบอร์ดเก็บปีเดียว · ช่วงที่คร่อมข้ามปีถูกตัดที่ต้นปี) · กรวย = ลีดปกติที่รับในช่วงนั้นไปถึงขั้นไหน (นัด/ไฟแนนซ์อ่านจาก Z — ไม่กรอก = ไม่ถูกนับ) ·
+  ช่องทางเคสปล่อย = `_done_channels()` (เรียก `_attach_clean_channel` ตัวเทียบเดียวกับตาราง Lead → จอง → จบ) · อันดับเซลล์
+- **สิ่งที่แบบมีแต่ไม่ได้ทำ (ข้อมูลไม่มีจริง)**: เส้น "ปีก่อน" · ปุ่ม "นำเข้าลีด"/"ลีดใหม่" (ไม่มีขั้นตอนให้เซลล์สร้างลีดเอง — เปลี่ยนเป็น "เช็คเบอร์ซ้ำ"/"เปิดไปป์ไลน์") ·
+  ตัวกรอง "ปิดได้ใน 30 วัน" (ไม่มีข้อมูลคาดการณ์ → ใช้ "ยังไม่โทร/รอเราตอบ" · "มีนัด" แทน) · "มูลค่าคาดการณ์" (ใช้ "ดีลกำลังเดินเดือนนี้" = pipelineValue แทน) ·
+  ปุ่มรายงานผลบนนาฬิกาโทร (รายงานยังทำในห้องจ่ายเบอร์ — หน้าเว็บบอกวิธี)
+- **แชท = Connect ของบัญชีที่ login** — แอดมินที่เลือกดูเซลล์คนอื่นจะเห็นแชททุกคน (ไม่ได้กรองตามเซลล์ที่เลือก · หน้าเว็บเขียนบอก)
+- **เทสต์**: `python scripts/test_crm_page.py` (66 ข้อ · test client จริง + CSRF จริง · ปลอมแค่ชีต/ผลแดชบอร์ด) — สิทธิ์ทุกบทบาท · ไม่มีลีด/แชทของคนอื่นหลุด ·
+  ไม่มี LINE id · คอลัมน์ของลีดจากชีต · เขียน Z เฉพาะแถวของตัวเอง · CSRF · ไม่แตะ read_at · ลากการ์ดของคนอื่นไม่ได้ · บั๊กวันที่ "d/m" · บั๊ก /me/
+  · ตรวจ UI ด้วย Chromium จริง (template ตัวจริง + ข้อมูลชีตจริง · ลากการ์ดแล้ว POST ถูกตัว · ตั้งนัด/บันทึก Z/ไม่สนใจ+เหตุผล · จอ 1590/1180/390 ไม่ล้นจอ · ไม่มี JS error)
+- **⚠️ เครื่อง dev**: ตั้งค่าเซลล์ในฐานข้อมูลทดสอบ (SQLite) มีชื่อปลอม (`TEAMS={"C":["เดลต้า"]}`) → ทีม/เป้า/อันดับในเครื่องว่าง ไม่ใช่บั๊ก (บนเซิร์ฟเวอร์อ่านจากชีต)
 
 ### 🔖 ป้ายเวอร์ชันมุมขวาล่าง (ส.ค.69)
 ทุกหน้า (login/index/seller/track base) โชว์เวอร์ชันมุมขวาล่าง — **สูตร: จำนวน git commit ÷ 10** (100 commits = v10.0 · เจ้าของกำหนด) · `app_version()` ใน [cars/context.py](cars/context.py) (git rev-list --count HEAD · cache ต่อ process · ไม่มี .git = ป้ายซ่อน) → `APP_VERSION` ผ่าน context processor `cars.context.nav` · ใช้เช็คว่า deploy ล่าสุดติดหรือยัง (ดูได้ตั้งแต่หน้า login)

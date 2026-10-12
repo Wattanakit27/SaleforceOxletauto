@@ -3,9 +3,14 @@ from django.views.decorators.csrf import csrf_exempt
 
 from checkout import fb_webhook as _fb_webhook
 
-from . import mobile_views, views
+from . import crm_views, mobile_views, views
 
 urlpatterns = [
+    # ★ 13 ต.ค.69 — หน้า Oxlet CRM (แบบ "Oxlet CRM.html") · หน้าใหม่แยก ไม่แตะหน้าเดิม · ดู crm_views.py
+    path("crm/", crm_views.page, name="crm_page"),
+    path("crm/api/data", crm_views.api_data, name="crm_api_data"),
+    path("crm/api/customer", crm_views.api_customer, name="crm_api_customer"),
+    path("crm/api/lead_status", crm_views.api_lead_status, name="crm_api_lead_status"),
     # ★ 9 ต.ค.69 — แอปมือถือ (demo): login ผ่าน LINE Login ตัวเดิม → token · ดู mobile_views.py
     path("m/login", mobile_views.m_login, name="m_login"),
     path("m/handoff/<str:pid>", mobile_views.m_handoff, name="m_handoff"),
