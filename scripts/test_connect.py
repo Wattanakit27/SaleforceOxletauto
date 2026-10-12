@@ -2765,6 +2765,105 @@ try:
     ck("…รันซ้ำ = ไม่นับซ้ำ (เป็นลีดรับซื้ออยู่แล้ว)", not any(x["id"] == LB.id for x in C.scan_deals(days=7, apply=True)["rows"]))
     ck("…แชทที่คนตั้งเป็นลีดขายไว้ ไม่ถูกเก็บตกทับ", C.deal_of(C.lead_of(chat_of(B1))) == "sell")
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[37] ไฮไลต์คำที่ระบบจับได้ · ป้ายที่มา · ค่าใหม่รอคนตัดสิน (12 ต.ค.69 · เจ้าของเลือกจากเดโม \"เอาแบบนี้แหละ\")")
+    C._DD.update(at=0.0, val=None)
+    t0 = timezone.now() - timedelta(minutes=20)
+    u81 = cust(981, "นภาทดสอบ").user_id
+    H1 = C.note_customer_message(u81, t0, "สวัสดีค่ะ")
+    convo = [("in", "สวัสดีค่ะ สนใจ yaris ativ ปี 2020 ค่ะ"),
+             ("out", "ลูกค้าทำงานอะไร รายได้ประมาณเท่าไหร่ครับ"),
+             ("in", "ทำงานโรงงาน ค่ะ รายได้ 15,000 อายุงาน 3 ปี"),
+             ("in", "😊😊 ผ่อนได้เดือนละ 7,000 เบอร์ 089-000-1234 ค่ะ"),
+             ("in", "จริงๆ รวมโอทีได้ 18,000 ค่ะ")]
+    for i, (d_, tx) in enumerate(convo):
+        GroupChat.objects.create(chat_type="user", sender_id=u81, message_id="g_hl1_%d" % i, msg_type="text", text=tx,
+                                 direction=d_, sent_at=t0 + timedelta(minutes=i))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H1.id)
+    ms = d.get("messages") or []
+    u16 = lambda t, s, e: t.encode("utf-16-le")[s * 2:e * 2].decode("utf-16-le")
+    got = {f: u16(m["text"], s, e) for m in ms for s, e, f in (m.get("hl") or [])}
+    ck("★ ข้อความในแชทมีตำแหน่งคำที่จับได้ (m.hl) ตรงคำที่ลูกค้าพิมพ์", got.get("occupation") == "ทำงานโรงงาน"
+       and got.get("job_tenure") == "อายุงาน 3 ปี" and "yaris ativ" in (got.get("car_text") or "").lower(), got)
+    ck("★ ข้อความมีอีโมจินำหน้า → ตำแหน่งเป็นแบบ UTF-16 (เบราว์เซอร์) ไฮไลต์เบอร์ตรงเป๊ะ", got.get("phone") == "089-000-1234", got)
+    ck("ทุกข้อความมี id อ้างอิง (ไม่ใช่ LINE id)", all(re.fullmatch(r"[lf]\d+", m.get("id") or "") for m in ms), [m.get("id") for m in ms])
+    ck("ข้อความของเรา (ลีดขาย) ไม่ไฮไลต์", not any(m.get("hl") for m in ms if m["dir"] == "out"))
+    L_ = d.get("lead") or {}
+    ck("รายได้ที่เติม = ข้อความแรกที่บอก (15000) · จดว่ามาจากแชท", L_.get("income") == "15000"
+       and (L_.get("auto") or {}).get("income") == "แชท", (L_.get("income"), L_.get("auto")))
+    sg = (L_.get("sugg") or {}).get("income") or {}
+    ck("★ ลูกค้าพูดรายได้ใหม่ทีหลัง (18,000) → ไม่ทับเอง ขึ้นเป็น \"ค่าใหม่รอคนตัดสิน\"", sg.get("v") == "18000"
+       and sg.get("from") == "15000" and "18,000" in (sg.get("why") or ""), L_.get("sugg"))
+    ck("…อาชีพ/อายุงานไม่มีค่าใหม่ = ไม่ถาม", set(L_.get("sugg") or {}) == {"income"}, L_.get("sugg"))
+    ck("★ API แชท (มีไฮไลต์+ค่าใหม่): ไม่มี LINE user id หลุด", not leak.search(json.dumps(d, ensure_ascii=False)))
+    s_, d = J(SA1, "/connect/api/lead", {"id": H1.id, "field": "income", "value": "18000"})
+    ck("เซลล์ที่ไม่ใช่เจ้าของ ตัดสินค่าใหม่ไม่ได้", s_ == 403, s_)
+    s_, d = J(ADM, "/connect/api/lead", {"id": H1.id, "field": "income", "value": "18000"})
+    L_ = d.get("lead") or {}
+    ck("★ กด \"ใช้ 18,000\" → ช่องเป็นค่าใหม่ + คนยืนยันแล้ว + กล่องหาย", s_ == 200 and L_.get("income") == "18000"
+       and (L_.get("auto") or {}).get("income") == "คน" and "income" not in (L_.get("sugg") or {}), (s_, L_.get("sugg")))
+    GroupChat.objects.create(chat_type="user", sender_id=u81, message_id="g_hl1_9", msg_type="text",
+                             text="ตอนนี้รายได้ 25,000 แล้วค่ะ", direction="in", sent_at=t0 + timedelta(minutes=9))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H1.id)
+    ck("★ ช่องที่คนตัดสินแล้ว ลูกค้าพูดค่าใหม่อีก = ไม่ถามซ้ำ ไม่ทับ", (d.get("lead") or {}).get("income") == "18000"
+       and "income" not in ((d.get("lead") or {}).get("sugg") or {}), (d.get("lead") or {}).get("sugg"))
+
+    # เบอร์ใหม่ที่ลูกค้าพิมพ์ทีหลัง → ถาม (ไม่เปลี่ยนเบอร์หลักเอง) · "คงเบอร์เดิม" = คนยืนยัน
+    GroupChat.objects.create(chat_type="user", sender_id=u81, message_id="g_hl1_10", msg_type="text",
+                             text="เบอร์ใหม่ 0861112222 นะคะ", direction="in", sent_at=t0 + timedelta(minutes=10))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H1.id)
+    L_ = d.get("lead") or {}
+    ck("★ เบอร์ใหม่ → ค่าใหม่รอคนตัดสิน (เบอร์หลักยังเป็นเบอร์เดิม)", L_.get("phone") == "0890001234"
+       and ((L_.get("sugg") or {}).get("phone") or {}).get("v") == "0861112222", (L_.get("phone"), L_.get("sugg")))
+    s_, d = J(ADM, "/connect/api/lead", {"id": H1.id, "field": "phone", "value": "0890001234"})
+    ck("กด \"คงเบอร์เดิม\" → เบอร์เดิม + คนยืนยัน + กล่องหาย", s_ == 200 and (d.get("lead") or {}).get("phone") == "0890001234"
+       and "phone" not in ((d.get("lead") or {}).get("sugg") or {}), d.get("lead", {}).get("sugg"))
+
+    # รุ่นกว้าง ("city") → ตัวเลือกรุ่นย่อยให้คนเลือก · "ยังไม่รู้" = ไม่ถามซ้ำ แต่ระบบยังเปลี่ยนเป็นรุ่นจริงได้ภายหลัง
+    u82 = cust(982, "มิ้นทดสอบ").user_id
+    H2 = C.note_customer_message(u82, t0, "สวัสดีค่ะ")
+    GroupChat.objects.create(chat_type="user", sender_id=u82, message_id="g_hl2_0", msg_type="text",
+                             text="สนใจ city ตัวไหนบ้างคะ งบ 4 แสน", direction="in", sent_at=t0)
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H2.id)
+    L_ = d.get("lead") or {}
+    opts = ((L_.get("sugg") or {}).get("car_model") or {}).get("opts") or []
+    ck("★ บอกแค่ \"city\" → CAR/สูตร = ไม่ระบุรุ่นรถ + ตัวเลือก City 4/5 ประตู ให้คนเลือก (ไม่เดา)",
+       L_.get("car_model") == "ไม่ระบุรุ่นรถ" and "City 4 ประตู" in opts and "City 5 ประตู" in opts, (L_.get("car_model"), opts))
+    s_, d = J(ADM, "/connect/api/lead", {"id": H2.id, "field": "car_model", "dismiss": True})
+    L_ = d.get("lead") or {}
+    ck("★ \"ยังไม่รู้\" → กล่องหาย · ช่องยังเป็นค่าที่ระบบเติม (ไม่กลายเป็นคน)", s_ == 200 and "car_model" not in (L_.get("sugg") or {})
+       and (L_.get("auto") or {}).get("car_model") == "แชท", (s_, L_.get("sugg"), L_.get("auto")))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H2.id)
+    ck("…เปิดแชทอีกรอบ ไม่ถามซ้ำ", "car_model" not in ((d.get("lead") or {}).get("sugg") or {}), (d.get("lead") or {}).get("sugg"))
+    GroupChat.objects.create(chat_type="user", sender_id=u82, message_id="g_hl2_1", msg_type="text",
+                             text="เอาเป็น city 5 ประตูค่ะ", direction="in", sent_at=t0 + timedelta(minutes=1))
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % H2.id)
+    ck("…ลูกค้าบอกรุ่นชัดทีหลัง → ระบบยังเปลี่ยนเป็นรุ่นจริงได้ตามกติกาเดิม", (d.get("lead") or {}).get("car_model") == "City 5 ประตู",
+       (d.get("lead") or {}).get("car_model"))
+    s_, d = J(ADM, "/connect/api/lead", {"id": H2.id, "field": "car_model", "dismiss": True})
+    ck("ปิดกล่องที่ไม่มีแล้ว = บอกเหตุ (400)", s_ == 400 and d.get("error"), (s_, d))
+
+    # ข้อความเข้า (webhook) ก็เก็บค่าใหม่ไว้ได้ทันที — save แบบ update_fields ต้องไม่พังเพราะ _sugg ไม่ใช่ช่องของตาราง
+    u83 = cust(983, "ลูกค้าคีย์ใหม่").user_id
+    H3 = C.note_customer_message(u83, t0, "พนักงานบริษัท เงินเดือน 20,000 ค่ะ")
+    C.note_customer_message(u83, t0 + timedelta(minutes=1), "ขอแก้ค่ะ เงินเดือนจริง 22,000")
+    l3_ = ChatLead.objects.get(chat_id=H3.id)
+    ck("★ ข้อความเข้า (ไม่ต้องเปิดแชท) → ค่าใหม่ถูกเก็บไว้รอคนตัดสิน", l3_.income == "20000"
+       and ((l3_.auto or {}).get(C.SUGG_KEY) or {}).get("income", {}).get("v") == "22000", (l3_.income, l3_.auto))
+
+    # ลีดรับซื้อ: ไฮไลต์คำว่าขาย/ฝ่ายจัดซื้อ (ทั้ง 2 ฝั่ง) · ลีดขายไม่ไฮไลต์คำว่าขาย
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % FB1.id)
+    fms = d.get("messages") or []
+    ck("★ ลีดรับซื้อ: ข้อความของเรา \"ฝ่ายจัดซื้อ\" ไฮไลต์เป็นช่อง deal", any(f == "deal" and "จัดซื้อ" in u16(m["text"], s, e)
+       for m in fms if m["dir"] == "out" for s, e, f in (m.get("hl") or [])), [m.get("hl") for m in fms])
+    s_, d = J(ADM, "/connect/api/chat?id=%d" % B1.id)
+    ck("ลีดขาย (คนตั้งเอง) ไม่ไฮไลต์คำว่าขาย", not any(f == "deal" for m in (d.get("messages") or [])
+                                                       for *_x, f in (m.get("hl") or [])))
+    s_, d = J(SA1, "/connect/api/chat?id=%d" % H1.id)
+    ck("เซลล์ที่ไม่ใช่เจ้าของ: เปิดไม่ได้ หรือเห็นแค่ตัวอย่างคิว — ไม่มีไฮไลต์/ข้อมูลลีด/ค่าใหม่",
+       s_ == 403 or (d.get("access") == "preview" and "lead" not in d
+                     and not any(m.get("hl") for m in d.get("messages") or [])), (s_, d.get("access"), list(d)))
+
 finally:
     _runner.teardown_databases(_old)
 

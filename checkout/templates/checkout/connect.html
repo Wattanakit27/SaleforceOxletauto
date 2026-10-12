@@ -179,6 +179,44 @@
                       border: .5px solid var(--bd2); background: var(--bg2); line-height: 1.5; }
   .cn-comp-why { padding: 12px 16px; background: var(--bg); border-top: .5px solid var(--bd2); color: var(--t3); }
   .cn-err { color: var(--red); padding: 0 16px 8px; background: var(--bg); }
+  /* ★ 12 ต.ค.69 คำที่ระบบจับได้ (สีตามหมวด: ติดต่อ · รถ · การเงิน · เจตนา) · ป้ายที่มา · ค่าใหม่รอยืนยัน · ความพร้อมข้อมูล · ตอบด่วน */
+  .kw { font: inherit; line-height: inherit; color: inherit; cursor: pointer; margin: 0; padding: 0 2px; border: 0; border-radius: 4px;
+        background: var(--kw-bg); box-shadow: inset 0 -2px 0 var(--kw-ln); white-space: pre-wrap; text-align: inherit; }
+  .kw-c { --kw-bg: rgba(37,99,235,.15); --kw-ln: #2563eb; }
+  .kw-r { --kw-bg: rgba(124,58,237,.15); --kw-ln: #7c3aed; }
+  .kw-m { --kw-bg: rgba(5,150,105,.16); --kw-ln: #059669; }
+  .kw-i { --kw-bg: rgba(234,88,12,.16); --kw-ln: #c2410c; }
+  .bub.out .kw { background: rgba(255,255,255,.22); box-shadow: inset 0 -2px 0 rgba(255,255,255,.9); }
+  .kw.on, .bub.out .kw.on { background: var(--kw-ln); color: #fff; box-shadow: none; }
+  .bub.flash { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .kw-src { font: inherit; font-size: 10.5px; line-height: 1.5; padding: 0 5px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+            background: var(--bg); color: var(--t2); border: 1px solid var(--kw-ln, var(--bd2)); }
+  .pf-fld.flash, .pf-buy.flash, .pf-src.flash { outline: 2px solid var(--kw-ln, var(--blue)); outline-offset: 3px; border-radius: 6px; }
+  .pf-sgm { font-size: 10.5px; color: var(--amber); white-space: nowrap; font-weight: 700; }
+  .kw-hd { display: flex; align-items: baseline; gap: 8px; }
+  .kw-n { margin-left: auto; font-weight: 800; color: var(--blue); }
+  .kw-bar { height: 6px; border-radius: 3px; background: var(--bg3); overflow: hidden; margin: 6px 0 8px; }
+  .kw-bar > i { display: block; height: 100%; background: var(--blue); }
+  .kw-ready { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 3px 10px; font-size: 12.5px; }
+  .kw-ready span { display: flex; gap: 5px; align-items: center; min-width: 0; }
+  .kw-ready .ok { color: var(--green); }
+  .kw-ready .no { color: var(--t3); }
+  .kw-ready .no i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--t3); flex: none; margin: 0 1px; }
+  .kw-ask { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--amber-bg); line-height: 1.5; }
+  .kw-ask b { color: var(--amber); }
+  .kw-leg { display: flex; flex-wrap: wrap; gap: 5px 7px; align-items: center; margin-top: 9px; font-size: 12px; color: var(--t3); }
+  .kw-leg .kw { cursor: default; font-size: 12px; }
+  .kw-leg label { display: flex; gap: 5px; align-items: center; width: 100%; cursor: pointer; color: var(--t2); }
+  .kw-sg { padding: 8px 10px; border: 1px solid var(--amber-mid); border-radius: 8px; margin-top: 6px; line-height: 1.5; }
+  .kw-sg .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .kw-qr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 16px 0; background: var(--bg); border-top: .5px solid var(--bd2); }
+  #cn-qr-wrap:not(:empty) + #cn-comp-wrap .cn-comp, #cn-qr-wrap:not(:empty) + #cn-comp-wrap .cn-comp-why { border-top: 0; }
+  .kw-qr .q { font: inherit; font-size: 12.5px; padding: 3px 9px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2);
+              color: var(--t1); cursor: pointer; white-space: nowrap; }
+  .kw-qr .q.next { border-color: var(--amber-mid); background: var(--amber-bg); color: var(--amber); font-weight: 700; }
+  .kw-pt { margin-left: auto; display: inline-flex; border: .5px solid var(--bd2); border-radius: 7px; overflow: hidden; }
+  .kw-pt button { font: inherit; font-size: 12px; padding: 2px 8px; border: 0; background: var(--bg2); color: var(--t3); cursor: pointer; }
+  .kw-pt button.on { background: var(--blue); color: var(--on-blue); }
   .cn-blank { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--t3); padding: 30px; line-height: 1.8; }
 
   /* ── แชท | โปรไฟล์ลูกค้า ── */
@@ -919,8 +957,10 @@
     f: {}, fltOpen: false, crmOpts: null, alerts: null,
     raPlan: null, raOff: new Set(), raBusy: '', raDone: null,      // Run Auto ของห้องพัก Lead
     lostPick: 0, aiDraft: {}, sumDraft: {}, apptDraft: {}, callDraft: {}, callMedia: {},
+    hl: true, pt: 'm',                     // ★ 12 ต.ค.69 ไฮไลต์คำที่ระบบจับได้ · คำลงท้ายของข้อความตอบด่วน (m = ครับ · f = ค่ะ)
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
+  try { S.hl = localStorage.getItem('cn_hl') !== '0'; S.pt = localStorage.getItem('cn_pt') === 'f' ? 'f' : 'm'; } catch (e) {}
   const TABS_ADMIN = [
     // ★ 7 ต.ค.69 เอาแท็บ "เลยเวลา" ออก (เจ้าของสั่ง) — ทีมตอบลูกค้าในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา
     //   → แชทที่ตอบไปแล้วค้างเป็น "เลยเวลา" ไปหมด ตัวเลขไม่มีความหมาย · แท็บแรกของแอดมินจึงเป็น "รอรับ"
@@ -1666,7 +1706,7 @@
     }
     const same = S.chat && S.chat.row.id === id;
     S.chat = d;
-    if (same) { paintHeader(); paintProfile(); paintMsgs(true); paintComposer(false); }
+    if (same) { paintHeader(); paintProfile(); paintMsgs(true); paintQuick(); paintComposer(false); }
     else paintChat();
   }
 
@@ -1674,12 +1714,12 @@
     $('cn-pane').innerHTML = `
       <div class="cn-ph" id="cn-ph"></div>
       <div class="cn-chat">
-        <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-sim-wrap"></div><div id="cn-comp-wrap"></div></div>
+        <div class="cn-cmain"><div class="cn-msgs" id="cn-msgs"></div><div id="cn-sim-wrap"></div><div id="cn-qr-wrap"></div><div id="cn-comp-wrap"></div></div>
         <aside class="cn-side" id="cn-side"></aside>
       </div>`;
     // paintProfile(true) — แผงเพิ่งถูกสร้างใหม่ (ว่าง) · ถ้าไม่บังคับ กดกลับแล้วเปิดลูกค้าคนเดิม แผงขวาจะว่าง
     //   เพราะข้อมูลเหมือนรอบก่อน (ลายเซ็นเดิม) เลยไม่ถูกวาด
-    applySide(); paintHeader(true); paintProfile(true); paintMsgs(false); paintSim(); paintComposer(true);
+    applySide(); paintHeader(true); paintProfile(true); paintMsgs(false); paintSim(); paintQuick(); paintComposer(true);
   }
 
   function paintHeader(force) {
@@ -1786,6 +1826,210 @@
     if (sel && !sel.value) sel.focus({ preventScroll: true });
   }
 
+  // ── ★ 12 ต.ค.69 คำที่ระบบจับได้ในแชท (เจ้าของเลือกจากเดโม CRM: "เอาแบบนี้แหละ แก้ไขเลย") ──
+  //   เซิร์ฟเวอร์ส่ง m.hl = [[เริ่ม, จบ, ช่อง]] (connect.add_spans · ตัวจับชุดเดิม) → ระบายสีตามหมวด
+  //   กดคำ = ไปช่องข้อมูลที่คำนั้นลง · กดป้าย "จากแชท 14:02" ที่ช่อง = ย้อนไปข้อความต้นทาง
+  const KW_CAT = { phone: 'c', line_id: 'c', car_text: 'r', car_model: 'r', occupation: 'm', income: 'm', job_tenure: 'm',
+                   pay_history: 'm', customer_type: 'm', customer_status: 'i', deal: 'i', trade: 'i' };
+  const KW_NAME = { phone: 'เบอร์โทร', line_id: 'ID LINE', car_text: 'รถลูกค้าถาม', car_model: 'CAR / สูตร', occupation: 'อาชีพ',
+                    income: 'รายได้', job_tenure: 'อายุงาน', pay_history: 'ประวัติการผ่อน', customer_type: 'ประเภทลูกค้า',
+                    customer_status: 'สถานะลูกค้า', deal: 'ลีดรับซื้อรถ', trade: 'มีรถเทิร์น' };
+  const KW_LEG = [['c', 'ติดต่อ'], ['r', 'รถ'], ['m', 'การเงินลูกค้า'], ['i', 'เจตนา / สถานะ']];
+  // ประโยคถามต่อ / ตอบด่วน — {q} = คำลงท้ายคำถาม (ครับ/คะ) · {p} = คำลงท้ายบอกเล่า (ครับ/ค่ะ) · กดแล้วแค่ใส่ช่องพิมพ์ ไม่ส่งเอง
+  const KW_ASK = {
+    contact: 'รบกวนขอเบอร์โทร หรือ ID LINE ไว้ให้เจ้าหน้าที่ติดต่อกลับหน่อยนะ{q}',
+    car: 'สนใจรุ่นไหน ปีประมาณไหนเป็นพิเศษไหม{q}',
+    money: 'ลูกค้าทำงานอะไร รายได้ต่อเดือนประมาณเท่าไหร่{q} จะได้เช็คไฟแนนซ์ให้{p}',
+    tenure: 'ทำงานที่ปัจจุบันมากี่ปีแล้ว{q}',
+    pay: 'ตอนนี้มีผ่อนอะไรอยู่ไหม{q} ผ่อนตรงทุกงวดไหม{q}',
+    view: 'สะดวกเข้ามาดูรถที่เต็นท์วันไหน{q}',
+    bcar: 'รถรุ่นอะไร ปีไหน เลขไมล์ประมาณเท่าไหร่{q}',
+    photos: 'รบกวนส่งภาพรถ ด้านนอก ด้านใน หน้าปัดให้เห็นเลขไมล์ และสำเนาเล่มทะเบียน หน้า 4 และ 18 เพื่อให้เจ้าหน้าที่ฝ่ายจัดซื้อประเมินราคานะ{q}',
+    payoff: 'รถยังติดไฟแนนซ์อยู่ไหม{q} ยอดปิดประมาณเท่าไหร่{q}',
+    handoff: 'ขอบคุณ{p} แอดมินจะประสานงานให้เจ้าหน้าที่ฝ่ายจัดซื้อติดต่อกลับนะ{q}',
+  };
+  const ptTxt = s => String(s || '').replace(/\{q\}/g, S.pt === 'f' ? 'คะ' : 'ครับ').replace(/\{p\}/g, S.pt === 'f' ? 'ค่ะ' : 'ครับ');
+  const kwKey = f => f === 'car_model' ? 'car_text' : (f === 'customer_type' ? 'occupation' : f);
+  const kwNorm = s => String(s || '').replace(/…/g, '').replace(/\s+/g, '').toLowerCase();
+  const kwDigits = s => { let d = String(s || '').replace(/\D/g, ''); return d.startsWith('66') ? '0' + d.slice(2) : d; };
+  function shortAt(iso) {
+    if (!iso) return '';
+    const t = new Date(iso), now = new Date();
+    const hm = pad(t.getHours()) + ':' + pad(t.getMinutes());
+    return t.toDateString() === now.toDateString() ? hm : t.getDate() + '/' + (t.getMonth() + 1) + ' ' + hm;
+  }
+  function kwText(m) {
+    const t = m.text || '', hl = S.hl ? (m.hl || []) : [];
+    if (!hl.length) return h(t);
+    let x = '', p = 0;
+    hl.forEach(([s, e, f]) => {
+      if (s < p || e > t.length) return;
+      x += h(t.slice(p, s)) + `<button type="button" class="kw kw-${KW_CAT[f] || 'i'}" data-kw="${h(f)}" title="ระบบจับคำนี้ → ช่อง ${h(KW_NAME[f] || f)} (กดเพื่อไปที่ช่อง)">${h(t.slice(s, e))}</button>`;
+      p = e;
+    });
+    return x + h(t.slice(p));
+  }
+  // ข้อความต้นทางของช่อง f — ตรงกับคำที่จับได้ (autoWhy) / ค่าในช่อง ก่อน · ไม่ตรง = ข้อความแรกที่พูดถึง (สถานะลูกค้า = ล่าสุด)
+  function kwFindMsg(f, why, val, last) {
+    const ms = (S.chat && S.chat.messages) || [], k = kwKey(f), w = kwNorm(why), dv = kwDigits(val);
+    const cand = [];
+    ms.forEach((m, i) => (m.hl || []).forEach(x => { if (x[2] === k) cand.push([i, (m.text || '').slice(x[0], x[1])]); }));
+    if (!cand.length) return -1;
+    const hit = c => (k === 'phone' && dv && kwDigits(c[1]) === dv)
+      || (w && (w.includes(kwNorm(c[1])) || kwNorm(c[1]).includes(w)))
+      || (k === 'line_id' && val && kwNorm(c[1]).includes(kwNorm(val)));
+    const ok = cand.filter(hit);
+    const pool = ok.length ? ok : (k === 'phone' && dv ? [] : cand);
+    if (!pool.length) return -1;
+    return (last ? pool[pool.length - 1] : pool[0])[0];
+  }
+  function kwSrc(L, f) {
+    const i = kwFindMsg(f, (L.autoWhy || {})[f], L[f], f === 'customer_status');
+    return i < 0 ? null : { i, at: (S.chat.messages[i] || {}).at };
+  }
+  // ไปที่ช่องข้อมูล (เปิดคอลัมน์ขวาที่ซ่อนไว้ / กางแบบพับบนจอแคบ) แล้วกระพริบกรอบสีของหมวด
+  function kwGo(f, btn) {
+    if (btn) { btn.classList.add('on'); setTimeout(() => btn.classList.remove('on'), 2200); }
+    const sel = f === 'deal' ? '.pf-buy' : (f === 'trade' ? '[data-box=trade]' : `.pf-fld [data-f="${f}"]`);
+    let side = $('cn-side');
+    if (side && side.offsetParent === null && !S.side && window.innerWidth > 1180) {
+      S.side = true;
+      try { localStorage.setItem('cn_side', '1'); } catch (e) {}
+      applySide(); paintHeader(true); side = $('cn-side');
+    }
+    let el = (side && side.offsetParent !== null) ? side.querySelector(sel) : null;
+    if (!el) {
+      const dt = document.querySelector('#cn-ph details.cn-prof-m');
+      if (dt) { dt.open = true; el = dt.querySelector(sel); }
+    }
+    if (!el) { toast('คำนี้ → ช่อง "' + (KW_NAME[f] || f) + '"'); return; }
+    const box = el.closest('.pf-fld') || el, cls = 'kw-' + (KW_CAT[f] || 'i');
+    box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    box.classList.add('flash', cls);
+    setTimeout(() => box.classList.remove('flash', cls), 2200);
+  }
+  // ย้อนไปข้อความต้นทาง (ป้าย "จากแชท" / "ดูในแชท")
+  function goMsg(i, f) {
+    const b = document.querySelector(`#cn-msgs .bub[data-mi="${i}"]`);
+    if (!b) { toast('ข้อความต้นทางเก่ากว่าที่โหลดไว้ในหน้านี้'); return; }
+    b.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 2200);
+    b.querySelectorAll(`.kw[data-kw="${kwKey(f)}"]`).forEach(x => { x.classList.add('on'); setTimeout(() => x.classList.remove('on'), 2200); });
+  }
+  // ความพร้อมของข้อมูล — ลีดขาย: ก่อนจ่ายเบอร์ (มีเลขแล้ว = ข้อมูลไฟแนนซ์) · ลีดรับซื้อ: ก่อนส่งจัดซื้อ
+  //   [ชื่อ, มีแล้วไหม, คีย์ประโยคถามต่อ, ช่องที่ใช้]
+  function kwReady(d) {
+    const L = d.lead || {}, has = f => !!(L[f] && String(L[f]).trim());
+    if (L.deal === 'buy') {
+      const imgs = (d.messages || []).filter(m => m.dir !== 'out' && (m.type === 'image' || (m.files || []).some(x => x.kind === 'image'))).length;
+      return { title: 'พร้อมส่งจัดซื้อ', items: [
+        ['เบอร์ หรือ ID LINE', has('phone') || has('line_id'), 'contact', 'phone'],
+        ['รุ่น + ปีรถของลูกค้า', has('car_text'), 'bcar', 'car_text'],
+        ['รูปรถ + เล่ม (2 รูปขึ้นไป)', imgs >= 2, 'photos', ''],
+      ] };
+    }
+    return { title: L.code ? 'ข้อมูลลูกค้าสำหรับไฟแนนซ์' : 'ข้อมูลพร้อมจ่ายเบอร์', items: [
+      ['เบอร์ หรือ ID LINE', has('phone') || has('line_id'), 'contact', 'phone'],
+      ['รถที่สนใจ', has('car_text') || (has('car_model') && L.car_model !== 'ไม่ระบุรุ่นรถ'), 'car', 'car_text'],
+      ['อาชีพ + รายได้', has('occupation') && has('income'), 'money', 'occupation'],
+      ['อายุงาน', has('job_tenure'), 'tenure', 'job_tenure'],
+      ['ประวัติการผ่อน', has('pay_history'), 'pay', 'pay_history'],
+    ] };
+  }
+  function kwBoxHtml(d) {
+    const R = kwReady(d), n = R.items.length, done = R.items.filter(x => x[1]).length, miss = R.items.find(x => !x[1]);
+    let x = `<div class="pf-sec kw-box" data-box="kw"><div class="kw-hd"><span class="pf-h" style="margin:0">${h(R.title)}</span><span class="kw-n">${done}/${n}</span></div>
+      <div class="kw-bar"><i style="width:${Math.round(done / n * 100)}%"></i></div>
+      <div class="kw-ready">${R.items.map(i => i[1] ? `<span class="ok">${ic('check', 13)}${h(i[0])}</span>` : `<span class="no"><i></i>${h(i[0])}</span>`).join('')}</div>`;
+    if (miss) {
+      x += `<div class="kw-ask"><b>ถามต่อ: ${h(miss[0])}</b><div>“${h(ptTxt(KW_ASK[miss[2]]))}”</div>${
+        d.canReply && d.replyOn ? `<button class="btn sm" data-ask="${miss[2]}" style="margin-top:6px">ใส่ในช่องพิมพ์</button>` : ''}</div>`;
+    } else {
+      x += `<div class="pf-done" style="margin-top:8px">ข้อมูลครบแล้ว</div>`;
+    }
+    return x + `<div class="kw-leg"><label><input type="checkbox" data-act="hl"${S.hl ? ' checked' : ''}> ไฮไลต์คำที่ระบบจับได้ในแชท</label>${
+      KW_LEG.map(([c, t]) => `<span class="kw kw-${c}">${t}</span>`).join('')}</div></div>`;
+  }
+  // ลูกค้าพูดค่าใหม่ทีหลัง — ระบบไม่ทับค่าเดิมเอง ให้คนเลือก (connect.SUGG_KEY)
+  const kwVal = (f, v) => f === 'income' && /^\d+$/.test(String(v || '')) ? Number(v).toLocaleString() : (f === 'phone' ? fmtPhone(String(v || '')) : (v || '–'));
+  function kwSuggHtml(d) {
+    const L = d.lead || {}, sg = L.sugg || {}, keys = Object.keys(sg);
+    if (!keys.length || !d.leadEditable) return '';
+    return `<div class="pf-sec kw-sugg" data-box="sugg"><div class="pf-h" style="color:var(--amber)">ลูกค้าพูดค่าใหม่ — รอคนตัดสิน (ระบบไม่ทับค่าเดิมเอง)</div>${keys.map(f => {
+      const s = sg[f], mi = kwFindMsg(f, s.why, s.v, true);
+      const acts = s.opts
+        ? s.opts.map(o => `<button class="btn sm" data-sg-use="${h(f)}" data-v="${h(o)}">${h(o)}</button>`).join('') + `<button class="btn sm" data-sg-no="${h(f)}">ยังไม่รู้</button>`
+        : `<button class="btn sm pri" data-sg-use="${h(f)}" data-v="${h(s.v)}">ใช้ ${h(kwVal(f, s.v))}</button><button class="btn sm" data-sg-use="${h(f)}" data-v="${h(s.from)}">คง ${h(kwVal(f, s.from))}</button>`;
+      return `<div class="kw-sg" data-sg="${h(f)}"><div><b>${h(KW_NAME[f] || f)}</b> ${s.opts
+          ? `ลูกค้าบอกแค่ “${h(s.why)}” — รุ่นไหน? (ระบบไม่เดา)`
+          : `${h(kwVal(f, s.from))} → <b>${h(kwVal(f, s.v))}</b>`}</div>${!s.opts && s.why ? `<div class="pf-note" style="margin:2px 0 0">${h(s.why)}</div>` : ''}
+        <div class="acts">${acts}${mi >= 0 ? `<button class="btn sm" data-src="${h(f)}" data-mi="${mi}">ดูในแชท</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+  // ปุ่มในกล่องความพร้อม/ค่าใหม่/ป้ายที่มา — ผูกได้ทั้งแผงขวาและแบบพับ (เรียกซ้ำกับกล่องที่วาดใหม่ได้)
+  function bindKw(el) {
+    el.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => kwAsk(b.dataset.ask));
+    el.querySelectorAll('[data-src]').forEach(b => b.onclick = () => goMsg(+b.dataset.mi, b.dataset.src));
+    el.querySelectorAll('[data-act=hl]').forEach(c => c.onchange = () => {
+      S.hl = c.checked;
+      try { localStorage.setItem('cn_hl', S.hl ? '1' : '0'); } catch (e) {}
+      document.querySelectorAll('[data-act=hl]').forEach(x => { x.checked = S.hl; });
+      paintMsgs(true);
+    });
+    el.querySelectorAll('[data-sg-use]').forEach(b => b.onclick = () => { b.disabled = true; saveLead(b.dataset.sgUse, b.dataset.v, null, true); });
+    el.querySelectorAll('[data-sg-no]').forEach(b => b.onclick = async () => {
+      const id = S.chat.row.id; b.disabled = true;
+      const r = await api('/connect/api/lead', { id, field: b.dataset.sgNo, dismiss: true });
+      if (!S.chat || S.chat.row.id !== id) return;
+      if (!r.ok) { b.disabled = false; toast(r.error || 'ทำไม่สำเร็จ'); return; }
+      S.chat.lead = r.lead; paintProfile(true);
+    });
+  }
+  // ข้อมูลลีดเปลี่ยน (คนแก้ช่อง) → วาดเฉพาะกล่องความพร้อม/ค่าใหม่ใหม่ ไม่วาดทั้งแผง (คนอาจกำลังพิมพ์ช่องถัดไป)
+  function refreshKw() {
+    const d = S.chat; if (!d || !d.lead) return;
+    const swap = (old, html) => {
+      if (!html) { old.remove(); return; }
+      const t = document.createElement('div'); t.innerHTML = html;
+      const n = t.firstElementChild; old.replaceWith(n); bindKw(n);
+    };
+    document.querySelectorAll('[data-box=kw]').forEach(b => swap(b, kwBoxHtml(d)));
+    document.querySelectorAll('[data-box=sugg]').forEach(b => swap(b, kwSuggHtml(d)));
+    paintQuick();
+  }
+  // ประโยคถามต่อ/ตอบด่วน → ใส่ในช่องพิมพ์ (ไม่ส่งเอง — คนตรวจ/แก้ก่อนกดส่ง)
+  function kwAsk(k) {
+    const ta = $('cn-text');
+    if (!ta) { toast('ตอบลูกค้าคนนี้ไม่ได้ตอนนี้'); return; }
+    const t = ptTxt(KW_ASK[k] || '');
+    ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + ' ' + t : t;
+    ta.dispatchEvent(new Event('input'));
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  // แถบตอบด่วนเหนือช่องพิมพ์ — ประโยคถามต่อ (ข้อมูลที่ยังขาด) ขึ้นก่อน · คำลงท้ายเลือกได้ (จำไว้ในเครื่อง)
+  function paintQuick() {
+    const w = $('cn-qr-wrap'); if (!w) return;
+    const d = S.chat;
+    if (!d || !d.lead || !d.canReply || !d.replyOn) { if (w.innerHTML) { w.innerHTML = ''; w.dataset.k = ''; } return; }
+    const miss = kwReady(d).items.find(x => !x[1]);
+    const base = d.lead.deal === 'buy'
+      ? [['ขอรูปรถ + เล่ม', 'photos'], ['ถามรุ่น / ปี / ไมล์', 'bcar'], ['ถามยอดปิดไฟแนนซ์', 'payoff'], ['แจ้งส่งจัดซื้อ', 'handoff']]
+      : [['ขอเบอร์ / ไลน์', 'contact'], ['ถามอาชีพ / รายได้', 'money'], ['ถามประวัติผ่อน', 'pay'], ['ชวนนัดดูรถ', 'view']];
+    const list = (miss ? [['ถามต่อ: ' + miss[0], miss[2], 1]] : []).concat(base.filter(b => !miss || b[1] !== miss[2]));
+    const key = list.map(x => x[1]).join(',') + '|' + S.pt;
+    if (w.dataset.k === key) return;
+    w.dataset.k = key;
+    w.innerHTML = `<div class="kw-qr"><span style="color:var(--t3);font-size:12px">ตอบด่วน</span>${list.map(([l, k, nx]) =>
+      `<button type="button" class="q${nx ? ' next' : ''}" data-ask="${k}" title="${h(ptTxt(KW_ASK[k]))}">${h(l)}</button>`).join('')}
+      <span class="kw-pt" title="คำลงท้ายของข้อความตอบด่วน (จำไว้ในเครื่องนี้)"><button type="button" data-pt="m" class="${S.pt !== 'f' ? 'on' : ''}">ครับ</button><button type="button" data-pt="f" class="${S.pt === 'f' ? 'on' : ''}">ค่ะ</button></span></div>`;
+    w.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => kwAsk(b.dataset.ask));
+    w.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => {
+      S.pt = b.dataset.pt;
+      try { localStorage.setItem('cn_pt', S.pt); } catch (e) {}
+      paintQuick(); refreshKw();
+    });
+  }
+
   // ช่องของฟอร์ม — ชื่อ/ลำดับตามชีตลีด (คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py)
   //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด)
   //   ★ ช่องไหนในชีตเป็น dropdown → เป็นตัวเลือกชุดเดียวกับชีตเอง (`leadOptions.dropdowns` อ่านจากชีตทุกชั่วโมง)
@@ -1814,7 +2058,12 @@
     const A = L.auto || {}, v = L[f] || '', W = L.autoWhy || {};
     // ช่องที่จับจาก keyword บอกด้วยว่าจับจากคำไหน — คนตรวจได้ทันทีว่าระบบอ่านถูกไหม
     const why = W[f] ? ` · จับจากคำว่า “${W[f]}”` : '';
-    const badge = (A[f] && A[f] !== 'คน') ? `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])}${h(why)} — แก้ได้">จาก${h(A[f])}</span>` : '';
+    // ★ 12 ต.ค.69 ระบบเติมจากแชท → ป้ายบอกเวลาข้อความต้นทาง กดแล้วย้อนไปข้อความนั้น (หาไม่เจอ = ป้ายเดิม)
+    const src = A[f] === 'แชท' ? kwSrc(L, f) : null;
+    let badge = '';
+    if (src) badge = `<button type="button" class="kw-src kw-${KW_CAT[f] || 'i'}" data-src="${f}" data-mi="${src.i}" title="ระบบเติมให้อัตโนมัติจากแชท${h(why)} — กดเพื่อดูข้อความต้นทาง · แก้ได้">จากแชท ${h(shortAt(src.at))}</button>`;
+    else if (A[f] && A[f] !== 'คน') badge = `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])}${h(why)} — แก้ได้">จาก${h(A[f])}</span>`;
+    if ((L.sugg || {})[f]) badge = `<span class="pf-sgm" title="ลูกค้าพูดค่าใหม่ — ดูกล่อง &quot;รอคนตัดสิน&quot; ด้านบน">ค่าใหม่รอยืนยัน</span>` + badge;
     const dis = ed ? '' : ' disabled';
     const opts = Array.isArray(_DDF[f]) && _DDF[f].length ? _DDF[f] : null;
     let inp;
@@ -1825,7 +2074,7 @@
         opts.map(o => `<option value="${h(o)}"${o === v ? ' selected' : ''}>${h(o)}</option>`).join('')}${extra}</select>`;
     } else if (kind === 'area') inp = `<textarea data-f="${f}" rows="2"${dis}>${h(v)}</textarea>`;
     else inp = `<input type="${kind === 'tel' ? 'tel' : 'text'}" data-f="${f}" value="${h(v)}"${dis} autocomplete="off">`;
-    return `<div class="pf-fld"><div class="pf-lab"><span>${h(label)}</span>${badge}</div>${inp}</div>`;
+    return `<div class="pf-fld"><div class="pf-lab"><span>${h(label)}</span>${badge ? `<span style="display:flex;gap:4px;align-items:center">${badge}</span>` : ''}</div>${inp}</div>`;
   }
 
   function profileHtml(d, sfx) {
@@ -1843,6 +2092,7 @@
         ${ed ? `<input class="pf-tag-in" data-act="tag" placeholder="+ ใส่แท็ก" list="dl-tag-${sfx}">` : ''}</div>`;
     }
     x += `</div>`;
+    if (p.full && L) x += kwBoxHtml(d) + kwSuggHtml(d);  // ★ 12 ต.ค.69 ข้อมูลพร้อมจ่ายเบอร์ x/5 · ค่าใหม่รอคนตัดสิน
     if (p.full && d.crm) x += crmHtml(d, sfx);          // ★ 11 ต.ค.69 ขั้น · นัด · โทร · สรุป (บนสุด — งานที่ต้องลงมือ)
     x += `<div class="pf-sec">
       <div class="pf-kv"><span>ผู้รับผิดชอบ</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>`;
@@ -1894,7 +2144,7 @@
     } else if (d.codeHelp && !L.code) {
       x += parkRowHtml(L) + assignBoxHtml(d, sfx) + `<div class="pf-note" style="margin:-4px 0 8px">ลูกค้าอยากขายรถให้เรา? <a href="#" data-act="deal-buy">ย้ายไปเป็นลีดรับซื้อรถ</a></div>`;
     }
-    if (L.trade && L.deal !== 'buy') x += `<div class="pf-src">ลูกค้ามีรถเทิร์น — "${h(L.trade.why || '')}" (ยังเป็นลีดขายรถ)</div>`;
+    if (L.trade && L.deal !== 'buy') x += `<div class="pf-src" data-box="trade">ลูกค้ามีรถเทิร์น — "${h(L.trade.why || '')}" (ยังเป็นลีดขายรถ)</div>`;
     if (d.codeHelp && L.code) x += lfBoxHtml(d);
     LEAD_UI.forEach(sec => {
       x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}`;
@@ -2037,11 +2287,14 @@
   // แผงโปรไฟล์ถูกเรียกวาดใหม่ทุก 6 วิ (ตามแชท) — **ห้ามวาดทับตอนกำลังพิมพ์ในฟอร์ม**
   //   และไม่วาดถ้าข้อมูลไม่เปลี่ยน (กันกระพริบ/เลื่อนกลับบนสุด)
   let _profSig = '';
+  // ข้อความ (จำนวน + ตัวสุดท้าย) อยู่ในลายเซ็นด้วย — ป้าย "จากแชท 14:02" / ความพร้อม (รูปรถ) / ปุ่มถามต่อ อิงแชท
+  const profSig = d => JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
+                                       d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
+                                       S.lostPick === d.row.id, S.aiDraft[d.row.id] || null, d.canReply, d.replyOn,
+                                       (d.messages || []).length, ((d.messages || []).slice(-1)[0] || {}).id || '']);
   function paintProfile(force) {
     const d = S.chat; if (!d) return;
-    const sig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
-                                d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
-                                S.lostPick === d.row.id, S.aiDraft[d.row.id] || null]);
+    const sig = profSig(d);
     const act = document.activeElement;
     const typing = act && act.closest && act.closest('#cn-side, #cn-prof-m-body') && /INPUT|TEXTAREA|SELECT/.test(act.tagName);
     if (!force && (sig === _profSig || typing)) return;
@@ -2057,6 +2310,7 @@
 
   function bindProfile(el) {
     bindCrm(el);
+    bindKw(el);
     el.querySelectorAll('[data-f]').forEach(inp => {
       inp.addEventListener('change', () => {
         if (inp.tagName === 'SELECT') inp.classList.toggle('empty', !inp.value);
@@ -2414,18 +2668,20 @@
     if (inp) {
       inp.classList.remove('bad');
       const box = inp.closest('.pf-fld'); if (box) { box.classList.add('ok'); setTimeout(() => box.classList.remove('ok'), 1500); }
-      const b = box && box.querySelector('.pf-auto'); if (b) b.remove();              // คนแก้แล้ว = ไม่ใช่ค่าอัตโนมัติ
+      // คนแก้แล้ว = ไม่ใช่ค่าอัตโนมัติ (ป้ายที่มา + "ค่าใหม่รอยืนยัน" ของช่องนี้หายทั้ง 2 ฝั่ง)
+      document.querySelectorAll(`[data-f="${field}"]`).forEach(x => {
+        const fb = x.closest('.pf-fld'); if (fb) fb.querySelectorAll('.pf-auto, .kw-src, .pf-sgm').forEach(y => y.remove());
+      });
       // ช่องเดียวกันอีกฝั่ง (คอลัมน์ขวา/แบบพับบนมือถือ) + ใบจ่ายลีด อัปเดตตาม โดยไม่วาดทั้งแผง (คนอาจกำลังพิมพ์ช่องถัดไป)
       document.querySelectorAll(`[data-f="${field}"]`).forEach(x => {
         if (x === inp) return;
         if (x.type === 'checkbox') x.checked = !!r.lead[field]; else x.value = r.lead[field] || '';
       });
       document.querySelectorAll('.pf-slip-text').forEach(x => { x.textContent = r.lead.slipText || ''; });
-      _profSig = JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
-                                 d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
-                                 S.lostPick === d.row.id, S.aiDraft[d.row.id] || null]);
+      refreshKw();                                   // ความพร้อม x/5 · ค่าใหม่รอยืนยัน · ตอบด่วน อัปเดตตามช่องที่เพิ่งแก้
+      _profSig = profSig(d);
     }
-    if (repaint) paintProfile(true);
+    if (repaint) { paintProfile(true); paintQuick(); }
     if (field === 'customer_name' || field === 'tags') loadInbox(false);   // ชื่อ/แท็กโชว์ในรายชื่อด้วย
   }
 
@@ -2451,16 +2707,18 @@
     const d = S.chat;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
     // รีเฟรชทุก 6 วิ แต่ข้อความไม่เปลี่ยน = ไม่วาดใหม่ (ไม่งั้นรูปกะพริบ/โหลดซ้ำ และเลื่อนดูรูปเก่าแล้วถูกดีดลงล่าง)
-    const sig = JSON.stringify([d.row && d.row.id, d.access, d.messages]);
+    const sig = JSON.stringify([d.row && d.row.id, d.access, d.messages, S.hl]);
     if (keepScroll && sig === _msgSig && el.childElementCount) return;
     _msgSig = sig;
+    // ★ 12 ต.ค.69 กดคำที่ไฮไลต์ → ไปช่องข้อมูลที่คำนั้นลง (ผูกครั้งเดียวที่กล่องข้อความ)
+    el.onclick = e => { const b = e.target.closest && e.target.closest('.kw[data-kw]'); if (b) kwGo(b.dataset.kw, b); };
     let html = '';
     if (d.access === 'preview') {
       html += `<div class="cn-lock">เห็นเฉพาะข้อความที่ลูกค้าเพิ่งส่ง — กด "รับลูกค้าคนนี้" ก่อน ถึงจะเห็นแชทย้อนหลังและตอบได้</div>`;
     }
     if (!(d.messages || []).length) html += `<div class="cn-blank">ยังไม่มีข้อความ</div>`;
     let lastDay = '';
-    (d.messages || []).forEach(m => {
+    (d.messages || []).forEach((m, mi) => {
       const dt = m.at ? new Date(m.at) : null;
       const day = dt ? dt.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
       if (day && day !== lastDay) { html += `<div class="cn-day">${h(day)}</div>`; lastDay = day; }
@@ -2468,8 +2726,8 @@
       const out = m.dir === 'out';
       const hasF = !!(m.files && m.files.length);
       // "[รูป]" "[วิดีโอ]" คือคำแทนตอนไม่มีไฟล์ให้ดู — มีไฟล์แล้วไม่ต้องโชว์ (ข้อความจริงที่พิมพ์มาพร้อมรูปยังโชว์)
-      const txt = hasF && /^\[[^\]]*\]$/.test((m.text || '').trim()) ? '' : h(m.text);
-      html += `<div class="bub ${out ? 'out' : 'in'}${m.media && !hasF ? ' media' : ''}${hasF ? ' has-file' : ''}">`
+      const txt = hasF && /^\[[^\]]*\]$/.test((m.text || '').trim()) ? '' : kwText(m);
+      html += `<div class="bub ${out ? 'out' : 'in'}${m.media && !hasF ? ' media' : ''}${hasF ? ' has-file' : ''}" data-mi="${mi}">`
         + (hasF ? (txt ? `<span class="cn-mtxt">${txt}</span>` : '') + filesHtml(m) : txt + (m.media ? '<br><small>(ไฟล์แนบ)</small>' : ''))
         + `<div class="meta">${out && m.by ? h(m.by) + ' · ' : ''}${t}</div></div>`;
     });

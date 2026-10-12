@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,11 +20,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { absUrl, api, authHeaders } from '../../lib/api';
 import { Extra, HEAT } from '../../lib/crm';
+import { askText, HlText, KwPanel, Lead, Pt, QuickBar, ready } from '../../lib/kw';
 import { Banner, Btn, C, fmtTime, Loading } from '../../lib/ui';
 
 // ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่ง — url = /connect/api/media (ต้องแนบ token · เซิร์ฟเวอร์เช็คสิทธิ์)
 type MFile = { url: string; kind: string; state: string; name: string; size: number; ext: string };
-type Msg = { at: string; text: string; type: string; media: boolean; dir: string; by: string; files?: MFile[] };
+type Msg = {
+  id?: string; at: string; text: string; type: string; media: boolean; dir: string; by: string; files?: MFile[];
+  hl?: [number, number, string][]; // ★ 12 ต.ค.69 คำที่ระบบจับได้ (ตำแหน่ง UTF-16 · connect.add_spans)
+};
+// คำลงท้ายของข้อความตอบด่วน — จำไว้ตลอดที่เปิดแอป (ครับ/ค่ะ)
+let PT: Pt = 'm';
 
 const FILE_NOTE: Record<string, string> = {
   gone: 'ไฟล์นี้หมดอายุที่ต้นทางแล้ว — เปิดดูในแอป LINE OA / Facebook',
@@ -51,6 +58,8 @@ type Chat = {
   replyOn: boolean;
   replyWhy: string;
   profile?: { phones?: string[] };
+  lead?: Lead; // เฉพาะคนที่เห็นแชทเต็ม
+  leadEditable?: boolean;
 };
 
 export default function ChatScreen() {
@@ -62,6 +71,18 @@ export default function ChatScreen() {
   const [claiming, setClaiming] = useState(false);
   const [viewer, setViewer] = useState('');
   const confirmed = useRef(false); // ถามยืนยันครั้งแรกที่ตอบลูกค้าจริง (เวอร์ชันทดลอง)
+  // ★ 12 ต.ค.69 แผง "ระบบจับได้" · ไฮไลต์คำ · คำลงท้ายตอบด่วน · ข้อความที่กำลังชี้ (ป้าย "แชท 14:02")
+  const [kwOpen, setKwOpen] = useState(false);
+  const [hlOn, setHlOn] = useState(true);
+  const [pt, setPtState] = useState<Pt>(PT);
+  const [focus, setFocus] = useState('');
+  const [flash, setFlash] = useState(-1);
+  const [kwBusy, setKwBusy] = useState(false);
+  const listRef = useRef<FlatList<Msg>>(null);
+  const setPt = (p: Pt) => {
+    PT = p;
+    setPtState(p);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -127,8 +148,45 @@ export default function ChatScreen() {
     doSend();
   };
 
+  // ประโยคถามต่อ/ตอบด่วน → ใส่ในช่องพิมพ์ (ไม่ส่งเอง — คนตรวจ/แก้ก่อนกดส่ง)
+  const ask = (k: string) => {
+    const t = askText(k, pt);
+    setText((cur) => (cur.trim() ? cur.replace(/\s+$/, '') + ' ' + t : t));
+  };
+  // ค่าใหม่รอคนตัดสิน: ใช้ค่าใหม่/คงค่าเดิม = บันทึกช่องตามปกติ (คนยืนยันแล้ว) · ยังไม่รู้ = ปิดกล่อง ไม่ถามซ้ำ
+  const decide = async (body: Record<string, any>) => {
+    setKwBusy(true);
+    try {
+      await api('/connect/api/lead', { body: { id: Number(id), ...body } });
+      await load();
+    } catch (e: any) {
+      Alert.alert('บันทึกไม่สำเร็จ', e?.message || '');
+    } finally {
+      setKwBusy(false);
+    }
+  };
+  // ย้อนไปข้อความต้นทาง (รายการกลับหัว — ข้อความใหม่อยู่ล่าง)
+  const goMsg = (i: number) => {
+    if (!d) return;
+    const idx = d.messages.length - 1 - i;
+    setKwOpen(false);
+    setFlash(i);
+    setTimeout(() => setFlash(-1), 2200);
+    setTimeout(() => listRef.current?.scrollToIndex({ index: idx, viewPosition: 0.5, animated: true }), 60);
+  };
+  // แตะคำที่ไฮไลต์ → เปิดแผงแล้วชี้ช่องที่คำนั้นลง
+  const pick = (f: string) => {
+    setFocus(f);
+    setKwOpen(true);
+    setTimeout(() => setFocus(''), 2500);
+  };
+
   const title = d?.row?.name || name || 'แชท';
   const msgs = d ? [...d.messages].reverse() : [];
+  const L = d?.access === 'full' ? d?.lead : undefined;
+  const R = L && d ? ready(L, d.messages) : null;
+  const nSugg = L && d?.leadEditable ? Object.keys(L.sugg || {}).length : 0;
+  const nAuto = L ? Object.keys(L.auto || {}).filter((f) => L[f] && (L.auto || {})[f] !== 'คน').length : 0;
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
@@ -175,28 +233,76 @@ export default function ChatScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {L && R ? (
+              <Pressable onPress={() => setKwOpen((v) => !v)} style={st.kwStrip}>
+                <Text style={st.kwStripT} numberOfLines={1}>
+                  ระบบจับได้ {nAuto} ช่อง
+                  {nSugg ? <Text style={{ color: C.amber, fontWeight: '700' }}>{` · รอยืนยัน ${nSugg}`}</Text> : null}
+                  {` · ${R.title.replace('ข้อมูล', '')} ${R.items.filter((x) => x[1]).length}/${R.items.length}`}
+                </Text>
+                <Text style={{ color: C.purple, fontWeight: '700' }}>{kwOpen ? 'ซ่อน' : 'ดู'}</Text>
+              </Pressable>
+            ) : null}
+            {L && kwOpen ? (
+              <ScrollView style={st.kwPanel} contentContainerStyle={{ padding: 12 }}>
+                <KwPanel
+                  lead={L}
+                  msgs={d.messages}
+                  editable={!!d.leadEditable}
+                  canAsk={d.canReply && d.replyOn}
+                  pt={pt}
+                  focus={focus}
+                  busy={kwBusy}
+                  onAsk={(k) => {
+                    ask(k);
+                    setKwOpen(false);
+                  }}
+                  onUse={(f, v) => decide({ field: f, value: v })}
+                  onDismiss={(f) => decide({ field: f, dismiss: true })}
+                  onGoMsg={goMsg}
+                />
+                <Pressable onPress={() => setHlOn((v) => !v)} style={st.hlTog}>
+                  <View style={[st.box, hlOn && { backgroundColor: C.purple, borderColor: C.purple }]} />
+                  <Text style={{ color: C.text }}>ไฮไลต์คำที่ระบบจับได้ในแชท</Text>
+                </Pressable>
+              </ScrollView>
+            ) : null}
             {d.access === 'preview' ? (
               <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
                 <Banner kind="info" text={'คิวรอรับ — เห็นแค่ข้อความล่าสุดของลูกค้า กด "รับลูกค้า" เพื่อดูทั้งหมดและตอบ'} />
               </View>
             ) : null}
             <FlatList
+              ref={listRef}
               inverted
               data={msgs}
+              onScrollToIndexFailed={(e) => {
+                listRef.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true });
+                setTimeout(() => listRef.current?.scrollToIndex({ index: e.index, viewPosition: 0.5 }), 250);
+              }}
               keyExtractor={(m, i) => `${m.at}-${i}`}
               contentContainerStyle={{ padding: 12, gap: 8 }}
-              renderItem={({ item: m }) => {
+              renderItem={({ item: m, index }) => {
                 const out = m.dir === 'out';
+                const mi = d.messages.length - 1 - index; // ลำดับในรายการเดิม (เก่า→ใหม่)
                 const files = m.files || [];
                 // "[รูป]" คือคำแทนตอนไม่มีไฟล์ให้ดู — มีไฟล์แล้วไม่ต้องโชว์ (ข้อความจริงที่พิมพ์มาพร้อมรูปยังโชว์)
                 const showText = !files.length || !/^\[[^\]]*\]$/.test((m.text || '').trim());
                 return (
                   <View style={[st.bubbleWrap, out ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-                    <View style={[st.bubble, out ? st.out : st.in, files.length ? st.withFile : null]}>
+                    <View style={[st.bubble, out ? st.out : st.in, files.length ? st.withFile : null, flash === mi && st.flash]}>
                       {showText ? (
-                        <Text style={[st.msg, out && { color: '#fff' }, m.media && !files.length && { fontStyle: 'italic' }]}>
-                          {m.text || (m.media ? '[รูป/ไฟล์]' : '')}
-                        </Text>
+                        m.text ? (
+                          <HlText
+                            m={m}
+                            out={out}
+                            on={hlOn}
+                            onPick={pick}
+                            style={[st.msg, out && { color: '#fff' }, m.media && !files.length && { fontStyle: 'italic' }]}
+                          />
+                        ) : (
+                          <Text style={[st.msg, out && { color: '#fff' }, { fontStyle: 'italic' }]}>{m.media ? '[รูป/ไฟล์]' : ''}</Text>
+                        )
                       ) : null}
                       {files.map((f, i) =>
                         FILE_NOTE[f.state] ? (
@@ -222,6 +328,8 @@ export default function ChatScreen() {
               {d.canClaim ? (
                 <Btn title="รับลูกค้าคนนี้" onPress={claim} busy={claiming} />
               ) : d.canReply && d.replyOn ? (
+                <>
+                {L ? <QuickBar lead={L} msgs={d.messages} pt={pt} setPt={setPt} onAsk={ask} /> : null}
                 <View style={st.inputRow}>
                   <TextInput
                     style={st.input}
@@ -233,6 +341,7 @@ export default function ChatScreen() {
                   />
                   <Btn title="ส่ง" onPress={send} busy={sending} disabled={!text.trim()} small style={{ minWidth: 64 }} />
                 </View>
+                </>
               ) : (
                 <Banner
                   kind="warn"
@@ -275,6 +384,15 @@ const st = StyleSheet.create({
   viewerImg: { width: '100%', height: '85%' },
   viewerHint: { color: '#ddd', marginTop: 10, fontSize: 14 },
   meta: { fontSize: 11, color: C.sub, marginTop: 2, marginHorizontal: 4 },
+  flash: { borderWidth: 2, borderColor: C.purple },
+  kwStrip: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: C.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line,
+  },
+  kwStripT: { flex: 1, color: C.text, fontSize: 13 },
+  kwPanel: { maxHeight: 360, backgroundColor: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
+  hlTog: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, minHeight: 32 },
+  box: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: C.sub },
   bar: { padding: 10, backgroundColor: '#fff', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: {

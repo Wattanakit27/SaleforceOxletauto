@@ -20,6 +20,7 @@
   · แบบฟอร์มที่แอดมินใช้ ("อาชีพ : … รายได้ : … อายุงาน : … ประวัติการผ่อน : …") อ่านก่อน แม่นที่สุด
   · สถานะลูกค้า = ข้อความล่าสุดที่บอกสถานะชนะ (ลูกค้าเปลี่ยนใจได้) · ช่องอื่น = ข้อความแรกที่บอก
 """
+import functools
 import re
 
 # ── หมวด "ประเภทลูกค้า" → ตัวสะกดที่ชีตอาจใช้ (ชีตสะกด "ฟลีแลนด์" "เกษตกร" "รัฐวิสาหากิจ" — เทียบตามของจริง) ──
@@ -277,6 +278,9 @@ def income_in(t: str):
     "รวมกับแฟน" ไม่นับ (รายได้ครอบครัว ไม่ใช่ของลูกค้า)"""
     best = None
     for m in _INCOME_KW.finditer(t):
+        # ★ 12 ต.ค.69 (เห็นจากไฮไลต์ในหน้าแชท) "ผ่อนได้เดือนละ 7,000" = ค่างวดที่ผ่อนไหว ไม่ใช่รายได้
+        if re.search(r"(?:ผ่อน|งวด|ดาวน์|จ่าย)\s*$", t[max(0, m.start() - 6):m.start()]):
+            continue
         win = t[m.end():m.end() + 30]
         hit = money_at(win)
         if not hit:
@@ -515,6 +519,111 @@ def extract(texts) -> dict:
         m = _SALARIED.search(norm(" ".join(texts or [])))
         if m:
             out["customer_type"] = ("company", m.group(0))
+    return out
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  ไฮไลต์คำที่ระบบจับได้ในหน้าแชท + "ลูกค้าพูดค่าใหม่" (12 ต.ค.69 · เจ้าของเลือกจากเดโม "เอาแบบนี้แหละ")
+#  ตัวจับยังเป็นตัวเดิมข้างบน (ไม่เขียนกติกาใหม่) — ตรงนี้แค่หา "ตำแหน่ง" ของคำที่ตัวเดิมจับได้ในข้อความที่ลูกค้าพิมพ์จริง
+# ═════════════════════════════════════════════════════════════════════════════
+@functools.lru_cache(maxsize=8192)
+def _extract_one(raw: str) -> tuple:
+    """`extract` ของข้อความเดียว (จำผลไว้ — ข้อความแชทไม่เปลี่ยน แต่หน้าแชทรีเฟรชทุก 6 วิ)"""
+    return tuple(extract([raw]).items())
+
+
+def latest(texts) -> dict:
+    """ข้อความเรียงเก่า→ใหม่ → `{ช่อง: (ค่า, คำที่จับได้)}` จาก **ข้อความล่าสุด** ที่พูดถึงช่องนั้น
+
+    `extract` ใช้ข้อความแรก (ค่าที่เติมลงฟอร์ม) — ตัวนี้ใช้ดูว่าลูกค้าพูดค่าใหม่ทีหลังไหม
+    ("รายได้ 15,000" แล้วต่อมา "จริงๆ รวมโอทีได้ 18,000")"""
+    out = {}
+    for raw in reversed([str(t) for t in texts or [] if t]):
+        for f, v in _extract_one(raw):
+            out.setdefault(f, v)
+    return out
+
+
+_NORM_RX = re.compile("เเ|ํา|[​-‍﻿]|พนง\\.?\\s*|พนังงาน")
+_NORM_REP = {"เเ": "แ", "ํา": "ำ", "พนังงาน": "พนักงาน"}
+
+
+def norm_map(raw):
+    """เหมือน `norm()` แต่จำด้วยว่าตัวอักษรแต่ละตัวมาจากตรงไหนของข้อความเดิม
+    → (ข้อความที่ล้างแล้ว, [(เริ่ม, จบ) ในข้อความเดิม ต่อ 1 ตัวอักษร]) — ใช้ไฮไลต์บนข้อความที่ลูกค้าพิมพ์จริง"""
+    raw = str(raw or "")
+    chars, pos, i = [], [], 0
+    for m in _NORM_RX.finditer(raw):
+        for j in range(i, m.start()):
+            chars.append(raw[j])
+            pos.append((j, j + 1))
+        g = m.group(0)
+        rep = _NORM_REP.get(g, "พนักงาน" if g.startswith("พนง") else "")
+        for c in rep:
+            chars.append(c)
+            pos.append((m.start(), m.end()))
+        i = m.end()
+    for j in range(i, len(raw)):
+        chars.append(raw[j])
+        pos.append((j, j + 1))
+    # lower() ทีละตัว — ตัวที่ lower แล้วยาวขึ้น (หายากมาก) คงไว้ ไม่งั้นตำแหน่งเลื่อน
+    return "".join(c.lower() if len(c.lower()) == 1 else c for c in chars), pos
+
+
+def _locate(t: str, ev: str, start: int = 0):
+    """หาคำที่จับได้ (ผ่าน `_clip` มาแล้ว — ช่องว่างถูกยุบ/ตัดท้าย) ในข้อความที่ล้างแล้ว → (เริ่ม, จบ) หรือ None"""
+    ev = str(ev or "").replace("…", "").strip()
+    if len(ev) < 2:
+        return None
+    i = t.find(ev, start)
+    if i >= 0:
+        return i, i + len(ev)
+    parts = [p for p in re.split(r"\s+", ev) if p]
+    rx = r"\s*".join("".join("[:：=]" if c in ":：=" else re.escape(c) for c in p) for p in parts)
+    m = re.compile(rx).search(t, start)
+    return (m.start(), m.end()) if m else None
+
+
+SPAN_FIELDS = ("occupation", "income", "job_tenure", "pay_history", "customer_status")
+
+
+def spans(raw) -> list:
+    """ข้อความลูกค้า 1 ข้อความ → [(เริ่ม, จบ, ช่อง)] ตำแหน่ง **ในข้อความเดิม** ของคำที่ `extract` จับได้
+    ประเภทลูกค้าไม่ไฮไลต์แยก (มาจากคำเดียวกับอาชีพ)"""
+    raw = str(raw or "")
+    t, pos = norm_map(raw)
+    if not t.strip():
+        return []
+    out = []
+    for f, (_val, ev) in _extract_one(raw):
+        if f not in SPAN_FIELDS:
+            continue
+        evs = [ev]
+        if f == "pay_history" and " / " in (ev or "") and not str(ev).startswith(("ประวัติผ่อน", "เครดิต")):
+            evs = str(ev).split(" / ")              # หลายเรื่องในข้อความเดียว ("ผ่อนรถ / ผ่อนตรง") = ไฮไลต์ทีละคำ
+        for e in evs:
+            hit = _locate(t, e)
+            if hit:
+                out.append((pos[hit[0]][0], pos[hit[1] - 1][1], f))
+    return out
+
+
+def deal_spans(raw, outbound: bool = False) -> list:
+    """คำที่ทำให้แชทเป็น "ลีดรับซื้อรถ" (ช่อง `deal`) และ "มีรถเทิร์น" (ช่อง `trade`) — กติกาเดียวกับ `deal_kind`
+    · ข้อความของเรา: เฉพาะคำชี้ขาด (ฝ่ายจัดซื้อ / หน้า 4 และ 18) ที่ไม่ได้พูดเรื่องเทิร์น"""
+    t, pos = norm_map(raw)
+    if not t.strip():
+        return []
+    span = lambda m, f: (pos[m.start()][0], pos[m.end() - 1][1], f)
+    if outbound:
+        return [] if _TRADE.search(t) else [span(m, "deal") for m in _BUY_OUT.finditer(t)]
+    out = [span(m, "trade") for m in _TRADE.finditer(t)]
+    if out or _BUY_NOT.search(t) or _JOB.search(t):
+        return out
+    for rx in _BUY:
+        for m in rx.finditer(t):
+            if m.end() > m.start() and not _negated(t, m.start()):
+                out.append(span(m, "deal"))
     return out
 
 

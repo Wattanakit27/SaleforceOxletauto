@@ -23,6 +23,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 import statistics
 from contextlib import contextmanager
@@ -2196,6 +2197,31 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
         #   "civic" → FC แค่ 49% · อีซูซุ → D Max 6 จาก 14 — ไม่มีรุ่นไหนเกินครึ่งชัด เดาผิดแย่กว่าบอกว่ายังไม่รู้
         if unspec:
             put("car_model", unspec, "แชท")
+    # ★ 12 ต.ค.69 คำแนะนำให้คนเลือก (ไม่ทับเอง): เบอร์ใหม่ที่ลูกค้าพิมพ์ทีหลัง · รุ่นย่อยของชื่อรุ่นกว้าง ("city" → 4/5 ประตู)
+    sg = dict(auto.get(SUGG_KEY) or {})
+    no = auto.get(SUGG_NO_KEY) or {}
+    sug_before = json.dumps(sg, sort_keys=True, ensure_ascii=False)
+    newest = phones_in(list(reversed(msgs)))
+    if newest and lead.phone and auto.get("phone") == "แชท" and newest[0] != lead.phone \
+            and newest[0] not in (no.get("phone") or []):
+        if (sg.get("phone") or {}).get("v") != newest[0]:
+            sg["phone"] = {"v": newest[0], "why": "ลูกค้าพิมพ์เบอร์นี้ทีหลัง", "from": lead.phone,
+                           "at": timezone.now().isoformat(timespec="seconds")}
+    else:
+        sg.pop("phone", None)
+    opts = _model_choices(msgs[first_i]) if (unspec and first_i is not None and clear_i is None) else []
+    okey = "opts:" + "|".join(opts)
+    if opts and lead.car_model == unspec and auto.get("car_model") == "แชท" and okey not in (no.get("car_model") or []):
+        sg.setdefault("car_model", {"opts": opts, "why": _car_context(msgs, hits, first_i), "from": unspec,
+                                    "at": timezone.now().isoformat(timespec="seconds")})
+    else:
+        sg.pop("car_model", None)
+    if json.dumps(sg, sort_keys=True, ensure_ascii=False) != sug_before:
+        if sg:
+            auto[SUGG_KEY] = sg
+        else:
+            auto.pop(SUGG_KEY, None)
+        changed.append(SUGG_KEY)
     # ค่าเก่าที่ระบบเติมทั้งประโยค (ก่อนมีตัวตัดคำ) → ตัดให้เหลือรุ่น+สเปก · ที่คน/ใบจ่ายลีดใส่ไม่แตะ
     if auto.get("car_text") == "แชท" and lead.car_text:
         tidy = _dedupe_words(car_phrase(lead.car_text))[:LEAD_FIELDS["car_text"]]
@@ -2328,6 +2354,9 @@ def lead_json(o, lead=None) -> dict:
         "tags": list(lead.tags or []),
         "auto": {k: v for k, v in (lead.auto or {}).items() if not k.startswith("_")},
         "autoWhy": dict((lead.auto or {}).get(KW_KEY) or {}),   # ช่องที่จับจาก keyword → จับจากคำไหน (โชว์ในป้าย)
+        # ★ 12 ต.ค.69 ค่าใหม่ที่ลูกค้าพูดทีหลัง รอคนตัดสิน {ช่อง: {v | opts, why, from, at}} (ช่องที่ยังเป็นค่าที่ระบบเติม)
+        "sugg": {f: s for f, s in ((lead.auto or {}).get(SUGG_KEY) or {}).items()
+                 if (lead.auto or {}).get(f) != HUMAN},
         "slip": (lead.auto or {}).get("_slip") or None,
         "sheet": (lead.auto or {}).get(SHEET_KEY) or None,     # ★ 11 ต.ค.69 เลขที่ได้จากชีตลีด (จ่ายนอกระบบ)
         # ช่องอัตโนมัติ (คำนวณจากระบบ ไม่ให้แก้มือ — แก้แล้วจะไม่ตรงกับของจริง)
@@ -2413,6 +2442,12 @@ def save_lead_field(o, field: str, value, by: str = ""):
     setattr(lead, field, v)
     auto = dict(lead.auto or {})
     auto[field] = HUMAN
+    sg = dict(auto.get(SUGG_KEY) or {})           # คนตัดสินช่องนี้แล้ว (ใช้ค่าใหม่/คงค่าเดิม/พิมพ์เอง) = ไม่มีอะไรรอยืนยัน
+    if sg.pop(field, None) is not None:
+        if sg:
+            auto[SUGG_KEY] = sg
+        else:
+            auto.pop(SUGG_KEY, None)
     lead.auto = auto
     lead.updated_by = (by or "")[:80]
     lead.save(update_fields=[field, "auto", "updated_by", "updated_at"])
@@ -2788,6 +2823,118 @@ def contacts_in(msgs) -> tuple:
     return phones, ids
 
 
+# ── ★ 12 ต.ค.69 ไฮไลต์คำที่ระบบจับได้ในแชท (เจ้าของเลือกจากเดโม CRM "เอาแบบนี้แหละ แก้ไขเลย") ──
+#   ใช้ตัวจับชุดเดิมทั้งหมด (phones_in / _LINE_ID_LABEL / car_in+car_phrase / lead_keywords) — แค่หา "ตำแหน่ง"
+#   ส่งเป็น m["hl"] = [[เริ่ม, จบ, ช่อง]] ตำแหน่งในข้อความที่ลูกค้าพิมพ์จริง · หน้าเว็บระบายสีตามหมวด กดแล้วไปช่องนั้น
+_SPANS = {}                       # (id ข้อความ, เราเพิ่งขอไอดีไหม) → spans · ข้อความไม่เปลี่ยน คิดครั้งเดียวต่อ process
+_SPANS_MAX = 20000
+
+
+def _merge_spans(sp, text) -> list:
+    """เรียง · ตัดที่ซ้อนกัน (เอาอันที่เริ่มก่อน/ยาวกว่า) · ต่อคำของช่องเดียวกันที่ห่างกันแค่ช่องว่าง"""
+    out = []
+    for s, e, f in sorted(sp, key=lambda x: (x[0], -(x[1] - x[0]))):
+        if e <= s:
+            continue
+        if out and s < out[-1][1]:
+            continue
+        if out and out[-1][2] == f and not text[out[-1][1]:s].strip():
+            out[-1][1] = e
+            continue
+        out.append([s, e, f])
+    return out
+
+
+def _car_spans(text: str) -> list:
+    """คำที่บอกรถใน "รถลูกค้าถาม" (car_phrase ตัดคำเกินออกแล้ว) — หาแต่ละคำในข้อความเดิม"""
+    if car_in(text) is None:
+        return []
+    low, out, cur = text.lower(), [], 0
+    for w in car_phrase(text).split():
+        i = low.find(w.lower(), cur)
+        if i < 0:
+            i = low.find(w.lower())
+        if i >= 0:
+            out.append((i, i + len(w), "car_text"))
+            cur = i + len(w)
+    return out
+
+
+def msg_spans(text: str, asked: bool = False, outbound: bool = False) -> list:
+    """ข้อความ 1 ข้อความ → [[เริ่ม, จบ, ช่อง]] (ช่อง = คีย์ใน LEAD_FIELDS หรือ deal/trade)"""
+    from . import lead_keywords as K
+    if outbound:
+        return _merge_spans(K.deal_spans(text, outbound=True), text)
+    sp = []
+    for m in _PHONE_RE.finditer(text):
+        if phones_in([m.group(0)]):
+            sp.append((m.start(), m.end(), "phone"))
+    for mm in _LINE_ID_LABEL.finditer(text):
+        if _id_ok(mm.group(1)):
+            sp.append((mm.start(1), mm.end(1), "line_id"))
+    from .lead_qr import _LINK, line_contact
+    for mm in _LINK.finditer(text):
+        if line_contact(mm.group(0)):
+            sp.append((mm.start(), mm.end(), "line_id"))
+    st = text.strip()
+    if asked and _BARE_ID.match(st) and _id_ok(st):
+        i = text.find(st)
+        sp.append((i, i + len(st), "line_id"))
+    try:
+        sp += _car_spans(text)
+    except Exception:
+        pass
+    sp += K.spans(text) + K.deal_spans(text)
+    return _merge_spans(sp, text)
+
+
+def _u16(text: str, sp: list) -> list:
+    """ตำแหน่งแบบ Python (นับตัวอักษร) → แบบ JavaScript (นับ UTF-16) — อีโมจิ/อักษรนอก BMP นับเป็น 2 ในเบราว์เซอร์
+    ไม่แปลง = ไฮไลต์เลื่อนไปทับคำข้างๆ ทุกข้อความที่มีอีโมจินำหน้า (ลูกค้าใส่อีโมจิบ่อย)"""
+    if not sp or all(ord(c) < 0x10000 for c in text):
+        return sp
+    pre, n = [0], 0
+    for c in text:
+        n += 2 if ord(c) >= 0x10000 else 1
+        pre.append(n)
+    return [[pre[s], pre[e], f] for s, e, f in sp]
+
+
+def add_spans(msgs, lead=None) -> list:
+    """ใส่ m["hl"] ให้ข้อความในแชท (เฉพาะคนที่เห็นแชทเต็ม) · คำว่า "ขาย/รับซื้อ" ไฮไลต์เฉพาะลีดที่เป็นรับซื้อจริง
+    (ลีดขายที่บังเอิญมีคำว่าขาย ไฮไลต์แล้วชวนเข้าใจผิด) · มีรถเทิร์นก็เหมือนกัน"""
+    deal = deal_of(lead) if lead else ""
+    trade = bool(lead and (lead.auto or {}).get(TRADE_KEY))
+    asked = False
+    for m in msgs or []:
+        t = m.get("text") or ""
+        out = m.get("dir") == "out"
+        if out:
+            asked = bool(_ASK_ID.search(t))
+            if deal != "buy" or not t:
+                continue
+        elif not t.strip() or t.startswith("["):
+            asked = False
+            continue
+        key = (m.get("id") or t, "o" if out else asked)
+        sp = _SPANS.get(key) if m.get("id") else None
+        if sp is None:
+            try:
+                sp = _u16(t, msg_spans(t, asked=asked, outbound=out))
+            except Exception:
+                sp = []
+            if m.get("id"):
+                if len(_SPANS) > _SPANS_MAX:
+                    _SPANS.clear()
+                _SPANS[key] = sp
+        sp = [x for x in sp if (x[2] != "deal" or deal == "buy") and (x[2] != "trade" or trade)]
+        if sp:
+            m["hl"] = sp
+        if not out:
+            asked = False
+    return msgs
+
+
 def capture_contact(o, msgs=None, extra=None) -> bool:
     """เก็บเบอร์/ID LINE ที่ลูกค้าให้ในแชทลงข้อมูลลีด (ช่องที่ยังว่าง + คนยังไม่เคยแก้) → คืนว่าได้อะไรใหม่ไหม
 
@@ -2881,7 +3028,82 @@ def apply_keywords(lead, auto: dict, msgs, notes=()) -> list:
         changed.append(f)
     if changed:
         auto[KW_KEY] = why
+    # ★ 12 ต.ค.69 ลูกค้าพูดค่าใหม่ทีหลัง ("รายได้ 15,000" → "จริงๆ รวมโอทีได้ 18,000") — ไม่ทับเอง ขึ้นให้คนเลือก
+    sg = {f: v for f, v in K.latest(msgs or []).items() if f in SUGG_FIELDS}
+    if _suggest(lead, auto, {f: (str(v or "").strip()[:LEAD_FIELDS[f]], ev) for f, (v, ev) in sg.items()},
+                fields=SUGG_FIELDS):
+        changed.append(SUGG_KEY)
     return changed
+
+
+# ── ★ 12 ต.ค.69 "ค่าใหม่รอคนตัดสิน" (เดโม CRM ที่เจ้าของเลือก) ──
+#   เดิม: ช่องที่ระบบเติมจากแชทแล้ว = เติมครั้งเดียว → ลูกค้าแก้ค่าทีหลัง ค่าใหม่หายเงียบ (ไม่มีใครรู้)
+#   ตอนนี้: ค่าใหม่ไม่ทับเอง เก็บไว้ที่ auto[SUGG_KEY] = {ช่อง: {v | opts, why, from, at}} → แผงขวาขึ้นกล่องให้คนเลือก
+#   · ใช้ค่าใหม่ = บันทึกช่องตามปกติ (กลายเป็น "คน" → ระบบไม่แตะอีก) · คงค่าเดิม = บันทึกค่าเดิม (คนยืนยันแล้ว)
+#   · "ยังไม่รู้"/ปิด = จดไว้ใน auto[SUGG_NO_KEY] ไม่ถามค่าเดิมซ้ำ · ช่องที่คนแก้แล้วไม่ถามเลย
+#   · สถานะลูกค้าไม่อยู่ในนี้ (เปลี่ยนตามข้อความล่าสุดเองอยู่แล้ว)
+SUGG_KEY = "_sugg"
+SUGG_NO_KEY = "_sugg_no"
+SUGG_FIELDS = ("occupation", "income", "job_tenure")
+
+
+def _suggest(lead, auto: dict, latest: dict, fields=SUGG_FIELDS) -> bool:
+    """`latest` = {ช่อง: (ค่าล่าสุดในแชท, คำที่จับได้)} → ตั้ง/ล้างคำแนะนำของช่องใน `fields` · คืนว่าเปลี่ยนไหม"""
+    sg = dict(auto.get(SUGG_KEY) or {})
+    no = auto.get(SUGG_NO_KEY) or {}
+    before = json.dumps(sg, sort_keys=True, ensure_ascii=False)
+    for f in fields:
+        cur, a = (getattr(lead, f) or ""), auto.get(f)
+        val, ev = latest.get(f) or ("", "")
+        if not cur or a != "แชท" or not val or val == cur or val in (no.get(f) or []):
+            sg.pop(f, None)
+            continue
+        if (sg.get(f) or {}).get("v") != val:
+            sg[f] = {"v": val, "why": str(ev or "")[:120], "from": cur, "at": timezone.now().isoformat(timespec="seconds")}
+    if json.dumps(sg, sort_keys=True, ensure_ascii=False) == before:
+        return False
+    if sg:
+        auto[SUGG_KEY] = sg
+    else:
+        auto.pop(SUGG_KEY, None)
+    return True
+
+
+def _model_choices(text: str) -> list:
+    """ลูกค้าพิมพ์ชื่อรุ่นหลักที่มีหลายรุ่นย่อย ("city") → ตัวเลือก "CAR / สูตร" ของรุ่นนั้นทั้งหมด (ให้คนเลือก ไม่เดา)"""
+    try:
+        from dashboard.services.purchase_report import _compact
+    except Exception:
+        return []
+    c = _compact(text)
+    for b in _vocab().get("bases") or []:
+        if b in c:
+            opts = [o for o in dd_options("car_model") if o.split() and o.split()[0].lower() == b]
+            if 2 <= len(opts) <= 8:
+                return opts
+    return []
+
+
+def dismiss_suggestion(o, field: str, by: str = ""):
+    """ปุ่ม "ยังไม่รู้"/ปิดกล่อง — ไม่ถามค่านี้ซ้ำ (ค่าในช่องไม่เปลี่ยน · ระบบยังเติม/แทนได้ตามกติกาเดิม)"""
+    lead = lead_of(o, create=False)
+    auto = dict((lead.auto if lead else None) or {})
+    sg = dict(auto.get(SUGG_KEY) or {})
+    item = sg.pop(field, None)
+    if not item:
+        return False, "ไม่มีค่าใหม่รอยืนยันในช่องนี้แล้ว"
+    no = dict(auto.get(SUGG_NO_KEY) or {})
+    key = item.get("v") or ("opts:" + "|".join(item.get("opts") or []))
+    no[field] = ((no.get(field) or []) + [key])[-5:]
+    auto[SUGG_NO_KEY] = no
+    if sg:
+        auto[SUGG_KEY] = sg
+    else:
+        auto.pop(SUGG_KEY, None)
+    lead.auto = auto
+    lead.updated_by = (by or "")[:80]
+    lead.save(update_fields=["auto", "updated_by", "updated_at"])
+    return True, "ปิดแล้ว — ไม่ถามค่านี้ซ้ำ"
 
 
 def capture_profile(o, msgs=None, extra=None) -> bool:
@@ -2907,7 +3129,8 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
     deal = apply_deal_kind(lead, auto, texts, outs, evs)
     if got or deal:
         lead.auto = auto
-        lead.save(update_fields=got + ["auto", "updated_at"])
+        # got อาจมี SUGG_KEY (คำแนะนำค่าใหม่ — อยู่ใน auto) ซึ่งไม่ใช่ช่องของตาราง
+        lead.save(update_fields=[f for f in got if f in LEAD_FIELDS] + ["auto", "updated_at"])
     return bool(got or deal)
 
 
@@ -3498,6 +3721,7 @@ def messages(o, limit: int = 200, since=None) -> list:
             "dir": m.direction or "in", "by": _by(m),
             # ★ 11 ต.ค.69 รูป/ไฟล์ที่ส่งในแชท — ลิงก์ผ่าน /connect/api/media (เช็คสิทธิ์) · chatmedia.py
             "files": _files(o, "f", m),
+            "id": "f%d" % m.pk,
         } for m in frows]
     qs = GroupChat.objects.filter(sender_id=o.profile.user_id).exclude(chat_type=GroupChat.GROUP)
     if since:
@@ -3512,6 +3736,7 @@ def messages(o, limit: int = 200, since=None) -> list:
         "dir": g.direction or "in",
         "by": g.sent_by_name or "",
         "files": _files(o, "l", g),
+        "id": "l%d" % g.pk,                       # ★ 12 ต.ค.69 อ้างข้อความ (ไฮไลต์ · ป้ายที่มาของช่องข้อมูล) — ไม่ใช่ LINE id
     } for g in rows]
 
 

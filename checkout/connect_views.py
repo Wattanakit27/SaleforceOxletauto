@@ -392,6 +392,10 @@ def api_chat(request):
         try:
             C.capture_contact(o, msgs)                # เบอร์/ID LINE ที่ลูกค้าให้ (รวมไอดีที่ส่งหลังเราขอ)
             lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"], events=msgs)
+            try:                                  # ★ 12 ต.ค.69 ไฮไลต์คำที่ระบบจับได้ (m["hl"]) — พังต้องไม่ทำให้แชทเปิดไม่ได้
+                C.add_spans(msgs, lead)
+            except Exception:
+                pass
             out["lead"] = C.lead_json(o, lead)
             out["leadEditable"] = bool(admin or mine)
             out["leadOptions"] = C.lead_options()
@@ -626,6 +630,8 @@ def api_lead(request):
     """แก้ข้อมูลลีด 1 ช่อง — POST `{id, field, value}` · เจ้าของลูกค้าหรือแอดมินเท่านั้น
 
     ทีละช่อง (ไม่ใช่ทั้งฟอร์ม) — 2 คนแก้คนละช่องพร้อมกันจะไม่ทับกัน
+    ★ 12 ต.ค.69 กล่อง "ค่าใหม่รอคนตัดสิน": ใช้ค่าใหม่/คงค่าเดิม = `{id, field, value}` ตามปกติ (คนยืนยันแล้ว)
+      · "ยังไม่รู้" = `{id, field, dismiss: true}` ปิดกล่อง ไม่ถามค่านี้ซ้ำ (ค่าในช่องไม่เปลี่ยน)
     """
     ctx, body, bad = _post_guard(request)
     if bad:
@@ -636,7 +642,10 @@ def api_lead(request):
     emp = ctx["emp"]
     if not (ctx["admin"] or (emp and o.owner_id == emp.id)):
         return _j({"ok": False, "error": "แก้ได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
-    ok, msg = C.save_lead_field(o, str(body.get("field") or ""), body.get("value"), by=ctx["name"])
+    if body.get("dismiss"):                       # ★ 12 ต.ค.69 ปิดกล่อง "ค่าใหม่รอยืนยัน" (ยังไม่รู้) — ไม่แก้ค่าในช่อง
+        ok, msg = C.dismiss_suggestion(o, str(body.get("field") or ""), by=ctx["name"])
+    else:
+        ok, msg = C.save_lead_field(o, str(body.get("field") or ""), body.get("value"), by=ctx["name"])
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
     o = _row(request, ctx, o.id)
