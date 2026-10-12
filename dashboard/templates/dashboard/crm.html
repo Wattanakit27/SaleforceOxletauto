@@ -828,7 +828,7 @@ function pageReport(){
     + kp + `<div class="g2">${lineCard(R)}${funnelCard(g)}</div><div class="g2">${donutCard(g)}${rankCard(g)}</div>`; }
 function lineCard(R){
   const pts = R.monthly || [], cur = pts.filter(x => !x.future);
-  const W = 560, H = 210, L = 40, T = 14, B = 26, Rr = 10;
+  const W = 560, H = 210, L = 60, T = 14, B = 26, Rr = 10;
   const mx = Math.max(1, ...cur.map(x => x.dealValue)) * 1.15;
   const sx = i => L + (W - L - Rr) * i / 11, sy = v => T + (H - T - B) * (1 - v / mx);
   const ticks = [0, .25, .5, .75, 1].map(t => mx * t);
