@@ -1398,16 +1398,22 @@
       //   จอกว้าง (มีแถบเมนูซ้าย) = ไม่มีหัวเว็บเลย (class hdr-cn · แถบเมนูของ Connect เป็นหัวแทน)
       //   จอแคบ = เหลือ ☰ + โลโก้ + สลับธีม + ออกจากระบบ (ป้ายบทบาท/ออนไลน์/กระดิ่ง/ดูในฐานะ/รีเฟรช ไม่เกี่ยวกับแชท)
       const _hdrSlim = tab === 'cn';
-      html += `<header${_hdrSlim ? ' class="hdr-cn"' : ''} style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:${_hdrSlim?'8px':'14px'};padding:${_hdrSlim?'6px 14px':'13px 18px'};background:var(--bg);border:.5px solid var(--bd);border-radius:${_hdrSlim?'12px':'16px'};box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
+      // ★ 13 ต.ค.69 แท็บ "สถานะรถ" = หัวเว็บแถวเดียวบางๆ (เจ้าของ: "แถบด้านบนใหญ่เกินไป รก" · ส่งรูปกรอบแดงให้สูงเท่านั้น)
+      //   breadcrumb + ชื่อหน้าอยู่บรรทัดเดียวกัน · ตัดป้ายบทบาท/ดูในฐานะ/รีเฟรช (ไม่เกี่ยวกับข้อมูลรถ)
+      const _hdrThin = tab === 't';
+      const _hdrSm = _hdrSlim || _hdrThin;
+      html += `<header${_hdrSlim ? ' class="hdr-cn"' : ''} style="display:flex;align-items:center;justify-content:space-between;flex-wrap:${_hdrThin?'nowrap':'wrap'};gap:10px;margin-bottom:${_hdrSm?'10px':'14px'};padding:${_hdrSm?'6px 14px':'13px 18px'};background:var(--bg);border:.5px solid var(--bd);border-radius:${_hdrSm?'12px':'16px'};box-shadow:0 2px 14px rgba(0,0,0,.05)">`;
       html += `<div style="display:flex;align-items:center;gap:13px">`;
       // display:none ตรงนี้ = ค่าปลอดภัยถ้า CSS ใหม่ยังไม่มา (หัวเว็บจะหน้าตาเหมือนเดิมทุกอย่าง)
-      html += `<div class="hdr-page" style="display:none">${_hdrSlim ? '' : `<div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div>`}<div class="hdr-h1"${_hdrSlim?' style="font-size:16px"':''}>${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
+      html += _hdrThin
+        ? `<div class="hdr-page" style="display:none"><div class="hdr-crumb" style="gap:6px">Oxlet Dashboard ${ic('lucide:chevron-right',12)} <b style="font-size:16px;color:var(--t1);font-weight:800">${h(_curTab.l)}</b></div></div>`
+        : `<div class="hdr-page" style="display:none">${_hdrSlim ? '' : `<div class="hdr-crumb">Oxlet Dashboard ${ic('lucide:chevron-right',12)} หน้าหลัก</div>`}<div class="hdr-h1"${_hdrSlim?' style="font-size:16px"':''}>${h(_inSocial ? 'โซเชียล · ' + _curTab.l : _curTab.l)}</div></div>`;
       html += `<button class="nav-burger" onclick="toggleNav()" title="เมนู — แท็บทั้งหมด" aria-label="เปิดเมนู">${ic('lucide:menu',20)}</button>`;
-      html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:${_hdrSlim?30:42}px;width:auto;display:block">`;
-      html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:${_hdrSlim?17:22}px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span>${_hdrSlim ? '' : `<span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span>`}</div>`;
+      html += `<img class="hdr-logo" src="${LOGO_URL}" alt="Oxlet" style="height:${_hdrSm?30:42}px;width:auto;display:block">`;
+      if(!_hdrThin) html += `<div class="hdr-title" style="display:flex;flex-direction:column;line-height:1.15"><span style="font-size:${_hdrSm?17:22}px;font-weight:800;color:var(--t1);letter-spacing:-.3px">Oxlet Dashboard</span>${_hdrSm ? '' : `<span style="font-size:var(--fs-body);color:var(--t3);font-weight:500;letter-spacing:.2px">ระบบติดตามยอดขาย · Oxlet Auto</span>`}</div>`;
       // Viewer badge
-      if(_hdrSlim) {
-        // แท็บ Connect: ไม่มีป้ายบทบาท
+      if(_hdrSm) {
+        // แท็บ Connect / สถานะรถ: ไม่มีป้ายบทบาท
       } else if(canViewAll) {
         const roleLabel = isAdmin ? 'Admin' : 'ผู้บริหาร';
         const roleBg = isAdmin ? 'var(--amber-bg)' : 'var(--purple-bg)';
@@ -1422,11 +1428,11 @@
         html += `<span style="background:var(--blue-bg);color:var(--blue);padding:5px 13px;border-radius:8px;font-size:var(--fs-body);font-weight:700;border:.5px solid var(--blue)">${h(employee.nickname)}</span>`;
       }
       html += `</div>`;
-      html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">`;
+      html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:${_hdrThin?'nowrap':'wrap'}">`;
       // Admin-only: หัวเว็บเหลือแค่ "ตัวบอกสถานะสด" (ออนไลน์/กระดิ่ง) — เครื่องมือจัดการย้ายเข้า drawer แล้ว (ดู ADMIN_MENU)
       if(isAdmin && !_hdrSlim) {
         // 🟢 คนเข้าเว็บตอนนี้ (online now) — heartbeat อัปเดต #online-count ทุก ~45 วิ
-        html += `<button id="online-now" onclick="openOnlinePanel()" title="คนกำลังใช้งานเว็บตอนนี้ — กดดูรายชื่อ (อัปเดต ~45 วิ)" style="font-size:var(--fs-body);padding:5px 11px;border-radius:7px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer">${ic('lucide:radio',14)} <span id="online-count">${_onlineNow!=null?_onlineNow:'–'}</span> ออนไลน์</button>`;
+        html += `<button id="online-now" onclick="openOnlinePanel()" title="คนกำลังใช้งานเว็บตอนนี้ — กดดูรายชื่อ (อัปเดต ~45 วิ)" style="font-size:var(--fs-body);padding:5px 11px;border-radius:7px;border:.5px solid var(--green-mid,#1d9e75);background:var(--green-bg,#eaf3de);color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer">${ic('lucide:radio',14)} <span id="online-count">${_onlineNow!=null?_onlineNow:'–'}</span>${_hdrThin?'':' ออนไลน์'}</button>`;
         // 🔔 กระดิ่งแจ้งเตือนแอดมิน — เน้นเคสปล่อยไม่ลงวันปล่อย + เซลล์ใหม่ + วันที่ปีผิด
         const _al = computeAdminAlerts();
         const _alTot = _al.blankRel.length + _al.badYr.length + _al.newSellers.length + _al.stuckCars.length;
@@ -1435,7 +1441,7 @@
         html += `<button id="alerts-bell" onclick="openAlertsPanel()" title="แจ้งเตือน: รถค้างนาน / เคสปล่อยลงวันไม่ครบ (เซ็น/ผล/ปล่อย) / เซลล์ใหม่ / วันที่ปีผิด" style="position:relative;font-size:var(--fs-body);padding:5px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:${_alColor};cursor:pointer;display:inline-flex;align-items:center">${ic('lucide:bell',16)}${_alBadge}</button>`;
       }
       // Impersonate switcher (admin + ผู้บริหาร)
-      if(canViewAll && D.sellers && !_hdrSlim) {
+      if(canViewAll && D.sellers && !_hdrSm) {
         const allNames = D.sellers.map(s=>s.name);
         const selfLabel = isAdmin ? 'Admin (ทั้งหมด)' : 'ผู้บริหาร (ทั้งหมด)';
         html += `<select onchange="setImpersonate(this.value)" style="font-size:var(--fs-body);padding:3px 9px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer">`;
@@ -1444,13 +1450,13 @@
         html += `</select>`;
       }
       html += `<button onclick="toggleTheme()" title="สลับโหมดสว่าง/มืด" style="font-size:var(--fs-body);padding:4px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">${themeIcon()}</button>`;
-      if(!_hdrSlim) html += `<button onclick="location.reload()" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:refresh-cw',15)} รีเฟรช</button>`;
+      if(!_hdrSm) html += `<button onclick="location.reload()" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:refresh-cw',15)} รีเฟรช</button>`;
       // ออกจากระบบ — ทุกคนที่เห็นหน้านี้ login แล้ว (admin/ผู้บริหาร). role กำหนดตอน login ที่ /login/
-      html += `<button class="hdr-logout" onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:log-out',15)} ออกจากระบบ</button>`;
+      html += `<button class="hdr-logout" onclick="if(confirm('ออกจากระบบ?'))location.href='/logout/'" title="ออกจากระบบ" style="font-size:var(--fs-body);padding:5px 12px;border-radius:7px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer;display:inline-flex;align-items:center;gap:5px">${ic('lucide:log-out',15)}${_hdrThin?'':' ออกจากระบบ'}</button>`;
       html += `</div></header>`;
 
       // Last fetch
-      if(D.meta?.generatedAt && tab !== 'cn') {     // แท็บ Connect ไม่เกี่ยวกับข้อมูลชีต — เอาที่ไปให้แชท
+      if(D.meta?.generatedAt && tab !== 'cn' && tab !== 't') {   // สถานะรถ: เวลาดึงชีตขายไม่เกี่ยวกับข้อมูลรถ     // แท็บ Connect ไม่เกี่ยวกับข้อมูลชีต — เอาที่ไปให้แชท
         const d = new Date(D.meta.generatedAt);
         html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px;text-align:right">ดึงข้อมูลล่าสุด: ${d.toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})}</div>`;
       }
@@ -1530,7 +1536,7 @@
       html += `</div>`;
       // หน้าโซเชียล: แถบสลับแพลตฟอร์มบนสุด (แทน 4 ปุ่มในเมนูเดิม)
       if(_inSocial) html += socialSubBar(NAV_TABS.filter(t => SOCIAL_SUB.includes(t.id)));
-      if(tab !== 'cn') html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
+      if(tab !== 'cn' && tab !== 't') html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;padding:0 4px">${h(TAB_DESC[tab] || '')}</div>`;
 
       // Date filter bar (ซ่อนในแท็บ "เซลล์"/"สถานะรถ"/"เบิก-คืนรถ"/"จัดซื้อ" — มี UI/รอบเดือนของตัวเอง)
       if(tab!=='s' && tab!=='t' && tab!=='ck' && tab!=='p' && tab!=='cn') html += renderDateFilterBar();
@@ -6368,8 +6374,16 @@
       const left = sb ? Math.max(0, Math.round(sb.getBoundingClientRect().right)) : 0;
       const pl = f.parentElement.getBoundingClientRect().left;
       f.style.left = '0'; f.style.marginLeft = (left - pl) + 'px'; f.style.width = (window.innerWidth - left) + 'px';
+      // สูงถึงขอบล่างจอพอดี (หัวเว็บแท็บนี้บางลงแล้ว · เดิมสูงตายตัว 100vh-172px)
+      const top = f.getBoundingClientRect().top + window.scrollY;
+      f.style.height = Math.max(560, window.innerHeight - top - 8) + 'px';
     }
     window.addEventListener('resize', fitTrkFrame);
+    // จัดใหม่ทุกครั้งที่พื้นที่เนื้อหาเปลี่ยนขนาด/ตำแหน่ง (โหลด CSS/ฟอนต์เสร็จ · ย่อ-กางแถบเมนู · เลย์เอาต์เลื่อน)
+    //   เดิมคำนวณครั้งเดียวตอนโหลด → บางจังหวะได้ค่าก่อนหน้าจัดตัวเสร็จ กรอบไปเยื้องขวา ~260px
+    if (window.ResizeObserver) {
+      try { new ResizeObserver(() => fitTrkFrame()).observe(document.getElementById('dashboard-root') || document.body); } catch (_) {}
+    }
 
     // แท็บ "Connect" — ฝังหน้า /connect/ (หน้าเดียวกับที่เซลล์เปิดจากมือถือ · สิทธิ์เช็คที่เซิร์ฟเวอร์)
     //   ★ 3 ต.ค.69 เจ้าของแจ้ง "หน้าจอแชทเล็กมาก" — เดิมสูงตายตัว 100vh-190px แล้วยังมีบรรทัดอธิบาย/เวลาดึงข้อมูลกินที่
@@ -6580,8 +6594,12 @@
       _trkPie('trkPieBranch','trkLegBranch', Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([name,n],i)=>({name,n,c:_bpal[i%_bpal.length]})));
     }
 
+    // ★ 13 ต.ค.69 เจ้าของสั่ง "ไม่เอาหน้าต่างลอย แบ่งออกไปเป็นหน้าหนึ่งเลย" — ทุกอย่างของสถานะรถ
+    //   (รายละเอียดรถ · เพิ่มรถ · ถังขยะ · สาขา · ผู้ใช้/บทบาท) สร้างผ่านตัวนี้ตัวเดียว → ตั้งธง _pageNext
+    //   ให้ตัวแปลงหน้า (_pageify ท้ายไฟล์) เปลี่ยนเป็นหน้าเต็มทันทีที่ถูกใส่เข้าหน้า · ปิด (remove) = กลับหน้าสถานะรถ
     function _trkOverlay(id, inner){
       const old=document.getElementById(id); if(old) old.remove();
+      if (typeof _pageNext === 'function') _pageNext(id);
       const ov=document.createElement('div'); ov.id=id;
       ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto';
       ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
@@ -10022,6 +10040,9 @@
         .concat(typeof SETTINGS_MENU !== 'undefined' ? SETTINGS_MENU : []);
       all.forEach(g => (g.items || []).forEach(it => { if (_pageKey(it.fn) === key) t = it.l; }));
       if (key === 'settings') t = 'ตั้งค่า';
+      const TRK = { 'trk-car':'รายละเอียดรถ', 'trk-add':'เพิ่มรถ', 'trk-trash':'ถังขยะ (รถ)',
+                    'trk-branches':'สาขา', 'trk-users':'ผู้ใช้ / บทบาท (ระบบติดตามรถ)' };
+      if (TRK[key]) t = TRK[key];
       return t;
     };
 
@@ -10040,7 +10061,11 @@
       const root = document.getElementById('dashboard-root');
       if (root) [...root.children].forEach(c => { if (c.dataset.oxHidden) { c.style.display = c.dataset.oxHidden === '1' ? '' : c.dataset.oxHidden; delete c.dataset.oxHidden; } });
       document.body.classList.remove('ox-paged');
-      if (!pop && /[?&]panel=/.test(location.search)) history.replaceState(null, '', location.pathname);
+      if (typeof fitTrkFrame === 'function') requestAnimationFrame(fitTrkFrame);   // กลับมาหน้าสถานะรถ = จัดกรอบใหม่
+      if (!pop && /[?&]panel=/.test(location.search)) {
+        const _q = new URLSearchParams(location.search); _q.delete('panel');
+        history.replaceState(null, '', location.pathname + (_q.toString() ? '?' + _q.toString() : ''));
+      }
     }
 
     function _pageBack() { if (_pageEl) _pageEl.remove(); }   // observer จะเห็นการลบแล้วคืนหน้าเอง
@@ -10059,6 +10084,7 @@
       });
       // กล่องลอย → บล็อกปกติในหน้า (ล้าง inset/ฉากหลังมืด/จัดกึ่งกลางทิ้ง)
       el.style.cssText = 'display:block;padding:0 0 28px';
+      el.onclick = null;                                        // เดิมกดพื้นหลังมืด = ปิด · เป็นหน้าแล้วไม่ควรปิดเพราะกดที่ว่าง
       const card = el.firstElementChild;
       if (card) {
         card.style.maxWidth = '100%';
@@ -10073,13 +10099,15 @@
       bar.innerHTML = `<button onclick="_pageBack()" style="display:inline-flex;align-items:center;gap:6px;`
         + `padding:6px 12px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);`
         + `color:var(--t2);font-size:var(--fs-body);cursor:pointer;font-family:inherit">`
-        + `${ic('lucide:arrow-left', 15)} กลับแดชบอร์ด</button>`
+        + `${ic('lucide:arrow-left', 15)} ${String(key).startsWith('trk-') ? 'กลับหน้าสถานะรถ' : 'กลับแดชบอร์ด'}</button>`
         + `<div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">${h(_pageTitle(key))}</div>`;
       root.appendChild(bar);
       root.appendChild(el);
       // URL ของหน้านั้นเอง — ก๊อปลิงก์ส่งต่อได้ + ปุ่ม Back ของเบราว์เซอร์กลับแดชบอร์ด
-      if (new URLSearchParams(location.search).get('panel') !== key) {
-        history.pushState({ oxPage: key }, '', location.pathname + '?panel=' + encodeURIComponent(key));
+      const _q = new URLSearchParams(location.search);
+      if (_q.get('panel') !== key) {
+        _q.set('panel', key);
+        history.pushState({ oxPage: key }, '', location.pathname + '?' + _q.toString());
       }
       window.scrollTo(0, 0);
     }

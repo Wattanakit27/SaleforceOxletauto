@@ -5,9 +5,16 @@
 {# ★ 13 ต.ค.69 หน้าตาใหม่ "เรียบหรู" — เปิดเฉพาะหน้านี้ (หน้าอื่นที่ใช้ base.html เช่นหน้าสแกน QR ไม่โดน) #}
 <script>document.documentElement.classList.add('lux');</script>
 <style>
-  .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
-  .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:600px;width:100%;max-height:94vh;overflow:auto}
-  #carBody{max-width:920px}
+  /* ★ 13 ต.ค.69 เจ้าของสั่ง "ไม่เอาหน้าต่างลอย แบ่งออกไปเป็นหน้าหนึ่งเลย" — .ov ทุกตัวเปิดเป็น "หน้า" แทนกล่องลอย
+     JS เปิด/ปิดด้วย style.display เหมือนเดิม (ไม่ต้องแก้ทุกจุด) · ตัวจัดการหน้า (pgSync) เลือกหน้าบนสุดใส่ .pg-top
+     !important ชนะ inline style → โชว์ได้ทีละหน้า · หน้าอื่นของบอร์ด (KPI/บอร์ด/ตาราง) ซ่อนตอนเปิดหน้า */
+  .ov{display:none!important}
+  .ov.pg-top{display:block!important}
+  body.paged .wrap > :not(.ov){display:none!important}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;width:100%;max-width:640px}
+  #carBody{max-width:none}
+  .pg-bar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+  .pg-bar b{font-size:17px}
   .modal h2{margin:0 0 12px}
   /* กล่องแนบรูปแบบเส้นประ — ให้หน้าตาตรงกับหน้าสแกน/หน้าเซลล์ (ส.ค.69) */
   .stage-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
@@ -162,6 +169,7 @@
 
   html.lux .chartgrid{gap:16px;margin-bottom:20px}
   .chartgrid>*{min-width:0}   /* ให้กราฟหดตามกรอบได้ (เดิม canvas ค้างความกว้างตอนวาดครั้งแรก → หน้าล้นแนวนอน) */
+  .chartgrid canvas{max-width:100%}
   html.lux .chead{margin-bottom:14px}
   html.lux .plegend .pill{background:var(--bg2);border:1px solid var(--line)}
 
@@ -213,12 +221,10 @@
   html.lux .wsw:active .wsl:before{width:22px}
   html.lux .wsw input:checked+.wsl{background:linear-gradient(180deg,#22c55e,#16a34a)}
 
-  /* ── ป๊อปอัป: พื้นหลังเบลอ + เด้งขึ้นนุ่มๆ ── */
-  html.lux .ov{background:rgba(16,16,36,.42);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:luxFade .2s ease}
-  html.lux .modal{border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 30px 70px -24px rgba(16,16,36,.45);
-                  animation:luxPop .28s var(--ease)}
-  @keyframes luxFade{from{opacity:0}to{opacity:1}}
-  @keyframes luxPop{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+  /* ── หน้า (แทนป๊อปอัป): เลื่อนเข้านุ่มๆ ── */
+  html.lux .ov.pg-top{animation:luxPage .24s var(--ease)}
+  html.lux .modal{border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--sh1)}
+  @keyframes luxPage{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   html.lux .stage-drop{border-radius:12px;transition:border-color .2s,background-color .2s}
   html.lux .stage-drop:hover{background:var(--accent-soft)}
 
@@ -909,7 +915,39 @@
   window.addEventListener('resize',()=>{ segSync(document.getElementById('bmSeg')); segSync(document.getElementById('viewSeg')); });
   if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ segSync(document.getElementById('bmSeg')); segSync(document.getElementById('viewSeg')); });
   // (closeShoot ถูกถอดไปพร้อมปุ่มถ่ายคอนเทนต์ ส.ค.69 — เคยเรียกต่อ = ReferenceError ทุกครั้งที่กด Esc)
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeFlagProof();} });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') pgBack(); });
+
+  // ─────────── ตัวจัดการ "หน้า" (แทนหน้าต่างลอย · 13 ต.ค.69) ───────────
+  // ทุกโค้ดเดิมยังเปิด/ปิดด้วย style.display ตามเดิม → ตัวนี้คอยดูแล้วเลือกหน้าบนสุดมาโชว์
+  // ซ้อนกันได้ (เช่น รายละเอียดรถ → ยืนยันเปลี่ยนสเตป) · ปิดหน้าบน = กลับหน้าก่อนหน้า · ปิดหมด = กลับบอร์ดตำแหน่งเดิม
+  const PG_TITLE={carModal:'รายละเอียดรถ',stageModal:'ยืนยันเปลี่ยนสเตป',addModal:'เพิ่มรถ',flagModal:'ยืนยันว่าถ่ายเสร็จแล้ว'};
+  const PG_CLOSE={carModal:()=>closeCar(),stageModal:()=>closeStage(),addModal:()=>closeAdd(),flagModal:()=>closeFlagProof()};
+  let _pgStack=[], _pgScroll=0;
+  function _pgOpen(el){ return !!el.style.display && el.style.display!=='none'; }
+  function pgBack(){ const top=_pgStack[_pgStack.length-1]; if(top&&PG_CLOSE[top.id]) PG_CLOSE[top.id](); else if(top) top.style.display='none'; }
+  function pgSync(){
+    const ovs=[...document.querySelectorAll('.ov')];
+    const was=_pgStack[_pgStack.length-1];
+    if(!_pgStack.length && ovs.some(_pgOpen)) _pgScroll=window.scrollY;
+    _pgStack=_pgStack.filter(_pgOpen);
+    ovs.forEach(o=>{ if(_pgOpen(o) && !_pgStack.includes(o)) _pgStack.push(o); });
+    const top=_pgStack[_pgStack.length-1];
+    ovs.forEach(o=>o.classList.toggle('pg-top',o===top));
+    document.body.classList.toggle('paged',!!top);
+    if(top!==was){
+      if(top){ window.scrollTo(0,0); _scrollParent(); }
+      else { window.scrollTo(0,_pgScroll); }
+      if(window.lucide) lucide.createIcons();
+    }
+  }
+  document.querySelectorAll('.ov').forEach(o=>{
+    o.removeAttribute('onclick'); o.onclick=null;            // เดิมกดพื้นหลังมืด = ปิด · เป็นหน้าแล้วไม่มีพื้นหลังให้กด
+    const bar=document.createElement('div'); bar.className='pg-bar';
+    bar.innerHTML='<button type="button" class="btn sm" onclick="pgBack()"><i data-lucide="arrow-left"></i> กลับ</button><b>'+(PG_TITLE[o.id]||'')+'</b>';
+    o.insertBefore(bar,o.firstChild);
+    new MutationObserver(pgSync).observe(o,{attributes:true,attributeFilter:['style']});
+  });
+  pgSync();
 
   // ─────────── กราฟ (Chart.js · ธีมสว่าง/มืด) ───────────
   const PHASES = JSON.parse(document.getElementById('phaseData').textContent);
@@ -996,6 +1034,12 @@
   }
 
   buildCharts();
+  // กรอบ iframe ถูกปรับขนาดหลังวาดกราฟ (fitTrkFrame ของแดชบอร์ดขาย) — Chart.js บางทีไม่จับเอง → สั่งวาดตามขนาดใหม่
+  (function(){
+    let t; const fit=()=>{ clearTimeout(t); t=setTimeout(()=>{ [pipeChart,healthChart].forEach(c=>{ try{ c&&c.resize(); }catch(e){} }); },80); };
+    window.addEventListener('resize',fit);
+    const g=document.querySelector('.chartgrid'); if(g&&window.ResizeObserver) new ResizeObserver(fit).observe(g);
+  })();
   colorizeStagePills();
   applyLang();   // ลงสีสเตป pill ในตาราง
   // re-render เมื่อสลับธีม (สีข้อความ/เส้น/พื้นเปลี่ยน)

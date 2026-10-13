@@ -4058,6 +4058,21 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
   - แถบปุ่มเหนือกรอบใน index.html = คลาส `.trk-tb` (ใน `<style>` ของ index.html · ไม่ต้อง collectstatic) · เพิ่มไอคอน
     `qr-code`/`building-2` เข้า `LUCIDE` แล้ว
   - แก้ไปพร้อมกัน: มือถือซ่อนคอลัมน์ผิด (`nth-child(7)` = คอลัมน์ Active ตั้งแต่เพิ่มคอลัมน์ → เปลี่ยนเป็น 8 = ลูกศร)
+- **★★ 13 ต.ค.69 (รอบ 2) — หัวเว็บบาง + "ไม่มีหน้าต่างลอย" ในหน้าสถานะรถ** (เจ้าของ: *"แถบด้านบนใหญ่เกินไป รก · ไม่เอาหน้าต่างลอย
+  ต่อให้จะดูสถานะ หรือเพิ่มลบแก้ไขรูป แบ่งออกไปเป็นหน้าหนึ่งเลย"*)
+  - **หัวเว็บแท็บ 't'** (`_hdrThin` ใน `render()` ของ index.html) = แถวเดียว ~43px: `Oxlet Dashboard › สถานะรถ` · ไม่มีป้ายบทบาท/ดูในฐานะ/รีเฟรช/
+    บรรทัดเวลาดึงข้อมูล/คำอธิบายแท็บ · มือถือ: ซ่อนชื่อเว็บ ปุ่มออนไลน์/ออกจากระบบเหลือไอคอน `nowrap` (เดิมแตก 3 แถว)
+  - **ในกรอบ `/track/` ([dashboard.html](templates/dashboard.html))**: ทุก `.ov` (รายละเอียดรถ · ยืนยันเปลี่ยนสเตป · เพิ่มรถ · ยืนยันถ่ายเสร็จ)
+    เป็น "หน้า" — `pgSync()` จัดลำดับตามที่เปิด (ตัวบนสุดได้ `.pg-top`) · `body.paged` ซ่อนเนื้อหาอื่นใน `.wrap` · แต่ละหน้ามีแถบ "← กลับ" + ชื่อ
+    (`PG_TITLE`) · `pgBack()` เรียกตัวปิดเดิม (`PG_CLOSE`) · Esc = กลับ · กดพื้นหลังไม่ปิดแล้ว · ปิดหมด = เลื่อนกลับตำแหน่งเดิมบนบอร์ด
+    · **ตัวปิดเดิม (closeCar/closeStage/…) ไม่ได้แก้** — แค่ซ่อน/โชว์ด้วย `style.display` ตามเดิม แล้ว MutationObserver จับ
+  - **หน้าต่างของแดชบอร์ดขาย** (เพิ่มรถ/ถังขยะ/สาขา/ผู้ใช้ + `openTrkCar` จากกระดิ่ง) — `_trkOverlay()` เรียก `_pageNext(id)` → กลไก `_pageify`
+    เดิมแปลงเป็นหน้า · ปุ่ม "กลับหน้าสถานะรถ" · URL `?tab=t&panel=trk-…` (ปุ่ม Back ของเบราว์เซอร์ใช้ได้ · ปิดแล้วเหลือ `?tab=t`)
+  - **กรอบสูงพอดีจอ**: `fitTrkFrame()` ตั้งความสูง = ขอบล่างจอ − ตำแหน่งกรอบ · ResizeObserver ที่ `#dashboard-root` วัดซ้ำ
+  - **กราฟในกรอบไม่หดตาม** (Chart.js ไม่จับตอนกรอบถูกปรับขนาดทีหลัง → หน้าล้นแนวนอน) → `resize` + ResizeObserver ที่ `.chartgrid` สั่ง
+    `chart.resize()` เอง + `.chartgrid canvas{max-width:100%}`
+  - ตรวจ Chrome: การ์ด → หน้ารถ → หน้ายืนยันสเตป → กลับ 2 ครั้งถึงบอร์ดที่ตำแหน่งเดิม · ปุ่มแถบเครื่องมือ 4 ปุ่ม + กระดิ่ง เปิดเป็นหน้า ·
+    จอ 1280/375 ไม่ล้นแนวนอน · ไม่มี JS error
 - **★ ยุบเหลือ login เดียว (มิ.ย.69)**: ไม่มีหน้า login แยกของ tracking แล้ว — ใช้หน้า login หลักของ sales (`/login/`) หน้าเดียว
   - `LOGIN_URL=/login/` · `/track/login/` → redirect `/login/?next=/track/` · `/track/logout/` → redirect `/logout/` · ปุ่มออกใน [base.html](templates/base.html) ใช้ `/logout/` ของ sales (flush ทั้ง 2 auth)
   - **middleware [cars/middleware.py](cars/middleware.py) `TrackSessionBridgeMiddleware`**: เข้า `/track/` แล้วถ้ามี session sales (`oxlet_user`) แต่ยังไม่ได้ login Django auth → เรียก `_bridge_line_to_django_user()` ([views.py](dashboard/views.py)) สร้าง/ผูก Django User `line_<userId>` + `auth.login()` ให้อัตโนมัติ → แอดมิน login sales ครั้งเดียว เข้าแท็บ "สถานะรถ" ได้เลย ไม่ login ซ้ำ · ทำเฉพาะ path `/track/` (ไม่แตะ sales · try/except กัน DB ล่มกระทบ sales) · ต้องวางหลัง `AuthenticationMiddleware`
