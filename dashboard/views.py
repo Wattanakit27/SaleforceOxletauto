@@ -1649,6 +1649,12 @@ def cron_tick(request):
                 _ls_pending()
             except Exception:
                 pass
+            try:                                # ★ 13 ต.ค.69 สำเนาชีตจ่ายเบอร์ + รายงานแบน ลง Postgres (ทุก 10 นาที)
+                from .services.sheet_mirror import due as _sm_due, run as _sm_run
+                if _sm_due():
+                    _sm_run()
+            except Exception:
+                pass
             finally:
                 try:
                     from django.db import connection as _conn2
@@ -2675,6 +2681,24 @@ def admin_system_health(request):
             elif _stuck:
                 issues.append({"level": "warn",
                                "msg": "ใบเคส/คอมเมนต์จากห้องเคสHOT ค้างยังไม่ลงชีต %d รายการ (เกิน 10 นาที)" % _stuck})
+    except Exception:
+        pass
+
+    # ── 🗄️ 13 ต.ค.69 — สำเนาชีตจ่ายเบอร์ลง Postgres ต้องไม่หยุดเงียบ ──
+    try:
+        from .services import sheet_mirror as _sm
+        _sml = _sm._kv(_sm.KV_LAST)
+        if _sml.get("error"):
+            issues.append({"level": "warn", "msg": "สำเนาชีตจ่ายเบอร์ลง Postgres ล้ม: %s · ตรวจด้วย manage.py sheet_mirror"
+                                                   % _sml["error"][:160]})
+        elif _sml.get("at"):
+            from datetime import datetime as _dt
+
+            from django.utils import timezone as _djtz      # ไฟล์นี้ไม่ได้ import timezone ระดับไฟล์
+            _age = (_djtz.now() - _dt.fromisoformat(_sml["at"])).total_seconds() / 60
+            if _age > 40:
+                issues.append({"level": "warn", "msg": "สำเนาชีตจ่ายเบอร์ลง Postgres ไม่ได้อัปเดตมา %d นาที "
+                                                       "(ปกติทุก 10 นาที — cron ทำงานไหม)" % _age})
     except Exception:
         pass
 

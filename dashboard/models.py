@@ -666,3 +666,84 @@ class MobileToken(models.Model):
 
     def __str__(self):
         return "%s (%s)" % (self.nickname, self.device or "-")
+
+
+class LeadSheetRow(models.Model):
+    """สำเนาแถวของ "ชีทจ่ายเบอร์ ปี69" (แท็บรายเดือน) ใน Postgres — ★ 13 ต.ค.69 เจ้าของสั่ง
+    *"อย่าลืมเก็บลง postgres ด้วยนะ เก็บไว้เผื่อทำอย่างอื่นต่อ"*
+
+    **ชีตยังเป็นต้นฉบับ** (แอดมิน/เซลล์กรอกในชีต) · ตารางนี้ดึงซ้ำทุก 10 นาที (`sheet_mirror.py`)
+    แทนที่ทั้งแท็บในธุรกรรมเดียว → แถวที่ถูกลบ/แก้ในชีตตามมาด้วย · ช่องหลักแตกเป็นคอลัมน์
+    (จับคู่ตามหัวตารางชุดเดียวกับแดชบอร์ด — แต่ละเดือนคอลัมน์ไม่ตรงกัน) · **ทุกช่องดิบอยู่ใน `raw`**
+    """
+    tab = models.CharField("แท็บ", max_length=40, db_index=True)
+    row_no = models.PositiveIntegerField("แถวในชีต")
+    tab_month = models.DateField("เดือนของแท็บ", db_index=True)
+    code = models.CharField("Code", max_length=40, blank=True, db_index=True)
+    received_date = models.DateField("ว/ด/ป", null=True, blank=True, db_index=True)
+    time = models.CharField("เวลา", max_length=16, blank=True)
+    phone = models.CharField("เบอร์โทร / ID LINE", max_length=160, blank=True, db_index=True)
+    seller = models.CharField("เซลล์", max_length=80, blank=True, db_index=True)
+    live_team = models.CharField("ทีมไลฟ์", max_length=80, blank=True)
+    admin = models.CharField("Admin", max_length=80, blank=True)
+    channel = models.CharField("ช่องทาง", max_length=160, blank=True, db_index=True)
+    branch = models.CharField("สาขา", max_length=80, blank=True)
+    lead_type = models.CharField("type", max_length=80, blank=True)
+    ads = models.TextField("ADS", blank=True)
+    car_inquiry = models.TextField("รถลูกค้าถาม", blank=True)
+    car_formula = models.CharField("CAR / สูตร", max_length=120, blank=True, db_index=True)
+    call_proof = models.CharField("แจ้งหลักฐานการโทร", max_length=60, blank=True)
+    focus = models.CharField("FOCUS", max_length=60, blank=True)
+    contact_at = models.DateTimeField("วัน เวลา ที่ติดต่อ", null=True, blank=True)
+    update_count = models.IntegerField("จำนวนอัพเดท", null=True, blank=True)
+    last_updated_at = models.DateTimeField("วัน เวลา อัพเดทล่าสุด", null=True, blank=True)
+    fill_note = models.TextField("มากรอกชีตกันเถอะ", blank=True)
+    profile = models.TextField("PROFILE ลูกค้า จาก ADMIN", blank=True)
+    occupation = models.TextField("อาชีพ", blank=True)
+    income = models.TextField("รายได้", blank=True)
+    job_tenure = models.TextField("อายุงาน", blank=True)
+    payment_history = models.TextField("ประวัติการผ่อน", blank=True)
+    customer_type = models.CharField("ประเภทลูกค้า", max_length=120, blank=True)
+    customer_status = models.CharField("สถานะลูกค้า", max_length=120, blank=True, db_index=True)
+    admin_status = models.TextField("Status แอดมิน", blank=True)
+    sales_status = models.TextField("Status เซลล์", blank=True)
+    raw = models.JSONField("ทุกช่องดิบ {หัวคอลัมน์: ค่า}", default=dict, blank=True)
+    synced_at = models.DateTimeField("ดึงจากชีตเมื่อ")
+
+    class Meta:
+        db_table = "dash_lead_sheet_row"
+        verbose_name = "แถวชีตจ่ายเบอร์ (สำเนา)"
+        verbose_name_plural = "แถวชีตจ่ายเบอร์ (สำเนา)"
+        ordering = ["tab_month", "row_no"]
+        constraints = [models.UniqueConstraint(fields=["tab", "row_no"], name="uniq_lead_sheet_row")]
+        indexes = [models.Index(fields=["seller", "received_date"])]
+
+    def __str__(self):
+        return "%s แถว %s %s" % (self.tab, self.row_no, self.code)
+
+
+class BanSheetRow(models.Model):
+    """สำเนาแท็บ "รายงานแบน" (Sheet Master) ใน Postgres — ★ 13 ต.ค.69 · ดึงพร้อมชีตจ่ายเบอร์ทุก 10 นาที (แทนที่ทั้งแท็บ)"""
+    row_no = models.PositiveIntegerField("แถวในชีต", unique=True)
+    ban_date = models.DateField("วันที่แบน", null=True, blank=True, db_index=True)
+    time = models.CharField("เวลา", max_length=16, blank=True)
+    seller = models.CharField("คนที่โดนแบน", max_length=80, blank=True, db_index=True)
+    seller_display = models.CharField("ชื่อที่แสดง", max_length=120, blank=True)
+    ban_type = models.CharField("ประเภท", max_length=80, blank=True)
+    reason = models.TextField("เหตุผล", blank=True)
+    banned_by = models.CharField("คนสั่งแบน", max_length=80, blank=True)
+    unban_date = models.CharField("ปลดแบน", max_length=40, blank=True)
+    status = models.CharField("สถานะ", max_length=40, blank=True)
+    raw_text = models.TextField("ข้อความเดิม", blank=True)
+    group_id = models.CharField("กลุ่ม", max_length=64, blank=True)
+    raw = models.JSONField("ทุกช่องดิบ", default=dict, blank=True)
+    synced_at = models.DateTimeField("ดึงจากชีตเมื่อ")
+
+    class Meta:
+        db_table = "dash_ban_sheet_row"
+        verbose_name = "แถวรายงานแบน (สำเนา)"
+        verbose_name_plural = "แถวรายงานแบน (สำเนา)"
+        ordering = ["row_no"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.ban_date, self.seller, self.ban_type)
