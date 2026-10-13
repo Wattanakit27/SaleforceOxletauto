@@ -50,30 +50,53 @@ def web_url(car):
     return "%s/stock/%s/" % (base, car.code) if base else ""
 
 
-def _photo_urls(car):
-    """รูปขาย (id/path ใน car.extra['sale_photos']) → URL เต็มที่โชว์รูมโหลดได้
+def _media_url(pid):
+    """id/path ของไฟล์ในระบบ → URL เต็มที่โชว์รูมโหลดได้ (None = ทำลิงก์ไม่ได้)
     Drive id (ไม่มี '/') → thumbnail link · disk path (มี '/') → SITE_URL + /media/ + path"""
+    if "/" in pid:
+        base = getattr(settings, "SITE_URL", "").rstrip("/")
+        media = getattr(settings, "MEDIA_URL", "/media/")
+        return base + "/" + media.strip("/") + "/" + pid.lstrip("/")
+    try:
+        from . import gdrive
+        return gdrive.photo_url(pid)
+    except Exception:
+        return None
+
+
+def _cover_fallback(car):
+    """ยังไม่มีรูปขาย → รูปหน้าปกรถ 1 รูป (13 ต.ค.69 · เจ้าของ: "รูปหน้าปกไม่มา")
+    รถที่นำเข้าจาก Car Spend ไม่มีรูปขาย → เว็บขึ้นโลโก้แทนรูปทุกคัน
+      1) Car.photo (รูปปกที่ตั้งในระบบ) · ไฟล์บนดิสก์ต้องมีอยู่จริง (ไม่งั้นโชว์รูมโหลดไม่ได้ แล้วเงียบ)
+      2) รูปแรกของอัลบัม Car Spend (extra.image_urls · ลิงก์สาธารณะ ไม่หมดอายุ)
+    key คงที่ต่อรูป → อัปรูปขายทีหลัง โชว์รูมลบรูปปกนี้แล้วใช้รูปขายแทนเอง (reconcile ด้วย key)"""
+    name = str(getattr(car.photo, "name", "") or "").strip() if getattr(car, "photo", None) else ""
+    if name:
+        ok = True
+        if "/" in name:
+            import os
+            ok = os.path.exists(os.path.join(str(getattr(settings, "MEDIA_ROOT", "")), name))
+        url = _media_url(name) if ok else None
+        if url:
+            return [{"url": url, "key": name}]
+    ex = car.extra if isinstance(getattr(car, "extra", None), dict) else {}
+    for im in ex.get("image_urls") or []:
+        if isinstance(im, dict) and str(im.get("full") or "").startswith("http"):
+            return [{"url": im["full"], "key": "carspend:" + str(im.get("file") or im["full"])}]
+    return []
+
+
+def _photo_urls(car):
+    """รูปขาย (id/path ใน car.extra['sale_photos']) → URL เต็มที่โชว์รูมโหลดได้ · ไม่มีรูปขาย = รูปหน้าปก"""
     ids = (car.extra or {}).get("sale_photos") if isinstance(car.extra, dict) else None
-    if not isinstance(ids, list):
-        return []
-    base = getattr(settings, "SITE_URL", "").rstrip("/")
-    media = getattr(settings, "MEDIA_URL", "/media/")
     out = []
-    for pid in ids:
+    for pid in ids if isinstance(ids, list) else []:
         pid = str(pid or "").strip()
-        if not pid:
-            continue
-        if "/" in pid:   # disk path
-            url = base + "/" + media.strip("/") + "/" + pid.lstrip("/")
-        else:            # Drive id
-            try:
-                from . import gdrive
-                url = gdrive.photo_url(pid)
-            except Exception:
-                continue
-        # key = id/path ต้นทาง (คงที่) → โชว์รูมผูกรูปกับต้นทางไว้ (reconcile ปก/ลบได้ถูกตัว)
-        out.append({"url": url, "key": pid})
-    return out
+        url = _media_url(pid) if pid else None
+        if url:
+            # key = id/path ต้นทาง (คงที่) → โชว์รูมผูกรูปกับต้นทางไว้ (reconcile ปก/ลบได้ถูกตัว)
+            out.append({"url": url, "key": pid})
+    return out or _cover_fallback(car)
 
 
 def sale_price(car):

@@ -4749,6 +4749,17 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
   ป้ายสั้นใต้สวิตช์ (`Car.web_state["short"]` = `C.WEB_STATE_SHORT`) · ข้อความเต็มใน `title` · `td` หยุด click (ไม่เปิดป๊อปอัป)
   · สวิตช์โชว์เฉพาะ `can_web` (context จาก `dashboard` view) · คนอื่นเห็นป้ายอย่างเดียว · รถขายแล้ว = สวิตช์กดไม่ได้
   · JS ใช้ตัวส่งเดียวกับป๊อปอัป (`_postWebActive` → `_syncWebUI` อัปเดตการ์ด/ตาราง/ป๊อปอัปพร้อมกัน) · ส่งไปเว็บไม่สำเร็จ = `alert`
+- **★ รูปหน้าปกไปเว็บด้วย (13 ต.ค.69 รอบ 3 · เจ้าของ: "รูปหน้าปกไม่มา")** — `_photo_urls()` ส่งรูปขาย (`extra.sale_photos`) เหมือนเดิม
+  · **ไม่มีรูปขาย = `_cover_fallback()` ส่งรูปเดียว**: `Car.photo` (ไฟล์บนดิสก์ต้องมีอยู่จริง เช็คที่ `MEDIA_ROOT`) → ไม่มี/หาย = รูปแรกของอัลบัม Car Spend
+  (`extra.image_urls[0].full` · ลิงก์สาธารณะ ทดสอบแล้วดึงได้ด้วย UA ธรรมดา) · key คงที่ (`path` / `carspend:<file>`) → อัปรูปขายทีหลัง โชว์รูมลบปกนี้แล้วใช้รูปขายแทนเอง
+  · รถที่ขึ้นเว็บไปแล้วจะได้รูปเมื่อส่งรอบถัดไป (`showroom_push --apply` ซ้ำ) · เทสต์ `python scripts/test_showroom_photos.py` (11 ข้อ · ไม่ใช้ DB)
+- **⚠️★ บนเซิร์ฟเวอร์จริงไม่เคยตั้ง `SHOWROOM_WEBHOOK_URL`/`STOCK_SYNC_SECRET` เลย** (เจอ 13 ต.ค.69 ตอน `showroom_push` ขึ้น "ยังไม่ได้ตั้ง")
+  → ระบบรถไม่เคยส่งรถไปเว็บโชว์รูมสักคันตั้งแต่ทำ webhook (ก.ค.69) ทั้งที่ `.env` ในเครื่อง dev มีค่า · **`.env` เครื่อง dev ≠ `/opt/oxlet/.env`**
+  · ตั้งแล้ว: secret คัดลอกจาก `/opt/oxletauto_web/.env` · URL = `http://76.13.214.140:8080/api/stock-update/` (IP สาธารณะ — ทดสอบจากข้างนอกแล้วผ่าน ·
+  `127.0.0.1:8080` ยังไม่เคยทดสอบ อาจโดน ALLOWED_HOSTS ของโชว์รูม) · `SHOWROOM_PUBLIC_URL=http://76.13.214.140:8080`
+  · **เว็บโชว์รูมบน VPS** = `/opt/oxletauto_web` · branch `feat/plates-postgres` · `.venv` · ไฟล์เป็นของ `oxlet` · service **`oxletauto`** · nginx ฟังพอร์ต 8080
+  · deploy โชว์รูม: `cd /opt/oxletauto_web && git pull && sudo -u oxlet .venv/bin/python manage.py migrate cars && sudo systemctl restart oxletauto`
+  · หลังตั้งค่า + `showroom_push --apply`: เว็บโชว์รูมมีรถ 99 คัน (เดิม 8 คันนำเข้าจาก `scraped_cars.json` + จากระบบหลังบ้าน 91)
 - **ยังไม่ได้ทำ**: ตัวกรอง "ขึ้นเว็บ/ยังไม่ขึ้น" ในตารางรถ
 - **เทสต์**: `python scripts/test_web_active.py` (64 ข้อ · ปลอมแค่ `requests.post` ด้วยตัวปลอมที่ทำตามสัญญา api_stock_update) ·
   ฝั่งโชว์รูม `python scripts/test_stock_active.py` (44 ข้อ) · ตรวจ E2E แล้ว: รัน 2 เว็บในเครื่อง (8000/8001 · SQLite) กดสวิตช์จริงในป๊อปอัป →
