@@ -361,6 +361,9 @@ def car_json(request, code):
         "qrUrl": f"/track/qr/{car.code}.png",
         "lastWorker": (logs[0]["worker"] if logs else ""),
         "photo": car.photo.url if car.photo else "",
+        # แกลเลอรีรูปรถในหน้ารายละเอียด (13 ต.ค.69 · เดิมอยู่หน้า "แก้ไข" ล่างสุด หาไม่เจอ)
+        # รูปแรก = รูปหลัก = ปกบนเว็บโชว์รูม · สิทธิ์ตรงกับ api_car_photos (can_edit_car)
+        "salePhotos": _sale_photos_ctx(car), "canPhotos": roles.can_edit_car(request.user),
         "scanUrl": f"/track/scan/{car.code}/",
         "editUrl": f"/track/cars/{car.code}/edit/",
         "logs": logs, "direct": direct, "canEdit": roles.can_edit_this_car(request.user, car),

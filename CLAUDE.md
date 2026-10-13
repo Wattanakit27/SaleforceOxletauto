@@ -4073,6 +4073,14 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
     `chart.resize()` เอง + `.chartgrid canvas{max-width:100%}`
   - ตรวจ Chrome: การ์ด → หน้ารถ → หน้ายืนยันสเตป → กลับ 2 ครั้งถึงบอร์ดที่ตำแหน่งเดิม · ปุ่มแถบเครื่องมือ 4 ปุ่ม + กระดิ่ง เปิดเป็นหน้า ·
     จอ 1280/375 ไม่ล้นแนวนอน · ไม่มี JS error
+- **★ 13 ต.ค.69 (รอบ 4) — แกลเลอรีรูปรถ + "⭐ ตั้งเป็นรูปหลัก" อยู่ในหน้ารายละเอียดรถแล้ว** (เจ้าของถาม *"ปุ่มเพิ่มรูปรถ … เลือกเป็นหน้าหลัก หายไปไหน"*
+  — ของเดิมอยู่หน้า "แก้ไข" ซึ่งเป็นปุ่มเล็กล่างสุด หาไม่เจอ) · ใต้รูปรถ: รูปย่อทุกรูป · รูปแรก = รูปหลัก (กรอบม่วง) · ปุ่มตั้งเป็นรูปหลัก/ลบ ·
+    เพิ่มรูปหลายรูป (`/track/api/upload` target=disk → `api_car_photos` add) · `_photosHtml`/`_cpInner`/`cpCall`/`cpUpload` ใน [dashboard.html](templates/dashboard.html)
+  · `car_json` ส่ง `salePhotos` (= `_sale_photos_ctx`) + `canPhotos` (= `can_edit_car` ตรงกับ API) · ไม่มีสิทธิ์ = เห็นรูปย่อกดดูอย่างเดียว
+  · รูปหลัก = `Car.photo` = ปกบนเว็บโชว์รูม (api_car_photos save → post_save ส่งไปเว็บเองถ้าอยู่พร้อมขาย/จอง) · หน้า "แก้ไข" ยังมีแกลเลอรีเดิม
+  · **หมายเหตุยาวไม่บังช่องอื่นแล้ว** (เจ้าของ: "หมายเหตุยาวเกินก็บัง") — `_noteHtml()` ย้ายหมายเหตุออกจากตารางช่องแคบมาเต็มความกว้างใต้ตาราง ·
+    ตัวคั่น `•••••//•••••` ของ Car Spend → ขึ้นบรรทัดใหม่ · ยาวเกิน 160 ตัว/3 บรรทัด = พับไว้ 3 บรรทัด + ปุ่ม "ดูหมายเหตุทั้งหมด" · escape แล้ว (เดิม `kv()` ไม่ escape)
+  · ⚠️ ทดสอบในเครื่อง: `.env` dev มี `GDRIVE_*` ที่ token หมดอายุ → อัปรูป 502 (`default_storage` เป็น Drive แม้ target=disk) — รัน dev ด้วย `GDRIVE_REFRESH_TOKEN=` ว่าง
 - **★ ยุบเหลือ login เดียว (มิ.ย.69)**: ไม่มีหน้า login แยกของ tracking แล้ว — ใช้หน้า login หลักของ sales (`/login/`) หน้าเดียว
   - `LOGIN_URL=/login/` · `/track/login/` → redirect `/login/?next=/track/` · `/track/logout/` → redirect `/logout/` · ปุ่มออกใน [base.html](templates/base.html) ใช้ `/logout/` ของ sales (flush ทั้ง 2 auth)
   - **middleware [cars/middleware.py](cars/middleware.py) `TrackSessionBridgeMiddleware`**: เข้า `/track/` แล้วถ้ามี session sales (`oxlet_user`) แต่ยังไม่ได้ login Django auth → เรียก `_bridge_line_to_django_user()` ([views.py](dashboard/views.py)) สร้าง/ผูก Django User `line_<userId>` + `auth.login()` ให้อัตโนมัติ → แอดมิน login sales ครั้งเดียว เข้าแท็บ "สถานะรถ" ได้เลย ไม่ login ซ้ำ · ทำเฉพาะ path `/track/` (ไม่แตะ sales · try/except กัน DB ล่มกระทบ sales) · ต้องวางหลัง `AuthenticationMiddleware`
