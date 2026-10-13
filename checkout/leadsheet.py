@@ -125,6 +125,10 @@ class _Api:
         return self._ok(requests.get(url, params={"valueRenderOption": render}, headers=self.h, timeout=60),
                         "อ่าน " + rng).get("values", [])
 
+    def batch(self, reqs: list, what: str):
+        return self._ok(requests.post(self.base + ":batchUpdate", json={"requests": reqs}, headers=self.h,
+                                      timeout=60), what)
+
     def write(self, cells: dict, what: str):
         """เขียนเฉพาะเซลล์ที่ระบุ ({"'แท็บ'!A12": ค่า}) — ไม่แตะเซลล์อื่นในแถว (ไม่ทับสูตร/dropdown ของคนอื่น)"""
         data = [{"range": rng, "values": [[val]]} for rng, val in cells.items()]
@@ -658,9 +662,10 @@ def ban_rows(g) -> list:
 class Ctx:
     """ของที่ใช้ร่วมกันใน 1 รอบ — ตัวต่อ Sheets + แท็บที่อ่านแล้ว (อ่านแท็บละครั้ง)"""
 
-    def __init__(self, lead_api=None, ban_api=None, write=True):
+    def __init__(self, lead_api=None, ban_api=None, write=True, redirect=""):
         self._lead, self._ban, self.write = lead_api, ban_api, write
         self.tabs, self.titles, self.ban_tab, self._ban_props = {}, None, None, None
+        self.redirect = redirect          # จำลอง: ทุกแท็บเดือน → แท็บทดสอบแท็บเดียว (ไม่แตะแท็บจริง)
 
     def lead_api(self):
         if self._lead is None:
@@ -676,6 +681,8 @@ class Ctx:
         return self._ban
 
     def tab(self, title) -> LeadTab | None:
+        if self.redirect:
+            title = self.redirect
         if self.titles is None:
             self.titles = self.lead_api().props()
         if title not in self.titles:
@@ -729,12 +736,11 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
         y = at.year - (1 if int(cm.group(1)) > at.month else 0)
         cands.append(tab_name(date(y, int(cm.group(1)), 1)))
     for title in cands:
-        if title in seen:
-            continue
-        seen.add(title)
         t = ctx.tab(title)
-        if t is not None:
-            hits += [(t, n, r) for n, r in t.find(code)]
+        if t is None or t.title in seen:
+            continue
+        seen.add(t.title)
+        hits += [(t, n, r) for n, r in t.find(code)]
     new_keys = _contact_keys(row.get(L.phone, ""))
     same = [(t, n, r) for t, n, r in hits
             if not new_keys or not _contact_keys(t.val(r, L.phone)) or new_keys & _contact_keys(t.val(r, L.phone))]
@@ -1162,3 +1168,124 @@ def status() -> dict:
     st, last = _kv(KV_STATE), _kv(KV_LAST)
     return {"config": get_config(), "cursor": st.get("last_id"), "cursorAt": st.get("at"),
             "rooms": len(_rooms()), "pending": pending_count(), "last": last}
+
+
+# ════════════════════════════════════════════════════════════════════
+# จำลอง: แอดมินพิมพ์ใบในกลุ่ม + เซลล์รายงานผล — ไม่ส่งอะไรเข้า LINE · เขียนแท็บทดสอบแยก
+# ════════════════════════════════════════════════════════════════════
+SIM_TAB = "ทดสอบลงชีต (ลบได้)"
+
+
+def _uid_of(nick: str) -> str:
+    """LINE id ของพนักงาน (ใช้ภายในเท่านั้น — ไม่พิมพ์ออก) · ไม่มี = ค่าว่าง"""
+    from .models import LineProfile
+    p = (LineProfile.objects.filter(employee__nickname=nick, employee__active=True)
+         .order_by("-last_seen").first())
+    return p.user_id if p else ""
+
+
+def _sim_msg(text: str, uid: str = "", name: str = "", mention=None, at=None):
+    """ข้อความในกลุ่มแบบไม่บันทึกลงฐานข้อมูล (หน้าตาเหมือนแถว GroupChat ที่ webhook เก็บ)"""
+    from .models import GroupChat
+    rooms = _rooms()
+    return GroupChat(chat_type=GroupChat.GROUP, group_id=rooms[0] if rooms else "", group_name="จำลอง",
+                     message_id="sim", sender_id=uid, sender_name=name, msg_type="text", text=text,
+                     extra={"mention": list(mention or [])}, direction=GroupChat.IN,
+                     sent_at=at or timezone.now())
+
+
+def _ensure_sim_tab(ctx: Ctx) -> str:
+    """สร้างแท็บทดสอบ (หัวตารางก๊อปจากแท็บเดือนนี้) ถ้ายังไม่มี"""
+    api = ctx.lead_api()
+    props = api.props()
+    if SIM_TAB not in props:
+        src = tab_name(timezone.localdate())
+        if src not in props:
+            raise SheetError("ไม่มีแท็บ %s ให้ก๊อปหัวตาราง" % src)
+        hdr = (api.get("%s!A1:AH1" % _q(src)) or [[]])[0]
+        # แท็บใหม่มี 26 คอลัมน์ (A–Z) — หัวตารางจริงมี 29+ คอลัมน์ เขียนเลยขอบ = Sheets ตอบ 400
+        api.batch([{"addSheet": {"properties": {"title": SIM_TAB, "gridProperties": {
+            "rowCount": 200, "columnCount": max(40, len(hdr) + 5)}}}}], "สร้างแท็บทดสอบ")
+        api.write({"%s!%s1" % (_q(SIM_TAB), _col(i)): h for i, h in enumerate(hdr) if str(h).strip()},
+                  "หัวตารางแท็บทดสอบ")
+    ctx.titles = None
+    ctx.tabs = {}
+    return SIM_TAB
+
+
+def delete_sim_tab() -> bool:
+    ctx = Ctx()
+    props = ctx.lead_api().props()
+    if SIM_TAB not in props:
+        return False
+    ctx.lead_api().batch([{"deleteSheet": {"sheetId": props[SIM_TAB]["id"]}}], "ลบแท็บทดสอบ")
+    return True
+
+
+def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tiktok ช่องขายบอส") -> list:
+    """จำลองแอดมินจ่ายเบอร์ในกลุ่ม → ลงชีต (แท็บทดสอบ) ด้วยโค้ดตัวจริงทุกขั้น · คืนบรรทัดรายงานผล
+
+    ไม่ส่ง LINE · ไม่บันทึกข้อความลงฐานข้อมูล · ไม่แตะตัวชี้ / แท็บเดือนจริง / ชีตรายงานแบน
+    """
+    from dashboard.services.google_sheets import LEADS_COL as L
+
+    from .leadgroup import parse_leadsheet
+    from .models import Employee
+    out = []
+    emp = Employee.objects.filter(nickname=seller, active=True).first()
+    if not emp:
+        raise SheetError("ไม่พบเซลล์ชื่อเล่น %s ในทะเบียนพนักงาน" % seller)
+    s_uid, a_uid = _uid_of(seller), _uid_of(admin)
+    ctx = Ctx(redirect=SIM_TAB)
+    _ensure_sim_tab(ctx)
+    now = timezone.localtime()
+    code = "TLD%d-9%s" % (now.month, now.strftime("%d%H%M")[-5:])     # เลขรัน 6 หลักขึ้นต้น 9 — ไม่ชนเลขจริง (4 หลัก)
+    run = code.split("-")[1]
+    lines = [
+        "Ac Lead No.   %s" % code,
+        "Ads  : ทดสอบระบบลงชีต",
+        "ชื่อ Account: ลูกค้าทดสอบ",
+        "ID LINE : -",
+        "เบอร์โทร : 080-000-0000",
+        "ช่องทาง  : %s" % channel,
+        "รถ : สนใจ civic fe ปี22",
+        "ไลฟ์ :   live sale",
+        "เพิ่มเติม : ลูกค้าทดสอบ ทำงานโรงงาน ติดต่อได้เลยนะครับ  @%s" % (emp.display_name or seller),
+    ]
+    slip = "\n".join(lines)
+    out.append("ข้อความที่จำลองว่าแอดมิน %s พิมพ์ในกลุ่ม (ไม่ได้ส่งเข้า LINE):" % admin)
+    out += ["    " + x for x in lines]
+    out.append("แท็กจริงของ LINE: %s" % (("มี (ชี้ไปที่ %s)" % seller) if s_uid else "ไม่มี — ใช้ชื่อหลัง @ แทน"))
+
+    g = _sim_msg(slip, a_uid, admin, [s_uid] if s_uid else [])
+    d = parse_leadsheet(slip)
+    r = handle_slip(g, d, ctx)
+    out.append("1) แอดมินโพสต์ใบ → %s %s แถว %s · เซลล์ = %s (%s)" % (
+        r["action"], r["code"], r["sheetRow"], r.get("seller", ""), r.get("sellerFrom", "")))
+    r2 = handle_slip(g, d, ctx)
+    out.append("2) แอดมินโพสต์ใบเดิมซ้ำ → %s (ต้องเป็น dup = ไม่เพิ่มแถว)" % r2["action"])
+    n = r["sheetRow"]
+    t = ctx.tab(SIM_TAB)
+    a_before = t.val(t.rows[n - 2], L.received_date) if len(t.rows) >= n - 1 else ""
+    if s_uid:
+        rep = _sim_msg("%s รอตอบครับ" % run, s_uid, seller, at=timezone.now() + timedelta(minutes=5))
+        r3 = handle(rep, ctx)
+        out.append('3) %s รายงาน "%s รอตอบครับ" → %s · จำนวนอัพเดท = %s' % (
+            seller, run, r3["action"], r3.get("count", "-")))
+    else:
+        out.append("3) ข้ามการรายงานผล — %s ยังไม่มีบัญชี LINE ผูกในทะเบียน" % seller)
+    o_uid = _uid_of(other) if other else ""
+    if o_uid:
+        r4 = handle(_sim_msg("%s ลูกค้าไม่รับสาย" % run, o_uid, other), ctx)
+        out.append("4) %s (ไม่ใช่เจ้าของ) รายงานเลขเดียวกัน → %s (ต้องเป็น not-owner = ไม่ลง)" % (other, r4["action"]))
+    fresh = LeadTab(ctx.lead_api(), SIM_TAB)                      # อ่านแถวกลับจากชีตจริง
+    row = next((rr for _, rr in fresh.find(code)), [])
+    out.append('แถวในชีตตอนนี้ (แท็บ "%s" แถว %d · มี %d แถวของเลขนี้):' % (SIM_TAB, n, len(fresh.find(code))))
+    for i, h in enumerate(fresh.header):
+        v = str(row[i]).strip() if i < len(row) else ""
+        if v:
+            out.append("    %-28s %s" % (re.sub(r"\s+", " ", str(h)).strip()[:28], v))
+    after = fresh.val(row, L.received_date)
+    out.append("ว/ด/ป ก่อนรายงาน = %s · หลังรายงาน = %s → %s" % (
+        a_before, after, "ไม่ถูกทับ ✓" if after == a_before else "ถูกทับ ✗"))
+    return out

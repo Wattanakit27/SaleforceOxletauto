@@ -10,6 +10,9 @@
     python manage.py leadsheet --run                 # เขียนข้อความที่ค้างเดี๋ยวนี้
     python manage.py leadsheet --repair-dates        # หาแถวที่ ว/ด/ป ถูก n8n เขียนทับ (ดูเฉยๆ)
     python manage.py leadsheet --repair-dates --apply [--tab "ตุลาคม 69"]   # คืนวันที่จริง
+    python manage.py leadsheet --simulate --seller มัท --admin กวาง [--other เฟิร์ส]
+        # จำลองแอดมินโพสต์ใบในกลุ่ม + เซลล์รายงานผล → ลงแท็บ "ทดสอบลงชีต (ลบได้)" (ไม่ส่ง LINE · ไม่แตะแท็บจริง)
+    python manage.py leadsheet --simulate-cleanup    # ลบแท็บทดสอบ
 
 ใส่ --out ไฟล์ เพื่อเลี่ยงภาษาไทยเพี้ยนบน console Windows
 """
@@ -40,6 +43,11 @@ class Command(BaseCommand):
         p.add_argument("--repair-dates", action="store_true", help="หา/ซ่อม ว/ด/ป ที่ถูกเขียนทับด้วยวันที่รายงาน")
         p.add_argument("--tab", action="append", help='แท็บที่ซ่อม เช่น "ตุลาคม 69" (ใส่ซ้ำได้ · ไม่ใส่ = เดือนนี้+เดือนก่อน)')
         p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair-dates")
+        p.add_argument("--simulate", action="store_true", help="จำลองแอดมินจ่ายเบอร์ → ลงแท็บทดสอบ")
+        p.add_argument("--seller", help="ชื่อเล่นเซลล์ที่ได้ใบ (ใช้กับ --simulate)")
+        p.add_argument("--admin", default="", help="ชื่อเล่นแอดมินที่โพสต์ใบ (ใช้กับ --simulate)")
+        p.add_argument("--other", default="", help="เซลล์อีกคน ลองรายงานแทน (ต้องไม่ลง)")
+        p.add_argument("--simulate-cleanup", action="store_true", help="ลบแท็บทดสอบ")
         p.add_argument("--out", help="เขียนผลลงไฟล์ (UTF-8)")
 
     def handle(self, *args, **o):
@@ -64,7 +72,14 @@ class Command(BaseCommand):
             last = LS.set_since(since)
             lines.append("ตั้งจุดเริ่ม: ข้อความหลัง %s (id > %d)" % (o["since"], last))
 
-        if o["repair_dates"]:
+        if o["simulate"]:
+            if not o.get("seller"):
+                raise CommandError("ใส่ --seller ชื่อเล่นเซลล์ (เช่น --seller มัท)")
+            lines += LS.simulate(o["seller"], o.get("admin") or "", o.get("other") or "")
+            lines.append('ดูในชีต: แท็บ "%s" · ลบแท็บด้วย --simulate-cleanup' % LS.SIM_TAB)
+        elif o["simulate_cleanup"]:
+            lines.append("ลบแท็บทดสอบแล้ว" if LS.delete_sim_tab() else "ไม่มีแท็บทดสอบ")
+        elif o["repair_dates"]:
             self._repair(o, lines)
         elif o["run"]:
             lines.append(json.dumps(LS.process_pending(), ensure_ascii=False, indent=1))

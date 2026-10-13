@@ -89,6 +89,7 @@ class Fake:
     def __init__(self):
         self.files = {LEAD_SID: {}, BAN_SID: {BAN_TAB: [BAN_HDR, ["1/10/2026", "10:00", "บิว"]]}}
         self.grid = {}
+        self.cols = {}                   # แท็บที่สร้างผ่าน addSheet: จำนวนคอลัมน์ (ค่าตั้งต้นของ Google = 26)
         self.calls, self.fail = [], 0
 
     def _file(self, url):
@@ -134,7 +135,7 @@ class Fake:
             for d in json["data"]:
                 m = _RNG.match(d["range"])
                 tab, n, c = m.group(1), int(m.group(3)), _ci(m.group(2))
-                if n > self.grid.get((sid, tab), 4000):
+                if n > self.grid.get((sid, tab), 4000) or c >= self.cols.get((sid, tab), 99):
                     return R(400, {"error": "exceeds grid limits"})
                 row = self._rows(sid, tab, n)
                 while len(row) <= c:
@@ -144,6 +145,14 @@ class Fake:
             return R(200, {"totalUpdatedCells": len(json["data"])})
         if u.endswith(":batchUpdate"):
             for rq in json["requests"]:
+                if "addSheet" in rq:
+                    pr = rq["addSheet"]["properties"]
+                    self.files[sid][pr["title"]] = []
+                    self.cols[(sid, pr["title"])] = (pr.get("gridProperties") or {}).get("columnCount", 26)
+                    continue
+                if "deleteSheet" in rq:
+                    del self.files[sid][list(self.files[sid])[rq["deleteSheet"]["sheetId"]]]
+                    continue
                 ad = rq["appendDimension"]
                 tab = list(self.files[sid])[ad["sheetId"]]
                 self.grid[(sid, tab)] = self.grid.get((sid, tab), 4000) + ad["length"]
@@ -386,6 +395,21 @@ ok("TT รถเข้าใหม่ → ตัวเลือกที่ข�
 ok("ไม่ตรงกติกาไหน = คำเดิม (ไม่เดา)", LS.match_channel("ช่องลึกลับ xyz") == "ช่องลึกลับ xyz")
 ok("รายงาน 9075/1", LS.parse_report("9075/1 ได้รถแล้วครับ")["slash"] == 1)
 ok("ใบจ่ายลีดไม่ใช่รายงาน", LS.parse_report(SLIP) is None)
+
+# ── 9b) จำลองแอดมินจ่ายเบอร์ (manage.py leadsheet --simulate) ─────────────
+with mock.patch.object(LS.timezone, "localdate", lambda: datetime(2026, 10, 13).date()):
+    before_oct = [list(x) for x in FAKE.files[LEAD_SID][TAB_OCT]]
+    rep = LS.simulate("มัท", "กวาง", "เฟิร์ส")
+    sim = FAKE.files[LEAD_SID].get(LS.SIM_TAB) or []
+text = "\n".join(rep)
+ok("จำลอง: สร้างแท็บทดสอบ + หัวตารางก๊อปจากเดือนนี้", sim and sim[0][:4] == HDR[:4], sim[:1])
+ok("จำลอง: ลงแถวเดียว (โพสต์ซ้ำไม่เพิ่ม)", len([x for x in sim[1:] if len(x) > 3 and x[3]]) == 1, sim)
+ok("จำลอง: เซลล์จากแท็กจริง + รายงานผลลง + คนอื่นรายงานไม่ลง",
+   "add" in text and "dup" in text and "report" in text and "not-owner" in text, text)
+ok("จำลอง: ว/ด/ป ไม่ถูกทับ", "ไม่ถูกทับ ✓" in text, text)
+ok("จำลอง: แท็บเดือนจริงไม่ถูกแตะ", FAKE.files[LEAD_SID][TAB_OCT] == before_oct)
+ok("จำลอง: ไม่มี LINE id ในรายงาน", not re.search(r"U[0-9a-f]{32}", text))
+ok("ลบแท็บทดสอบได้", LS.delete_sim_tab() and LS.SIM_TAB not in FAKE.files[LEAD_SID])
 
 # ── 10) ไม่มี LINE user id ลงชีต + store_chat เก็บคนที่ถูกแท็ก ─────────────
 leak = [v for v in FAKE.cells().values() if re.search(r"U[0-9a-f]{32}", str(v))]
