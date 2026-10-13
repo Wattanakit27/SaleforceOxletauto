@@ -173,6 +173,13 @@
   .chartgrid>*{min-width:0}   /* ให้กราฟหดตามกรอบได้ (เดิม canvas ค้างความกว้างตอนวาดครั้งแรก → หน้าล้นแนวนอน) */
   .chartgrid canvas{max-width:100%}
   /* แกลเลอรีรูปรถในหน้ารายละเอียด (13 ต.ค.69) — มุมมน ≤8px ตามกติกาหน้าตา */
+  .cp-main{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:var(--bg2)}
+  .cd-top{display:block}
+  .cd-top .cd-info{margin-top:4px}
+  @media (min-width:900px){
+    .cd-top{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px;align-items:start}
+    .cd-top .cd-info{margin-top:0}
+  }
   .cp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
   .cp-th{width:100%;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--line)}
   .cp-item{border:2px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg2)}
@@ -620,15 +627,18 @@
         ${d.t2l!=null?`<span class="pill">T2L ${d.t2l} วัน</span>`:''}
         ${d.price?`<span class="pill" style="font-weight:700">฿ ${d.price}</span>`:''}
       </div>
-      <div id="carPhotos">${_photosHtml(d)}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
-        ${kv(T('fBranch'),d.branch)}${kv(T('fStatus'),d.status)}
-        ${kv(T('fBrand'),((d.brand||'')+' '+(d.model||'')).trim())}${kv(T('fYear'),d.year)}
-        ${kv(T('fColor'),d.color)}${kv(T('fKm'),d.km)}
-        ${kv(T('fDateIn'),d.dateIn)}${kv(T('fBook'),d.bookStatus)}
-        ${kv(T('fTax'),d.taxDue)}
-      </div>
-      ${_noteHtml(d.note)}
+      ${(()=>{ /* ★ 13 ต.ค.69 รูปเต็มกรอบ (เดิมบีบสูง 340px วางกลางกรอบเทากว้างทั้งจอ ดูแปลก) — จอกว้าง: รูปซ้าย ข้อมูลขวา */
+        const ph=_photosHtml(d);
+        const info=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px">
+          ${kv(T('fBranch'),d.branch)}${kv(T('fStatus'),d.status)}
+          ${kv(T('fBrand'),((d.brand||'')+' '+(d.model||'')).trim())}${kv(T('fYear'),d.year)}
+          ${kv(T('fColor'),d.color)}${kv(T('fKm'),d.km)}
+          ${kv(T('fDateIn'),d.dateIn)}${kv(T('fBook'),d.bookStatus)}
+          ${kv(T('fTax'),d.taxDue)}
+        </div>${_noteHtml(d.note)}`;
+        return ph ? `<div class="cd-top"><div id="carPhotos">${ph}</div><div class="cd-info">${info}</div></div>`
+                  : `<div id="carPhotos"></div>${info}`;
+      })()}
       ${(d.detail&&Object.keys(d.detail).length)?`<details style="margin-top:12px"><summary class="sm mut" style="cursor:pointer">${T('detailAll')}</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 14px;margin-top:6px">${dump(d.detail)}</div></details>`:''}
       ${(d.owner&&Object.keys(d.owner).length)?`<details style="margin-top:8px"><summary class="sm mut" style="cursor:pointer">${T('owner')}</summary><div style="margin-top:6px">${dump(d.owner)}</div></details>`:''}
       ${d.showPriority===false?'':`<div class="sm mut" style="margin:14px 0 6px">${T('prio')}</div>
@@ -685,7 +695,7 @@
   function _photosHtml(d){ _cp={code:d.code, photos:d.salePhotos||[], can:!!d.canPhotos}; return _cpInner(); }
   function _cpInner(){
     const ps=_cp.photos, show=src=>`document.getElementById('cpMain').src=${JSON.stringify(src).replace(/"/g,'&quot;')}`;
-    let h = ps.length ? `<img id="cpMain" src="${esc(ps[0].url)}" style="width:100%;max-height:340px;object-fit:contain;border-radius:10px;background:var(--bg2)">` : '';
+    let h = ps.length ? `<img id="cpMain" class="cp-main" src="${esc(ps[0].url)}" alt="">` : '';
     if(!_cp.can){
       if(ps.length>1) h += `<div class="cp-grid" style="margin-top:8px">${ps.map(p=>`<img src="${esc(p.url)}" class="cp-th" loading="lazy" onclick="${show(p.url)}">`).join('')}</div>`;
       return h ? `<div style="margin-bottom:12px">${h}</div>` : '';

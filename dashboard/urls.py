@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 
 from checkout import fb_webhook as _fb_webhook
+from checkout import weblead as _weblead
 
 from . import crm_views, mobile_views, views
 
@@ -68,6 +69,8 @@ urlpatterns = [
     path("api/admin/ads", views.admin_ads, name="admin_ads"),
     path("api/admin/meta_sync", views.admin_meta_sync, name="admin_meta_sync"),
     path("api/tiktok/webhook", views.tiktok_webhook, name="tiktok_webhook"),
+    # ฟอร์ม "ขอราคาพิเศษ / นัดดูรถ" ของเว็บโชว์รูม → ใบร่างเข้ากลุ่ม ADMIN เก็บ Lead + ห้องพัก Lead (13 ต.ค.69)
+    path("api/showroom/lead", _weblead.api_web_lead, name="showroom_lead"),
     # Messenger webhook — Facebook ส่งแชทของเพจมาเองทันที (4 ต.ค.69 · แทนการถาม API ทุกนาที)
     path("api/meta/webhook", csrf_exempt(_fb_webhook.view), name="meta_webhook"),
     path("legal/terms/", views.legal_page, {"doc": "terms"}, name="legal_terms"),
