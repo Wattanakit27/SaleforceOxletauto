@@ -153,6 +153,11 @@ class Fake:
                 if "deleteSheet" in rq:
                     del self.files[sid][list(self.files[sid])[rq["deleteSheet"]["sheetId"]]]
                     continue
+                if "deleteDimension" in rq:                      # ลบแถว (ทีละคำขอ ตามลำดับที่ส่งมา)
+                    rg = rq["deleteDimension"]["range"]
+                    tab = list(self.files[sid])[rg["sheetId"]]
+                    del self.files[sid][tab][rg["startIndex"]:rg["endIndex"]]
+                    continue
                 ad = rq["appendDimension"]
                 tab = list(self.files[sid])[ad["sheetId"]]
                 self.grid[(sid, tab)] = self.grid.get((sid, tab), 4000) + ad["length"]
@@ -410,6 +415,27 @@ ok("จำลอง: ว/ด/ป ไม่ถูกทับ", "ไม่ถู�
 ok("จำลอง: แท็บเดือนจริงไม่ถูกแตะ", FAKE.files[LEAD_SID][TAB_OCT] == before_oct)
 ok("จำลอง: ไม่มี LINE id ในรายงาน", not re.search(r"U[0-9a-f]{32}", text))
 ok("ลบแท็บทดสอบได้", LS.delete_sim_tab() and LS.SIM_TAB not in FAKE.files[LEAD_SID])
+
+# ── 9c) จำลองต่อท้ายแท็บเดือนจริง (--in-month-tab) + ลบเฉพาะแถวที่จำลองสร้าง ─────
+oct_now = FAKE.files[LEAD_SID][TAB_OCT]
+last_before = max(i for i, x in enumerate(oct_now) if any(str(v).strip() for v in x[:5]))
+snapshot = [list(x) for x in oct_now]
+with mock.patch.object(LS.timezone, "localdate", lambda: datetime(2026, 10, 13).date()):
+    rep = LS.simulate("มัท", "กวาง", "เฟิร์ส", real_tab=True)
+text = "\n".join(rep)
+sim_code = re.search(r"Ac Lead No\.\s+(\S+)", text).group(1)
+added_at = [i for i, x in enumerate(oct_now) if len(x) > 3 and x[3] == sim_code]
+ok("ต่อท้ายแถวสุดท้ายของแท็บเดือนจริง", added_at == [last_before + 1], (added_at, last_before))
+ok("รายงานผล + ว/ด/ป ไม่ถูกทับ (แท็บจริง)", "report" in text and "ไม่ถูกทับ ✓" in text, text)
+ok("จดเลขแถวจำลองไว้ให้ลบ", LS._kv(LS.KV_SIM).get("rows") == [{"tab": TAB_OCT, "code": sim_code}])
+decoy = lrow(**{"ว/ด/ป": "13/10/26", "Code": sim_code, "เซลล์": "นวล", "ADS": "โฆษณาจริง"})
+oct_now.append(decoy)                                            # แถวจริงที่บังเอิญเลขเดียวกัน (ADS ไม่ใช่ป้ายจำลอง)
+gone = LS.delete_sim_rows()
+ok("ลบแถวจำลองแถวเดียว", gone == ["%s แถว %d" % (TAB_OCT, last_before + 2)], gone)
+ok("แถวอื่นไม่ถูกแตะ (เทียบก่อนจำลอง)", oct_now[:len(snapshot)] == snapshot)
+ok("แถวเลขเดียวกันแต่ไม่ใช่ของจำลอง ไม่ถูกลบ", oct_now[-1] == decoy)
+oct_now.pop()
+ok("ลบซ้ำ = ไม่มีอะไรให้ลบ", LS.delete_sim_rows() == [])
 
 # ── 10) ไม่มี LINE user id ลงชีต + store_chat เก็บคนที่ถูกแท็ก ─────────────
 leak = [v for v in FAKE.cells().values() if re.search(r"U[0-9a-f]{32}", str(v))]

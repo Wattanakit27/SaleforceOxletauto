@@ -1213,6 +1213,10 @@ def _ensure_sim_tab(ctx: Ctx) -> str:
     return SIM_TAB
 
 
+SIM_ADS = "ทดสอบระบบลงชีต"         # ป้ายในช่อง ADS ของแถวจำลอง — ลบแถวได้เฉพาะแถวที่มีป้ายนี้ + เลขที่จดไว้
+KV_SIM = "leadsheet_sim"           # {"rows": [{"tab", "code"}]} แถวจำลองที่ลงแท็บเดือนจริง (รอลบ)
+
+
 def delete_sim_tab() -> bool:
     ctx = Ctx()
     props = ctx.lead_api().props()
@@ -1222,10 +1226,37 @@ def delete_sim_tab() -> bool:
     return True
 
 
-def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tiktok ช่องขายบอส") -> list:
-    """จำลองแอดมินจ่ายเบอร์ในกลุ่ม → ลงชีต (แท็บทดสอบ) ด้วยโค้ดตัวจริงทุกขั้น · คืนบรรทัดรายงานผล
+def delete_sim_rows() -> list:
+    """ลบแถวจำลองที่ลงแท็บเดือนจริง — **เฉพาะเลขที่จดไว้ตอนจำลอง และช่อง ADS เป็นป้ายจำลอง** (อ่านสดก่อนลบ ·
+    ลบจากล่างขึ้นบน) · แถวที่ไม่ตรงทั้ง 2 อย่างไม่แตะ · คืนรายการที่ลบ"""
+    from dashboard.services.google_sheets import LEADS_COL as L
+    want = _kv(KV_SIM).get("rows") or []
+    if not want:
+        return []
+    ctx = Ctx()
+    api, props, done = ctx.lead_api(), ctx.lead_api().props(), []
+    for title in sorted({w["tab"] for w in want}):
+        if title not in props:
+            continue
+        t = LeadTab(api, title)
+        codes = {_code_key(w["code"]) for w in want if w["tab"] == title}
+        rows = sorted((n for c in codes for n, r in t.find(c) if t.val(r, L.ads) == SIM_ADS), reverse=True)
+        if rows:
+            api.batch([{"deleteDimension": {"range": {"sheetId": props[title]["id"], "dimension": "ROWS",
+                                                      "startIndex": n - 1, "endIndex": n}}} for n in rows],
+                      "ลบแถวจำลอง")
+            done += ["%s แถว %d" % (title, n) for n in rows]
+    _set_kv(KV_SIM, {"rows": []})
+    return done
 
-    ไม่ส่ง LINE · ไม่บันทึกข้อความลงฐานข้อมูล · ไม่แตะตัวชี้ / แท็บเดือนจริง / ชีตรายงานแบน
+
+def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tiktok ช่องขายบอส",
+             real_tab: bool = False) -> list:
+    """จำลองแอดมินจ่ายเบอร์ในกลุ่ม → ลงชีตด้วยโค้ดตัวจริงทุกขั้น · คืนบรรทัดรายงานผล
+
+    ไม่ส่ง LINE · ไม่บันทึกข้อความลงฐานข้อมูล · ไม่แตะตัวชี้ / ชีตรายงานแบน
+    `real_tab=False` = แท็บทดสอบแยก · `True` = **ต่อท้ายแท็บเดือนจริง** (แดชบอร์ดนับระหว่างที่แถวยังอยู่ →
+    จดเลขไว้ใน KV ให้ `delete_sim_rows()` ลบทีหลัง)
     """
     from dashboard.services.google_sheets import LEADS_COL as L
 
@@ -1236,14 +1267,17 @@ def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tikt
     if not emp:
         raise SheetError("ไม่พบเซลล์ชื่อเล่น %s ในทะเบียนพนักงาน" % seller)
     s_uid, a_uid = _uid_of(seller), _uid_of(admin)
-    ctx = Ctx(redirect=SIM_TAB)
-    _ensure_sim_tab(ctx)
+    if real_tab:
+        ctx = Ctx()
+    else:
+        ctx = Ctx(redirect=SIM_TAB)
+        _ensure_sim_tab(ctx)
     now = timezone.localtime()
     code = "TLD%d-9%s" % (now.month, now.strftime("%d%H%M")[-5:])     # เลขรัน 6 หลักขึ้นต้น 9 — ไม่ชนเลขจริง (4 หลัก)
     run = code.split("-")[1]
     lines = [
         "Ac Lead No.   %s" % code,
-        "Ads  : ทดสอบระบบลงชีต",
+        "Ads  : %s" % SIM_ADS,
         "ชื่อ Account: ลูกค้าทดสอบ",
         "ID LINE : -",
         "เบอร์โทร : 080-000-0000",
@@ -1260,12 +1294,16 @@ def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tikt
     g = _sim_msg(slip, a_uid, admin, [s_uid] if s_uid else [])
     d = parse_leadsheet(slip)
     r = handle_slip(g, d, ctx)
+    tab = r.get("tab") or SIM_TAB
+    if real_tab and r.get("action") == "add":
+        st = _kv(KV_SIM)
+        _set_kv(KV_SIM, {"rows": (st.get("rows") or []) + [{"tab": tab, "code": r["code"]}]})
     out.append("1) แอดมินโพสต์ใบ → %s %s แถว %s · เซลล์ = %s (%s)" % (
         r["action"], r["code"], r["sheetRow"], r.get("seller", ""), r.get("sellerFrom", "")))
     r2 = handle_slip(g, d, ctx)
     out.append("2) แอดมินโพสต์ใบเดิมซ้ำ → %s (ต้องเป็น dup = ไม่เพิ่มแถว)" % r2["action"])
     n = r["sheetRow"]
-    t = ctx.tab(SIM_TAB)
+    t = ctx.tab(tab)
     a_before = t.val(t.rows[n - 2], L.received_date) if len(t.rows) >= n - 1 else ""
     if s_uid:
         rep = _sim_msg("%s รอตอบครับ" % run, s_uid, seller, at=timezone.now() + timedelta(minutes=5))
@@ -1278,9 +1316,9 @@ def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tikt
     if o_uid:
         r4 = handle(_sim_msg("%s ลูกค้าไม่รับสาย" % run, o_uid, other), ctx)
         out.append("4) %s (ไม่ใช่เจ้าของ) รายงานเลขเดียวกัน → %s (ต้องเป็น not-owner = ไม่ลง)" % (other, r4["action"]))
-    fresh = LeadTab(ctx.lead_api(), SIM_TAB)                      # อ่านแถวกลับจากชีตจริง
+    fresh = LeadTab(ctx.lead_api(), tab)                          # อ่านแถวกลับจากชีตจริง
     row = next((rr for _, rr in fresh.find(code)), [])
-    out.append('แถวในชีตตอนนี้ (แท็บ "%s" แถว %d · มี %d แถวของเลขนี้):' % (SIM_TAB, n, len(fresh.find(code))))
+    out.append('แถวในชีตตอนนี้ (แท็บ "%s" แถว %d · มี %d แถวของเลขนี้):' % (tab, n, len(fresh.find(code))))
     for i, h in enumerate(fresh.header):
         v = str(row[i]).strip() if i < len(row) else ""
         if v:
