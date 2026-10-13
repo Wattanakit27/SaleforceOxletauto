@@ -736,6 +736,14 @@ def store_chat(data) -> int:
             continue
         mtype = (msg.get("type") or "").strip()
         uid = (src.get("userId") or "").strip()
+        extra = {k: v for k, v in msg.items()
+                 if k in ("keywords", "address", "latitude", "longitude",
+                          "fileName", "fileSize", "duration", "title")}
+        if ctype == GroupChat.GROUP and mtype == "text":
+            # ★ 13 ต.ค.69 — คนที่ถูกแท็กจริง (LINE user id) ใช้หาเซลล์ที่ได้ใบ/คนที่โดนแบน (`leadsheet.py` แทน n8n)
+            #   ข้อความ "@ชื่อ" ที่พิมพ์เองไม่ได้แท็กจริง = ไม่อยู่ในนี้ · เก็บ [] ไว้ด้วย = รู้ว่า "ไม่มีใครถูกแท็ก"
+            extra["mention"] = [m.get("userId") for m in ((msg.get("mention") or {}).get("mentionees") or [])
+                                if isinstance(m, dict) and m.get("type") == "user" and m.get("userId")][:20]
         try:
             # ★ ก.ย.69 — เก็บ user id + โปรไฟล์ลงตาราง `LineProfile` ไปในตัว (เจ้าของสั่ง)
             #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"
@@ -755,9 +763,7 @@ def store_chat(data) -> int:
                 sticker_id=str(msg.get("stickerId") or "")[:32],
                 sticker_package=str(msg.get("packageId") or "")[:32],
                 emojis=msg.get("emojis") or [],
-                extra={k: v for k, v in msg.items()
-                       if k in ("keywords", "address", "latitude", "longitude",
-                                "fileName", "fileSize", "duration", "title")},
+                extra=extra,
                 has_media=mtype in (GroupChat.IMAGE, GroupChat.VIDEO,
                                     GroupChat.AUDIO, GroupChat.FILE),
                 sent_at=_event_time(ev),

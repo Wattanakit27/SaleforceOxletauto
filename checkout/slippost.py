@@ -217,6 +217,11 @@ def _store(room: dict, code: str, text: str, nick: str, info: dict, by: str, cha
             channel=(channel or "")[:24], direction=GroupChat.OUT, sent_by_name=(by or "")[:80],
             sent_at=timezone.now())
     except Exception:
+        return
+    try:                                    # ★ 13 ต.ค.69 ลงชีตจ่ายเบอร์เลย (ไม่ต้องรอ cron · เธรดแยก)
+        from . import leadsheet
+        leadsheet.kick()
+    except Exception:
         pass
 
 

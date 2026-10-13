@@ -1644,6 +1644,11 @@ def cron_tick(request):
                 process_pending()
             except Exception:
                 pass
+            try:                                # ★ 13 ต.ค.69 ชีตจ่ายเบอร์ (แทน n8n) — เก็บตกแบบเดียวกัน
+                from checkout.leadsheet import process_pending as _ls_pending
+                _ls_pending()
+            except Exception:
+                pass
             finally:
                 try:
                     from django.db import connection as _conn2
@@ -2670,6 +2675,26 @@ def admin_system_health(request):
             elif _stuck:
                 issues.append({"level": "warn",
                                "msg": "ใบเคส/คอมเมนต์จากห้องเคสHOT ค้างยังไม่ลงชีต %d รายการ (เกิน 10 นาที)" % _stuck})
+    except Exception:
+        pass
+
+    # ── 🧾 13 ต.ค.69 — ห้องจ่ายเบอร์ → ชีตจ่ายเบอร์ (ย้ายมาจาก n8n) ต้องไม่หยุดเงียบ ──
+    try:
+        from checkout import leadsheet as _ls
+        if _ls.get_config()["enabled"]:
+            _ll = _ls._kv(_ls.KV_LAST)
+            _lstuck = _ls.pending_count(older_than_min=10)
+            if _ll.get("error"):
+                issues.append({"level": "err",
+                               "msg": "ลงชีตจ่ายเบอร์ล้ม: %s — ข้อความค้าง %d รายการ (ระบบลองใหม่ทุกนาที) "
+                                      "· ตรวจด้วย manage.py leadsheet" % (_ll["error"][:160], _lstuck)})
+            elif _lstuck:
+                issues.append({"level": "warn",
+                               "msg": "ใบจ่ายลีด/รายงานผลค้างยังไม่ลงชีตจ่ายเบอร์ %d รายการ (เกิน 10 นาที)" % _lstuck})
+            if _ll.get("notOwner"):
+                issues.append({"level": "warn",
+                               "msg": "รายงานผลที่ไม่ได้ลงชีตเพราะคนรายงานไม่ใช่เจ้าของเคส (ล่าสุด): %s"
+                                      % " · ".join(_ll["notOwner"][-3:])})
     except Exception:
         pass
 
@@ -3800,6 +3825,12 @@ def _checkout_ingest(data):
             try:
                 from checkout.tradein import maybe_process
                 maybe_process(data)
+            except Exception:
+                pass
+            # ★ 13 ต.ค.69 — ใบจ่ายลีด/รายงานผล/แบน ในห้องจ่ายเบอร์ → "ชีทจ่ายเบอร์ ปี69" (แทน n8n · ปิดโดยปริยาย)
+            try:
+                from checkout.leadsheet import maybe_process as _ls_process
+                _ls_process(data)
             except Exception:
                 pass
             # ★ 10 ต.ค.69 — งานจ่ายเบอร์: ปุ่มรับเคส/ขอผ่าน (postback) + ใบ/รายงานผลในห้องจ่ายเบอร์
