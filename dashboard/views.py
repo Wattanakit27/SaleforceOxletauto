@@ -1645,8 +1645,8 @@ def cron_tick(request):
             except Exception:
                 pass
             try:                                # ★ 13 ต.ค.69 ชีตจ่ายเบอร์ (แทน n8n) — เก็บตกแบบเดียวกัน
-                from checkout.leadsheet import process_pending as _ls_pending
-                _ls_pending()
+                from checkout.leadsheet import safe_process as _ls_safe
+                _ls_safe("cron")                # ★ 14 ต.ค.69 ล้มกะทันหัน = จด log + แจ้งเจ้าของ (เดิมกลืนเงียบ)
             except Exception:
                 pass
             try:                                # ★ 13 ต.ค.69 สำเนาชีตจ่ายเบอร์ + รายงานแบน ลง Postgres (ทุก 10 นาที)
@@ -2733,6 +2733,23 @@ def admin_system_health(request):
                 issues.append({"level": "warn",
                                "msg": "แจ้งเตือน LINE เรื่องลงชีตจ่ายเบอร์ส่งไม่ถึง (%s) — ทดสอบด้วย "
                                       "manage.py leadsheet --alert-test" % (_lal.get("error") or "")[:160]})
+            # ★ 14 ต.ค.69 ตัวเฝ้าระบบ (เธรดในเว็บ ตรวจทุก 5 นาที) ต้องเดินอยู่ — ไม่งั้นกรณี "ไม่มีอะไรทำงานเลย" ไม่มีใครเห็น
+            _lwd = _ls._kv(_ls.KV_WD)
+            if _lwd.get("issues"):
+                issues.append({"level": "warn", "msg": "ตัวเฝ้าระบบลงชีต: " + " · ".join(_lwd["issues"])[:300]})
+            try:
+                from datetime import datetime as _dt2
+
+                from django.utils import timezone as _djtz2
+                _wage = ((_djtz2.now() - _dt2.fromisoformat(_lwd["at"])).total_seconds() / 60
+                         if _lwd.get("at") else None)
+            except (ValueError, TypeError):
+                _wage = None
+            if _wage is None or _wage > 20:
+                issues.append({"level": "warn",
+                               "msg": "ตัวเฝ้าระบบลงชีตจ่ายเบอร์ไม่ได้ทำงาน%s (ควรตรวจทุก 5 นาที · เริ่มเองเมื่อเว็บรันใต้ "
+                                      "gunicorn) — รีสตาร์ทเว็บ / ดู log ด้วย manage.py leadsheet --log"
+                                      % ((" มา %d นาที" % _wage) if _wage is not None else "")})
     except Exception:
         pass
 

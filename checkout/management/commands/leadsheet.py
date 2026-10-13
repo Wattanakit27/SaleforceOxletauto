@@ -59,6 +59,9 @@ class Command(BaseCommand):
         p.add_argument("--other", default="", help="เซลล์อีกคน ลองรายงานแทน (ต้องไม่ลง)")
         p.add_argument("--in-month-tab", action="store_true", help="ใช้กับ --simulate: ต่อท้ายแท็บเดือนจริง")
         p.add_argument("--simulate-cleanup", action="store_true", help="ลบแท็บทดสอบ + แถวจำลองในแท็บเดือนจริง")
+        p.add_argument("--log", action="store_true", help="ดู log ย้อนหลัง: เรื่องที่แจ้งเตือน · ล้ม · ผลส่ง LINE")
+        p.add_argument("--days", type=int, default=3, help="ใช้กับ --log (ค่าเริ่มต้น 3 วัน)")
+        p.add_argument("--watchdog", action="store_true", help="ตรวจระบบแบบตัวเฝ้าระบบเดี๋ยวนี้ (ไม่ส่ง LINE)")
         p.add_argument("--out", help="เขียนผลลงไฟล์ (UTF-8)")
 
     def handle(self, *args, **o):
@@ -85,7 +88,18 @@ class Command(BaseCommand):
             last = LS.set_since(since)
             lines.append("ตั้งจุดเริ่ม: ข้อความหลัง %s (id > %d)" % (o["since"], last))
 
-        if o["test_month_move"]:
+        if o["log"]:
+            rows = LS.recent_log(days=o["days"], limit=300)
+            lines.append("log ระบบลงชีตจ่ายเบอร์ %d วันล่าสุด (%d รายการ · ใหม่ก่อน):" % (o["days"], len(rows)))
+            for r in rows:
+                lines.append("  %s %s %s" % (r["at"], "ok " if r["ok"] else "ERR", r["text"]))
+            if not rows:
+                lines.append("  (ไม่มี — ไม่มีเรื่องผิดปกติ)")
+        elif o["watchdog"]:
+            items = LS.watchdog_check()
+            lines.append("ตัวเฝ้าระบบ: %s" % ("ปกติ" if not items else "%d เรื่อง" % len(items)))
+            lines += ["  - " + t for _k, t, _e in items]
+        elif o["test_month_move"]:
             lines += LS.move_selftest()
         elif o["alert_test"]:
             r = LS.alert_test()
@@ -121,6 +135,11 @@ class Command(BaseCommand):
                                          else "ไม่ถึง: %s" % st["alertLast"].get("error", ""))) if st["alertLast"] else ""))
             if st["failing"]:
                 lines.append("กำลังบันทึกไม่ได้: %s" % st["failing"])
+            wd = st.get("watchdog") or {}
+            lines.append("ตัวเฝ้าระบบ: %s" % (("ตรวจล่าสุด %s · %s" % (wd.get("at"), "; ".join(wd.get("issues") or [])
+                                                                       or "ปกติ")) if wd.get("at")
+                                               else "ยังไม่เคยทำงาน (เริ่มเองเมื่อเว็บรันใต้ gunicorn)"))
+            lines.append("ดู log ย้อนหลัง: manage.py leadsheet --log [--days 7]")
             if st["fallback"]:
                 lines.append("ใบที่ลงแท็บเดิมรอย้ายไปแท็บใหม่ %d ใบ: %s" % (len(st["fallback"]), ", ".join(
                     "%s→%s" % (x["code"], x["want"]) for x in st["fallback"][-10:])))

@@ -683,6 +683,139 @@ g = GroupChat.objects.filter(message_id="real-1").first()
 ok("store_chat เก็บ user id ของคนที่ถูกแท็กจริง (ไม่เอา @All)", g and g.extra.get("mention") == [U("b")],
    g and g.extra)
 
+# ── 11) log ทุกเรื่อง + แจ้งเตือนเมื่อพังกะทันหัน + ตัวเฝ้าระบบ (14 ต.ค.69 เจ้าของสั่ง) ─────────────
+from dashboard.models import EventLog  # noqa: E402
+from dashboard.services import sheet_mirror as SM  # noqa: E402
+from dashboard.services.cache_store import set_kv as _setkv  # noqa: E402
+from django.utils import timezone as djtz  # noqa: E402
+
+LS.process_pending()                                              # เคลียร์ของค้างก่อนเริ่มส่วนนี้
+ev = EventLog.objects.filter(kind="leadsheet")
+
+
+def ev_has(text, **kw):                                           # SQLite ไม่รองรับค้นใน JSON → กรองใน Python
+    return any(text in str((e.detail or {}).get("text", "")) for e in ev.filter(**kw))
+
+
+ok("ทุกเรื่องที่แจ้ง = 1 แถวใน dash_event_log (kind=leadsheet)", ev.count() > 0, ev.count())
+ok("log: บันทึกชีตไม่ได้ = ok False", ev_has("บันทึกชีตไม่ได้", ok=False, target="fail"))
+ok("log: กลับมาบันทึกได้ = ok True", ev.filter(ok=True, target="recovered").exists())
+ok("log: ไม่มี LINE user id ในข้อความ", not [e for e in ev.all() if re.search(r"U[0-9a-f]{32}", str(e.detail))])
+
+# ปิดแจ้งเตือน LINE = ยังจด log
+LS.set_config(alert=False)
+n_line, n_ev = len(FAKE.line), ev.count()
+LS.alert([("t:1", "ทดสอบจด log ตอนปิดแจ้งเตือน", 0)])
+ok("ปิดแจ้งเตือน LINE = ไม่ส่ง แต่ยังจด log", len(FAKE.line) == n_line and ev.count() == n_ev + 1
+   and ev_has("ตอนปิดแจ้งเตือน"), (len(FAKE.line) - n_line, ev.count() - n_ev))
+LS.set_config(alert=True)
+
+# failing=None (ตัวเฝ้าระบบ/สำเนาชีตเรียก) ห้ามแตะสถานะ "บันทึกไม่ได้"
+LS._set_kv(LS.KV_ALERT, dict(LS._kv(LS.KV_ALERT), failing="boom"))
+n_line = len(FAKE.line)
+LS.alert([("t:2", "เรื่องอื่น", 0)])
+ok("alert(items) ไม่ล้างสถานะบันทึกไม่ได้ · ไม่แจ้งว่าหายแล้ว", LS._kv(LS.KV_ALERT).get("failing") == "boom"
+   and not any("กลับมาบันทึก" in t for t in line_texts(n_line)), line_texts(n_line))
+LS.alert([], failing="")
+ok("ผลบันทึกรอบใหม่สำเร็จ (failing='') = แจ้งหายแล้ว", not LS._kv(LS.KV_ALERT).get("failing")
+   and any("กลับมาบันทึก" in t for t in line_texts(n_line)), line_texts(n_line))
+
+# พังกะทันหันในงานเบื้องหลัง = จด log + แจ้ง (เดิม except: pass เงียบ)
+n_line = len(FAKE.line)
+with mock.patch.object(LS, "process_pending", side_effect=RuntimeError("db gone")):
+    r = LS.safe_process("cron")
+ok("safe_process: ล้ม → คืน error ไม่โยนต่อ", "db gone" in r.get("error", ""), r)
+ok("safe_process: แจ้ง LINE ว่าล้มกะทันหัน (บอกที่มา)", any("ล้มกะทันหัน" in t and "cron" in t and "db gone" in t
+                                                           for t in line_texts(n_line)), line_texts(n_line))
+ok("safe_process: จด log ok False", ev.filter(ok=False, target__startswith="crash:").exists())
+n_line = len(FAKE.line)
+with mock.patch.object(LS, "process_pending", side_effect=RuntimeError("db gone")):
+    LS.safe_process("cron")
+ok("ล้มซ้ำภายในชั่วโมง = ไม่แจ้งซ้ำ", len(FAKE.line) == n_line, line_texts(n_line))
+
+
+class _SyncThread:
+    def __init__(self, target=None, **k):
+        self.t = target
+
+    def start(self):
+        self.t()
+
+
+n_line = len(FAKE.line)
+with mock.patch.object(LS, "process_pending", side_effect=ValueError("kick พัง")), \
+        mock.patch.object(LS.threading, "Thread", _SyncThread):
+    LS.kick()
+ok("kick (ระบบส่งใบ) ล้ม = แจ้ง ไม่เงียบ", any("kick พัง" in t for t in line_texts(n_line)), line_texts(n_line))
+n_line = len(FAKE.line)
+with mock.patch.object(LS, "process_pending", side_effect=ValueError("webhook พัง")):
+    LS.maybe_process({"events": [{"source": {"groupId": ROOM}}]})
+ok("maybe_process (ข้อความ LINE เข้า) ล้ม = แจ้ง ไม่เงียบ", any("webhook พัง" in t for t in line_texts(n_line)),
+   line_texts(n_line))
+VSRC = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "views.py"),
+            encoding="utf-8").read()
+ok("cron ใช้ safe_process (ไม่กลืน error เงียบ)", '_ls_safe("cron")' in VSRC and "_ls_pending()" not in VSRC)
+
+# สำเนาชีตลง Postgres ล้ม = แจ้งด้วย
+n_line = len(FAKE.line)
+with mock.patch.object(SM, "_auth", side_effect=RuntimeError("ไม่มีสิทธิ์อ่านชีต")):
+    r = SM.run()
+ok("สำเนาชีตล้ม → แจ้ง LINE + log", r.get("error") and any("สำเนาชีต" in t for t in line_texts(n_line))
+   and ev.filter(target__startswith="mirror:").exists(), (r, line_texts(n_line)))
+
+# ตัวเฝ้าระบบ
+LS._set_kv(LS.KV_ALERT, dict(LS._kv(LS.KV_ALERT), failing="", sent={}))
+_setkv("cron_tick", {"ok": True})
+now = djtz.now()
+keys = lambda items: [k for k, _t, _e in items]  # noqa: E731
+ok("ตัวเฝ้าระบบ: cron เพิ่งทำงาน = ไม่แจ้ง", "wd:cron" not in keys(LS.watchdog_check(now)))
+ok("ตัวเฝ้าระบบ: cron หยุดเกิน 10 นาที = แจ้ง", "wd:cron" in keys(LS.watchdog_check(now + timedelta(minutes=30))))
+day = djtz.make_aware(datetime(2026, 11, 10, 12, 0))               # หลังข้อความทดสอบทั้งหมด (ล่าสุด 1 พ.ย.)
+ok("ตัวเฝ้าระบบ: ช่วงทำงานไม่มีข้อความจากห้องจ่ายเบอร์เกิน 90 นาที = แจ้ง",
+   "wd:quiet" in keys(LS.watchdog_check(day.replace(hour=15, minute=0))))
+ok("ตัวเฝ้าระบบ: นอกเวลาทำงาน = ไม่แจ้งเรื่องเงียบ",
+   "wd:quiet" not in keys(LS.watchdog_check(day.replace(hour=22, minute=0))))
+# ข้อความค้างเกิน 15 นาที (งานปกติไม่ได้ทำงาน) → ลงให้เอง + แจ้ง
+_setkv("cron_tick", {"ok": True})
+LS.process_pending()
+old = djtz.now() - timedelta(minutes=20)
+msg(SLIP.replace("TLD10-9221", "TLD10-9501").replace("089-123-4567", "089-777-0001"), U("c"), at=old,
+    extra={"mention": [U("a")]})
+ok("มีข้อความค้างเกิน 15 นาที", LS.pending_count(LS.STUCK_MIN) == 1, LS.pending_count(LS.STUCK_MIN))
+items = LS.watchdog_check()
+ok("ตัวเฝ้าระบบลงให้เอง → ไม่ค้าง + แจ้งว่าลงให้แล้ว", LS.pending_count() == 0
+   and any(k.startswith("wd:healed") for k in keys(items)), items)
+msg(SLIP.replace("TLD10-9221", "TLD10-9502").replace("089-123-4567", "089-777-0002"), U("c"), at=old,
+    extra={"mention": [U("a")]})
+FAKE.fail = 1
+items = LS.watchdog_check()
+ok("ลงเองแล้วยังไม่ได้ = แจ้งว่ายังค้าง + เหตุผล", "wd:stuck" in keys(items)
+   and any("ยังไม่ได้" in t for _k, t, _e in items), items)
+LS.process_pending()                                              # รอบถัดไปลงได้
+ok("รอบถัดไปลงได้", LS.pending_count() == 0)
+LS.set_config(enabled=False)
+ok("ปิดระบบลงชีต = ตัวเฝ้าไม่ตรวจ", LS.watchdog_check(now + timedelta(minutes=60)) == [])
+LS.set_config(enabled=True)
+ok("ตัวเฝ้าไม่เริ่มเองตอนรันเทสต์/manage.py (เฉพาะ gunicorn)", LS._WD["pid"] == 0, LS._WD)
+ok("ผู้นำตัวเฝ้า (SQLite) = ทำได้", LS._wd_leader() is True)
+
+# ดู log ย้อนหลัง
+rows = LS.recent_log(days=3)
+ok("recent_log: มีเรื่องที่แจ้ง + ผลส่ง LINE", any("บันทึกชีตไม่ได้" in r_["text"] for r_ in rows)
+   and any(r_["kind"] == "line_send" for r_ in rows), rows[:5])
+ok("recent_log: ไม่มี LINE user id", not [r_ for r_ in rows if re.search(r"U[0-9a-f]{32}", r_["text"])])
+import tempfile  # noqa: E402
+
+from django.core.management import call_command  # noqa: E402
+
+_tmp = os.path.join(tempfile.mkdtemp(), "log.txt")
+call_command("leadsheet", "--log", "--days", "3", "--out", _tmp)
+_out = open(_tmp, encoding="utf-8").read()
+ok("manage.py leadsheet --log", "log ระบบลงชีตจ่ายเบอร์" in _out and "ล้มกะทันหัน" in _out, _out[:400])
+call_command("leadsheet", "--out", _tmp)
+_out = open(_tmp, encoding="utf-8").read()
+ok("manage.py leadsheet (สถานะ) บอกเรื่องตัวเฝ้าระบบ", "ตัวเฝ้าระบบ" in _out, _out[-300:])
+
 for p in P:
     p.stop()
 _runner.teardown_databases(_old)

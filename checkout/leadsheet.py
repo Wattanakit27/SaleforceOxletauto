@@ -64,6 +64,17 @@ FALLBACK_REMIND_MIN = 360          # ยังไม่มีแท็บเด�
 #   ก็ดี แต่แจ้งฉันด้วย"* — ระบบอ่านหัวตารางใหม่ทุกรอบอยู่แล้ว (ขยับ = ตามได้เอง) แต่หัวคอลัมน์ถูกเปลี่ยนชื่อ = ช่องนั้น
 #   ถูกข้ามเงียบๆ → จำตำแหน่งคอลัมน์ล่าสุดที่ใช้ได้ไว้ เปลี่ยนชื่อในที่เดิมได้ใช้คอลัมน์เดิมต่อ + แจ้งทุกกรณี
 KV_COLS = "leadsheet_cols"         # {แท็บ: {ช่อง: {"i": ลำดับคอลัมน์, "h": หัวคอลัมน์}}} ตำแหน่งที่ใช้ได้ล่าสุด
+# ★ 14 ต.ค.69 เจ้าของสั่ง *"ถ้ามี error หรือข้อผิดพลาดอะไร บันทึก log ไว้ และแจ้งเตือนฉันด้วย"*
+#   ทุกเรื่องที่แจ้ง = 1 แถวใน dash_event_log (kind=leadsheet) · ดูย้อนหลัง: manage.py leadsheet --log
+#   + ตัวเฝ้าระบบ (watchdog) ในตัวเว็บเอง — จับกรณี "ไม่มีอะไรทำงานเลย" ที่ตัวแจ้งเตือนปกติมองไม่เห็น
+#     (cron จาก n8n หยุด · ข้อความ LINE ไม่วิ่งเข้า · ข้อความค้างไม่มีใครลง)
+KV_WD = "leadsheet_watchdog"       # รอบล่าสุดของตัวเฝ้าระบบ {at, pid, issues}
+WD_LOCK_KEY = 7_406_066            # advisory lock — gunicorn 5 worker มีตัวเฝ้าทำงานจริงตัวเดียว
+WD_EVERY_SEC = 300                 # ตรวจทุก 5 นาที
+CRON_STALE_MIN = 10                # cron ไม่ทำงานเกินนี้ = แจ้ง
+STUCK_MIN = 15                     # ข้อความค้างไม่ได้ลงชีตเกินนี้ = ลองลงเอง แล้วแจ้ง
+QUIET_MIN = 90                     # ช่วงทำงานไม่มีข้อความจากห้องจ่ายเบอร์เข้าเลยเกินนี้ = แจ้ง
+QUIET_HOURS = (10, 19)             # ช่วงทำงานที่ห้องจ่ายเบอร์ต้องมีข้อความ (วัดจริง ~15–20 ข้อความ/ชม.)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1153,7 +1164,7 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
                 items.append(("move-fail", "ย้ายใบจากแท็บเดิมไปแท็บเดือนใหม่ไม่สำเร็จ: %s (ลองใหม่ทุก %d นาที)"
                               % (str(e)[:200], FALLBACK_CHECK_MIN), ALERT_REPEAT_MIN))
             if not msgs:
-                alert(items)
+                alert(items, failing="")                         # ต่อชีตได้ + ไม่มีอะไรค้าง = หายแล้ว
                 return {"pending": 0}
         res = {"at": timezone.localtime().isoformat(timespec="seconds"), "processed": 0, "added": [],
                "updated": [], "dup": [], "reports": 0, "notOwner": [], "reportMiss": [], "bans": 0,
@@ -1529,15 +1540,15 @@ def _send_alert(text: str) -> tuple:
     return st == 200, ("" if st == 200 else "LINE %s: %s" % (st, str(body)[:200]))
 
 
-def alert(items: list, failing: str = "", pending: int = 0, force: bool = False) -> dict:
-    """ส่ง LINE ส่วนตัวเจ้าของ **รวมเป็นข้อความเดียวต่อรอบ** · กันซ้ำด้วยคีย์ใน KV_ALERT
+def alert(items: list, failing: str | None = None, pending: int = 0, force: bool = False) -> dict:
+    """จด log + ส่ง LINE ส่วนตัวเจ้าของ **รวมเป็นข้อความเดียวต่อรอบ** · กันซ้ำด้วยคีย์ใน KV_ALERT
 
-    failing = บันทึกชีตไม่ได้ (เตือนซ้ำทุก ALERT_REPEAT_MIN) · หายแล้ว = แจ้ง "กลับมาบันทึกได้แล้ว" ครั้งเดียว
+    failing = ผลการบันทึกชีตรอบนี้ ("" = ได้ · ข้อความ = ไม่ได้ เตือนซ้ำทุก ALERT_REPEAT_MIN ·
+              หายแล้วแจ้ง "กลับมาบันทึกได้แล้ว" ครั้งเดียว) · None = ไม่เกี่ยว (ตัวเฝ้าระบบ/สำเนาชีตเรียก)
     items = [(คีย์, ข้อความ, เตือนซ้ำทุกกี่นาที)] · 0 = ครั้งเดียวต่อคีย์
+    **จด log ทุกครั้งที่มีเรื่อง แม้ปิดแจ้งเตือน LINE ไว้** (ปิดแค่การส่ง)
     """
     from django.utils.dateparse import parse_datetime
-    if not get_config().get("alert", True) and not force:
-        return {}
     st = _kv(KV_ALERT)
     sent = dict(st.get("sent") or {})
     now = timezone.now()
@@ -1546,26 +1557,31 @@ def alert(items: list, failing: str = "", pending: int = 0, force: bool = False)
         t = parse_datetime(sent.get(key) or "")
         return t is None or (every and now - t >= timedelta(minutes=every))
 
-    lines = []
+    lines, logs = [], []                                         # logs = [(สำเร็จ/ดี?, คีย์, ข้อความ)]
     if failing:
         if due("fail", ALERT_REPEAT_MIN):
             lines.append("บันทึกชีตไม่ได้: %s%s · ระบบลองใหม่ทุกนาที ข้อความไม่หาย"
                          % (failing[:200], (" — ค้าง %d ข้อความ" % pending) if pending else ""))
+            logs.append((False, "fail", lines[-1]))
             sent["fail"] = now.isoformat()
         st["failing"] = failing[:300]
-    elif st.get("failing"):
+    elif failing is not None and st.get("failing"):
         lines.append("กลับมาบันทึกชีตได้แล้ว (ข้อความที่ค้างลงครบ)")
+        logs.append((True, "recovered", lines[-1]))
         st["failing"] = ""
         sent.pop("fail", None)
     for key, text, every in items:
         if due(key, every):
             lines.append(text)
+            logs.append((key.startswith(("moved:", "wd:healed")), key, text))
             sent[key] = now.isoformat()
+    for good, key, text in logs:
+        _log_event(good, key, text)
     keep_after = now - timedelta(days=7)
     sent = {k: v for k, v in sent.items() if (parse_datetime(v) or now) >= keep_after}
     st["sent"] = sent
     out = {}
-    if lines:
+    if lines and (get_config().get("alert", True) or force):
         head = "[ลงชีตจ่ายเบอร์] %s" % timezone.localtime(now).strftime("%d/%m %H:%M")
         ok, err = _send_alert(head + "\n" + "\n".join("- " + x for x in lines[:20])
                               + ("\n(และอีก %d เรื่อง)" % (len(lines) - 20) if len(lines) > 20 else ""))
@@ -1582,6 +1598,145 @@ def alert_test() -> dict:
     ok, err = _send_alert("[ลงชีตจ่ายเบอร์] ทดสอบแจ้งเตือน — ถ้าบันทึกชีตไม่ได้หรือมีรายงานผลที่ลงชีตไม่ได้ "
                           "จะแจ้งมาที่แชทนี้")
     return {"ok": ok, "error": err, "to": alert_target()}
+
+
+def _log_event(ok: bool, key: str, text: str):
+    """1 เรื่อง = 1 แถวใน dash_event_log (kind=leadsheet) — ไม่ให้การจด log ทำงานหลักพัง"""
+    try:
+        from dashboard.services import eventlog
+        eventlog.log(eventlog.LEADSHEET, name=WHAT, target=key[:64], ok=ok, text=text[:1000])
+    except Exception:
+        pass
+
+
+def safe_process(source: str = "") -> dict:
+    """เรียก process_pending แบบ **ห้ามพังเงียบ** — เดิมงานเบื้องหลัง (cron/webhook/kick) ห่อ `except: pass`
+    ระบบลงชีตพังกะทันหัน (บั๊ก/ฐานข้อมูลล่ม) = ไม่มีใครรู้ → ตอนนี้จด log + แจ้งเจ้าของ (ข้อความไม่หาย ตัวชี้ไม่ขยับ)"""
+    try:
+        return process_pending()
+    except Exception as e:
+        err = ("%s: %s" % (type(e).__name__, e))[:300]
+        log.exception("leadsheet: process_pending ล้ม (%s)", source)
+        try:
+            alert([("crash:" + err[:80], "ระบบลงชีตล้มกะทันหัน (%s): %s · ข้อความไม่หาย รอบหน้าลองใหม่"
+                    % (source or "-", err), ALERT_REPEAT_MIN)])
+        except Exception:
+            log.exception("leadsheet: แจ้งเตือนล้ม")
+            _log_event(False, "crash", err)
+        return {"error": err}
+
+
+def watchdog_check(now=None) -> list:
+    """ตรวจว่าระบบลงชีต "ยังเดินอยู่" — คืนรายการแจ้งเตือน (ไม่ส่งเอง) · ตัวแจ้งเตือนปกติทำงานใน process_pending
+    ถ้าไม่มีอะไรมาเรียก process_pending เลย (cron หยุด + ข้อความไม่เข้า) มันก็เงียบ — ตัวนี้จึงต้องอยู่นอกเส้นทางนั้น
+
+    1. cron (ตัวปลุกงานทุกนาทีจาก n8n) หยุด
+    2. ข้อความค้างไม่ได้ลงชีตเกิน STUCK_MIN → **ลองลงเองก่อน** (refresh เอง) แล้วแจ้งผล
+    3. ช่วงทำงาน ไม่มีข้อความจากห้องจ่ายเบอร์เข้าเลยเกิน QUIET_MIN = ตัวส่งต่อ LINE (n8n) น่าจะหยุด
+    """
+    from django.utils.dateparse import parse_datetime
+
+    from dashboard.services.cache_store import get_kv
+
+    from .models import GroupChat
+    if not get_config()["enabled"]:
+        return []
+    now = now or timezone.now()
+    items = []
+    ct = get_kv("cron_tick") or {}
+    at = parse_datetime(str(ct.get("updated_at") or "").replace("Z", "+00:00"))
+    if at and now - at > timedelta(minutes=CRON_STALE_MIN):
+        items.append(("wd:cron", "ตัวปลุกงานทุกนาที (cron จาก n8n) ไม่ทำงานมา %d นาที — ชีตยังลงจากข้อความ LINE ที่เข้ามาได้ "
+                      "แต่งานเก็บตก/แจ้งเตือนอื่นหยุด · ตรวจ n8n" % ((now - at).total_seconds() // 60), ALERT_REPEAT_MIN))
+    stuck = pending_count(STUCK_MIN)
+    if stuck and not _kv(KV_ALERT).get("failing"):                # กำลังบันทึกไม่ได้ = แจ้งไปแล้วทางนั้น
+        res = safe_process("ตัวเฝ้าระบบ")
+        left = pending_count(STUCK_MIN)
+        if left:
+            items.append(("wd:stuck", "มีข้อความค้างไม่ได้ลงชีต %d รายการเกิน %d นาที — ระบบลองลงเองแล้วยังไม่ได้ (%s)"
+                          % (left, STUCK_MIN, res.get("error") or res.get("skipped") or "ไม่ทราบสาเหตุ"),
+                          ALERT_REPEAT_MIN))
+        elif not res.get("error"):
+            items.append(("wd:healed:" + timezone.localtime(now).strftime("%Y%m%d%H%M"),
+                          "มีข้อความค้างไม่ได้ลงชีต %d รายการ (งานปกติไม่ได้ทำงาน) — ระบบลงให้เองแล้ว" % stuck, 0))
+    local = timezone.localtime(now)
+    if QUIET_HOURS[0] <= local.hour < QUIET_HOURS[1]:
+        last = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=_rooms(), direction=GroupChat.IN)
+                .order_by("-sent_at").values_list("sent_at", flat=True).first())
+        if last and now - last > timedelta(minutes=QUIET_MIN):
+            items.append(("wd:quiet", "ไม่มีข้อความจากห้องจ่ายเบอร์เข้าระบบมา %d นาที (ช่วงทำงาน) — ตัวส่งต่อข้อความ LINE (n8n) "
+                          "อาจหยุด ชีตจะไม่ลงจนกว่าจะกลับมา" % ((now - last).total_seconds() // 60), 180))
+    return items
+
+
+_WD = {"pid": 0, "leader": False}
+
+
+def _wd_leader() -> bool:
+    """ตัวเฝ้าระบบทำงานจริงแค่ worker เดียว — ถือ advisory lock ไว้ตลอดอายุ connection ของเธรดนี้"""
+    from django.db import connection
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cur:
+        if _WD["leader"]:
+            cur.execute("SELECT 1")                              # connection หลุด = lock หลุด → โยน error ไปขอใหม่
+            return True
+        cur.execute("SELECT pg_try_advisory_lock(%s)", [WD_LOCK_KEY])
+        _WD["leader"] = bool(cur.fetchone()[0])
+    return _WD["leader"]
+
+
+def start_watchdog():
+    """เริ่มตัวเฝ้าระบบในเธรดแยก (เรียกจาก CheckoutConfig.ready เฉพาะใต้ gunicorn) — ไม่ขึ้นกับ n8n/cron"""
+    import os
+    if _WD["pid"] == os.getpid():                                # fork แล้วเธรดไม่ตามมา → เทียบ pid ไม่ใช่แค่ธง
+        return False
+    _WD["pid"], _WD["leader"] = os.getpid(), False
+
+    def loop():
+        import random
+        import time
+        time.sleep(60 + random.random() * 60)                    # ให้เว็บเปิดเสร็จก่อน · worker ไม่ชนกัน
+        while True:
+            try:
+                if _wd_leader():
+                    items = watchdog_check()
+                    _set_kv(KV_WD, {"at": timezone.localtime().isoformat(timespec="seconds"), "pid": os.getpid(),
+                                    "issues": [t for _k, t, _e in items]})
+                    if items:
+                        alert(items)
+            except Exception:
+                log.exception("leadsheet watchdog")
+                _WD["leader"] = False
+                try:
+                    from django.db import connection
+                    connection.close()
+                except Exception:
+                    pass
+            time.sleep(WD_EVERY_SEC)
+
+    threading.Thread(target=loop, daemon=True, name="leadsheet-watchdog").start()
+    return True
+
+
+def recent_log(days: int = 3, limit: int = 100) -> list:
+    """log ของระบบลงชีตย้อนหลัง (ใหม่ก่อน) — เรื่องที่แจ้ง · ล้ม · ผลส่งแจ้งเตือน"""
+    from django.db.models import Q
+
+    from dashboard.models import EventLog
+    since = timezone.now() - timedelta(days=days)
+    q = (Q(kind="leadsheet") | Q(kind="cron", name=WHAT) | Q(kind="cron", name="สำเนาชีตจ่ายเบอร์ลง Postgres")
+         | Q(kind="line_send", name="แจ้งเตือนลงชีตจ่ายเบอร์"))
+    out = []
+    for e in EventLog.objects.filter(q, at__gte=since).order_by("-at")[:limit]:
+        d = e.detail or {}
+        text = d.get("text") or d.get("error") or ", ".join("%s=%s" % (k, v) for k, v in d.items())
+        if e.kind == "line_send":
+            text = ("ส่งแจ้งเตือน LINE ถึงแล้ว" if e.ok else
+                    "ส่งแจ้งเตือน LINE ไม่ถึง: %s" % (d.get("error") or d.get("status") or "-"))
+        out.append({"at": timezone.localtime(e.at).strftime("%d/%m %H:%M"), "ok": e.ok, "kind": e.kind,
+                    "text": str(text)[:500]})
+    return out
 
 
 def _log(ok: bool, **kw):
@@ -1603,9 +1758,7 @@ def kick():
 
     def run():
         try:
-            process_pending()
-        except Exception:
-            pass
+            safe_process("ระบบส่งใบ")
         finally:
             _BG["busy"] = False
             try:
@@ -1623,7 +1776,7 @@ def maybe_process(data):
         return None
     s = str(data)
     if any(gid in s for gid in _rooms()):
-        return process_pending()
+        return safe_process("ข้อความ LINE เข้า")
     return None
 
 
@@ -1712,7 +1865,7 @@ def status() -> dict:
     return {"config": get_config(), "cursor": st.get("last_id"), "cursorAt": st.get("at"),
             "rooms": len(_rooms()), "pending": pending_count(), "last": last,
             "fallback": _kv(KV_FALLBACK).get("rows") or [], "alertTo": alert_target(),
-            "alertLast": al.get("lastSend") or {}, "failing": al.get("failing") or ""}
+            "alertLast": al.get("lastSend") or {}, "failing": al.get("failing") or "", "watchdog": _kv(KV_WD)}
 
 
 # ════════════════════════════════════════════════════════════════════

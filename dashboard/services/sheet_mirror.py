@@ -318,6 +318,12 @@ def run(tabs: list | None = None) -> dict:
                 eventlog.log(eventlog.CRON, name="สำเนาชีตจ่ายเบอร์ลง Postgres", ok=False, error=res["error"])
             except Exception:
                 pass
+            try:                                                 # ★ 14 ต.ค.69 แจ้งเจ้าของด้วย (ซ้ำทุก 1 ชม. ถ้ายังล้ม)
+                from checkout.leadsheet import ALERT_REPEAT_MIN, alert
+                alert([("mirror:" + res["error"][:60], "สำเนาชีตจ่ายเบอร์ลง Postgres ล้ม: %s (ชีตยังลงปกติ · ลองใหม่ทุก 10 นาที)"
+                        % res["error"][:200], ALERT_REPEAT_MIN)])
+            except Exception:
+                pass
         res["ms"] = int((time.time() - t0) * 1000)
         if not tabs:
             _set_kv(KV_LAST, res)
