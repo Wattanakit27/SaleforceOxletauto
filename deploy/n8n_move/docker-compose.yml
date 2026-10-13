@@ -1,0 +1,99 @@
+# n8n บนเครื่อง SaleForce (srv1793506) — ย้ายมาจาก srv1102218 (ต.ค.69 · เครื่องเดิมหมดอายุ 3 พ.ย.69)
+#
+# move.sh prepare คัดลอกไฟล์นี้ไปไว้ที่ /opt/n8n/docker-compose.yml
+# ค่าลับ (กุญแจถอดรหัส credential ของ n8n · รหัสฐานข้อมูล) อยู่ใน /opt/n8n/.env (chmod 600) — ห้าม commit
+#
+# ต่างจากเครื่องเดิม (/root/docker-compose.yml บน srv1102218) แค่ 3 อย่าง:
+#   1. ไม่มี traefik — พอร์ต 80/443 เป็นของ nginx ที่เสิร์ฟ SaleForce อยู่แล้ว (nginx → 127.0.0.1:5678)
+#   2. ชื่อโดเมนเป็น n8n.srv1793506.hstgr.cloud (N8N_DOMAIN ใน .env)
+#   3. ข้อมูลอยู่ใต้ /opt/n8n (เดิมอยู่ใน docker volume) — ดู/สำรองง่าย
+# ที่เหลือ (เวอร์ชัน · timezone · กุญแจ · การเก็บประวัติรัน · ตัวรันโค้ดแยก) เหมือนเดิมทุกค่า
+#
+# ★ เพดานแรม (เพิ่มตอนย้าย · เครื่องเดิมไม่มี) — เครื่องนี้มี SaleForce + เว็บโชว์รูม + API แอปมือถืออยู่ด้วย
+#   วัดจริง (Hostinger) 6–12 ต.ค.69: เครื่อง n8n เดิมทั้งเครื่องใช้ 2.3–2.7 GB (รวมระบบปฏิบัติการ) ·
+#   SaleForce กลางวันขึ้นถึง 4.0 GB · แรมเครื่อง 8 GB → n8n ใช้แรมพุ่งเมื่อไหร่ ต้องตายแค่ตัวมันเอง
+#   ไม่ใช่ให้ระบบไล่ฆ่า gunicorn/Postgres ของ SaleForce · เพดานตั้งสูงกว่าที่เคยใช้จริงหลายเท่า
+# ★ หมุนไฟล์ log (10 MB × 3) — เครื่องเดิมรันมา 2 เดือนไม่มีเพดาน log ของ docker โตไม่หยุด
+name: n8n
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    mem_limit: 1g
+    logging: *logging
+    environment:
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD}
+      - POSTGRES_DB=n8n
+    volumes:
+      - n8n_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: ${N8N_IMAGE}
+    restart: always
+    mem_limit: 3g
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5678:5678"          # เปิดเฉพาะในเครื่อง — คนนอกเข้าผ่าน nginx (https) เท่านั้น
+    environment:
+      - N8N_HOST=${N8N_DOMAIN}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://${N8N_DOMAIN}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - N8N_PROXY_HOPS=1
+      - NODE_OPTIONS=--max-old-space-size=2048   # เดิม 4096 — ต้องต่ำกว่า mem_limit ไม่งั้นโดนตัดก่อน V8 เก็บขยะ
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_PAYLOAD_SIZE_MAX=128
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD}
+      - DB_POSTGRESDB_POOL_SIZE=20
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=72
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=5000
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+    volumes:
+      - /opt/n8n/n8n_data:/home/node/.n8n
+      - /opt/n8n/files:/files          # เดิม /local-files:/files — path ในตัว container ต้องคงเป็น /files
+
+  n8n-runner:
+    image: ${RUNNER_IMAGE}
+    restart: always
+    mem_limit: 1536m
+    logging: *logging
+    depends_on:
+      - n8n
+    environment:
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_MAX_CONCURRENCY=10
+      - NODE_OPTIONS=--max-old-space-size=1024   # เดิม 2048 — Code node ประมวลข้อความ/JSON ไม่ถึงหลักร้อย MB
+
+volumes:
+  n8n_pg:
