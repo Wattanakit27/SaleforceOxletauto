@@ -254,6 +254,11 @@ r = LS.process_pending()
 ok("จ่ายใหม่ (เลขเดิม คนใหม่) = เปลี่ยนเซลล์ในแถวเดิม", r.get("updated") == ["TLD10-9221"] and col("เซลล์") == "เฟิร์ส",
    (r, col("เซลล์")))
 ok("ไม่มีแถวใหม่", len([x for x in oct_ if len(x) > 3 and x[3] == "TLD10-9221"]) == 1)
+w0 = len(FAKE.writes())
+msg(SLIP.replace("@เซลมัท OxletAuto", "@POOH"), U("c"), extra={})                       # ข้อความเก่า: ไม่มีข้อมูลแท็กจริง
+r = LS.process_pending()
+ok("★ แท็กที่หาในทะเบียนไม่เจอ ไม่ทับเซลล์เดิม (บั๊กที่เจอจากพรีวิว prod)",
+   r.get("dup") == ["TLD10-9221"] and col("เซลล์") == "เฟิร์ส" and len(FAKE.writes()) == w0, (r, col("เซลล์")))
 
 # ── 4) ใบที่ระบบส่งเอง (Connect) → ทางเดียวกัน ───────────────────
 LeadTask.objects.create(code="NLD10-9222", run="9222", seller=mat, seller_name="มัท")

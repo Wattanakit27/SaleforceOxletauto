@@ -443,6 +443,9 @@ def _nick_of_uid(uid: str) -> str:
     return ((p.employee.nickname if p.employee_id else "") or (p.nickname if p.is_employee else "") or "").strip()
 
 
+SURE_SELLER = ("แท็ก LINE", "งานจ่ายเบอร์ในระบบ", "ข้อความ @")   # รู้แน่ว่าเป็นใครในทะเบียน
+
+
 def _seller_of(g, d: dict) -> tuple:
     """เซลล์ที่ได้ใบ → (ชื่อในชีต, มาจากไหน) — แท็กจริงของ LINE ก่อน · แล้วงานจ่ายเบอร์ของระบบ · แล้วข้อความ @"""
     from dashboard.services.constants import normalize_seller
@@ -709,6 +712,7 @@ def _contact_keys(s: str) -> set:
 
 
 def handle_slip(g, d: dict, ctx: Ctx) -> dict:
+    from dashboard.services.constants import normalize_seller
     from dashboard.services.google_sheets import LEADS_COL as L
     row = slip_row(g, d)
     why = row.pop("_why", {})
@@ -737,8 +741,12 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
     if same:
         t, n, r = same[-1]                                       # แถวล่างสุดของแท็บล่าสุด
         upd = {}
-        if row.get(L.sales_rep) and row[L.sales_rep] != t.val(r, L.sales_rep):
-            upd[L.sales_rep] = row[L.sales_rep]                  # จ่ายใหม่ (เลขเดิม คนใหม่)
+        # จ่ายใหม่ (เลขเดิม คนใหม่) — เปลี่ยนเฉพาะตอนรู้แน่ว่าเป็นใครในทะเบียน
+        # ★ เจอจากพรีวิวบน prod 13 ต.ค.69: ข้อความเก่าไม่มีข้อมูลแท็กจริง แท็ก "@POOH" หาในทะเบียนไม่เจอ
+        #   → เกือบเอา "POOH" ไปทับ "ภู" ที่ถูกต้องอยู่แล้ว · หาไม่เจอ = ไม่แตะช่องเซลล์ของแถวเดิม
+        if (row.get(L.sales_rep) and why.get("seller") in SURE_SELLER
+                and normalize_seller(row[L.sales_rep]) != normalize_seller(t.val(r, L.sales_rep))):
+            upd[L.sales_rep] = row[L.sales_rep]
         for f in (L.phone, L.live_team, L.admin, L.channel, L.type, L.ads, L.car_inquiry, L.car_formula,
                   L.customer_profile):
             if row.get(f) and not t.val(r, f):
@@ -747,6 +755,8 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
         if not ctx.write:                                        # preview: เทียบกับแถวที่มีอยู่ (เช่นที่ n8n เขียนไว้)
             for f, v in row.items():
                 old, new = t.val(r, f), str(v).lstrip("'")
+                if f == L.received_date and _parse_dmy(old) == _parse_dmy(new):
+                    continue                                     # 13/10/26 = 13/10/2026 (แค่รูปแบบ)
                 if old and new and _clean(old).lower() != _clean(new).lower():
                     diff[_field_name(f)] = [old, new]
         if not upd:
