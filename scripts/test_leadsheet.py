@@ -38,6 +38,7 @@ from checkout import leadsheet as LS  # noqa: E402
 from checkout import people  # noqa: E402
 from checkout.models import Employee, GroupChat, LeadTask, LineProfile  # noqa: E402
 from dashboard.services import google_sheets as G  # noqa: E402
+from dashboard.services import line_channels  # noqa: E402
 
 people.BG = False
 FAILS = []
@@ -91,6 +92,9 @@ class Fake:
         self.grid = {}
         self.cols = {}                   # แท็บที่สร้างผ่าน addSheet: จำนวนคอลัมน์ (ค่าตั้งต้นของ Google = 26)
         self.calls, self.fail = [], 0
+        # แท็บเดือนจริงตั้งรูปแบบคอลัมน์ ว/ด/ป เป็น d/m/yy — เขียน 13/10/2026 แล้วอ่านกลับได้ 13/10/26 (เหมือน prod)
+        self.date_yy = False
+        self.line = []                   # ข้อความที่ยิงไป LINE push (แจ้งเตือนเจ้าของ) — ไม่นับเป็นการเขียนชีต
 
     def _file(self, url):
         for sid in self.files:
@@ -126,6 +130,9 @@ class Fake:
 
     def post(self, url, params=None, json=None, headers=None, timeout=None):
         u = urllib.parse.unquote(url)
+        if "api.line.me" in u:
+            self.line.append(json)
+            return R(200, {})
         sid = self._file(u)
         self.calls.append(("POST", u, json))
         if self.fail:
@@ -142,6 +149,8 @@ class Fake:
                     row.append("")
                 v = d["values"][0][0]
                 row[c] = v[1:] if isinstance(v, str) and v.startswith("'") else v     # USER_ENTERED: ' = ข้อความ
+                if self.date_yy and c == 0 and isinstance(row[c], str):
+                    row[c] = re.sub(r"^(\d{1,2}/\d{1,2}/)\d{2}(\d{2})$", r"\1\2", row[c])
             return R(200, {"totalUpdatedCells": len(json["data"])})
         if u.endswith(":batchUpdate"):
             for rq in json["requests"]:
@@ -152,6 +161,22 @@ class Fake:
                     continue
                 if "deleteSheet" in rq:
                     del self.files[sid][list(self.files[sid])[rq["deleteSheet"]["sheetId"]]]
+                    continue
+                if "cutPaste" in rq:                             # ย้ายช่วงเซลล์ (ค่าไปครบ · ต้นทางว่าง)
+                    cp = rq["cutPaste"]
+                    src, dst = cp["source"], cp["destination"]
+                    tabs = list(self.files[sid])
+                    st, dt = tabs[src["sheetId"]], tabs[dst["sheetId"]]
+                    if dst["rowIndex"] + 1 > self.grid.get((sid, dt), 4000):
+                        return R(400, {"error": "exceeds grid limits"})
+                    srow = self._rows(sid, st, src["startRowIndex"] + 1)
+                    vals = list(srow[src["startColumnIndex"]:src["endColumnIndex"]])
+                    drow = self._rows(sid, dt, dst["rowIndex"] + 1)
+                    while len(drow) < dst["columnIndex"] + len(vals):
+                        drow.append("")
+                    drow[dst["columnIndex"]:dst["columnIndex"] + len(vals)] = vals
+                    for i in range(src["startColumnIndex"], min(src["endColumnIndex"], len(srow))):
+                        srow[i] = ""
                     continue
                 if "deleteDimension" in rq:                      # ลบแถว (ทีละคำขอ ตามลำดับที่ส่งมา)
                     rg = rq["deleteDimension"]["range"]
@@ -186,7 +211,8 @@ class Creds:
 FAKE = Fake()
 P = [mock.patch("requests.get", FAKE.get), mock.patch("requests.post", FAKE.post),
      mock.patch.object(G, "_get_credentials", lambda: Creds()),
-     mock.patch.object(G, "fetch_sheet", lambda key: [])]
+     mock.patch.object(G, "fetch_sheet", lambda key: []),
+     mock.patch.object(line_channels, "dm_token", lambda: "TEST_DM_TOKEN")]
 for p in P:
     p.start()
 
@@ -205,9 +231,14 @@ U = lambda c: "U" + c * 32                                       # noqa: E731
 mat = Employee.objects.create(nickname="มัท", display_name="เซลมัท OxletAuto", position="ทีม A")
 first = Employee.objects.create(nickname="เฟิร์ส", display_name="First", position="ทีม A")
 kwang = Employee.objects.create(nickname="กวาง", display_name="Kwang", position="ออฟฟิศ บ้านเก่า")
-for uid, e in ((U("a"), mat), (U("b"), first), (U("c"), kwang)):
+owner = Employee.objects.create(nickname="Wattanakit", display_name="วัฒนกิจ", position="")
+for uid, e in ((U("a"), mat), (U("b"), first), (U("c"), kwang), (U("e"), owner)):
     LineProfile.objects.create(user_id=uid, employee=e, is_employee=True, nickname=e.nickname,
                                display_name=e.display_name)
+
+
+def line_texts(since=0):
+    return [m["text"] for b in FAKE.line[since:] for m in b.get("messages", [])]
 ROOM = "C" + "1" * 32
 OTHER = "C" + "9" * 32
 _N = {"i": 0}
@@ -297,6 +328,9 @@ w0 = len(FAKE.writes())
 msg("9221 รอตอบครับ", U("a"), at=datetime(2026, 10, 14, 7, 30, tzinfo=dtz.utc))   # มัทรายงาน แต่ไม่ใช่เจ้าของแล้ว
 r = LS.process_pending()
 ok("คนรายงานไม่ใช่เจ้าของ = ไม่เขียน", r.get("notOwner") and len(FAKE.writes()) == w0, r)
+ok("แจ้ง LINE เจ้าของ: รายงานผลไม่ลงชีต (ไม่ใช่เจ้าของ)",
+   any("รายงานผลไม่ลงชีต" in t and "มัท" in t and "เฟิร์ส" in t for t in line_texts()), line_texts())
+ok("แจ้งไปที่ LINE ของ Wattanakit", FAKE.line and FAKE.line[-1]["to"] == U("e"), FAKE.line[-1:])
 msg("9221 รอตอบครับ", U("b"), at=datetime(2026, 10, 14, 7, 31, tzinfo=dtz.utc))   # เฟิร์ส (เจ้าของ)
 r = LS.process_pending()
 ok("เจ้าของรายงาน → ลงชีต", r.get("reports") == 1, r)
@@ -352,16 +386,198 @@ r = LS.process_pending()
 ok("เขียนล้ม = ไม่ขยับตัวชี้", r.get("error") and LS._kv(LS.KV_STATE)["last_id"] == before, r)
 r = LS.process_pending()
 ok("รอบถัดไปเขียนได้", r.get("added") == ["TLD10-9301"], r)
+# ★ 13 ต.ค.69 เจ้าของสั่ง: ยังไม่มีแท็บเดือนใหม่ = ลงแท็บเดิมไปก่อน · แท็บใหม่มาเมื่อไหร่ค่อยลงแท็บใหม่
+other_before = [list(x) for x in oct_]
+n_line = len(FAKE.line)
 msg(SLIP.replace("TLD10-9221", "TLD11-9400"), U("c"), at=datetime(2026, 11, 1, 3, 0, tzinfo=dtz.utc),
     extra={"mention": [U("a")]})
 r = LS.process_pending()
-ok("ยังไม่มีแท็บเดือนใหม่ = ค้างไว้ บอกเหตุผล", "ยังไม่มีแท็บ" in (r.get("error") or ""), r)
-FAKE.files[LEAD_SID][TAB_NOV] = [HDR]
+in_oct = [x for x in oct_ if len(x) > 3 and x[3] == "TLD11-9400"]
+ok("ยังไม่มีแท็บเดือนใหม่ = ลงแท็บเดิม (ตุลาคม) ไปก่อน ไม่ค้าง", r.get("added") == ["TLD11-9400"] and len(in_oct) == 1
+   and not r.get("error"), r)
+ok("ว/ด/ป ของใบ = วันที่ใบถึงกลุ่ม (1 พ.ย.)", in_oct and in_oct[0][0] == "1/11/2026", in_oct)
+ok("จดไว้รอย้าย", [(x["want"], x["tab"], x["code"]) for x in LS._kv(LS.KV_FALLBACK).get("rows") or []]
+   == [(TAB_NOV, TAB_OCT, "TLD11-9400")], LS._kv(LS.KV_FALLBACK))
+ok("แจ้ง LINE: ยังไม่มีแท็บใหม่ ลงแท็บเดิมไปก่อน", any("ยังไม่มีแท็บ" in t and TAB_OCT in t for t in line_texts(n_line)),
+   line_texts(n_line))
+msg("9400 รอตอบครับ", U("a"), at=datetime(2026, 11, 1, 4, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("รายงานผลของใบที่ลงแท็บเดิม → ลงได้", r.get("reports") == 1 and in_oct[0][HDR.index("จำนวนอัพเดท")] == "1", r)
+FAKE.files[LEAD_SID][TAB_NOV] = []                               # แอดมินสร้างแท็บไว้เปล่าๆ (ยังไม่มีหัวตาราง)
 FAKE.grid[(LEAD_SID, TAB_NOV)] = 1
+msg(SLIP.replace("TLD10-9221", "TLD11-9401").replace("089-123-4567", "089-555-0001"), U("c"),
+    at=datetime(2026, 11, 1, 5, 0, tzinfo=dtz.utc), extra={"mention": [U("a")]})
+LS._set_kv(LS.KV_FALLBACK, dict(LS._kv(LS.KV_FALLBACK), checkedAt=""))
+r = LS.process_pending()
+ok("แท็บใหม่ยังเปล่า (ไม่มีหัวตาราง) = ลงแท็บเดิมต่อ ไม่ค้างทั้งคิว", r.get("added") == ["TLD11-9401"]
+   and not r.get("error"), r)
+ok("แท็บใหม่ยังไม่พร้อม = ยังไม่ย้าย", len(LS._kv(LS.KV_FALLBACK).get("rows") or []) == 2)
+w_calls = len(FAKE.calls)
+r = LS.process_pending()
+ok("ไม่มีข้อความใหม่ + เพิ่งเช็ค = ไม่ยิง Google", r == {"pending": 0} and len(FAKE.calls) == w_calls, r)
+FAKE.files[LEAD_SID][TAB_NOV].append(list(HDR))                 # แอดมินวางหัวตาราง
+LS._set_kv(LS.KV_FALLBACK, dict(LS._kv(LS.KV_FALLBACK), checkedAt=""))
+n_line = len(FAKE.line)
 r = LS.process_pending()
 nov = FAKE.files[LEAD_SID][TAB_NOV]
-ok("สร้างแท็บแล้ว → ลงแถว 2 (ขยายตารางให้เอง)", r.get("added") == ["TLD11-9400"] and nov[1][3] == "TLD11-9400",
-   (r, nov))
+moved = [x[3] for x in nov[1:] if len(x) > 3 and x[3]]
+ok("แท็บใหม่มา → ย้าย 2 ใบไปต่อท้ายแท็บใหม่ ตามลำดับเดิม (ขยายตารางให้เอง)", moved == ["TLD11-9400", "TLD11-9401"],
+   nov)
+ok("ย้ายทั้งแถว (รวมจำนวนอัพเดทจากรายงานผล + ว/ด/ป)", len(nov) > 1 and nov[1][HDR.index("จำนวนอัพเดท")] == "1"
+   and nov[1][0] == "1/11/2026", nov[1:2])
+ok("แถวที่ย้ายถูกลบจากแท็บเดิม", not [x for x in oct_ if len(x) > 3 and x[3] in ("TLD11-9400", "TLD11-9401")])
+ok("แถวอื่นในแท็บเดิมไม่ถูกแตะ", oct_ == other_before, (len(oct_), len(other_before)))
+ok("ล้างรายการรอย้าย", not LS._kv(LS.KV_FALLBACK).get("rows"))
+ok("แจ้ง LINE: ย้ายให้แล้ว", any("ย้ายใบ" in t and "TLD11-9400" in t for t in line_texts(n_line)), line_texts(n_line))
+msg(SLIP.replace("TLD10-9221", "TLD11-9402").replace("089-123-4567", "089-555-0002"), U("c"),
+    at=datetime(2026, 11, 1, 6, 0, tzinfo=dtz.utc), extra={"mention": [U("a")]})
+r = LS.process_pending()
+ok("ใบหลังแท็บใหม่มา → ลงแท็บใหม่ตรงๆ", r.get("added") == ["TLD11-9402"] and nov[-1][3] == "TLD11-9402"
+   and not LS._kv(LS.KV_FALLBACK).get("rows"), (r, nov[-1]))
+
+# ── 7b) แจ้ง LINE เมื่อบันทึกชีตไม่ได้ — ครั้งเดียวต่อชั่วโมง · กลับมาได้แจ้งว่าหายแล้ว ──────────────
+n_line = len(FAKE.line)
+FAKE.fail = 1
+msg(SLIP.replace("TLD10-9221", "TLD11-9403").replace("089-123-4567", "089-555-0003"), U("c"),
+    at=datetime(2026, 11, 1, 7, 0, tzinfo=dtz.utc), extra={"mention": [U("a")]})
+r = LS.process_pending()
+ok("บันทึกชีตไม่ได้ → แจ้ง LINE (บอกว่าข้อความไม่หาย)", r.get("error")
+   and any("บันทึกชีตไม่ได้" in t and "ไม่หาย" in t for t in line_texts(n_line)), line_texts(n_line))
+n_line = len(FAKE.line)
+FAKE.fail = 1
+r = LS.process_pending()
+ok("ล้มซ้ำภายในชั่วโมง = ไม่แจ้งซ้ำ", r.get("error") and len(FAKE.line) == n_line, line_texts(n_line))
+r = LS.process_pending()
+ok("กลับมาบันทึกได้ → ลงครบ + แจ้งว่าหายแล้ว", r.get("added") == ["TLD11-9403"]
+   and any("กลับมาบันทึกชีตได้แล้ว" in t for t in line_texts(n_line)), (r, line_texts(n_line)))
+n_line = len(FAKE.line)
+msg("9999 ลูกค้าไม่รับสาย", U("a"), at=datetime(2026, 11, 1, 8, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("หาเลขที่รายงานไม่เจอ → แจ้ง LINE", any("หาเลข" in t and "9999" in t for t in line_texts(n_line)), line_texts(n_line))
+n_line = len(FAKE.line)
+msg("9400 รอตอบ", "U" + "f" * 32, at=datetime(2026, 11, 1, 8, 5, tzinfo=dtz.utc))   # คนนอกทะเบียน
+r = LS.process_pending()
+ok("คนรายงานไม่อยู่ในทะเบียน → แจ้ง LINE (เดิมข้ามเงียบ)",
+   any("ไม่อยู่ในทะเบียน" in t for t in line_texts(n_line)), (r, line_texts(n_line)))
+ok("ทุกแจ้งเตือนไปที่ Wattanakit · ไม่มี LINE id ในข้อความ",
+   all(b["to"] == U("e") for b in FAKE.line) and not any(re.search(r"U[0-9a-f]{32}", t) for t in line_texts()),
+   line_texts())
+LS.set_config(alert=False)
+n_line = len(FAKE.line)
+msg("9998 ลูกค้าไม่รับสาย", U("a"), at=datetime(2026, 11, 1, 8, 10, tzinfo=dtz.utc))
+LS.process_pending()
+ok("ปิดแจ้งเตือนได้", len(FAKE.line) == n_line)
+LS.set_config(alert=True)
+
+# ── 7c) หัวคอลัมน์ขยับ / เปลี่ยนชื่อ / ถูกลบ → ปรับเองได้ก็ปรับ + แจ้งเจ้าของทุกกรณี (14 ต.ค.69) ─────────────
+ok("จำตำแหน่งคอลัมน์ล่าสุดของแท็บไว้", str(G.LEADS_COL.lead_code) in (LS._kv(LS.KV_COLS).get(TAB_NOV) or {}),
+   LS._kv(LS.KV_COLS))
+
+
+def nslip(code, minute):
+    return msg(SLIP.replace("TLD10-9221", code).replace("089-123-4567", "089-556-%04d" % minute), U("c"),
+               at=datetime(2026, 11, 1, 9, minute, tzinfo=dtz.utc), extra={"mention": [U("a")]})
+
+
+def nrow(code, hdr):
+    ci = hdr.index("Code")
+    got = [x for x in nov if len(x) > ci and x[ci] == code]
+    return got[0] if got else []
+
+
+def at(row_, name, hdr):
+    i = hdr.index(name)
+    return row_[i] if len(row_) > i else ""
+
+
+# a) แทรกคอลัมน์ใหม่ที่ B — ทุกคอลัมน์ขยับไป 1 ช่อง
+for r_ in nov:
+    r_.insert(1, "")
+nov[0][1] = "หมายเหตุแอดมิน"
+H1 = list(nov[0])
+n_line = len(FAKE.line)
+nslip("TLD11-9410", 1)
+r = LS.process_pending()
+x = nrow("TLD11-9410", H1)
+ok("คอลัมน์ขยับ → ลงช่องถูกทุกช่อง (จับด้วยชื่อหัวคอลัมน์)", r.get("added") == ["TLD11-9410"] and x
+   and (at(x, "เซลล์", H1), at(x, "ADS", H1), at(x, "หมายเหตุแอดมิน", H1)) == ("มัท", "ทดสอบโฆษณา", ""), (r, x))
+ok("แจ้ง LINE: คอลัมน์ขยับ ปรับให้แล้ว", any("คอลัมน์ขยับ" in t and TAB_NOV in t for t in line_texts(n_line)),
+   line_texts(n_line))
+n_line = len(FAKE.line)
+nslip("TLD11-9414", 2)
+LS.process_pending()
+ok("ขยับแล้วรอบถัดไปไม่แจ้งซ้ำ", not any("คอลัมน์ขยับ" in t for t in line_texts(n_line)), line_texts(n_line))
+
+# b) เปลี่ยนชื่อหัวคอลัมน์ในที่เดิม "เซลล์" → "คนดูแลเคส" (ระบบไม่รู้จักชื่อนี้)
+i_sel = H1.index("เซลล์")
+nov[0][i_sel] = "คนดูแลเคส"
+n_line = len(FAKE.line)
+nslip("TLD11-9411", 3)
+r = LS.process_pending()
+x = nrow("TLD11-9411", H1)
+ok("หัวคอลัมน์ถูกเปลี่ยนชื่อ → บันทึกลงคอลัมน์เดิมต่อ", r.get("added") == ["TLD11-9411"] and x and x[i_sel] == "มัท",
+   (r, x))
+ok("แจ้ง LINE: เปลี่ยนชื่อ + ใช้คอลัมน์เดิมต่อ",
+   any("เปลี่ยนชื่อเป็น" in t and "คนดูแลเคส" in t for t in line_texts(n_line)), line_texts(n_line))
+msg("9411 รอตอบครับ", U("a"), at=datetime(2026, 11, 1, 9, 30, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("รายงานผลยังหาเจ้าของเคสเจอ (อ่านช่องเซลล์จากคอลัมน์เดิม)", r.get("reports") == 1, r)
+nov[0][i_sel] = "เซลล์"
+
+# c) ลบคอลัมน์ ADS — ทุกคอลัมน์หลังจากนั้นเลื่อนซ้าย → ไม่เดาตำแหน่ง · แจ้งว่าหาไม่เจอ · ช่องอื่นยังลงถูก
+i_ads = H1.index("ADS")
+for r_ in nov:
+    if len(r_) > i_ads:
+        del r_[i_ads]
+H2 = list(nov[0])
+n_line = len(FAKE.line)
+nslip("TLD11-9412", 4)
+r = LS.process_pending()
+x = nrow("TLD11-9412", H2)
+ok("คอลัมน์ถูกลบ → ช่องอื่นยังลงถูก", r.get("added") == ["TLD11-9412"] and x
+   and (at(x, "เซลล์", H2), at(x, "รถลูกค้าถาม", H2)) == ("มัท", "สนใจ civic fe ปี22"), (r, x))
+ok("ไม่เดาตำแหน่ง (ค่า ADS ไม่ไปโผล่ช่องอื่น)", x and "ทดสอบโฆษณา" not in x, x)
+ok("แจ้ง LINE: หาหัวคอลัมน์ ADS ไม่เจอ ช่องนี้ไม่ได้บันทึก",
+   any('"ADS"' in t and "ไม่เจอ" in t and "ไม่ได้บันทึก" in t for t in line_texts(n_line)), line_texts(n_line))
+ok("สถานะรอบล่าสุดบอกเรื่องคอลัมน์", any("ADS" in c for c in (r.get("columns") or [])), r.get("columns"))
+
+# d) หัว "Code" ถูกเปลี่ยนชื่อในที่เดิม → ใช้คอลัมน์เดิมต่อ (ไม่ทำให้ทั้งแท็บใช้ไม่ได้)
+i_code = H2.index("Code")
+nov[0][i_code] = "เลขลีด"
+n_line = len(FAKE.line)
+nslip("TLD11-9413", 5)
+r = LS.process_pending()
+ok("หัว Code ถูกเปลี่ยนชื่อ → ยังลงแท็บเดิมของเดือน (ไม่ไปลงแท็บเดือนก่อน)",
+   r.get("added") == ["TLD11-9413"] and nrow("TLD11-9413", nov[0][:i_code] + ["Code"] + nov[0][i_code + 1:])
+   and not LS._kv(LS.KV_FALLBACK).get("rows"), r)
+ok("แจ้ง LINE: หัว Code ถูกเปลี่ยนชื่อ", any("เลขลีด" in t and "Code" in t for t in line_texts(n_line)),
+   line_texts(n_line))
+nov[0][i_code] = "Code"
+
+# e) หัว Code หายและเดาไม่ได้ (ไม่มีตำแหน่งที่จำไว้) → ลงแท็บเดือนก่อนไปก่อน + แจ้ง · แก้หัวแล้วย้ายกลับให้เอง
+cols = LS._kv(LS.KV_COLS)
+cols.pop(TAB_NOV, None)
+LS._set_kv(LS.KV_COLS, cols)
+nov[0][i_code] = "รหัสใหม่"
+n_line = len(FAKE.line)
+nslip("TLD11-9415", 6)
+r = LS.process_pending()
+ok("หัว Code หาย เดาไม่ได้ → ลงแท็บเดือนก่อนไปก่อน ไม่ค้าง", r.get("added") == ["TLD11-9415"]
+   and [x["code"] for x in LS._kv(LS.KV_FALLBACK).get("rows") or []] == ["TLD11-9415"], (r, LS._kv(LS.KV_FALLBACK)))
+ok("แจ้ง LINE: หาหัวคอลัมน์ Code ไม่เจอ + หัวตารางตอนนี้",
+   any("Code" in t and "ไม่เจอ" in t and "รหัสใหม่" in t for t in line_texts(n_line)), line_texts(n_line))
+nov[0][i_code] = "Code"
+LS._set_kv(LS.KV_FALLBACK, dict(LS._kv(LS.KV_FALLBACK), checkedAt=""))
+n_line = len(FAKE.line)
+LS.process_pending()
+x = nrow("TLD11-9415", H2)
+ok("แก้หัวกลับแล้ว → ย้ายใบกลับแท็บของเดือนให้เอง", x and not LS._kv(LS.KV_FALLBACK).get("rows")
+   and not [y for y in oct_ if len(y) > 3 and y[3] == "TLD11-9415"], x)
+ok("★ แท็บใหม่จัดคอลัมน์ต่างจากแท็บเดิม → ย้ายตามชื่อหัวคอลัมน์ ลงช่องถูก (ไม่ตัดแปะทั้งแถว)",
+   x and (at(x, "เซลล์", H2), at(x, "เบอร์โทร", H2), at(x, "ว/ด/ป", H2), at(x, "หมายเหตุแอดมิน", H2))
+   == ("มัท", "0895560006", "1/11/2026", ""), x)
+ok("แจ้ง LINE: ย้ายตามชื่อหัวคอลัมน์ + บอกคอลัมน์ที่แท็บใหม่ไม่มี (ADS)",
+   any("ย้ายตามชื่อหัวคอลัมน์" in t and "ADS" in t for t in line_texts(n_line)), line_texts(n_line))
 
 # ── 8) ซ่อม ว/ด/ป ที่ n8n เขียนทับ ─────────────────────────────────
 FAKE.files[LEAD_SID][TAB_OCT].append(lrow(**{"ว/ด/ป": "13/10/26", "Code": "NLD10-9050", "เซลล์": "มัท",
@@ -420,9 +636,12 @@ ok("ลบแท็บทดสอบได้", LS.delete_sim_tab() and LS.SIM_
 oct_now = FAKE.files[LEAD_SID][TAB_OCT]
 last_before = max(i for i, x in enumerate(oct_now) if any(str(v).strip() for v in x[:5]))
 snapshot = [list(x) for x in oct_now]
+FAKE.date_yy = True                                              # แท็บเดือนจริงโชว์ปี 2 หลัก (เหมือน prod)
 with mock.patch.object(LS.timezone, "localdate", lambda: datetime(2026, 10, 13).date()):
     rep = LS.simulate("มัท", "กวาง", "เฟิร์ส", real_tab=True)
+FAKE.date_yy = False
 text = "\n".join(rep)
+ok("แท็บจริงโชว์ ว/ด/ป ปี 2 หลัก (ชุดปลอมจำลองได้)", re.search(r"หลังรายงาน = \d{1,2}/\d{1,2}/\d{2} ", text), text)
 sim_code = re.search(r"Ac Lead No\.\s+(\S+)", text).group(1)
 added_at = [i for i, x in enumerate(oct_now) if len(x) > 3 and x[3] == sim_code]
 ok("ต่อท้ายแถวสุดท้ายของแท็บเดือนจริง", added_at == [last_before + 1], (added_at, last_before))
@@ -436,6 +655,17 @@ ok("แถวอื่นไม่ถูกแตะ (เทียบก่อ�
 ok("แถวเลขเดียวกันแต่ไม่ใช่ของจำลอง ไม่ถูกลบ", oct_now[-1] == decoy)
 oct_now.pop()
 ok("ลบซ้ำ = ไม่มีอะไรให้ลบ", LS.delete_sim_rows() == [])
+
+# ── 9d) ทดสอบย้ายข้ามแท็บกับชีต (manage.py leadsheet --test-month-move) ─────────────
+oct_snapshot = [list(x) for x in FAKE.files[LEAD_SID][TAB_OCT]]
+with mock.patch.object(LS.timezone, "localdate", lambda: datetime(2026, 10, 13).date()):
+    rep = LS.move_selftest()
+ok("คำสั่งทดสอบย้ายข้ามแท็บ: ผ่านทุกข้อ", rep[0].startswith("ผลรวม: ใช้ได้") and not any(x.startswith("ไม่ผ่าน") for x in rep),
+   rep)
+ok("คำสั่งทดสอบย้าย: ลบแท็บชั่วคราวทิ้ง · แท็บเดือนจริงไม่ถูกแตะ",
+   not any(t in FAKE.files[LEAD_SID] for t in LS.MOVE_TEST_TABS) and FAKE.files[LEAD_SID][TAB_OCT] == oct_snapshot)
+cut = [rq for c in FAKE.writes() for rq in ((c[2] or {}).get("requests") or []) if "cutPaste" in rq]
+ok("ย้ายด้วย cutPaste (ค่า+รูปแบบไปครบ ไม่อ่านแล้วเขียนใหม่)", cut, len(cut))
 
 # ── 10) ไม่มี LINE user id ลงชีต + store_chat เก็บคนที่ถูกแท็ก ─────────────
 leak = [v for v in FAKE.cells().values() if re.search(r"U[0-9a-f]{32}", str(v))]

@@ -2719,6 +2719,20 @@ def admin_system_health(request):
                 issues.append({"level": "warn",
                                "msg": "รายงานผลที่ไม่ได้ลงชีตเพราะคนรายงานไม่ใช่เจ้าของเคส (ล่าสุด): %s"
                                       % " · ".join(_ll["notOwner"][-3:])})
+            for _lc in (_ll.get("columns") or []):
+                if "ไม่เจอ" in _lc:                                # หัวคอลัมน์ถูกแก้แล้วเดาไม่ได้ = ช่องนั้นไม่ได้บันทึก
+                    issues.append({"level": "warn", "msg": "ชีตจ่ายเบอร์: " + _lc[:240]})
+            _lfb = _ls._kv(_ls.KV_FALLBACK).get("rows") or []
+            if _lfb:
+                issues.append({"level": "warn",
+                               "msg": "ยังไม่มีแท็บ %s ในชีตจ่ายเบอร์ — ลงแท็บเดิมไว้ก่อน %d ใบ "
+                                      "(สร้างแท็บใหม่แล้วระบบย้ายให้เองภายใน %d นาที)"
+                                      % (_lfb[-1].get("want", ""), len(_lfb), _ls.FALLBACK_CHECK_MIN)})
+            _lal = (_ls._kv(_ls.KV_ALERT).get("lastSend") or {})
+            if _lal and not _lal.get("ok"):
+                issues.append({"level": "warn",
+                               "msg": "แจ้งเตือน LINE เรื่องลงชีตจ่ายเบอร์ส่งไม่ถึง (%s) — ทดสอบด้วย "
+                                      "manage.py leadsheet --alert-test" % (_lal.get("error") or "")[:160]})
     except Exception:
         pass
 

@@ -7,6 +7,9 @@
     python manage.py leadsheet --on --since "2026-10-13 18:00"   # เปิด + ไล่ย้อนจากเวลาที่ปิด n8n
     python manage.py leadsheet --off
     python manage.py leadsheet --ban off             # ไม่เขียนรายงานแบน (ใบ/รายงานผลยังเขียน)
+    python manage.py leadsheet --alert-test          # ส่ง LINE ทดสอบหาผู้รับแจ้งเตือน (ค่าตั้งต้น: Wattanakit/วัฒนกิจ)
+    python manage.py leadsheet --test-month-move     # ลองย้ายแถวข้ามแท็บกับ Google จริง (แท็บชั่วคราว ลบทิ้งเอง)
+    python manage.py leadsheet --alert-to ชื่อเล่น      # เปลี่ยนผู้รับแจ้งเตือน · --alert off = ปิดแจ้งเตือน
     python manage.py leadsheet --run                 # เขียนข้อความที่ค้างเดี๋ยวนี้
     python manage.py leadsheet --repair-dates        # หาแถวที่ ว/ด/ป ถูก n8n เขียนทับ (ดูเฉยๆ)
     python manage.py leadsheet --repair-dates --apply [--tab "ตุลาคม 69"]   # คืนวันที่จริง
@@ -38,6 +41,11 @@ class Command(BaseCommand):
         p.add_argument("--on", action="store_true")
         p.add_argument("--off", action="store_true")
         p.add_argument("--ban", choices=["on", "off"])
+        p.add_argument("--alert", choices=["on", "off"], help="แจ้งเตือน LINE ส่วนตัวเมื่อบันทึกชีตไม่ได้")
+        p.add_argument("--alert-to", help="ชื่อเล่น (หรือชื่อ LINE) ผู้รับแจ้งเตือน")
+        p.add_argument("--alert-test", action="store_true", help="ส่งข้อความทดสอบหาผู้รับแจ้งเตือน")
+        p.add_argument("--test-month-move", action="store_true",
+                       help="ลองย้ายแถวข้ามแท็บกับ Google จริง (สร้างแท็บชั่วคราว 2 แท็บแล้วลบทิ้ง)")
         p.add_argument("--since", help='ตั้งจุดเริ่ม เช่น "2026-10-13 18:00" (เวลาไทย) — ข้อความหลังเวลานี้จะถูกเขียน')
         p.add_argument("--run", action="store_true", help="เขียนข้อความที่ค้างเดี๋ยวนี้")
         p.add_argument("--preview", action="store_true", help="ดูว่าจะเขียนอะไร (ไม่เขียน)")
@@ -63,10 +71,12 @@ class Command(BaseCommand):
                 since = timezone.make_aware(datetime.strptime(o["since"], "%Y-%m-%d %H:%M"))
             except ValueError:
                 raise CommandError('--since ต้องเป็น "YYYY-MM-DD HH:MM" (เวลาไทย)')
-        if o["on"] or o["off"] or o.get("ban"):
+        if o["on"] or o["off"] or o.get("ban") or o.get("alert") or o.get("alert_to") is not None:
             was = LS.get_config()["enabled"]
             cfg = LS.set_config(enabled=(True if o["on"] else (False if o["off"] else None)),
-                                ban={"on": True, "off": False}.get(o.get("ban")))
+                                ban={"on": True, "off": False}.get(o.get("ban")),
+                                alert={"on": True, "off": False}.get(o.get("alert")),
+                                alert_to=o.get("alert_to"))
             lines.append("ตั้งค่าแล้ว: %s" % json.dumps(cfg, ensure_ascii=False))
             if o["on"] and not was and not since:
                 last = LS.set_since()
@@ -75,7 +85,12 @@ class Command(BaseCommand):
             last = LS.set_since(since)
             lines.append("ตั้งจุดเริ่ม: ข้อความหลัง %s (id > %d)" % (o["since"], last))
 
-        if o["simulate"]:
+        if o["test_month_move"]:
+            lines += LS.move_selftest()
+        elif o["alert_test"]:
+            r = LS.alert_test()
+            lines.append(("ส่งแล้ว → %s" % r["to"]) if r["ok"] else ("ส่งไม่ถึง: %s" % r["error"]))
+        elif o["simulate"]:
             if not o.get("seller"):
                 raise CommandError("ใส่ --seller ชื่อเล่นเซลล์ (เช่น --seller มัท)")
             lines += LS.simulate(o["seller"], o.get("admin") or "", o.get("other") or "",
@@ -99,6 +114,16 @@ class Command(BaseCommand):
             lines.append("ตัวชี้: %s (%s) · ค้าง %d · เกิน 10 นาที %d" % (
                 st["cursor"], st["cursorAt"] or "-", st["pending"], LS.pending_count(10)))
             lines.append("ผลรอบล่าสุด: %s" % json.dumps(st["last"], ensure_ascii=False))
+            cfg = st["config"]
+            lines.append("แจ้งเตือน LINE: %s · ผู้รับ %s%s" % (
+                "เปิด" if cfg.get("alert", True) else "ปิด", st["alertTo"] or "หาไม่เจอ (ตั้งด้วย --alert-to)",
+                (" · ส่งล่าสุด %s %s" % (st["alertLast"].get("at", ""), "ถึง" if st["alertLast"].get("ok")
+                                         else "ไม่ถึง: %s" % st["alertLast"].get("error", ""))) if st["alertLast"] else ""))
+            if st["failing"]:
+                lines.append("กำลังบันทึกไม่ได้: %s" % st["failing"])
+            if st["fallback"]:
+                lines.append("ใบที่ลงแท็บเดิมรอย้ายไปแท็บใหม่ %d ใบ: %s" % (len(st["fallback"]), ", ".join(
+                    "%s→%s" % (x["code"], x["want"]) for x in st["fallback"][-10:])))
 
         text = "\n".join(lines)
         if o.get("out"):

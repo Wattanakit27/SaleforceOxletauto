@@ -51,6 +51,20 @@ _LOCK_KEY = 7_406_064              # Postgres advisory lock (leadflow ใช้ 
 MAX_ROW = 6000
 _ROW_COLS = 5                      # หาแถวสุดท้ายจาก ว/ด/ป · เบอร์ · เวลา · Code · เซลล์ (คอลัมน์อื่นคนกรอกทีหลัง)
 
+# ★ 13 ต.ค.69 เจ้าของสั่ง: *"ขึ้นเดือนใหม่ต้องกรอกลงเดือนล่าสุด · ถ้ายังไม่เจอแท็บใหม่ให้บันทึกลงแท็บเดิมไปก่อน
+#   จนกว่าจะมีแท็บใหม่ค่อยอัปเดตในแท็บใหม่ · มีข้อผิดพลาด/บันทึกไม่ได้ แจ้ง LINE ส่วนตัวฉัน (วัฒนกิจ)"*
+KV_FALLBACK = "leadsheet_fallback"  # {"rows": [{"want","tab","code","at"}], "checkedAt"} ใบที่ลงแท็บเดิมเพราะยังไม่มีแท็บใหม่
+FALLBACK_MONTHS = 3                # ลงแท็บเดิมได้ย้อนกี่เดือน
+FALLBACK_CHECK_MIN = 5             # มีใบรอย้าย = เช็คทุก 5 นาทีว่าแอดมินสร้างแท็บใหม่หรือยัง (แม้ไม่มีข้อความใหม่)
+KV_ALERT = "leadsheet_alert"       # {"sent": {คีย์: iso}, "failing": str, "lastSend": {...}} — กันแจ้งเตือนซ้ำ
+ALERT_TO = ("Wattanakit", "วัฒนกิจ")  # ผู้รับแจ้งเตือนทาง LINE ส่วนตัว · เปลี่ยนได้ด้วย manage.py leadsheet --alert-to
+ALERT_REPEAT_MIN = 60              # ปัญหาเดิมยังไม่หาย = เตือนซ้ำทุก 1 ชม. (cron ลองใหม่ทุกนาที แต่ไม่ต้องเตือนทุกนาที)
+FALLBACK_REMIND_MIN = 360          # ยังไม่มีแท็บเดือนใหม่ = เตือนซ้ำทุก 6 ชม.
+# ★ 14 ต.ค.69 เจ้าของแจ้ง *"เคสที่เจอบ่อยคือ column เปลี่ยนชื่อหรือขยับแล้วบันทึกไม่ได้ · ถ้าทำให้ refresh เองแล้วบันทึกได้
+#   ก็ดี แต่แจ้งฉันด้วย"* — ระบบอ่านหัวตารางใหม่ทุกรอบอยู่แล้ว (ขยับ = ตามได้เอง) แต่หัวคอลัมน์ถูกเปลี่ยนชื่อ = ช่องนั้น
+#   ถูกข้ามเงียบๆ → จำตำแหน่งคอลัมน์ล่าสุดที่ใช้ได้ไว้ เปลี่ยนชื่อในที่เดิมได้ใช้คอลัมน์เดิมต่อ + แจ้งทุกกรณี
+KV_COLS = "leadsheet_cols"         # {แท็บ: {ช่อง: {"i": ลำดับคอลัมน์, "h": หัวคอลัมน์}}} ตำแหน่งที่ใช้ได้ล่าสุด
+
 
 # ════════════════════════════════════════════════════════════════════
 # ค่าตั้ง / KV
@@ -74,15 +88,21 @@ def _set_kv(key, val):
 
 
 def get_config() -> dict:
-    c = {"enabled": False, "ban": True}
+    """enabled/ban/alert = สวิตช์ · alert_to = ชื่อเล่น (หรือชื่อ LINE) ผู้รับแจ้งเตือน · ว่าง = ALERT_TO"""
+    c = {"enabled": False, "ban": True, "alert": True, "alert_to": ""}
     d = _kv(KV_CONFIG)
-    c.update({k: bool(d[k]) for k in ("enabled", "ban") if k in d})
+    c.update({k: bool(d[k]) for k in ("enabled", "ban", "alert") if k in d})
+    if isinstance(d.get("alert_to"), str):
+        c["alert_to"] = d["alert_to"].strip()[:80]
     return c
 
 
 def set_config(**kw) -> dict:
     c = get_config()
-    c.update({k: bool(v) for k, v in kw.items() if v is not None})
+    for k, v in kw.items():
+        if v is None:
+            continue
+        c[k] = str(v).strip()[:80] if k == "alert_to" else bool(v)
     _set_kv(KV_CONFIG, c)
     return get_config()
 
@@ -176,10 +196,92 @@ _RUN = re.compile(r"-(\d{3,6})(?:/(\d{1,2}))?$")
 _CODE_MONTH = re.compile(r"^[A-Z]*?(\d{1,2})-")
 
 
+def _write_fields() -> tuple:
+    """ช่องที่ระบบนี้เขียนลงชีต (ใบจ่ายลีด + รายงานผล)"""
+    from dashboard.services.google_sheets import LEADS_COL as L
+    return (L.received_date, L.phone, L.time, L.lead_code, L.sales_rep, L.live_team, L.admin, L.channel, L.branch,
+            L.type, L.ads, L.car_inquiry, L.car_formula, L.customer_profile, L.update_count, L.last_updated_at,
+            L.contact_datetime, L.call_proof)
+
+
+def _col_label(f) -> str:
+    """ชื่อหัวคอลัมน์มาตรฐานของช่อง (ชื่อแรกในรายการที่ระบบรู้จัก) — ไว้เขียนในแจ้งเตือน"""
+    from dashboard.services.google_sheets import _LEAD_FIELD_ALIASES
+    for idx, names in _LEAD_FIELD_ALIASES:
+        if idx == f:
+            return names[0]
+    return str(f)
+
+
+def _heal_columns(t, learn: bool):
+    """เทียบการจับคู่คอลัมน์รอบนี้กับตำแหน่งที่ใช้ได้ล่าสุดของแท็บนี้ (KV_COLS)
+
+    · คอลัมน์ขยับ (ชื่อเดิม ตำแหน่งใหม่) — จับคู่ด้วยชื่อตามได้เองอยู่แล้ว → แจ้งให้รู้ (รวมเป็นข้อความเดียวต่อแท็บ)
+    · หัวคอลัมน์ถูกเปลี่ยนชื่อ "ในที่เดิม" → ใช้คอลัมน์เดิมต่อ + แจ้ง ถ้าเข้าเงื่อนไขทุกข้อ:
+        ตำแหน่งเดิมมีหัวคอลัมน์ · หัวนั้นไม่ใช่ของช่องอื่นที่ระบบรู้จัก · คอลัมน์ข้างๆ (ที่รู้จัก) ยังอยู่ที่เดิม
+      (ข้อหลังกันกรณี "ลบคอลัมน์" แล้วทุกอย่างเลื่อน — ถ้าเดาตำแหน่งตอนนั้นจะเขียนลงช่องผิด → ไม่เดา แจ้งว่าหาไม่เจอแทน)
+    · learn = รอบเขียนจริง → จำตำแหน่งที่ใช้ได้ล่าสุดไว้ (preview/จำลองไม่จำ)
+    """
+    st = _kv(KV_COLS)
+    known = st.get(t.title) or {}
+    hdr = [str(h).strip() for h in t.header]
+    claimed = set(t.cm.values())
+    moved = []
+    for f in _write_fields():
+        k = known.get(str(f)) or {}
+        cur = t.cm.get(f)
+        if cur is not None:
+            if k and k.get("i") is not None and k["i"] != cur:
+                moved.append("%s %s→%s" % (_col_label(f), _col(k["i"]), _col(cur)))
+            continue
+        i = k.get("i")
+        if i is None or i >= len(hdr) or not hdr[i] or i in claimed:
+            continue
+        neigh = [nf for nf, v in known.items() if v.get("i") in (i - 1, i + 1)]
+        if not neigh or any(t.cm.get(int(nf)) != known[nf]["i"] for nf in neigh):
+            continue
+        t.cm[f] = i
+        claimed.add(i)
+        t.notes.append(("colheal:%s:%s:%s" % (t.title, f, hdr[i]),
+                        'แท็บ "%s": หัวคอลัมน์ "%s" (คอลัมน์ %s) ถูกเปลี่ยนชื่อเป็น "%s" — ระบบบันทึกลงคอลัมน์เดิมต่อให้แล้ว '
+                        '· ถ้าไม่ใช่ช่องเดียวกัน แก้หัวคอลัมน์กลับเป็น "%s"' % (t.title, k.get("h") or _col_label(f),
+                                                                          _col(i), hdr[i], _col_label(f)), 0))
+    if moved:
+        sig = ",".join(sorted(moved))
+        t.notes.append(("colmove:%s:%s" % (t.title, sig),
+                        'แท็บ "%s": คอลัมน์ขยับ (%s) — ระบบปรับตามให้แล้ว บันทึกได้ปกติ' % (t.title, " · ".join(moved[:8])
+                                                                                     + (" ฯลฯ" if len(moved) > 8 else "")),
+                        0))
+    if learn and t.cm.get(t.L.lead_code) is not None:
+        new = {str(f): {"i": t.cm[f], "h": hdr[t.cm[f]] if t.cm[f] < len(hdr) else ""}
+               for f in _write_fields() if t.cm.get(f) is not None}
+        if new != known:
+            st[t.title] = new
+            keep = [k for k in st if k != t.title][-5:] + [t.title]      # จำแค่ ~6 แท็บล่าสุด
+            _set_kv(KV_COLS, {k: st[k] for k in keep})
+
+
+def _column_items(ctx) -> list:
+    """รายการแจ้งเตือนเรื่องคอลัมน์ของรอบนี้ (ซ่อม/ขยับ/หาไม่เจอ)"""
+    out = list(ctx.col_notes)
+    for t in list(ctx.tabs.values()):
+        if t is None:
+            continue
+        out += t.notes
+        if t.missing:
+            names = sorted(_col_label(f) for f in t.missing)
+            hdr = [str(h).strip() for h in t.header if str(h).strip()]
+            out.append(("colmiss:%s:%s" % (t.title, ",".join(names)),
+                        'แท็บ "%s": หาหัวคอลัมน์ %s ไม่เจอ — ช่องนี้ไม่ได้บันทึก (ส่วนอื่นของแถวบันทึกแล้ว) · '
+                        "แก้ชื่อหัวคอลัมน์ให้ตรงของเดิม · หัวตารางตอนนี้: %s"
+                        % (t.title, ", ".join('"%s"' % n for n in names), " | ".join(hdr[:14])), ALERT_REPEAT_MIN))
+    return out
+
+
 class LeadTab:
     """แท็บรายเดือน 1 แท็บ + ดัชนี Code → แถว · อ่านครั้งเดียวต่อรอบแล้วแก้ในหน่วยความจำตามที่เขียนไป"""
 
-    def __init__(self, api, title):
+    def __init__(self, api, title, learn: bool = False):
         from dashboard.services.google_sheets import LEADS_COL, _resolve_lead_colmap
         self.api, self.title = api, title
         vals = api.get("%s!A1:AH%d" % (_q(title), MAX_ROW))
@@ -187,8 +289,13 @@ class LeadTab:
         self.rows = vals[1:] if len(vals) > 1 else []            # แถวชีต = index + 2
         self.cm = _resolve_lead_colmap(self.header, self.rows[:20]) if self.header else {}
         self.L = LEADS_COL
+        self.notes, self.missing = [], set()                     # แจ้งเตือนเรื่องคอลัมน์ · ช่องที่เขียนไม่ได้
+        if self.header:
+            _heal_columns(self, learn)                           # หัวคอลัมน์ถูกเปลี่ยนชื่อในที่เดิม = ใช้คอลัมน์เดิมต่อ
         if self.cm.get(LEADS_COL.lead_code) is None:
-            raise SheetError("แท็บ %s ไม่มีหัวคอลัมน์ Code" % title)
+            e = SheetError("แท็บ %s ไม่มีหัวคอลัมน์ Code" % title)
+            e.header = list(self.header)
+            raise e
         self.last = 1
         for i, r in enumerate(self.rows):
             if any(str(v).strip() for v in r[:_ROW_COLS]):
@@ -230,6 +337,8 @@ class LeadTab:
             i = self.cm.get(f)
             if i is not None:
                 out["%s!%s%d" % (_q(self.title), _col(i), n)] = v
+            elif str(v).strip():
+                self.missing.add(f)                              # หาคอลัมน์ไม่เจอ = ช่องนี้ไม่ได้บันทึก → แจ้งเจ้าของ
         return out
 
     def remember(self, n: int, values: dict):
@@ -666,6 +775,8 @@ class Ctx:
         self._lead, self._ban, self.write = lead_api, ban_api, write
         self.tabs, self.titles, self.ban_tab, self._ban_props = {}, None, None, None
         self.redirect = redirect          # จำลอง: ทุกแท็บเดือน → แท็บทดสอบแท็บเดียว (ไม่แตะแท็บจริง)
+        self.notready = set()             # แท็บที่มีชื่อแล้วแต่ยังไม่มีหัวตาราง (แอดมินเพิ่งสร้างเปล่าๆ)
+        self.col_notes = []               # แท็บที่หาคอลัมน์ Code ไม่เจอ (หัวตารางมี แต่ชื่อเปลี่ยน/ลบ)
 
     def lead_api(self):
         if self._lead is None:
@@ -688,8 +799,37 @@ class Ctx:
         if title not in self.titles:
             return None
         if title not in self.tabs:
-            self.tabs[title] = LeadTab(self.lead_api(), title)
+            try:
+                self.tabs[title] = LeadTab(self.lead_api(), title, learn=self.write and not self.redirect)
+            except SheetError as e:
+                # แอดมินสร้างแท็บเดือนใหม่ไว้เปล่าๆ (ยังไม่วางหัวตาราง) = ยังใช้ไม่ได้ เหมือนยังไม่มีแท็บ
+                #   ถ้าโยนต่อ คิวทั้งหมด (รวมรายงานผลของเคสเดือนก่อน) จะค้างจนกว่าจะมีหัวตาราง
+                if "ไม่มีหัวคอลัมน์ Code" not in str(e):
+                    raise
+                self.tabs[title] = None
+                self.notready.add(title)
+                hdr = [str(h).strip() for h in (getattr(e, "header", None) or []) if str(h).strip()]
+                if hdr:                                          # มีหัวตาราง แต่หาคอลัมน์ Code ไม่เจอ = มีคนแก้หัวตาราง
+                    self.col_notes.append(("colcode:" + title, 'แท็บ "%s": หาหัวคอลัมน์ "Code" ไม่เจอ — ระบบใช้แท็บนี้ไม่ได้ '
+                                           "(ใบใหม่ลงแท็บเดือนก่อนไปก่อน · รายงานผลของเคสในแท็บนี้ลงไม่ได้) · แก้หัวคอลัมน์ "
+                                           'กลับเป็น "Code" · หัวตารางตอนนี้: %s' % (title, " | ".join(hdr[:12])),
+                                           ALERT_REPEAT_MIN))
         return self.tabs[title]
+
+    def month_tab(self, at) -> tuple:
+        """แท็บที่จะลงใบของวันที่ `at` → (LeadTab, ชื่อแท็บที่ควรเป็น ถ้าต้องลงแท็บเดิมแทน · ไม่งั้น "")
+
+        ปกติ = แท็บของเดือนนั้น ("พฤศจิกายน 69") · ยังไม่มี/ยังเปล่า = แท็บเดือนล่าสุดที่มี (ย้อนได้ FALLBACK_MONTHS)
+        """
+        want = tab_name(at)
+        t = self.tab(want)
+        if t is not None or self.redirect:
+            return t, ""
+        for k in range(1, FALLBACK_MONTHS + 1):
+            t = self.tab(tab_name(_prev(at, k)))
+            if t is not None:
+                return t, want
+        return None, want
 
     @staticmethod
     def _room(api, props: dict, title: str, n: int):
@@ -725,9 +865,10 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
     why = row.pop("_why", {})
     code = row[L.lead_code]
     at = timezone.localtime(g.sent_at or timezone.now()).date()
-    target = ctx.tab(tab_name(at))
+    # ขึ้นเดือนใหม่ = แท็บเดือนใหม่ · ยังไม่มีแท็บใหม่ = ลงแท็บเดิมไปก่อน แล้ว `settle_fallback` ย้ายให้เมื่อแท็บใหม่มา
+    target, fallback = ctx.month_tab(at)
     if target is None:
-        raise SheetError("ยังไม่มีแท็บ %s ในชีตจ่ายเบอร์ (แอดมินต้องสร้างก่อน)" % tab_name(at))
+        raise SheetError("ยังไม่มีแท็บ %s และไม่มีแท็บเดือนก่อนหน้าให้ลงแทน (แอดมินต้องสร้างแท็บ)" % tab_name(at))
     # มีเลขนี้อยู่แล้ว (แท็บเดือนนี้ / เดือนก่อน / เดือนตามเลข) = ลีดเดิม → ไม่เพิ่มแถว
     seen, hits = set(), []
     cm = _CODE_MONTH.match(code)
@@ -777,6 +918,8 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
         raise SheetError("แท็บ %s เกิน %d แถว" % (target.title, MAX_ROW))
     res = {"action": "add", "code": code, "tab": target.title, "sheetRow": n, "seller": row.get(L.sales_rep, ""),
            "sellerFrom": why.get("seller", "")}
+    if fallback:
+        res["fallback"] = fallback                              # แท็บที่ควรลง (ยังไม่มี) → process_pending จดไว้รอย้าย
     if hits:
         res["conflict"] = "เลข %s มีอยู่แล้ว (แถว %s) แต่เบอร์/ไลน์คนละคน — เพิ่มเป็นแถวใหม่" % (
             code, ", ".join("%s!%d" % (t.title, nn) for t, nn, _ in hits))
@@ -797,7 +940,9 @@ def handle_report(g, p: dict, ctx: Ctx) -> dict:
     prof = LineProfile.objects.filter(user_id=g.sender_id or "").select_related("employee").first()
     nick = (prof.employee.nickname if prof and prof.employee_id and prof.employee.active else "") if prof else ""
     if not nick:
-        return {"action": "skip", "why": "คนรายงานไม่อยู่ในทะเบียนพนักงาน"}
+        # ข้อความหน้าตาเป็นรายงานผล แต่ไม่รู้ว่าใครส่ง = ลงชีตไม่ได้ → แจ้งเจ้าของ (เดิมข้ามเงียบ)
+        return {"action": "report-noemp", "reporter": g.sender_name or "ไม่ทราบชื่อ",
+                "label": p["code"] or p["run"], "why": "คนรายงานไม่อยู่ในทะเบียนพนักงาน"}
     at = timezone.localtime(g.sent_at or timezone.now())
     label = p["code"] or ("%s%s" % (p["run"], "/%d" % p["slash"] if p["slash"] else ""))
     for k in range(3):                                           # แท็บเดือนนี้ก่อน (เคสค้างถูกก๊อปมาเดือนใหม่)
@@ -987,7 +1132,8 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
             return {"skipped": "อีกตัวกำลังทำอยู่"}
         last_id = _cursor()
         msgs = list(_qs(last_id)[:limit])
-        if not msgs:
+        settle_due = _fallback_due()
+        if not msgs and not settle_due:
             return {"pending": 0}
         ctx = ctx or Ctx()
         try:
@@ -997,10 +1143,22 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
             _set_kv(KV_LAST, {"at": timezone.localtime().isoformat(timespec="seconds"), "error": err,
                               "processed": 0, "lastId": last_id})
             _log(False, error=err)
+            alert([], failing=err)
             return {"error": err}
+        items = []                                               # [(คีย์กันซ้ำ, ข้อความ, เตือนซ้ำทุกกี่นาที · 0 = ครั้งเดียว)]
+        if settle_due:
+            try:
+                items += settle_fallback(ctx)
+            except (SheetError, requests.RequestException) as e:
+                items.append(("move-fail", "ย้ายใบจากแท็บเดิมไปแท็บเดือนใหม่ไม่สำเร็จ: %s (ลองใหม่ทุก %d นาที)"
+                              % (str(e)[:200], FALLBACK_CHECK_MIN), ALERT_REPEAT_MIN))
+            if not msgs:
+                alert(items)
+                return {"pending": 0}
         res = {"at": timezone.localtime().isoformat(timespec="seconds"), "processed": 0, "added": [],
                "updated": [], "dup": [], "reports": 0, "notOwner": [], "reportMiss": [], "bans": 0,
                "conflicts": [], "unknownSeller": [], "error": ""}
+        fb_new = {}                                              # แท็บที่ควรลง → [ใบที่ลงแท็บเดิมรอบนี้]
         for g in msgs:
             try:
                 r = handle(g, ctx)
@@ -1012,12 +1170,16 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
                 r = {"action": "parse-error", "error": ("%s: %s" % (type(e).__name__, e))[:200]}
                 log.exception("leadsheet: ข้อความ %s", g.id)
             a = r.get("action")
+            items += _alert_items(g, r)
             if a == "add":
                 res["added"].append(r["code"])
                 if r.get("conflict"):
                     res["conflicts"].append(r["conflict"])
                 if "ไม่พบ" in (r.get("sellerFrom") or "") or not r.get("seller"):
                     res["unknownSeller"].append(r["code"])
+                if r.get("fallback"):
+                    _remember_fallback(r["fallback"], r["tab"], r["code"])
+                    fb_new.setdefault((r["fallback"], r["tab"]), []).append(r["code"])
             elif a == "update":
                 res["updated"].append(r["code"])
             elif a == "dup":
@@ -1028,6 +1190,8 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
                 res["notOwner"].append("%s (%s รายงาน · ในชีตเป็นของ %s)" % (r["code"], r["reporter"], r["owner"]))
             elif a == "report-miss":
                 res["reportMiss"].append(r["code"])
+            elif a == "report-noemp":
+                res.setdefault("reportNoEmp", []).append("%s (%s)" % (r["label"], r["reporter"]))
             elif a == "ban":
                 res["bans"] += len(r.get("sellers") or [])
             elif a in ("ban-error", "parse-error"):
@@ -1038,8 +1202,386 @@ def process_pending(limit: int = 150, ctx: Ctx | None = None) -> dict:
         res["lastId"] = last_id
         for k in ("notOwner", "reportMiss", "conflicts", "unknownSeller", "dup"):
             res[k] = res[k][-30:]
+        for (want, tab), codes in fb_new.items():
+            total = sum(1 for x in (_kv(KV_FALLBACK).get("rows") or []) if x.get("want") == want)
+            items.append(("fb:" + want, 'ยังไม่มีแท็บ "%s" (หรือยังไม่มีหัวตาราง) — ลงแท็บ "%s" ไปก่อน %d ใบ (ล่าสุด %s) · '
+                          "สร้างแท็บ %s เมื่อไหร่ ระบบย้ายไปให้เอง" % (want, tab, total, ", ".join(codes[-5:]), want),
+                          FALLBACK_REMIND_MIN))
+        if res["error"]:
+            res["fallbackRows"] = len(_kv(KV_FALLBACK).get("rows") or [])
+        col = _column_items(ctx)
+        if col:
+            res["columns"] = [x[1] for x in col][-10:]
+        items += col
         _set_kv(KV_LAST, res)
+        alert(items, failing=res["error"], pending=(pending_count() if res["error"] else 0))
         return res
+
+
+# ════════════════════════════════════════════════════════════════════
+# ขึ้นเดือนใหม่: ลงแท็บเดิมไปก่อน → ย้ายไปแท็บใหม่เมื่อแอดมินสร้าง
+# ════════════════════════════════════════════════════════════════════
+def _remember_fallback(want: str, tab: str, code: str):
+    st = _kv(KV_FALLBACK)
+    rows = [x for x in (st.get("rows") or []) if not (x.get("want") == want and x.get("code") == code)]
+    rows.append({"want": want, "tab": tab, "code": code, "at": timezone.localtime().isoformat(timespec="seconds")})
+    _set_kv(KV_FALLBACK, dict(st, rows=rows[-500:]))
+
+
+def _fallback_due(now=None) -> bool:
+    """มีใบรอย้าย และไม่ได้เช็คมาเกิน FALLBACK_CHECK_MIN นาที"""
+    from django.utils.dateparse import parse_datetime
+    st = _kv(KV_FALLBACK)
+    if not st.get("rows"):
+        return False
+    t = parse_datetime(st.get("checkedAt") or "")
+    return not t or (now or timezone.now()) - t >= timedelta(minutes=FALLBACK_CHECK_MIN)
+
+
+def _in_month(val, want: str) -> bool:
+    d = _parse_dmy(val)
+    return bool(d) and tab_name(d) == want
+
+
+def settle_fallback(ctx: Ctx) -> list:
+    """แท็บเดือนใหม่มาแล้ว → ย้ายใบที่ลงแท็บเดิมไว้ไปต่อท้ายแท็บใหม่ (ทั้งแถว รวมช่องที่คนกรอกเพิ่มแล้ว)
+
+    ย้ายด้วย cutPaste ของ Google (ค่า+รูปแบบไปครบ ไม่ต้องอ่านแล้วเขียนใหม่ = เบอร์ไม่เสีย 0 · วันที่ไม่เพี้ยน)
+    แล้วลบแถวที่ว่างในแท็บเดิม — ทั้งหมดในคำขอเดียว (Google ทำทั้งชุดหรือไม่ทำเลย)
+
+    ไม่แตะแถวที่: เลขนั้นมีในแท็บใหม่แล้ว (แอดมินก๊อปไปเอง) · หาแถวเดิมไม่เจอ · ว/ด/ป ไม่ใช่เดือนของแท็บใหม่
+    → แถวที่ ว/ด/ป เป็นเดือนใหม่แต่อยู่แท็บเดิม แดชบอร์ดไม่นับ (กรองแถวตามเดือนของแท็บ) จึงต้องย้าย
+    คืนรายการแจ้งเตือน [(คีย์, ข้อความ, เตือนซ้ำ)]
+    """
+    from dashboard.services.google_sheets import LEADS_COL as L
+    st = _kv(KV_FALLBACK)
+    rows = st.get("rows") or []
+    if not rows:
+        return []
+    api = ctx.lead_api()
+    props = api.props()
+    keep, notes = [], []
+    wants = []
+    for x in rows:
+        if x.get("want") not in wants:
+            wants.append(x["want"])
+    for want in wants:
+        items = [x for x in rows if x.get("want") == want]
+        new = None
+        if want in props:
+            try:
+                new = LeadTab(api, want)
+            except SheetError:
+                new = None                                       # มีแท็บแล้วแต่ยังไม่มีหัวตาราง
+        if new is None:
+            keep += items
+            continue
+        olds, moves, skipped = {}, [], []
+        for x in items:
+            if new.find(x["code"]):
+                skipped.append("%s (มีในแท็บใหม่แล้ว)" % x["code"])
+                continue
+            ot = olds.get(x["tab"])
+            if ot is None and x["tab"] in props:
+                try:
+                    ot = olds[x["tab"]] = LeadTab(api, x["tab"])
+                except SheetError:
+                    ot = None
+            hits = [n for n, r in (ot.find(x["code"]) if ot else []) if _in_month(ot.val(r, L.received_date), want)]
+            if not hits:
+                skipped.append("%s (หาแถวในแท็บ %s ไม่เจอ)" % (x["code"], x["tab"]))
+                continue
+            moves.append((x["tab"], hits[-1], x["code"]))
+        if moves:
+            dropped = _move_rows(api, props, moves, olds, new, want)
+            _log(True, moved=[m[2] for m in moves], to=want, dropped=dropped)
+            notes.append(("moved:%s:%s" % (want, ",".join(m[2] for m in moves)), 'แท็บ "%s" มาแล้ว — ย้ายใบที่ลงแท็บเดิมไว้ไปให้ %d ใบ: %s%s'
+                          % (want, len(moves), ", ".join(m[2] for m in moves[:10]),
+                             (" · แท็บใหม่จัดคอลัมน์ต่างจากแท็บเดิม ย้ายตามชื่อหัวคอลัมน์ (คอลัมน์ที่แท็บใหม่ไม่มี "
+                              "ค่าไม่ได้ย้าย: %s)" % ", ".join(dropped)) if dropped else ""), 0))
+        if skipped:
+            notes.append(("moveskip:%s:%s" % (want, ",".join(skipped)), 'แท็บ "%s" มาแล้ว — ไม่ได้ย้าย %d ใบ: %s'
+                          % (want, len(skipped), ", ".join(skipped[:10])), 0))
+    _set_kv(KV_FALLBACK, {"rows": keep, "checkedAt": timezone.now().isoformat()})
+    ctx.titles, ctx.tabs = None, {}                              # แถวเลื่อนแล้ว — อ่านใหม่
+    return notes
+
+
+def _hnorm(h) -> str:
+    from dashboard.services.google_sheets import _norm_header
+    return _norm_header(str(h or ""))
+
+
+def _same_layout(old: LeadTab, new: LeadTab) -> bool:
+    """หัวตารางแท็บเดิมตรงกับแท็บใหม่ทุกคอลัมน์ (แท็บใหม่มีคอลัมน์เพิ่มท้ายได้) = ตัดแปะทั้งแถวได้"""
+    ha = [_hnorm(h) for h in old.header]
+    while ha and not ha[-1]:
+        ha.pop()
+    hb = [_hnorm(h) for h in new.header]
+    return bool(ha) and ha == hb[:len(ha)]
+
+
+def _col_map(old: LeadTab, new: LeadTab) -> dict:
+    """ลำดับคอลัมน์แท็บเดิม → แท็บใหม่: ชื่อหัวคอลัมน์ตรงกันก่อน แล้วช่องที่ระบบรู้จัก (ชื่อเรียกต่างกันได้)"""
+    hn = {}
+    for j, h in enumerate(new.header):
+        if _hnorm(h) and _hnorm(h) not in hn:
+            hn[_hnorm(h)] = j
+    out, used = {}, set()
+    for i, h in enumerate(old.header):
+        j = hn.get(_hnorm(h)) if _hnorm(h) else None
+        if j is not None and j not in used:
+            out[i] = j
+            used.add(j)
+    for f, i in old.cm.items():
+        j = new.cm.get(f)
+        if i not in out and j is not None and j not in used:
+            out[i] = j
+            used.add(j)
+    return out
+
+
+def _move_rows(api, props: dict, moves: list, olds: dict, new: LeadTab, want: str) -> list:
+    """ย้ายแถว [(แท็บเดิม, แถว, Code)] ไปต่อท้ายแท็บ `want` แล้วลบแถวเดิม · คืนหัวคอลัมน์ที่แท็บใหม่ไม่มี (ค่าไม่ได้ย้าย)
+
+    หัวตารางตรงกัน = cutPaste + ลบ ในคำขอเดียว (ค่า+รูปแบบไปครบ) ·
+    ★ ไม่ตรงกัน (แท็บใหม่จัดคอลัมน์ใหม่) = ตัดแปะทั้งแถวจะลงผิดช่อง → เขียนค่าตามชื่อหัวคอลัมน์ แล้วค่อยลบแถวเดิม
+    """
+    dest, assign = new.last + 1, {}
+    for m in sorted(moves, key=lambda m: (m[0], m[1])):         # เรียงตามเดิม (เก่าก่อน) → ต่อท้ายตามลำดับ
+        assign[m] = dest
+        dest += 1
+    Ctx._room(api, props, want, dest - 1)
+    if not all(_same_layout(olds[m[0]], new) for m in moves):
+        cells, dropped = {}, set()
+        for m in moves:
+            ot = olds[m[0]]
+            cmap = _col_map(ot, new)
+            row = ot.rows[m[1] - 2] if 0 <= m[1] - 2 < len(ot.rows) else []
+            for i, v in enumerate(row):
+                if not str(v).strip():
+                    continue
+                j = cmap.get(i)
+                if j is None:
+                    dropped.add((str(ot.header[i]).strip() if i < len(ot.header) else "") or _col(i))
+                    continue
+                cells["%s!%s%d" % (_q(want), _col(j), assign[m])] = _t(v) if isinstance(v, str) else v
+        if cells:
+            api.write(cells, "ย้ายใบไป %s (ตามชื่อหัวคอลัมน์)" % want)
+        api.batch([{"deleteDimension": {"range": {"sheetId": props[m[0]]["id"], "dimension": "ROWS",
+                                                  "startIndex": m[1] - 1, "endIndex": m[1]}}}
+                   for m in sorted(moves, key=lambda m: (m[0], -m[1]))], "ลบแถวที่ย้ายแล้วจากแท็บเดิม")
+        return sorted(dropped) or ["(ไม่มี — แค่ลำดับคอลัมน์ต่างกัน)"]
+    reqs = []
+    for m in sorted(moves, key=lambda m: (m[0], -m[1])):        # ลบจากล่างขึ้นบน — แถวข้างบนไม่เลื่อน
+        ncol = max(len(olds[m[0]].header), 1)
+        reqs.append({"cutPaste": {
+            "source": {"sheetId": props[m[0]]["id"], "startRowIndex": m[1] - 1, "endRowIndex": m[1],
+                       "startColumnIndex": 0, "endColumnIndex": ncol},
+            "destination": {"sheetId": props[want]["id"], "rowIndex": assign[m] - 1, "columnIndex": 0},
+            "pasteType": "PASTE_NORMAL"}})
+        reqs.append({"deleteDimension": {"range": {"sheetId": props[m[0]]["id"], "dimension": "ROWS",
+                                                   "startIndex": m[1] - 1, "endIndex": m[1]}}})
+    api.batch(reqs, "ย้ายใบจากแท็บเดิมไป %s" % want)
+    return []
+
+
+MOVE_TEST_TABS = ("ทดสอบย้ายแท็บ ต้นทาง (ลบได้)", "ทดสอบย้ายแท็บ ปลายทาง (ลบได้)")
+
+
+def _del_tabs(props: dict, titles) -> list:
+    """คำขอลบแท็บ — เรียงรหัสแท็บมากไปน้อย (ชุดปลอมในเทสต์ใช้ลำดับแท็บเป็นรหัส · ของจริงไม่สนลำดับ)"""
+    ids = sorted((props[t]["id"] for t in titles if t in props), reverse=True)
+    return [{"deleteSheet": {"sheetId": i}} for i in ids]
+
+
+def move_selftest() -> list:
+    """ลองย้ายแถวข้ามแท็บกับ **Google ของจริง** (manage.py leadsheet --test-month-move)
+
+    สร้างแท็บชั่วคราว 2 แท็บ (หัวตารางก๊อปจากแท็บเดือนนี้) → ลงแถวตัวอย่าง 2 แถวที่ต้นทาง → ย้ายแถวที่ 2 ด้วยโค้ดตัวเดียวกับ
+    ตอนขึ้นเดือนใหม่ (`_move_rows`) → อ่านกลับมาตรวจ → **ลบทั้ง 2 แท็บทิ้งเสมอ** · ไม่แตะแท็บเดือนจริง
+    """
+    from dashboard.services.google_sheets import LEADS_COL as L
+    api = Ctx().lead_api()
+    src, dst = MOVE_TEST_TABS
+    out, ok_all = [], True
+
+    def check(name, cond, extra=""):
+        nonlocal ok_all
+        ok_all = ok_all and bool(cond)
+        out.append("%s %s%s" % ("ผ่าน" if cond else "ไม่ผ่าน", name, ("" if cond else " — %s" % extra)))
+
+    props = api.props()
+    old = _del_tabs(props, MOVE_TEST_TABS)
+    if old:
+        api.batch(old, "ลบแท็บทดสอบย้ายที่ค้าง")
+        props = api.props()
+    month = tab_name(timezone.localdate())
+    if month not in props:
+        raise SheetError("ไม่มีแท็บ %s ให้ก๊อปหัวตาราง" % month)
+    hdr = (api.get("%s!A1:AH1" % _q(month)) or [[]])[0]
+    api.batch([{"addSheet": {"properties": {"title": src, "gridProperties": {
+                   "rowCount": 20, "columnCount": max(40, len(hdr) + 5)}}}},
+               {"addSheet": {"properties": {"title": dst, "gridProperties": {      # ปลายทางมีแถวเดียว = ต้องขยายเอง
+                   "rowCount": 1, "columnCount": max(40, len(hdr) + 5)}}}}], "สร้างแท็บทดสอบย้าย")
+    try:
+        for t in MOVE_TEST_TABS:
+            api.write({"%s!%s1" % (_q(t), _col(i)): h for i, h in enumerate(hdr) if str(h).strip()},
+                      "หัวตารางแท็บทดสอบย้าย")
+        st = LeadTab(api, src)
+        api.write(st.cells(2, {L.received_date: "31/10/2026", L.phone: _t("0811111111"), L.time: "'08:00",
+                               L.lead_code: "TEST-KEEP-1", L.sales_rep: "ทดสอบ"}), "แถวตัวอย่าง (ต้องอยู่ที่เดิม)")
+        api.write(st.cells(3, {L.received_date: "1/11/2026", L.phone: _t("0812345678"), L.time: "'09:05",
+                               L.lead_code: "TEST-MOVE-1", L.sales_rep: "ทดสอบ", L.update_count: "2"}),
+                  "แถวตัวอย่าง (ต้องถูกย้าย)")
+        props = api.props()
+        st, dt = LeadTab(api, src), LeadTab(api, dst)
+        n = [k for k, _ in st.find("TEST-MOVE-1")]
+        check("ลงแถวตัวอย่างที่แท็บต้นทาง", n == [3], n)
+        _move_rows(api, props, [(src, 3, "TEST-MOVE-1")], {src: st}, dt, dst)
+        st, dt = LeadTab(api, src), LeadTab(api, dst)
+        moved = dt.find("TEST-MOVE-1")
+        check("ย้ายไปแท็บปลายทางแถว 2 (ขยายตารางให้เอง)", [k for k, _ in moved] == [2], [k for k, _ in moved])
+        r = moved[0][1] if moved else []
+        check("เบอร์ไม่เสียเลข 0", dt.val(r, L.phone) == "0812345678", dt.val(r, L.phone))
+        check("วันที่ไม่เพี้ยน (1 พ.ย. 2026)", _parse_dmy(dt.val(r, L.received_date)) == date(2026, 11, 1),
+              dt.val(r, L.received_date))
+        check("เวลา + ช่องอื่นไปครบ", (dt.val(r, L.time), dt.val(r, L.update_count)) == ("09:05", "2"),
+              (dt.val(r, L.time), dt.val(r, L.update_count)))
+        check("แถวที่ย้ายหายจากต้นทาง (ไม่เหลือแถวว่าง)", not st.find("TEST-MOVE-1") and st.last == 2, st.last)
+        check("แถวอื่นในต้นทางอยู่ที่เดิม", [k for k, _ in st.find("TEST-KEEP-1")] == [2])
+    finally:
+        props = api.props()
+        if _del_tabs(props, MOVE_TEST_TABS):
+            api.batch(_del_tabs(props, MOVE_TEST_TABS), "ลบแท็บทดสอบย้าย")
+        out.append("ลบแท็บทดสอบทั้ง 2 แท็บแล้ว")
+    out.insert(0, "ผลรวม: %s" % ("ใช้ได้ — ขึ้นเดือนใหม่ย้ายใบจากแท็บเดิมได้จริง" if ok_all else "มีข้อที่ไม่ผ่าน — ส่งผลนี้ให้ Claude ดู"))
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════
+# แจ้งเตือนทาง LINE ส่วนตัวเจ้าของ — บันทึกชีตไม่ได้ / ข้อความที่ลงชีตไม่ได้ / ลงแท็บเดิม
+# ════════════════════════════════════════════════════════════════════
+def _alert_items(g, r: dict) -> list:
+    """ผลของข้อความ 1 ข้อความ → รายการที่ต้องแจ้ง (คีย์ = เลขข้อความ → แจ้งครั้งเดียว)"""
+    a, k = r.get("action"), "m%s" % g.id
+    if a == "not-owner":
+        return [(k, "รายงานผลไม่ลงชีต: %s — %s รายงาน แต่ในชีตเป็นเคสของ %s (พิมพ์เลขผิด?)"
+                 % (r.get("code"), r.get("reporter"), r.get("owner")), 0)]
+    if a == "report-miss":
+        return [(k, "รายงานผลไม่ลงชีต: หาเลข %s ไม่เจอในแท็บ 3 เดือนล่าสุด (%s รายงาน)"
+                 % (r.get("code"), r.get("reporter")), 0)]
+    if a == "report-noemp":
+        return [(k, "รายงานผลไม่ลงชีต: เลข %s — คนส่ง (%s) ไม่อยู่ในทะเบียนพนักงาน" % (r.get("label"), r.get("reporter")), 0)]
+    if a == "parse-error":
+        return [(k, "อ่านข้อความในห้องจ่ายเบอร์ไม่ได้ ข้ามไป: %s" % r.get("error", ""), 0)]
+    if a == "ban-error":
+        return [(k, "บันทึกรายงานแบนไม่ได้: %s" % r.get("error", ""), 0)]
+    out = []
+    if a == "add" and r.get("conflict"):
+        out.append((k + "c", "ลงแถวใหม่แต่เลขซ้ำ: %s" % r["conflict"], 0))
+    if a == "add" and ("ไม่พบ" in (r.get("sellerFrom") or "") or not r.get("seller")):
+        out.append((k + "s", "ลงชีตแล้วแต่หาเซลล์ในทะเบียนไม่เจอ: %s (ช่องเซลล์ = %s)"
+                    % (r.get("code"), r.get("seller") or "ว่าง"), 0))
+    return out
+
+
+def _alert_uid() -> str:
+    """LINE id ของผู้รับแจ้งเตือน (ใช้ภายใน ไม่พิมพ์ออก) — ชื่อเล่นในทะเบียน → ชื่อที่ตั้งใน LINE"""
+    from django.db.models import Q
+
+    from .models import Employee, LineProfile
+    names = [n for n in [get_config().get("alert_to")] + list(ALERT_TO) if n]
+    for nm in names:
+        e = (Employee.objects.filter(nickname__iexact=nm).first()
+             or Employee.objects.filter(display_name__iexact=nm).first())
+        if e is not None:
+            p = LineProfile.objects.filter(employee=e).exclude(user_id="").order_by("-last_seen").first()
+            if p:
+                return p.user_id
+        ps = list(LineProfile.objects.filter(Q(nickname__iexact=nm) | Q(display_name__iexact=nm), is_employee=True)
+                  .exclude(user_id="").order_by("-last_seen")[:5])
+        if ps and len({p.employee_id or p.user_id for p in ps}) == 1:
+            return ps[0].user_id
+    return ""
+
+
+def alert_target() -> str:
+    """ชื่อผู้รับที่ใช้อยู่ (ไว้โชว์ในสถานะ) — ไม่คืน LINE id"""
+    from .models import LineProfile
+    uid = _alert_uid()
+    if not uid:
+        return ""
+    p = LineProfile.objects.filter(user_id=uid).select_related("employee").first()
+    return (p.employee.nickname if p and p.employee_id else (p.display_name if p else "")) or "พบแล้ว"
+
+
+def _send_alert(text: str) -> tuple:
+    from dashboard.services import line_channels, line_notify
+    uid = _alert_uid()
+    if not uid:
+        return False, "หา LINE ของผู้รับแจ้งเตือน (%s) ในทะเบียนไม่เจอ" % (get_config().get("alert_to") or ALERT_TO[0])
+    tok = line_channels.dm_token()
+    if not tok:
+        return False, "ยังไม่ได้ตั้ง token ของบอทส่งข้อความ"
+    st, body = line_notify.push_line_message(uid, [{"type": "text", "text": text[:4900]}], tok,
+                                             what="แจ้งเตือนลงชีตจ่ายเบอร์")
+    return st == 200, ("" if st == 200 else "LINE %s: %s" % (st, str(body)[:200]))
+
+
+def alert(items: list, failing: str = "", pending: int = 0, force: bool = False) -> dict:
+    """ส่ง LINE ส่วนตัวเจ้าของ **รวมเป็นข้อความเดียวต่อรอบ** · กันซ้ำด้วยคีย์ใน KV_ALERT
+
+    failing = บันทึกชีตไม่ได้ (เตือนซ้ำทุก ALERT_REPEAT_MIN) · หายแล้ว = แจ้ง "กลับมาบันทึกได้แล้ว" ครั้งเดียว
+    items = [(คีย์, ข้อความ, เตือนซ้ำทุกกี่นาที)] · 0 = ครั้งเดียวต่อคีย์
+    """
+    from django.utils.dateparse import parse_datetime
+    if not get_config().get("alert", True) and not force:
+        return {}
+    st = _kv(KV_ALERT)
+    sent = dict(st.get("sent") or {})
+    now = timezone.now()
+
+    def due(key, every):
+        t = parse_datetime(sent.get(key) or "")
+        return t is None or (every and now - t >= timedelta(minutes=every))
+
+    lines = []
+    if failing:
+        if due("fail", ALERT_REPEAT_MIN):
+            lines.append("บันทึกชีตไม่ได้: %s%s · ระบบลองใหม่ทุกนาที ข้อความไม่หาย"
+                         % (failing[:200], (" — ค้าง %d ข้อความ" % pending) if pending else ""))
+            sent["fail"] = now.isoformat()
+        st["failing"] = failing[:300]
+    elif st.get("failing"):
+        lines.append("กลับมาบันทึกชีตได้แล้ว (ข้อความที่ค้างลงครบ)")
+        st["failing"] = ""
+        sent.pop("fail", None)
+    for key, text, every in items:
+        if due(key, every):
+            lines.append(text)
+            sent[key] = now.isoformat()
+    keep_after = now - timedelta(days=7)
+    sent = {k: v for k, v in sent.items() if (parse_datetime(v) or now) >= keep_after}
+    st["sent"] = sent
+    out = {}
+    if lines:
+        head = "[ลงชีตจ่ายเบอร์] %s" % timezone.localtime(now).strftime("%d/%m %H:%M")
+        ok, err = _send_alert(head + "\n" + "\n".join("- " + x for x in lines[:20])
+                              + ("\n(และอีก %d เรื่อง)" % (len(lines) - 20) if len(lines) > 20 else ""))
+        out = {"at": timezone.localtime(now).isoformat(timespec="seconds"), "ok": ok, "error": err, "n": len(lines)}
+        st["lastSend"] = out
+        if not ok:
+            log.warning("leadsheet: แจ้งเตือนไม่ถึง — %s", err)
+    _set_kv(KV_ALERT, st)
+    return out
+
+
+def alert_test() -> dict:
+    """ส่งข้อความทดสอบหาผู้รับแจ้งเตือน (manage.py leadsheet --alert-test)"""
+    ok, err = _send_alert("[ลงชีตจ่ายเบอร์] ทดสอบแจ้งเตือน — ถ้าบันทึกชีตไม่ได้หรือมีรายงานผลที่ลงชีตไม่ได้ "
+                          "จะแจ้งมาที่แชทนี้")
+    return {"ok": ok, "error": err, "to": alert_target()}
 
 
 def _log(ok: bool, **kw):
@@ -1166,8 +1708,11 @@ def repair_dates(tabs: list | None = None, apply: bool = False, ctx: Ctx | None 
 
 def status() -> dict:
     st, last = _kv(KV_STATE), _kv(KV_LAST)
+    al = _kv(KV_ALERT)
     return {"config": get_config(), "cursor": st.get("last_id"), "cursorAt": st.get("at"),
-            "rooms": len(_rooms()), "pending": pending_count(), "last": last}
+            "rooms": len(_rooms()), "pending": pending_count(), "last": last,
+            "fallback": _kv(KV_FALLBACK).get("rows") or [], "alertTo": alert_target(),
+            "alertLast": al.get("lastSend") or {}, "failing": al.get("failing") or ""}
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1324,6 +1869,9 @@ def simulate(seller: str, admin: str, other: str = "", channel: str = "Live tikt
         if v:
             out.append("    %-28s %s" % (re.sub(r"\s+", " ", str(h)).strip()[:28], v))
     after = fresh.val(row, L.received_date)
+    # เทียบเป็น "วันที่" ไม่ใช่ตัวอักษร — เราเขียน 13/10/2026 แต่แท็บเดือนจริงตั้งรูปแบบคอลัมน์โชว์ 13/10/26
+    #   (เทียบตัวอักษรเคยขึ้น "ถูกทับ ✗" หลอกตอนลองบน prod 13 ต.ค.69 ทั้งที่เป็นวันเดียวกัน)
+    same = _parse_dmy(after) is not None and _parse_dmy(after) == _parse_dmy(a_before)
     out.append("ว/ด/ป ก่อนรายงาน = %s · หลังรายงาน = %s → %s" % (
-        a_before, after, "ไม่ถูกทับ ✓" if after == a_before else "ถูกทับ ✗"))
+        a_before, after, "ไม่ถูกทับ ✓ (วันเดียวกัน)" if same else "ถูกทับ ✗"))
     return out
