@@ -192,6 +192,8 @@ def dashboard(request):
         # ปุ่ม "แดชบอร์ดขาย" โชว์เฉพาะแอดมินขาย (มาจาก /track/ ตรง) — คนงาน (position=worker) ซ่อน (อยู่ /dashboard/ แล้ว)
         "show_sales_link": (request.session.get("oxlet_user") or {}).get("position") == "admin",
         "add_form": CarForm(), "can_add": roles.can_add_car(request.user),
+        # คอลัมน์ Active ในตาราง — สวิตช์กดได้เฉพาะผู้บริหาร/แอดมิน (คนอื่นเห็นสถานะอย่างเดียว)
+        "can_web": roles.can_set_web_active(request.user),
         # build public photo URL ตรงจาก Supabase (ไม่พึ่ง storage backend บน prod เหมือน cars_api)
         "supabaseUrl": (getattr(settings, "SUPABASE_URL", "") or "").rstrip("/"),
         "storageBucket": getattr(settings, "SUPABASE_STORAGE_BUCKET", "") or "car-photos",
@@ -367,6 +369,7 @@ def car_json(request, code):
         "price": _price_show(car),
         "owner": (car.extra or {}).get("owner") or {},
         "detail": (car.extra or {}).get("detail") or {},
+        "web": _web_json(request.user, car),   # ปุ่ม Active / สถานะบนเว็บโชว์รูม Oxlet
     }, json_dumps_params={"ensure_ascii": False})
 
 
@@ -1297,6 +1300,74 @@ def api_seller_set_stage(request):
         notify_stage_change(car, worker_name=actor)
     return JsonResponse({"ok": True, "stageName": car.stage_name, "stageIcon": car.stage_icon,
                          "flag": car.flag, "days": car.days_in_stage})
+
+
+def _web_json(user, car):
+    """ส่วน "เว็บโชว์รูม Oxlet" ของป๊อปอัปรถ — สถานะ Active + ขึ้นเว็บจริงไหม + ลิงก์"""
+    from . import showroom_sync
+    st = car.web_state
+    return {
+        "active": car.web_active, "can": roles.can_set_web_active(user),
+        "state": st["key"] if st else "", "text": st["text"] if st else "",
+        "short": st["short"] if st else "", "color": st["color"] if st else "",
+        "sold": car.status == "sold",
+        "listed": car.web_listed and car.status != "sold",
+        "by": car.web_active_by,
+        "at": timezone.localtime(car.web_active_at).strftime("%d/%m/%y %H:%M") if car.web_active_at else "",
+        "url": showroom_sync.web_url(car) if (car.web_listed and car.status != "sold") else "",
+        "configured": showroom_sync.is_configured(),
+        "stageOk": car.stage in C.WEB_STAGES,
+    }
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def api_web_active(request):
+    """ปุ่ม Active — ให้รถขึ้น/ลงเว็บโชว์รูม Oxlet · POST JSON {code, active}
+    ★ 13 ต.ค.69 เจ้าของสั่ง: ผู้บริหาร + แอดมินเท่านั้น · ขึ้นเว็บจริงเมื่อถึงสเตปพร้อมขาย/จอง
+    บันทึกสถานะก่อน แล้วส่งไปเว็บทันทีและรอผล → บอกผู้ใช้ตรงๆ ว่าขึ้นเว็บแล้ว/รอ/ส่งไม่สำเร็จ
+    (ส่งไม่สำเร็จ = Active ยังติดอยู่ กดส่งอีกครั้งได้ · รอบเปลี่ยนสถานะถัดไปก็ส่งให้เองอีก)
+    csrf_exempt — บอร์ดถูกฝัง iframe ในหน้าแดชบอร์ดที่ไม่มี CSRF token (แบบเดียวกับ set_priority)"""
+    if not roles.can_set_web_active(request.user):
+        return JsonResponse({"ok": False, "error": "เฉพาะผู้บริหาร/แอดมินที่กด Active ได้"}, status=403)
+    try:
+        data = json.loads(request.body or "{}")
+    except ValueError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    car = get_object_or_404(Car, code=str(data.get("code") or ""), deleted_at__isnull=True)
+    want = data.get("active")
+    if not isinstance(want, bool):
+        return JsonResponse({"ok": False, "error": "ต้องส่ง active เป็น true/false"}, status=400)
+    if want and car.status == "sold":
+        return JsonResponse({"ok": False, "error": "รถคันนี้ขายแล้ว ขึ้นเว็บไม่ได้"}, status=400)
+    if want != car.web_active:
+        if want:
+            Car.objects.filter(pk=car.pk).update(
+                web_active=True, web_active_at=timezone.now(), web_active_by=_actor(request.user)[:80])
+        else:
+            Car.objects.filter(pk=car.pk).update(web_active=False)
+        car.refresh_from_db()
+    from . import showroom_sync
+    res = showroom_sync.push_showroom(car, why="กด Active" if want else "ปิด Active")
+    car.refresh_from_db()
+    if res.get("unconfigured"):
+        msg = "บันทึกแล้ว — แต่ระบบยังไม่ได้เชื่อมเว็บโชว์รูม (ตั้ง SHOWROOM_WEBHOOK_URL / STOCK_SYNC_SECRET)"
+    elif not res.get("ok"):
+        msg = "บันทึกแล้ว แต่ส่งไปเว็บไม่สำเร็จ: %s — กดส่งอีกครั้งได้" % res.get("error", "")
+    elif not want:
+        msg = "ซ่อนจากเว็บ Oxlet แล้ว" if res.get("action") == "hidden" else "ปิด Active แล้ว (รถคันนี้ไม่ได้อยู่บนเว็บ)"
+    elif res.get("listed"):
+        price = showroom_sync.sale_price(car)
+        msg = "สร้างประกาศใหม่บนเว็บ Oxlet แล้ว" if res.get("created") else "แสดงบนเว็บ Oxlet แล้ว"
+        msg += (" · ราคา %s บาท" % "{:,}".format(price)) if price else \
+            " — ยังไม่มีราคาขาย ใส่ราคาที่หน้าแก้ไขรถ แล้วระบบส่งไปเว็บให้เอง"
+    else:
+        msg = "Active แล้ว — รถจะขึ้นเว็บเองเมื่อถึงสเตปพร้อมขาย"
+    return JsonResponse({"ok": True, "pushed": bool(res.get("ok")), "message": msg,
+                         "web": _web_json(request.user, car)}, json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt

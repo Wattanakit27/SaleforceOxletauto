@@ -2,6 +2,8 @@
 {% load static %}
 {% block title %}สถานะรถ · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+{# ★ 13 ต.ค.69 หน้าตาใหม่ "เรียบหรู" — เปิดเฉพาะหน้านี้ (หน้าอื่นที่ใช้ base.html เช่นหน้าสแกน QR ไม่โดน) #}
+<script>document.documentElement.classList.add('lux');</script>
 <style>
   .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
   .modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:600px;width:100%;max-height:94vh;overflow:auto}
@@ -14,6 +16,16 @@
   .stage-drop i{width:24px;height:24px}
   .stage-drop:hover{border-color:var(--accent)}
   .clickrow{cursor:pointer} .clickrow:hover{background:#252b4233}
+  /* คอลัมน์ Active — สวิตช์เลื่อน (มุมมนนิดเดียว ไม่ใช่ทรงแคปซูล ตามกติกาหน้าตาของระบบ) */
+  .wsw{position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;vertical-align:middle;flex-shrink:0}
+  .wsw input{position:absolute;opacity:0;width:0;height:0}
+  .wsl{position:absolute;inset:0;background:#cbd5e1;border-radius:7px;transition:background .18s}
+  .wsl:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+  .wsw input:checked+.wsl{background:var(--ok)}
+  .wsw input:checked+.wsl:before{transform:translateX(20px)}
+  .wsw input:disabled+.wsl{opacity:.45;cursor:not-allowed}
+  .wsw input:focus-visible+.wsl{outline:2px solid var(--accent);outline-offset:2px}
+  .wcell{white-space:nowrap} .wlbl{font-size:12px;font-weight:600;margin-top:3px;white-space:nowrap}
   .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;font-size:13px;background:var(--bg3);border:.5px solid var(--line)}
   .chip.on{border-color:var(--accent);color:var(--fg)}
   .kv{padding:8px 2px;border-bottom:.5px solid var(--line)}
@@ -43,10 +55,11 @@
   .bcard{border-left:3px solid var(--line)}
   .bcard.red{border-left-color:var(--red)} .bcard.amber{border-left-color:var(--amber)} .bcard.ok{border-left-color:var(--ok)}
   .bcol .bcard:hover{background:#252b4233}
-  /* มือถือ: ซ่อนคอลัมน์ สาขา + ลูกศร ให้ตารางพอดีจอ ไม่ต้องเลื่อนขวา */
+  /* มือถือ: ซ่อนคอลัมน์ สาขา + ลูกศร ให้ตารางพอดีจอ ไม่ต้องเลื่อนขวา
+     (ลูกศรเป็นคอลัมน์ที่ 8 แล้วตั้งแต่มีคอลัมน์ Active — เดิม nth-child(7) ไปซ่อน Active แทน) */
   @media(max-width:640px){
     #carTable th:nth-child(4),#carTable td:nth-child(4){display:none}
-    #carTable th:nth-child(7),#carTable td:nth-child(7){display:none}
+    #carTable th:nth-child(8),#carTable td:nth-child(8){display:none}
     #carTable th,#carTable td{padding:8px 5px;font-size:13px}
     #carTable .pill{font-size:13px;padding:3px 7px}
   }
@@ -72,6 +85,159 @@
   html.embedded #trkHead,html.embedded .trk-drawer,html.embedded .trk-bd{display:none}
   html.embedded #trkHead{display:none}
   html.embedded .kgrid{margin-top:2px}
+
+  /* ═══════════ หน้าตาใหม่ "เรียบหรู" (13 ต.ค.69 · ตามคลิปตัวอย่างที่เจ้าของส่ง) ═══════════
+     โทนม่วงขาวของบริษัทเหมือนเดิม (เจ้าของสั่ง 19 ก.ย. ห้ามดำขาว) · พื้นโล่ง ขอบบาง เงานุ่ม ปุ่มลื่น
+     ทุกกฎขึ้นต้นด้วย html.lux = มีผลเฉพาะหน้านี้ · ปุ่ม/ป้ายมุมมน ≤8px (กติกาเดิม ห้ามทรงแคปซูล)
+     ตัวอักษรใช้ 3 ขนาดของระบบรถ 17 / 14.5 / 13 (ตัวเลข KPI ใหญ่ได้) */
+  html.lux{--bg:#f6f6fa;--card:#ffffff;--line:#ebebf3;--line2:#e1e0ec;--mut:#6b6f82;--fg:#16162a;
+           --bg2:#f9f9fc;--bg3:#f2f0fc;--accent:#7b61ff;--accent2:#6342f0;--accent-soft:#f1edff;
+           --ring:rgba(123,97,255,.26);--ease:cubic-bezier(.2,.8,.2,1);
+           --sh1:0 1px 2px rgba(22,22,42,.04),0 1px 3px rgba(22,22,42,.03);
+           --sh2:0 10px 24px -10px rgba(22,22,42,.16),0 3px 8px -3px rgba(22,22,42,.06);
+           --sh-pri:0 1px 2px rgba(83,52,220,.28),0 6px 14px -6px rgba(99,66,240,.55)}
+  html.lux[data-theme=dark]{--bg:#0d0e19;--card:#151726;--line:#24273a;--line2:#2f3349;--mut:#8d92a8;--fg:#ececf6;
+           --bg2:#111323;--bg3:#1d1f33;--accent-soft:#221d3f;--ring:rgba(150,128,255,.34);
+           --sh1:0 1px 2px rgba(0,0,0,.35);--sh2:0 12px 28px -12px rgba(0,0,0,.7)}
+  html.lux body{background:var(--bg);-webkit-font-smoothing:antialiased}
+  html.lux .wrap{max-width:1360px;padding:24px 24px 40px}
+  html.lux .top{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:saturate(1.4) blur(12px);
+                -webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
+  html.lux .card{border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh1);padding:20px}
+  html.lux h1{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  html.lux h2{font-size:14.5px;font-weight:700;letter-spacing:-.005em}
+
+  /* ── ปุ่ม: ยกขึ้นนิดตอนชี้ · ยุบลงตอนกด · วงโฟกัสม่วงนุ่ม ── */
+  html.lux .btn{min-height:38px;padding:7px 14px;border-radius:8px;border:1px solid var(--line2);background:var(--card);
+                color:var(--fg);font-weight:600;font-size:14.5px;font-family:inherit;line-height:1.3;box-shadow:var(--sh1);
+                transition:transform .2s var(--ease),box-shadow .2s var(--ease),background-color .2s,border-color .2s,color .2s,filter .2s}
+  html.lux .btn:hover{transform:translateY(-1px);box-shadow:var(--sh2);
+                      border-color:color-mix(in srgb,var(--accent) 38%,var(--line2))}
+  html.lux .btn:active{transform:translateY(0) scale(.97);box-shadow:var(--sh1);transition-duration:.07s}
+  html.lux .btn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+  html.lux .btn.sm{min-height:32px;padding:5px 11px;font-size:13px}
+  html.lux .btn.pri{background:linear-gradient(180deg,var(--accent),var(--accent2));border-color:transparent;color:#fff;
+                    box-shadow:var(--sh-pri),inset 0 1px 0 rgba(255,255,255,.2)}
+  html.lux .btn.pri:hover{filter:brightness(1.07) saturate(1.05);
+                          box-shadow:0 2px 4px rgba(83,52,220,.3),0 12px 24px -10px rgba(99,66,240,.6),inset 0 1px 0 rgba(255,255,255,.22)}
+  html.lux .btn svg{width:16px;height:16px;flex-shrink:0}
+  html.lux .btn[disabled]{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+
+  /* ── ช่องกรอก/ตัวเลือก ── */
+  html.lux :where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea){
+    border:1px solid var(--line2);background:var(--card);color:var(--fg);border-radius:8px;min-height:38px;
+    padding:8px 12px;font-family:inherit;font-size:14.5px;transition:border-color .18s,box-shadow .18s}
+  html.lux :where(input,select,textarea):hover{border-color:color-mix(in srgb,var(--accent) 30%,var(--line2))}
+  html.lux :where(input,select,textarea):focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+  html.lux select{appearance:none;-webkit-appearance:none;padding-right:34px;cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238d92a8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center}
+
+  /* ── ตัวเลือกแบบแถบเลื่อน (segmented) — แผ่นขาวเลื่อนตามตัวที่เลือก ── */
+  .seg{position:relative;display:inline-flex;gap:2px;padding:3px;background:var(--bg3);border:1px solid var(--line);border-radius:9px;flex-shrink:0}
+  .seg-i{position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 14px;border:0;
+         border-radius:7px;background:transparent;color:var(--mut);font-family:inherit;font-size:13px;font-weight:600;line-height:1;cursor:pointer;
+         white-space:nowrap;transition:color .25s var(--ease)}
+  .seg-i:hover{color:var(--fg)} .seg-i.on{color:var(--fg)}
+  .seg-i b{font-weight:700;color:var(--mut);font-variant-numeric:tabular-nums;transition:color .25s}
+  .seg-i.on b{color:var(--accent)}
+  .seg-i:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+  .seg-thumb{position:absolute;z-index:0;top:3px;bottom:3px;left:0;width:0;border-radius:7px;background:var(--card);
+             box-shadow:0 1px 2px rgba(22,22,42,.08),0 3px 8px -3px rgba(22,22,42,.12)}
+  .seg.ready .seg-thumb{transition:transform .34s var(--ease),width .34s var(--ease)}
+
+  /* ── KPI ── */
+  html.lux .kgrid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-bottom:20px}
+  html.lux .k{flex-direction:column;align-items:stretch;gap:0;padding:18px 18px 16px;border:1px solid var(--line);
+              border-radius:16px;box-shadow:var(--sh1);transition:transform .22s var(--ease),box-shadow .22s var(--ease)}
+  html.lux .k:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
+  html.lux .k-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  html.lux .k .lbl{margin:0;font-size:13px;font-weight:600;color:var(--mut)}
+  html.lux .k .ic{width:34px;height:34px;border-radius:9px}
+  html.lux .k .ic svg{width:18px;height:18px}
+  html.lux .k .n{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.05;font-variant-numeric:tabular-nums}
+  html.lux .k .n small{font-size:14.5px;font-weight:500;color:var(--mut);letter-spacing:0}
+  html.lux .k .sub{margin-top:8px;display:flex;align-items:center;gap:7px;font-size:13px}
+  html.lux .k .sub .dot{width:7px;height:7px}
+
+  html.lux .chartgrid{gap:16px;margin-bottom:20px}
+  .chartgrid>*{min-width:0}   /* ให้กราฟหดตามกรอบได้ (เดิม canvas ค้างความกว้างตอนวาดครั้งแรก → หน้าล้นแนวนอน) */
+  html.lux .chead{margin-bottom:14px}
+  html.lux .plegend .pill{background:var(--bg2);border:1px solid var(--line)}
+
+  /* ── หัวการ์ด ── */
+  .chd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .chd h2{margin:0;display:flex;align-items:center;gap:8px}
+  .chd h2 svg{width:17px;height:17px;color:var(--accent);flex-shrink:0}
+  .chd .sub{display:block;margin-top:3px;font-size:13px;color:var(--mut)}
+
+  /* ── บอร์ด ── */
+  html.lux .bcol{width:232px;flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:10px 10px 6px}
+  html.lux .bcol.mine{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
+  html.lux .bc-n{min-width:24px;height:22px;padding:0 7px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;
+                 background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--mut);font-variant-numeric:tabular-nums}
+  html.lux .bcard{background:var(--card);border:1px solid var(--line);border-left-width:3px;border-radius:10px;padding:10px 11px;cursor:pointer;
+                  box-shadow:var(--sh1);transition:transform .2s var(--ease),box-shadow .2s var(--ease)}
+  html.lux .bcol .bcard:hover{background:var(--card);transform:translateY(-2px);box-shadow:var(--sh2)}
+  html.lux .bcard:active{transform:translateY(0) scale(.985)}
+
+  /* ── สเตป pill (สีเติมด้วย JS) / ป้ายวันค้าง ── */
+  html.lux .pill{border-radius:7px;padding:4px 10px;font-size:13px;line-height:1.35}
+  .days{display:inline-flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+  .days .dot{width:7px;height:7px}
+
+  /* ── ตาราง ── */
+  .ftool{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .fsearch{position:relative;display:block;flex:1 1 260px;max-width:360px;margin:0}
+  .fsearch svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--mut);pointer-events:none}
+  html.lux .fsearch input{width:100%;padding-left:36px}
+  html.lux .ftool select{width:auto}
+  .fcount{margin-left:auto;font-size:13px;color:var(--mut);white-space:nowrap}
+  .twrap{border:1px solid var(--line);border-radius:12px;overflow:auto}
+  html.lux #carTable{border-collapse:separate;border-spacing:0;font-size:14.5px}
+  html.lux #carTable thead th{position:sticky;top:0;z-index:1;background:var(--bg2);padding:11px 14px;font-size:13px;font-weight:600;
+                              color:var(--mut);border-bottom:1px solid var(--line);white-space:nowrap}
+  html.lux #carTable td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  html.lux #carTable tbody tr:last-child td{border-bottom:0}
+  html.lux #carTable tbody tr{transition:background-color .18s}
+  html.lux #carTable tbody tr.clickrow:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .cthumb{width:58px;height:42px;border-radius:9px;object-fit:cover;display:block;box-shadow:0 0 0 1px var(--line)}
+  .cthumb.ph{display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--mut)}
+  .tcode{font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+  .tcar{font-weight:600} .tplate{font-size:13px;color:var(--mut);margin-top:2px}
+  .chev{width:18px;height:18px;color:var(--mut);opacity:.35;transition:opacity .2s,transform .2s var(--ease)}
+  #carTable tbody tr.clickrow:hover .chev{opacity:1;transform:translateX(3px);color:var(--accent)}
+  html.lux .wlbl{font-size:13px}
+  html.lux .wsl{transition:background .25s var(--ease)}
+  html.lux .wsl:before{transition:transform .28s var(--ease)}
+  html.lux .wsw:active .wsl:before{width:22px}
+  html.lux .wsw input:checked+.wsl{background:linear-gradient(180deg,#22c55e,#16a34a)}
+
+  /* ── ป๊อปอัป: พื้นหลังเบลอ + เด้งขึ้นนุ่มๆ ── */
+  html.lux .ov{background:rgba(16,16,36,.42);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:luxFade .2s ease}
+  html.lux .modal{border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 30px 70px -24px rgba(16,16,36,.45);
+                  animation:luxPop .28s var(--ease)}
+  @keyframes luxFade{from{opacity:0}to{opacity:1}}
+  @keyframes luxPop{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+  html.lux .stage-drop{border-radius:12px;transition:border-color .2s,background-color .2s}
+  html.lux .stage-drop:hover{background:var(--accent-soft)}
+
+  @media (max-width:640px){
+    html.lux .wrap{padding:14px 12px 30px}
+    html.lux .card{padding:14px}
+    html.lux .kgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    html.lux .k{padding:14px}
+    html.lux .k .n{font-size:24px}
+    .fsearch{max-width:none;flex-basis:100%}
+    html.lux .ftool select{flex:1 1 140px;min-width:0}
+    .fcount{margin-left:0;flex-basis:100%}
+    .cthumb{width:46px;height:34px}
+    html.lux #carTable th,html.lux #carTable td{padding:9px 8px}
+    .seg-i{padding:0 11px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html.lux *,html.lux *::before{animation:none!important;transition:none!important}
+  }
 </style>
 
 <!-- หัว + ปุ่มจัดการ (ซ่อนเมื่อฝังในกรอบ sales/เซลล์ · ดู html.embedded #trkHead) -->
@@ -111,50 +277,64 @@
 {% if can_add %}
 <!-- ★ 22 ก.ย.69 — ปุ่มเพิ่มรถอยู่ "นอกหัวเว็บ" เพราะหัวถูกซ่อนตอนฝังในกรอบ (แดชบอร์ดขาย/หน้าเซลล์)
      จัดซื้อที่เข้าทางนั้นเลยไม่เห็นปุ่มเลย = "เพิ่มรถไม่ได้" · วางบนสุดให้เห็นทันทีไม่ต้องเลื่อนหา -->
-<div class="row" style="justify-content:flex-end;margin-bottom:10px">
+<div class="row" id="addRow" style="justify-content:flex-end;margin-bottom:14px">
   <button class="btn pri" onclick="openAdd()"><i data-lucide="plus"></i> <span data-i18n="addCar">เพิ่มรถ</span></button>
 </div>
+<script>
+  // ฝังในแท็บ "สถานะรถ" ของแดชบอร์ดขาย = แถบปุ่มด้านบน (.trk-tb) มี "เพิ่มรถ" อยู่แล้ว → ซ่อนตัวซ้ำในกรอบ
+  // หน้าเซลล์ (ไม่มีแถบนั้น) ยังเห็นปุ่มนี้ตามเดิม (บทเรียน 22 ก.ย.: จัดซื้อหาปุ่มเพิ่มรถไม่เจอ)
+  try{ if(window.self!==window.top && parent.document.querySelector('.trk-tb')) document.getElementById('addRow').style.display='none'; }catch(e){}
+</script>
 {% endif %}
 <div class="kgrid">
   <div class="k">
-    <div class="ic" style="background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)"><i data-lucide="car-front"></i></div>
-    <div><div class="lbl" data-i18n="totalCars">รถทั้งหมด</div><div class="n">{{ total }}</div><div class="sub" id="kSale" data-i18n="inProgress">กำลังดำเนินการ</div></div>
+    <div class="k-top"><div class="lbl" data-i18n="totalCars">รถทั้งหมด</div>
+      <div class="ic" style="background:var(--accent-soft);color:var(--accent)"><i data-lucide="car-front"></i></div></div>
+    <div class="n">{{ total }}</div>
+    <div class="sub mut"><span class="dot" style="background:var(--accent)"></span><span id="kSale" data-i18n="inProgress">กำลังดำเนินการ</span></div>
   </div>
   <div class="k">
-    <div class="ic" style="background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)"><i data-lucide="alert-triangle"></i></div>
-    <div><div class="lbl" data-i18n="stuckLong">ค้างนาน (&gt;3 วัน ในสเตป)</div><div class="n tag-red">{{ flags.red }}</div><div class="sub" data-i18n="urgent">ต้องเร่งจัดการ</div></div>
+    <div class="k-top"><div class="lbl" data-i18n="stuckLong">ค้างนาน (&gt;3 วัน ในสเตป)</div>
+      <div class="ic" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)"><i data-lucide="alert-triangle"></i></div></div>
+    <div class="n tag-red">{{ flags.red }}</div>
+    <div class="sub mut"><span class="dot red"></span><span data-i18n="urgent">ต้องเร่งจัดการ</span></div>
   </div>
   <div class="k">
-    <div class="ic" style="background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)"><i data-lucide="clock"></i></div>
-    <div><div class="lbl" data-i18n="nearStuck">ใกล้ค้าง (≥2 วัน)</div><div class="n tag-amber">{{ flags.amber }}</div><div class="sub" data-i18n="watch">เฝ้าระวัง</div></div>
+    <div class="k-top"><div class="lbl" data-i18n="nearStuck">ใกล้ค้าง (≥2 วัน)</div>
+      <div class="ic" style="background:color-mix(in srgb,var(--amber) 12%,transparent);color:var(--amber)"><i data-lucide="clock"></i></div></div>
+    <div class="n tag-amber">{{ flags.amber }}</div>
+    <div class="sub mut"><span class="dot amber"></span><span data-i18n="watch">เฝ้าระวัง</span></div>
   </div>
   <div class="k">
-    <div class="ic" style="background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)"><i data-lucide="gauge"></i></div>
-    <div><div class="lbl" data-i18n="avgT2l">T2L เฉลี่ย</div><div class="n">{% if avg_t2l %}{{ avg_t2l }}<span style="font-size:13px;font-weight:500;color:var(--mut)"> วัน</span>{% else %}—{% endif %}</div><div class="sub"><span data-i18n="target">เป้า ≤</span> {{ t2l_target }} <span data-i18n="daysU">วัน</span></div></div>
+    <div class="k-top"><div class="lbl" data-i18n="avgT2l">T2L เฉลี่ย</div>
+      <div class="ic" style="background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)"><i data-lucide="gauge"></i></div></div>
+    <div class="n">{% if avg_t2l %}{{ avg_t2l }}<small> วัน</small>{% else %}—{% endif %}</div>
+    <div class="sub mut"><span class="dot ok"></span><span><span data-i18n="target">เป้า ≤</span> {{ t2l_target }} <span data-i18n="daysU">วัน</span></span></div>
   </div>
 </div>
 
 <!-- บอร์ดสถานะรถ (คัมบัง) — โฟกัสสเตปของตัวเอง · สลับดูทั้งหมดได้ · กดการ์ด = ดู/เปลี่ยนสเตป -->
-<div class="card" style="padding:14px;margin-bottom:14px">
-  <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-    <div><h2 style="margin:0;font-size:14.5px"><i data-lucide="layout-grid" style="width:16px;height:16px;vertical-align:-3px"></i> <span data-i18n="board">บอร์ดสถานะรถ</span></h2><span class="mut sm" data-i18n="tapCard">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
-    {% if has_my %}<div class="row" style="gap:6px">
-      <button id="bmMine" class="btn sm pri" onclick="setBoardMode('mine')" data-i18n="mine">งานของฉัน</button>
-      <button id="bmAll" class="btn sm" onclick="setBoardMode('all')" data-i18n="all">ทั้งหมด</button>
+<div class="card" style="margin-bottom:20px">
+  <div class="chd">
+    <div><h2><i data-lucide="layout-grid"></i> <span data-i18n="board">บอร์ดสถานะรถ</span></h2><span class="sub" data-i18n="tapCard">กดการ์ดเพื่อดู/เปลี่ยนสเตป</span></div>
+    {% if has_my %}<div class="seg" id="bmSeg">
+      <span class="seg-thumb"></span>
+      <button type="button" id="bmMine" class="seg-i on" onclick="setBoardMode('mine')" data-i18n="mine">งานของฉัน</button>
+      <button type="button" id="bmAll" class="seg-i" onclick="setBoardMode('all')" data-i18n="all">ทั้งหมด</button>
     </div>{% endif %}
   </div>
-  <div style="overflow-x:auto;padding-bottom:6px">
-    <div style="display:flex;gap:10px;min-width:max-content;align-items:flex-start">
+  <div style="overflow-x:auto;padding:2px 2px 8px">
+    <div style="display:flex;gap:12px;min-width:max-content;align-items:flex-start">
       {% for col in board_cols %}
-      <div class="bcol" data-mine="{% if col.mine %}1{% else %}0{% endif %}" style="width:212px;flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px{% if col.mine %};outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:-1px{% endif %}">
-        <div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px">
+      <div class="bcol{% if col.mine %} mine{% endif %}" data-mine="{% if col.mine %}1{% else %}0{% endif %}">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px">
           <span class="pill" data-stage="{{ col.key }}" style="font-weight:700"><i data-lucide="{{ col.icon }}" style="width:15px;height:15px"></i> <span class="stg-name">{{ col.name }}</span></span>
-          <span class="mut sm" style="font-weight:700">{{ col.cars|length }}</span>
+          <span class="bc-n">{{ col.cars|length }}</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:7px;max-height:430px;overflow-y:auto">
+        <div style="display:flex;flex-direction:column;gap:8px;max-height:430px;overflow-y:auto;padding:2px 2px 4px">
           {% for c in col.cars %}
-          <div class="bcard" onclick="openCar('{{ c.code }}')" title="{{ c.code }} · {{ c.priority_name }}" style="background:var(--card);border:.5px solid var(--line);border-left:3px solid {{ c.card_color }};border-radius:9px;padding:8px 9px;cursor:pointer">
-            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.card_label }}</b><span class="row" style="gap:4px;align-items:center">{% for f in c.flags %}<i data-lucide="{{ f.icon }}" style="width:16px;height:16px;color:{{ f.color }}" title="{{ f.name }}"></i>{% endfor %}<span class="dot" style="background:{{ c.card_color }}" title="{{ c.priority_name }}"></span></span></div>
+          <div class="bcard" onclick="openCar('{{ c.code }}')" title="{{ c.code }} · {{ c.priority_name }}" style="border-left-color:{{ c.card_color }}">
+            <div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b class="sm">{{ c.card_label }}</b><span class="row" style="gap:4px;align-items:center"><span class="webb" data-code="{{ c.code }}" style="display:contents">{% with ws=c.web_state %}{% if ws %}<i data-lucide="globe" style="width:16px;height:16px;color:{{ ws.color }}" title="{{ ws.text }}"></i>{% endif %}{% endwith %}</span>{% for f in c.flags %}<i data-lucide="{{ f.icon }}" style="width:16px;height:16px;color:{{ f.color }}" title="{{ f.name }}"></i>{% endfor %}<span class="dot" style="background:{{ c.card_color }}" title="{{ c.priority_name }}"></span></span></div>
             <div class="sm" style="color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div>
             {% if c.out_now %}<div class="sm" title="{{ c.out_now.why }} {{ c.out_now.where }}" style="margin:3px 0;padding:2px 7px;border-radius:6px;background:color-mix(in srgb,#f59e0b 18%,transparent);color:#b45309;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚗 ออกนอกลาน · {{ c.out_now.who }}</div>{% endif %}
             <div class="mut sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.branch_name }} · {% if c.need_photo %}<span style="color:#2563eb;font-weight:600" data-i18n="fWait">รอถ่ายรูป</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span>{% else %}<span data-i18n="stuck">ค้าง</span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span>{% endif %}</div>
@@ -185,16 +365,19 @@
 </div>
 
 <!-- ตัวกรอง + ตารางรถ -->
-<div class="card" style="padding:14px">
-  <div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <a class="btn sm{% if cur_view != 'sold' %} pri{% endif %}" href="?view=active{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="inSystem">รถในระบบ</span> {{ active_n }}</a>
-    <a class="btn sm{% if cur_view == 'sold' %} pri{% endif %}" href="?view=sold{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="soldTab">ขายแล้ว</span> {{ sold_n }}</a>
+<div class="card">
+  <div class="chd">
+    <div><h2><i data-lucide="car-front"></i> <span data-i18n="carList">รายการรถ</span></h2><span class="sub"><span data-i18n="tapRow">กดแถวดูรายละเอียด</span></span></div>
+    <div class="seg" id="viewSeg">
+      <span class="seg-thumb"></span>
+      <a class="seg-i{% if cur_view != 'sold' %} on{% endif %}" href="?view=active{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="inSystem">รถในระบบ</span> <b>{{ active_n }}</b></a>
+      <a class="seg-i{% if cur_view == 'sold' %} on{% endif %}" href="?view=sold{% if cur_branch %}&branch={{ cur_branch }}{% endif %}{% if cur_stage %}&stage={{ cur_stage }}{% endif %}&sort={{ cur_sort }}"><span data-i18n="soldTab">ขายแล้ว</span> <b>{{ sold_n }}</b></a>
+    </div>
   </div>
-  <form method="get" class="row" style="gap:8px;margin-bottom:10px">
+  <form method="get" class="ftool">
     <input type="hidden" name="view" value="{{ cur_view }}">
-    <input type="search" name="q" value="{{ cur_q }}" placeholder="ค้นทะเบียน / รหัสรถ / รุ่น" data-i18n-ph="searchPh"
-           style="width:auto;min-width:190px" aria-label="ค้นหา">
-    <button class="btn sm" type="submit"><i data-lucide="search"></i></button>
+    <label class="fsearch"><i data-lucide="search"></i>
+      <input type="search" name="q" value="{{ cur_q }}" placeholder="ค้นทะเบียน / รหัสรถ / รุ่น" data-i18n-ph="searchPh" aria-label="ค้นหา"></label>
     <select name="branch" onchange="this.form.submit()" style="width:auto">
       <option value="" data-i18n="allBranch">ทุกสาขา</option>
       {% for code, name in branch_choices %}<option value="{{ code }}" {% if cur_branch == code %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -213,26 +396,32 @@
       <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %} data-i18n="sortNewest">เข้าใหม่สุด</option>
       <option value="code" {% if cur_sort == 'code' %}selected{% endif %} data-i18n="sortCode">รหัสรถ</option>
     </select>
-    {% if cur_branch or cur_stage or cur_q or cur_flag %}<a class="btn sm" href="?view={{ cur_view }}" data-i18n="clearFilter">ล้างตัวกรอง</a>{% endif %}
-    <span class="mut sm" style="margin-left:auto">{{ cars|length }} · <span data-i18n="tapRow">กดแถวดูรายละเอียด</span></span>
+    {% if cur_branch or cur_stage or cur_q or cur_flag %}<a class="btn sm" href="?view={{ cur_view }}"><i data-lucide="x"></i> <span data-i18n="clearFilter">ล้างตัวกรอง</span></a>{% endif %}
+    <span class="fcount"><b style="color:var(--fg)">{{ cars|length }}</b> <span data-i18n="carsU">คัน</span></span>
   </form>
 
-  <div style="overflow:auto">
+  <div class="twrap">
   <table id="carTable">
-    <thead><tr><th style="width:60px" data-i18n="thPhoto">รูป</th><th data-i18n="thCode">รหัส</th><th data-i18n="thCar">รถ</th><th data-i18n="thBranch">สาขา</th><th data-i18n="thStage">สเตป</th><th data-i18n="thStuck">ค้าง</th><th></th></tr></thead>
+    <thead><tr><th style="width:60px" data-i18n="thPhoto">รูป</th><th data-i18n="thCode">รหัส</th><th data-i18n="thCar">รถ</th><th data-i18n="thBranch">สาขา</th><th data-i18n="thStage">สเตป</th><th data-i18n="thStuck">ค้าง</th><th title="ขึ้นเว็บโชว์รูม Oxlet (ขึ้นจริงเมื่อถึงสเตปพร้อมขาย/จอง)">Active</th><th></th></tr></thead>
     <tbody>
     {% for c in cars %}
       <tr class="clickrow" onclick="openCar('{{ c.code }}')">
-        <td>{% if c.photo %}<img src="{{ c.photo.url }}" loading="lazy" style="width:54px;height:40px;object-fit:cover;border-radius:6px;display:block">{% else %}<div style="width:54px;height:40px;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--mut)"><i data-lucide="car-front" style="width:18px;height:18px"></i></div>{% endif %}</td>
-        <td><b>{{ c.code }}</b></td>
-        <td>{{ c.title }}{% if c.plate %}<div class="sm mut">{{ c.plate }}</div>{% endif %}</td>
+        <td>{% if c.photo %}<img class="cthumb" src="{{ c.photo.url }}" loading="lazy" alt="">{% else %}<div class="cthumb ph"><i data-lucide="car-front" style="width:18px;height:18px"></i></div>{% endif %}</td>
+        <td><span class="tcode">{{ c.code }}</span></td>
+        <td><div class="tcar">{{ c.title }}</div>{% if c.plate %}<div class="tplate">{{ c.plate }}</div>{% endif %}</td>
         <td class="sm mut">{{ c.branch_name }}</td>
         <td><span class="pill" data-stage="{{ c.stage }}"><i data-lucide="{{ c.stage_icon }}"></i> <span class="stg-name">{{ c.stage_name }}</span></span></td>
-        <td><span class="dot {{ c.flag }}"></span> {{ c.days_in_stage }} <span data-i18n="daysU">วัน</span></td>
-        <td class="mut">›</td>
+        <td><span class="days"><span class="dot {{ c.flag }}"></span>{{ c.days_in_stage }} <span data-i18n="daysU">วัน</span></span></td>
+        {% with ws=c.web_state %}
+        <td class="wcell" data-code="{{ c.code }}" {% if can_web %}onclick="event.stopPropagation()"{% endif %} title="{% if ws %}{{ ws.text }}{% elif c.status == 'sold' %}ขายแล้ว — ไม่ขึ้นเว็บ{% else %}ยังไม่ขึ้นเว็บ Oxlet{% endif %}">
+          {% if can_web %}<label class="wsw"><input type="checkbox" aria-label="Active {{ c.card_label }}" {% if c.web_active and c.status != 'sold' %}checked{% endif %} {% if c.status == 'sold' %}disabled{% endif %} onchange="tblWebActive('{{ c.code }}',this)"><span class="wsl"></span></label>{% endif %}
+          <div class="wlbl" style="color:{% if ws %}{{ ws.color }}{% else %}var(--mut){% endif %}">{% if ws %}{{ ws.short }}{% elif not can_web %}—{% endif %}</div>
+        </td>
+        {% endwith %}
+        <td style="width:34px"><i data-lucide="chevron-right" class="chev"></i></td>
       </tr>
     {% empty %}
-      <tr><td colspan="7" class="mut" style="text-align:center;padding:24px">ยังไม่มีรถ{% if can_add %} — กด "เพิ่มรถ" เพื่อเริ่ม{% endif %}</td></tr>
+      <tr><td colspan="8" class="mut" style="text-align:center;padding:24px">ยังไม่มีรถ{% if can_add %} — กด "เพิ่มรถ" เพื่อเริ่ม{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -330,7 +519,7 @@
 
   // ─────────── i18n (TH/EN/MM/KH) — บอร์ด/โมดัลคนงานหลายสัญชาติ ───────────
   const STG={"intake":{"th":"รับเข้า","en":"Intake","mm":"ကားဝင်ရောက်","kh":"ទទួលចូល"},"photo_wait":{"th":"รถรอถ่ายรูป","en":"Awaiting Photos","mm":"ဓာတ်ပုံစောင့်","kh":"រង់ចាំថតរូប"},"repair":{"th":"เช็คซ่อม","en":"Repair","mm":"ပြုပြင်ရန်","kh":"ជួសជុល"},"repair_done":{"th":"ซ่อมเสร็จรอตรวจ","en":"Repaired · Awaiting Check","mm":"ပြင်ပြီး · စစ်ဆေးရန်","kh":"ជួសជុលរួច · រង់ចាំពិនិត្យ"},"parts":{"th":"สั่งของ/รออะไหล่","en":"Awaiting Parts","mm":"အပိုပစ္စည်းစောင့်","kh":"រង់ចាំគ្រឿងបន្លាស់"},"upholstery":{"th":"งานเบาะ","en":"Upholstery","mm":"ထိုင်ခုံအလုပ်","kh":"កៅអី"},"paint_in":{"th":"อู่สีใน","en":"Paint (in-house)","mm":"အတွင်းဆေးသုတ်","kh":"លាបថ្នាំក្នុង"},"paint_out":{"th":"อู่สีนอก","en":"Paint (outside)","mm":"အပြင်ဆေးသုတ်","kh":"លាបថ្នាំក្រៅ"},"paint_check":{"th":"รอตรวจสี","en":"Paint Check","mm":"ဆေးသုတ်စစ်ဆေးရန်","kh":"រង់ចាំពិនិត្យថ្នាំ"},"film":{"th":"ติดฟิล์ม","en":"Window Film","mm":"ဖလင်ကပ်","kh":"បិទហ្វីល"},"wash_release":{"th":"ชงล้างรอปล่อย","en":"Wash before release","mm":"ထုတ်ပေးရန် ဆေးကြော","kh":"លាងមុនប្រគល់"},"wash":{"th":"ชงล้าง","en":"Wash / Detail","mm":"ကားဆေးကြော","kh":"លាងសម្អាត"},"qc_show":{"th":"รอ QC ตรวจ","en":"Awaiting QC","mm":"QC စစ်ဆေးရန်","kh":"រង់ចាំ QC ពិនិត្យ"},"sales_check":{"th":"รอเซลล์ตรวจรถขึ้นโชว์","en":"Awaiting Sales Check","mm":"အရောင်းစစ်ဆေးရန်","kh":"រង់ចាំផ្នែកលក់ពិនិត្យ"},"show":{"th":"รถพร้อมขาย (ตรวจรถขึ้นโชว์)","en":"Ready for Sale (showroom check)","mm":"ရောင်းရန်အသင့်","kh":"ត្រៀមលក់"},"reserve":{"th":"จอง","en":"Reserved","mm":"ကြိုတင်မှာ","kh":"កក់ទុក"},"finance":{"th":"จัดไฟแนนซ์","en":"Financing","mm":"ငွေချေး","kh":"ហិរញ្ញវត្ថុ"},"transport_check":{"th":"ตรวจขนส่ง","en":"DLT Inspection","mm":"ယာဉ်စစ်ဆေးရေး","kh":"ត្រួតពិនិត្យយានយន្ត"},"closing":{"th":"รอปิดการขาย","en":"Closing","mm":"အရောင်းပိတ်","kh":"បិទការលក់"},"qc_release":{"th":"ตรวจรถรอปล่อย","en":"QC before Release","mm":"ထုတ်ပေးရန် QC","kh":"ត្រួតពិនិត្យមុនប្រគល់"},"release":{"th":"ปล่อยรถ (ส่งรูปปล่อยรถ)","en":"Release (send release photos)","mm":"ကားထုတ်ပေး","kh":"ប្រគល់រថយន្ត"},"sold":{"th":"ขายแล้ว","en":"Sold","mm":"ရောင်းပြီး","kh":"លក់រួច"}};
-  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ต้องใส่)", "en": "Note (required)", "mm": "မှတ်ချက် (မဖြစ်မနေ)", "kh": "កំណត់ចំណាំ (ត្រូវការ)"}, "noteReq": {"th": "ต้องใส่หมายเหตุก่อนยืนยัน", "en": "Please add a note first", "mm": "မှတ်ချက် အရင်ထည့်ပါ", "kh": "សូមបញ្ចូលកំណត់ចំណាំជាមុន"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fWait": {"th": "รอถ่ายรูป", "en": "Waiting for photos", "mm": "ဓာတ်ပုံစောင့်နေ", "kh": "រង់ចាំថតរូប"}, "fWaitNote": {"th": "รอถ่ายรูป — รอทุกอย่างเสร็จก่อน", "en": "Waiting for photos — on hold until all done", "mm": "ဓာတ်ပုံစောင့် — အားလုံးပြီးမှ", "kh": "រង់ចាំថតរូប — រួចរាល់ទាំងអស់សិន"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}, "prio": {"th": "ความด่วน", "en": "Priority", "mm": "အရေးပေါ်", "kh": "អាទិភាព"}, "flags": {"th": "ธงงานค้าง (ติ๊กพร้อมกันได้)", "en": "Pending work flags", "mm": "ကျန်ရှိသောအလုပ်", "kh": "ការងារនៅសល់"}, "shoot": {"th": "ถ่ายคอนเทนต์", "en": "Shoot content", "mm": "ကွန်တင့်ရိုက်", "kh": "ថតខ្លឹមសារ"}, "shootDone": {"th": "บันทึกคอนเทนต์แล้ว", "en": "Content saved"}, "mediaReq": {"th": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน", "en": "This stage needs a photo/video first", "mm": "ဓာတ်ပုံ/ဗီဒီယို လိုအပ်သည်", "kh": "ត្រូវការរូប/វីដេអូ"}, "addMedia": {"th": "แนบรูป/วิดีโอ", "en": "Add photo/video", "mm": "ဓာတ်ပုံ/ဗီဒီယို ထည့်", "kh": "ភ្ជាប់រូប/វីដេអូ"}, "mediaOpt": {"th": "แนบรูป/วิดีโอ (ถ้ามี)", "en": "Add photo/video (optional)", "mm": "ဓာတ်ပုံ/ဗီဒီယို (ရှိလျှင်)", "kh": "ភ្ជាប់រូប/វីដេអូ (បើមាន)"}, "photoHint": {"th": "แตะเพื่อถ่าย/เลือกไฟล์", "en": "Tap to take / pick files", "mm": "ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ", "kh": "ចុចដើម្បីថត/ជ្រើសឯកសារ"}, "uploading": {"th": "กำลังอัปโหลด…", "en": "Uploading…"}, "saved": {"th": "บันทึกแล้ว", "en": "Saved"}, "expBtn": {"th": "Export ไทม์ไลน์ (beta)", "en": "Export timeline (beta)", "mm": "အချိန်ဇယား ထုတ်ယူ (beta)", "kh": "នាំចេញកាលវិភាគ (beta)"}, "expPhotos": {"th": "เอารูป/วิดีโอมาด้วย (ได้ไฟล์ zip)", "en": "Include photos/videos (zip file)", "mm": "ဓာတ်ပုံ/ဗီဒီယို ပါထည့် (zip)", "kh": "រួមបញ្ចូលរូប/វីដេអូ (zip)"}, "expWait": {"th": "กำลังเตรียมไฟล์ zip… รูปเยอะอาจใช้เวลาสักครู่", "en": "Preparing zip… may take a moment", "mm": "zip ပြင်ဆင်နေသည်…", "kh": "កំពុងរៀបចំ zip…"}, "expGo": {"th": "กำลังดาวน์โหลด…", "en": "Downloading…", "mm": "ဒေါင်းလုဒ်နေသည်…", "kh": "កំពុងទាញយក…"}, "menu": {"th": "เมนู", "en": "Menu", "mm": "မီနူး", "kh": "ម៉ឺនុយ"}, "secAdmin": {"th": "ผู้ใช้ & Log", "en": "Users & Log", "mm": "အသုံးပြုသူ & မှတ်တမ်း", "kh": "អ្នកប្រើ & កំណត់ហេតុ"}, "secExport": {"th": "ดาวน์โหลด", "en": "Download", "mm": "ဒေါင်းလုဒ်", "kh": "ទាញយក"}, "secLang": {"th": "ภาษา", "en": "Language", "mm": "ဘာသာစကား", "kh": "ភាសា"}, "expAll": {"th": "Export ไทม์ไลน์ทุกคัน (beta)", "en": "Export all timelines (beta)", "mm": "အားလုံး ထုတ်ယူ (beta)", "kh": "នាំចេញទាំងអស់ (beta)"}, "expAllHint": {"th": "CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน", "en": "CSV of all cars · for photos, export one car at a time", "mm": "CSV အားလုံး · ဓာတ်ပုံလိုလျှင် တစ်စီးချင်း", "kh": "CSV ទាំងអស់ · បើចង់បានរូប សូមនាំចេញម្តងមួយ"}, "addCar": {"th": "เพิ่มรถ", "en": "Add car", "mm": "ကားထည့်ရန်", "kh": "បញ្ចូលរថយន្ត"}, "searchPh": {"th": "ค้นทะเบียน / รหัสรถ / รุ่น", "en": "Search plate / code / model", "mm": "နံပါတ်ပြား / ကုဒ် ရှာရန်", "kh": "ស្វែងរកផ្លាកលេខ / លេខកូដ"}};
+  const UT={"title": {"th": "สถานะรถ", "en": "Car Status", "mm": "ကားအခြေအနေ", "kh": "ស្ថានភាពរថយន្ត"}, "subtitle": {"th": "ภาพรวมไปป์ไลน์", "en": "Pipeline overview"}, "totalCars": {"th": "รถทั้งหมด", "en": "Total cars"}, "inProgress": {"th": "กำลังดำเนินการ", "en": "In progress"}, "stuckLong": {"th": "ค้างนาน (>3 วัน ในสเตป)", "en": "Stuck long (>3 days in stage)"}, "urgent": {"th": "ต้องเร่งจัดการ", "en": "Needs action"}, "nearStuck": {"th": "ใกล้ค้าง (≥2 วัน)", "en": "Near stuck (≥2 days)"}, "watch": {"th": "เฝ้าระวัง", "en": "Watch"}, "avgT2l": {"th": "T2L เฉลี่ย", "en": "Avg T2L"}, "target": {"th": "เป้า ≤", "en": "Target ≤"}, "board": {"th": "บอร์ดสถานะรถ", "en": "Car Status Board", "mm": "ကားအခြေအနေဘုတ်", "kh": "ក្តារស្ថានភាព"}, "tapCard": {"th": "กดการ์ดเพื่อดู/เปลี่ยนสเตป", "en": "Tap a card to view / change stage", "mm": "ကတ်နှိပ်၍ ကြည့်/ပြောင်း", "kh": "ចុចកាតដើម្បីមើល/ប្តូរ"}, "mine": {"th": "งานของฉัน", "en": "My work", "mm": "ကျွန်ုပ်အလုပ်", "kh": "ការងារខ្ញុំ"}, "all": {"th": "ทั้งหมด", "en": "All", "mm": "အားလုံး", "kh": "ទាំងអស់"}, "stuck": {"th": "ค้าง", "en": "stuck", "mm": "ကြာ", "kh": "ជាប់"}, "daysU": {"th": "วัน", "en": "d", "mm": "ရက်", "kh": "ថ្ងៃ"}, "pipeline": {"th": "ไปป์ไลน์ — รถแต่ละสเตป", "en": "Pipeline — cars per stage"}, "tapBar": {"th": "กดแถบเพื่อกรองตาราง", "en": "Tap a bar to filter"}, "noCars": {"th": "ยังไม่มีรถในระบบ", "en": "No cars yet"}, "health": {"th": "สุขภาพงาน", "en": "Work health"}, "inSystem": {"th": "รถในระบบ", "en": "Active"}, "soldTab": {"th": "ขายแล้ว", "en": "Sold"}, "thPhoto": {"th": "รูป", "en": "Photo"}, "thCode": {"th": "รหัส", "en": "Code"}, "thCar": {"th": "รถ", "en": "Car"}, "thBranch": {"th": "สาขา", "en": "Branch"}, "thStage": {"th": "สเตป", "en": "Stage"}, "thStuck": {"th": "ค้าง", "en": "Stuck"}, "tapRow": {"th": "กดแถวดูรายละเอียด", "en": "tap a row for details"}, "allBranch": {"th": "ทุกสาขา", "en": "All branches"}, "allStage": {"th": "ทุกสเตป", "en": "All stages"}, "sortUpdated": {"th": "อัปเดตล่าสุด", "en": "Recently updated"}, "sortStuck": {"th": "ค้างนานสุด", "en": "Most stuck"}, "sortNewest": {"th": "เข้าใหม่สุด", "en": "Newest in"}, "sortCode": {"th": "รหัสรถ", "en": "Car code"}, "clearFilter": {"th": "ล้างตัวกรอง", "en": "Clear"}, "confirmTitle": {"th": "ยืนยันเปลี่ยนสเตป", "en": "Confirm stage change", "mm": "အဆင့်ပြောင်း အတည်ပြု", "kh": "បញ្ជាក់ការប្តូរ"}, "note": {"th": "หมายเหตุ (ต้องใส่)", "en": "Note (required)", "mm": "မှတ်ချက် (မဖြစ်မနေ)", "kh": "កំណត់ចំណាំ (ត្រូវការ)"}, "noteReq": {"th": "ต้องใส่หมายเหตุก่อนยืนยัน", "en": "Please add a note first", "mm": "မှတ်ချက် အရင်ထည့်ပါ", "kh": "សូមបញ្ចូលកំណត់ចំណាំជាមុន"}, "notePh": {"th": "เช่น สาเหตุที่ตรวจไม่ผ่าน / งานที่ทำ", "en": "e.g. reason failed / work done"}, "cancel": {"th": "ยกเลิก", "en": "Cancel", "mm": "ပယ်ဖျက်", "kh": "បោះបង់"}, "confirm": {"th": "ยืนยันเปลี่ยน", "en": "Confirm", "mm": "အတည်ပြု", "kh": "បញ្ជាក់"}, "saving": {"th": "กำลังบันทึก…", "en": "Saving…", "mm": "သိမ်းနေသည်…", "kh": "កំពុងរក្សាទុក…"}, "changeFail": {"th": "เปลี่ยนสเตปไม่สำเร็จ", "en": "Change failed"}, "changeStage": {"th": "เปลี่ยนสเตป", "en": "Change stage", "mm": "အဆင့်ပြောင်း", "kh": "ប្តូរដំណាក់កាល"}, "history": {"th": "ประวัติการสแกน", "en": "Scan history", "mm": "စကင်မှတ်တမ်း", "kh": "ប្រវត្តិស្កេន"}, "scanChange": {"th": "เปลี่ยนสเตปผ่านการสแกน QR", "en": "Change stage via QR scan"}, "openQR": {"th": "เปิด QR", "en": "Open QR"}, "edit": {"th": "แก้ไขข้อมูล", "en": "Edit"}, "noHistory": {"th": "ยังไม่มีประวัติ", "en": "No history yet"}, "fRed": {"th": "ค้างนาน", "en": "Stuck", "mm": "ကြာ", "kh": "ជាប់"}, "fAmber": {"th": "ใกล้ค้าง", "en": "Near stuck"}, "fOk": {"th": "ปกติ", "en": "OK"}, "fWait": {"th": "รอถ่ายรูป", "en": "Waiting for photos", "mm": "ဓာတ်ပုံစောင့်နေ", "kh": "រង់ចាំថតរូប"}, "fWaitNote": {"th": "รอถ่ายรูป — รอทุกอย่างเสร็จก่อน", "en": "Waiting for photos — on hold until all done", "mm": "ဓာတ်ပုံစောင့် — အားလုံးပြီးမှ", "kh": "រង់ចាំថតរូប — រួចរាល់ទាំងអស់សិន"}, "fBranch": {"th": "สาขา", "en": "Branch"}, "fStatus": {"th": "สถานะ", "en": "Status"}, "fBrand": {"th": "ยี่ห้อ/รุ่น", "en": "Make/Model"}, "fYear": {"th": "ปี", "en": "Year"}, "fColor": {"th": "สี", "en": "Color"}, "fKm": {"th": "เลขไมล์", "en": "Mileage"}, "fDateIn": {"th": "วันรับเข้า", "en": "Date in"}, "fBook": {"th": "สถานะเล่ม", "en": "Book status"}, "fTax": {"th": "ครบกำหนดภาษี", "en": "Tax due"}, "fNote": {"th": "หมายเหตุ", "en": "Note"}, "detailAll": {"th": "รายละเอียดรถ (ทั้งหมด)", "en": "Car details (all)"}, "owner": {"th": "เจ้าของรถ", "en": "Owner"}, "prio": {"th": "ความด่วน", "en": "Priority", "mm": "အရေးပေါ်", "kh": "អាទិភាព"}, "flags": {"th": "ธงงานค้าง (ติ๊กพร้อมกันได้)", "en": "Pending work flags", "mm": "ကျန်ရှိသောအလုပ်", "kh": "ការងារនៅសល់"}, "shoot": {"th": "ถ่ายคอนเทนต์", "en": "Shoot content", "mm": "ကွန်တင့်ရိုက်", "kh": "ថតខ្លឹមសារ"}, "shootDone": {"th": "บันทึกคอนเทนต์แล้ว", "en": "Content saved"}, "mediaReq": {"th": "สเตปนี้ต้องแนบรูป/วิดีโอก่อนยืนยัน", "en": "This stage needs a photo/video first", "mm": "ဓာတ်ပုံ/ဗီဒီယို လိုအပ်သည်", "kh": "ត្រូវការរូប/វីដេអូ"}, "addMedia": {"th": "แนบรูป/วิดีโอ", "en": "Add photo/video", "mm": "ဓာတ်ပုံ/ဗီဒီယို ထည့်", "kh": "ភ្ជាប់រូប/វីដេអូ"}, "mediaOpt": {"th": "แนบรูป/วิดีโอ (ถ้ามี)", "en": "Add photo/video (optional)", "mm": "ဓာတ်ပုံ/ဗီဒီယို (ရှိလျှင်)", "kh": "ភ្ជាប់រូប/វីដេអូ (បើមាន)"}, "photoHint": {"th": "แตะเพื่อถ่าย/เลือกไฟล์", "en": "Tap to take / pick files", "mm": "ရိုက်ရန်/ဖိုင်ရွေးရန် နှိပ်ပါ", "kh": "ចុចដើម្បីថត/ជ្រើសឯកសារ"}, "uploading": {"th": "กำลังอัปโหลด…", "en": "Uploading…"}, "saved": {"th": "บันทึกแล้ว", "en": "Saved"}, "expBtn": {"th": "Export ไทม์ไลน์ (beta)", "en": "Export timeline (beta)", "mm": "အချိန်ဇယား ထုတ်ယူ (beta)", "kh": "នាំចេញកាលវិភាគ (beta)"}, "expPhotos": {"th": "เอารูป/วิดีโอมาด้วย (ได้ไฟล์ zip)", "en": "Include photos/videos (zip file)", "mm": "ဓာတ်ပုံ/ဗီဒီယို ပါထည့် (zip)", "kh": "រួមបញ្ចូលរូប/វីដេអូ (zip)"}, "expWait": {"th": "กำลังเตรียมไฟล์ zip… รูปเยอะอาจใช้เวลาสักครู่", "en": "Preparing zip… may take a moment", "mm": "zip ပြင်ဆင်နေသည်…", "kh": "កំពុងរៀបចំ zip…"}, "expGo": {"th": "กำลังดาวน์โหลด…", "en": "Downloading…", "mm": "ဒေါင်းလုဒ်နေသည်…", "kh": "កំពុងទាញយក…"}, "menu": {"th": "เมนู", "en": "Menu", "mm": "မီနူး", "kh": "ម៉ឺនុយ"}, "secAdmin": {"th": "ผู้ใช้ & Log", "en": "Users & Log", "mm": "အသုံးပြုသူ & မှတ်တမ်း", "kh": "អ្នកប្រើ & កំណត់ហេតុ"}, "secExport": {"th": "ดาวน์โหลด", "en": "Download", "mm": "ဒေါင်းလုဒ်", "kh": "ទាញយក"}, "secLang": {"th": "ภาษา", "en": "Language", "mm": "ဘာသာစကား", "kh": "ភាសា"}, "expAll": {"th": "Export ไทม์ไลน์ทุกคัน (beta)", "en": "Export all timelines (beta)", "mm": "အားလုံး ထုတ်ယူ (beta)", "kh": "នាំចេញទាំងអស់ (beta)"}, "expAllHint": {"th": "CSV ทุกคัน · อยากได้รูปด้วยให้กดที่รถทีละคัน", "en": "CSV of all cars · for photos, export one car at a time", "mm": "CSV အားလုံး · ဓာတ်ပုံလိုလျှင် တစ်စီးချင်း", "kh": "CSV ទាំងអស់ · បើចង់បានរូប សូមនាំចេញម្តងមួយ"}, "addCar": {"th": "เพิ่มรถ", "en": "Add car", "mm": "ကားထည့်ရန်", "kh": "បញ្ចូលរថយន្ត"}, "searchPh": {"th": "ค้นทะเบียน / รหัสรถ / รุ่น", "en": "Search plate / code / model", "mm": "နံပါတ်ပြား / ကုဒ် ရှာရန်", "kh": "ស្វែងរកផ្លាកលេខ / លេខកូដ"}, "webTitle": {"th": "เว็บโชว์รูม Oxlet", "en": "Oxlet showroom website", "mm": "Oxlet ဝက်ဘ်ဆိုက်", "kh": "គេហទំព័រ Oxlet"}, "webOpen": {"th": "ดูบนเว็บ", "en": "View on website", "mm": "ဝက်ဘ်တွင်ကြည့်ရန်", "kh": "មើលលើគេហទំព័រ"}, "carList": {"th": "รายการรถ", "en": "Cars", "mm": "ကားစာရင်း", "kh": "បញ្ជីរថយន្ត"}, "carsU": {"th": "คัน", "en": "cars", "mm": "စီး", "kh": "គ្រឿង"}};
   const TRK_LANG_KEY='trkLang';
   let TLANG=(function(){try{return localStorage.getItem(TRK_LANG_KEY)||'th';}catch(e){return 'th';}})();
   function stgName(k){const x=STG[k];return x?(x[TLANG]||x.en||x.th):k;}
@@ -345,6 +534,7 @@
     document.querySelectorAll('.pill[data-stage] .stg-name').forEach(function(el){var p=el.closest('[data-stage]');if(p)el.textContent=stgName(p.getAttribute('data-stage'));});
     document.querySelectorAll('select[name="stage"] option[value]').forEach(function(op){if(op.value&&STG[op.value])op.textContent=stgName(op.value);});
     document.querySelectorAll('#langSw [data-lang]').forEach(function(b){b.classList.toggle('pri',b.getAttribute('data-lang')===TLANG);});
+    segSync(document.getElementById('bmSeg')); segSync(document.getElementById('viewSeg'));   // ข้อความยาวขึ้น/สั้นลง = วางแผ่นเลื่อนใหม่
   }
   const STAGE_COLOR={intake:'#64748b',photo_wait:'#0891b2',repair:'#d97706',repair_done:'#7c3aed',parts:'#d97706',upholstery:'#d97706',paint_in:'#d97706',paint_out:'#d97706',paint_check:'#7c3aed',film:'#d97706',wash_release:'#0891b2',wash:'#0891b2',qc_show:'#7c3aed',sales_check:'#7c3aed',show:'#16a34a',reserve:'#2563eb',finance:'#2563eb',transport_check:'#2563eb',closing:'#2563eb',qc_release:'#7c3aed',release:'#16a34a',sold:'#16a34a'};
   // ความด่วน (สีการ์ด) — ตรงกับ constants.PRIORITY_COLOR/NAME · FORCE_MEDIA = สเตปที่บังคับแนบรูป/วิดีโอ
@@ -436,6 +626,7 @@
           <i data-lucide="${f.icon}" style="width:18px;height:18px;color:${f.color}"></i> ${f.name}</label>`).join('')}
         <span id="flagMsg" class="mut sm"></span>
       </div>
+      ${_webSection(d)}
       <div class="sm mut" style="margin:14px 0 6px">${T('changeStage')}</div>
       <div>${stageBtns}</div>
       <div class="sm mut" style="margin:14px 0 6px">${T('history')}</div>
@@ -554,6 +745,88 @@
     }catch(e){ if(msg) msg.textContent=T('changeFail'); }
   }
 
+  // ★ 13 ต.ค.69 — ปุ่ม Active: ให้รถขึ้นเว็บโชว์รูม Oxlet (ผู้บริหาร/แอดมินเท่านั้น · เช็คซ้ำที่เซิร์ฟเวอร์)
+  //   ขึ้นเว็บจริงเมื่อถึงสเตปพร้อมขาย/จอง · สถานะที่โชว์ = ที่เว็บโชว์รูมตอบกลับมาจริง (ไม่เดาจากสเตป)
+  function _webStateHtml(code,w){
+    const parts=[];
+    if(w.state) parts.push(`<span style="color:${w.color};font-weight:700">● ${esc(w.text)}</span>`);
+    else parts.push(`<span class="mut">${w.active?'—':'ยังไม่ขึ้นเว็บ · ลูกค้าไม่เห็นรถคันนี้'}</span>`);
+    if(w.url) parts.push(`<a href="${esc(w.url)}" target="_blank" rel="noopener" style="font-weight:700">${T('webOpen')} ↗</a>`);
+    if(w.state==='error' && w.can) parts.push(`<button class="btn sm" onclick="setWebActive('${code}',true,true)">ส่งอีกครั้ง</button>`);
+    let h=`<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">${parts.join('')}</div>`;
+    if(w.active && w.by) h+=`<div class="mut sm" style="margin-top:3px">กด Active โดย ${esc(w.by)}${w.at?' · '+esc(w.at):''}</div>`;
+    if(w.can && !w.configured) h+=`<div class="sm" style="margin-top:4px;color:var(--red)">ระบบยังไม่ได้เชื่อมเว็บโชว์รูม — กดได้ แต่รถจะยังไม่ขึ้นเว็บจนกว่าจะตั้งค่า</div>`;
+    return h;
+  }
+  function _webSection(d){
+    const w=d.web; if(!w) return '';
+    if(!w.can){   // คนอื่นเห็นแค่ว่าขึ้นเว็บอยู่ไหม (กดไม่ได้)
+      return w.state?`<div class="sm" style="margin:14px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><i data-lucide="globe" style="width:18px;height:18px;color:${w.color}"></i>${_webStateHtml(d.code,w)}</div>`:'';
+    }
+    return `<div class="sm mut" style="margin:14px 0 6px">${T('webTitle')}</div>
+      <div style="border:.5px solid var(--line);border-radius:8px;padding:9px 11px">
+        <label class="row" style="gap:9px;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600;padding:2px 0 6px">
+          <input type="checkbox" id="webSw" ${w.active?'checked':''} onchange="setWebActive('${d.code}',this.checked)" style="width:22px;height:22px;accent-color:#16a34a;flex-shrink:0;cursor:pointer">
+          <i data-lucide="globe" style="width:18px;height:18px;color:#16a34a"></i> Active — แสดงรถคันนี้บนเว็บ Oxlet</label>
+        <div id="webState">${_webStateHtml(d.code,w)}</div>
+        <div id="webMsg" class="sm" style="margin-top:4px"></div>
+        <div class="mut sm" style="margin-top:4px">${w.stageOk?'รถอยู่สเตปที่ขึ้นเว็บได้ — กด Active แล้วขึ้นทันที':'ขึ้นเว็บเมื่อถึงสเตปพร้อมขาย/จอง — กด Active ไว้ก่อนได้'}</div>
+      </div>`;
+  }
+  // ไอคอนลูกโลกบนการ์ดในบอร์ด + สวิตช์ในคอลัมน์ Active ของตาราง — อัปเดตทันทีหลังกด (ไม่ต้องรีโหลดทั้งหน้า)
+  //   กดจากป๊อปอัปหรือจากตารางก็ได้ → ทุกจุดที่โชว์รถคันนี้ต้องตรงกัน
+  function _syncWebUI(code,w){
+    document.querySelectorAll('.webb[data-code="'+code+'"]').forEach(el=>{
+      el.innerHTML=w.state?`<i data-lucide="globe" style="width:16px;height:16px;color:${w.color}" title="${esc(w.text)}"></i>`:'';
+    });
+    document.querySelectorAll('.wcell[data-code="'+code+'"]').forEach(td=>{
+      const cb=td.querySelector('input'); if(cb){ cb.checked=!!w.active && !w.sold; cb.disabled=!!w.sold; }
+      const lb=td.querySelector('.wlbl'); if(lb){ lb.textContent=w.short||(cb?'':'—'); lb.style.color=w.color||'var(--mut)'; }
+      td.title=w.text||(w.sold?'ขายแล้ว — ไม่ขึ้นเว็บ':'ยังไม่ขึ้นเว็บ Oxlet');
+    });
+    if(window.lucide) lucide.createIcons();
+  }
+  function _webAsk(on){
+    return on?'ให้รถคันนี้ขึ้นเว็บ Oxlet (ลูกค้าเห็น)?\nถ้ายังไม่ถึงสเตปพร้อมขาย จะขึ้นเองเมื่อถึง':'ซ่อนรถคันนี้จากเว็บ Oxlet?\n(ประกาศบนเว็บยังเก็บไว้ กด Active อีกครั้งก็กลับมา)';
+  }
+  // ยิง API ตัวเดียวทั้งป๊อปอัปและตาราง → คืน JSON ของเซิร์ฟเวอร์เสมอ (พลาด = {ok:false,error})
+  async function _postWebActive(code,on){
+    try{
+      const r=await fetch('/track/api/web_active',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({code,active:on})});
+      const j=await r.json().catch(()=>({ok:false,error:'เซิร์ฟเวอร์ตอบ HTTP '+r.status}));
+      if(j.ok) _syncWebUI(code,j.web);
+      return j;
+    }catch(e){ return {ok:false,error:'ผิดพลาด: '+e}; }
+  }
+  async function setWebActive(code,on,resend){
+    const sw=document.getElementById('webSw'), msg=document.getElementById('webMsg');
+    if(!resend && !confirm(_webAsk(on))){ if(sw) sw.checked=!on; return; }
+    if(sw) sw.disabled=true;
+    if(msg){ msg.textContent='กำลังส่งไปเว็บโชว์รูม…'; msg.style.color=''; }
+    const j=await _postWebActive(code,on);
+    if(sw) sw.disabled=false;
+    if(!j.ok){ if(sw) sw.checked=!on; if(msg){ msg.textContent=j.error||'บันทึกไม่สำเร็จ'; msg.style.color='var(--red)'; } return; }
+    if(sw) sw.checked=!!j.web.active;
+    const st=document.getElementById('webState'); if(st) st.innerHTML=_webStateHtml(code,j.web);
+    if(msg){ msg.textContent=j.message||''; msg.style.color=j.pushed?'':'var(--red)'; }
+  }
+  // สวิตช์ในคอลัมน์ Active ของตาราง (ไม่เปิดป๊อปอัป — td หยุด event ไว้แล้ว)
+  async function tblWebActive(code,el){
+    const on=el.checked, td=el.closest('.wcell'), lb=td&&td.querySelector('.wlbl');
+    if(!confirm(_webAsk(on))){ el.checked=!on; return; }
+    el.disabled=true;
+    if(lb){ lb.textContent='กำลังส่ง…'; lb.style.color='var(--mut)'; }
+    const j=await _postWebActive(code,on);
+    el.disabled=false;
+    if(!j.ok){
+      el.checked=!on;
+      if(lb){ lb.textContent='บันทึกไม่สำเร็จ'; lb.style.color='var(--red)'; }
+      alert(j.error||'บันทึกไม่สำเร็จ'); return;
+    }
+    if(td) td.title=j.message||td.title;
+    if(!j.pushed) alert(j.message);        // ส่งไปเว็บไม่สำเร็จ = ต้องเห็น ไม่ใช่แค่ป้ายเล็กๆ
+  }
+
   // ธงงานค้าง (ยังไม่ถ่ายรูป/คอนเทนต์) — แยกจากความด่วน · ติ๊กพร้อมกันได้ · บันทึกทันที
   // ★ ส.ค.69 — ธงที่ "ปลดออกเฉยๆ ไม่ได้" (ต้องแนบรูป+โน้ต) · sync กับ C.FLAG_PROOF_REQUIRED ฝั่งเซิร์ฟเวอร์
   const FLAG_PROOF=new Set(['need_photo']);
@@ -603,13 +876,38 @@
 
   // (ถ่ายคอนเทนต์ ถอดออกแล้ว ส.ค.69 — โค้ด openShoot/doShoot/shootModal ลบทิ้ง · ดู git history ถ้าจะกู้)
   // บอร์ด: สลับ "งานของฉัน" (เฉพาะคอลัมน์สเตปตัวเอง) / "ทั้งหมด"
+  // ตัวเลือกแบบแถบเลื่อน — วางแผ่นขาวใต้ตัวที่เลือก (เลื่อนนุ่มๆ หลังวาดครั้งแรก · ครั้งแรกไม่เลื่อน กันกระพริบ)
+  function segSync(seg){
+    if(!seg) return;
+    const on=seg.querySelector('.seg-i.on'), th=seg.querySelector('.seg-thumb');
+    if(!on||!th) return;
+    th.style.width=on.offsetWidth+'px';
+    th.style.transform='translateX('+on.offsetLeft+'px)';
+  }
+  function segInit(seg){
+    if(!seg) return;
+    segSync(seg);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>seg.classList.add('ready')));
+    // ตัวเลือกที่เป็นลิงก์ (รถในระบบ/ขายแล้ว) — เลื่อนแผ่นไปก่อนแล้วค่อยเปลี่ยนหน้า ให้รู้สึกลื่น ไม่กระตุก
+    seg.querySelectorAll('a.seg-i').forEach(a=>a.addEventListener('click',e=>{
+      if(a.classList.contains('on')||e.metaKey||e.ctrlKey||e.shiftKey) return;
+      e.preventDefault();
+      seg.querySelectorAll('.seg-i').forEach(x=>x.classList.toggle('on',x===a)); segSync(seg);
+      setTimeout(()=>{ location.href=a.href; },180);
+    }));
+  }
   function setBoardMode(m){
     document.querySelectorAll('.bcol').forEach(el=>{ el.style.display=(m==='all'||el.getAttribute('data-mine')==='1')?'':'none'; });
     const bm=document.getElementById('bmMine'), ba=document.getElementById('bmAll');
-    if(bm) bm.classList.toggle('pri', m==='mine');
-    if(ba) ba.classList.toggle('pri', m==='all');
+    if(bm) bm.classList.toggle('on', m==='mine');
+    if(ba) ba.classList.toggle('on', m==='all');
+    segSync(document.getElementById('bmSeg'));
   }
   {% if has_my %}setBoardMode('mine');{% endif %}
+  segInit(document.getElementById('bmSeg')); segInit(document.getElementById('viewSeg'));
+  // ภาษาเปลี่ยน = ความกว้างตัวอักษรเปลี่ยน → วางแผ่นใหม่ · ฟอนต์โหลดเสร็จทีหลังก็เช่นกัน
+  window.addEventListener('resize',()=>{ segSync(document.getElementById('bmSeg')); segSync(document.getElementById('viewSeg')); });
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ segSync(document.getElementById('bmSeg')); segSync(document.getElementById('viewSeg')); });
   // (closeShoot ถูกถอดไปพร้อมปุ่มถ่ายคอนเทนต์ ส.ค.69 — เคยเรียกต่อ = ReferenceError ทุกครั้งที่กด Esc)
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCar();closeAdd();closeStage();closeFlagProof();} });
 
@@ -629,7 +927,7 @@
     id:'barValue',
     afterDatasetsDraw(ch){
       const ds=ch.data.datasets[0], mut=gv('--mut'); const {ctx}=ch;
-      ctx.save(); ctx.font='700 12px "Segoe UI",sans-serif'; ctx.fillStyle=mut; ctx.textBaseline='middle';
+      ctx.save(); ctx.font='700 12px "Noto Sans Thai","Segoe UI",sans-serif'; ctx.fillStyle=mut; ctx.textBaseline='middle';
       ch.getDatasetMeta(0).data.forEach((el,i)=>{ const v=ds.data[i]; if(v>0) ctx.fillText(v, el.x+7, el.y); });
       ctx.restore();
     }
@@ -642,14 +940,15 @@
       const a=ch.chartArea, ctx=ch.ctx, tot=ch.data.datasets[0].data.reduce((x,y)=>x+y,0);
       const cx=(a.left+a.right)/2, cy=(a.top+a.bottom)/2;
       ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle=gv('--fg'); ctx.font='800 26px "Segoe UI",sans-serif'; ctx.fillText(tot, cx, cy-7);
-      ctx.fillStyle=gv('--mut'); ctx.font='500 11px "Segoe UI",sans-serif'; ctx.fillText('รถทั้งหมด', cx, cy+15);
+      ctx.fillStyle=gv('--fg'); ctx.font='700 28px "Noto Sans Thai","Segoe UI",sans-serif'; ctx.fillText(tot, cx, cy-7);
+      ctx.fillStyle=gv('--mut'); ctx.font='500 12px "Noto Sans Thai","Segoe UI",sans-serif'; ctx.fillText('รถทั้งหมด', cx, cy+15);
       ctx.restore();
     }
   };
 
   function buildCharts(){
     const grid=gv('--line'), tick=gv('--mut'), surf=gv('--card');
+    if(window.Chart) Chart.defaults.font.family="'Noto Sans Thai','Segoe UI',sans-serif";   // ฟอนต์เดียวกับทั้งหน้า
     if(pipeChart) pipeChart.destroy();
     if(healthChart) healthChart.destroy();
 
@@ -664,7 +963,7 @@
       pipeChart=new Chart(document.getElementById('pipeChart'),{
         type:'bar',
         data:{ labels:bars.map(b=>b.label), datasets:[{ data:bars.map(b=>b.v),
-          backgroundColor:bars.map(b=>b.c), borderRadius:4, borderSkipped:false, barThickness:16, maxBarThickness:20 }]},
+          backgroundColor:bars.map(b=>b.c), borderRadius:6, borderSkipped:false, barThickness:14, maxBarThickness:18 }]},
         options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
           layout:{padding:{right:24}},
           onClick:(e,els)=>{ if(els.length){ const p=new URLSearchParams(location.search); p.set('stage',bars[els[0].index].key); location.search=p.toString(); } },

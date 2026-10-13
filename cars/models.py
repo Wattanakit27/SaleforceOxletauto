@@ -44,6 +44,18 @@ class Car(models.Model):
     need_content = models.BooleanField("ยังไม่ได้ถ่ายคอนเทนต์", default=True)
     need_tire = models.BooleanField("รอเปลี่ยนยาง", default=False)
 
+    # ----- เว็บโชว์รูม Oxlet (ปุ่ม Active · 13 ต.ค.69 เจ้าของสั่ง) -----
+    # รถขึ้นเว็บเมื่อ "กด Active" + ถึงสเตปพร้อมขาย/จอง เท่านั้น (เดิมขึ้นเองทุกคันที่ถึงพร้อมขาย)
+    #   web_active   = ตั้งใจให้ขึ้นเว็บ (ผู้บริหาร/แอดมินกด) · กดก่อนถึงพร้อมขายได้ = รอขึ้นเอง
+    #   web_listed   = เว็บโชว์รูมตอบกลับมาว่า "ลูกค้าเห็นอยู่" — ของจริง ไม่เดาเอาจากสเตป
+    #   web_sync_error = ส่งครั้งล่าสุดไม่สำเร็จเพราะอะไร (ว่าง = ปกติ) · กติกาเดิม: ส่งไม่ออกต้องมีที่ให้เห็น
+    web_active = models.BooleanField("Active (ขึ้นเว็บ Oxlet)", default=False)
+    web_active_at = models.DateTimeField("กด Active เมื่อ", null=True, blank=True)
+    web_active_by = models.CharField("กด Active โดย", max_length=80, blank=True)
+    web_listed = models.BooleanField("แสดงบนเว็บอยู่ (เว็บยืนยัน)", default=False)
+    web_synced_at = models.DateTimeField("ส่งไปเว็บล่าสุด", null=True, blank=True)
+    web_sync_error = models.CharField("ส่งไปเว็บไม่สำเร็จ", max_length=200, blank=True)
+
     # ----- ฝ่ายทะเบียน -----
     book_status = models.CharField("สถานะเล่ม", max_length=14, choices=C.BOOK_STATUS_CHOICES, blank=True)
     tax_due_date = models.DateField("ครบกำหนดต่อภาษี", null=True, blank=True)
@@ -205,6 +217,24 @@ class Car(models.Model):
         """ธงงานค้างที่ติดอยู่ → [{key, name, icon, color}] สำหรับโชว์เป็นไอคอนบนการ์ด/ป๊อปอัป"""
         return [{"key": k, "name": C.FLAG_NAME[k], "icon": C.FLAG_ICON[k], "color": C.FLAG_COLOR[k]}
                 for k in C.FLAG_KEYS if getattr(self, k, False)]
+
+    @property
+    def web_state(self):
+        """สถานะบนเว็บโชว์รูม Oxlet → {key, text, color} หรือ None (ยังไม่ Active / ขายแล้ว)
+        live = เว็บยืนยันว่าลูกค้าเห็นอยู่ · wait = Active แล้ว รอถึงพร้อมขาย ·
+        pending = ถึงพร้อมขายแล้วแต่ยังไม่ได้คำยืนยันจากเว็บ · error = ส่งไปเว็บไม่สำเร็จ"""
+        if not self.web_active or self.status == "sold":
+            return None
+        if self.web_sync_error:
+            key, text = "error", "ส่งไปเว็บไม่สำเร็จ: " + self.web_sync_error
+        elif self.web_listed:
+            key, text = "live", "แสดงบนเว็บ Oxlet อยู่"
+        elif self.stage in C.WEB_STAGES:
+            key, text = "pending", "Active แล้ว · ยังไม่ได้คำยืนยันจากเว็บ"
+        else:
+            key, text = "wait", "Active แล้ว · ขึ้นเว็บเมื่อถึงสเตปพร้อมขาย"
+        # short = ป้ายสั้นใต้สวิตช์ในคอลัมน์ Active ของตาราง (ข้อความเต็มอยู่ใน title)
+        return {"key": key, "text": text, "short": C.WEB_STATE_SHORT[key], "color": C.WEB_STATE_COLOR[key]}
 
     @property
     def card_label(self):

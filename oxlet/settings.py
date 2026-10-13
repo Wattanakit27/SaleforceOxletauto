@@ -206,6 +206,9 @@ CRON_SECRET = os.getenv("CRON_SECRET", "")
 # ตั้ง 2 ค่าให้ครบ + STOCK_SYNC_SECRET ต้องตรงกับฝั่ง oxlet_web · ว่าง = ปิด (ไม่ยิง)
 SHOWROOM_WEBHOOK_URL = os.getenv("SHOWROOM_WEBHOOK_URL", "")
 STOCK_SYNC_SECRET = os.getenv("STOCK_SYNC_SECRET", "")
+# โดเมนหน้าเว็บโชว์รูมที่ลูกค้าเปิด (ทำลิงก์ "ดูบนเว็บ" ในป๊อปอัปรถ) · ไม่ตั้ง = เดาจาก SHOWROOM_WEBHOOK_URL
+# ตั้งเมื่อ webhook ยิงทาง 127.0.0.1 (2 เว็บอยู่ VPS เดียวกัน) — ไม่งั้นไม่มีลิงก์ให้กด
+SHOWROOM_PUBLIC_URL = os.getenv("SHOWROOM_PUBLIC_URL", "")
 
 ROOT_URLCONF = "oxlet.urls"
 

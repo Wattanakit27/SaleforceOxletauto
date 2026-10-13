@@ -4038,6 +4038,26 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
        `window.FORCE_MEDIA` ได้ `undefined` แล้ว **ผ่านแบบหลอกๆ** · ต้องอ้างชื่อเปล่า `FORCE_MEDIA`
        (บทเรียนเดียวกับ `window._soChart` เมื่อ ก.ย.69 — พลาดซ้ำรอบที่สอง)
 - **★ บอร์ด "สถานะรถ" เต็มจอ (ก.ค.69)**: แท็บ "สถานะรถ" (แอดมิน · `renderTracking` ใน [index.html](dashboard/templates/dashboard/index.html)) + โหมด "สถานะรถ" (เซลล์ · `renderCarsMode` ใน [seller.html](dashboard/templates/dashboard/seller.html)) = ฝัง `/track/` เป็น **iframe เต็มความกว้างจอ (100vw)**. base.html ตั้ง `html.embedded` เมื่ออยู่ใน iframe → [dashboard.html](templates/dashboard.html) ซ่อนหัวบอร์ด+ปุ่มซ้ำ (`#trkHead` · สลับภาษา/แดชบอร์ดขาย/เพิ่มรถ/QR/ผู้ใช้/Log) ให้บอร์ดใหญ่ขึ้น · **workers เข้า `/track/` ตรง (ไม่ใช่ iframe) ยังเห็นหัว + สลับภาษา 4 ภาษาปกติ** · **⚠️ cluster เดิม `renderTrk`/`_kbCol`/`buildTrkPies`/`_trkBanner` (native board ในหน้า sales) = dead code แล้ว** (แทนด้วย iframe · openTrkCar ยังใช้จากกระดิ่ง)
+  - **★ 13 ต.ค.69 กรอบไม่ใช่ 100vw แล้ว** — กรอบลอดใต้แถบเมนูซ้าย (จอ ≥1100px) คอลัมน์ รูป/รหัส โดนบัง ~220px ที่จอ 1280 →
+    **`fitTrkFrame()`** (index.html) วัดขอบขวาของ `#nav-slide` แล้วตั้ง `marginLeft`/`width` ให้กรอบเริ่มต่อจากแถบเมนูพอดี
+    (เรียกหลัง render + 350ms + `onload` ของกรอบ + resize + ตอนย่อ/กางแถบเมนู) · ไม่มีแถบเมนู (จอแคบ) = เต็มจอเหมือนเดิม
+- **★ หน้าตาใหม่ "เรียบหรู" ของหน้าสถานะรถ (13 ต.ค.69 · เจ้าของส่งคลิปตัวอย่าง SaaS + ขอ "ปุ่มสมูดลื่นๆ · Luxury")**
+  - เจ้าของเลือก: **ทำเฉพาะหน้าสถานะรถ** · **โทนม่วงขาวเดิม** (ไม่ใช่ดำขาวแบบคลิป — กติกา 19 ก.ย.)
+  - **สไตล์อยู่ใน `<style>` ของ [dashboard.html](templates/dashboard.html) ทั้งหมด ขึ้นต้น `html.lux`** — คลาส `lux` ถูกใส่บน `<html>`
+    ตอนต้น block content ของหน้านี้หน้าเดียว → **หน้าอื่นที่ใช้ base.html (หน้าสแกน QR ของคนงาน · ฟอร์มแก้รถ · ผู้ใช้) ไม่โดน**
+    · จะขยายไปหน้าอื่น = ใส่ `<script>document.documentElement.classList.add('lux')</script>` + ย้ายกฎไปไฟล์กลาง
+  - ของที่เปลี่ยน: โทเคนสี/เงา (`--sh1`/`--sh2`/`--sh-pri`/`--ease`) ทั้งสว่าง+มืด · ปุ่ม `.btn` ยกขึ้นตอนชี้/ยุบตอนกด/วงโฟกัสม่วง ·
+    `.btn.pri` ไล่สีม่วง · ช่องกรอก/select ลูกศรเอง (กฎรวมใช้ `:where()` เพื่อให้กฎเฉพาะชนะ — เคยทำไอคอนค้นหาทับตัวอักษร) ·
+    **ตัวเลือกแบบแถบเลื่อน `.seg`** (`segSync`/`segInit` · แผ่นขาวเลื่อนตามตัวที่เลือก · ลิงก์ เลื่อนก่อน 180ms แล้วค่อยเปลี่ยนหน้า) ใช้กับ
+    "รถในระบบ/ขายแล้ว" และ "งานของฉัน/ทั้งหมด" · KPI การ์ดใหม่ (`.k-top`) · บอร์ด (`.bcol`/`.bcard` ยกตอนชี้ · ตัวเลขใน `.bc-n`) ·
+    ตาราง (`.twrap` หัวตรึง · `.cthumb` · `.chev` เลื่อนตอนชี้) · ป๊อปอัปพื้นหลังเบลอ + เด้งขึ้น (`luxFade`/`luxPop`) ·
+    เคารพ `prefers-reduced-motion`
+  - **⚠️ ไอคอน lucide ถูกแปลง `<i>` → `<svg>` หลังโหลด** — CSS ที่เขียน `.x i{}` จะไม่โดน ต้องเขียน `.x svg{}` (เคยทำแว่นขยายลอยเหนือช่องค้นหา)
+  - `.chartgrid>*{min-width:0}` — กราฟวาดตอนกรอบยังกว้างแล้วไม่หดตาม → ทั้งหน้าล้นแนวนอน
+  - ปุ่ม "เพิ่มรถ" ในกรอบซ่อนเมื่อหน้าแม่มีแถบ `.trk-tb` (แท็บสถานะรถของแดชบอร์ดขาย) · หน้าเซลล์ยังเห็น
+  - แถบปุ่มเหนือกรอบใน index.html = คลาส `.trk-tb` (ใน `<style>` ของ index.html · ไม่ต้อง collectstatic) · เพิ่มไอคอน
+    `qr-code`/`building-2` เข้า `LUCIDE` แล้ว
+  - แก้ไปพร้อมกัน: มือถือซ่อนคอลัมน์ผิด (`nth-child(7)` = คอลัมน์ Active ตั้งแต่เพิ่มคอลัมน์ → เปลี่ยนเป็น 8 = ลูกศร)
 - **★ ยุบเหลือ login เดียว (มิ.ย.69)**: ไม่มีหน้า login แยกของ tracking แล้ว — ใช้หน้า login หลักของ sales (`/login/`) หน้าเดียว
   - `LOGIN_URL=/login/` · `/track/login/` → redirect `/login/?next=/track/` · `/track/logout/` → redirect `/logout/` · ปุ่มออกใน [base.html](templates/base.html) ใช้ `/logout/` ของ sales (flush ทั้ง 2 auth)
   - **middleware [cars/middleware.py](cars/middleware.py) `TrackSessionBridgeMiddleware`**: เข้า `/track/` แล้วถ้ามี session sales (`oxlet_user`) แต่ยังไม่ได้ login Django auth → เรียก `_bridge_line_to_django_user()` ([views.py](dashboard/views.py)) สร้าง/ผูก Django User `line_<userId>` + `auth.login()` ให้อัตโนมัติ → แอดมิน login sales ครั้งเดียว เข้าแท็บ "สถานะรถ" ได้เลย ไม่ login ซ้ำ · ทำเฉพาะ path `/track/` (ไม่แตะ sales · try/except กัน DB ล่มกระทบ sales) · ต้องวางหลัง `AuthenticationMiddleware`
@@ -4678,6 +4698,47 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
 - **env (ว่าง = ปิดสนิท no-op ทั้ง 2 ฝั่ง · ระบบเดิมไม่กระทบ)**: `SHOWROOM_WEBHOOK_URL` (url โชว์รูม + `/api/stock-update/`) · `STOCK_SYNC_SECRET` (ค่าลับ ต้องตรงกับ oxlet_web) · **`SITE_URL`** (โดเมน backend จริง — โชว์รูมโหลดรูปจาก `SITE_URL/media/...` · nginx ต้องเสิร์ฟ `/media/`)
 - **ทิศทางเดียว** (backend → โชว์รูม) · lead/จอง จากโชว์รูมยังไม่ sync กลับ · ยังไม่มี pull สำรอง (webhook พลาด = เงียบ)
 - **ฝั่งรับ (oxlet_web)**: `Vehicle.stock_code` (0021) + `VehicleImage.src` (0022 · ผูกรูปกับต้นทาง reconcile/dedup กันซ้ำ) · view `api_stock_update` + `_sync_car_photos` · **ต้อง `migrate` ตอน deploy**
+
+#### 🌐 ปุ่ม Active — รถขึ้นเว็บเมื่อกดเท่านั้น (13 ต.ค.69 · เจ้าของสั่ง)
+*"เพิ่มปุ่ม Active … เมื่อกด Active แล้ว รถถึงจะแสดงหน้าใน Web Oxlet"* · เจ้าของเลือก: **ต้องถึงพร้อมขายก่อน** ·
+**รถที่ขึ้นเว็บอยู่แล้วโชว์ต่อ (นับเป็น Active)** · **กดได้เฉพาะผู้บริหาร + แอดมิน** · **สวิตช์อยู่ในป๊อปอัปรถ (หน้าสถานะรถ)**
+- **ขึ้นเว็บ = `web_active` AND สเตปพร้อมขาย/จอง (`C.WEB_STAGES`)** · ขายแล้ว = หายเสมอ · **เลิกพฤติกรรมเดิมที่รถขึ้นเว็บเองทุกคันที่ถึงพร้อมขาย**
+  · กด Active ก่อนถึงพร้อมขายได้ = รอ แล้วขึ้นเองตอนถึง (post_save ส่งเหมือนเดิม)
+- **`Car` (cars migration 0019)**: `web_active` · `web_active_at` · `web_active_by` (= ความตั้งใจ) ·
+  **`web_listed` = เว็บโชว์รูมตอบกลับมาว่าลูกค้าเห็นอยู่ (ของจริง ไม่เดาจากสเตป)** · `web_synced_at` · `web_sync_error`
+  · `Car.web_state` → `{key: live|wait|pending|error, text, color}` หรือ None — ใช้ทั้งป้ายลูกโลกบนการ์ด + ป๊อปอัป
+  · migration นับ Active ให้รถที่ **อยู่พร้อมขาย/จอง หรือเคยถึงพร้อมขาย (`frontline_at`) และสถานะ active** (พัก/ขายแล้ว/ยังทำสภาพ = ไม่)
+- **[showroom_sync.py](cars/showroom_sync.py)** เขียนใหม่: payload มี **`active`** · **`push_showroom(car)`** (ยิงแล้วรอผล · ปุ่ม/คำสั่ง) +
+  `notify_showroom(car)` (post_save · thread) · **ทั้ง 2 ทางบันทึกผลลงรถด้วย `.update()`** (ไม่ยิง post_save ซ้ำ = ไม่วน) ·
+  ส่งไม่สำเร็จ = แปลเป็นภาษาคน (เน็ต/timeout/401 รหัสลับไม่ตรง/HTTP) เก็บที่ `web_sync_error` + `dash_event_log` kind=`showroom`
+  · ปุ่ม = จดทุกครั้ง · อัตโนมัติ = จดเฉพาะตอนพลาด · `BG=False` ในเทสต์
+- **API `POST /track/api/web_active {code, active}`** (`api_web_active` · csrf_exempt แบบ set_priority) — `roles.can_set_web_active` = **{EXEC, ADMIN}**
+  (superuser = EXEC) · บันทึกก่อนแล้วส่ง → คืน `message` ภาษาคน + `web` · ส่งไม่สำเร็จ Active ยังติด (กด "ส่งอีกครั้ง" ได้) · รถขายแล้วกด = 400
+- **ป๊อปอัป** ([dashboard.html](templates/dashboard.html) `_webSection`/`_webStateHtml`/`setWebActive`/`_cardWeb`): สวิตช์ + สถานะจริง + ลิงก์ "ดูบนเว็บ" +
+  ใครกดเมื่อไหร่ · **ถามยืนยันทั้งเปิด/ปิด** · คนที่ไม่มีสิทธิ์เห็นแค่บรรทัดสถานะ · การ์ดบนบอร์ด = ไอคอน `globe` ใน `<span class="webb" style="display:contents">`
+  (สีตามสถานะ · อัปเดตทันทีไม่ต้องรีโหลด) · i18n `webTitle`/`webOpen` ใน `UT`
+- **ลิงก์ "ดูบนเว็บ"** = `<SHOWROOM_PUBLIC_URL>/stock/<รหัสรถ>/` (โชว์รูมเด้งไปหน้ารถเอง) · **env ใหม่ `SHOWROOM_PUBLIC_URL`** ·
+  ไม่ตั้ง = เดาจาก webhook URL · **webhook เป็น 127.0.0.1/localhost (2 เว็บ VPS เดียวกัน) = ไม่มีลิงก์ ต้องตั้งเอง**
+  · ⚠️ `.env` ในเครื่อง dev ตั้ง `SHOWROOM_WEBHOOK_URL=http://127.0.0.1:8080/…` → prod น่าจะยิงทางในเครื่องเหมือนกัน
+- **`manage.py showroom_push [--apply] [--code X] [--errors] [--out]`** — ส่งรถ Active ทุกคันแล้วบันทึกสถานะจริง ·
+  **รันครั้งเดียวหลัง deploy** (migration รู้แค่ว่า Active ไม่รู้ว่าเว็บมีประกาศจริงไหม) · ไม่ใส่ `--apply` = ดูเฉยๆ
+- **หน้าสถานะระบบร้อง**: มีรถ Active แต่ยังไม่ตั้ง webhook (warn) · รถ Active ส่งไม่สำเร็จ (err)
+- **⚠️ ลำดับ deploy: โชว์รูมก่อน แล้วค่อย SaleForce** — โชว์รูมรุ่นเก่าไม่รู้จัก `active` จะถือว่า true → รถไม่ Active ถึงพร้อมขายแล้วถูกสร้างประกาศ ·
+  กลับกัน (โชว์รูมใหม่ + SaleForce เก่าที่ไม่ส่ง active) = ถือว่า true = พฤติกรรมเดิม ไม่พัง
+- **★ ราคาขายส่งไปเว็บด้วย (13 ต.ค.69 รอบ 2 · เจ้าของสั่ง)** — `showroom_sync.sale_price(car)` = **`Car.price` (กรอกเอง) ก่อน →
+  `extra["price_num"]` (นำเข้า Car Spend)** ลำดับเดียวกับ `cars_api.priceNum`/need_match · ใส่ payload ช่อง `price` ทุกครั้ง
+  · **SaleForce = แหล่งความจริงของราคา**: มีราคา = ทับราคาบนเว็บทุกรอบ (staff แก้ราคาในโชว์รูมจะโดนทับ → แก้ที่หน้าแก้ไขรถฝั่งนี้) ·
+  ไม่มีราคา = เว็บคงราคาเดิม · แก้ราคาที่หน้าแก้ไขรถ → post_save ส่งราคาใหม่เอง (ถ้ารถอยู่พร้อมขาย/จอง)
+  · ข้อความหลังกด Active บอกราคาที่ขึ้นเว็บ / บอกให้ไปใส่ราคาถ้ายังไม่มี
+- **★ คอลัมน์ "Active" ในตารางรถ (หน้า /track/)** — สวิตช์เลื่อน (`.wsw`/`.wsl` · **มุมมน 7px ไม่ใช่แคปซูล** ตามกติกาหน้าตา) +
+  ป้ายสั้นใต้สวิตช์ (`Car.web_state["short"]` = `C.WEB_STATE_SHORT`) · ข้อความเต็มใน `title` · `td` หยุด click (ไม่เปิดป๊อปอัป)
+  · สวิตช์โชว์เฉพาะ `can_web` (context จาก `dashboard` view) · คนอื่นเห็นป้ายอย่างเดียว · รถขายแล้ว = สวิตช์กดไม่ได้
+  · JS ใช้ตัวส่งเดียวกับป๊อปอัป (`_postWebActive` → `_syncWebUI` อัปเดตการ์ด/ตาราง/ป๊อปอัปพร้อมกัน) · ส่งไปเว็บไม่สำเร็จ = `alert`
+- **ยังไม่ได้ทำ**: ตัวกรอง "ขึ้นเว็บ/ยังไม่ขึ้น" ในตารางรถ
+- **เทสต์**: `python scripts/test_web_active.py` (64 ข้อ · ปลอมแค่ `requests.post` ด้วยตัวปลอมที่ทำตามสัญญา api_stock_update) ·
+  ฝั่งโชว์รูม `python scripts/test_stock_active.py` (44 ข้อ) · ตรวจ E2E แล้ว: รัน 2 เว็บในเครื่อง (8000/8001 · SQLite) กดสวิตช์จริงในป๊อปอัป →
+  ลูกค้าเห็นรถในโชว์รูม · ปิด = หาย · กดตอนซ่อมอยู่ = รอ แล้วขึ้นเองตอนถึงพร้อมขาย
+  · ⚠️ รัน dev 2 เว็บพร้อมกัน: cmd `set DB_HOST=` = **ลบ**ตัวแปร แล้ว `load_dotenv` เติม Postgres จาก `.env` กลับ → ต้องตั้งเป็นค่าว่างจาก Python
 
 ### 🔄 ดึงรถสดจากเว็บ Car Spend (ส.ค.69) — `manage.py sync_carspend`
 นำเข้ารถจากระบบต้นทาง **Car Spend** (`autosoftware.co.th/oxletauto` · Prosoft Car) เข้าตาราง `Car` **ผ่าน HTTP สด** — ไม่ต้อง export zip มือเหมือน [import_cars](cars/management/commands/import_cars.py)

@@ -2635,6 +2635,28 @@ def admin_system_health(request):
     except Exception:                       # ยังไม่ migrate / ตารางล็อกอ่านไม่ได้ = ข้ามเงียบ
         pass
 
+    # ── 🌐 13 ต.ค.69 — ปุ่ม Active: รถที่ Active แต่ส่งไปเว็บโชว์รูมไม่สำเร็จ ต้องมีที่ให้เห็น ──
+    try:
+        from cars import showroom_sync as _ss
+        from cars.models import Car as _Car
+        _act = _Car.objects.filter(web_active=True, deleted_at__isnull=True).exclude(status="sold")
+        if not _ss.is_configured():
+            if _act.exists():
+                issues.append({"level": "warn",
+                               "msg": "มีรถกด Active %d คัน แต่ยังไม่ได้เชื่อมเว็บโชว์รูม "
+                                      "(SHOWROOM_WEBHOOK_URL / STOCK_SYNC_SECRET) — รถจะไม่ขึ้นเว็บ" % _act.count()})
+        else:
+            _werr = _act.exclude(web_sync_error="")
+            _nw = _werr.count()
+            if _nw:
+                _ex = _werr.values_list("code", "web_sync_error").first()
+                issues.append({"level": "err",
+                               "msg": "รถ Active %d คันส่งไปเว็บโชว์รูมไม่สำเร็จ (เช่น %s: %s) "
+                                      "— แก้แล้วรัน manage.py showroom_push --apply --errors"
+                                      % (_nw, _ex[0], (_ex[1] or "")[:80])})
+    except Exception:                       # ยังไม่ migrate (cars 0019) = ข้ามเงียบ
+        pass
+
     # ── 🔁 8 ต.ค.69 — เคสรับซื้อ/เทิร์นรถ → ชีต (ย้ายมาจาก n8n) ต้องไม่หยุดเงียบแบบที่ n8n เคยเป็น ──
     try:
         from checkout import tradein as _ti
