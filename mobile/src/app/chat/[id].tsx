@@ -20,11 +20,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { absUrl, api, authHeaders } from '../../lib/api';
 import { Extra, HEAT } from '../../lib/crm';
+import { ChatFile, MFile } from '../../lib/files';
 import { askText, HlText, KwPanel, Lead, Pt, QuickBar, ready } from '../../lib/kw';
 import { Banner, Btn, C, fmtTime, Loading } from '../../lib/ui';
 
 // ★ 11 ต.ค.69 รูป/ไฟล์ที่ลูกค้าส่ง — url = /connect/api/media (ต้องแนบ token · เซิร์ฟเวอร์เช็คสิทธิ์)
-type MFile = { url: string; kind: string; state: string; name: string; size: number; ext: string };
+// ★ 13 ต.ค.69 วิดีโอ/เสียง/ไฟล์ เล่น-เปิดในแอปได้แล้ว (lib/files.tsx)
 type Msg = {
   id?: string; at: string; text: string; type: string; media: boolean; dir: string; by: string; files?: MFile[];
   hl?: [number, number, string][]; // ★ 12 ต.ค.69 คำที่ระบบจับได้ (ตำแหน่ง UTF-16 · connect.add_spans)
@@ -310,9 +311,7 @@ export default function ChatScreen() {
                         ) : f.kind === 'image' ? (
                           <ChatImage key={i} uri={absUrl(f.url)} onOpen={() => setViewer(absUrl(f.url))} />
                         ) : (
-                          <Text key={i} style={[st.note, out && { color: '#fff' }]}>
-                            {f.kind === 'video' ? 'วิดีโอ' : f.kind === 'audio' ? 'ข้อความเสียง' : 'ไฟล์ ' + (f.name || '')} — เปิดดูได้ที่หน้าเว็บ Connect
-                          </Text>
+                          <ChatFile key={i} f={f} uri={absUrl(f.url)} out={out} />
                         ),
                       )}
                     </View>

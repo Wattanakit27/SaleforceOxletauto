@@ -206,9 +206,16 @@ def _follow(name: str, emp) -> dict:
                 chat_by_code[x["code"]] = x["chat_id"]
         except Exception:
             pass
+    z_opts = []
+    if name != "ADMIN":                          # ★ 13 ต.ค.69 เลือกสถานะลูกค้า (Z) จากแอป → /crm/api/lead_status
+        try:                                     #   ลีดของเทเลเซลล์แก้ในชีตโดยตรง (API ตอบ 400) → ไม่ส่งตัวเลือก
+            from .crm_page import _z_options
+            z_opts = _z_options()
+        except Exception:
+            z_opts = []
     return {
         "follow": len(fu["urgent"]), "notCalled": fu["notCalled"], "noStatus": fu["noStatus"],
-        "stale": fu["stale"], "windowDays": 14,
+        "stale": fu["stale"], "windowDays": 14, "zOptions": z_opts,
         "urgent": [{"code": u["code"], "car": u.get("car") or "", "phone": u.get("phone") or "",
                     "type": u.get("leadType") or "", "status": u["customerStatus"] or "",
                     "hot": "hot" in (u["leadTier"] or ""), "updates": u["updateCount"] or 0,

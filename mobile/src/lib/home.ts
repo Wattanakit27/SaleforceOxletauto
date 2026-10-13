@@ -2,6 +2,7 @@
 // จำไว้ในหน่วยความจำ 45 วิ → สลับแท็บ วันนี้ ↔ ฉัน ไม่ต้องโหลดใหม่ (ดึงลงเพื่อโหลดใหม่ได้เสมอ)
 import { api } from './api';
 import type { Role } from './auth';
+import { clearSavedStatus } from './leadstatus';
 
 export type CarRow = {
   code: string;
@@ -101,7 +102,7 @@ export type Home = {
     callLate?: number;
   };
   tasks?: { total: number; open: number; late: number; rows: Task[]; callMin: number };
-  follow?: { follow: number; notCalled: number; noStatus: number; stale: number; windowDays: number; urgent: Urgent[]; deals: Deal[] };
+  follow?: { follow: number; notCalled: number; noStatus: number; stale: number; windowDays: number; urgent: Urgent[]; deals: Deal[]; zOptions?: string[] };
   followLazy?: boolean; // ตามด่วนมาแยกคำขอ (ยังไม่มา = กำลังโหลด)
   followError?: string;
   carMatch?: { customers: number; rows: { code: string; customer: string; want: string; cars: { code: string; name: string }[] }[] };
@@ -183,6 +184,7 @@ export function clearHome(): void {
   gen++;
   cache = null;
   followP = null;
+  clearSavedStatus(); // สถานะที่เพิ่งบันทึกของคนก่อนหน้า ไม่ค้างให้คนถัดไป
 }
 
 /** ฿1.2M / ฿850K / ฿1,234 */

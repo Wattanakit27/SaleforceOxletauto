@@ -162,6 +162,12 @@ def m_car(request, code):
         "checklistStages": roles.checklist_stages_for(request.user), "checklistItems": C.CHECKLIST_ITEMS,
     }
     data["checkout"] = _checkout_info(request, code)
+    # ★ 13 ต.ค.69 ความด่วน + ธงงานค้าง ตั้งจากแอปได้ (ยิง /track/api/set_priority · set_flags ตัวเดิม)
+    #   สิทธิ์ (canPriority / flagPerms) มากับ car_json แล้ว · ที่นี่ส่งแค่รายการตัวเลือก
+    data["priorities"] = [{"key": k, "name": n, "color": C.PRIORITY_COLOR.get(k, "")}
+                          for k, n in C.PRIORITY_CHOICES]
+    data["flagDefs"] = [{"key": k, "name": n, "color": col, "proof": k in C.FLAG_PROOF_REQUIRED,
+                         "done": C.FLAG_DONE_NAME.get(k, "")} for k, n, _i, col in C.CAR_FLAGS]
     return _j(data)
 
 

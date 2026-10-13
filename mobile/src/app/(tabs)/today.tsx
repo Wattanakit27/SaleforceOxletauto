@@ -10,6 +10,7 @@ import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View 
 
 import { useAuth } from '../../lib/auth';
 import { baht, CarRow, CheckinAll, Home, leftText, loadHome, OutRow } from '../../lib/home';
+import { shownStatus, StatusPicker } from '../../lib/leadstatus';
 import { Banner, Btn, C, Card, Loading, Tag } from '../../lib/ui';
 
 const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -218,6 +219,8 @@ function OutLines({ rows }: { rows?: OutRow[] }) {
 // ─────────────────────────────────────────────────────────────
 function SellerBody({ d }: { d: Home }) {
   const [moreUrg, setMoreUrg] = useState(false);
+  const [zPick, setZPick] = useState<{ code: string; cur: string } | null>(null);
+  const [, bump] = useState(0); // วาดใหม่หลังบันทึกสถานะ (ค่าที่บันทึกจำไว้ใน lib/leadstatus)
   const k = d.kpi;
   const sc = d.score;
   const ch = d.chats;
@@ -225,6 +228,7 @@ function SellerBody({ d }: { d: Home }) {
   const fu = d.follow;
   const cm = d.carMatch;
   const urgent = fu?.urgent || [];
+  const zOpts = fu?.zOptions || [];
   return (
     <>
       {k ? (
@@ -305,27 +309,41 @@ function SellerBody({ d }: { d: Home }) {
           title={`ตามด่วน — ${fu.follow} เคส`}
           note={`ลีด ${fu.windowDays} วันล่าสุด · ยังไม่โทร ${fu.notCalled} · ไม่มีสถานะ ${fu.noStatus} — ลำดับเดียวกับข้อความ "ตามด่วน" ใน LINE`}>
           {urgent.length ? (
-            (moreUrg ? urgent : urgent.slice(0, 5)).map((u) => (
-              <View key={u.code} style={st.listRow}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={st.rowMain}>
-                    {u.code || '(ไม่มีโค้ด)'} {u.hot ? <Text style={{ color: C.red }}>🔥</Text> : null}
-                  </Text>
-                  <Text style={[st.sub, { fontWeight: '700', color: u.updates === 0 ? C.red : C.amber }]}>{u.reason}</Text>
-                  <Text style={st.sub} numberOfLines={1}>
-                    {u.car || 'ไม่ระบุรถ'}
-                    {u.status ? ' · ' + u.status : ''} · ไม่ได้แตะ {u.idle} วัน
-                  </Text>
+            (moreUrg ? urgent : urgent.slice(0, 5)).map((u) => {
+              const z = shownStatus(u.code, u.status);
+              return (
+                <View key={u.code} style={st.listRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={st.rowMain}>
+                      {u.code || '(ไม่มีโค้ด)'} {u.hot ? <Text style={{ color: C.red }}>🔥</Text> : null}
+                    </Text>
+                    <Text style={[st.sub, { fontWeight: '700', color: u.updates === 0 ? C.red : C.amber }]}>{u.reason}</Text>
+                    <Text style={st.sub} numberOfLines={1}>
+                      {u.car || 'ไม่ระบุรถ'} · ไม่ได้แตะ {u.idle} วัน
+                    </Text>
+                    {z.v || (zOpts.length && u.code) ? (
+                      <Text style={[st.sub, z.saved && { color: C.green, fontWeight: '700' }]} numberOfLines={1}>
+                        สถานะ: {z.v || 'ยังไม่ใส่'}
+                        {z.saved ? ' ✓ บันทึกแล้ว' : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={{ gap: 6 }}>
+                    {u.phone ? <SmallBtn title="โทร" onPress={() => call(u.phone)} color={C.green} /> : null}
+                    {u.chatId ? <SmallBtn title="แชท" onPress={() => openChat(u.chatId as number)} /> : null}
+                    {zOpts.length && u.code ? (
+                      <SmallBtn title="สถานะ" onPress={() => setZPick({ code: u.code, cur: z.v })} color={C.amber} />
+                    ) : null}
+                  </View>
                 </View>
-                <View style={{ gap: 6 }}>
-                  {u.phone ? <SmallBtn title="โทร" onPress={() => call(u.phone)} color={C.green} /> : null}
-                  {u.chatId ? <SmallBtn title="แชท" onPress={() => openChat(u.chatId as number)} /> : null}
-                </View>
-              </View>
-            ))
+              );
+            })
           ) : (
             <Empty text="ไม่มีลีดที่ต้องตามด่วน 👍" />
           )}
+          {zOpts.length && urgent.length ? (
+            <Text style={st.sub}>โทรแล้วกด “สถานะ” บันทึกผลลงชีตได้เลย — เลือกเคสเสีย/จองแล้ว เคสจะหลุดจากรายการรอบถัดไป</Text>
+          ) : null}
           {urgent.length > 5 ? (
             <Pressable onPress={() => setMoreUrg(!moreUrg)}>
               <Text style={st.more}>{moreUrg ? 'ย่อ' : `ดูอีก ${urgent.length - 5} เคส`}</Text>
@@ -374,6 +392,15 @@ function SellerBody({ d }: { d: Home }) {
       ) : null}
 
       <OutLines rows={d.myOut} />
+      {zPick ? (
+        <StatusPicker
+          code={zPick.code}
+          current={zPick.cur}
+          options={zOpts}
+          onClose={() => setZPick(null)}
+          onSaved={() => bump((n) => n + 1)}
+        />
+      ) : null}
     </>
   );
 }

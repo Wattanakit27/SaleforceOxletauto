@@ -2,6 +2,7 @@
 // เปลี่ยนสเตป: เลือกสเตป → หมายเหตุ + รูป (+ เช็คลิสต์ตรวจรถ ถ้าเป็นสเตปตรวจ) → ยืนยัน
 // กติกา "ต้องแนบรูป/หมายเหตุ" มาจากเซิร์ฟเวอร์ (rules) และเซิร์ฟเวอร์ตรวจซ้ำอีกชั้นเสมอ
 // ★ 11 ต.ค.69 เบิก-คืนรถจากหน้านี้ได้ (lib/checkout.tsx · ข้อมูลจาก checkout ใน /track/api/m/car)
+// ★ 13 ต.ค.69 ตั้งความด่วน + ติ๊กธงงานค้างได้ (lib/carmarks.tsx)
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -22,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { absUrl, api } from '../../lib/api';
+import { CarMarks, Marks } from '../../lib/carmarks';
 import { CheckoutCard, CkInfo } from '../../lib/checkout';
 import { MediaPicker, useUploads } from '../../lib/media';
 import { Banner, Btn, C, Card, Loading, Tag } from '../../lib/ui';
@@ -29,7 +31,7 @@ import { Banner, Btn, C, Card, Loading, Tag } from '../../lib/ui';
 type Media = { url: string; video: boolean };
 type Log = { stage: string; worker: string; note: string; at: string; dur: string; cur: boolean; media: Media[] };
 type Direct = { key: string; name: string; ph: string; color: string; owner: string };
-type Car = {
+type Car = Marks & {
   code: string;
   title: string;
   plate: string;
@@ -43,7 +45,6 @@ type Car = {
   flag: string;
   priorityName: string;
   priorityColor: string;
-  showPriority: boolean;
   flags: { key: string; name: string; color: string }[];
   outNow: { who: string; why: string; where: string; since: string } | null;
   photo: string;
@@ -293,6 +294,8 @@ export default function CarScreen() {
               </View>
             ) : null}
           </Card>
+
+          <CarMarks car={car} onDone={load} />
 
           {car.checkout && !car.checkout.open ? (
             <CheckoutCard code={car.code} info={car.checkout} onDone={load} />

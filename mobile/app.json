@@ -38,7 +38,10 @@
           "photosPermission": "เลือกรูป/วิดีโอแนบตอนเปลี่ยนสเตปรถ",
           "cameraPermission": "ถ่ายรูปแนบตอนเปลี่ยนสเตปรถ"
         }
-      ]
+      ],
+      "expo-video",
+      "expo-sharing",
+      "expo-font"
     ],
     "scheme": "oxletauto",
     "extra": {

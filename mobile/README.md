@@ -59,13 +59,15 @@
 | แชท | `/connect/api/summary` · `inbox` · `chat` · `claim` · `reply` |
 | วันนี้ / ฉัน | `/api/m/home?lazy=1` + `/api/m/home?part=follow` (ตามด่วนโหลดแยก ไม่ให้หน้าแรกรอ) |
 | ห้องพัก | `/connect/api/inbox?view=tocode` · `POST assign_lead` · `POST park_assign` |
-| รถ | `/track/api/cars` · `/track/api/m/car/<code>` · `POST /track/api/upload` · `POST /track/api/seller_set_stage` |
+| รถ | `/track/api/cars` · `/track/api/m/car/<code>` · `POST /track/api/upload` · `POST /track/api/seller_set_stage` · `POST /track/api/set_priority` · `POST /track/api/set_flags` |
+| สถานะลูกค้า (ตามด่วน) | `POST /crm/api/lead_status` |
+| วิดีโอ/ไฟล์ในแชท | `/connect/api/media` (โหลดลงเครื่องพร้อม token แล้วเล่น/เปิด) |
 | เบิก-คืนรถ | `POST /checkout/api/car_out` · `POST /checkout/api/car_return` |
 
 ## ไม่มีในเวอร์ชันทดลอง
 
 - **แจ้งเตือน (push)** — ต้องเป็นแอปที่ build เอง (ต้องมีบัญชี Apple Developer $99/ปี สำหรับ iPhone)
-- ส่งรูปหาลูกค้าในแชท · ตั้งความด่วน/ธงงานค้าง · Run Auto / ตั้งเลขเอง / ไม้ 2 ในห้องพัก (ใช้หน้าเว็บ)
+- ส่งรูปหาลูกค้าในแชท · Run Auto / ตั้งเลขเอง / ไม้ 2 ในห้องพัก (ใช้หน้าเว็บ)
 - เช็คชื่อด้วยเซลฟี่ในแอป — ยังเช็คชื่อด้วยรูปในกลุ่ม LINE ตามเดิม (แอปแค่โชว์ผล)
 
 ## ตรวจโค้ด

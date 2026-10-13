@@ -227,6 +227,29 @@ d = r.json() if r.status_code == 200 else {}
 ok(r.status_code == 200 and d.get("code") == "CSDEMO1", "เปิดรถด้วย token ได้ (ผูก login ระบบรถให้เอง)")
 ok(d.get("direct") and isinstance(d.get("rules", {}).get("forceMedia"), list),
    "ได้ปุ่มเปลี่ยนสเตป + กติกาแนบรูป/หมายเหตุ")
+ok([p["key"] for p in d.get("priorities") or []] == ["urgent_high", "urgent", "normal", "low"],
+   "ได้รายการความด่วน 4 ระดับ (★ 13 ต.ค.69)")
+fd = {f["key"]: f for f in d.get("flagDefs") or []}
+ok(set(fd) == {"need_photo", "need_content", "need_tire"} and fd["need_photo"]["proof"] and not fd["need_tire"]["proof"],
+   "ได้รายการธง 3 ช่อง + บอกว่าปลด 'ยังไม่ได้ถ่ายรูป' ต้องมีหลักฐาน")
+ok(d.get("canPriority") is True and all((d.get("flagPerms") or {}).values()), "แอดมินระบบ: ตั้งความด่วน/ธงได้ทุกช่อง")
+TH = {"HTTP_AUTHORIZATION": "Bearer " + ADM_TOK}
+r = Client(enforce_csrf_checks=True).post("/track/api/set_priority", json.dumps({"code": "CSDEMO1", "priority": "urgent"}),
+                                          content_type="application/json", secure=True, **TH)
+ok(r.status_code == 200 and Car.objects.get(code="CSDEMO1").priority == "urgent", "ตั้งความด่วนจากแอป")
+r = Client().post("/track/api/set_flags", json.dumps({"code": "CSDEMO1", "need_tire": True}),
+                  content_type="application/json", secure=True, **TH)
+ok(r.status_code == 200 and Car.objects.get(code="CSDEMO1").need_tire, "ติ๊กธง 'รอเปลี่ยนยาง' จากแอป")
+Car.objects.filter(code="CSDEMO1").update(need_photo=True)
+r = Client().post("/track/api/set_flags", json.dumps({"code": "CSDEMO1", "need_photo": False}),
+                  content_type="application/json", secure=True, **TH)
+ok(r.status_code == 400 and Car.objects.get(code="CSDEMO1").need_photo, "ปลด 'ยังไม่ได้ถ่ายรูป' โดยไม่มีรูป/หมายเหตุ → 400 ธงยังอยู่")
+r = Client().post("/track/api/set_flags", json.dumps({"code": "CSDEMO1", "need_photo": False, "note": "ถ่ายครบแล้ว",
+                                                      "media": [{"id": "cars/CSDEMO1/a.jpg", "video": False}]}),
+                  content_type="application/json", secure=True, **TH)
+_c = Car.objects.get(code="CSDEMO1")
+ok(r.status_code == 200 and not _c.need_photo and _c.logs.filter(note__contains="ถ่ายครบแล้ว").exists(),
+   "  …แนบรูป + หมายเหตุ → ปลดได้ และเก็บลงประวัติรถ")
 r = Client().get("/track/api/m/car/NOPE", secure=True, HTTP_AUTHORIZATION="Bearer " + ADM_TOK)
 ok(r.status_code == 404 and not r.json()["ok"], "รหัสรถไม่มีในระบบ → 404 JSON (ไม่ใช่หน้า HTML)")
 ok(Client().get("/track/api/m/car/CSDEMO1", secure=True).status_code in (302, 401),
@@ -307,6 +330,12 @@ ok(not User.objects.filter(username="line_django_chang1").exists(),
    "  …ไม่สร้างบัญชีใหม่ที่ไม่มีบทบาท (line_django_chang1)")
 r = Client().get("/connect/api/inbox", secure=True, **WH)
 ok(r.status_code == 403, "คนงานเปิด Connect ไม่ได้ (แชทลูกค้าเฉพาะเซลล์/แอดมิน)")
+_wc = Client().get("/track/api/m/car/CSDEMO1", secure=True, **WH).json()
+ok((_wc.get("flagPerms") or {}).get("need_tire") is True and (_wc.get("flagPerms") or {}).get("need_photo") is False,
+   "ช่าง: ติ๊กธงยางได้ · ธงถ่ายรูปไม่ได้ (ของทีมคอนเทนต์)")
+r = Client().post("/track/api/set_flags", json.dumps({"code": "CSDEMO1", "need_content": False}),
+                  content_type="application/json", secure=True, **WH)
+ok(r.status_code == 403, "  …ช่างยิงปลดธงคอนเทนต์ตรงๆ → 403 (เซิร์ฟเวอร์ตรวจเอง ไม่ใช่แค่ซ่อนสวิตช์)")
 wd = Client().get("/track/api/m/car/CSDEMO1", secure=True, **WH).json()
 import tempfile  # noqa: E402
 from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402

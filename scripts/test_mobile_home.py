@@ -115,6 +115,7 @@ SALES = [
     sale("นวล", 1, "จอง", 8, "คุณคนอื่น", "3คค3333"),
 ]
 FD.fetch_all_sheets = lambda *a, **k: {"leads": LEADS, "sales_reports": SALES}
+GS.fetch_all_sheets = FD.fetch_all_sheets          # หน้า CRM (ตัวเขียนสถานะลูกค้า) อ่านผ่าน google_sheets
 GS.fetch_sheet = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ไม่ต่อชีตในเทสต์"))
 CONST.refresh_from_sheet = lambda *a, **k: None
 CONST.ALL_SELLERS.clear() if hasattr(CONST.ALL_SELLERS, "clear") else None
@@ -307,6 +308,42 @@ try:
     tb = token_for(BUYER)
     r = Client().get("/api/m/home?part=follow", HTTP_AUTHORIZATION="Bearer " + tb, secure=True).json()
     ok(r.get("ok") and "follow" not in r, "บทบาทอื่นขอ part=follow → ไม่ได้อะไร")
+
+    print("\n[3c] บันทึกสถานะลูกค้า (Z) จากรายการตามด่วน (★ 13 ต.ค.69)")
+    zo = (Client().get("/api/m/home?part=follow", HTTP_AUTHORIZATION="Bearer " + t, secure=True).json()
+          .get("follow") or {}).get("zOptions") or []
+    ok(len(zo) >= 10 and "สนใจมาก" in zo, "ตามด่วนส่งตัวเลือกสถานะลูกค้า (ชุดเดียวกับ dropdown ชีต) มาด้วย")
+    _writes = []
+    _gs_upd = GS.update_lead_field
+
+    def _fake_upd(code, field, value, month=None, expected_seller=None):
+        _writes.append((code, field, value, expected_seller))
+        return {"ok": True, "tab": "ตุลาคม 69", "cell": "Z10"}
+
+    GS.update_lead_field = _fake_upd
+    try:
+        cz = Client(enforce_csrf_checks=True)          # แอปไม่มีคุกกี้ CSRF — token ต้องผ่านได้เอง
+        r = cz.post("/crm/api/lead_status", {"code": "NLD10-9002", "value": "สนใจมาก"},
+                    content_type="application/json", HTTP_AUTHORIZATION="Bearer " + t, secure=True)
+        ok(r.status_code == 200 and r.json().get("ok"), "เซลล์บันทึกสถานะจากแอปได้ (token ข้าม CSRF)"
+           + ("" if r.status_code == 200 else " [%s %s]" % (r.status_code, r.content[:120])))
+        ok(_writes[-1:] == [("NLD10-9002", "customer_status", "สนใจมาก", "มัท")],
+           "  …เขียนช่อง Z ช่องเดียว ของแถวที่ชื่อเซลล์ = คนที่ login")
+        n = len(_writes)
+        r = cz.post("/crm/api/lead_status", {"code": "NLD10-9006", "value": "สนใจมาก"},
+                    content_type="application/json", HTTP_AUTHORIZATION="Bearer " + t, secure=True)
+        ok(r.status_code == 404 and len(_writes) == n, "ลีดของคนอื่น → 404 ไม่เขียนอะไร")
+        r = cz.post("/crm/api/lead_status", {"code": "NLD10-9002", "value": "ค่ามั่ว"},
+                    content_type="application/json", HTTP_AUTHORIZATION="Bearer " + t, secure=True)
+        ok(r.status_code == 400 and len(_writes) == n, "ค่านอก dropdown → 400 ไม่เขียน")
+        r = Client(enforce_csrf_checks=True).post("/crm/api/lead_status", {"code": "NLD10-9002", "value": "ลังเล"},
+                                                  content_type="application/json", secure=True)
+        ok(r.status_code in (401, 403) and len(_writes) == n, "ไม่มี token → เขียนไม่ได้")
+        r = cz.post("/crm/api/lead_status", {"code": "NLD10-9002", "value": "สนใจมาก"},
+                    content_type="application/json", HTTP_AUTHORIZATION="Bearer " + token_for(WORKER), secure=True)
+        ok(r.status_code == 403 and len(_writes) == n, "คนงานเขียนสถานะลูกค้าไม่ได้")
+    finally:
+        GS.update_lead_field = _gs_upd
 
     print("\n[4] ส่วนหนึ่งพัง ไม่ลากทั้งหน้า")
     _bak = FD.compute_diligence_scores
