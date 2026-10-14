@@ -3,6 +3,7 @@
 // กติกา "ต้องแนบรูป/หมายเหตุ" มาจากเซิร์ฟเวอร์ (rules) และเซิร์ฟเวอร์ตรวจซ้ำอีกชั้นเสมอ
 // ★ 11 ต.ค.69 เบิก-คืนรถจากหน้านี้ได้ (lib/checkout.tsx · ข้อมูลจาก checkout ใน /track/api/m/car)
 // ★ 13 ต.ค.69 ตั้งความด่วน + ติ๊กธงงานค้างได้ (lib/carmarks.tsx)
+// ★ 14 ต.ค.69 ปุ่ม Active ขึ้น/ลงเว็บโชว์รูม (lib/webactive.tsx · ผู้บริหาร/แอดมิน)
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -15,7 +16,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -26,7 +26,8 @@ import { absUrl, api } from '../../lib/api';
 import { CarMarks, Marks } from '../../lib/carmarks';
 import { CheckoutCard, CkInfo } from '../../lib/checkout';
 import { MediaPicker, useUploads } from '../../lib/media';
-import { Banner, Btn, C, Card, Loading, Tag } from '../../lib/ui';
+import { Banner, BigSwitch, Btn, C, Card, Loading, Tag } from '../../lib/ui';
+import { WebActiveCard, WebInfo } from '../../lib/webactive';
 
 type Media = { url: string; video: boolean };
 type Log = { stage: string; worker: string; note: string; at: string; dur: string; cur: boolean; media: Media[] };
@@ -54,6 +55,7 @@ type Car = Marks & {
   role: string;
   rules: { forceMedia: string[]; forceNote: string[]; checklistStages: string[]; checklistItems: string[] };
   checkout: CkInfo | null;
+  web?: WebInfo; // ปุ่ม Active เว็บโชว์รูม (★ 14 ต.ค.69)
 };
 
 const PHASE_NAME: Record<string, string> = {
@@ -222,6 +224,8 @@ export default function CarScreen() {
 
           {car.checkout?.open ? <CheckoutCard code={car.code} info={car.checkout} onDone={load} /> : null}
 
+          <WebActiveCard code={car.code} web={car.web} onDone={load} />
+
           <Card style={{ gap: 12 }}>
             <Text style={st.h2}>เปลี่ยนสเตป</Text>
             {!car.direct.length ? (
@@ -278,7 +282,7 @@ export default function CarScreen() {
                     {car.rules.checklistItems.map((i) => (
                       <View key={i} style={st.chkRow}>
                         <Text style={[st.chkText, !chk[i] && { color: C.red }]}>{i}</Text>
-                        <Switch
+                        <BigSwitch
                           value={!!chk[i]}
                           onValueChange={(v) => setChk((cur) => ({ ...cur, [i]: v }))}
                           trackColor={{ true: C.purple, false: '#f3b4b4' }}

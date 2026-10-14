@@ -90,13 +90,17 @@ def my_checkin(emp, day=None) -> dict | None:
     day = day or timezone.localdate()
     dname = THAI_DAYS[day.weekday()]
     out = {"workStart": emp.work_start or "", "dayName": dname, "track": bool(emp.track_checkin)}
-    c = CheckIn.objects.filter(employee=emp, date_iso=day).order_by("checkin_at", "id").first()
+    from checkout.checkin_app import SOURCE, first_per_employee
+    rows = first_per_employee(CheckIn.objects.filter(employee=emp, date_iso=day))
+    c = rows[0] if rows else None
+    out["anywhere"] = bool(getattr(emp, "checkin_anywhere", False))   # ★ 14 ต.ค.69 เช็คชื่อในแอป
     if c:
         late = None
         a, b = _hm(c.time_hm), _hm(c.work_start or emp.work_start)
         if c.status == "late" and a is not None and b is not None and a > b:
             late = a - b
-        out.update(status=c.status or "abnormal", time=c.time_hm or "", lateMin=late)
+        out.update(status=c.status or "abnormal", time=c.time_hm or "", lateMin=late,
+                   source="app" if c.time_source == SOURCE else "line")
     elif emp.day_off and dname in emp.day_off:
         out["status"] = "dayoff"
     else:
@@ -321,7 +325,9 @@ def checkin_summary(day=None) -> dict:
     dname = THAI_DAYS[day.weekday()]
     seen, n = set(), {"ontime": 0, "late": 0, "abnormal": 0}
     late_rows = []
-    for c in CheckIn.objects.filter(date_iso=day).select_related("employee").order_by("time_hm", "id"):
+    from checkout.checkin_app import first_per_employee   # คนเดียววันละแถว (แอป + กลุ่ม LINE)
+    for c in sorted(first_per_employee(CheckIn.objects.filter(date_iso=day).select_related("employee")),
+                    key=lambda x: (x.time_hm or "", x.id)):
         if c.employee_id:
             seen.add(c.employee_id)
         st = c.status if c.status in n else "abnormal"

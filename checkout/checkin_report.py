@@ -101,7 +101,8 @@ def collect(day=None) -> dict:
 
     checks = {}
     orphan = []          # เช็คชื่อเข้ามาแต่จับคู่กับทะเบียนไม่ได้ — ต้องไม่ทำหาย
-    for c in CheckIn.objects.filter(date_iso=day).select_related("employee"):
+    from .checkin_app import first_per_employee   # ★ 14 ต.ค.69 แอป + กลุ่ม LINE = อันไหนมาก่อนนับอันนั้น
+    for c in first_per_employee(CheckIn.objects.filter(date_iso=day).select_related("employee")):
         if c.employee_id:
             checks[c.employee_id] = c
         else:

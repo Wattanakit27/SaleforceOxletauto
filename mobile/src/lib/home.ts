@@ -34,6 +34,8 @@ export type Checkin = {
   workStart: string;
   dayName: string;
   track: boolean;
+  anywhere?: boolean; // ★ 14 ต.ค.69 เช็คชื่อนอกสถานที่ได้ (แอดมินติ๊ก)
+  source?: 'app' | 'line'; // เช็คชื่อทางไหน
 } | null;
 export type Task = {
   code: string;

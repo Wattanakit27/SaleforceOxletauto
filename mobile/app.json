@@ -41,7 +41,13 @@
       ],
       "expo-video",
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ใช้ตำแหน่งตอนเช็คชื่อเข้างาน เพื่อตรวจว่าอยู่ที่สาขา"
+        }
+      ]
     ],
     "scheme": "oxletauto",
     "extra": {

@@ -113,13 +113,27 @@ function CheckinLine({ c }: { c?: Home['checkin'] }) {
     late: [`เช็คชื่อแล้ว ${c.time || ''} · สาย${c.lateMin ? ' ' + c.lateMin + ' นาที' : ''}`, C.amber, C.amberBg],
     abnormal: ['เช็คชื่อแล้ว ' + (c.time || '') + ' · อ่านเวลาไม่ออก', C.amber, C.amberBg],
     dayoff: ['วันนี้วันหยุดของคุณ', C.sub, '#eeeeee'],
-    none: ['ยังไม่เช็คชื่อ' + (c.workStart ? ` (เข้างาน ${c.workStart})` : '') + ' — ส่งรูปในกลุ่มเช็คชื่อ', C.red, C.redBg],
+    none: ['ยังไม่เช็คชื่อ' + (c.workStart ? ` (เข้างาน ${c.workStart})` : ''), C.red, C.redBg],
   };
   const [t, fg, bg] = map[c.status] || map.none;
+  // ★ 14 ต.ค.69 ยังไม่เช็คชื่อ = ปุ่มใหญ่ไปหน้าเช็คชื่อในแอป (ส่งรูปในกลุ่มเหมือนเดิมก็ยังได้)
+  if (c.status === 'none') {
+    return (
+      <View style={{ gap: 6 }}>
+        <View style={[st.pill, { backgroundColor: bg }]}>
+          <Text style={{ color: fg, fontWeight: '700', fontSize: 14 }}>{t}</Text>
+        </View>
+        <Btn title="📍  เช็คชื่อเข้างาน" onPress={() => router.push('/checkin')} />
+      </View>
+    );
+  }
   return (
-    <View style={[st.pill, { backgroundColor: bg }]}>
-      <Text style={{ color: fg, fontWeight: '700', fontSize: 14 }}>{t}</Text>
-    </View>
+    <Pressable onPress={() => router.push('/checkin')} style={[st.pill, { backgroundColor: bg }]}>
+      <Text style={{ color: fg, fontWeight: '700', fontSize: 14 }}>
+        {t}
+        {c.source === 'app' ? ' · ในแอป' : ''}
+      </Text>
+    </Pressable>
   );
 }
 

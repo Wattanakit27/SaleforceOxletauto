@@ -2,11 +2,11 @@
 // ยิง API เดิม: POST /checkout/api/car_out · car_return — เซิร์ฟเวอร์ตรวจจำนวนรูปขั้นต่ำซ้ำอีกชั้น
 // ติ๊กมุมที่ถ่ายไม่ครบ = ยังบันทึกได้ (ระบบจดว่าขาดมุมไหน ให้หัวหน้าเห็น) — กติกาเดียวกับเว็บ
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from './api';
 import { MediaPicker, useUploads } from './media';
-import { Banner, Btn, C, Card } from './ui';
+import { Banner, BigSwitch, Btn, C, Card } from './ui';
 
 export type CkInfo = {
   open: {
@@ -168,12 +168,12 @@ export function CheckoutCard({ code, info, onDone }: { code: string; info: CkInf
           {mode === 'out' ? (
             <View style={st.row}>
               <Text style={st.rowText}>ขอเบิกน้ำมันด้วย</Text>
-              <Switch value={fuel} onValueChange={setFuel} trackColor={{ true: C.purple, false: C.line }} />
+              <BigSwitch value={fuel} onValueChange={setFuel} trackColor={{ true: C.purple, false: C.line }} />
             </View>
           ) : (
             <View style={st.row}>
               <Text style={[st.rowText, damage && { color: C.red }]}>มีความเสียหาย / ผิดปกติ</Text>
-              <Switch value={damage} onValueChange={setDamage} trackColor={{ true: C.red, false: C.line }} />
+              <BigSwitch value={damage} onValueChange={setDamage} trackColor={{ true: C.red, false: C.line }} />
             </View>
           )}
 

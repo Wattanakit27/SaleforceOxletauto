@@ -125,6 +125,31 @@ def m_home(request):
 
 
 @csrf_exempt
+def m_checkin(request):
+    """เช็คชื่อเข้างานจากแอป — ★ 14 ต.ค.69 (checkout/checkin_app.py)
+    GET = สถานะวันนี้ + กติกาตำแหน่ง · POST multipart {photo, lat, lng, acc} = เช็คชื่อ
+    ไม่ส่งอะไรลงกลุ่ม LINE (ตาราง 9:30 / รอบตามตัว 10:00 อ่านจากตารางเช็คชื่ออยู่แล้ว)
+    """
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from checkout import checkin_app as CA
+    from checkout import connect as CN
+    user = dict(tok.user)
+    emp = CN.employee_of(user)
+    if request.method == "GET":
+        if not emp:
+            return _j({"ok": True, "linked": False,
+                       "error": "บัญชีนี้ยังไม่ผูกกับทะเบียนพนักงาน — แจ้งแอดมินให้เพิ่มชื่อเล่นในหน้าพนักงาน"})
+        return _j({"ok": True, "linked": True, "name": emp.nickname, **CA.today_info(emp)})
+    if request.method != "POST":
+        return _j({"ok": False, "error": "method not allowed"}, 405)
+    status, payload = CA.check_in(emp, user, request.POST.get("lat"), request.POST.get("lng"),
+                                  request.POST.get("acc"), request.FILES.get("photo"))
+    return _j(payload, status)
+
+
+@csrf_exempt
 @require_POST
 def m_logout(request):
     tok, bad = _need_token(request)

@@ -881,6 +881,8 @@ def api_employees(request):
             "notify_missing": bool(b.get("notifyMissing", False)),
             # ติ๊ก = หมายเหตุอยู่ยาว (ลาคลอด) · ไม่ติ๊ก = ใช้เฉพาะวันที่เขียน แล้วหายเอง
             "note_sticky": bool(b.get("noteSticky", False)),
+            # ★ 14 ต.ค.69 ติ๊ก = เช็คชื่อในแอปได้ทุกที่ (งานนอกสาขา) · ไม่ติ๊ก = ต้องอยู่ในรัศมีสาขา
+            "checkin_anywhere": bool(b.get("checkinAnywhere", False)),
         }
         row = Employee.objects.filter(pk=b.get("id") or 0).first()
         if row:
@@ -948,6 +950,7 @@ def api_employees(request):
             "noteDate": e.note_date.isoformat() if e.note_date else "",
             "noteSticky": e.note_sticky,
             "trackCheckin": e.track_checkin, "notifyMissing": e.notify_missing,
+            "checkinAnywhere": e.checkin_anywhere,
             "fromSheet": e.source == Employee.SHEET,
             # ระบบเพิ่มให้เองตอนเจอในกลุ่ม + ยังไม่มีใครมากรอกตำแหน่ง/เวลา = ต้องมีคนตามเติม
             "needsInfo": e.source == Employee.AUTO and not (e.position and e.work_start),
@@ -1003,8 +1006,9 @@ def api_checkins(request):
             d_from, d_to = d_to, d_from
 
         agg = {}
-        for c in (CheckIn.objects.filter(date_iso__gte=d_from, date_iso__lte=d_to)
-                  .select_related("employee").order_by("date_iso")):
+        from .checkin_app import first_per_employee   # คนเดียววันละแถว (แอป + กลุ่ม LINE)
+        for c in sorted(first_per_employee(CheckIn.objects.filter(date_iso__gte=d_from, date_iso__lte=d_to)
+                                           .select_related("employee")), key=lambda x: (x.date_iso, x.id)):
             key = c.employee_id or ("uid:" + c.user_id)
             a = agg.setdefault(key, {
                 "name": (c.employee.nickname if c.employee_id and c.employee else "") or c.display_name or "ไม่ทราบชื่อ",
@@ -1043,9 +1047,10 @@ def api_checkins(request):
     THAI_DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
     day_name = THAI_DAYS[day.weekday()]
 
+    from . import checkin_app as CA
     rows, seen_emp = [], set()
-    for c in (CheckIn.objects.filter(date_iso=day).select_related("employee")
-              .order_by("time_hm", "id")):
+    for c in sorted(CA.first_per_employee(CheckIn.objects.filter(date_iso=day).select_related("employee")),
+                    key=lambda x: (x.time_hm or "", x.id)):
         if c.employee_id:
             seen_emp.add(c.employee_id)
         rows.append({
@@ -1058,6 +1063,11 @@ def api_checkins(request):
             "status": c.status, "reason": c.reason,
             "timeSource": c.time_source, "address": c.full_address,
             "linked": bool(c.employee_id),   # ยังจับคู่กับทะเบียนไม่ได้ = ต้องไปผูกชื่อ
+            # ★ 14 ต.ค.69 เช็คชื่อในแอป — เปิดเซลฟี่ (แอดมินเท่านั้น) + ดูตำแหน่งบนแผนที่
+            "app": c.time_source == CA.SOURCE,
+            "photoUrl": ("/checkout/api/checkin_photo?id=%d" % c.pk) if CA.photo_file(c) else "",
+            "mapUrl": CA.map_url(c),
+            "site": (c.raw or {}).get("site", "") if c.time_source == CA.SOURCE else "",
         })
 
     missing, dayoff = [], []
@@ -1115,6 +1125,15 @@ def api_checkin_config(request):
                 ok, msg = False, str(e)[:300]
             return JsonResponse({"ok": ok, "message": msg},
                                 json_dumps_params={"ensure_ascii": False})
+
+        # ★ 14 ต.ค.69 พิกัดสาขาสำหรับเช็คชื่อในแอป (คนที่ไม่ได้ติ๊ก "นอกสถานที่ได้" ต้องอยู่ในรัศมี)
+        if b.get("action") == "sites":
+            from . import checkin_app as CA
+            ok, err, rows = CA.save_sites(b.get("sites") or [])
+            if not ok:
+                return JsonResponse({"ok": False, "error": err}, status=400,
+                                    json_dumps_params={"ensure_ascii": False})
+            return JsonResponse({"ok": True, "sites": rows}, json_dumps_params={"ensure_ascii": False})
 
         def _hhmm(v):
             v = (v or "").strip()
@@ -1178,7 +1197,44 @@ def api_checkin_config(request):
                   "total": data["counts"]["total"], "missing": data["counts"]["missing"]},
         "tag": {"can": ok_n, "all": all_n, "cannot": no_tag[:20]},
         "managers": [{"name": m["name"], "canTag": bool(m["userId"])} for m in mgrs],
+        # ★ 14 ต.ค.69 เช็คชื่อในแอป — พิกัดสาขา + ใครเช็คชื่อนอกสถานที่ได้ (ติ๊กในหน้าพนักงาน)
+        "sites": _ckapp_sites(),
+        "anywhere": _ckapp_anywhere(),
     }, json_dumps_params={"ensure_ascii": False})
+
+
+def _ckapp_sites():
+    from . import checkin_app as CA
+    return CA.sites()
+
+
+def _ckapp_anywhere():
+    from .models import Employee
+    return list(Employee.objects.filter(active=True, checkin_anywhere=True)
+                .order_by("nickname").values_list("nickname", flat=True))
+
+
+def api_checkin_photo(request):
+    """เซลฟี่ตอนเช็คชื่อในแอป `?id=<CheckIn.id>` — ★ 14 ต.ค.69 · แอดมิน/ผู้บริหารเท่านั้น
+    ไฟล์อยู่นอก /media/ (ข้อมูลส่วนบุคคล) → เปิดได้ทางนี้ทางเดียว"""
+    if not _admin(request):
+        return JsonResponse({"ok": False, "error": "ต้อง login admin/ผู้บริหาร"}, status=401,
+                            json_dumps_params={"ensure_ascii": False})
+    from django.http import FileResponse, Http404
+    from . import checkin_app as CA
+    from .models import CheckIn
+    try:
+        c = CheckIn.objects.get(pk=int(request.GET.get("id") or 0))
+    except (CheckIn.DoesNotExist, ValueError):
+        raise Http404
+    p = CA.photo_file(c)
+    if not p:
+        raise Http404
+    import mimetypes
+    resp = FileResponse(open(p, "rb"), content_type=mimetypes.guess_type(str(p))[0] or "image/jpeg")
+    resp["Cache-Control"] = "private, max-age=3600"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
 
 
 def api_customers(request):

@@ -7813,8 +7813,12 @@
             <td style="padding:7px 5px;text-align:center;color:var(--t3)">${h(r.workStart||'-')}</td>
             <td style="padding:7px 5px;text-align:center;font-size:var(--fs-sub);font-weight:800;color:${st[1]}">${h(r.timeHm||'-')}</td>
             <td style="padding:7px 5px"><span style="font-size:var(--fs-body);font-weight:700;color:${st[1]};background:var(--bg2);padding:3px 9px;border-radius:7px;white-space:nowrap">${st[0]}</span>
-              ${r.timeSource==='message'?'<div style="font-size:var(--fs-body);color:var(--t3);margin-top:2px">อ่านจากรูปไม่ได้ ใช้เวลาที่ส่ง</div>':''}</td>
-            <td style="padding:7px 5px;color:var(--t3);font-size:var(--fs-body);max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h(r.address||'')}">${h(r.address||'-')}</td></tr>`;
+              ${r.timeSource==='message'?'<div style="font-size:var(--fs-body);color:var(--t3);margin-top:2px">อ่านจากรูปไม่ได้ ใช้เวลาที่ส่ง</div>':''}
+              ${r.app?'<div style="font-size:var(--fs-body);color:var(--blue);margin-top:2px">เช็คชื่อในแอป</div>':''}</td>
+            <td style="padding:7px 5px;color:var(--t3);font-size:var(--fs-body);max-width:260px;white-space:nowrap" title="${h(r.address||'')}">
+              <span style="display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">${h(r.address||(r.app?'นอกสาขา':'-'))}</span>
+              ${r.mapUrl?`<a href="${h(r.mapUrl)}" target="_blank" rel="noopener" style="color:var(--blue);margin-left:6px">แผนที่</a>`:''}
+              ${r.photoUrl?`<a href="${h(r.photoUrl)}" target="_blank" rel="noopener" style="color:var(--blue);margin-left:6px">รูป</a>`:''}</td></tr>`;
         });
         html += `</tbody></table></div>`;
       } else {
@@ -8001,6 +8005,19 @@
 
       html += `</div>`;
 
+      // ★ 14 ต.ค.69 เช็คชื่อในแอป — คนที่ไม่ได้ติ๊ก "นอกสถานที่" ต้องอยู่ในรัศมีสาขาใดสาขาหนึ่ง
+      const any = _ckc.anywhere || [];
+      html += `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:13px;background:var(--bg2);margin-bottom:12px">
+        <div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1);margin-bottom:4px">เช็คชื่อในแอป — พิกัดสาขา</div>
+        <div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:10px;line-height:1.7">
+          พนักงานกดเช็คชื่อในแอปได้ (เซลฟี่ + ตำแหน่ง) หรือส่งรูปในกลุ่มเหมือนเดิม — อันไหนมาก่อนนับอันนั้น · ไม่ส่งอะไรลงกลุ่มตอนเช็คชื่อ<br>
+          คนที่ <b>ไม่ได้ติ๊ก "นอกสถานที่"</b> ต้องอยู่ในรัศมีสาขาข้างล่าง · ยังไม่ตั้งสาขาเลย = กดได้ทุกที่ (ไม่ได้ตรวจตำแหน่ง)<br>
+          พิกัด: เปิด Google Maps → กดค้างที่ร้าน → ก๊อปตัวเลข เช่น <code>13.361, 100.984</code> มาวาง หรือกด "ใช้ตำแหน่งเครื่องนี้" ตอนอยู่ที่ร้าน</div>
+        <div id="ckc_sites"></div>
+        <div style="font-size:var(--fs-body);color:var(--t2);margin-top:10px"><b>เช็คชื่อนอกสถานที่ได้:</b> ${any.length ? any.map(h).join(' · ') : '<span style="color:var(--t3)">ยังไม่มี</span>'}
+          <div style="color:var(--t3);margin-top:3px">ติ๊กได้ที่ <a href="#" onclick="document.getElementById('ckc-overlay').remove();openEmployees();return false" style="color:var(--blue)">เมนูพนักงาน</a> → ช่อง "นอกสถานที่"</div></div>
+      </div>`;
+
       const mg = _ckc.managers || [];
       html += `<div style="font-size:var(--fs-body);color:var(--t2);margin-bottom:12px">
         <b>คนที่จะถูกแท็กตอนมีคนไม่เช็คชื่อ:</b> ${mg.length ? mg.map(m => h(m.name) + (m.canTag?'':' <span style="color:var(--amber)">(แท็กไม่ได้)</span>')).join(' · ') : '<span style="color:var(--amber)">ยังไม่ได้ติ๊กใคร</span>'}
@@ -8016,6 +8033,55 @@
       document.getElementById('ckc_t1').value = c.tableTime || '';
       document.getElementById('ckc_t2').value = c.escalateTime || '';
       renderCheckinConfigTarget();
+      _ckcSites = (_ckc.sites || []).map(x => ({name: x.name, ll: x.lat + ', ' + x.lng, radius: x.radius}));
+      renderCkcSites();
+    }
+
+    // ★ 14 ต.ค.69 พิกัดสาขา (เช็คชื่อในแอป) — แก้ในตัวแปรก่อน กด "บันทึกสาขา" ถึงส่ง
+    var _ckcSites = [];   // var: renderCheckinConfig อาจถูกเรียกก่อนบรรทัดนี้
+    function renderCkcSites() {
+      const el = document.getElementById('ckc_sites'); if (!el) return;
+      const inp = 'font-size:var(--fs-body);padding:7px 9px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t1);min-width:0';
+      let html = _ckcSites.length ? '' : '<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:8px">ยังไม่ได้ตั้งสาขา</div>';
+      _ckcSites.forEach((x, i) => {
+        html += `<div style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(150px,1.6fr) 88px auto auto;gap:6px;align-items:center;margin-bottom:6px">
+          <input value="${h(String(x.name||''))}" placeholder="ชื่อสาขา" oninput="_ckcSites[${i}].name=this.value" style="${inp}">
+          <input value="${h(String(x.ll||''))}" placeholder="13.361, 100.984" oninput="_ckcSites[${i}].ll=this.value" style="${inp}">
+          <input type="number" min="50" max="5000" value="${h(String(x.radius||300))}" title="รัศมี (เมตร)" oninput="_ckcSites[${i}].radius=this.value" style="${inp}">
+          <button onclick="ckcHere(${i})" title="ใช้ตำแหน่งของเครื่องนี้ (ต้องอยู่ที่ร้าน)" style="font-size:var(--fs-body);padding:7px 10px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer;white-space:nowrap">ใช้ตำแหน่งเครื่องนี้</button>
+          <button onclick="_ckcSites.splice(${i},1);renderCkcSites()" title="ลบสาขานี้" style="font-size:var(--fs-body);padding:7px 10px;border-radius:9px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">ลบ</button></div>`;
+      });
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
+        <button onclick="_ckcSites.push({name:'',ll:'',radius:300});renderCkcSites()" style="font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:.5px solid var(--bd2);background:var(--bg);color:var(--t2);cursor:pointer">+ เพิ่มสาขา</button>
+        <button onclick="saveCkcSites()" style="font-size:var(--fs-body);font-weight:700;padding:7px 14px;border-radius:9px;border:none;background:var(--blue);color:var(--on-blue);cursor:pointer">บันทึกสาขา</button>
+        <span id="ckc_sites_msg" style="font-size:var(--fs-body);color:var(--t3)">รัศมีเป็นเมตร (ค่าแนะนำ 300)</span></div>`;
+      el.innerHTML = html;
+    }
+    function _ckcSitesMsg(t, col) { const el = document.getElementById('ckc_sites_msg'); if (el) { el.textContent = t; el.style.color = col || 'var(--t3)'; } }
+    function ckcHere(i) {
+      if (!navigator.geolocation) { _ckcSitesMsg('เบราว์เซอร์นี้ไม่ให้ตำแหน่ง', 'var(--red)'); return; }
+      _ckcSitesMsg('กำลังหาตำแหน่ง…');
+      navigator.geolocation.getCurrentPosition(p => {
+        _ckcSites[i].ll = p.coords.latitude.toFixed(6) + ', ' + p.coords.longitude.toFixed(6);
+        renderCkcSites(); _ckcSitesMsg('ได้ตำแหน่งแล้ว (คลาดเคลื่อน ~' + Math.round(p.coords.accuracy) + ' ม.) — กด "บันทึกสาขา"', 'var(--green)');
+      }, e => _ckcSitesMsg('หาตำแหน่งไม่ได้: ' + (e.message || e.code), 'var(--red)'), {enableHighAccuracy: true, timeout: 15000});
+    }
+    async function saveCkcSites() {
+      const rows = [];
+      for (const x of _ckcSites) {
+        const m = String(x.ll || '').match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
+        if (!m) { _ckcSitesMsg('สาขา "' + (x.name || '?') + '": ใส่พิกัดแบบ 13.361, 100.984', 'var(--red)'); return; }
+        rows.push({name: String(x.name || '').trim(), lat: Number(m[1]), lng: Number(m[2]), radius: Number(x.radius || 300)});
+      }
+      _ckcSitesMsg('กำลังบันทึก…');
+      try {
+        const r = await fetch('/checkout/api/checkin_config', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrfToken(),'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin', body: JSON.stringify({action:'sites', sites: rows})});
+        const d = await r.json();
+        if (!d.ok) { _ckcSitesMsg(d.error || 'ไม่สำเร็จ', 'var(--red)'); return; }
+        _ckc.sites = d.sites;
+        _ckcSites = d.sites.map(x => ({name: x.name, ll: x.lat + ', ' + x.lng, radius: x.radius}));
+        renderCkcSites(); _ckcSitesMsg('✓ บันทึกแล้ว ' + d.sites.length + ' สาขา', 'var(--green)');
+      } catch (e) { _ckcSitesMsg('ผิดพลาด: ' + (e.message || e), 'var(--red)'); }
     }
 
     function renderCheckinConfigTarget() {
@@ -8161,8 +8227,9 @@
           <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px" title="ใช้เฉพาะวันที่เขียน แล้วหายเอง — ถ้าลายาว (ลาคลอด) ให้ติ๊ก &quot;ค้างไว้&quot;">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
           <th style="padding:6px 5px" title="ติ๊กออกสำหรับผู้บริหาร — จะไม่ขึ้นในหน้าเช็คชื่อเข้างานเลย">เช็คชื่อ</th>
           <th style="padding:6px 5px" title="ติ๊ก = ถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ (หัวหน้า/ผู้บริหาร)">แจ้งเตือน</th>
+          <th style="padding:6px 5px" title="เช็คชื่อในแอป: ติ๊ก = กดได้ทุกที่ (งานนอกสาขา) · ไม่ติ๊ก = ต้องอยู่ในรัศมีสาขา (ตั้งพิกัดสาขาที่ ตั้งค่าส่งเช็คชื่อเข้าไลน์)">นอกสถานที่</th>
           <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
-      if (!rows.length) html += `<tr><td colspan="11" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
+      if (!rows.length) html += `<tr><td colspan="12" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
@@ -8180,6 +8247,7 @@
           <td style="padding:5px;color:${acc?'var(--green)':'var(--t3)'};font-weight:${acc?700:400};white-space:nowrap">${acc?(acc+' บัญชี'):'ยังไม่ผูก'}</td>
           <td style="padding:5px;text-align:center;white-space:nowrap"><input type="checkbox" id="emp_trk_${e.id}" ${e.trackCheckin===false?'':'checked'} onchange="empSave(${e.id})" title="ติ๊กออก = ผู้บริหาร ไม่ต้องเช็คชื่อ" style="width:16px;height:16px;cursor:pointer">${e.leftGroupAt ? `<div title="ออกจากกลุ่มเช็คชื่อ — ระบบเอาออกจากเช็คชื่อให้เอง · กลับเข้ากลุ่มจะคืนให้เอง" style="font-size:var(--fs-body);font-weight:700;color:var(--t2)">ออกจากกลุ่ม ${h(String(e.leftGroupAt).slice(8,10).replace(/^0/,''))}/${h(String(+String(e.leftGroupAt).slice(5,7)))}</div>` : ''}${e.trackCheckin===false && (e.checkinsWhileOff||0)>0 ? `<div title="ปิดเช็คชื่อไว้ แต่เช็คชื่อเข้ามา ${e.checkinsWhileOff} วันใน 14 วัน" style="font-size:var(--fs-body);font-weight:700;color:var(--red)">เช็คชื่อจริง ${e.checkinsWhileOff} วัน</div>` : ''}</td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_ntf_${e.id}" ${e.notifyMissing?'checked':''} onchange="empSave(${e.id})" title="ติ๊ก = ถูกแท็กตอนมีคนยังไม่เช็คชื่อ" style="width:16px;height:16px;cursor:pointer"></td>
+          <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_any_${e.id}" ${e.checkinAnywhere?'checked':''} onchange="empSave(${e.id})" title="ติ๊ก = เช็คชื่อในแอปได้ทุกที่ (งานนอกสาขา) · ไม่ติ๊ก = ต้องอยู่ในรัศมีสาขา" style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;text-align:center"><input type="checkbox" id="emp_act_${e.id}" ${e.active?'checked':''} onchange="empSave(${e.id})" style="width:16px;height:16px;cursor:pointer"></td>
           <td style="padding:5px;white-space:nowrap">
             <span id="emp_ok_${e.id}" style="font-size:var(--fs-body);font-weight:700;color:var(--green);margin-right:6px"></span>
@@ -8247,6 +8315,7 @@
                 note:_empV('emp_note_'+id), active: act ? act.checked : true,
                 trackCheckin: trk ? trk.checked : true,
                 notifyMissing: (document.getElementById('emp_ntf_' + id) || {}).checked || false,
+                checkinAnywhere: (document.getElementById('emp_any_' + id) || {}).checked || false,
                 noteSticky: (document.getElementById('emp_stk_' + id) || {}).checked || false},
                'emp_msg', id);
     }

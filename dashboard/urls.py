@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/m/token", mobile_views.m_token, name="m_token"),
     path("api/m/me", mobile_views.m_me, name="m_me"),
     path("api/m/home", mobile_views.m_home, name="m_home"),
+    path("api/m/checkin", mobile_views.m_checkin, name="m_checkin"),   # เช็คชื่อในแอป (★ 14 ต.ค.69)
     path("api/m/logout", mobile_views.m_logout, name="m_logout"),
     path("", views.index),
     path("dashboard/", views.dashboard_page, name="dashboard"),

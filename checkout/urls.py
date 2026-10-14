@@ -21,4 +21,5 @@ urlpatterns = [
     # เช็คชื่อเข้างานรายวัน (n8n เขียนเข้ามา · หน้านี้อ่านอย่างเดียว)
     path("api/checkins", views.api_checkins, name="checkout_checkins"),
     path("api/checkin_config", views.api_checkin_config, name="checkout_checkin_config"),
+    path("api/checkin_photo", views.api_checkin_photo, name="checkout_checkin_photo"),   # เซลฟี่เช็คชื่อในแอป (แอดมิน)
 ]

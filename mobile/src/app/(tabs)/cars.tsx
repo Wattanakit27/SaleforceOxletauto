@@ -112,7 +112,7 @@ export default function Cars() {
           autoCorrect={false}
         />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={st.chips}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.bar} contentContainerStyle={st.chips}>
         {filters.map((f) => {
           const on = f.k === fk;
           const n = active.filter(f.test).length;
@@ -214,13 +214,21 @@ const st = StyleSheet.create({
     color: C.text,
     backgroundColor: '#fff',
   },
-  chips: { gap: 6, paddingHorizontal: 12, paddingBottom: 6 },
-  chip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff' },
+  // ★ 14 ต.ค.69 แถบกรองห้ามหด (flexShrink 0) — เดิมรายการรถข้างล่างบีบแถบจนตัวหนังสือโดนตัด · ปุ่มใหญ่ขึ้นกดง่าย
+  bar: { flexGrow: 0, flexShrink: 0 },
+  chips: { gap: 8, paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center' },
+  chip: {
+    minHeight: 42, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff',
+  },
   chipOn: { backgroundColor: C.purple, borderColor: C.purple },
-  chipText: { fontSize: 13, fontWeight: '700', color: C.text },
-  sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
-  sortBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff' },
-  sortText: { fontSize: 12, fontWeight: '700', color: C.text },
+  chipText: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: C.text },
+  sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 4 },
+  sortBtn: {
+    minHeight: 38, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff',
+  },
+  sortText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: C.text },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,7 +251,7 @@ const st = StyleSheet.create({
   },
   plate: { fontSize: 16, fontWeight: '800', color: C.text },
   title: { fontSize: 14, fontWeight: '400', color: C.sub },
-  sub: { fontSize: 13, color: C.sub },
+  sub: { fontSize: 14, color: C.sub },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 },
   chev: { fontSize: 24, color: C.sub },
   empty: { textAlign: 'center', color: C.sub, padding: 40 },

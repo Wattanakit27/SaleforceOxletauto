@@ -6,6 +6,8 @@ import {
   Pressable,
   StyleProp,
   StyleSheet,
+  Switch,
+  SwitchProps,
   Text,
   View,
   ViewStyle,
@@ -70,6 +72,11 @@ export function Btn({
       )}
     </Pressable>
   );
+}
+
+/** สวิตช์ขนาดใหญ่ (★ 14 ต.ค.69 เจ้าของ: ช่องติ๊กของสำคัญควรใหญ่กว่านี้) — ขยาย 30% + เว้นขอบให้ไม่ทับข้อความข้างๆ */
+export function BigSwitch(props: SwitchProps) {
+  return <Switch {...props} style={[s.bigSwitch, props.style]} />;
 }
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -155,5 +162,6 @@ const s = StyleSheet.create({
     borderColor: C.line,
   },
   banner: { borderRadius: 8, padding: 12 },
+  bigSwitch: { transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }], marginHorizontal: 8, marginVertical: 4 },
   tag: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
 });

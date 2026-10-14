@@ -178,7 +178,7 @@ export default function ChatList() {
           returnKeyType="search"
         />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={st.quick}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.bar} contentContainerStyle={st.quick}>
         {QUICK.map((x, i) => {
           const on = f[x.k] === x.v;
           return (
@@ -321,8 +321,13 @@ const st = StyleSheet.create({
   preview: { fontSize: 14, color: C.sub, marginTop: 2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
   empty: { textAlign: 'center', color: C.sub, padding: 40 },
-  quick: { gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
-  qchip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff' },
+  // ★ 14 ต.ค.69 แถบกรองห้ามหด (flexShrink 0) — เดิมรายชื่อข้างล่างบีบแถบจนตัวหนังสือโดนตัด · ชิปใหญ่ขึ้นกดง่าย
+  bar: { flexGrow: 0, flexShrink: 0 },
+  quick: { gap: 8, paddingHorizontal: 12, paddingBottom: 10, alignItems: 'center' },
+  qchip: {
+    minHeight: 42, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff',
+  },
   qchipOn: { backgroundColor: C.purple, borderColor: C.purple },
-  qtext: { fontSize: 13, fontWeight: '700', color: C.text },
+  qtext: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: C.text },
 });

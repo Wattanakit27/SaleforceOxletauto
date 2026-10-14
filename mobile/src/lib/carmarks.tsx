@@ -5,11 +5,11 @@
 //   ธง = แยกสิทธิ์รายช่อง (รูป/คอนเทนต์ = โปรดักชัน · ยาง = ช่าง+ทะเบียน · ผู้บริหารได้ทุกช่อง)
 //   ปลดธง "ยังไม่ได้ถ่ายรูป" = ประกาศว่าถ่ายเสร็จ → ต้องแนบรูป + หมายเหตุ (เก็บลงประวัติรถ)
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from './api';
 import { MediaPicker, useUploads } from './media';
-import { Banner, Btn, C, Card } from './ui';
+import { Banner, BigSwitch, Btn, C, Card } from './ui';
 
 export type FlagDef = { key: string; name: string; color: string; proof: boolean; done: string };
 export type Marks = {
@@ -132,7 +132,7 @@ export function CarMarks({ car, onDone }: { car: Marks; onDone: () => Promise<vo
                 <View style={st.flagRow}>
                   <View style={[st.dot, { backgroundColor: f.color }]} />
                   <Text style={[st.flagT, !can && { color: C.sub }]}>{f.name}</Text>
-                  <Switch
+                  <BigSwitch
                     value={proof?.key === f.key ? true : val}
                     disabled={!can || !!busy}
                     onValueChange={(v) => toggle(f, v)}

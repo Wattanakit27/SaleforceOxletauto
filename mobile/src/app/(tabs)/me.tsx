@@ -1,6 +1,6 @@
 // แท็บ "ฉัน" — บัญชีที่ใช้ · เช็คชื่อวันนี้ · คะแนนเซลล์แยก 6 ด้าน (เซลล์) · ออกจากระบบ
 // ข้อมูลชุดเดียวกับหน้า "วันนี้" (GET /api/m/home · จำไว้ 45 วิ ไม่โหลดซ้ำตอนสลับแท็บ)
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -80,8 +80,16 @@ export default function Me() {
             {ci.status === 'late' && ci.lateMin ? ` (${ci.lateMin} นาที)` : ''}
           </Text>
           <Text style={st.sub}>
-            เวลาเข้างานของคุณ: {ci.workStart || 'ยังไม่ได้ตั้ง (แจ้งแอดมิน)'} · เช็คชื่อด้วยการส่งรูปในกลุ่ม LINE เช็คชื่อตามเดิม
+            เวลาเข้างานของคุณ: {ci.workStart || 'ยังไม่ได้ตั้ง (แจ้งแอดมิน)'}
+            {ci.source ? ` · เช็คชื่อทาง${ci.source === 'app' ? 'แอป' : 'รูปในกลุ่ม LINE'}` : ''}
+            {ci.anywhere ? ' · เช็คชื่อนอกสถานที่ได้' : ''}
           </Text>
+          {ci.status === 'none' ? (
+            <Btn title="📍  เช็คชื่อเข้างาน" onPress={() => router.push('/checkin')} />
+          ) : (
+            <Btn title="ดูรายละเอียดเช็คชื่อ" outline small onPress={() => router.push('/checkin')} />
+          )}
+          <Text style={st.sub}>ส่งรูปในกลุ่ม LINE เหมือนเดิมก็ได้ — นับอันที่มาก่อน</Text>
         </Card>
       ) : null}
 
