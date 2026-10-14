@@ -773,6 +773,8 @@ ok("ตัวเฝ้าระบบ: cron หยุดเกิน 10 นา�
 day = djtz.make_aware(datetime(2026, 11, 10, 12, 0))               # หลังข้อความทดสอบทั้งหมด (ล่าสุด 1 พ.ย.)
 ok("ตัวเฝ้าระบบ: ช่วงทำงานไม่มีข้อความจากห้องจ่ายเบอร์เกิน 90 นาที = แจ้ง",
    "wd:quiet" in keys(LS.watchdog_check(day.replace(hour=15, minute=0))))
+ok("ตัวเฝ้าระบบ: 10:30 เช้า (ข้อความล่าสุดเมื่อคืน) = ยังไม่แจ้ง (นับจาก 10:00 ไม่ใช่จากเมื่อคืน)",
+   "wd:quiet" not in keys(LS.watchdog_check(day.replace(hour=10, minute=30))))
 ok("ตัวเฝ้าระบบ: นอกเวลาทำงาน = ไม่แจ้งเรื่องเงียบ",
    "wd:quiet" not in keys(LS.watchdog_check(day.replace(hour=22, minute=0))))
 # ข้อความค้างเกิน 15 นาที (งานปกติไม่ได้ทำงาน) → ลงให้เอง + แจ้ง

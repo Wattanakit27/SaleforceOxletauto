@@ -1663,9 +1663,13 @@ def watchdog_check(now=None) -> list:
     if QUIET_HOURS[0] <= local.hour < QUIET_HOURS[1]:
         last = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=_rooms(), direction=GroupChat.IN)
                 .order_by("-sent_at").values_list("sent_at", flat=True).first())
-        if last and now - last > timedelta(minutes=QUIET_MIN):
-            items.append(("wd:quiet", "ไม่มีข้อความจากห้องจ่ายเบอร์เข้าระบบมา %d นาที (ช่วงทำงาน) — ตัวส่งต่อข้อความ LINE (n8n) "
-                          "อาจหยุด ชีตจะไม่ลงจนกว่าจะกลับมา" % ((now - last).total_seconds() // 60), 180))
+        # นับจากข้อความล่าสุด หรือ 10:00 ของวันนี้ (อันที่หลังกว่า) — ไม่งั้น 10:00 ทุกเช้าจะแจ้งเพราะข้อความล่าสุดคือเมื่อคืน
+        start = local.replace(hour=QUIET_HOURS[0], minute=0, second=0, microsecond=0)
+        ref = max(last, start) if last else None
+        if ref and now - ref > timedelta(minutes=QUIET_MIN):
+            items.append(("wd:quiet", "ไม่มีข้อความจากห้องจ่ายเบอร์เข้าระบบตั้งแต่ %s (%d นาที · ช่วงทำงาน) — ตัวส่งต่อข้อความ "
+                          "LINE (n8n) อาจหยุด ชีตจะไม่ลงจนกว่าจะกลับมา"
+                          % (timezone.localtime(ref).strftime("%H:%M"), (now - ref).total_seconds() // 60), 180))
     return items
 
 
