@@ -282,6 +282,51 @@
     return 'today';
   })();
   const __charts = {};
+  // ★ 14 ต.ค.69 ข้อมูลอัปเดตเอง (ชุดเดียวกับ index.html _liveData) — ข้อมูล (D) ฝังมากับหน้าตอนเปิดครั้งเดียว
+  //   เดิมเปิดค้างไว้ = ตัวเลขค้างเป็นของวันที่เปิดหน้า → ถามหน้าตัวเองแบบ ?format=json ทุก 10 นาที (เฉพาะตอนเปิดดูอยู่)
+  //   + ทันทีที่กลับมาที่แท็บ · ข้อมูลไม่เปลี่ยน (`_hash` ตรง) = คำตอบสั้นๆ · เปลี่ยน = แทนที่ D แล้ววาดใหม่ที่ตำแหน่งเดิม
+  //   · กำลังพิมพ์ / เปิดหน้าต่างค้าง = เก็บไว้ก่อน ค่อยวาดตอนว่าง
+  //   · หน้าแชท/สถานะรถ (กรอบฝัง) และฟอร์มสินเชื่อ/ไฟแนนซ์ (ที่กรอกไว้จะหาย) = แทนที่ D เงียบๆ ไม่วาดใหม่
+  var _liveTick = function(){};   // var: setPageMode อาจเรียกก่อนบรรทัดนี้
+  (function _liveData(){
+    var EVERY = 10 * 60000, lastCheck = Date.now(), pending = null, inflight = false, lastInput = 0;
+    ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ lastInput = Date.now(); }, true); });
+    function busy() {
+      if (document.querySelector('.modal-overlay,[id$="-overlay"],[id$="-ov"]')) return true;
+      // ช่องพิมพ์ที่โฟกัสค้าง นับว่ายุ่งเฉพาะตอนเพิ่งพิมพ์/คลิกภายใน 2 นาที — ช่องวันที่ดึงโฟกัสกลับเองหลังเลือกวัน
+      //   ถ้านับตลอด คนที่เลือกวันแล้วเปิดค้างไว้จะไม่ได้ข้อมูลใหม่อีกเลย (เจอตอนทดสอบ)
+      var a = document.activeElement;
+      return !!(a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) && Date.now() - lastInput < 120000);
+    }
+    function apply(nd) {
+      if (busy()) { pending = nd; return; }
+      pending = null;
+      Object.keys(D).forEach(function(k){ delete D[k]; });
+      Object.keys(nd).forEach(function(k){ D[k] = nd[k]; });
+      if (['chat', 'cars', 'loan', 'finance'].indexOf(pageMode) >= 0) return;
+      var y = window.scrollY;
+      render();
+      window.scrollTo(0, y);
+    }
+    function check() {
+      if (document.hidden || inflight || !D) return;
+      inflight = true; lastCheck = Date.now();
+      var q = new URLSearchParams(location.search);
+      q.set('format', 'json'); q.set('h', D._hash || '');
+      fetch(location.pathname + '?' + q.toString(), {credentials: 'same-origin', cache: 'no-store'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){ if (j && j.meta && j.seller !== undefined) apply(j); })
+        .catch(function(){})
+        .then(function(){ inflight = false; });
+    }
+    _liveTick = function(){ if (pending) apply(pending); };
+    setInterval(function(){
+      if (pending) apply(pending);
+      if (Date.now() - lastCheck >= EVERY) check();
+    }, 20000);
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden && Date.now() - lastCheck > 60000) check(); });
+    window.addEventListener('pageshow', function(e){ if (e.persisted) check(); });
+  })();
 
   // ── date utils ──
   function parseSheetDate(s) {
@@ -2404,6 +2449,7 @@
       history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : ''));
     } catch (e) {}
     render();
+    try { _liveTick(); } catch (e) {}
   }
   function toggleTheme() {
     const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

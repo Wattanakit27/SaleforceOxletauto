@@ -9,6 +9,7 @@ from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.gzip import gzip_page
 
 from .services.fetch_dashboard import fetch_dashboard_data, _mask_phone
 from .services.google_sheets import fetch_sheet, cell, EMPLOYEE_COL as EM
@@ -380,12 +381,22 @@ def dashboard_page(request):
 
 
 @require_GET
+@gzip_page
 def api_dashboard(request):
-    """GET /api/dashboard — JSON data รวมทุกเซลล์ → ต้อง login admin/ผู้บริหาร."""
+    """GET /api/dashboard — JSON data รวมทุกเซลล์ → ต้อง login admin/ผู้บริหาร.
+
+    ★ 14 ต.ค.69 หน้าแดชบอร์ดถามทุก 5 นาทีเพื่ออัปเดตตัวเลขเอง (index.html _liveData)
+      `?since=<meta.generatedAt ที่หน้ามีอยู่>` ตรงกับชุดล่าสุด = ตอบสั้นๆ `{unchanged, generatedAt}` ไม่ส่งทั้งก้อน (~MB)
+      · บีบอัด gzip (nginx ไม่บีบ JSON) — ไม่มีความลับ/ค่าที่ผู้ใช้ส่งมาสะท้อนกลับในคำตอบ
+    """
     if not _can_view_all(_session_user(request)):
         return JsonResponse({"error": "ต้อง login ผู้บริหาร/admin ก่อน"}, status=401)
     try:
         data = fetch_dashboard_data()
+        gen = str(((data or {}).get("meta") or {}).get("generatedAt") or "")
+        since = (request.GET.get("since") or "").strip()
+        if since and gen and since == gen:
+            return JsonResponse({"unchanged": True, "generatedAt": gen})
         return JsonResponse(data, json_dumps_params={"ensure_ascii": False, "default": str})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -4756,6 +4767,19 @@ def _render_seller_page(request, seller_name):
         "monthly": data["monthly"],
         "scorecard": scorecard,
     }
+
+    # ★ 14 ต.ค.69 หน้าเซลล์อัปเดตตัวเลขเอง (seller.html _liveData) — `?format=json&h=<_hash>` = ข้อมูลชุดเดียวกับหน้า
+    #   ผ่านด่านสิทธิ์เดียวกับหน้า (seller_dashboard / me_dashboard ตรวจก่อนเรียกฟังก์ชันนี้)
+    #   _hash = ลายนิ้วมือของข้อมูล (ไม่รวม meta ที่มีเวลาคำนวณ) → ไม่เปลี่ยน = ตอบสั้นๆ ไม่ส่งทั้งก้อน
+    import hashlib as _hl
+    filtered["_hash"] = _hl.md5(json.dumps({k: v for k, v in filtered.items() if k != "meta"},
+                                           ensure_ascii=False, default=str, sort_keys=True).encode("utf-8")).hexdigest()
+    if request.GET.get("format") == "json":
+        if (request.GET.get("h") or "") == filtered["_hash"]:
+            return JsonResponse({"unchanged": True, "_hash": filtered["_hash"]})
+        resp = JsonResponse(filtered, json_dumps_params={"ensure_ascii": False, "default": str})
+        resp["Cache-Control"] = "no-store"
+        return resp
 
     constants = {
         "UPD_TGT": UPD_TGT,

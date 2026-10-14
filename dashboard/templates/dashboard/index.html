@@ -344,6 +344,83 @@
       }
       poll(); setInterval(poll, 30000);
     })();
+    // ★ 14 ต.ค.69 ข้อมูลอัปเดตเอง — ข้อมูลแดชบอร์ด (D) ฝังมากับหน้าตอนเปิดครั้งเดียว
+    //   เดิมเปิดแท็บค้างไว้ = ตัวเลขค้างเป็นของวันที่เปิดหน้า แต่ตัวกรองวันที่/ตัวหาร "ต่อวัน" ใช้วันนี้ → ดูเหมือนลีดหายครึ่งหนึ่ง
+    //   (เจอจริง: เครื่องหนึ่งเห็นยอด 1–14 ต.ค. เป็นข้อมูลของเช้า 8 ต.ค.)
+    //   · ถามเซิร์ฟเวอร์ทุก 5 นาทีเฉพาะตอนแท็บนี้เปิดดูอยู่ + ทันทีที่กลับมาที่แท็บ (?since= ไม่เปลี่ยน = ได้คำตอบสั้นๆ ไม่ส่งข้อมูลทั้งก้อน)
+    //   · ได้ชุดใหม่ = แทนที่ D แล้ววาดหน้าใหม่ที่ตำแหน่งเลื่อนเดิม — ผู้ใช้ไม่ต้องกดอะไร
+    //   · กำลังพิมพ์ / เปิดหน้าต่าง-พาเนลค้าง = เก็บไว้ก่อน ค่อยวาดตอนว่าง (วาดทับ = ของที่พิมพ์หาย · เลขแถวในหน้าต่างไม่ตรงข้อมูลใหม่)
+    //   · หน้าที่มีกรอบฝัง (Connect / สถานะรถ / เบิก-คืน / หน้าเซลล์) = แทนที่ D เงียบๆ ไม่วาดใหม่ (วาดใหม่ = กรอบโหลดใหม่ แชทที่พิมพ์ค้างหาย)
+    //   · เซิร์ฟเวอร์เองไม่ได้ดึงชีตใหม่เกิน 30 นาที (cron หยุด) = แถบแจ้งให้รู้ — ไม่มีปุ่ม เพราะกดโหลดซ้ำก็ไม่ช่วย
+    var _liveTick = function(){};   // var: switchTab อาจเรียกก่อนบรรทัดนี้ (บทเรียน TDZ เดิม)
+    (function _liveData(){
+      var EVERY = 5 * 60000, SERVER_STALE = 30 * 60000;
+      var KEEP = ['onhand', 'onhandMeta', 'sellerFlags'];   // มากับหน้าเท่านั้น (ไม่อยู่ใน /api/dashboard) · แก้ในหน้าแล้วเก็บใน D อยู่แล้ว
+      var lastCheck = Date.now(), pending = null, inflight = false, lastInput = 0;
+      ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ lastInput = Date.now(); }, true); });
+      function busy() {
+        if (/[?&]panel=/.test(location.search)) return true;
+        if (document.querySelector('[id$="-overlay"],[id$="-ov"],#ox-page-bar,#trk-stage-confirm')) return true;
+        if (document.body.classList.contains('nav-open')) return true;
+        // ช่องพิมพ์ที่โฟกัสค้าง นับว่ายุ่งเฉพาะตอนเพิ่งพิมพ์/คลิกภายใน 2 นาที — ช่องวันที่ดึงโฟกัสกลับเองหลังเลือกวัน
+        //   ถ้านับตลอด คนที่เลือกวันแล้วเปิดค้างไว้จะไม่ได้ข้อมูลใหม่อีกเลย (เจอตอนทดสอบ)
+        var a = document.activeElement;
+        return !!(a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) && Date.now() - lastInput < 120000);
+      }
+      function apply(nd) {
+        if (busy()) { pending = nd; return; }
+        pending = null;
+        Object.keys(D).forEach(function(k){ if (KEEP.indexOf(k) < 0) delete D[k]; });
+        Object.keys(nd).forEach(function(k){ if (KEEP.indexOf(k) < 0) D[k] = nd[k]; });
+        _rmCache = null; _rmKey = '';   // แคชผลรวมช่วงวันที่ผูกกับข้อมูลชุดเก่า
+        if (document.querySelector('#dashboard-root iframe')) return;
+        var y = window.scrollY;
+        render();
+        window.scrollTo(0, y);
+      }
+      function ago(ms) {
+        var m = Math.round(ms / 60000);
+        if (m < 60) return m + ' นาที';
+        var hr = Math.round(m / 60);
+        return hr < 48 ? hr + ' ชั่วโมง' : Math.round(hr / 24) + ' วัน';
+      }
+      function notice() {
+        var old = document.getElementById('stale-bar');
+        var t = NaN;
+        try { t = new Date(D.meta && D.meta.generatedAt).getTime(); } catch (e) {}
+        if (isNaN(t) || Date.now() - t < SERVER_STALE || document.querySelector('#dashboard-root iframe')) { if (old) old.remove(); return; }
+        var when = new Date(t).toLocaleString('th-TH', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+        var bar = old || document.createElement('div');
+        if (!old) {
+          bar.id = 'stale-bar';
+          bar.setAttribute('role', 'status');
+          bar.style.cssText = 'position:fixed;left:0;right:0;bottom:16px;margin:0 auto;width:fit-content;z-index:1300;max-width:calc(100vw - 32px);box-sizing:border-box;'
+            + 'padding:8px 12px;border-radius:8px;background:var(--amber-bg,#fef3c7);color:var(--amber,#92400e);border:1px solid var(--amber-mid,#f59e0b);'
+            + 'box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:var(--fs-body,13px);font-weight:600';
+          document.body.appendChild(bar);
+        }
+        bar.textContent = 'ระบบยังไม่ได้ดึงข้อมูลใหม่จากชีตตั้งแต่ ' + when + ' (' + ago(Date.now() - t)
+          + ') — ตัวเลขอาจไม่ตรงกับตอนนี้ · ระบบดึงข้อมูลอาจหยุดทำงาน ดูที่หน้าสถานะระบบ';
+      }
+      function check() {
+        if (document.hidden || inflight) return;
+        inflight = true; lastCheck = Date.now();
+        var since = (D.meta && D.meta.generatedAt) || '';
+        fetch('/api/dashboard?since=' + encodeURIComponent(since), {credentials: 'same-origin', cache: 'no-store'})
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){ if (j && j.meta && j.summary) apply(j); })
+          .catch(function(){})
+          .then(function(){ inflight = false; notice(); });
+      }
+      _liveTick = function(){ if (pending) apply(pending); notice(); };
+      setInterval(function(){
+        if (pending) apply(pending);
+        if (Date.now() - lastCheck >= EVERY) check();
+      }, 20000);
+      document.addEventListener('visibilitychange', function(){ if (!document.hidden && Date.now() - lastCheck > 60000) check(); });
+      window.addEventListener('pageshow', function(e){ if (e.persisted) check(); });   // กลับมาจาก back/forward cache
+      setTimeout(notice, 1500);
+    })();
     const passMonth = (ds, m) => {
       if(m===0) return true;
       if(!ds) return true;
@@ -5072,7 +5149,7 @@
         D.sellerFlags=j.flags||{};   // sync เงียบๆ กับ server (ไม่ต้อง render ซ้ำ)
       }catch(e){ if(_prev){D.sellerFlags[name]=_prev;}else{delete D.sellerFlags[name];} render(); alert('บันทึกไม่สำเร็จ (เน็ต?) — คืนค่าเดิม'); }
     }
-    function switchTab(t) { tab=t; showCase=null; closeNav(); updateUrl(); render(); }   // เลือกแท็บแล้วปิด drawer เอง
+    function switchTab(t) { tab=t; showCase=null; closeNav(); updateUrl(); render(); try { _liveTick(); } catch (e) {} }   // เลือกแท็บแล้วปิด drawer เอง
 
     // ══════════ แท็บ "จัดซื้อ" — ยอดรถเข้า รายรุ่น (จอง/จบ ย้อนหลัง + สต๊อกแก้ได้ + เหลือ/ต้องเติม + ผลงานซื้อ) ══════════
     let _yodStock = {};   // override สต๊อกที่แก้ในเว็บ {รุ่น:{target,start,added}} — ดึงจาก /api/admin/yod_stock
