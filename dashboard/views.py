@@ -8,7 +8,7 @@ from django.conf import settings
 from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.decorators.gzip import gzip_page
 
 from .services.fetch_dashboard import fetch_dashboard_data, _mask_phone
@@ -378,6 +378,61 @@ def dashboard_page(request):
         "is_boss": _is_boss(request),   # เมนู "ฐานข้อมูล" — superuser/ผู้บริหาร เท่านั้น
         "error": None,
     })
+
+
+NOTIFY_OWNER_PER_HOUR = 12
+
+
+@csrf_exempt
+@require_POST
+def api_notify_owner(request):
+    """POST /api/notify/owner — ส่ง LINE ส่วนตัวหาเจ้าของ (ผู้รับเดียวกับแจ้งเตือนลงชีตจ่ายเบอร์ · วัฒนกิจ)
+
+    ★ 14 ต.ค.69 เจ้าของสั่ง: งานที่ Claude รันบนเครื่อง dev เกิน 10 นาทีแล้วเสร็จ → แจ้งทาง LINE
+      hook บนเครื่อง dev ยิงมาที่นี่ (เครื่อง dev ไม่ต้องมีคีย์บอท/ไอดี LINE ของใคร)
+    · auth = header `X-Cron-Secret` ตรงกับ CRON_SECRET · body `{text}` (ตัดที่ 1000 ตัว)
+    · จำกัด NOTIFY_OWNER_PER_HOUR ข้อความ/ชม. (กันสคริปต์วนแล้วยิงรัว) · จดทุกครั้งใน dash_event_log
+    """
+    import hmac
+    secret = (getattr(settings, "CRON_SECRET", "") or "").strip()
+    given = (request.headers.get("X-Cron-Secret") or "").strip()
+    if not secret:
+        return JsonResponse({"ok": False, "error": "CRON_SECRET ยังไม่ได้ตั้งใน env"}, status=503)
+    if not given or not hmac.compare_digest(given.encode("utf-8"), secret.encode("utf-8")):   # bytes: หัวข้อภาษาไทยไม่ทำให้ 500
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
+    try:
+        body = json.loads(request.body or "{}")
+    except ValueError:
+        body = {}
+    text = str((body or {}).get("text") or "").strip()[:1000] if isinstance(body, dict) else ""
+    if not text:
+        return JsonResponse({"ok": False, "error": "ต้องมี text"}, status=400)
+    from .services import cache_store
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    key = "notify_owner_sent"
+    try:
+        sent = cache_store.get_kv(key) or {}
+        sent = sent.get("data", sent) if isinstance(sent, dict) else {}
+        recent = [t for t in (sent.get("at") or []) if now.timestamp() - float(t) < 3600]
+    except Exception:
+        recent = []
+    if len(recent) >= NOTIFY_OWNER_PER_HOUR:
+        return JsonResponse({"ok": False, "error": "เกิน %d ข้อความ/ชม." % NOTIFY_OWNER_PER_HOUR}, status=429)
+    from checkout import leadsheet
+    ok, err = leadsheet._send_alert(text, what="แจ้งเตือนจาก Claude (เครื่อง dev)")
+    try:
+        cache_store.set_kv(key, {"at": recent + [now.timestamp()]})
+    except Exception:
+        pass
+    try:
+        from .services import eventlog
+        eventlog.log("notify", name="แจ้งเตือนจาก Claude (เครื่อง dev)", target="owner", ok=ok,
+                     text=text[:300], error=err[:200])
+    except Exception:
+        pass
+    return JsonResponse({"ok": ok, "error": err}, status=200 if ok else 502,
+                        json_dumps_params={"ensure_ascii": False})
 
 
 @require_GET

@@ -26,6 +26,7 @@ urlpatterns = [
     path("admin/", views.admin_page, name="admin"),
     path("api/admin/trends", views.admin_trends, name="admin_trends"),
     path("api/dashboard", views.api_dashboard, name="api_dashboard"),
+    path("api/notify/owner", views.api_notify_owner, name="api_notify_owner"),   # LINE หาเจ้าของ (hook เครื่อง dev)
     path("api/presence", views.presence_ping, name="presence_ping"),
     path("api/presence/list", views.presence_list, name="presence_list"),
     path("api/auth", views.api_auth, name="api_auth"),

@@ -1527,7 +1527,7 @@ def alert_target() -> str:
     return (p.employee.nickname if p and p.employee_id else (p.display_name if p else "")) or "พบแล้ว"
 
 
-def _send_alert(text: str) -> tuple:
+def _send_alert(text: str, what: str = "แจ้งเตือนลงชีตจ่ายเบอร์") -> tuple:
     from dashboard.services import line_channels, line_notify
     uid = _alert_uid()
     if not uid:
@@ -1536,7 +1536,7 @@ def _send_alert(text: str) -> tuple:
     if not tok:
         return False, "ยังไม่ได้ตั้ง token ของบอทส่งข้อความ"
     st, body = line_notify.push_line_message(uid, [{"type": "text", "text": text[:4900]}], tok,
-                                             what="แจ้งเตือนลงชีตจ่ายเบอร์")
+                                             what=what)
     return st == 200, ("" if st == 200 else "LINE %s: %s" % (st, str(body)[:200]))
 
 
