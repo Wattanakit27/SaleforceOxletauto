@@ -1637,6 +1637,14 @@ def cron_tick(request):
         meta_result = _meta_run(now)
     except Exception as e:
         meta_result = "error: %s" % str(e)[:200]
+    # ── 🎞️ คลิปใหม่ Facebook: ดึงกราฟคนดูค้าง + วิเคราะห์ + ภาพทีละวินาที ทุกชั่วโมง (ใน thread) ──
+    try:
+        from .services.meta_sync import maybe_watch as _meta_watch
+        _w = _meta_watch(now)
+        if _w:
+            meta_result = (meta_result + " · " if meta_result else "") + "video-watch:" + _w
+    except Exception as e:
+        meta_result = (meta_result + " · " if meta_result else "") + "video-watch error: %s" % str(e)[:120]
 
     # ── 🎵 TikTok: ต่ออายุ access token ที่ใกล้หมด (อายุ ~24 ชม.) — ทีละ 3 ช่องต่อนาที ไม่หน่วง cron ──
     tiktok_result = {}
@@ -2734,6 +2742,24 @@ def admin_system_health(request):
     except Exception:                       # ยังไม่ migrate (cars 0019) = ข้ามเงียบ
         pass
 
+    # ── 🎞️ 15 ต.ค.69 — คลิปใหม่ Facebook: วิเคราะห์ + ภาพทีละวินาที ทุกชั่วโมง ต้องไม่หยุดเงียบ ──
+    try:
+        from .services import meta as _mt
+        from .services import meta_sync as _ms
+        from .services.fetch_dashboard import bangkok_now
+        if _mt.is_configured():
+            _vw = _ms._kv(_ms.WATCH_KEY)
+            _bkk = bangkok_now()
+            if _vw.get("errors"):
+                issues.append({"level": "warn",
+                               "msg": "รอบวิเคราะห์คลิปใหม่ Facebook มีปัญหา: %s · ตรวจด้วย manage.py meta_frames --watch"
+                                      % " · ".join(_vw["errors"][:2])[:200]})
+            elif _bkk.hour >= _ms.WATCH_FROM_HOUR + 2 and _ms._minutes_since(_vw.get("at") or "") > 180:
+                issues.append({"level": "warn",
+                               "msg": "รอบวิเคราะห์คลิปใหม่ Facebook ไม่ได้ทำงานเกิน 3 ชม. (ปกติทุกชั่วโมง) — cron อาจหยุด"})
+    except Exception:
+        pass
+
     # ── 🔁 8 ต.ค.69 — เคสรับซื้อ/เทิร์นรถ → ชีต (ย้ายมาจาก n8n) ต้องไม่หยุดเงียบแบบที่ n8n เคยเป็น ──
     try:
         from checkout import tradein as _ti
@@ -3090,6 +3116,18 @@ def admin_social(request):
     try:
         # ★ 26 ก.ย.69 — `?side=&owner=` = ขอคลิป/โพสต์ของช่องนั้นช่องเดียว (หน้า "ดูรายช่อง")
         #   แยกคำขอออกจากก้อนภาพรวม เพราะเพจเดียวมีโพสต์ 580+ ชิ้น (ดู social_stats.channel_posts)
+        # ★ 15 ต.ค.69 — หน้า "คนดูหลุดตรงไหน" ของวิดีโอ Facebook คลิปเดียว
+        #   `?video=<post id>` = ตัวเลข + กราฟ + ภาพทีละวินาที (เริ่มตัดภาพถ้ายังไม่มี) + ลิงก์เล่นคลิป
+        #   `?frames=<post id>` = ถามสถานะการตัดภาพอย่างเดียว (หน้าเว็บถามซ้ำระหว่างรอ — ไม่ยิง Facebook)
+        vid = (request.GET.get("video") or "").strip()
+        if vid:
+            return JsonResponse({"ok": True, **social_stats.video_detail(vid)},
+                                json_dumps_params={"ensure_ascii": False})
+        fr = (request.GET.get("frames") or "").strip()
+        if fr:
+            from .services import video_frames
+            return JsonResponse({"ok": True, **video_frames.status(fr)},
+                                json_dumps_params={"ensure_ascii": False})
         owner = (request.GET.get("owner") or "").strip()
         if owner:
             def _int(k, dv):

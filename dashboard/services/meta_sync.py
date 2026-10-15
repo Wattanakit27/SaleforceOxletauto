@@ -226,6 +226,111 @@ def _post_row(p, pid, trigger, snap_date, taken_at, ct):
     )
 
 
+# ═══════════ ★ 15 ต.ค.69 — กราฟ "คนยังดูอยู่กี่ %" ของวิดีโอ (เจ้าของสั่ง) ═══════════
+#  Facebook ให้ `post_video_retention_graph` 41 จุด (ทุก 2.5% ของความยาวคลิป) ไม่ได้ให้เป็นวินาที
+#  → ต้องรู้ความยาวคลิปด้วย (`/<เพจ>/videos?fields=length` · `?ids=` ใช้ไม่ได้แล้วตั้งแต่ Graph v26)
+#  **ดึงเป็นคำขอแยกจากยอดโพสต์** — ถ้าวันหนึ่ง Meta ถอด metric นี้ คำขอยอดโพสต์ (ตัวหลัก) ต้องไม่ล้มตาม
+#  (กติกาเดียวกับยอดระดับเพจ: ชุดหลักพังไม่ได้ · ชุดเสริมขาดได้) · โพสต์ที่ไม่ใช่วิดีโอ Meta คืน {} ไม่ error
+_RET_METRICS = ("post_video_retention_graph", "post_video_retention_graph_autoplayed",
+                "post_video_retention_graph_clicked_to_play")
+_RET_FIELDS = "id,created_time,attachments{media_type,target},insights.metric(%s)" % ",".join(_RET_METRICS)
+
+
+def _curve(v) -> list:
+    """{"0": 1, "1": 0.98, …, "40": 0.1} → [1.0, 0.98, …] (41 จุดตามลำดับ) · ไม่มีข้อมูล = []"""
+    if not isinstance(v, dict) or not v:
+        return []
+    pts = []
+    for k, x in v.items():
+        try:
+            pts.append((int(k), round(float(x), 4)))
+        except (TypeError, ValueError):
+            continue
+    return [x for _, x in sorted(pts)]
+
+
+def sync_retention(taken_at, days: int | None = None, trigger: str = "cron") -> dict:
+    """กราฟคนดูค้างของวิดีโอทุกคลิปในเพจ (ย้อน `days` วัน · ไม่ใส่ = POST_WINDOW_DAYS)
+    → `dash_meta_video_retention` 1 แถว/โพสต์ พร้อม **ผลวิเคราะห์** (Hook/Hold/หายครึ่ง/หลุดหนักสุด/ดูจบ/ทีละวินาที)
+
+    · คำตอบดิบของ Facebook เก็บลง `dash_meta_raw` (kind = retention / videos · ตัด paging ที่มี token ออก)
+    · คืน `new` = post id ที่เพิ่งเจอครั้งแรกรอบนี้ (คลิปใหม่)
+    """
+    from dashboard.models import MetaRaw, MetaVideoRetention
+
+    from . import social_stats
+
+    cutoff = taken_at - timedelta(days=days or POST_WINDOW_DAYS)
+    out = {"videos": 0, "lengths": 0, "raw": 0, "new": [], "errors": []}
+    for pid in sorted(meta.pages()):
+        try:
+            pt = meta.page_token(pid)
+        except meta.MetaError as e:
+            out["errors"].append("กราฟคนดูค้าง เพจ %s: ขอ page token ไม่ได้ (%s)" % (pid, str(e)[:80]))
+            continue
+        lengths = {}
+        try:
+            for chunk in meta.paged("/%s/videos" % pid, _token=pt, fields="id,length,created_time", limit=100):
+                MetaRaw.objects.create(kind="videos", ref_id=pid, trigger=trigger, data=_raw(chunk))
+                out["raw"] += 1
+                old = False
+                for v in (chunk.get("data") or []):
+                    ct = _dt(v.get("created_time"))
+                    if ct and ct < cutoff:
+                        old = True
+                        break
+                    try:
+                        lengths[str(v.get("id"))] = round(float(v.get("length")), 2)
+                    except (TypeError, ValueError):
+                        pass
+                if old:
+                    break
+        except meta.MetaError as e:                     # ไม่รู้ความยาว = ยังเก็บกราฟได้ (แสดงเป็น % ของคลิปแทนวินาที)
+            out["errors"].append("ความยาวคลิป เพจ %s: %s" % (pid, str(e)[:120]))
+        out["lengths"] += len(lengths)
+        try:
+            for chunk in meta.paged("/%s/posts" % pid, _token=pt, fields=_RET_FIELDS, limit=50):
+                MetaRaw.objects.create(kind="retention", ref_id=pid, trigger=trigger, data=_raw(chunk))
+                out["raw"] += 1
+                stop = False
+                for p in (chunk.get("data") or []):
+                    ct = _dt(p.get("created_time"))
+                    if ct and ct < cutoff:
+                        stop = True
+                        break
+                    att = ((p.get("attachments") or {}).get("data") or [{}])[0]
+                    if "video" not in (att.get("media_type") or ""):
+                        continue
+                    ins = {i.get("name"): (i.get("values") or [{}])[0].get("value")
+                           for i in ((p.get("insights") or {}).get("data") or [])
+                           if (i.get("period") or "lifetime") == "lifetime"}
+                    curve = _curve(ins.get(_RET_METRICS[0]))
+                    if not curve:
+                        continue                         # คลิปที่ยังไม่มีคนดู Meta คืนว่าง — ไม่เก็บแถวเปล่า
+                    vid = str((att.get("target") or {}).get("id") or "")
+                    post_id = str(p.get("id") or "")
+                    ln = lengths.get(vid)
+                    if ln is None:                       # รอบสั้น (คลิปใหม่) หน้าต่าง /videos อาจไม่ครอบ — ใช้ความยาวเดิม
+                        ln = (MetaVideoRetention.objects.filter(post_id=post_id)
+                              .values_list("length_sec", flat=True).first())
+                    row, created = MetaVideoRetention.objects.update_or_create(
+                        post_id=post_id,
+                        defaults=dict(page_id=pid, video_id=vid, created_time=ct, length_sec=ln,
+                                      curve=curve, curve_auto=_curve(ins.get(_RET_METRICS[1])),
+                                      curve_click=_curve(ins.get(_RET_METRICS[2])),
+                                      analyzed_at=timezone.now(), **social_stats.analysis_fields(curve, ln)))
+                    if created or not row.first_seen:
+                        MetaVideoRetention.objects.filter(pk=row.pk).update(first_seen=timezone.now())
+                        if created:
+                            out["new"].append(post_id)
+                    out["videos"] += 1
+                if stop:
+                    break
+        except meta.MetaError as e:
+            out["errors"].append("กราฟคนดูค้าง เพจ %s: %s" % (pid, str(e)[:120]))
+    return out
+
+
 # ── ดึงผลโฆษณา ─────────────────────────────────────────────────
 # ═══════════ ★ 21 ก.ย.69 — ยอด "ระดับเพจ" ที่ Facebook รายงานเอง ═══════════
 #  เจ้าของถาม: *"วันที่ 10 มี 15 ล้าน ทำไมวันที่ 20 มีแค่ 1 หมื่น 3 · มันจะเก็บไม่ครบ"*
@@ -395,6 +500,13 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
             g = sync_pages()
         except Exception as e:
             g = {"rows": 0, "raw": 0, "errors": ["ยอดเพจพัง: %s" % str(e)[:160]]}
+        # กราฟคนดูค้างของวิดีโอ — ชุดเสริม พังได้ไม่กระทบยอดโพสต์
+        try:
+            _touch()
+            rt = sync_retention(timezone.now())
+        except Exception as e:
+            rt = {"videos": 0, "errors": ["กราฟคนดูค้างพัง: %s" % str(e)[:160]]}
+        res["retention"] = rt.get("videos", 0)
         # แชท Messenger (CRM raw) → checkout_fbchat / checkout_fbprofile
         # ทำ **หลังสุด** เพราะช้าสุดและมีเพดานต่อรอบ — ถ้ามันล้ม ยอดโพสต์/โฆษณาต้องได้ไปแล้ว
         try:
@@ -407,7 +519,7 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
                    pageRows=g["rows"], accounts=a["accounts"], raw=p["raw"] + a["raw"] + g["raw"],
                    messenger={k: m.get(k) for k in ("threadsSeen", "threadsSynced", "unchanged",
                                                    "newMsgs", "profiles", "stopped", "sec")},
-                   errors=p["errors"] + a["errors"] + g["errors"] + (m.get("errors") or []),
+                   errors=p["errors"] + a["errors"] + g["errors"] + (rt.get("errors") or []) + (m.get("errors") or []),
                    trimmed=trim_raw())
         # สร้างตาราง "รายวัน" ใหม่จาก snapshot (ดู social_daily) — พังก็ไม่กระทบ snapshot
         from . import social_daily
@@ -426,6 +538,13 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
     res["usage"] = {"pct": meta.last_usage.get("pct", 0),
                     "regainMin": meta.last_usage.get("regain_min", 0)}
     cache_store.set_kv(STATUS_KEY, res)
+    # ภาพทีละวินาทีของคลิปยิงแอดวิวสูง — ทำล่วงหน้าใน thread แยก (ทีละคลิป) ไม่หน่วงรอบดึง
+    if res.get("retention"):
+        try:
+            from . import video_frames
+            video_frames.start_prefetch()
+        except Exception:
+            pass
     try:
         eventlog.log("meta_sync", name=trigger, target=by[:64], ok=res["ok"], ms=res["ms"],
                      posts=res.get("posts", 0), adsRows=res.get("adsRows", 0),
@@ -471,6 +590,76 @@ def maybe_run(now) -> str:
             and _minutes_since(last.get("at", "")) < LOCK_TTL_MIN):
         return "retry-wait"
     start_background("cron", "เที่ยงคืน")
+    return "started"
+
+
+# ── คลิปใหม่: วิเคราะห์ + ภาพทีละวินาทีให้เองทุกชั่วโมง (15 ต.ค.69 · เจ้าของสั่ง) ─────
+#  *"เมื่อมีคลิปใหม่มาวิเคราะห์ auto เองเลย และสกรีนช็อตเองเลยนะ"*
+#  รอบเที่ยงคืนดึงกราฟทุกคลิป 90 วันอยู่แล้ว แต่คลิปที่ลงตอนเช้าต้องรอถึงพรุ่งนี้ → รอบนี้ดึงเฉพาะคลิป
+#  `WATCH_DAYS` วันล่าสุด (เพจละ ~3 คำขอ · ไม่เปลืองโควต้า) แล้วสั่งทำภาพให้คลิปที่เข้าเกณฑ์ที่ยังไม่มี
+WATCH_KEY = "video_watch_last"
+WATCH_EVERY_MIN = 60
+WATCH_DAYS = 7               # = video_frames.NEW_DAYS (คลิปใหม่)
+WATCH_FROM_HOUR = DAILY_WINDOW_HOURS   # ช่วงเที่ยงคืน–ตี 3 รอบใหญ่ทำอยู่แล้ว ไม่ต้องซ้อน
+
+
+def watch_videos(trigger: str = "watch") -> dict:
+    """ดึงกราฟคลิป WATCH_DAYS วันล่าสุด → วิเคราะห์ → ทำภาพทีละวินาที (ทีละคลิป) · คืนสรุป + เก็บ KV"""
+    from . import social_stats, video_frames
+    t0 = time.time()
+    res = {"trigger": trigger, "started": timezone.now().isoformat()}
+    try:
+        rt = sync_retention(timezone.now(), days=WATCH_DAYS, trigger=trigger)
+        res.update(videos=rt["videos"], new=len(rt["new"]), newIds=rt["new"][:20], raw=rt["raw"],
+                   errors=rt["errors"])
+    except Exception as e:
+        res.update(videos=0, new=0, errors=["ดึงกราฟคลิปใหม่พัง: %s" % str(e)[:200]])
+    try:
+        res["analyzed"] = social_stats.analyze_missing()
+    except Exception as e:
+        res["errors"].append("วิเคราะห์พัง: %s" % str(e)[:160])
+    try:
+        fr = video_frames.prefetch_guarded()
+        if fr is None:
+            res["frames"] = {"busy": "รอบอื่นกำลังทำภาพอยู่"}
+        else:
+            res["frames"] = {k: fr[k] for k in ("total", "made", "ready", "failed", "busy", "pruned")}
+            res["errors"] += fr["errors"][:5]
+    except Exception as e:
+        res["errors"].append("ทำภาพพัง: %s" % str(e)[:160])
+    res["ok"] = not res["errors"]
+    res["ms"] = int((time.time() - t0) * 1000)
+    res["at"] = timezone.now().isoformat()
+    cache_store.set_kv(WATCH_KEY, res)
+    if not res["ok"]:
+        try:
+            from . import eventlog
+            eventlog.log("meta_sync", name="video_watch", ok=False, ms=res["ms"], errors=res["errors"][:5])
+        except Exception:
+            pass
+    return res
+
+
+def maybe_watch(now) -> str:
+    """เรียกจาก cron_tick ทุกนาที — ถึงรอบ (ทุก WATCH_EVERY_MIN นาที) แล้วเริ่มใน thread · '' = ไม่ได้ทำ"""
+    if now.hour < WATCH_FROM_HOUR or not meta.is_configured():
+        return ""
+    last = _kv(WATCH_KEY)
+    if _minutes_since(last.get("started") or "") < WATCH_EVERY_MIN:
+        return ""
+    if _locked():                                   # รอบใหญ่/กด sync เองกำลังทำอยู่
+        return "busy"
+    if meta.last_usage.get("pct", 0) >= USAGE_BLOCK_PCT:
+        return "usage"
+    cache_store.set_kv(WATCH_KEY, {**last, "started": timezone.now().isoformat()})   # จองรอบก่อนเริ่ม
+
+    def _job():
+        from django.db import connection
+        try:
+            watch_videos()
+        finally:
+            connection.close()
+    threading.Thread(target=_job, daemon=True, name="video-watch").start()
     return "started"
 
 

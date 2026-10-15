@@ -5716,6 +5716,7 @@
           <th style="${_n};width:84px">ไลก์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
           <th style="${_n};width:104px">คอมเมนต์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
           <th style="${_n};width:84px">แชร์<div style="font-weight:400;color:var(--t3)">สะสม</div></th>
+          ${side === 'meta' ? `<th style="${_n};width:92px" title="ของคนที่เริ่มดู ยังดูอยู่ถึงวินาทีที่ 3 (เฉพาะวิดีโอ)">ดูถึง 3 วิ<div style="font-weight:400;color:var(--t3)">Hook</div></th>` : ''}
         </tr></thead><tbody>` + rows.slice(0, 15).map((p, i) => `<tr onclick="soOpenPost(${i})" title="กดเพื่อดูกราฟรายวันของชิ้นนี้"
           style="border-top:.5px solid var(--bd2);cursor:pointer" onmouseover="this.style.background='var(--bg2)'"
           onmouseout="this.style.background=''">
@@ -5726,7 +5727,9 @@
           <td style="${_n}">${(p.views || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.likes || 0).toLocaleString()}</td>
           <td style="${_n}">${(p.comments || 0).toLocaleString()}</td>
-          <td style="${_n}">${soNum(side, 'shares', p.shares)}</td></tr>`).join('') + `</tbody></table></div>`;
+          <td style="${_n}">${soNum(side, 'shares', p.shares)}</td>
+          ${side === 'meta' ? `<td style="${_n};font-weight:700;color:${p.ret3 != null ? 'var(--blue)' : 'var(--t3)'}">${
+            p.ret3 != null ? p.ret3 + '%' : '–'}</td>` : ''}</tr>`).join('') + `</tbody></table></div>`;
     }
 
     // ── กดดูรายชิ้น: กราฟหน้าตาเดียวกับหน้ารวม แค่เป็นของโพสต์/คลิปนั้นอันเดียว ──
@@ -5743,6 +5746,14 @@
     function soBackToList() { _soOpen = null; drawSocial(); }
 
     function _soDetailHtml() {
+      const o = _soOpen, d = _soData[o.side] || {};
+      const p = (d.posts || []).find(x => x.id === o.id) || {};
+      // ★ 15 ต.ค.69 — วิดีโอ Facebook = หน้า "คนดูหลุดตรงไหน" (กราฟคนดูค้าง + ภาพทีละวินาที)
+      if (o.side === 'meta' && String(p.type || '').indexOf('video') >= 0) return _soVideoHtml(o, p);
+      return _soDetailPlain(true);
+    }
+
+    function _soDetailPlain(withBack) {
       const o = _soOpen, d = _soData[o.side] || {};
       const p = (d.posts || []).find(x => x.id === o.id) || {};
       const daily = (d.postDaily || {})[o.id] || {};
@@ -5763,12 +5774,7 @@
             !soHas(o.side, m) ? soDash(o.side) : (nDay ? (inRange[m] || 0).toLocaleString() : '—')}</div>
           <div style="font-size:var(--fs-body);color:var(--t3)">สะสม ${soNum(o.side, m, p[m])}</div></div>`).join('');
 
-      return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <button onclick="soBackToList()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
-            border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);
-            font-size:var(--fs-body);cursor:pointer;font-family:inherit">${ic('lucide:arrow-left',15)} กลับ</button>
-          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1);display:flex;align-items:center;gap:8px">
-            ${soLogo(o.side, 20)} ดูรายชิ้น</div></div>
+      return `${withBack ? _soBackBar(o) : ''}
         <div class="card" style="margin-bottom:12px;border-top:3px solid ${SO_COLOR[o.side]}">
           <div style="font-size:var(--fs-sub);font-weight:700;color:var(--t1);line-height:1.6">${h(p.text || '(ไม่มีข้อความ)')}</div>
           <div style="font-size:var(--fs-body);color:var(--t2);margin-top:8px">
@@ -5787,6 +5793,326 @@
           ${nDay ? '' : `<div style="text-align:center;color:var(--t3);font-size:var(--fs-body);margin-top:-150px;line-height:1.8">
              ชิ้นนี้ยังไม่มียอดรายวัน — ต้องเก็บ snapshot อย่างน้อย 2 คืน<br>
              <span>ตัวเลขสะสมด้านบนใช้ได้เลย</span></div>`}</div>`;
+    }
+
+    function _soBackBar(o) {
+      return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <button onclick="soBackToList()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+            border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);
+            font-size:var(--fs-body);cursor:pointer;font-family:inherit">${ic('lucide:arrow-left',15)} กลับ</button>
+          <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1);display:flex;align-items:center;gap:8px">
+            ${soLogo(o.side, 20)} ดูรายชิ้น</div></div>`;
+    }
+
+    // ═══ ★ 15 ต.ค.69 — วิดีโอ Facebook: "คนดูหลุดตรงไหน" (เจ้าของสั่ง · แบบที่ส่งมา โทนม่วงขาว) ═══
+    //   ซ้าย = เล่นคลิป + ตัวเลข · ขวา = Hook/Hold/หายครึ่ง/ดูจบ + กราฟคนดูค้าง + ภาพทีละวินาทีใต้กราฟ
+    //   ตัวเลขทั้งหมดคิดฝั่งเซิร์ฟเวอร์ (social_stats._kpi) · หน้าเว็บแค่วาด
+    //   ภาพทีละวินาทีตัดตอนมีคนเปิดดูครั้งแรก (video_frames) → ถามสถานะซ้ำทุก 4 วิ แล้ววาดเฉพาะส่วนขวา
+    //   ★ ไม่วาดทั้งหน้าใหม่ตอนภาพมา/ตอนกดภาพ — ตัวเล่นคลิปทางซ้ายจะถูกรีเซ็ต
+    let _soVid = {};                 // post id → {loading, data, err}
+    let _soDetTab = 'ret';           // 'ret' = คนดูหลุดตรงไหน · 'daily' = ยอดรายวัน
+    let _soRetChart = null, _soZoom = false, _soPick = null, _soPollT = null;
+    const SO_V = { drop: '#dc2626', half: '#d97706', hook: '#94a3b8' };
+
+    function _soVarColor(name, dv) {             // สีจากตัวแปร CSS (Chart.js ใช้ var() ตรงๆ ไม่ได้)
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || dv;
+    }
+    const _soPct = v => (v === null || v === undefined) ? '—' : (Number(v).toLocaleString('th-TH', { maximumFractionDigits: 1 }) + '%');
+    const _soN = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('th-TH');
+
+    function _soVideoHtml(o, p) {
+      const st = _soVid[o.id];
+      if (!st) _soVidFetch(o.id);
+      const v = (st && st.data) || {}, s = v.stats || {};
+      const fr = v.frames || {}, urls = fr.urls || [];
+      const poster = urls[0] || '';
+      const stat = (label, val, strong) => `<div style="border-radius:10px;padding:10px 12px;
+          background:${strong ? 'var(--blue)' : 'color-mix(in srgb,var(--blue) 70%,#1e1036)'};color:#fff">
+          <div style="font-size:var(--fs-body);opacity:.85">${label}</div>
+          <div style="font-size:21px;font-weight:800;margin-top:2px">${val}</div></div>`;
+      const pick = (a, b) => (a !== undefined && a !== null) ? a : b;
+      const left = `<div>
+          <div class="so-vbox" style="border-radius:12px;overflow:hidden;background:#000;aspect-ratio:9/16;max-height:520px;
+            display:flex;align-items:center;justify-content:center;margin:0 auto">
+            ${v.source ? `<video id="so-player" src="${h(v.source)}" ${poster ? `poster="${h(poster)}"` : ''} controls playsinline
+                 preload="metadata" style="width:100%;height:100%;object-fit:contain;background:#000"></video>`
+              : (poster ? `<img id="so-still" src="${h(poster)}" alt="" style="width:100%;height:100%;object-fit:contain">`
+                        : `<div style="color:#cbd5e1;font-size:var(--fs-body);padding:20px;text-align:center">${
+                            st && st.loading ? 'กำลังโหลดคลิป...' : 'เล่นคลิปในระบบไม่ได้ — เปิดโพสต์จริงแทน'}</div>`)}
+          </div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-body);margin:9px 2px 10px">
+            ${(s.link || p.link) ? `<a href="${h(s.link || p.link)}" target="_blank" rel="noopener" style="color:var(--blue)">เปิดโพสต์จริง</a>` : ''}
+            ${v.source ? `<a href="${h(v.source)}" target="_blank" rel="noopener" style="color:var(--blue)">ดาวน์โหลดคลิป</a>` : ''}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${stat('คนดู (3 วิ+)', _soN(pick(s.views, p.views)))}
+            ${stat('ไลก์', _soN(pick(s.likes, p.likes)))}
+            ${stat('คอมเมนต์', _soN(pick(s.comments, p.comments)))}
+            ${stat('แชร์', _soN(pick(s.shares, p.shares)))}
+            ${stat('ดูเฉลี่ย', s.avgSec != null ? s.avgSec.toLocaleString('th-TH') + ' วิ' : '—', true)}
+            ${stat('ไลก์+คอมเมนต์+แชร์', s.engPct != null ? s.engPct + '%' : '—', true)}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin-top:8px;line-height:1.6">${
+            s.views ? `วิวจากโฆษณา ${_soN(s.paid)} · ออร์แกนิก ${_soN(s.organic)}` : ''}${
+            v.len ? ` · คลิปยาว ${Number(v.len).toLocaleString('th-TH', { maximumFractionDigits: 1 })} วิ` : ''}</div></div>`;
+
+      const tab = (key, label) => `<button onclick="soDetTab('${key}')" data-sotab="${key}" style="padding:8px 4px;border:none;background:none;
+          cursor:pointer;font-family:inherit;font-size:var(--fs-sub);font-weight:${_soDetTab === key ? 800 : 500};
+          color:${_soDetTab === key ? 'var(--t1)' : 'var(--t3)'};border-bottom:2.5px solid ${_soDetTab === key ? 'var(--blue)' : 'transparent'}">${label}</button>`;
+      const right = `<div style="min-width:0">
+          <div style="font-size:var(--fs-sub);font-weight:700;color:var(--t1);line-height:1.6">${h(s.text || p.text || '(ไม่มีข้อความ)')}</div>
+          <div style="font-size:var(--fs-body);color:var(--t3);margin:3px 0 8px">${h(_soFmtDay(s.date || p.date || ''))}${
+            (s.type || p.type) ? ' · ' + h(s.type || p.type) : ''}</div>
+          <div style="display:flex;gap:22px;border-bottom:.5px solid var(--bd2);margin-bottom:12px">
+            ${tab('ret', 'คนดูหลุดตรงไหน')}${tab('daily', 'ยอดรายวัน')}</div>
+          <div id="so-pane-ret" style="display:${_soDetTab === 'ret' ? 'block' : 'none'}">${_soRetPane(o, st)}</div>
+          <div id="so-pane-daily" style="display:${_soDetTab === 'daily' ? 'block' : 'none'}">${_soDetailPlain(false)}</div></div>`;
+
+      return `<style>.so-vgrid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+          @media(min-width:980px){.so-vgrid{grid-template-columns:300px minmax(0,1fr)}}</style>
+        ${_soBackBar(o)}
+        <div class="card so-vgrid">${left}${right}</div>`;
+    }
+
+    function _soRetPane(o, st) {
+      if (!st || st.loading) return `<div style="text-align:center;color:var(--t3);padding:50px">
+          <div class="spin" style="margin:0 auto 12px"></div>กำลังดึงกราฟคนดูของคลิปนี้...</div>`;
+      if (st.err) return `<div style="text-align:center;color:var(--red);padding:40px">เปิดไม่ได้: ${h(st.err)}</div>`;
+      const v = st.data || {}, k = v.kpi || {}, avg = v.pageAvg || {};
+      const kcard = (label, val, sub) => `<div style="border:.5px solid var(--bd2);border-radius:10px;padding:10px 13px;min-width:0;background:var(--bg1)">
+          <div style="font-size:var(--fs-body);color:var(--t3)">${label}</div>
+          <div style="font-size:23px;font-weight:800;color:var(--t1);margin-top:3px">${val}</div>
+          ${sub ? `<div style="font-size:var(--fs-body);color:var(--t3)">${sub}</div>` : ''}</div>`;
+      const cmp = (x, a) => (x == null || a == null) ? '' : `เพจเฉลี่ย ${_soPct(a)}`;
+      const kpis = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-bottom:12px">
+          ${kcard('Hook · เริ่มดูแล้วดูถึง 3 วิ', _soPct(k.hook), cmp(k.hook, avg.hook))}
+          ${kcard('Hold (3→' + (k.holdTo === 'end' ? 'จบ' : '15 วิ') + ')', _soPct(k.hold), k.hold != null ? 'ของคนที่ดูถึง 3 วิ' : '')}
+          ${kcard('หายไปครึ่งหนึ่งภายใน', k.halfSec != null ? 'วิที่ ' + k.halfSec : (k.hook != null ? 'ไม่ถึงครึ่ง' : '—'),
+                  k.halfSec != null ? 'ของคนที่ดูถึง 3 วิ' : (k.hook != null ? 'อยู่เกินครึ่งจนจบคลิป' : ''))}
+          ${kcard('ดูจบ', _soPct(k.end), cmp(k.end, avg.end))}</div>`;
+      const fr = v.frames || {}, n = (fr.urls || []).length;
+      const frNote = fr.state === 'ready' ? `ภาพทีละวินาที ${n} ภาพ · กดที่ภาพเพื่อเล่นคลิปจากวินาทีนั้น`
+        : fr.state === 'running' ? 'กำลังตัดภาพทีละวินาทีจากคลิป (ครั้งแรกใช้เวลาราว 30 วินาที)...'
+        : fr.state === 'error' ? 'ตัดภาพจากคลิปไม่สำเร็จ: ' + h(fr.error || '')
+        : fr.state === 'skip' ? `ภาพทีละวินาทีทำให้เองเฉพาะคลิปใหม่ ${h(String(fr.newDays || 7))} วัน และคลิปที่ยิงแอดวิวสูงสุด ${h(String(fr.top || 25))} อันดับ · คลิปนี้ดูได้จากกราฟ` : '';
+      if (!v.has) {
+        return `${kpis}<div style="border:.5px dashed var(--bd2);border-radius:10px;padding:18px;
+            color:var(--t3);font-size:var(--fs-body);line-height:1.8;margin-bottom:12px">
+          ยังไม่มีกราฟคนดูของคลิปนี้ — ระบบดึงจาก Facebook ให้ทุกเที่ยงคืน<br>
+          คลิปที่เพิ่งลงหรือยังไม่มีคนดู Facebook ยังไม่ให้กราฟ</div>
+          ${frNote ? `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:6px">${frNote}</div>` : ''}
+          ${fr.state === 'ready' ? `<div style="background:var(--bg2);border-radius:10px;padding:10px 6px">
+            <div id="so-strip" style="position:relative;height:96px"></div></div>` : ''}`;
+      }
+      return `${kpis}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <div style="font-size:var(--fs-body);color:var(--t3)">${frNote}</div>
+          ${fr.state === 'ready' ? `<div style="margin-left:auto;display:flex;gap:6px">
+            <button onclick="soZoom(false)" style="${_soZBtn(!_soZoom)}">ย่อพอดีจอ</button>
+            <button onclick="soZoom(true)" style="${_soZBtn(_soZoom)}">ซูม</button></div>` : ''}</div>
+        <div id="so-ret-wrap" style="overflow-x:${_soZoom ? 'auto' : 'hidden'};background:var(--bg2);border-radius:10px;padding:10px 6px 6px">
+          <div id="so-ret-inner" style="${_soZoom && n ? 'width:' + Math.max(n * 46, 600) + 'px' : ''}">
+            <div style="height:300px;position:relative"><canvas id="so-ret-chart"></canvas></div>
+            <div id="so-strip" style="position:relative;height:96px;margin-top:4px"></div></div></div>
+        <div style="font-size:var(--fs-body);color:var(--t3);margin:8px 2px 14px;line-height:1.7">
+          เส้นม่วง = % ของคนที่เริ่มดูคลิปแล้วยังดูอยู่ ณ วินาทีนั้น (Facebook ให้มาเป็นช่วงละ 2.5% ของความยาวคลิป ระบบแปลงเป็นรายวินาที)
+          · เส้นประเทา = วิที่ 3 · แดง = จุดที่คนหลุดมากที่สุด · ส้ม = คนที่ดูถึง 3 วิ เหลือครึ่งหนึ่ง</div>
+        ${_soRetStory(v)}`;
+    }
+
+    const _soZBtn = on => `padding:5px 12px;border-radius:7px;font-size:var(--fs-body);cursor:pointer;font-family:inherit;
+        border:.5px solid ${on ? 'transparent' : 'var(--bd2)'};background:${on ? 'var(--blue)' : 'var(--bg1)'};
+        color:${on ? 'var(--on-blue)' : 'var(--t2)'};font-weight:700`;
+
+    function _soRetStory(v) {
+      const k = v.kpi || {}, avg = v.pageAvg || {}, s = v.stats || {}, ps = v.persec || [];
+      if (k.hook == null) return '';
+      const head = k.halfSec != null ? `คนที่ดูถึง 3 วิ หายไปครึ่งหนึ่งภายในวิที่ ${k.halfSec}`
+                                     : 'คนที่ดูถึง 3 วิ ยังอยู่เกินครึ่งจนจบคลิป';
+      const vs = (x, a) => (x == null || a == null) ? '' :
+        (x >= a ? ` — สูงกว่าค่าเฉลี่ยของเพจ (${_soPct(a)})` : ` — ต่ำกว่าค่าเฉลี่ยของเพจ (${_soPct(a)})`);
+      const lines = [
+        `Hook ${_soPct(k.hook)} ของคนที่เริ่มดู ยังดูอยู่ถึงวินาทีที่ 3${vs(k.hook, avg.hook)}`,
+        k.dropSec != null ? `ช่วงที่คนหลุดมากที่สุดคือวินาทีที่ ${k.dropSec - 1}→${k.dropSec} หายไป ${_soPct(k.dropPct)} ของคนที่เริ่มดู` : '',
+        `ดูจนจบ ${_soPct(k.end)}${vs(k.end, avg.end)}`,
+        (s.avgSec != null && v.len) ? `ดูเฉลี่ย ${s.avgSec.toLocaleString('th-TH')} วินาที จากคลิปยาว ${Math.round(v.len)} วินาที` : '',
+      ].filter(Boolean).map(t => `<li>${h(t)}</li>`).join('');
+      const at = k.dropSec != null ? ps[k.dropSec] : null;
+      const keep = (at != null && k.hook) ? Math.round(at / k.hook * 1000) / 10 : null;
+      const box = at == null ? '' : `<div style="background:var(--purple-bg);border:.5px solid color-mix(in srgb,var(--blue) 30%,transparent);
+          border-radius:12px;padding:13px 16px;margin-top:12px;color:var(--t1);font-size:var(--fs-body);line-height:1.8">
+          คนหลุดหนักสุดที่ <b>วินาทีที่ ${k.dropSec}</b> (กรอบแดงในแถบภาพ) → ยังดูอยู่
+          <span style="font-size:26px;font-weight:800;color:var(--blue)">${_soPct(at)}</span> ของคนที่เริ่มดู${
+            keep != null ? ` · เท่ากับ ${_soPct(keep)} ของคนที่ดูถึง 3 วิ` : ''}
+          <div style="color:var(--t3)">กดภาพวินาทีนั้นเพื่อดูว่าในคลิปเกิดอะไรขึ้น — เช่น เปลี่ยนฉาก พูดยาวยังไม่เข้าเรื่อง หรือข้อความบนจอหายไป</div></div>`;
+      return `<div style="font-size:var(--fs-sub);font-weight:800;color:var(--t1);margin-bottom:6px">${h(head)}</div>
+        <ul style="margin:0;padding-left:20px;color:var(--t2);font-size:var(--fs-body);line-height:1.9">${lines}</ul>${box}`;
+    }
+
+    async function _soVidFetch(id) {
+      _soVid[id] = { loading: true };
+      try {
+        const r = await fetch('/api/admin/social?video=' + encodeURIComponent(id), { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        _soVid[id] = { data: d };
+      } catch (e) {
+        _soVid[id] = { err: String((e && e.message) || e) };
+      }
+      if (_soOpen && _soOpen.id === id) drawSocial();
+      _soPollFrames(id);
+    }
+
+    function _soPollFrames(id) {
+      clearTimeout(_soPollT);
+      const st = _soVid[id], fr = st && st.data && st.data.frames;
+      if (!fr || fr.state !== 'running') return;
+      _soPollT = setTimeout(async () => {
+        if (!_soOpen || _soOpen.id !== id) return;          // ออกจากหน้านี้แล้ว เลิกถาม
+        try {
+          const r = await fetch('/api/admin/social?frames=' + encodeURIComponent(id), { credentials: 'same-origin' });
+          const d = await r.json();
+          if (d.ok) st.data.frames = d;
+        } catch (e) {}
+        if (!_soOpen || _soOpen.id !== id) return;
+        if (st.data.frames.state !== 'running') {
+          // เปลี่ยนเฉพาะส่วนขวา — ตัวเล่นคลิปทางซ้ายต้องไม่ถูกรีเซ็ต
+          const pane = document.getElementById('so-pane-ret');
+          if (pane) { pane.innerHTML = _soRetPane(_soOpen, st); _soRetDraw(); }
+          const u = st.data.frames.urls || [];
+          const vp = document.getElementById('so-player');
+          if (vp && u[0] && !vp.getAttribute('poster')) vp.setAttribute('poster', u[0]);
+          const still = document.getElementById('so-still');
+          if (still && u[0]) still.src = u[0];
+        } else _soPollFrames(id);
+      }, 4000);
+    }
+
+    function soDetTab(t) {
+      _soDetTab = t;
+      const a = document.getElementById('so-pane-ret'), b = document.getElementById('so-pane-daily');
+      if (!a || !b) { drawSocial(); return; }
+      a.style.display = t === 'ret' ? 'block' : 'none';
+      b.style.display = t === 'daily' ? 'block' : 'none';
+      document.querySelectorAll('[data-sotab]').forEach(btn => {
+        const on = btn.getAttribute('data-sotab') === t;
+        btn.style.fontWeight = on ? 800 : 500; btn.style.color = on ? 'var(--t1)' : 'var(--t3)';
+        btn.style.borderBottomColor = on ? 'var(--blue)' : 'transparent';
+      });
+      // กราฟที่วาดตอนซ่อนอยู่ได้ขนาด 0 — สั่งวัดใหม่ตอนเปิดแท็บ
+      if (t === 'daily' && _soChart) { try { _soChart.resize(); } catch (e) {} }
+      if (t === 'ret') _soRetDraw();
+    }
+
+    function soZoom(on) {
+      _soZoom = !!on;
+      const st = _soOpen && _soVid[_soOpen.id];
+      const pane = document.getElementById('so-pane-ret');
+      if (pane && st) { pane.innerHTML = _soRetPane(_soOpen, st); _soRetDraw(); }
+    }
+
+    function soSeek(sec) {
+      _soPick = sec;
+      const vp = document.getElementById('so-player');
+      if (vp) { try { vp.currentTime = sec; vp.pause(); } catch (e) {} }
+      const st = _soOpen && _soVid[_soOpen.id], u = st && st.data && st.data.frames && st.data.frames.urls;
+      const still = document.getElementById('so-still');      // เล่นคลิปไม่ได้ = ขยายภาพวินาทีนั้นในช่องซ้ายแทน
+      if (still && u && u[sec]) still.src = u[sec];
+      _soStripDraw();
+    }
+
+    // จุดที่ต้องเน้น (เส้นแนวตั้งบนกราฟ + กรอบในแถบภาพ)
+    function _soMarks(v) {
+      const k = v.kpi || {}, out = [];
+      if (k.hook != null) out.push({ sec: 3, color: SO_V.hook, label: '3 วิ', dash: [3, 4] });
+      if (k.dropSec != null) out.push({ sec: k.dropSec, color: SO_V.drop, label: 'หลุดหนักสุด วิ ' + k.dropSec, dash: [5, 4] });
+      if (k.halfSec != null) out.push({ sec: k.halfSec, color: SO_V.half, label: 'หายครึ่ง วิ ' + k.halfSec, dash: [5, 4] });
+      return out;
+    }
+
+    function _soRetDraw() {
+      const st = _soOpen && _soVid[_soOpen.id];
+      const v = st && st.data;
+      if (_soRetChart) { try { _soRetChart.destroy(); } catch (e) {} _soRetChart = null; }
+      const cv = document.getElementById('so-ret-chart');
+      if (!v) return;
+      if (!cv || typeof Chart === 'undefined' || cv.offsetParent === null) { _soStripDraw(); return; }
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      _chartLook(dark);
+      const sec = (v.persec || []).length > 1;
+      const labels = sec ? v.persec.map((_, i) => i) : (v.x || []);
+      const line = _soVarColor('--blue', '#7c3aed');
+      const marks = sec ? _soMarks(v) : [];
+      const markPlugin = { id: 'soMarks', afterDatasetsDraw(c) {
+        const { ctx, chartArea: a, scales: { x } } = c;
+        ctx.save();
+        marks.forEach((m, i) => {
+          const px = x.getPixelForValue(m.sec);
+          if (px < a.left || px > a.right) return;
+          ctx.strokeStyle = m.color; ctx.lineWidth = 1.6; ctx.setLineDash(m.dash);
+          ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+          ctx.setLineDash([]); ctx.fillStyle = m.color; ctx.font = "700 12px 'Noto Sans Thai', sans-serif";
+          const tw = ctx.measureText(m.label).width;
+          const tx = Math.min(Math.max(px + 4, a.left), a.right - tw - 2);
+          ctx.fillText(m.label, tx, a.top + 12 + i * 15);
+        });
+        ctx.restore();
+      } };
+      _soRetChart = new Chart(cv, {
+        type: 'line', plugins: [markPlugin],
+        data: { labels, datasets: [{ label: 'คนยังดูอยู่', data: sec ? v.persec : (v.all || []),
+          borderColor: line, backgroundColor: line + '22', fill: true, tension: .25,
+          borderWidth: 2.4, pointRadius: 0, pointHoverRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false,
+          scales: {
+            x: { grid: { display: false }, border: { display: false },
+                 ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12, font: { size: 11 },
+                          callback: (val, i) => sec ? (i + (i === labels.length - 1 ? ' วิ' : '')) : labels[i] + '%' } },
+            y: { min: 0, max: 100, border: { display: false }, grid: { drawTicks: false },
+                 ticks: { stepSize: 25, padding: 8, font: { size: 11 }, callback: t => t + '%' } } },
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: {
+              title: it => sec ? 'วินาทีที่ ' + it[0].label : 'ช่วง ' + it[0].label + '% ของคลิป',
+              label: it => ' คนยังดูอยู่ ' + _soPct(it.parsed.y) } } } },
+      });
+      _soStripDraw();
+    }
+
+    // แถบภาพทีละวินาที — วางตรงกับแกน x ของกราฟ (อ่านตำแหน่งจริงจากกราฟ ไม่เดาระยะขอบ)
+    function _soStripDraw() {
+      const box = document.getElementById('so-strip');
+      const st = _soOpen && _soVid[_soOpen.id], v = st && st.data;
+      if (!box || !v) return;
+      const fr = v.frames || {}, urls = fr.urls || [];
+      if (fr.state !== 'ready' || !urls.length) { box.style.height = '0'; box.innerHTML = ''; return; }
+      box.style.height = '96px';
+      const c = _soRetChart, a = c && c.chartArea;
+      const left = a ? a.left : 4, width = a ? (a.right - a.left) : Math.max(0, box.clientWidth - 8);
+      const ps = v.persec || [];
+      const n = ps.length > 1 ? Math.min(urls.length, ps.length) : urls.length;
+      const xs = i => (c && c.scales && c.scales.x && ps.length > 1) ? c.scales.x.getPixelForValue(i)
+                                                                    : left + (n > 1 ? i / (n - 1) : 0) * width;
+      const cell = width / Math.max(1, n);
+      const hi = {};
+      _soMarks(v).forEach(m => { if (m.sec < n && ps.length > 1) hi[m.sec] = m; });
+      let html = '', labRight = -1e9;
+      for (let i = 0; i < n; i++) {
+        const m = hi[i], big = !!m || _soPick === i;
+        const w = big ? Math.max(40, cell) : Math.max(cell - 1, 6);
+        const x = Math.round(xs(i) - w / 2);
+        const bd = m ? m.color : (_soPick === i ? 'var(--blue)' : 'transparent');
+        html += `<div onclick="soSeek(${i})" title="วินาทีที่ ${i}${ps[i] != null ? ' · ยังดูอยู่ ' + ps[i] + '%' : ''}"
+          style="position:absolute;left:${x}px;top:${big ? 0 : 8}px;width:${w}px;height:${big ? 72 : 56}px;cursor:pointer;
+            z-index:${big ? 3 : 1};border:2px solid ${bd};border-radius:5px;overflow:hidden;background:var(--bg1);
+            box-shadow:${big ? '0 2px 8px rgba(0,0,0,.18)' : 'none'}">
+          <img src="${h(urls[i])}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"></div>`;
+        if (m && ps[i] != null) {
+          // จุดสำคัญอยู่ติดกัน (เช่น หลุดหนักสุดวิ 24 กับหายครึ่งวิ 25) = ป้ายเลื่อนหลบกัน ไม่ทับเป็น "5449%"
+          const lx = Math.max(Math.round(xs(i) - 22), labRight + 4);
+          labRight = lx + 44;
+          html += `<div style="position:absolute;left:${lx}px;top:76px;width:44px;
+            text-align:center;font-size:var(--fs-body);font-weight:800;color:${m.color}">${Math.round(ps[i])}%</div>`;
+        }
+      }
+      box.innerHTML = html;
     }
 
     // ★ 24 ก.ย.69 — ตารางแยกรายช่อง/รายเพจ ครบทั้ง 3 ฝั่ง
@@ -5957,11 +6283,13 @@
               style="font-size:21px;font-weight:800;color:${p.live ? 'var(--t1)' : 'var(--t3)'}">${
               p.live ? _n(inc.views) : '–'}</span>
             <span style="font-size:var(--fs-body);color:var(--t3)">วิวในช่วงนี้ · สะสม ${_n(p.views)}</span></div>
-          <div style="display:flex;gap:11px;flex-wrap:wrap;font-size:var(--fs-body);color:var(--t3)">${small}</div>
+          <div style="display:flex;gap:11px;flex-wrap:wrap;font-size:var(--fs-body);color:var(--t3)">${small}${
+            p.ret3 != null ? `<span style="white-space:nowrap">ดูถึง 3 วิ <b style="color:var(--blue)">${p.ret3}%</b></span>` : ''}</div>
           <div style="display:flex;gap:7px;margin-top:auto;padding-top:4px">
             <button onclick="soOpenPostId('${h(side)}','${h(String(p.id)).replace(/'/g, '&#39;')}')"
               style="flex:1;padding:6px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);
-                color:var(--t2);font-size:var(--fs-body);cursor:pointer;font-family:inherit">ดูกราฟรายวัน</button>
+                color:var(--t2);font-size:var(--fs-body);cursor:pointer;font-family:inherit">${
+                side === 'meta' && String(p.type || '').indexOf('video') >= 0 ? 'คนดูหลุดตรงไหน' : 'ดูกราฟรายวัน'}</button>
             ${p.link ? `<a href="${h(p.link)}" target="_blank" rel="noopener"
               style="padding:6px 10px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);
                 color:var(--t2);font-size:var(--fs-body);text-decoration:none">เปิดจริง</a>` : ''}</div>
@@ -6219,7 +6547,7 @@
                background:${_soMetric === m ? 'var(--blue)' : 'var(--bg2)'};
                color:${_soMetric === m ? 'var(--on-blue)' : 'var(--t2)'}">${h(_soData.metricTh[m] || m)}</button>`).join('');
 
-      if (_soOpen) box.innerHTML = _soDetailHtml();
+      if (_soOpen) { box.innerHTML = _soDetailHtml(); _soRetDraw(); }   // วิดีโอ FB: กราฟคนดูค้าง + แถบภาพ
       else if (_soCh) box.innerHTML = _soChannelHtml();   // หน้าช่อง — ไม่มี canvas จึงข้ามส่วนกราฟไปเอง
       else box.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
           ${_soKpi(_soSide)}</div>

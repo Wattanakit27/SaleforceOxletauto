@@ -189,6 +189,51 @@ class MetaPostSnapshot(models.Model):
         return "%s %s %s" % (self.snap_date, self.post_id, self.trigger)
 
 
+class MetaVideoRetention(models.Model):
+    """กราฟ "คนยังดูอยู่กี่ %" ของวิดีโอในเพจ — 1 แถวต่อโพสต์ (ค่าล่าสุด · อัปเดตทุกเที่ยงคืน) · 15 ต.ค.69
+
+    Facebook ให้มา **41 จุด แบ่งตามความยาวคลิปทุก 2.5%** (จุด 0 = เริ่มคลิป · จุด 40 = จบคลิป) ค่าเป็นสัดส่วน 0–1
+    ไม่ได้ให้เป็นวินาที → แปลงด้วย `length_sec` · 3 เส้น: รวมทุกคน · วิดีโอเล่นเอง (autoplay) · คนกดเล่นเอง
+    เก็บค่าล่าสุดค่าเดียว (ไม่เก็บรายวัน) — กราฟแทบไม่ขยับหลังคลิปออกไม่กี่วัน เก็บทุกคืนจะบวมเปล่า
+    """
+    page_id = models.CharField("เพจ", max_length=32, db_index=True)
+    post_id = models.CharField("โพสต์", max_length=64, unique=True)
+    video_id = models.CharField("วิดีโอ", max_length=64, blank=True)
+    created_time = models.DateTimeField("โพสต์เมื่อ", null=True, blank=True)
+    length_sec = models.FloatField("ความยาวคลิป (วินาที)", null=True, blank=True)
+    curve = models.JSONField("คนยังดูอยู่ (รวม) 41 จุด", default=list, blank=True)
+    curve_auto = models.JSONField("คนยังดูอยู่ (เล่นเอง/autoplay)", default=list, blank=True)
+    curve_click = models.JSONField("คนยังดูอยู่ (กดเล่นเอง)", default=list, blank=True)
+    updated_at = models.DateTimeField("อัปเดตล่าสุด", auto_now=True)
+    first_seen = models.DateTimeField("ระบบเจอคลิปนี้ครั้งแรก", null=True, blank=True)
+
+    # ── ผลวิเคราะห์ (คิดด้วย social_stats._kpi ตัวเดียวกับหน้าเว็บ · คิดใหม่ทุกครั้งที่กราฟอัปเดต) ──
+    # เก็บเป็นคอลัมน์ให้เขียน SQL ได้ตรงๆ เช่น "คลิปไหน Hook ต่ำกว่า 60%" (15 ต.ค.69 · เจ้าของสั่ง)
+    hook_pct = models.FloatField("Hook · เหลือกี่ % ที่วิที่ 3", null=True, blank=True)
+    hold_pct = models.FloatField("Hold · ของคนที่ดูถึง 3 วิ ดูต่อถึงวิ 15/จบ กี่ %", null=True, blank=True)
+    hold_to = models.CharField("Hold วัดถึง (15 / end)", max_length=8, blank=True)
+    half_sec = models.IntegerField("คนที่ดูถึง 3 วิ หายครึ่งที่วินาทีที่", null=True, blank=True)
+    drop_sec = models.IntegerField("หลุดหนักสุดที่วินาทีที่", null=True, blank=True)
+    drop_pct = models.FloatField("หลุดหนักสุดกี่ %", null=True, blank=True)
+    end_pct = models.FloatField("ดูจบกี่ %", null=True, blank=True)
+    persec = models.JSONField("คนยังดูอยู่ทีละวินาที (%)", default=list, blank=True)
+    analyzed_at = models.DateTimeField("วิเคราะห์ล่าสุด", null=True, blank=True)
+
+    # ── ภาพทีละวินาที (ไฟล์อยู่ media/frames/meta/<post id>/ · ตารางจดว่ามีกี่ภาพ ทำเมื่อไหร่ เพราะอะไร) ──
+    frames_n = models.IntegerField("ภาพทีละวินาที (จำนวน)", default=0)
+    frames_at = models.DateTimeField("ทำภาพเมื่อ", null=True, blank=True)
+    frames_reason = models.CharField("ได้ภาพเพราะ (new = คลิปใหม่ · ads = ยิงแอดวิวสูง)", max_length=8, blank=True)
+    frames_error = models.CharField("ทำภาพไม่สำเร็จเพราะ", max_length=200, blank=True)
+
+    class Meta:
+        db_table = "dash_meta_video_retention"
+        verbose_name = "กราฟคนดูค้างของวิดีโอ Facebook"
+        verbose_name_plural = "กราฟคนดูค้างของวิดีโอ Facebook"
+
+    def __str__(self):
+        return "%s (%s วิ)" % (self.post_id, self.length_sec)
+
+
 class MetaAdDaily(models.Model):
     """ผลโฆษณา 1 ตัว × 1 วัน — ★ ต่างจากโพสต์: **Meta แยกรายวันให้เอง + ย้อนหลังได้**
 

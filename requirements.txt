@@ -15,3 +15,5 @@ playwright>=1.40           # headless Chromium แคป #rpt-card → ส่ง
 beautifulsoup4>=4.12       # parse HTML หน้า list/detail ของ autosoftware.co.th
 # ── เข้ารหัส token ของ TikTok ก่อนเก็บลงฐานข้อมูล (dashboard/services/tiktok_oauth.py) ──
 cryptography>=42           # Fernet · เดิมติดมากับแพ็กเกจอื่นอยู่แล้ว ใส่ไว้ตรงๆ กันวันที่มันหลุด
+# ── ภาพทีละวินาทีของวิดีโอ Facebook (dashboard/services/video_frames.py) — มี ffmpeg ในเครื่องแล้วไม่ใช้ตัวนี้ ──
+imageio-ffmpeg==0.6.0      # แถม ffmpeg ตัวเดียวมากับแพ็กเกจ ไม่ต้อง apt install · ล็อกเวอร์ชัน (บทเรียน playwright)

@@ -231,6 +231,7 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
         page_daily, page_total = {}, {}
 
     top_ids = {p["post_id"] for p in posts}
+    rets = retention_map(top_ids)
     per_item = _daily_one(rows, "post_id", set())
     return {
         "dailyItems": _daily_cover(per_item, f, t),   # คิดยอดรายวันได้กี่โพสต์ (เทียบกับ postCount)
@@ -253,6 +254,8 @@ def meta_stats(frm=None, to=None, top: int = 10) -> dict:
             "date": (p["created_time"].date().isoformat() if p["created_time"] else ""),
             "views": p["video_views"] or 0, "likes": p["reactions"] or 0,
             "comments": p["comments"] or 0, "shares": p["shares"] or 0,
+            # เหลือคนดูกี่ % ที่วินาทีที่ 3 (เฉพาะวิดีโอที่มีกราฟแล้ว) — None = ไม่ใช่วิดีโอ/ยังไม่ได้ดึง
+            "ret3": (rets.get(p["post_id"]) or {}).get("ret3"),
         } for p in posts],
         "days": _cron_days(MetaPostSnapshot, f, t),
     }
@@ -573,8 +576,215 @@ def channel_posts(side: str, owner: str, frm=None, to=None, limit: int = 48, off
                "asc" if direction == "asc" else "desc",
                "total" if basis == "total" else "range")
     page = rows[max(0, offset):max(0, offset) + max(1, limit)]
+    if side == "meta":                       # กราฟคนดูค้างมีเฉพาะวิดีโอ Facebook
+        rets = retention_map([r["id"] for r in page])
+        for r in page:
+            r["ret3"] = (rets.get(r["id"]) or {}).get("ret3")
     return {"rows": page, "total": len(rows),
             "daily": {r["id"]: per_item.get(r["id"], {}) for r in page}}
+
+
+# ═══════════ ★ 15 ต.ค.69 — กราฟ "คนยังดูอยู่กี่ %" ของวิดีโอ Facebook (เจ้าของสั่ง) ═══════════
+#  ที่มา: `dash_meta_video_retention` (meta_sync.sync_retention ทุกเที่ยงคืน) — 41 จุด ทุก 2.5% ของความยาวคลิป
+#  จุดที่ i อยู่ที่วินาที = i/40 × ความยาวคลิป · ไม่รู้ความยาว = แสดงเป็น % ของคลิปแทนวินาที
+HOOK_SEC = 3          # "เปิดหัว" = เหลือคนดูกี่ % ที่วินาทีที่ 3
+
+
+def _ret_at(curve: list, length, sec: float):
+    """สัดส่วนคนที่ยังดูอยู่ ณ วินาทีที่ `sec` (ประมาณค่าระหว่างจุด) · คิดไม่ได้ = None"""
+    if not curve or not length or length <= 0 or sec > length:
+        return None
+    x = sec / float(length) * (len(curve) - 1)
+    i = int(x)
+    if i >= len(curve) - 1:
+        return curve[-1]
+    return curve[i] + (curve[i + 1] - curve[i]) * (x - i)
+
+
+def retention_map(post_ids) -> dict:
+    """{post_id: {"ret3": % ที่วินาทีที่ 3 (0-100 · ปัด 1 ตำแหน่ง) | None, "len": วินาที | None}}"""
+    ids = [str(i) for i in post_ids if i]
+    if not ids:
+        return {}
+    try:
+        from dashboard.models import MetaVideoRetention
+        rows = MetaVideoRetention.objects.filter(post_id__in=ids).values("post_id", "curve", "length_sec")
+    except Exception:                        # ยังไม่ migrate = ไม่มีคอลัมน์นี้ ไม่พังทั้งหน้า
+        return {}
+    out = {}
+    for r in rows:
+        v = _ret_at(r["curve"] or [], r["length_sec"], HOOK_SEC)
+        out[r["post_id"]] = {"ret3": round(v * 100, 1) if v is not None else None,
+                             "len": round(r["length_sec"], 1) if r["length_sec"] else None}
+    return out
+
+
+def _kpi(curve: list, length) -> dict:
+    """ตัวเลขสรุปของกราฟ — คิดฝั่งเซิร์ฟเวอร์ที่เดียว (หน้าเว็บแค่วาด)
+
+    hook = เหลือคนดูกี่ % ที่วินาทีที่ 3 (จากคนที่กดเล่น/เห็นวิดีโอเล่น = 100%)
+    hold = ของคนที่ดูถึง 3 วิ ยังดูถึงวินาทีที่ 15 กี่ % (คลิปสั้นกว่า 15 วิ = ถึงจบคลิป)
+    halfSec = วินาทีแรกที่คนที่ดูถึง 3 วิ เหลือไม่ถึงครึ่ง · None = อยู่เกินครึ่งจนจบ
+    dropSec = วินาทีที่คนหลุดมากที่สุด (เทียบกับวินาทีก่อนหน้า) · end = ดูจบกี่ %
+    """
+    out = {"hook": None, "hold": None, "holdTo": None, "halfSec": None, "end": None,
+           "dropSec": None, "dropPct": None}
+    if not curve:
+        return out
+    out["end"] = round(curve[-1] * 100, 1)
+    if not length:
+        return out
+    h = _ret_at(curve, length, HOOK_SEC)
+    if h is None:
+        return out
+    out["hook"] = round(h * 100, 1)
+    to = 15 if length >= 15 else length
+    e = _ret_at(curve, length, to)
+    if h > 0 and e is not None:
+        out["hold"] = round(e / h * 100, 1)
+        out["holdTo"] = to if to == 15 else "end"
+    last = int(length)
+    for sec in range(HOOK_SEC, last + 1):
+        v = _ret_at(curve, length, sec)
+        if v is not None and h > 0 and v <= h / 2:
+            out["halfSec"] = sec
+            break
+    best, prev = 0.0, curve[0]
+    for sec in range(1, last + 1):
+        v = _ret_at(curve, length, sec)
+        if v is None:
+            break
+        if prev - v > best:
+            best, out["dropSec"] = prev - v, sec
+        prev = v
+    out["dropPct"] = round(best * 100, 1) if out["dropSec"] else None
+    return out
+
+
+def _persec(curve: list, length) -> list:
+    """% คนยังดูอยู่ทีละวินาที (0..ความยาวคลิป · สูงสุด 600 วิ) — ตรงกับภาพที่ตัดทีละวินาที · ไม่รู้ความยาว = []"""
+    out = []
+    if curve and length:
+        for sec in range(0, min(int(length), 600) + 1):
+            v = _ret_at(curve, length, sec)
+            out.append(round(v * 100, 1) if v is not None else None)
+    return out
+
+
+def analysis_fields(curve: list, length) -> dict:
+    """ผลวิเคราะห์ของคลิปเป็นค่าตามคอลัมน์ของ `MetaVideoRetention` (hook_pct … persec)
+
+    ใช้ `_kpi` ตัวเดียวกับหน้าเว็บ → ตัวเลขในฐานข้อมูลกับบนหน้าจอตรงกันเสมอ
+    """
+    k = _kpi(curve or [], length)
+    return {"hook_pct": k["hook"], "hold_pct": k["hold"],
+            "hold_to": "" if k["holdTo"] is None else str(k["holdTo"]),
+            "half_sec": k["halfSec"], "drop_sec": k["dropSec"], "drop_pct": k["dropPct"],
+            "end_pct": k["end"], "persec": _persec(curve or [], length)}
+
+
+def analyze_missing(limit: int = 2000) -> int:
+    """คิดผลวิเคราะห์ให้แถวที่ยังไม่เคยคิด (แถวก่อนมีคอลัมน์นี้ / ใส่ข้อมูลเอง) · ไม่ยิง Facebook"""
+    from django.utils import timezone
+
+    from dashboard.models import MetaVideoRetention
+    n = 0
+    for r in MetaVideoRetention.objects.filter(analyzed_at__isnull=True)[:limit]:
+        MetaVideoRetention.objects.filter(pk=r.pk).update(
+            analyzed_at=timezone.now(), **analysis_fields(r.curve, r.length_sec))
+        n += 1
+    return n
+
+
+def retention(post_id: str) -> dict:
+    """กราฟเต็มของคลิปเดียว — หน้า "ดูรายชิ้น" ขอเมื่อกดเข้าไปดู (ไม่ส่งมากับก้อนภาพรวม)"""
+    from dashboard.models import MetaVideoRetention
+    r = MetaVideoRetention.objects.filter(post_id=str(post_id or "")).first()
+    if not r or not r.curve:
+        return {"has": False}
+    n = len(r.curve) - 1
+    length = r.length_sec or None
+    persec = _persec(r.curve, length)
+    return {"has": True, "len": length, "unit": "sec" if length else "pct",
+            "x": [round(i / n * length, 1) if length else round(i / n * 100, 1) for i in range(n + 1)],
+            "all": [round(v * 100, 1) for v in r.curve],
+            "auto": [round(v * 100, 1) for v in (r.curve_auto or [])],
+            "click": [round(v * 100, 1) for v in (r.curve_click or [])],
+            "persec": persec, "kpi": _kpi(r.curve, length),
+            "updated": r.updated_at.isoformat() if r.updated_at else ""}
+
+
+def _page_avg(page_id: str, days: int = 60) -> dict:
+    """ค่าเฉลี่ยของเพจ (วิดีโอ 60 วันล่าสุด) — ไว้เทียบว่าคลิปนี้ดีกว่า/แย่กว่าปกติ"""
+    from django.utils import timezone
+
+    from dashboard.models import MetaVideoRetention
+    since = timezone.now() - timedelta(days=days)
+    hooks, ends = [], []
+    for r in (MetaVideoRetention.objects.filter(page_id=page_id, created_time__gte=since)
+              .values("curve", "length_sec")):
+        k = _kpi(r["curve"] or [], r["length_sec"])
+        if k["hook"] is not None:
+            hooks.append(k["hook"])
+        if k["end"] is not None:
+            ends.append(k["end"])
+    avg = lambda xs: round(sum(xs) / len(xs), 1) if xs else None   # noqa: E731
+    return {"hook": avg(hooks), "end": avg(ends), "n": len(hooks), "days": days}
+
+
+_SRC_CACHE: dict = {}       # post_id → (เวลา, ลิงก์ไฟล์วิดีโอ) — ลิงก์ของ Facebook หมดอายุเอง จำไว้แค่ 20 นาที
+
+
+def _video_source(post_id: str) -> str:
+    import time as _t
+    hit = _SRC_CACHE.get(post_id)
+    if hit and _t.time() - hit[0] < 1200:
+        return hit[1]
+    from . import meta
+    pid = post_id.split("_")[0]
+    pt = meta.page_token(pid)
+    p = meta.get("/" + post_id, _token=pt, fields="attachments{target,media_type}")
+    att = ((p.get("attachments") or {}).get("data") or [{}])[0]
+    vid = str((att.get("target") or {}).get("id") or "")
+    src = ""
+    if vid and "video" in (att.get("media_type") or ""):
+        src = meta.get("/" + vid, _token=pt, fields="source").get("source") or ""
+    _SRC_CACHE[post_id] = (_t.time(), src)
+    if len(_SRC_CACHE) > 300:
+        for k in list(_SRC_CACHE)[:100]:
+            _SRC_CACHE.pop(k, None)
+    return src
+
+
+def video_detail(post_id: str) -> dict:
+    """ทุกอย่างของหน้า "คนดูหลุดตรงไหน" ของคลิปเดียว: ตัวเลขโพสต์ · กราฟ · ภาพทีละวินาที · ลิงก์เล่นคลิป"""
+    from dashboard.models import MetaPostSnapshot
+    post_id = str(post_id or "").strip()
+    pid = post_id.split("_")[0]
+    if not post_id or pid not in _meta_pages():
+        return {"has": False, "error": "โพสต์นี้ไม่ได้อยู่ใต้เพจของบริษัทนี้"}
+    out = retention(post_id)
+    s = MetaPostSnapshot.objects.filter(post_id=post_id).order_by("-taken_at").first()
+    if s:
+        eng = (s.reactions or 0) + (s.comments or 0) + (s.shares or 0)
+        out["stats"] = {
+            "views": s.video_views or 0, "likes": s.reactions or 0, "comments": s.comments or 0,
+            "shares": s.shares or 0, "paid": s.video_views_paid or 0, "organic": s.video_views_organic or 0,
+            "avgSec": round((s.video_avg_watch_ms or 0) / 1000.0, 1),
+            "engPct": round(eng / s.video_views * 100, 2) if s.video_views else None,
+            "text": (s.message or "")[:200], "link": s.permalink or "", "type": s.post_type or "",
+            "date": s.created_time.date().isoformat() if s.created_time else "",
+        }
+    out["pageAvg"] = _page_avg(pid)
+    out["isVideo"] = bool(out.get("has")) or ("video" in ((s.post_type if s else "") or ""))
+    if out["isVideo"]:
+        from . import video_frames
+        out["frames"] = video_frames.for_detail(post_id)   # ทำเฉพาะคลิปยิงแอดวิวสูง TOP_N อันดับ
+        try:
+            out["source"] = _video_source(post_id)
+        except Exception as e:                               # เล่นคลิปไม่ได้ก็ยังดูกราฟ/ภาพได้
+            out["source"], out["sourceError"] = "", str(e)[:120]
+    return out
 
 
 def _thumb(side: str, vid: str, cache=None) -> str:
