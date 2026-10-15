@@ -1671,6 +1671,8 @@
     //   เพิ่มรายการใหม่ = เติมที่นี่ที่เดียว · ได้ URL ของตัวเอง (?panel=<key>) อัตโนมัติ
     const SETTINGS_MENU = [
       { g:'งานประจำวัน', d:'เปิดดูบ่อย — ลูกค้า · คนทำงาน', items: [
+        { i:'lucide:triangle-alert', l:'แจ้งผู้พัฒนา (บั๊ก / ขอฟีเจอร์)', fn:'openDevRequests()',
+          tip:'เจอบั๊กหรืออยากได้อะไรเพิ่ม แจ้งตรงนี้ แนบรูป/คลิป/ไฟล์ได้ · ส่งแล้วผู้พัฒนาได้ข้อความทาง LINE ทันที · ดูย้อนหลังได้ว่าใครขออะไรแต่ละวัน' },
 
         { i:'lucide:message-circle', l:'แชทลูกค้า (LINE OA)', fn:'openCustomerChat()',
           tip:'ลูกค้าที่ทักเข้า LINE OA — ใครทักมา ทักว่าอะไร ทักครั้งแรกเมื่อไหร่ + LINE id กดคัดลอกไว้ทักกลับ' },
@@ -7316,6 +7318,206 @@
     // 🎯 เป้ารับซื้อรถ รายคน × วิธี — ★ 30 ก.ย.69 (เจ้าของสั่ง "ให้มันสามารถแก้เป้าได้")
     //   เดิมฮาร์ดโค้ดใน B_TARGETS ต้องแก้โค้ด+deploy ทุกครั้งที่เป้าเปลี่ยน
     //   ★ เก็บเป็น "เป้า/เดือน" — ตารางคูณจำนวนเดือนในช่วงที่ดูเอง (เหมือนเป้าของเซลล์)
+    // ══════════ 🛠️ แจ้งผู้พัฒนา (15 ต.ค.69 · เจ้าของสั่ง) ══════════
+    //   แบบฟอร์มแจ้งบั๊ก/ขอฟีเจอร์ + แนบรูป/คลิป/ไฟล์ · ส่งแล้วเด้งข้อความเข้า LINE ส่วนตัวเจ้าของ (ไม่ส่งไฟล์เข้า LINE)
+    //   ด้านล่าง = เรื่องที่แจ้งแยกรายวัน (ใครขออะไร) · แอดมินสูงสุด/ผู้บริหาร เปลี่ยนสถานะ/เขียนหมายเหตุได้
+    //   ไฟล์อัปผ่าน /track/api/upload (target=devreq · nginx รับถึง 220 MB) → เก็บนอก /media/ เปิดผ่าน API ที่เช็คสิทธิ์
+    let _drFiles = [], _drBusy = 0, _drDays = 30, _drStatus = '', _drKind = 'bug', _drData = null;
+    const DR_KIND = { bug:'เจอบั๊ก / ใช้งานไม่ได้', feature:'ขอฟีเจอร์ / ขอแก้', question:'สอบถาม', other:'อื่นๆ' };
+    const DR_ST = { new:['ใหม่','var(--red)'], doing:['กำลังทำ','var(--amber)'], done:['เสร็จแล้ว','var(--green)'], rejected:['ไม่ทำ','var(--t3)'] };
+    const _drBtn = 'padding:8px 14px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);cursor:pointer;font-size:var(--fs-body);font-family:inherit';
+    const _drInp = 'width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);font-size:var(--fs-body);font-family:inherit';
+
+    async function openDevRequests() {
+      _drFiles = []; _drBusy = 0;
+      const ov = _trkOverlay('devrequests', '<p class="mut">กำลังโหลด…</p>');
+      ov.firstChild.style.maxWidth = '860px';
+      _drRenderShell(ov);
+      await _drLoad();
+    }
+
+    function _drRenderShell(ov) {
+      ov = ov || document.getElementById('devrequests'); if (!ov) return;
+      const curPage = ((document.querySelector('.ntab.on') || {}).textContent || '').trim();
+      const kinds = Object.entries(DR_KIND).map(([k, l]) => `<button type="button" data-drk="${k}" onclick="_drPickKind('${k}')"
+          style="${_drBtn};${_drKind === k ? 'background:var(--blue);color:var(--on-blue);border-color:var(--blue);font-weight:700' : ''}">${h(l)}</button>`).join('');
+      ov.firstChild.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="font-size:var(--fs-h);font-weight:800">${ic('lucide:triangle-alert', 18)} แจ้งผู้พัฒนา</div>
+          <button onclick="document.getElementById('devrequests').remove()" style="background:transparent;border:none;font-size:22px;color:var(--t3);cursor:pointer">✕</button></div>
+        <div class="mut" style="font-size:var(--fs-body);margin:6px 0 14px;line-height:1.6">เจอบั๊ก ใช้งานไม่ได้ หรืออยากได้อะไรเพิ่ม แจ้งตรงนี้ · ส่งแล้วผู้พัฒนาได้ข้อความทาง LINE ทันที
+          · แนบรูปหน้าจอ/คลิปอัดหน้าจอ/ไฟล์ได้ (ไฟล์ละไม่เกิน 200 MB · สูงสุด 10 ไฟล์)</div>
+        <div style="border:.5px solid var(--bd);border-radius:12px;padding:14px;background:var(--bg)">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${kinds}</div>
+          <input id="dr_title" maxlength="200" placeholder="หัวข้อสั้นๆ เช่น กดบันทึกสถานะลูกค้าแล้วไม่ติด" style="${_drInp};margin-bottom:8px">
+          <textarea id="dr_detail" rows="4" maxlength="5000" placeholder="รายละเอียด — ทำอะไรอยู่ · กดตรงไหน · เห็นอะไร · อยากให้เป็นแบบไหน" style="${_drInp};resize:vertical;margin-bottom:8px"></textarea>
+          <input id="dr_page" maxlength="300" value="${h(curPage)}" placeholder="เจอที่หน้าไหน (เช่น ภาพรวม / Connect / หน้าเซลล์)" style="${_drInp};margin-bottom:8px">
+          <label style="display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-body);margin-bottom:10px;cursor:pointer">
+            <input type="checkbox" id="dr_urgent" style="width:17px;height:17px;accent-color:var(--red)"> ด่วน (กระทบงานตอนนี้)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="${_drBtn};display:inline-flex;align-items:center;gap:6px">${ic('lucide:paperclip', 15)} แนบรูป/คลิป/ไฟล์
+              <input type="file" multiple accept="image/*,video/*,.pdf,.txt,.log,.csv,.xlsx,.xls,.doc,.docx,.zip" style="display:none" onchange="_drAddFiles(this)"></label>
+            <span class="mut" style="font-size:var(--fs-body)" id="dr_upst"></span></div>
+          <div id="dr_files" style="display:flex;flex-direction:column;gap:5px;margin-top:8px"></div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+            <button id="dr_send" onclick="_drSubmit()" style="padding:10px 18px;border-radius:9px;border:none;background:var(--blue);color:var(--on-blue);font-weight:700;cursor:pointer;font-size:var(--fs-body);font-family:inherit">${ic('lucide:send', 15)} ส่งให้ผู้พัฒนา</button>
+            <span id="dr_status" style="font-size:var(--fs-body)"></span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0 8px">
+          <div style="font-size:var(--fs-sub);font-weight:800">เรื่องที่แจ้งเข้ามา</div>
+          <select id="dr_days" onchange="_drDays=Number(this.value);_drLoad()" style="${_drInp};width:auto;padding:6px 9px">
+            ${[[7,'7 วัน'],[30,'30 วัน'],[90,'90 วัน'],[365,'1 ปี']].map(([v,l]) => `<option value="${v}" ${_drDays===v?'selected':''}>${l}</option>`).join('')}</select>
+          <span id="dr_filters" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
+        <div id="dr_list"><p class="mut">กำลังโหลด…</p></div>`;
+      _drPaintFiles();
+    }
+
+    function _drPickKind(k) {
+      _drKind = k;
+      document.querySelectorAll('#devrequests [data-drk]').forEach(b => {
+        const on = b.getAttribute('data-drk') === k;
+        b.style.background = on ? 'var(--blue)' : 'var(--bg2)'; b.style.color = on ? 'var(--on-blue)' : 'var(--t1)';
+        b.style.borderColor = on ? 'var(--blue)' : 'var(--bd2)'; b.style.fontWeight = on ? '700' : '';
+      });
+    }
+
+    function _drSize(n) { n = Number(n || 0); return n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB'; }
+
+    function _drPaintFiles() {
+      const box = document.getElementById('dr_files'); if (!box) return;
+      box.innerHTML = _drFiles.map((f, i) => `<div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-body);padding:6px 9px;border:.5px solid var(--bd);border-radius:8px;background:var(--bg2)">
+          ${ic(f.kind === 'image' ? 'lucide:camera' : f.kind === 'video' ? 'lucide:clapperboard' : 'lucide:file-text', 15)}
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(f.name)}</span>
+          <span class="mut">${f.err ? `<span style="color:var(--red)">${h(f.err)}</span>` : f.id ? _drSize(f.size) : 'กำลังอัป…'}</span>
+          ${f.id || f.err ? `<button onclick="_drFiles.splice(${i},1);_drPaintFiles()" title="เอาออก" style="background:transparent;border:none;color:var(--t3);cursor:pointer;font-size:16px">✕</button>` : ''}</div>`).join('');
+      const st = document.getElementById('dr_upst');
+      if (st) st.textContent = _drBusy ? 'กำลังอัปโหลด ' + _drBusy + ' ไฟล์…' : '';
+    }
+
+    async function _drAddFiles(inp) {
+      const list = [...(inp.files || [])]; inp.value = '';
+      for (const file of list) {
+        if (_drFiles.length >= 10) { alert('แนบได้ไม่เกิน 10 ไฟล์'); break; }
+        if (file.size > 200 * 1024 * 1024) { alert('ไฟล์ ' + file.name + ' ใหญ่เกิน 200 MB'); continue; }
+        const it = { name: file.name, size: file.size, kind: (file.type || '').startsWith('image') ? 'image' : (file.type || '').startsWith('video') ? 'video' : 'file' };
+        _drFiles.push(it); _drBusy++; _drPaintFiles();
+        try {
+          const fd = new FormData(); fd.append('file', file); fd.append('target', 'devreq');
+          const r = await fetch('/track/api/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+          const d = await r.json().catch(() => ({ ok: false, error: 'HTTP ' + r.status }));
+          if (d.ok) { it.id = d.id; it.size = d.size; it.kind = d.kind || it.kind; }
+          else it.err = d.error || 'อัปไม่สำเร็จ';
+        } catch (e) { it.err = 'อัปไม่สำเร็จ (เน็ต)'; }
+        _drBusy--; _drPaintFiles();
+      }
+    }
+
+    async function _drSubmit() {
+      const st = document.getElementById('dr_status'), btn = document.getElementById('dr_send');
+      const title = (document.getElementById('dr_title') || {}).value || '';
+      if (!title.trim()) { st.textContent = 'ใส่หัวข้อก่อน'; st.style.color = 'var(--red)'; return; }
+      if (_drBusy) { st.textContent = 'รอไฟล์อัปโหลดเสร็จก่อน'; st.style.color = 'var(--amber)'; return; }
+      const files = _drFiles.filter(f => f.id).map(f => ({ id: f.id, name: f.name }));
+      btn.disabled = true; st.textContent = 'กำลังส่ง…'; st.style.color = '';
+      try {
+        const d = await (await fetch('/api/admin/dev_requests', { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', kind: _drKind, title, files,
+            detail: (document.getElementById('dr_detail') || {}).value || '',
+            page: (document.getElementById('dr_page') || {}).value || '',
+            urgent: !!(document.getElementById('dr_urgent') || {}).checked }) })).json();
+        if (!d.ok) { st.textContent = d.error || 'ส่งไม่สำเร็จ'; st.style.color = 'var(--red)'; btn.disabled = false; return; }
+        _drFiles = [];
+        ['dr_title', 'dr_detail'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        const u = document.getElementById('dr_urgent'); if (u) u.checked = false;
+        _drPaintFiles();
+        st.textContent = d.item.lineOk ? 'ส่งแล้ว · ผู้พัฒนาได้ข้อความทาง LINE แล้ว' : 'บันทึกแล้ว · แต่เด้ง LINE ไม่สำเร็จ (' + (d.item.lineError || '') + ')';
+        st.style.color = d.item.lineOk ? 'var(--green)' : 'var(--amber)';
+        btn.disabled = false;
+        await _drLoad();
+      } catch (e) { st.textContent = 'ส่งไม่สำเร็จ (เน็ต)'; st.style.color = 'var(--red)'; btn.disabled = false; }
+    }
+
+    async function _drLoad() {
+      const box = document.getElementById('dr_list'); if (!box) return;
+      try {
+        const d = await (await fetch('/api/admin/dev_requests?days=' + _drDays + '&status=' + encodeURIComponent(_drStatus), { credentials: 'same-origin' })).json();
+        if (!d.ok) { box.innerHTML = '<p style="color:var(--red)">' + h(String(d.error || 'โหลดไม่ได้')) + '</p>'; return; }
+        _drData = d; _drPaintList();
+      } catch (e) { box.innerHTML = '<p style="color:var(--red)">โหลดไม่ได้</p>'; }
+    }
+
+    function _drDayLabel(iso) {
+      const d = new Date(iso + 'T00:00:00'), t = new Date(); t.setHours(0, 0, 0, 0);
+      const diff = Math.round((t - d) / 86400000);
+      const dm = d.getDate() + '/' + (d.getMonth() + 1);
+      return diff === 0 ? 'วันนี้ · ' + dm : diff === 1 ? 'เมื่อวาน · ' + dm : dm + '/' + (d.getFullYear() + 543 - 2500);
+    }
+
+    function _drPaintList() {
+      const d = _drData; if (!d) return;
+      const fb = document.getElementById('dr_filters');
+      if (fb) {
+        const all = Object.values(d.counts || {}).reduce((a, b) => a + b, 0);
+        fb.innerHTML = [['', 'ทั้งหมด ' + all]].concat(Object.entries(DR_ST).map(([k, v]) => [k, v[0] + ' ' + ((d.counts || {})[k] || 0)]))
+          .map(([k, l]) => `<button onclick="_drStatus='${k}';_drLoad()" style="${_drBtn};padding:5px 10px;${_drStatus === k ? 'background:var(--blue);color:var(--on-blue);border-color:var(--blue)' : ''}">${h(l)}</button>`).join('');
+      }
+      const box = document.getElementById('dr_list'); if (!box) return;
+      const items = d.items || [];
+      if (!items.length) { box.innerHTML = '<div class="mut" style="padding:18px;text-align:center;border:.5px dashed var(--bd2);border-radius:10px">ยังไม่มีเรื่องที่แจ้งในช่วงนี้</div>'; return; }
+      const byDay = {};
+      items.forEach(it => (byDay[it.date] = byDay[it.date] || []).push(it));
+      box.innerHTML = Object.keys(byDay).sort().reverse().map(day => {
+        const rows = byDay[day], who = {};
+        rows.forEach(r => who[r.requester] = (who[r.requester] || 0) + 1);
+        const whoTxt = Object.entries(who).sort((a, b) => b[1] - a[1]).map(([n, c]) => h(n) + ' ' + c).join(' · ');
+        return `<div style="margin-bottom:14px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:4px 2px 6px;border-bottom:.5px solid var(--bd2);margin-bottom:8px">
+            <span style="font-size:var(--fs-sub);font-weight:800">${_drDayLabel(day)}</span>
+            <span class="mut" style="font-size:var(--fs-body)">${rows.length} เรื่อง · ${whoTxt}</span></div>
+          ${rows.map(_drCard).join('')}</div>`;
+      }).join('');
+    }
+
+    function _drCard(r) {
+      const st = DR_ST[r.status] || [r.status, 'var(--t3)'];
+      const files = (r.files || []).map(f => f.gone ? `<span class="mut" style="font-size:var(--fs-body)">${h(f.name)} (ลบแล้ว)</span>`
+        : f.kind === 'image' ? `<a href="${f.url}" target="_blank" rel="noopener" title="${h(f.name)}"><img src="${f.url}" alt="" loading="lazy"
+            style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:.5px solid var(--bd)"></a>`
+        : `<a href="${f.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border:.5px solid var(--bd2);border-radius:8px;font-size:var(--fs-body);color:var(--blue);text-decoration:none">
+            ${ic(f.kind === 'video' ? 'lucide:clapperboard' : 'lucide:file-text', 14)} ${h(f.name)} · ${_drSize(f.size)}</a>`).join('');
+      const manage = _drData && _drData.canManage ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <select id="dr_st_${r.id}" style="${_drInp};width:auto;padding:6px 9px">${Object.entries(DR_ST).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
+          <input id="dr_note_${r.id}" value="${h(r.note || '')}" placeholder="หมายเหตุ (เช่น แก้แล้วในเวอร์ชันไหน)" style="${_drInp};flex:1;min-width:180px;padding:6px 9px">
+          <button onclick="_drSaveStatus(${r.id})" style="${_drBtn};padding:6px 12px">บันทึก</button>
+          <span id="dr_ss_${r.id}" style="font-size:var(--fs-body)"></span></div>`
+        : (r.note ? `<div style="margin-top:6px;font-size:var(--fs-body);color:var(--t2)">หมายเหตุผู้พัฒนา: ${h(r.note)}</div>` : '');
+      return `<div style="border:.5px solid var(--bd);border-left:3px solid ${st[1]};border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--bg)">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:var(--fs-body);padding:2px 7px;border-radius:6px;background:var(--bg2);color:var(--t2)">${h(r.kindTh)}</span>
+            ${r.urgent ? '<span style="font-size:var(--fs-body);padding:2px 7px;border-radius:6px;background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red);font-weight:700">ด่วน</span>' : ''}
+            <span style="font-size:var(--fs-body);padding:2px 7px;border-radius:6px;color:${st[1]};border:.5px solid ${st[1]}">${h(st[0])}</span>
+            <span class="mut" style="font-size:var(--fs-body);margin-left:auto">${h(r.requester)} · ${h(r.time)}${r.lineOk === false ? ' · <span style="color:var(--amber)" title="' + h(r.lineError || '') + '">LINE ไม่ถึง</span>' : ''}</span></div>
+          <div style="font-size:var(--fs-sub);font-weight:700;margin-top:6px;word-break:break-word">${h(r.title)}</div>
+          ${r.detail ? `<div style="font-size:var(--fs-body);color:var(--t2);margin-top:4px;white-space:pre-wrap;word-break:break-word">${h(r.detail)}</div>` : ''}
+          ${r.page ? `<div class="mut" style="font-size:var(--fs-body);margin-top:4px">หน้า: ${h(r.page)}</div>` : ''}
+          ${files ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">${files}</div>` : ''}
+          ${manage}</div>`;
+    }
+
+    async function _drSaveStatus(id) {
+      const s = document.getElementById('dr_ss_' + id);
+      const status = (document.getElementById('dr_st_' + id) || {}).value || '';
+      const note = (document.getElementById('dr_note_' + id) || {}).value || '';
+      if (s) { s.textContent = 'กำลังบันทึก…'; s.style.color = ''; }
+      try {
+        const d = await (await fetch('/api/admin/dev_requests', { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status', id, status, note }) })).json();
+        if (!d.ok) { if (s) { s.textContent = d.error || 'ไม่สำเร็จ'; s.style.color = 'var(--red)'; } return; }
+        await _drLoad();
+      } catch (e) { if (s) { s.textContent = 'ไม่สำเร็จ (เน็ต)'; s.style.color = 'var(--red)'; } }
+    }
+
     async function openPurchaseTargets(){ const ov=_trkOverlay('buy-targets','<p class="mut">กำลังโหลด…</p>'); await renderPurchaseTargets(ov); }
     async function renderPurchaseTargets(ov){
       ov=ov||document.getElementById('buy-targets'); if(!ov) return;

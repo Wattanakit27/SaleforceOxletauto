@@ -130,6 +130,8 @@ python manage.py runserver
 | `/api/line/webhook` | `line_webhook` | **public** (csrf_exempt) — LINE Messaging API webhook · จับ `groupId`+ชื่อ ตอนบอทได้ event จากกลุ่ม (join/message) → เก็บ `line_groups` (ยืนยัน signature ถ้ามี `LINE_CHANNEL_SECRET`) · **ต้อง register URL นี้ใน LINE Console** (Messaging API → Webhook URL = `SITE_URL/api/line/webhook` · เปิด Use webhook) |
 | `/api/line/group_ingest` | `line_group_ingest` | **public** (csrf_exempt · auth `?secret=CRON_SECRET` / header `X-Cron-Secret`) — รับ group event จาก **n8n** (กรณี n8n เป็นตัวรับ LINE webhook แล้ว forward มา) → เก็บ `line_groups` เดียวกับ webhook · body ยืดหยุ่น (LINE raw `{events:[...]}` / `{groupId,groupName?}` / list) · คืน `{ok,count,groups}` |
 | `/api/notify/owner` | `api_notify_owner` | **public** (csrf_exempt · POST · header `X-Cron-Secret` = `CRON_SECRET` เทียบแบบไบต์) — `{text}` (≤1000 ตัว) → LINE ส่วนตัวเจ้าของ (`leadsheet._send_alert` ผู้รับ `ALERT_TO` = วัฒนกิจ) · จำกัด 12 ข้อความ/ชม. (KV `notify_owner_sent` · เกิน = 429) · **ใช้กับ hook ของ Claude Code บนเครื่อง dev** (`~/.claude/hooks/long_task_notify.py` · งานเกิน 10 นาทีเสร็จ = แจ้ง) · ไม่ตั้ง CRON_SECRET = 503 · เทสต์ `scripts/test_notify_owner.py` |
+| `/api/admin/dev_requests` | `admin_dev_requests` | **แอดมิน** — "แจ้งผู้พัฒนา" (16 ต.ค.69) · GET `?days=&status=` = เรื่องที่แจ้ง (ใหม่สุดก่อน) + `counts` + `canManage` · POST `{action:"create", kind, urgent, title, detail, page, files:[{id,name}]}` = บันทึก + เด้ง LINE ส่วนตัวเจ้าของ · POST `{action:"status", id, status, note}` = **แอดมินสูงสุด/ผู้บริหาร (`_is_boss`) เท่านั้น** · ไฟล์แนบอัปก่อนผ่าน `/track/api/upload` (`target=devreq`) · ดู section "แจ้งผู้พัฒนา" |
+| `/api/admin/dev_requests/file` | `admin_dev_request_file` | **แอดมิน** GET `?id=&i=` = เปิดไฟล์แนบ (เก็บนอก /media/) · รูป/คลิป/PDF เปิดในเบราว์เซอร์ · ไฟล์อื่น = ดาวน์โหลดเสมอ · `nosniff` + CSP `sandbox` |
 | `/api/admin/update_release_date` | `update_release_date` | **admin (session) หรือเซลล์ (token/session + ownership)** POST: inline edit วันที่/สถานะ เขียนกลับชีตยอดขายตรงเซลล์ — body `{tab,row,col(2\|13\|14\|18\|19\|20\|21\|23),value,token?}` → `update_release_date()` PUT cell — **2=วันจอง · 13=N สถานะเคส (จอง/จอง(ซื้อสด)/รอเซ็นต์/รอผล/รอปล่อย/ปล่อย/รีเจ็ก · validate ตัด (ซื้อสด) แล้วต้องเป็น 1 ใน 6) · 14=เซ็น · 18=เอกสาร · 19/20=ผล · 21/23=ปล่อย**. เซลล์แก้ได้เฉพาะเคสตัวเอง (เช็คชื่อที่ marker ของแถว = `cell(r,0)`). ใช้จาก `saveReleaseDate`/`saveTimelineDate`/`saveCaseStatus` (index.html แอดมิน + seller.html เซลล์ · modal เคสจองมี dropdown สถานะ + แก้วันที่) |
 | `/connect/api/leadflow` | `connect_views.api_leadflow` | **แอดมิน/ผู้บริหาร** งานจ่ายเบอร์ (10 ต.ค.69 · `checkout/leadflow.py`) — GET = ค่าตั้ง + คิวจ่ายวน + งานวันนี้ · POST `{action:"config", …}` ตั้งค่า (ค่าผิด = 400 บอกช่อง) · `{action:"reassign", task, emp?}` จ่ายใหม่เลขเดิม (emp ว่าง = คนถัดไปในคิว) · `{action:"forward", id\|mid, emp}` ส่งต่อไม้ 2 (R+เลขเดิม+/1 → ห้อง REJECT) · ดู section "งานจ่ายเบอร์" |
 | `/api/seller/check_phone` | `seller_check_phone` | **ต้อง login** (เซลล์ · token `/s/` หรือ session `/me/` · token ของคนอื่นใช้ไม่ได้) POST `{token?, phone}` → เบอร์นี้เคยเป็นลีดของใคร เดือนไหน (`phonebook.check_for_seller`) · ของคนอื่น = บอกแค่ชื่อ+เดือน **ไม่ส่งเลขลีด** · รับเฉพาะเบอร์เต็ม · จด `dash_event_log` |
@@ -1338,6 +1340,32 @@ sender_id)` ≠ จำนวนคน**
 - **⚠️★ บทเรียน (เจ้าของแจ้ง "กดลูกค้าและแชท แต่เด้งไปหน้าเบิกรถ")**: เดิมข้อมูลลูกค้าถูกฝังอยู่ใน
   **พาเนลตั้งค่า "⚙️ กลุ่ม LINE" ของหน้าเบิก-คืนรถ** เพราะตอนนั้นทำมาเพื่อดีบักการดักเก็บ ไม่ได้ตั้งใจให้เป็นหน้า CRM
   · พอทำเมนู "ลูกค้า & ข้อมูล" ผมชี้เข้าหน้านั้นเลย → ผู้ใช้กดแล้วไปโผล่หน้างานที่ไม่เกี่ยวกัน
+### 🛠️ แจ้งผู้พัฒนา (บั๊ก / ขอฟีเจอร์) — [devreq.py](dashboard/services/devreq.py) · 16 ต.ค.69 (เจ้าของสั่ง)
+*"เพิ่มฟังก์ชันในการตั้งค่า คือ แจ้งเตือนผู้พัฒนา … สร้างแบบฟอร์มขึ้นมา ฉันจะได้รู้ว่าใคร Request ให้ทำอะไรบ้างแต่ละวัน
+… ส่งข้อความแจ้งเตือนมาที่ไลน์ส่วนตัวของฉันแล้ว ฉันจะไปดูระบบเอง"*
+- **ที่อยู่**: เมนู ☰ → ตั้งค่า → งานประจำวัน → **"แจ้งผู้พัฒนา (บั๊ก / ขอฟีเจอร์)"** (รายการแรก) · ลิงก์ตรง **`/dashboard/?panel=devrequests`**
+- **ฟอร์ม**: ประเภท (เจอบั๊ก / ขอฟีเจอร์ / สอบถาม / อื่นๆ) · หัวข้อ (บังคับ) · รายละเอียด · หน้าที่เจอ (เติมชื่อแท็บที่เปิดอยู่ให้) ·
+  ติ๊ก "ด่วน" · แนบรูป/คลิป/ไฟล์ได้ 10 ไฟล์ ไฟล์ละ ≤200 MB
+- **ส่งแล้วเด้ง LINE ส่วนตัวเจ้าของ** ด้วย `leadsheet._send_alert` (ผู้รับ `ALERT_TO` = Wattanakit/วัฒนกิจ · บอทตัวส่ง) — **ข้อความอย่างเดียว ไม่ส่งไฟล์เข้า LINE**
+  (บอก ประเภท/ด่วน/ใครแจ้ง/หัวข้อ/รายละเอียด 400 ตัว/หน้า/จำนวนรูป-คลิป-ไฟล์ + ลิงก์ `SITE_URL/dashboard/?panel=devrequests`) ·
+  **เพดาน `LINE_PER_HOUR`=30/ชม.** (เกิน = บันทึกแต่ไม่เด้ง) · **LINE ไม่ถึง = ยังบันทึก** + จดเหตุผลที่ `line_error` (หน้าเว็บบอกเหตุผลเป็นภาษาคน)
+- **รายการด้านล่างแยกรายวัน** ("วันนี้ · 16/10 · 3 เรื่อง · กวาง 2 · มัท 1") · ช่วง 7/30/90/365 วัน · กรองตามสถานะ
+  · สถานะ ใหม่ / กำลังทำ / เสร็จแล้ว / ไม่ทำ + หมายเหตุ — **เปลี่ยนได้เฉพาะ `_is_boss`** (แอดมินทั่วไปเห็นอย่างเดียว · เซิร์ฟเวอร์ตอบ 403)
+- **สิทธิ์**: แจ้ง/ดู = แอดมินทุกคน (`_is_admin`) · เซลล์/คนงาน = 401 (ยังไม่มีปุ่มในหน้าเซลล์)
+- **ตาราง `dash_dev_request`** (`DevRequest` · dashboard migration **0019**) — ใครแจ้ง (ชื่อเล่น + บทบาท · LINE id เก็บไว้แต่ **ไม่ส่งออกหน้าเว็บ**) ·
+  `files` JSON `[{id,name,size,kind}]` · `line_ok`/`line_error` · `user_agent` · เติม `db_inventory.TABLES` แล้ว (pii)
+- **★ ไฟล์แนบเก็บนอก `/media/`** — `DEV_REQUEST_ROOT` (ค่าตั้งต้น `private_media/devreq/YYYY-MM/<uuid>.<ext>` · gitignored แล้ว)
+  เพราะภาพหน้าจอบั๊กมักมีข้อมูลลูกค้า · เปิดได้ทางเดียวคือ `/api/admin/dev_requests/file` (เช็คสิทธิ์ · กัน `../` · id ต้องตรงรูปแบบ)
+  · ชื่อไฟล์สุ่มใหม่ ไม่ใช้ชื่อที่อัปมา · **HTML/SVG/ไฟล์อื่นดาวน์โหลดเสมอ** (กันไปรันในโดเมนเรา)
+- **★ อัปผ่าน `/track/api/upload` (`target=devreq`) ไม่ใช่ endpoint ใหม่** — nginx เปิดช่องนั้นรับ 220 MB อยู่แล้ว (ช่องปกติ 20 MB · คลิปมือถือเกินง่าย)
+  → **ไม่ต้องแก้ config เซิร์ฟเวอร์**
+- **ลบไฟล์เก่าเอง**: เรื่องเกิน `KEEP_FILE_DAYS`=180 วัน = ลบไฟล์ (ตัวเรื่องยังอยู่ · ไฟล์ขึ้น "ถูกลบแล้ว") · ไฟล์ที่อัปแล้วไม่ได้กดส่ง ค้างเกิน 2 วัน = ลบ
+  · ทำวันละครั้งตอนมีคนส่งเรื่อง (KV `devreq_cleanup`) · จด `dash_event_log` kind=`devreq` ทุกเรื่อง
+- **Deploy**: `migrate` (dashboard 0019) + restart · **โฟลเดอร์ `private_media/` สร้างเองตอนอัปครั้งแรก — ต้องเป็นของ user `oxlet`** (อย่ารันคำสั่งด้วย root ให้มันเกิดก่อน)
+- **เทสต์**: `python scripts/test_dev_requests.py` (37 ข้อ · test client จริงทั้งสาย upload→create→LINE→list→status→file→cleanup · ปลอมแค่ `requests.post`)
+  · ตรวจ UI ด้วย Chrome จริง (ส่งเรื่อง+แนบรูป/ไฟล์ · เปลี่ยนสถานะ · เปิดไฟล์ · จอ 1400/375 ไม่ล้นจอ · ไม่มี JS error)
+- **ยังไม่ได้ทำ**: ปุ่มแจ้งจากหน้าเซลล์/แอปมือถือ · แจ้งกลับคนแจ้งเมื่อเปลี่ยนสถานะ
+
   - **กฎ: ข้อมูลที่คนละบทบาทใช้ อย่าอยู่หน้าเดียวกัน** — ของตั้งค่า (ดักเก็บกลุ่มไหน) กับของงานประจำ
     (ดูลูกค้าคุยอะไร) คนละคนใช้ คนละความถี่ · ตอนนี้แยกเป็น `api_customers` + พาเนลของตัวเอง
     ส่วนสวิตช์ตั้งค่ายังอยู่ที่เดิม แต่ย้ายเมนูไปหมวด **"ตั้งค่าระบบ → ตั้งค่ากลุ่ม LINE ที่ดักเก็บ"**

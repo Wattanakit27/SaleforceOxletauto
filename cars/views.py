@@ -932,6 +932,12 @@ def api_upload(request):
     code = (request.POST.get("code") or "").strip()
     target = (request.POST.get("target") or "").strip()   # 'disk' = บังคับเก็บดิสก์ (รูปหน้าปก)
     is_video = (f.content_type or "").startswith("video")
+    if target == "devreq":
+        # ไฟล์แนบของ "แจ้งผู้พัฒนา" (15 ต.ค.69) — เก็บในที่ปิด ไม่ใช่ /media/ (ภาพหน้าจอบั๊กมักมีข้อมูลลูกค้า)
+        # ใช้ช่องนี้เพราะ nginx เปิดรับไฟล์ใหญ่ถึง 220 MB อยู่แล้ว (ช่องปกติของเว็บ 20 MB · คลิปมือถือเกินง่าย)
+        from dashboard.services import devreq
+        r = devreq.save_upload(f)
+        return JsonResponse(r, status=200 if r.get("ok") else 502)
 
     from . import gdrive
     if target != "disk" and gdrive.is_configured():

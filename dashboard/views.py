@@ -5081,3 +5081,74 @@ def api_v1_groups(request):
             return _api_json({"ok": False, "error": f"อ่านรายชื่อกลุ่มไม่ได้: {e}"}, status=502)
     data = sorted(merged.values(), key=lambda x: (-x["employeeCount"], x["name"] or x["groupId"]))
     return _api_json({"ok": True, "count": len(data), "data": data})
+
+
+# ═══════════ 🛠️ แจ้งผู้พัฒนา (15 ต.ค.69 · เจ้าของสั่ง) — แบบฟอร์มในหน้าตั้งค่า + เด้ง LINE ส่วนตัวเจ้าของ ═══════════
+@csrf_exempt
+def admin_dev_requests(request):
+    """แจ้งผู้พัฒนา — แอดมินทุกคนแจ้ง/ดูได้ · เปลี่ยนสถานะ/เขียนหมายเหตุได้เฉพาะแอดมินสูงสุด/ผู้บริหาร (`_is_boss`)
+
+    GET  ?days=30&status=  → {items (ใหม่สุดก่อน), counts, kinds, statuses, canManage}
+    POST {action:"create", kind, urgent, title, detail, page, files:[{id,name}]} → บันทึก + เด้ง LINE เจ้าของ
+    POST {action:"status", id, status, note} → เปลี่ยนสถานะ (boss)
+    ไฟล์แนบอัปก่อนผ่าน /track/api/upload (target=devreq) แล้วส่ง id มาในช่อง files
+    """
+    from .services import devreq
+    user = _session_user(request)
+    if not _is_admin(user):
+        return JsonResponse({"ok": False, "error": "ต้อง login แอดมินก่อน"}, status=401)
+    boss = _is_boss(request)
+    if request.method == "GET":
+        try:
+            days = int(request.GET.get("days") or 30)
+        except ValueError:
+            days = 30
+        out = devreq.listing(days, (request.GET.get("status") or "").strip())
+        return JsonResponse({"ok": True, **out, "canManage": boss}, json_dumps_params={"ensure_ascii": False})
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "method not allowed"}, status=405)
+    try:
+        body = json.loads(request.body or "{}")
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "ข้อมูลไม่ถูกต้อง"}, status=400)
+    action = (body.get("action") or "create").strip()
+    if action == "create":
+        item, err = devreq.create(user, body, request.META.get("HTTP_USER_AGENT", ""))
+        if err:
+            return JsonResponse({"ok": False, "error": err}, status=400)
+        return JsonResponse({"ok": True, "item": item}, json_dumps_params={"ensure_ascii": False})
+    if action == "status":
+        if not boss:
+            return JsonResponse({"ok": False, "error": "เปลี่ยนสถานะได้เฉพาะแอดมินสูงสุด/ผู้บริหาร"}, status=403)
+        item, err = devreq.set_status(body.get("id"), (body.get("status") or "").strip(), body.get("note"))
+        if err:
+            return JsonResponse({"ok": False, "error": err}, status=400)
+        return JsonResponse({"ok": True, "item": item}, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": False, "error": "ไม่รู้จักคำสั่ง"}, status=400)
+
+
+def admin_dev_request_file(request):
+    """GET ?id=<เรื่อง>&i=<ลำดับไฟล์> — เปิดไฟล์แนบ (แอดมินเท่านั้น · ไฟล์อยู่นอก /media/)
+    รูป/คลิป/PDF เปิดในเบราว์เซอร์ได้ · นอกนั้นดาวน์โหลดเสมอ (กัน HTML/SVG ที่แนบมาไปรันในโดเมนเรา)"""
+    from django.http import FileResponse, Http404
+
+    from .services import devreq
+    if not _is_admin(_session_user(request)):
+        return JsonResponse({"ok": False, "error": "ต้อง login แอดมินก่อน"}, status=401)
+    try:
+        hit = devreq.file_of(int(request.GET.get("id") or 0), int(request.GET.get("i") or 0))
+    except ValueError:
+        hit = None
+    if hit is None:
+        raise Http404("ไม่พบไฟล์ (อาจถูกลบเพราะเก่าเกินกำหนด)")
+    path, name, ext = hit
+    ctype = devreq.INLINE_TYPES.get(ext)
+    inline = bool(ctype) and request.GET.get("dl") != "1"
+    resp = FileResponse(open(path, "rb"), content_type=ctype or "application/octet-stream",
+                        as_attachment=not inline, filename=name)
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Cache-Control"] = "private, max-age=3600"
+    resp["Referrer-Policy"] = "no-referrer"
+    if ext != "pdf":
+        resp["Content-Security-Policy"] = "sandbox"
+    return resp

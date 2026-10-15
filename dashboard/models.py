@@ -792,3 +792,39 @@ class BanSheetRow(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.ban_date, self.seller, self.ban_type)
+
+
+class DevRequest(models.Model):
+    """แจ้งผู้พัฒนา — บั๊ก / ขอฟีเจอร์ / สอบถาม จากคนใช้ระบบ · 1 แถวต่อเรื่อง (15 ต.ค.69 · เจ้าของสั่ง)
+
+    ส่งแล้วเด้งข้อความเข้า LINE ส่วนตัวเจ้าของ (dashboard/services/devreq.py) · ไฟล์แนบเก็บนอก /media/
+    (`files` = [{id: token, name, size, kind}] · ลบไฟล์เองเกิน 180 วัน แล้วติด "gone")
+    """
+    KINDS = [("bug", "เจอบั๊ก / ใช้งานไม่ได้"), ("feature", "ขอฟีเจอร์ / ขอแก้"), ("question", "สอบถาม"), ("other", "อื่นๆ")]
+    STATUSES = [("new", "ใหม่"), ("doing", "กำลังทำ"), ("done", "เสร็จแล้ว"), ("rejected", "ไม่ทำ")]
+
+    created_at = models.DateTimeField("แจ้งเมื่อ", auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField("แก้ล่าสุด", auto_now=True)
+    kind = models.CharField("ประเภท", max_length=12, choices=KINDS, default="bug")
+    urgent = models.BooleanField("ด่วน", default=False)
+    title = models.CharField("หัวข้อ", max_length=200)
+    detail = models.TextField("รายละเอียด", blank=True)
+    page = models.CharField("เจอที่หน้าไหน", max_length=300, blank=True)
+    requester = models.CharField("ผู้แจ้ง", max_length=80, blank=True)
+    requester_role = models.CharField("บทบาทผู้แจ้ง", max_length=20, blank=True)
+    requester_uid = models.CharField("บัญชีผู้แจ้ง (ไม่โชว์บนเว็บ)", max_length=80, blank=True)
+    files = models.JSONField("ไฟล์แนบ", default=list, blank=True)
+    status = models.CharField("สถานะ", max_length=10, choices=STATUSES, default="new", db_index=True)
+    note = models.TextField("หมายเหตุจากผู้พัฒนา", blank=True)
+    line_ok = models.BooleanField("แจ้ง LINE สำเร็จ", null=True, blank=True)
+    line_error = models.CharField("แจ้ง LINE ไม่สำเร็จเพราะ", max_length=300, blank=True)
+    user_agent = models.CharField("อุปกรณ์ที่แจ้ง", max_length=300, blank=True)
+
+    class Meta:
+        db_table = "dash_dev_request"
+        verbose_name = "แจ้งผู้พัฒนา"
+        verbose_name_plural = "แจ้งผู้พัฒนา"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return "%s %s" % (self.created_at, self.title)
