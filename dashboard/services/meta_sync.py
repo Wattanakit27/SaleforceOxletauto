@@ -256,9 +256,7 @@ def sync_retention(taken_at, days: int | None = None, trigger: str = "cron") -> 
     · คำตอบดิบของ Facebook เก็บลง `dash_meta_raw` (kind = retention / videos · ตัด paging ที่มี token ออก)
     · คืน `new` = post id ที่เพิ่งเจอครั้งแรกรอบนี้ (คลิปใหม่)
     """
-    from dashboard.models import MetaRaw, MetaVideoRetention
-
-    from . import social_stats
+    from dashboard.models import MetaRaw
 
     cutoff = taken_at - timedelta(days=days or POST_WINDOW_DAYS)
     out = {"videos": 0, "lengths": 0, "raw": 0, "new": [], "errors": []}
@@ -298,37 +296,85 @@ def sync_retention(taken_at, days: int | None = None, trigger: str = "cron") -> 
                     if ct and ct < cutoff:
                         stop = True
                         break
-                    att = ((p.get("attachments") or {}).get("data") or [{}])[0]
-                    if "video" not in (att.get("media_type") or ""):
+                    r = _save_retention_post(pid, p, lengths)
+                    if r is None:
                         continue
-                    ins = {i.get("name"): (i.get("values") or [{}])[0].get("value")
-                           for i in ((p.get("insights") or {}).get("data") or [])
-                           if (i.get("period") or "lifetime") == "lifetime"}
-                    curve = _curve(ins.get(_RET_METRICS[0]))
-                    if not curve:
-                        continue                         # คลิปที่ยังไม่มีคนดู Meta คืนว่าง — ไม่เก็บแถวเปล่า
-                    vid = str((att.get("target") or {}).get("id") or "")
-                    post_id = str(p.get("id") or "")
-                    ln = lengths.get(vid)
-                    if ln is None:                       # รอบสั้น (คลิปใหม่) หน้าต่าง /videos อาจไม่ครอบ — ใช้ความยาวเดิม
-                        ln = (MetaVideoRetention.objects.filter(post_id=post_id)
-                              .values_list("length_sec", flat=True).first())
-                    row, created = MetaVideoRetention.objects.update_or_create(
-                        post_id=post_id,
-                        defaults=dict(page_id=pid, video_id=vid, created_time=ct, length_sec=ln,
-                                      curve=curve, curve_auto=_curve(ins.get(_RET_METRICS[1])),
-                                      curve_click=_curve(ins.get(_RET_METRICS[2])),
-                                      analyzed_at=timezone.now(), **social_stats.analysis_fields(curve, ln)))
-                    if created or not row.first_seen:
-                        MetaVideoRetention.objects.filter(pk=row.pk).update(first_seen=timezone.now())
-                        if created:
-                            out["new"].append(post_id)
+                    if r:
+                        out["new"].append(r)
                     out["videos"] += 1
                 if stop:
                     break
         except meta.MetaError as e:
             out["errors"].append("กราฟคนดูค้าง เพจ %s: %s" % (pid, str(e)[:120]))
     return out
+
+
+def _save_retention_post(pid: str, p: dict, lengths: dict):
+    """โพสต์ 1 ตัวจากคำตอบของ Facebook → แถว `dash_meta_video_retention` + ผลวิเคราะห์
+    คืน None = ไม่ใช่วิดีโอ/ยังไม่มีกราฟ · "" = อัปเดตแถวเดิม · post id = เพิ่งเจอครั้งแรก (คลิปใหม่)"""
+    from dashboard.models import MetaVideoRetention
+
+    from . import social_stats
+    att = ((p.get("attachments") or {}).get("data") or [{}])[0]
+    if "video" not in (att.get("media_type") or ""):
+        return None
+    ins = {i.get("name"): (i.get("values") or [{}])[0].get("value")
+           for i in ((p.get("insights") or {}).get("data") or [])
+           if (i.get("period") or "lifetime") == "lifetime"}
+    curve = _curve(ins.get(_RET_METRICS[0]))
+    if not curve:
+        return None                                      # คลิปที่ยังไม่มีคนดู Meta คืนว่าง — ไม่เก็บแถวเปล่า
+    vid = str((att.get("target") or {}).get("id") or "")
+    post_id = str(p.get("id") or "")
+    ln = lengths.get(vid)
+    if ln is None:                                       # หน้าต่าง /videos ไม่ครอบ — ใช้ความยาวเดิม
+        ln = (MetaVideoRetention.objects.filter(post_id=post_id)
+              .values_list("length_sec", flat=True).first())
+    row, created = MetaVideoRetention.objects.update_or_create(
+        post_id=post_id,
+        defaults=dict(page_id=pid, video_id=vid, created_time=_dt(p.get("created_time")), length_sec=ln,
+                      curve=curve, curve_auto=_curve(ins.get(_RET_METRICS[1])),
+                      curve_click=_curve(ins.get(_RET_METRICS[2])),
+                      analyzed_at=timezone.now(), **social_stats.analysis_fields(curve, ln)))
+    if created or not row.first_seen:
+        MetaVideoRetention.objects.filter(pk=row.pk).update(first_seen=timezone.now())
+    return post_id if created else ""
+
+
+def fetch_retention_one(post_id: str, trigger: str = "ondemand") -> dict:
+    """คลิปเดียว ดึงเดี๋ยวนี้: กราฟคนดูค้าง + ความยาวคลิป + รูปหน้าปก (15 ต.ค.69)
+
+    ใช้ตอนเปิดดูคลิปที่รอบปกติไม่ครอบ — เช่นคลิปเก่ากว่า POST_WINDOW_DAYS (เจ้าของเปิดคลิป 10/7 แล้ว "กราฟไม่ขึ้น")
+    · ไม่โหลดไฟล์วิดีโอ · คำตอบดิบเก็บลง `dash_meta_raw` · คืน {has, cover, error}
+    """
+    from dashboard.models import MetaRaw
+
+    from . import covers
+    post_id = str(post_id or "").strip()
+    pid = post_id.split("_")[0]
+    if not post_id or pid not in meta.pages():
+        return {"has": False, "error": "โพสต์นี้ไม่ได้อยู่ใต้เพจของบริษัทนี้"}
+    pt = meta.page_token(pid)
+    p = meta.get("/" + post_id, _token=pt, fields=_RET_FIELDS + ",full_picture")
+    MetaRaw.objects.create(kind="retention", ref_id=pid, trigger=trigger, data=_raw(p))
+    att = ((p.get("attachments") or {}).get("data") or [{}])[0]
+    vid = str((att.get("target") or {}).get("id") or "")
+    lengths = {}
+    if vid and "video" in (att.get("media_type") or ""):
+        try:
+            v = meta.get("/" + vid, _token=pt, fields="id,length,created_time")
+            MetaRaw.objects.create(kind="videos", ref_id=pid, trigger=trigger, data=_raw(v))
+            lengths[vid] = round(float(v.get("length")), 2)
+        except (meta.MetaError, TypeError, ValueError):
+            pass                                         # ไม่รู้ความยาว = ยังเก็บกราฟได้ (แสดงเป็น % ของคลิป)
+    has = _save_retention_post(pid, p, lengths) is not None
+    cover = False
+    if p.get("full_picture"):
+        try:
+            cover = covers.save("meta", post_id, p["full_picture"]) or bool(covers.url_for("meta", post_id))
+        except Exception:
+            cover = False
+    return {"has": has, "cover": cover}
 
 
 # ── ดึงผลโฆษณา ─────────────────────────────────────────────────
@@ -542,7 +588,8 @@ def run(trigger: str = "cron", by: str = "", ads_days: int | None = None) -> dic
     if res.get("retention"):
         try:
             from . import video_frames
-            video_frames.start_prefetch()
+            if video_frames.ENABLED:                 # ปิดไว้ (เจ้าของสั่ง "ไม่ต้องดาวน์โหลดวิดีโอ")
+                video_frames.start_prefetch()
         except Exception:
             pass
     try:
@@ -619,9 +666,11 @@ def watch_videos(trigger: str = "watch") -> dict:
     except Exception as e:
         res["errors"].append("วิเคราะห์พัง: %s" % str(e)[:160])
     try:
-        fr = video_frames.prefetch_guarded()
+        fr = video_frames.prefetch_guarded() if video_frames.ENABLED else {"off": True}
         if fr is None:
             res["frames"] = {"busy": "รอบอื่นกำลังทำภาพอยู่"}
+        elif fr.get("off"):
+            res["frames"] = {"off": "ปิดการตัดภาพ (ไม่โหลดวิดีโอ)"}
         else:
             res["frames"] = {k: fr[k] for k in ("total", "made", "ready", "failed", "busy", "pruned")}
             res["errors"] += fr["errors"][:5]

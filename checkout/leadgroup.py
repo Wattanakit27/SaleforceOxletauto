@@ -45,6 +45,7 @@ GROUP_HINTS = ["จ่ายเบอร์"]
 #   ★ 4 ต.ค.69 — เว้นวรรคหลังขีดก็นับ ("RTLD9- 6456/1" ในห้อง REJECT เคยหลุด) · เว้นได้แค่ในบรรทัดเดียวกัน
 #     ([ \t] ไม่ใช่ \s) ไม่งั้นใบร่าง "TLD10-" ที่บรรทัดถัดไปขึ้นต้นด้วยเบอร์โทร จะกลายเป็นเลขลีดปลอม
 _LEAD_NO = re.compile(r"Ac\s*Lead\s*No\.?\s*[:：]?\s*([A-Za-z]{0,6}\d{0,2}[ \t]*-?[ \t]*\d{3,6})", re.I)
+_LEAD_SLASH = re.compile(r"[ \t]*/[ \t]*(\d{1,2})(?!\d)")
 _FIELDS = {
     "ads": ["ads"],
     "account": ["ชื่อ account", "ชื่อaccount"],
@@ -78,6 +79,12 @@ def parse_leadsheet(text: str) -> dict | None:
     if not m:
         return None
     out = {"lead_code": re.sub(r"[ \t]", "", m.group(1)).upper()}
+    # ★ 15 ต.ค.69 — เลขไม้ 2 ในห้อง REJECT = เลขเดิม + "/1" (RNLD10-8286/1) · `_LEAD_NO` จับถึงตัวเลขเท่านั้น
+    #   `lead_code` คงเดิม (ห้องพัก/งานจ่ายเบอร์/สมุดเบอร์ใช้เลขฐานอยู่) · เลขเต็มอยู่ที่ `lead_code_full`
+    #   ระบบลงชีต (leadsheet) ต้องใช้เลขเต็ม ไม่งั้นแถวไม้ 2 ไม่มี /1 แล้วรายงาน "8286/1 …" หาแถวไม่เจอ
+    sl = _LEAD_SLASH.match(text or "", m.end())
+    out["lead_slash"] = int(sl.group(1)) if sl else 0
+    out["lead_code_full"] = out["lead_code"] + ("/%d" % out["lead_slash"] if sl else "")
     out.update(parse_fields(text))
     return out
 

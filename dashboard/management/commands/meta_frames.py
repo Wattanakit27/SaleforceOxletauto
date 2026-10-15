@@ -5,7 +5,11 @@
     python manage.py meta_frames --watch            # ทำรอบ "คลิปใหม่" เดี๋ยวนี้: ดึงกราฟ 7 วัน → วิเคราะห์ → ทำภาพ
     python manage.py meta_frames --analyze          # คิดผลวิเคราะห์ให้แถวที่ยังไม่มี (ไม่ยิง Facebook)
     python manage.py meta_frames --fetch [--limit 3]  # ทำภาพให้คลิปที่ยังไม่มี (ทีละคลิป รอจนเสร็จ)
+    python manage.py meta_frames --purge            # ลบภาพทีละวินาทีทั้งหมด (ปิดฟีเจอร์แล้ว · 15 ต.ค.69 ใช้รูปปก+ลิงก์แทน)
     python manage.py meta_frames --out f.txt        # console ไทยเพี้ยน (cp874) ให้เขียนไฟล์แทน
+
+★ ภาพทีละวินาทีปิดอยู่ (`video_frames.ENABLED = False`) — เจ้าของสั่ง "ไม่ต้องดาวน์โหลดวิดีโอ แค่ลิงก์ + รูปปก"
+  `--watch` ยังดึงกราฟคลิปใหม่ + วิเคราะห์ตามปกติ แค่ไม่ทำภาพ
 
 ปกติไม่ต้องรัน — cron_tick ทำรอบคลิปใหม่ทุกชั่วโมง + รอบเที่ยงคืนทำทุกคลิป
 ⚠️ บนเซิร์ฟเวอร์ต้องรันในนาม `oxlet` (เจ้าของ media/) ไม่งั้นโฟลเดอร์ภาพเป็นของ root แล้วเว็บเขียนไม่ได้
@@ -23,7 +27,8 @@ class Command(BaseCommand):
     def add_arguments(self, p):
         p.add_argument("--watch", action="store_true", help="ทำรอบคลิปใหม่เดี๋ยวนี้ (ดึงกราฟ+วิเคราะห์+ภาพ)")
         p.add_argument("--analyze", action="store_true", help="คิดผลวิเคราะห์ให้แถวที่ยังไม่มี")
-        p.add_argument("--fetch", action="store_true", help="ทำภาพให้คลิปที่ยังไม่มีเดี๋ยวนี้")
+        p.add_argument("--fetch", action="store_true", help="ทำภาพให้คลิปที่ยังไม่มีเดี๋ยวนี้ (เฉพาะตอนเปิดฟีเจอร์)")
+        p.add_argument("--purge", action="store_true", help="ลบภาพทีละวินาทีทั้งหมด")
         p.add_argument("--top", type=int, default=0, help="ยิงแอดกี่อันดับ (ไม่ใส่ = ค่าตั้งต้นของระบบ)")
         p.add_argument("--limit", type=int, default=None, help="ทำภาพอย่างมากกี่คลิปในรอบนี้")
         p.add_argument("--out", default="", help="เขียนผลลงไฟล์")
@@ -48,6 +53,13 @@ class Command(BaseCommand):
             say(w)
             say("")
 
+        if o["purge"]:
+            r = VF.purge()
+            say("ลบภาพทีละวินาทีแล้ว %d คลิป · คืนพื้นที่ %.1f MB" % (r["clips"], r["mb"]))
+            say("")
+        if not VF.ENABLED:
+            say("ภาพทีละวินาทีปิดอยู่ (ไม่โหลดวิดีโอ · หน้าเว็บใช้รูปหน้าปก + ลิงก์ไป Facebook)")
+            say("")
         if o["watch"]:
             from dashboard.services import meta_sync
             say("รอบคลิปใหม่: ดึงกราฟคลิป %d วันล่าสุด → วิเคราะห์ → ทำภาพ …" % meta_sync.WATCH_DAYS)
@@ -71,6 +83,18 @@ class Command(BaseCommand):
                 say("    - " + e)
             say("")
 
+        if not VF.ENABLED:
+            try:
+                from dashboard.models import MetaVideoRetention
+                tot = MetaVideoRetention.objects.count()
+                done = MetaVideoRetention.objects.filter(analyzed_at__isnull=False).count()
+                say("กราฟคนดูหลุดในฐานข้อมูล %d คลิป · วิเคราะห์แล้ว %d" % (tot, done))
+            except Exception:
+                pass
+            if o["out"]:
+                io.open(o["out"], "w", encoding="utf-8").write("\n".join(lines))
+                self.stdout.write("เขียนผลลง %s แล้ว" % o["out"])
+            return
         rows = VF.eligible(top, fresh=True)
         n_new = sum(1 for r in rows if r["reason"] == "new")
         say("คลิปที่ได้ภาพทีละวินาที %d คลิป = ยิงแอดวิวสูงสุด %d อันดับ (%d) + คลิปใหม่ %d วัน (%d)"

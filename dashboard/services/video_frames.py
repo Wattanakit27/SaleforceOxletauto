@@ -4,7 +4,12 @@
 *"มี screenshot ของแต่ละเฟรมต่อหนึ่งวิ และเน้นแบบนี้"* — ดูกราฟแล้วต้องเห็นทันทีว่าวินาทีที่คนหลุด
 ในคลิปกำลังโชว์อะไรอยู่
 
-**ทำให้ 2 กลุ่ม** (เจ้าของสั่ง 15 ต.ค.69) — กราฟคนดูค้างยังมีทุกคลิปเหมือนเดิม
+★★ **ปิดอยู่ (`ENABLED = False`)** — เจ้าของสั่ง 15 ต.ค.69 ค่ำ *"ไม่ต้องดาวน์โหลดวิดีโอ เราแค่แปะลิงก์ก็พอ
+แล้วก็เอารูปหน้าปกของวิดีโอมาก็พอจะได้ประหยัดพื้นที่"* → หน้าคลิปใช้รูปปก (`covers`) + ลิงก์ไป Facebook แทน
+· ปิดแล้วไม่มีอะไรโหลดวิดีโอเลย (ensure/for_detail/prefetch/start_prefetch คืนทันที) · ภาพเก่าลบด้วย `purge()`
+  (`manage.py meta_frames --purge`) · โค้ดเก็บไว้ ถ้าวันหน้าอยากเปิดกลับ = ตั้ง ENABLED = True
+
+(เดิม) **ทำให้ 2 กลุ่ม** — กราฟคนดูค้างยังมีทุกคลิปเหมือนเดิม
 1. **ยิงแอดและวิวสูงสุด `TOP_N` อันดับ** — *"Screenshot ทำแค่ตัวที่ยิง Ads แล้วมียอดวิวเยอะ 20-30 คลิปก็พอ"*
 2. **คลิปใหม่ที่ลงภายใน `NEW_DAYS` วัน** — *"เมื่อมีคลิปใหม่มาวิเคราะห์ auto เองเลย และสกรีนช็อตเองเลยนะ"*
 · คลิปหนึ่งต้องโหลดไฟล์วิดีโอ ~15 MB แล้วตัดภาพด้วย ffmpeg ~10 วิ · ทำทุกคลิป (~860 คลิป) กินเน็ต/ดิสก์เปล่าๆ
@@ -38,6 +43,7 @@ MAX_SECONDS = 600                # ตัดภาพแค่ 10 นาที�
 RUN_STALE_SEC = 900              # ทำค้างนานกว่านี้ = thread ตายไปแล้ว เริ่มใหม่ได้
 RETRY_AFTER_SEC = 1800           # ทำไม่สำเร็จ = เว้น 30 นาทีค่อยลองใหม่ (ไม่ยิงซ้ำทุกครั้งที่เปิดหน้า)
 KEEP_DAYS = 90
+ENABLED = False                  # ★ ปิด: ไม่โหลดวิดีโอมาตัดภาพ (เจ้าของสั่ง 15 ต.ค.69 · ใช้รูปปก+ลิงก์แทน)
 TOP_N = 25                       # ภาพทีละวินาที: คลิปที่ยิงแอด วิวสูงสุดกี่อันดับ
 NEW_DAYS = 7                     # + คลิปที่ลงภายในกี่วัน (คลิปใหม่ = วิเคราะห์+ภาพให้เองทุกชั่วโมง)
 PRUNE_GRACE_DAYS = 3             # หลุดเกณฑ์แล้วเก็บภาพไว้อีกกี่วันก่อนลบ
@@ -197,6 +203,8 @@ def _todo(st: dict) -> bool:
 
 def ensure(post_id: str, reason: str = "") -> dict:
     """มีภาพแล้วคืนเลย · ยังไม่มี = เริ่มทำใน thread แล้วคืนสถานะ running"""
+    if not ENABLED:
+        return {"state": "off", "urls": []}
     st = status(post_id)
     if not _todo(st):
         return st
@@ -209,7 +217,9 @@ def ensure(post_id: str, reason: str = "") -> dict:
 
 def for_detail(post_id: str) -> dict:
     """ภาพของหน้า "คนดูหลุดตรงไหน" — มีแล้วคืนเลย · อยู่ในกลุ่มที่ได้ภาพแต่ยังไม่มี = เริ่มทำ ·
-    นอกกลุ่ม = state "skip" (หน้าเว็บบอกเกณฑ์) ไม่โหลดคลิป"""
+    นอกกลุ่ม = state "skip" (หน้าเว็บบอกเกณฑ์) ไม่โหลดคลิป · ปิดอยู่ = state "off" (ไม่แสดงภาพเลย)"""
+    if not ENABLED:
+        return {"state": "off", "urls": []}
     st = status(post_id)
     if st["state"] in ("ready", "running"):
         return st
@@ -226,6 +236,8 @@ def for_detail(post_id: str) -> dict:
 def prefetch(n: int = TOP_N, limit: int | None = None, new_days: int | None = None) -> dict:
     """ทำภาพให้คลิปในกลุ่มที่ยังไม่มี **ทีละคลิป** (ไม่แย่งเน็ต/CPU กับเว็บ) · ลบภาพของคลิปที่หลุดเกณฑ์ · คืนสรุป"""
     from django.db import close_old_connections
+    if not ENABLED:
+        return {"total": 0, "made": 0, "ready": 0, "failed": 0, "busy": 0, "pruned": 0, "errors": [], "off": True}
     rows = eligible(n, fresh=True, new_days=new_days)
     out = {"total": len(rows), "made": 0, "ready": 0, "failed": 0, "busy": 0, "pruned": 0, "errors": []}
     for r in rows:
@@ -279,7 +291,7 @@ def prefetch_guarded(**kw):
 
 def start_prefetch() -> bool:
     """เรียกต่อท้ายรอบดึง Meta (thread แยก · ไม่หน่วงรอบดึง) · มีอันกำลังทำอยู่แล้ว = ไม่เริ่มซ้ำ"""
-    if _PREFETCH["on"]:
+    if not ENABLED or _PREFETCH["on"]:
         return False
 
     def _run():
@@ -322,6 +334,31 @@ def prune(keep: set, grace_days: int = PRUNE_GRACE_DAYS) -> int:
         _mark_db(e.name, frames_n=0, frames_reason="", frames_error="")
         n += 1
     return n
+
+
+def purge() -> dict:
+    """ลบภาพทีละวินาทีทั้งหมด + ล้างช่อง frames_* ในตาราง (ใช้ตอนปิดฟีเจอร์ · ประหยัดพื้นที่)"""
+    root = _root()
+    n, size = 0, 0
+    try:
+        for e in os.scandir(root):
+            if e.is_dir():
+                for f in os.scandir(e.path):
+                    try:
+                        size += f.stat().st_size
+                    except OSError:
+                        pass
+                n += 1
+    except OSError:
+        pass
+    shutil.rmtree(root, ignore_errors=True)
+    try:
+        from dashboard.models import MetaVideoRetention
+        MetaVideoRetention.objects.exclude(frames_n=0, frames_error="", frames_reason="").update(
+            frames_n=0, frames_at=None, frames_reason="", frames_error="")
+    except Exception:
+        pass
+    return {"clips": n, "mb": round(size / 1e6, 1)}
 
 
 def _mark_db(post_id: str, **fields):

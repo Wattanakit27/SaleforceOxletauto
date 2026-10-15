@@ -86,14 +86,32 @@ SOURCE = {"url": "https://video.xx.fbcdn.net/v/t42/clip.mp4?oh=1"}
 
 
 class R:
-    def __init__(self, js, code=200):
-        self._js, self.status_code, self.headers, self.text = js, code, {}, str(js)
+    def __init__(self, js, code=200, body=b"", ctype=""):
+        self._js, self.status_code, self.text = js, code, str(js)
+        self.headers = {"content-type": ctype} if ctype else {}
+        self._body = body
 
     def json(self):
         return self._js
 
+    def iter_content(self, n=65536):
+        yield self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+PIC = "https://scontent.xx.fbcdn.net/v/pic_%s.jpg?oh=1"
+OLD = []                                           # โพสต์เก่ากว่าหน้าต่างดึงปกติ (ไม่อยู่ใน /posts)
+
 
 def fake_get(url, params=None, timeout=None, **kw):
+    if "/pic_" in url:                             # โหลดรูปหน้าปก (covers.save)
+        CALLS.append("PIC")
+        return R({}, body=b"\xff\xd8" + b"x" * 2000, ctype="image/jpeg")
     path = url.split("graph.facebook.com/", 1)[-1].split("/", 1)[-1]   # ตัดเวอร์ชัน
     CALLS.append(path)
     fields = (params or {}).get("fields", "")
@@ -104,14 +122,21 @@ def fake_get(url, params=None, timeout=None, **kw):
     if path == PID + "/posts":
         return R({"data": POSTS})
     if path.startswith(PID + "_"):
-        p = next((x for x in POSTS if x["id"] == path), None)
-        return R({"id": path, "attachments": p["attachments"]} if p else {"error": {"message": "no", "code": 100}})
+        p = next((x for x in POSTS + OLD if x["id"] == path), None)
+        if not p:
+            return R({"error": {"message": "no", "code": 100}})
+        if "insights" in fields:                   # ดึงคลิปเดียว (fetch_retention_one)
+            return R(dict(p, full_picture=PIC % path))
+        return R({"id": path, "attachments": p["attachments"]})
+    if path == "V9":
+        return R({"id": "V9", "length": 30.0, "created_time": ISO})
     if path in ("V1", "V3", "V5"):
         return R({"id": path, "source": SOURCE["url"], "length": 40.0})
     return R({"error": {"message": "unknown path " + path, "code": 100}})
 
 
 P = [mock.patch("requests.get", fake_get)]
+video_frames.ENABLED = True        # ข้อ [3]–[7] ทดสอบกลไกตัดภาพ (ของจริงปิดอยู่ — ข้อ [8])
 for p in P:
     p.start()
 
@@ -176,7 +201,8 @@ try:
            and det["stats"]["engPct"] == 5.0, det.get("stats"))
         ok("ค่าเฉลี่ยของเพจ (Hook ของ 2 คลิป)", det["pageAvg"]["hook"] == round((94.0 + social_stats._kpi(meta_sync._curve(STEP), 10.0)["hook"]) / 2, 1)
            and det["pageAvg"]["n"] == 2, det["pageAvg"])
-        ok("ลิงก์เล่นคลิปจาก Facebook", det["source"] == SOURCE["url"], det.get("source"))
+        ok("ไม่เล่น/ไม่โหลดวิดีโอในหน้า (ไม่มีลิงก์ไฟล์วิดีโอ) · มีรูปหน้าปกจาก Facebook",
+           "source" not in det and "/media/covers/meta/" + PID + "_1.jpg" in det.get("cover", ""), det.get("cover"))
         ok("เริ่มตัดภาพในเบื้องหลัง", det["frames"]["state"] in ("running", "ready"), det["frames"])
         for _ in range(50):
             if video_frames.status(PID + "_1")["state"] == "ready":
@@ -388,6 +414,80 @@ try:
         meta_sync._lock("manual", "test")
         ok("รอบใหญ่/กด sync เองกำลังทำ = ไม่ซ้อน", meta_sync.maybe_watch(_dt(2026, 10, 15, 11, 0)) == "busy")
         meta_sync._unlock()
+    # ── 8) ปิดการตัดภาพ (เจ้าของสั่ง "ไม่ต้องดาวน์โหลดวิดีโอ แค่ลิงก์ + รูปปก") · คลิปเก่าดึงกราฟตอนเปิดดู ──
+    print("\n[8] ปิดการโหลดวิดีโอ · รูปปก + ลิงก์ · คลิปเก่าดึงกราฟเอง")
+    video_frames.ENABLED = False
+    EXTRACTED.clear()
+    with mock.patch.object(video_frames, "_extract", fake_extract2):
+        ok("ปิดอยู่: for_detail/ensure = off · ไม่โหลดคลิป", video_frames.for_detail(PID + "_120")["state"] == "off"
+           and video_frames.ensure(PID + "_120")["state"] == "off" and not EXTRACTED)
+        r = video_frames.prefetch()
+        ok("ปิดอยู่: prefetch ไม่ทำอะไร", r.get("off") and r["total"] == 0 and not EXTRACTED, r)
+        ok("ปิดอยู่: start_prefetch ไม่เริ่ม", video_frames.start_prefetch() is False)
+        w = meta_sync.watch_videos("test")
+        ok("ปิดอยู่: รอบคลิปใหม่ยังดึงกราฟ+วิเคราะห์ แต่ไม่ทำภาพ", w["videos"] >= 1 and w["frames"].get("off")
+           and not EXTRACTED and w["ok"], w)
+    # คลิปเก่ากว่า 90 วัน: อยู่ในตารางโพสต์ (snapshot) แต่รอบปกติไม่ได้ดึงกราฟ — เหมือนคลิป 10/7 ที่เจ้าของเปิด
+    OLD.append({"id": PID + "_9", "created_time": (NOW - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S+0000"),
+                "insights": ins(LIN), "attachments": {"data": [{"media_type": "video", "target": {"id": "V9"}}]}})
+    MetaPostSnapshot.objects.create(taken_at=t_now, snap_date=timezone.localdate(), trigger="cron", page_id=PID,
+                                    post_id=PID + "_9", post_type="video", created_time=NOW - timedelta(days=120),
+                                    video_views=142868, permalink="https://www.facebook.com/x/videos/9")
+    ok("ก่อนเปิด: ยังไม่มีกราฟคลิปเก่า", not MetaVideoRetention.objects.filter(post_id=PID + "_9").exists())
+    nraw = MetaRaw.objects.count()
+    CALLS.clear()
+    d9 = social_stats.video_detail(PID + "_9")
+    H9 = social_stats._kpi(meta_sync._curve(LIN), 30.0)["hook"]        # คลิปยาว 30 วิ
+    ok("เปิดคลิปเก่า → ดึงกราฟคลิปเดียวเดี๋ยวนั้น + วิเคราะห์", d9.get("has") and d9["kpi"]["hook"] == H9 == 92.0
+       and d9["len"] == 30.0, {k: d9.get(k) for k in ("has", "len", "retError")})
+    ok("คลิปเก่า: เก็บรูปหน้าปก · ไม่มีลิงก์ไฟล์วิดีโอ · ภาพ = off", "_9.jpg" in d9.get("cover", "")
+       and "source" not in d9 and d9["frames"]["state"] == "off", (d9.get("cover"), d9.get("frames")))
+    ok("คลิปเก่า: คำตอบดิบเก็บลงฐานข้อมูล (กราฟ + ความยาว)", MetaRaw.objects.count() - nraw == 2)
+    ok("คลิปเก่า: แถวกราฟ + ผลวิเคราะห์อยู่ในตาราง", MetaVideoRetention.objects.get(post_id=PID + "_9").hook_pct == H9)
+    CALLS.clear()
+    social_stats.video_detail(PID + "_9")
+    ok("เปิดซ้ำ = ไม่ยิง Facebook อีก (มีกราฟ + รูปปกแล้ว)", not CALLS, CALLS)
+    # คลิปที่ Facebook ยังไม่ให้กราฟ (ยังไม่มีคนดู) — ลองครั้งเดียวต่อชั่วโมง ไม่ยิงทุกครั้งที่เปิด
+    MetaPostSnapshot.objects.create(taken_at=t_now, snap_date=timezone.localdate(), trigger="cron", page_id=PID,
+                                    post_id=PID + "_4", post_type="video", created_time=NOW)
+    social_stats._RET_TRY.pop(PID + "_4", None)
+    CALLS.clear()
+    d4 = social_stats.video_detail(PID + "_4")
+    n1 = len(CALLS)
+    social_stats.video_detail(PID + "_4")
+    ok("ไม่มีกราฟ: ลองดึงครั้งเดียว · เปิดซ้ำในชั่วโมงเดียวกันไม่ยิงซ้ำ", not d4.get("has") and n1 >= 1 and len(CALLS) == n1,
+       (n1, len(CALLS)))
+    r = adm.get("/api/admin/social?video=" + PID + "_9", secure=True)
+    ok("API: คลิปเก่าได้กราฟ + รูปปก", r.status_code == 200 and r.json()["has"] and r.json()["cover"], str(r.content[:200]))
+    # ลบภาพที่ทำไปแล้ว (manage.py meta_frames --purge)
+    nclip = len([e for e in os.scandir(video_frames._root()) if e.is_dir()])
+    pr = video_frames.purge()
+    ok("purge: ลบภาพทั้งหมด + ล้างช่อง frames ในตาราง", pr["clips"] == nclip and nclip > 0
+       and not os.path.exists(video_frames._root())
+       and not MetaVideoRetention.objects.exclude(frames_n=0).exists(), (pr, nclip))
+    out = os.path.join(MEDIA, "mf2.txt")
+    call_command("meta_frames", out=out)
+    ok("คำสั่ง meta_frames บอกว่าปิดอยู่", "ปิดอยู่" in open(out, encoding="utf-8").read())
+
+    # รูปปกเก็บแบบย่อ (Facebook ให้รูปเต็ม 1080×1920 ~400 KB) — ประหยัดพื้นที่
+    import io as _io
+
+    from PIL import Image as _Img
+
+    from dashboard.services import covers as _cv
+    _b = _io.BytesIO()
+    _Img.effect_noise((1080, 1920), 60).convert("RGB").save(_b, "JPEG", quality=95)
+    big = _b.getvalue()
+    small = _cv._shrink(big)
+    ok("ย่อรูปปก: ด้านยาวไม่เกิน 720 · ไฟล์เล็กลง", max(_Img.open(_io.BytesIO(small)).size) <= _cv.MAX_SIDE_PX
+       and len(small) < len(big) / 3, (len(big), len(small)))
+    ok("ไฟล์ที่ไม่ใช่รูป = คืนของเดิม (ไม่พัง)", _cv._shrink(b"not-an-image") == b"not-an-image")
+    _p = _cv.path_for("meta", PID + "_big")
+    os.makedirs(os.path.dirname(_p), exist_ok=True)
+    open(_p, "wb").write(big)
+    _r = _cv.shrink_all("meta")
+    ok("shrink_all ย่อรูปเดิมที่ใหญ่ · รูปเล็กอยู่แล้วไม่แตะ", _r["files"] == 1 and os.path.getsize(_p) < len(big) / 3, _r)
+
     cache_store.set_kv("video_watch_last", {"at": timezone.now().isoformat(), "errors": ["ทดสอบ: ดึงกราฟพัง"]})
     r = adm.get("/api/admin/system_health", secure=True)
     ok("หน้าสถานะระบบร้องเมื่อรอบคลิปใหม่พัง (บล็อกเช็คได้รันจริง)",

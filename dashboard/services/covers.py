@@ -9,6 +9,10 @@ TikTok (`cover_image_url`) และ Facebook (`full_picture`) ให้ลิ�
 **YouTube ไม่ต้องใช้ไฟล์นี้** — ประกอบลิงก์จาก video id ได้ฟรีและไม่หมดอายุ
 (`i.ytimg.com/vi/<id>/mqdefault.jpg`)
 
+**ย่อรูปก่อนเก็บ** (15 ต.ค.69 · เจ้าของสั่ง "ประหยัดพื้นที่") — Facebook ให้ `full_picture` ขนาดเต็ม 1080×1920
+(~400 KB/รูป · วัดจริง 521 รูป = 179 MB) ทั้งที่หน้าเว็บแสดงแค่ ~300×520 → ย่อด้านยาวไม่เกิน `MAX_SIDE_PX`
+แล้วบีบ JPEG `JPEG_QUALITY` (~40-60 KB) · รูปเดิมที่เก็บไว้แล้ว ย่อด้วย `shrink_all()` (`manage.py social_covers --shrink`)
+
 ทุกฟังก์ชัน **best-effort** — โหลดไม่ได้/ดิสก์เต็ม = ข้ามเงียบ ห้ามทำให้รอบ sync ล้ม
 (รูปปกเป็นของแถม ส่วนตัวเลขคือของจริงที่เสียแล้วเสียเลย)
 """
@@ -24,6 +28,8 @@ SIDES = ("tiktok", "meta")          # YouTube ไม่ต้องเก็บ 
 SUBDIR = "covers"
 MAX_BYTES = 600_000                 # รูปปกจริงราว 20-60 KB · เกินนี้ถือว่าผิดปกติ
 TIMEOUT = 8
+MAX_SIDE_PX = 720                   # ย่อด้านยาวไม่เกินนี้ (หน้าเว็บแสดงสูงสุด ~520px)
+JPEG_QUALITY = 78
 _OK_TYPES = ("image/jpeg", "image/jpg", "image/png", "image/webp")
 
 # id จาก API เอามาต่อเป็นชื่อไฟล์ตรงๆ ไม่ได้ (กัน ../ และอักขระที่ระบบไฟล์ไม่รับ)
@@ -78,6 +84,7 @@ def save(side: str, item_id: str, url: str, overwrite: bool = False) -> bool:
     buf = _fetch(url, MAX_BYTES)
     if not buf:
         return False
+    buf = _shrink(buf)
     try:
         os.makedirs(os.path.dirname(p), exist_ok=True)
         tmp = p + ".part"                 # เขียนไฟล์ชั่วคราวก่อนแล้วค่อยย้าย
@@ -113,6 +120,60 @@ def _fetch(url: str, max_bytes: int) -> bytes:
     except Exception as e:
         log.debug("โหลดรูปไม่ได้ (%s): %s", str(url)[:60], e)
         return b""
+
+
+def _shrink(buf: bytes) -> bytes:
+    """ย่อ + บีบเป็น JPEG · ย่อไม่ได้ (ไม่มี Pillow/ไฟล์แปลก) หรือย่อแล้วไม่เล็กลง = คืนของเดิม"""
+    try:
+        import io
+
+        from PIL import Image
+        im = Image.open(io.BytesIO(buf))
+        im.load()
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        if max(im.size) > MAX_SIDE_PX:
+            im.thumbnail((MAX_SIDE_PX, MAX_SIDE_PX))
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
+        small = out.getvalue()
+        return small if len(small) < len(buf) else buf
+    except Exception as e:
+        log.debug("ย่อรูปปกไม่ได้: %s", e)
+        return buf
+
+
+def shrink_all(side: str = "", min_bytes: int = 120_000) -> dict:
+    """ย่อรูปปกที่เก็บไว้แล้ว (ไฟล์ที่ใหญ่กว่า `min_bytes`) · คืน {files, before_mb, after_mb}"""
+    out = {"files": 0, "before_mb": 0.0, "after_mb": 0.0}
+    for s in ([side] if side else SIDES):
+        d = os.path.join(_base(), s)
+        try:
+            entries = [e for e in os.scandir(d) if e.name.endswith(".jpg")]
+        except OSError:
+            continue
+        for e in entries:
+            try:
+                size = e.stat().st_size
+                if size <= min_bytes:
+                    continue
+                with open(e.path, "rb") as f:
+                    buf = f.read()
+                small = _shrink(buf)
+                if len(small) >= size:
+                    continue
+                tmp = e.path + ".part"
+                with open(tmp, "wb") as f:
+                    f.write(small)
+                os.replace(tmp, e.path)
+                out["files"] += 1
+                out["before_mb"] += size / 1e6
+                out["after_mb"] += len(small) / 1e6
+            except OSError as ex:
+                log.debug("ย่อ %s ไม่ได้: %s", e.name, ex)
+    out["before_mb"] = round(out["before_mb"], 1)
+    out["after_mb"] = round(out["after_mb"], 1)
+    return out
 
 
 def save_many(side: str, pairs) -> int:

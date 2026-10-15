@@ -14,6 +14,7 @@
     python manage.py leadsheet --repair-dates        # หาแถวที่ ว/ด/ป ถูก n8n เขียนทับ (ดูเฉยๆ)
     python manage.py leadsheet --repair-dates --apply [--tab "ตุลาคม 69"]   # คืนวันที่จริง
     python manage.py leadsheet --fix-names [--apply]  # ช่องเซลล์ตามแท็บรายชื่อสมาชิก (เช่น "ใหม่" → ADMIN)
+    python manage.py leadsheet --fix-slash [--apply]  # แถวไม้ 2 ที่ลงโดยไม่มี /1 (14–15 ต.ค.69) + ลงรายงานผลที่พลาดให้ใหม่
     python manage.py leadsheet --simulate --seller มัท --admin กวาง [--other เฟิร์ส]
         # จำลองแอดมินโพสต์ใบในกลุ่ม + เซลล์รายงานผล → ลงแท็บ "ทดสอบลงชีต (ลบได้)" (ไม่ส่ง LINE · ไม่แตะแท็บจริง)
     python manage.py leadsheet --simulate --seller มัท --admin กวาง --in-month-tab
@@ -55,7 +56,9 @@ class Command(BaseCommand):
         p.add_argument("--tab", action="append", help='แท็บที่ซ่อม เช่น "ตุลาคม 69" (ใส่ซ้ำได้ · ไม่ใส่ = เดือนนี้+เดือนก่อน)')
         p.add_argument("--fix-names", action="store_true",
                        help='แก้ช่องเซลล์ที่ลงเป็นชื่อเล่น ให้ตรงแท็บ "รายชื่อสมาชิกกลุ่ม Lead" (เช่น ใหม่ → ADMIN)')
-        p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair-dates / --fix-names")
+        p.add_argument("--fix-slash", action="store_true",
+                       help="ซ่อมแถวไม้ 2 ที่ลงโดยไม่มี /1 (RNLD10-8286 → RNLD10-8286/1) + ลงรายงานผลที่หาแถวไม่เจอให้ใหม่")
+        p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair-dates / --fix-names / --fix-slash")
         p.add_argument("--simulate", action="store_true", help="จำลองแอดมินจ่ายเบอร์ → ลงแท็บทดสอบ")
         p.add_argument("--seller", help="ชื่อเล่นเซลล์ที่ได้ใบ (ใช้กับ --simulate)")
         p.add_argument("--admin", default="", help="ชื่อเล่นแอดมินที่โพสต์ใบ (ใช้กับ --simulate)")
@@ -119,6 +122,25 @@ class Command(BaseCommand):
             lines.append("ลบแท็บทดสอบแล้ว" if LS.delete_sim_tab() else "ไม่มีแท็บทดสอบ")
         elif o["repair_dates"]:
             self._repair(o, lines)
+        elif o["fix_slash"]:
+            r = LS.fix_slash_codes(o.get("tab"), apply=o["apply"])
+            lines.append("แท็บ: %s" % json.dumps(r["tabs"], ensure_ascii=False))
+            lines.append("แก้เลขไม้ 2 ให้มี /n %d แถว%s:" % (len(r["fix"]), " (เขียนแล้ว)" if o["apply"] else " (ยังไม่เขียน)"))
+            for f in r["fix"]:
+                lines.append("  %s แถว %s  %s → %s  (%s · %s)%s" % (f["tab"], f["row"], f["code"], f["to"], f["seller"],
+                                                                 f["date"], " · " + f["note"] if f.get("note") else ""))
+            lines.append("ไม่แตะ %d แถว:" % len(r["skip"]))
+            for f in r["skip"]:
+                lines.append("  %s แถว %s  %s (%s) — %s" % (f["tab"], f["row"], f["code"], f["seller"], f["why"]))
+            rep = r["reports"]
+            ok_n = sum(1 for x in rep if x.get("action") == "report")
+            lines.append("รายงานผลไม้ 2 ที่เคยหาแถวไม่เจอ %d ข้อความ · ลงได้ %d%s:" % (
+                len(rep), ok_n, " (เขียนแล้ว)" if o["apply"] else " (ยังไม่เขียน)"))
+            for x in rep:
+                lines.append("  %s  %s → %s %s" % (x.get("at"), x.get("text", "").replace("\n", " "), x.get("action"),
+                                                    x.get("code") or x.get("owner") or x.get("error") or ""))
+            if not o["apply"]:
+                lines.append("ดูแล้วถูกต้อง → รันซ้ำพร้อม --apply")
         elif o["fix_names"]:
             r = LS.fix_member_names(o.get("tab"), apply=o["apply"])
             lines.append("แท็บ: %s" % json.dumps(r["tabs"], ensure_ascii=False))

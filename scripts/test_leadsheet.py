@@ -938,6 +938,123 @@ FAKE.files[LEAD_SID][LS.MEMBERS_TAB][1][4] = "Admin"                 # คนพ
 LS._MEMBERS.update(at=0.0, base=None)
 ok("Nickname 'Admin' ในแท็บ → ลงเป็น ADMIN ตัวใหญ่", LS.member_name(LS.Ctx(write=False), uid=U("m")) == "ADMIN")
 
+# ── 13) เลขไม้ 2 ต้องมี "/1" (บั๊ก 14–15 ต.ค.69: ลงชีตเป็น RNLD10-8286 แล้วรายงาน "8286/1" หาไม่เจอ) ──
+print("\n[13] เลขไม้ 2 มี /n")
+from checkout.leadgroup import parse_leadsheet  # noqa: E402
+
+d = parse_leadsheet("Ac Lead No. RNLD10-9701/1\nเบอร์โทร : 0897000001\n@มัท")
+ok("ตัวอ่านใบเก็บ /1 ไว้ (lead_code เดิมไม่เปลี่ยน)", (d["lead_code"], d["lead_slash"], d["lead_code_full"])
+   == ("RNLD10-9701", 1, "RNLD10-9701/1"), d)
+d = parse_leadsheet("Ac Lead No. RTLD10- 9702 / 2\nเบอร์โทร : 0897000002")
+ok("เว้นวรรครอบ / ก็อ่านได้", d["lead_code_full"] == "RTLD10-9702/2", d)
+d = parse_leadsheet("Ac Lead No. NLD10-9703\n1/10 ลูกค้าโทรกลับ")
+ok("เลขปกติ = ไม่มี /n · ไม่เอาวันที่บรรทัดถัดไปมาต่อ", (d["lead_slash"], d["lead_code_full"]) == (0, "NLD10-9703"), d)
+
+msg(slip("RTLD10-9701/1", "089-700-0001", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]},
+    at=datetime(2026, 10, 15, 6, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("ใบไม้ 2 ลงชีตเป็นเลขเต็ม RTLD10-9701/1", sheet_row("RTLD10-9701/1").get("เซลล์") == "มัท"
+   and not sheet_row("RTLD10-9701"), (r, sheet_row("RTLD10-9701/1")))
+msg("9701/1 ลูกค้าไม่รับสายครับ", U("a"), at=datetime(2026, 10, 15, 6, 30, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("รายงาน '9701/1 …' เจอแถว → ลงชีต", r.get("reports") == 1
+   and sheet_row("RTLD10-9701/1").get("จำนวนอัพเดท") == "1", (r, sheet_row("RTLD10-9701/1")))
+
+# แถวที่ลงไปแล้วโดยไม่มี /1 (ของจริง 72 แถว) — รายงานต้องยังหาเจอ · โพสต์ใบซ้ำ = ซ่อมเลข ไม่เพิ่มแถว
+oct_rows = FAKE.files[LEAD_SID][TAB_OCT]
+_h = oct_rows[0]
+
+
+def legacy_row(code, phone, seller="มัท"):
+    r_ = [""] * len(_h)
+    for k, v in (("ว/ด/ป", "15/10/26"), ("Code", code), ("เซลล์", seller), ("เบอร์โทร", phone)):
+        r_[_h.index(k)] = v
+    oct_rows.append(r_)
+
+
+legacy_row("NLD10-9710", "0897000010", seller="เฟิร์ส")                 # เลขเดิมของคนอื่น (ไม้ 1 · มาก่อน)
+legacy_row("RNLD10-9710", "0897000010")                                   # ไม้ 2 ที่ลงไว้โดยไม่มี /1 (ล่าสุด)
+msg("9710/1 ลูกค้าอยู่ต่างจังหวัดครับ", U("a"), at=datetime(2026, 10, 15, 7, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("รายงาน '9710/1' หาแถวเก่าที่ไม่มี /1 เจอ (ไม่ใช่แถวไม้ 1 ของคนอื่น)", r.get("reports") == 1
+   and sheet_row("RNLD10-9710").get("จำนวนอัพเดท") == "1" and not sheet_row("NLD10-9710").get("จำนวนอัพเดท"),
+   (r, sheet_row("RNLD10-9710")))
+n_rows = len(oct_rows)
+msg(slip("RNLD10-9710/1", "089-700-0010", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]},
+    at=datetime(2026, 10, 15, 7, 10, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("โพสต์ใบไม้ 2 ซ้ำ = ซ่อมเลขในแถวเดิมเป็น /1 · ไม่เพิ่มแถว", sheet_row("RNLD10-9710/1").get("จำนวนอัพเดท") == "1"
+   and not sheet_row("RNLD10-9710") and len(oct_rows) == n_rows, (r, sheet_row("RNLD10-9710/1")))
+
+# manage.py leadsheet --fix-slash: ซ่อมแถวที่ลงไปแล้ว + ลงรายงานที่เคยพลาดให้ใหม่ (เวลาเดิมของข้อความ)
+legacy_row("RTLD10-9720", "0897000020")
+legacy_row("RTLD10-9721", "0897000021")                                   # ไม่มีใบต้นฉบับในคลังแชท = ไม่แตะ
+legacy_row("RTLD10-9722", "0897000022")
+legacy_row("RTLD10-9722/1", "0897000022")                                  # มีแถวเลขเต็มแล้ว = ไม่แตะ (ให้คนตรวจ)
+msg(slip("RTLD10-9720/1", "089-700-0020", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]},
+    at=datetime(2026, 10, 14, 6, 0, tzinfo=dtz.utc))
+msg(slip("RTLD10-9722/1", "089-700-0022", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]},
+    at=datetime(2026, 10, 14, 6, 1, tzinfo=dtz.utc))
+msg("9720/1 รอตอบครับ", U("a"), at=datetime(2026, 10, 14, 8, 15, tzinfo=dtz.utc))
+msg("9720/1 นัดดูรถพรุ่งนี้ครับ", U("a"), at=datetime(2026, 10, 15, 3, 0, tzinfo=dtz.utc))
+msg("9720/1 รอตอบค่ะ", U("b"), at=datetime(2026, 10, 15, 3, 5, tzinfo=dtz.utc))   # เฟิร์สไม่ใช่เจ้าของ
+LS.set_since()                    # ข้อความพวกนี้ระบบรุ่นเก่าอ่านไปแล้ว (หาแถวไม่เจอ) — ไม่ให้รอบปกติมาอ่านซ้ำ
+nw = len(FAKE.writes())
+r = LS.fix_slash_codes([TAB_OCT], apply=False)
+fx = {f["code"]: f["to"] for f in r["fix"]}
+sk = {f["code"]: f["why"] for f in r["skip"]}
+ok("--fix-slash ดูเฉยๆ: เจอแถวที่ต้องซ่อมจากใบต้นฉบับ · ไม่เขียน",
+   fx == {"RTLD10-9720": "RTLD10-9720/1", "RTLD10-9722": "RTLD10-9722/1"}
+   and len(FAKE.writes()) == nw and sheet_row("RTLD10-9720"), (fx, sk))
+ok("ไม่มีใบต้นฉบับ = ไม่แตะ พร้อมเหตุผล", list(sk) == ["RTLD10-9721"], sk)
+ok("มีแถวเลขเต็มอยู่แล้ว = ยังซ่อม (เลขซ้ำได้ ยึดแถวล่าสุด) พร้อมบอก",
+   any(f.get("note") and f["code"] == "RTLD10-9722" for f in r["fix"]), r["fix"])
+acts = [x.get("action") for x in r["reports"]]
+ok("ดูเฉยๆ: รายงานที่เคยพลาดจะลงได้ 2 · คนอื่นรายงาน = ไม่ใช่เจ้าของ", acts == ["report", "report", "not-owner"], r["reports"])
+r = LS.fix_slash_codes([TAB_OCT], apply=True)
+row20 = sheet_row("RTLD10-9720/1")
+ok("--fix-slash --apply: Code เป็นเลขเต็ม", row20 and not sheet_row("RTLD10-9720") and r["applied"] == 2, r["fix"])
+ok("--apply: ลงรายงานที่พลาดให้ 2 ครั้ง · เวลาอัพเดทล่าสุด = เวลาข้อความเดิม",
+   row20.get("จำนวนอัพเดท") == "2" and r["reportsApplied"] == 2
+   and row20.get("วัน เวลา อัพเดทล่าสุด", "").startswith("15/10/2026 10:00"), row20)
+ok("ไม่แตะแถวที่ไม่มีใบต้นฉบับ", sheet_row("RTLD10-9721") and not sheet_row("RTLD10-9722"))
+r = LS.fix_slash_codes([TAB_OCT], apply=False)
+ok("--fix-slash รอบสอง = ไม่มีอะไรให้ซ่อม · ไม่ลงรายงานซ้ำ", not r["fix"] and not r["reports"], r)
+
+# ── 14) เลขซ้ำในชีต = ยึดแถวล่าสุด (เจ้าของสั่ง 15 ต.ค.69) ──
+print("\n[14] เลขซ้ำ = ยึดแถวล่าสุด")
+legacy_row("NLD10-9730", "0897000030", seller="เฟิร์ส")                 # ไม้ 1 (เก่า)
+legacy_row("RNLD10-9730/1", "0897000030")                                  # ไม้ 2 ของมัท (ล่าสุด)
+msg("9730 ลูกค้ารอเงินเดือนออกครับ", U("a"), at=datetime(2026, 10, 15, 9, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("รายงานเลขรันเปล่า → ลงแถวล่าสุด (ไม้ 2 ของมัท)", r.get("reports") == 1
+   and sheet_row("RNLD10-9730/1").get("จำนวนอัพเดท") == "1" and not sheet_row("NLD10-9730").get("จำนวนอัพเดท"),
+   (r, sheet_row("RNLD10-9730/1")))
+msg("9730 ไม่รับสายครับ", U("b"), at=datetime(2026, 10, 15, 9, 5, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("เจ้าของแถวเก่า (เฟิร์ส) รายงาน = ไม่ใช่เจ้าของแล้ว (เคสย้ายไปไม้ 2)", r.get("notOwner")
+   and not sheet_row("NLD10-9730").get("จำนวนอัพเดท"), r)
+legacy_row("TLD10-9740", "0897000040", seller="เฟิร์ส")                 # เลขเดียวกันซ้ำ 2 แถว: เดิมเฟิร์ส
+legacy_row("TLD10-9740", "0897000040")                                     # แถวล่าสุด = มัท (จ่ายใหม่)
+msg("9740 ลูกค้าสนใจมากครับ", U("b"), at=datetime(2026, 10, 15, 9, 10, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("เลขซ้ำ: เจ้าของแถวเก่ารายงาน = ไม่ใช่เจ้าของ (ไม่แอบลงแถวเก่าของตัวเอง)", r.get("notOwner"), r)
+msg("9740 ลูกค้าสนใจมากครับ", U("a"), at=datetime(2026, 10, 15, 9, 15, tzinfo=dtz.utc))
+r = LS.process_pending()
+_rows40 = [x for x in oct_rows[1:] if len(x) > _h.index("Code") and x[_h.index("Code")] == "TLD10-9740"]
+ok("เลขซ้ำ: เจ้าของแถวล่าสุดรายงาน → ลงแถวล่าสุดเท่านั้น", r.get("reports") == 1
+   and [x[_h.index("จำนวนอัพเดท")] if len(x) > _h.index("จำนวนอัพเดท") else "" for x in _rows40] == ["", "1"],
+   (r, _rows40))
+msg(slip("TLD10-9740", "089-700-0040", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]},
+    at=datetime(2026, 10, 15, 9, 20, tzinfo=dtz.utc))
+n_rows = len(oct_rows)
+r = LS.process_pending()
+_ads = _h.index("ADS")
+ok("ใบเลขซ้ำโพสต์อีกรอบ = เทียบกับแถวล่าสุด (ไม่เพิ่มแถว · เติมช่องว่างที่แถวล่าสุด · แถวเก่าไม่แตะ)",
+   r.get("updated") == ["TLD10-9740"] and len(oct_rows) == n_rows
+   and _rows40[1][_ads] == "ทดสอบโฆษณา" and (len(_rows40[0]) <= _ads or not _rows40[0][_ads])
+   and _rows40[0][_h.index("เซลล์")] == "เฟิร์ส", (r, _rows40))
+
 for p in P:
     p.stop()
 _runner.teardown_databases(_old)

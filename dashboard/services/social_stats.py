@@ -733,6 +733,8 @@ def _page_avg(page_id: str, days: int = 60) -> dict:
 
 
 _SRC_CACHE: dict = {}       # post_id → (เวลา, ลิงก์ไฟล์วิดีโอ) — ลิงก์ของ Facebook หมดอายุเอง จำไว้แค่ 20 นาที
+_RET_TRY: dict = {}         # post_id → เวลาที่ลองดึงกราฟ/รูปปกคลิปเดียวล่าสุด (กันยิง Facebook ทุกครั้งที่เปิดหน้า)
+RET_RETRY_SEC = 3600
 
 
 def _video_source(post_id: str) -> str:
@@ -765,6 +767,25 @@ def video_detail(post_id: str) -> dict:
         return {"has": False, "error": "โพสต์นี้ไม่ได้อยู่ใต้เพจของบริษัทนี้"}
     out = retention(post_id)
     s = MetaPostSnapshot.objects.filter(post_id=post_id).order_by("-taken_at").first()
+    is_video = "video" in ((s.post_type if s else "") or "")
+    # ★ 15 ต.ค.69 — คลิปที่รอบปกติไม่ครอบ (เก่ากว่า 90 วัน · เพิ่งลง) ยังไม่มีกราฟ → ดึงคลิปเดียวเดี๋ยวนี้
+    #   (เจ้าของเปิดคลิป 10/7 แล้ว "กราฟไม่ขึ้น") · พลาด/Facebook ไม่ให้กราฟ = เว้น 1 ชม. ค่อยลองใหม่ (ไม่ยิงทุกครั้งที่เปิด)
+    from . import covers
+    need_cover = is_video and not covers.url_for("meta", post_id)
+    if (is_video and not out.get("has")) or need_cover:
+        import time as _t
+        last = _RET_TRY.get(post_id, 0)
+        if _t.time() - last >= RET_RETRY_SEC:
+            _RET_TRY[post_id] = _t.time()
+            try:
+                from .meta_sync import fetch_retention_one
+                fr = fetch_retention_one(post_id)
+                if fr.get("has") and not out.get("has"):
+                    out = retention(post_id)
+                if fr.get("error"):
+                    out["retError"] = fr["error"]
+            except Exception as e:                            # ดึงไม่ได้ก็ยังดูตัวเลขโพสต์ได้
+                out["retError"] = str(e)[:160]
     if s:
         eng = (s.reactions or 0) + (s.comments or 0) + (s.shares or 0)
         out["stats"] = {
@@ -776,14 +797,12 @@ def video_detail(post_id: str) -> dict:
             "date": s.created_time.date().isoformat() if s.created_time else "",
         }
     out["pageAvg"] = _page_avg(pid)
-    out["isVideo"] = bool(out.get("has")) or ("video" in ((s.post_type if s else "") or ""))
+    out["isVideo"] = bool(out.get("has")) or is_video
+    # รูปหน้าปก + ลิงก์ไปดูคลิปใน Facebook (ไม่เล่น/ไม่โหลดวิดีโอในระบบ — เจ้าของสั่ง 15 ต.ค.69)
+    out["cover"] = covers.url_for("meta", post_id)
     if out["isVideo"]:
         from . import video_frames
-        out["frames"] = video_frames.for_detail(post_id)   # ทำเฉพาะคลิปยิงแอดวิวสูง TOP_N อันดับ
-        try:
-            out["source"] = _video_source(post_id)
-        except Exception as e:                               # เล่นคลิปไม่ได้ก็ยังดูกราฟ/ภาพได้
-            out["source"], out["sourceError"] = "", str(e)[:120]
+        out["frames"] = video_frames.for_detail(post_id)   # ปิดอยู่ = {"state": "off"}
     return out
 
 

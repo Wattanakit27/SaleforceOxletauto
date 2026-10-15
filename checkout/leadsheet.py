@@ -212,6 +212,12 @@ def _code_key(s) -> str:
 
 
 _RUN = re.compile(r"-(\d{3,6})(?:/(\d{1,2}))?$")
+
+
+def _slash_of(code) -> int:
+    """เลขไม้ (/n) ท้ายเลขลีด · ไม่มี = 0"""
+    m = _RUN.search(_code_key(code))
+    return int(m.group(2) or 0) if m else 0
 _CODE_MONTH = re.compile(r"^[A-Z]*?(\d{1,2})-")
 
 
@@ -331,6 +337,14 @@ class LeadTab:
         k = _code_key(code)
         ci = self.cm[self.L.lead_code]
         return [(i + 2, r) for i, r in enumerate(self.rows) if ci < len(r) and _code_key(r[ci]) == k]
+
+    def find_legacy(self, code) -> list:
+        """แถวไม้ 2 ที่ลงไว้โดยไม่มี /n (บั๊ก 14–15 ต.ค.69: RNLD10-8286 แทน RNLD10-8286/1)
+        — ใช้เมื่อหาเลขเต็มไม่เจอ · เฉพาะเลขขึ้นต้น R เท่านั้น (เลขปกติไม่มี /n อยู่แล้ว)"""
+        k = _code_key(code)
+        if "/" not in k or not k.startswith("R"):
+            return []
+        return self.find(k.split("/")[0])
 
     def by_run(self, run: str, slash: int | None = None, month: int | None = None) -> list:
         ci = self.cm[self.L.lead_code]
@@ -679,7 +693,8 @@ def _seller_of(g, d: dict, ctx=None) -> tuple:
         uid = mention[-1]
         nick, how = _nick_of_uid(uid), "แท็ก LINE"
     if not nick and g.direction == GroupChat.OUT:
-        t = LeadTask.objects.filter(code=_code_key(d.get("lead_code"))).first()
+        t = (LeadTask.objects.filter(code=_code_key(d.get("lead_code_full") or d.get("lead_code"))).first()
+             or LeadTask.objects.filter(code=_code_key(d.get("lead_code"))).first())
         nick, how = ((t.seller_name or "") if t else ""), "งานจ่ายเบอร์ในระบบ"
     if not nick and d.get("assigned"):
         tag = d["assigned"].lstrip("@").strip()
@@ -703,7 +718,7 @@ def slip_row(g, d: dict, ctx=None) -> dict:
     from .models import ChatLead, ExtLead, GroupChat
     text = g.text or ""
     at = timezone.localtime(g.sent_at or timezone.now())
-    code = _code_key(d.get("lead_code"))
+    code = _code_key(d.get("lead_code_full") or d.get("lead_code"))     # เลขเต็ม (ไม้ 2 มี /1)
     channel = match_channel(d.get("channel") or "")
     live = match_live(d.get("live") or "")
     seller, how = _seller_of(g, d, ctx)
@@ -726,6 +741,9 @@ def slip_row(g, d: dict, ctx=None) -> dict:
     rich = None
     try:
         rich = ChatLead.objects.filter(code__iexact=code).first() or ExtLead.objects.filter(code__iexact=code).first()
+        if rich is None and code != _code_key(d.get("lead_code")):
+            base = _code_key(d.get("lead_code"))
+            rich = ChatLead.objects.filter(code__iexact=base).first() or ExtLead.objects.filter(code__iexact=base).first()
     except Exception:
         rich = None
     if rich is not None:
@@ -1001,7 +1019,7 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
         if t is None or t.title in seen:
             continue
         seen.add(t.title)
-        hits += [(t, n, r) for n, r in t.find(code)]
+        hits += [(t, n, r) for n, r in sorted(t.find(code) + t.find_legacy(code), key=lambda x: x[0])]   # ยึดแถวล่าสุด
     new_keys = _contact_keys(row.get(L.phone, ""))
     same = [(t, n, r) for t, n, r in hits
             if not new_keys or not _contact_keys(t.val(r, L.phone)) or new_keys & _contact_keys(t.val(r, L.phone))]
@@ -1014,6 +1032,8 @@ def handle_slip(g, d: dict, ctx: Ctx) -> dict:
         if (row.get(L.sales_rep) and why.get("seller") in SURE_SELLER
                 and normalize_seller(row[L.sales_rep]) != normalize_seller(t.val(r, L.sales_rep))):
             upd[L.sales_rep] = row[L.sales_rep]
+        if _code_key(t.val(r, L.lead_code)) != code:              # แถวเก่าที่ลงไปโดยไม่มี /n → ซ่อมเลขให้เต็ม
+            upd[L.lead_code] = code
         for f in (L.phone, L.live_team, L.admin, L.channel, L.type, L.ads, L.car_inquiry, L.car_formula,
                   L.customer_profile):
             if row.get(f) and not t.val(r, f):
@@ -1073,22 +1093,23 @@ def handle_report(g, p: dict, ctx: Ctx) -> dict:
         t = ctx.tab(tab_name(_prev(at.date(), k)))
         if t is None:
             continue
-        if p["code"]:
-            rows = t.find(p["code"]) or t.by_run(p["run"], p["slash"] if p["slash"] else None)
-        else:
-            rows = t.by_run(p["run"], p["slash"] if p["slash"] else None, p["month"] or None)
-            if not p["slash"]:
-                plain = [(n, r) for n, r in rows if "/" not in t.val(r, L.lead_code)]
-                rows = plain or rows
+        rows = (t.find(p["code"]) + t.find_legacy(p["code"])) if p["code"] else []
+        if not rows:
+            rows = t.by_run(p["run"], None, p["month"] or None)
+            if p["slash"]:
+                # ระบุ /n มา = เลือกแถวที่ /n ตรงก่อน · ไม่มี (แถวไม้ 2 ที่ลงไว้โดยไม่มี /n 14–15 ต.ค.69) = ทุกแถวของเลขนี้
+                exact = [(n, r) for n, r in rows if _slash_of(t.val(r, L.lead_code)) == p["slash"]]
+                rows = exact or rows
         if not rows:
             continue
-        mine = _owner_rows(t, rows, names)
-        empty = [(n, r) for n, r in rows if not t.val(r, L.sales_rep)]
-        pick = (mine or (empty if len(rows) == 1 else []))
-        if not pick:
-            return {"action": "not-owner", "code": label, "tab": t.title, "reporter": nick,
-                    "owner": ", ".join(sorted({t.val(r, L.sales_rep) or "-" for _, r in rows}))}
-        n, r = pick[-1]
+        # ★ เลขลีดซ้ำในชีตได้ (เลขเดิม → ไม้ 2 · จ่ายใหม่ · ก๊อปเคสค้างมาเดือนใหม่) → **ยึดแถวล่าสุด** (เจ้าของสั่ง 15 ต.ค.69)
+        #   แถวล่างสุดของแท็บใหม่สุดที่เจอเลขนี้ = เคสตอนนี้เป็นของใคร · เดิมเลือก "แถวของคนรายงาน" แม้เป็นแถวเก่า
+        rows.sort(key=lambda x: x[0])
+        n, r = rows[-1]
+        seller = t.val(r, L.sales_rep)
+        if seller and not _owner_rows(t, [(n, r)], names):
+            return {"action": "not-owner", "code": label, "tab": t.title, "reporter": nick, "owner": seller,
+                    "sheetRow": n, "rowCode": t.val(r, L.lead_code)}
         upd = {L.update_count: str(_num(t.val(r, L.update_count)) + 1), L.last_updated_at: _dtstr(at),
                L.call_proof: C.dd_pick("call_proof", "ส่งแล้ว") or "ส่งแล้ว"}
         if not t.val(r, L.contact_datetime):
@@ -2015,6 +2036,101 @@ def fix_member_names(tabs: list | None = None, apply: bool = False, ctx: Ctx | N
             out["applied"] += len(fixes)
     if apply:
         _log(True, fixedNames=out["applied"], tabs=tabs)
+    return out
+
+
+BUG_SLASH_START = date(2026, 10, 14)     # วันที่ระบบนี้เริ่มลงชีตแทน n8n (แถวไม้ 2 ลงโดยไม่มี /n ตั้งแต่วันนี้)
+_R_NO_SLASH = re.compile(r"^R[A-Z]*\d{1,2}-\d{3,6}$")
+
+
+def fix_slash_codes(tabs: list | None = None, apply: bool = False, ctx: Ctx | None = None,
+                    redo_reports: bool = True, days: int = 70) -> dict:
+    """ซ่อมแถวไม้ 2 ที่ลงไว้โดยไม่มี "/n" (บั๊ก 14–15 ต.ค.69: `RNLD10-8286` แทน `RNLD10-8286/1`)
+
+    1. หาแถวที่ Code ขึ้นต้น R ไม่มี "/" → หาใบจ่ายลีดต้นฉบับในคลังแชทห้องจ่ายเบอร์ (เลขฐานตรงกัน) →
+       ใบมี /n = แก้ช่อง Code ให้เป็นเลขเต็ม · ไม่เจอใบ / ใบไม่มี /n / มีแถวเลขเต็มอยู่แล้ว = ไม่แตะ (รายงานให้ดู)
+    2. (`redo_reports`) รายงานผล "8286/1 …" ที่ส่งตั้งแต่ BUG_SLASH_START แล้วหาแถวไม่เจอเพราะเลขขาด /n
+       → ลงให้ใหม่ด้วยเวลาเดิมของข้อความ (ก่อนแก้หาแถวไม่เจอแน่นอน = ไม่นับซ้ำ)
+    ไม่ใส่ apply = ดูเฉยๆ · ต้องรันบนเซิร์ฟเวอร์ (คลังแชทอยู่ที่นั่น)
+    """
+    from dashboard.services.google_sheets import LEADS_COL as L
+
+    from .leadgroup import parse_leadsheet
+    from .models import GroupChat
+    ctx = ctx or Ctx(write=apply)
+    today = timezone.localdate()
+    tabs = tabs or [tab_name(today), tab_name(_prev(today))]
+    out = {"tabs": [], "fix": [], "skip": [], "applied": 0, "reports": [], "reportsApplied": 0}
+
+    # ใบจ่ายลีดที่มี /n ในห้องจ่ายเบอร์ → {เลขฐาน: {เลขเต็ม}}
+    since = timezone.now() - timedelta(days=days)
+    full_of: dict = {}                                           # เลขฐาน → [เลขเต็ม ตามลำดับเวลาใบ]
+    qs = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=_rooms(), sent_at__gte=since,
+                                   text__icontains="lead")
+          .only("text").order_by("sent_at", "id"))
+    for g in qs.iterator():
+        d = parse_leadsheet(g.text or "")
+        if d and d.get("lead_slash"):
+            lst = full_of.setdefault(_code_key(d["lead_code"]), [])
+            full = _code_key(d["lead_code_full"])
+            if full in lst:
+                lst.remove(full)
+            lst.append(full)
+
+    fixed_runs = {}                                              # เลขรัน → [(แท็บ, แถว)] ที่แก้แล้ว
+    for title in tabs:
+        t = ctx.tab(title)
+        if t is None:
+            out["tabs"].append({"tab": title, "error": "ไม่มีแท็บนี้"})
+            continue
+        cells, nfix = {}, 0
+        for i, r in enumerate(t.rows):
+            code = _code_key(t.val(r, L.lead_code))
+            if not _R_NO_SLASH.match(code):
+                continue
+            n = i + 2
+            fulls = full_of.get(code) or []
+            item = {"tab": title, "row": n, "code": code, "seller": t.val(r, L.sales_rep),
+                    "date": t.val(r, L.received_date)}
+            if not fulls:
+                item["why"] = "ไม่พบใบจ่ายลีดที่มี /n"
+                out["skip"].append(item)
+                continue
+            full = fulls[-1]                                     # ใบหลายเลข (/1 แล้ว /2) = ยึดใบล่าสุด
+            if t.find(full):
+                item["note"] = "มีแถว %s อยู่แล้ว — เลขซ้ำได้ ยึดแถวล่าสุด" % full
+            item["to"] = full
+            out["fix"].append(item)
+            cells.update(t.cells(n, {L.lead_code: full}))
+            t.remember(n, {L.lead_code: full})                  # รอบเดียวกัน (ลงรายงานใหม่) เห็นเลขเต็มแล้ว
+            m = _RUN.search(full)
+            fixed_runs.setdefault(m.group(1), []).append((title, n))
+            nfix += 1
+        out["tabs"].append({"tab": title, "fix": nfix})
+        if apply and cells:
+            ctx.lead_api().write(cells, "ซ่อมเลขไม้ 2 (เติม /n) แท็บ %s" % title)
+            out["applied"] += nfix
+
+    if redo_reports and fixed_runs:
+        start = timezone.make_aware(datetime.combine(BUG_SLASH_START, datetime.min.time()))
+        msgs = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, group_id__in=_rooms(), msg_type="text",
+                                         direction=GroupChat.IN, sent_at__gte=start)
+                .order_by("sent_at", "id"))
+        for g in msgs.iterator():
+            p = parse_report(g.text or "")
+            if not p or not p["slash"] or p["run"] not in fixed_runs:
+                continue
+            try:
+                res = handle_report(g, p, ctx)
+            except SheetError as e:
+                res = {"action": "error", "error": str(e)[:160]}
+            res["at"] = timezone.localtime(g.sent_at).strftime("%d/%m %H:%M") if g.sent_at else ""
+            res["text"] = (g.text or "")[:60]
+            out["reports"].append(res)
+            if apply and res.get("action") == "report":
+                out["reportsApplied"] += 1
+    if apply:
+        _log(True, fixedSlash=out["applied"], redoReports=out["reportsApplied"], tabs=tabs)
     return out
 
 

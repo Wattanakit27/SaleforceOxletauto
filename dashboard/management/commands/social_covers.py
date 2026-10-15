@@ -4,6 +4,7 @@
     python manage.py social_covers                 # ดูว่ามีรูปปกกี่ใบแล้ว
     python manage.py social_covers --fetch         # ดึงรูปปกเดี๋ยวนี้ (ไม่ต้องรอ sync เที่ยงคืน)
     python manage.py social_covers --fetch --side tiktok
+    python manage.py social_covers --shrink        # ย่อรูปปกที่เก็บไว้แล้ว (15 ต.ค.69 · Facebook ให้รูปเต็ม ~400 KB)
     python manage.py social_covers --out cover.txt # console ไทยเพี้ยน (cp874) ให้เขียนไฟล์แทน
 
 **ทำไมต้องมีคำสั่งนี้** — ลิงก์รูปปกที่ TikTok/Facebook ให้มา **หมดอายุใน ~6 ชม.**
@@ -23,6 +24,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, p):
         p.add_argument("--fetch", action="store_true", help="ดึงรูปปกเดี๋ยวนี้")
+        p.add_argument("--shrink", action="store_true", help="ย่อรูปปกที่เก็บไว้แล้ว (ประหยัดพื้นที่)")
         p.add_argument("--side", default="", help="tiktok | meta (ไม่ใส่ = ทั้งคู่)")
         p.add_argument("--out", default="", help="เขียนผลลงไฟล์ (เลี่ยง console ไทยเพี้ยน)")
 
@@ -53,6 +55,11 @@ class Command(BaseCommand):
                     say("  โหลดมาใหม่ %d ใบ" % n)
                 except Exception as e:
                     say("  ดึงไม่สำเร็จ: %s" % str(e)[:200])
+            say("")
+
+        if o["shrink"]:
+            r = covers.shrink_all(o["side"])
+            say("ย่อรูปปก %d รูป · %.1f MB → %.1f MB" % (r["files"], r["before_mb"], r["after_mb"]))
             say("")
 
         say("รูปปกที่เก็บไว้ตอนนี้")
