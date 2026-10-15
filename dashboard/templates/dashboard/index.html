@@ -5842,8 +5842,7 @@
                 align-items:center;justify-content:center">${ic('lucide:play', 26)}</span>
               ${cover ? '' : (st && st.loading ? 'กำลังโหลด...' : 'ยังไม่มีรูปหน้าปก')}</span>
           </${link ? 'a' : 'div'}>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-body);margin:9px 2px 10px">
-            ${link ? `<a href="${h(link)}" target="_blank" rel="noopener" style="color:var(--blue)">ดูคลิปใน Facebook ↗</a>` : ''}</div>
+          <div style="height:10px"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             ${stat('คนดู (3 วิ+)', _soN(pick(s.views, p.views)))}
             ${stat('ไลก์', _soN(pick(s.likes, p.likes)))}
