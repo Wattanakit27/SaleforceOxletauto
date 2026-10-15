@@ -818,6 +818,126 @@ call_command("leadsheet", "--out", _tmp)
 _out = open(_tmp, encoding="utf-8").read()
 ok("manage.py leadsheet (สถานะ) บอกเรื่องตัวเฝ้าระบบ", "ตัวเฝ้าระบบ" in _out, _out[-300:])
 
+# ── 12) ชื่อในชีตตามแท็บ "รายชื่อสมาชิกกลุ่ม Lead" (15 ต.ค.69 · "ใหม่" ต้องลงเป็น ADMIN แบบที่ n8n ทำ) ─────────────
+mai = Employee.objects.create(nickname="ใหม่", display_name="Mai🐶OxletAuto", position="เทเลเซลล์")
+LineProfile.objects.create(user_id=U("m"), employee=mai, is_employee=True, nickname="ใหม่", display_name="Mai🐶OxletAuto")
+MEM_HDR = ["userId", "displayName", "pictureUrl", "_line", "Nickname"]
+FAKE.files[LEAD_SID][LS.MEMBERS_TAB] = [
+    MEM_HDR,
+    [U("m"), "Mai🐶OxletAuto", "", "", "ADMIN"],
+    [U("a"), "เซลมัท OxletAuto", "", "", "มัท"],
+    [U("x"), "ชื่อซ้ำ", "", "", "คนหนึ่ง"],
+    [U("y"), "ชื่อซ้ำ 🐶", "", "", "อีกคน"],                           # ชื่อ LINE ซ้ำ Nickname ต่าง = ไม่ใช้เทียบ
+    ["", "", "", "", ""],
+]
+LS._MEMBERS.update(at=0.0, base=None)
+LS.set_config(enabled=True)
+
+
+def sheet_row(code, tab=TAB_OCT):
+    rows = FAKE.files[LEAD_SID][tab]
+    h = rows[0]
+    for r in rows[1:]:
+        if len(r) > h.index("Code") and r[h.index("Code")] == code:
+            return dict(zip(h, r + [""] * (len(h) - len(r))))
+    return {}
+
+
+def slip(code, phone, tag="@Mai🐶OxletAuto"):
+    return SLIP.replace("TLD10-9221", code).replace("089-123-4567", phone).replace("@เซลมัท OxletAuto", tag)
+
+
+msg(slip("TLD10-9601", "089-600-0001"), U("c"), extra={"mention": [U("m")]})
+r = LS.process_pending()
+ok("ใหม่ถูกแท็กจริง → ลงเป็น ADMIN (ตามแท็บรายชื่อสมาชิก)", sheet_row("TLD10-9601").get("เซลล์") == "ADMIN",
+   (r, sheet_row("TLD10-9601")))
+msg(slip("TLD10-9602", "089-600-0002"), U("c"), extra={})                         # ข้อความเก่า: ไม่มีข้อมูลแท็กจริง
+LS.process_pending()
+ok("แท็กเป็นข้อความ @ชื่อ LINE → ADMIN", sheet_row("TLD10-9602").get("เซลล์") == "ADMIN", sheet_row("TLD10-9602"))
+LeadTask.objects.create(code="NLD10-9603", run="9603", seller=mai, seller_name="ใหม่")
+msg(SYS.replace("NLD10-9222", "NLD10-9603").replace("abc_test", "mai_test").replace("@มัท", "@ใหม่"), out=True,
+    extra={"source": "connect", "code": "NLD10-9603", "tagged": True})
+LS.process_pending()
+ok("ใบที่ระบบส่ง (งานจ่ายเบอร์ของใหม่) → ADMIN", sheet_row("NLD10-9603").get("เซลล์") == "ADMIN",
+   sheet_row("NLD10-9603"))
+msg(slip("TLD10-9605", "089-600-0005", tag="@เซลมัท OxletAuto"), U("c"), extra={"mention": [U("a")]})
+LS.process_pending()
+ok("คนอื่นในแท็บ (มัท = มัท) ไม่เปลี่ยน", sheet_row("TLD10-9605").get("เซลล์") == "มัท", sheet_row("TLD10-9605"))
+
+# รายงานผล: ใหม่เป็นเจ้าของแถว ADMIN และแถวเก่าที่ลงไปแล้วเป็น "ใหม่" ก็ได้
+msg("9601 รอตอบค่ะ", U("m"), at=datetime(2026, 10, 14, 4, 0, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("ใหม่รายงานแถว ADMIN = เจ้าของ → ลงชีต", r.get("reports") == 1 and sheet_row("TLD10-9601").get("จำนวนอัพเดท") == "1",
+   (r, sheet_row("TLD10-9601")))
+oct_rows = FAKE.files[LEAD_SID][TAB_OCT]
+_h = oct_rows[0]
+legacy = [""] * len(_h)
+for k, v in (("ว/ด/ป", "15/10/26"), ("Code", "NLD10-9604"), ("เซลล์", "ใหม่"), ("เบอร์โทร", "0896000004")):
+    legacy[_h.index(k)] = v
+oct_rows.append(legacy)
+msg("9604 รอตอบค่ะ", U("m"), at=datetime(2026, 10, 14, 4, 5, tzinfo=dtz.utc))
+r = LS.process_pending()
+ok("แถวเก่าที่ลงเป็น 'ใหม่' ใหม่ก็ยังรายงานได้", r.get("reports") == 1, r)
+msg("9601 รอตอบครับ", U("a"), at=datetime(2026, 10, 14, 4, 10, tzinfo=dtz.utc))   # มัทรายงานเคสของ ADMIN
+r = LS.process_pending()
+ok("คนอื่นรายงานแถว ADMIN = ไม่ใช่เจ้าของ", r.get("notOwner"), r)
+
+# แบน: คนโดนแบน/คนสั่งแบน ตามแท็บรายชื่อสมาชิก
+nb = len(FAKE.files[BAN_SID][BAN_TAB])
+msg("แบน @Mai🐶OxletAuto ไม่กรอกชีต", U("c"), extra={"mention": [U("m")]})
+LS.process_pending()
+banrows = FAKE.files[BAN_SID][BAN_TAB]
+b3 = dict(zip(BAN_HDR, banrows[-1] + [""] * 11)) if len(banrows) > nb else {}
+ok("แบนใหม่ → seller = ADMIN · คนสั่ง = กวาง (ไม่อยู่ในแท็บ = ชื่อเล่น)", (b3.get("seller"), b3.get("bannedBy")) ==
+   ("ADMIN", "กวาง"), b3)
+
+# ชื่อ LINE ซ้ำ Nickname ต่าง = ไม่เดา · ไม่มีแท็บ = ใช้ทะเบียนตามเดิม
+ctx = LS.Ctx(write=False)
+ok("ชื่อ LINE ซ้ำ (Nickname ต่าง) = ไม่ใช้เทียบ", LS.member_name(ctx, disp="ชื่อซ้ำ") == "", LS._MEMBERS["disp"])
+ok("เทียบชื่อ LINE ตัดอิโมจิ/ตัวพิมพ์", LS.member_name(ctx, disp=" MAI🐶OxletAuto ") == "ADMIN"
+   and LS.member_name(ctx, disp="Mai") == "")              # ตรงตัวเท่านั้น ไม่ fuzzy
+ok("ไม่มีบัญชีในแท็บ = ''", LS.member_name(ctx, uid=U("c"), nick="กวาง") == "")
+
+# อ่านแท็บรายชื่อสมาชิกไม่ได้ (และยังไม่เคยอ่านได้) = ไม่ลงชีต รอรอบหน้า — ห้ามลงเป็น "ใหม่"
+LS._MEMBERS.update(at=0.0, base=None, uid={}, disp={})
+_real_get = LS._Api.get
+
+
+def _members_down(self, rng, render="FORMATTED_VALUE"):
+    if LS.MEMBERS_TAB in rng:
+        raise LS.SheetError("อ่าน %s: HTTP 503" % rng, 503)
+    return _real_get(self, rng, render)
+
+
+with mock.patch.object(LS._Api, "get", _members_down):
+    msg(slip("TLD10-9606", "089-600-0006"), U("c"), extra={"mention": [U("m")]})
+    r = LS.process_pending()
+    ok("แท็บรายชื่อสมาชิกอ่านไม่ได้ = ยังไม่ลง (ไม่ลงเป็นชื่อผิด)", not sheet_row("TLD10-9606") and LS.pending_count() >= 1,
+       (r, sheet_row("TLD10-9606")))
+r = LS.process_pending()
+ok("รอบถัดไปอ่านได้ → ลงเป็น ADMIN", sheet_row("TLD10-9606").get("เซลล์") == "ADMIN", (r, sheet_row("TLD10-9606")))
+_old_tab = FAKE.files[LEAD_SID].pop(LS.MEMBERS_TAB)
+LS._MEMBERS.update(at=0.0, base=None)
+msg(slip("TLD10-9607", "089-600-0007"), U("c"), extra={"mention": [U("m")]})
+LS.process_pending()
+ok("ไม่มีแท็บรายชื่อสมาชิก = ใช้ชื่อเล่นในทะเบียนตามเดิม", sheet_row("TLD10-9607").get("เซลล์") == "ใหม่",
+   sheet_row("TLD10-9607"))
+FAKE.files[LEAD_SID][LS.MEMBERS_TAB] = _old_tab
+
+# ซ่อมแถวที่ลงไปแล้วเป็น "ใหม่" (manage.py leadsheet --fix-names) · ADMIN ตัวใหญ่เสมอ
+LS._MEMBERS.update(at=0.0, base=None)
+r = LS.fix_member_names([TAB_OCT], apply=False)
+ok("--fix-names ดูเฉยๆ: เจอแถว 'ใหม่' 2 แถว · ไม่เขียน", sorted(f["code"] for f in r["fix"]) == ["NLD10-9604", "TLD10-9607"]
+   and all(f["to"] == "ADMIN" for f in r["fix"]) and sheet_row("TLD10-9607").get("เซลล์") == "ใหม่", r)
+ok("--fix-names ไม่แตะคนที่ชื่อตรงอยู่แล้ว (มัท)", not [f for f in r["fix"] if f["from"] == "มัท"], r)
+r = LS.fix_member_names([TAB_OCT], apply=True)
+ok("--fix-names --apply: ลงเป็น ADMIN ครบ", r["applied"] == 2 and sheet_row("TLD10-9607").get("เซลล์") == "ADMIN"
+   and sheet_row("NLD10-9604").get("เซลล์") == "ADMIN", r)
+ok("--fix-names รอบสอง = ไม่มีอะไรให้แก้", not LS.fix_member_names([TAB_OCT], apply=False)["fix"])
+FAKE.files[LEAD_SID][LS.MEMBERS_TAB][1][4] = "Admin"                 # คนพิมพ์ในแท็บเป็นตัวเล็ก
+LS._MEMBERS.update(at=0.0, base=None)
+ok("Nickname 'Admin' ในแท็บ → ลงเป็น ADMIN ตัวใหญ่", LS.member_name(LS.Ctx(write=False), uid=U("m")) == "ADMIN")
+
 for p in P:
     p.stop()
 _runner.teardown_databases(_old)

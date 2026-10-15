@@ -13,6 +13,7 @@
     python manage.py leadsheet --run                 # เขียนข้อความที่ค้างเดี๋ยวนี้
     python manage.py leadsheet --repair-dates        # หาแถวที่ ว/ด/ป ถูก n8n เขียนทับ (ดูเฉยๆ)
     python manage.py leadsheet --repair-dates --apply [--tab "ตุลาคม 69"]   # คืนวันที่จริง
+    python manage.py leadsheet --fix-names [--apply]  # ช่องเซลล์ตามแท็บรายชื่อสมาชิก (เช่น "ใหม่" → ADMIN)
     python manage.py leadsheet --simulate --seller มัท --admin กวาง [--other เฟิร์ส]
         # จำลองแอดมินโพสต์ใบในกลุ่ม + เซลล์รายงานผล → ลงแท็บ "ทดสอบลงชีต (ลบได้)" (ไม่ส่ง LINE · ไม่แตะแท็บจริง)
     python manage.py leadsheet --simulate --seller มัท --admin กวาง --in-month-tab
@@ -52,7 +53,9 @@ class Command(BaseCommand):
         p.add_argument("--last", type=int, default=0, help="ใช้กับ --preview: ข้อความล่าสุด N ข้อความ (ไม่สนตัวชี้)")
         p.add_argument("--repair-dates", action="store_true", help="หา/ซ่อม ว/ด/ป ที่ถูกเขียนทับด้วยวันที่รายงาน")
         p.add_argument("--tab", action="append", help='แท็บที่ซ่อม เช่น "ตุลาคม 69" (ใส่ซ้ำได้ · ไม่ใส่ = เดือนนี้+เดือนก่อน)')
-        p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair-dates")
+        p.add_argument("--fix-names", action="store_true",
+                       help='แก้ช่องเซลล์ที่ลงเป็นชื่อเล่น ให้ตรงแท็บ "รายชื่อสมาชิกกลุ่ม Lead" (เช่น ใหม่ → ADMIN)')
+        p.add_argument("--apply", action="store_true", help="ใช้คู่กับ --repair-dates / --fix-names")
         p.add_argument("--simulate", action="store_true", help="จำลองแอดมินจ่ายเบอร์ → ลงแท็บทดสอบ")
         p.add_argument("--seller", help="ชื่อเล่นเซลล์ที่ได้ใบ (ใช้กับ --simulate)")
         p.add_argument("--admin", default="", help="ชื่อเล่นแอดมินที่โพสต์ใบ (ใช้กับ --simulate)")
@@ -116,6 +119,16 @@ class Command(BaseCommand):
             lines.append("ลบแท็บทดสอบแล้ว" if LS.delete_sim_tab() else "ไม่มีแท็บทดสอบ")
         elif o["repair_dates"]:
             self._repair(o, lines)
+        elif o["fix_names"]:
+            r = LS.fix_member_names(o.get("tab"), apply=o["apply"])
+            lines.append("แท็บ: %s" % json.dumps(r["tabs"], ensure_ascii=False))
+            lines.append("ช่องเซลล์ที่ไม่ตรงแท็บรายชื่อสมาชิก %d แถว:" % len(r["fix"]))
+            for f in r["fix"]:
+                lines.append("  %s แถว %d  %s  %s → %s" % (f["tab"], f["row"], f["code"], f["from"], f["to"]))
+            if o["apply"]:
+                lines.append("แก้แล้ว %d แถว (เขียนเฉพาะช่องเซลล์)" % r["applied"])
+            elif r["fix"]:
+                lines.append("(ยังไม่ได้แก้ — ใส่ --apply เพื่อเขียนลงชีต)")
         elif o["run"]:
             lines.append(json.dumps(LS.process_pending(), ensure_ascii=False, indent=1))
         elif o["preview"]:

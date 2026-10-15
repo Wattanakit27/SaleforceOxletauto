@@ -75,6 +75,14 @@ CRON_STALE_MIN = 10                # cron ไม่ทำงานเกิน�
 STUCK_MIN = 15                     # ข้อความค้างไม่ได้ลงชีตเกินนี้ = ลองลงเอง แล้วแจ้ง
 QUIET_MIN = 90                     # ช่วงทำงานไม่มีข้อความจากห้องจ่ายเบอร์เข้าเลยเกินนี้ = แจ้ง
 QUIET_HOURS = (10, 19)             # ช่วงทำงานที่ห้องจ่ายเบอร์ต้องมีข้อความ (วัดจริง ~15–20 ข้อความ/ชม.)
+# ★ 15 ต.ค.69 เจ้าของแจ้ง *"เซลล์ชื่อ 'ใหม่' โผล่ในชีต ฉันตั้งค่าไว้ให้เป็น Admin"* — n8n แปลง "คน" เป็น "ชื่อในชีต"
+#   ด้วยแท็บ "รายชื่อสมาชิกกลุ่ม Lead" (userId | displayName | Nickname) ทุกขั้น: เซลล์ของใบจ่ายลีด · เจ้าของตอนรายงานผล ·
+#   คนโดนแบน/คนสั่งแบน · ตอนย้ายมาผมใช้ชื่อเล่นในทะเบียนพนักงานแทน → ขั้นนี้หลุด (Mai = ADMIN ในแท็บนั้น)
+#   ตอนนี้แท็บนั้นชนะทะเบียน · เทียบด้วย LINE id แล้วชื่อที่ตั้งใน LINE แบบตรงตัวเท่านั้น (ไม่ fuzzy)
+MEMBERS_TAB = "รายชื่อสมาชิกกลุ่ม Lead"
+MEMBERS_TTL_SEC = 600
+MEMBER_HOW = "แท็บรายชื่อสมาชิกกลุ่ม Lead"
+_MEMBERS = {"at": 0.0, "base": None, "uid": {}, "disp": {}}
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -567,31 +575,127 @@ def _nick_of_uid(uid: str) -> str:
     return ((p.employee.nickname if p.employee_id else "") or (p.nickname if p.is_employee else "") or "").strip()
 
 
-SURE_SELLER = ("แท็ก LINE", "งานจ่ายเบอร์ในระบบ", "ข้อความ @")   # รู้แน่ว่าเป็นใครในทะเบียน
+_EMOJI = re.compile("[%s-%s%s-%s%s-%s%s-%s%s%s]" % tuple(chr(c) for c in (   # อิโมจิ/สัญลักษณ์ในชื่อ LINE
+    0x10000, 0x10FFFF, 0x2190, 0x21FF, 0x2300, 0x27BF, 0x2B00, 0x2BFF, 0xFE0F, 0x200D)))
 
 
-def _seller_of(g, d: dict) -> tuple:
-    """เซลล์ที่ได้ใบ → (ชื่อในชีต, มาจากไหน) — แท็กจริงของ LINE ก่อน · แล้วงานจ่ายเบอร์ของระบบ · แล้วข้อความ @"""
+def _dkey(s) -> str:
+    """ชื่อที่ตั้งใน LINE → คีย์เทียบ: ตัวพิมพ์เล็ก · ตัดอิโมจิ · ช่องว่างเหลือช่องเดียว (เทียบตรงตัว ไม่ fuzzy)"""
+    return re.sub(r"\s+", " ", _EMOJI.sub("", str(s or ""))).strip().lower()
+
+
+def load_members(ctx) -> dict:
+    """แท็บ "รายชื่อสมาชิกกลุ่ม Lead" → {"uid": {LINE id: Nickname}, "disp": {ชื่อ LINE: Nickname}} · จำ 10 นาที
+
+    ไม่มีแท็บนี้ = ว่าง (ใช้ชื่อเล่นในทะเบียนตามเดิม) · อ่านพลาด = ใช้ของที่จำไว้ · ไม่เคยอ่านได้เลย = โยน SheetError
+    (รอบหน้าลองใหม่ — ลงชีตด้วยชื่อผิดแล้วต้องตามแก้ทีหลัง แย่กว่ารอนาทีเดียว)
+    ชื่อ LINE ซ้ำกันแต่ Nickname ต่างกัน = ไม่ใช้ชื่อนั้นเทียบ (ไม่เดาว่าใคร)
+    """
+    import time
+    api = ctx.lead_api()
+    base = getattr(api, "base", "")
+    now = time.time()
+    if _MEMBERS["base"] == base and now - _MEMBERS["at"] < MEMBERS_TTL_SEC:
+        return _MEMBERS
+    if ctx.titles is None:
+        ctx.titles = api.props()
+    if MEMBERS_TAB not in ctx.titles:
+        _MEMBERS.update(at=now, base=base, uid={}, disp={})
+        return _MEMBERS
+    try:
+        vals = api.get("%s!A1:Z2000" % _q(MEMBERS_TAB))
+    except SheetError:
+        if _MEMBERS["base"] == base and _MEMBERS["at"]:
+            return _MEMBERS
+        raise
+    hdr = [str(h).strip().lower() for h in (vals[0] if vals else [])]
+    iu, idn, inn = (hdr.index(k) if k in hdr else -1 for k in ("userid", "displayname", "nickname"))
+    uid, disp, clash = {}, {}, set()
+    for r in (vals[1:] if inn >= 0 else []):
+        cell = [str(v).strip() for v in r]
+        nick = cell[inn] if inn < len(cell) else ""
+        if not nick:
+            continue
+        if 0 <= iu < len(cell) and cell[iu]:
+            uid[cell[iu]] = nick
+        k = _dkey(cell[idn]) if 0 <= idn < len(cell) else ""
+        if k:
+            if disp.get(k, nick) != nick:
+                clash.add(k)
+            disp[k] = nick
+    for k in clash:
+        disp.pop(k, None)
+    _MEMBERS.update(at=now, base=base, uid=uid, disp=disp)
+    return _MEMBERS
+
+
+def member_name(ctx, uid: str = "", nick: str = "", disp: str = "") -> str:
+    """ชื่อที่แท็บรายชื่อสมาชิกตั้งไว้ให้คนนี้ ("" = ไม่ได้ตั้ง) — เทียบ LINE id ก่อน → บัญชี LINE ของคนในทะเบียนชื่อเล่นนี้ →
+    ชื่อที่ตั้งใน LINE (ตรงตัว) · ใช้กับใบที่ระบบส่งเองด้วย (มีแต่ชื่อเล่นจากงานจ่ายเบอร์ ไม่มี LINE id)"""
+    if ctx is None:
+        return ""
+    m = load_members(ctx)
+    if not m["uid"] and not m["disp"]:
+        return ""
+    if uid and m["uid"].get(uid):
+        return _upper_admin(m["uid"][uid])
+    names = [disp] if disp else []
+    if nick:
+        from django.db.models import Q
+
+        from .models import Employee, LineProfile
+        for u, dn in LineProfile.objects.filter(Q(employee__nickname=nick) | Q(nickname=nick, is_employee=True)
+                                                ).values_list("user_id", "display_name"):
+            if m["uid"].get(u):
+                return _upper_admin(m["uid"][u])
+            names.append(dn)
+        names += list(Employee.objects.filter(nickname=nick).values_list("display_name", flat=True))
+    for n in names:
+        k = _dkey(n)
+        if k and m["disp"].get(k):
+            return _upper_admin(m["disp"][k])
+    return ""
+
+
+def _upper_admin(name: str) -> str:
+    """เจ้าของสั่ง 15 ต.ค.69 "ใช้คำว่า ADMIN ตัวใหญ่หมด" — ตัวเลือกในชีตและคีย์ของแดชบอร์ดคือ ADMIN"""
+    return "ADMIN" if str(name or "").strip().upper() == "ADMIN" else name
+
+
+# รู้แน่ว่าเป็นใคร (แท็กจริง / งานในระบบ / เจอในทะเบียน / เจอในแท็บรายชื่อสมาชิก) — ใช้ตัดสินว่าเปลี่ยนเซลล์ของแถวเดิมได้ไหม
+SURE_SELLER = ("แท็ก LINE", "งานจ่ายเบอร์ในระบบ", "ข้อความ @", MEMBER_HOW)
+
+
+def _seller_of(g, d: dict, ctx=None) -> tuple:
+    """เซลล์ที่ได้ใบ → (ชื่อในชีต, มาจากไหน) — แท็กจริงของ LINE ก่อน · แล้วงานจ่ายเบอร์ของระบบ · แล้วข้อความ @
+    แล้วแปลงเป็นชื่อที่แท็บ "รายชื่อสมาชิกกลุ่ม Lead" ตั้งไว้ (ขั้นเดียวกับ n8n · เช่น ใหม่ → ADMIN)"""
     from dashboard.services.constants import normalize_seller
 
     from . import connect as C
     from .models import GroupChat, LeadTask
-    nick, how = "", ""
+    nick, how, uid, tag = "", "", "", ""
     mention = (g.extra or {}).get("mention") or []
     if mention:
-        nick, how = _nick_of_uid(mention[-1]), "แท็ก LINE"
+        uid = mention[-1]
+        nick, how = _nick_of_uid(uid), "แท็ก LINE"
     if not nick and g.direction == GroupChat.OUT:
         t = LeadTask.objects.filter(code=_code_key(d.get("lead_code"))).first()
         nick, how = ((t.seller_name or "") if t else ""), "งานจ่ายเบอร์ในระบบ"
     if not nick and d.get("assigned"):
+        tag = d["assigned"].lstrip("@").strip()
         nick = C._tag_match(d["assigned"])
         how = "ข้อความ @" if nick else ""
         if not nick:
-            nick, how = d["assigned"].lstrip("@").strip(), "ข้อความ @ (ไม่พบในทะเบียน)"
+            nick, how = tag, "ข้อความ @ (ไม่พบในทะเบียน)"
+    sheet = member_name(ctx, uid=uid, nick=nick if how in SURE_SELLER else "", disp=tag)
+    if sheet:
+        if how not in SURE_SELLER:
+            how = MEMBER_HOW
+        nick = sheet
     return (normalize_seller(nick) if nick else ""), how
 
 
-def slip_row(g, d: dict) -> dict:
+def slip_row(g, d: dict, ctx=None) -> dict:
     """ใบจ่ายลีด 1 ใบ → {ช่อง canonical: ค่าที่จะเขียน} + "_why" (ที่มาของบางช่อง ไว้ดูตอน preview)"""
     from dashboard.services.google_sheets import LEADS_COL as L
 
@@ -602,7 +706,7 @@ def slip_row(g, d: dict) -> dict:
     code = _code_key(d.get("lead_code"))
     channel = match_channel(d.get("channel") or "")
     live = match_live(d.get("live") or "")
-    seller, how = _seller_of(g, d)
+    seller, how = _seller_of(g, d, ctx)
     if g.direction == GroupChat.OUT:
         admin = g.sent_by_name or g.sender_name or ""
     else:
@@ -677,10 +781,11 @@ def parse_report(text: str):
     return None
 
 
-def _owner_rows(tab: LeadTab, rows: list, nick: str) -> list:
+def _owner_rows(tab: LeadTab, rows: list, names) -> list:
+    """แถวที่เจ้าของ = คนรายงาน · `names` = ชื่อเล่นในทะเบียน + ชื่อในแท็บรายชื่อสมาชิก (เช่น ใหม่ / ADMIN)"""
     from dashboard.services.constants import normalize_seller
-    me = normalize_seller(nick)
-    return [(n, r) for n, r in rows if normalize_seller(tab.val(r, tab.L.sales_rep)) == me]
+    me = {normalize_seller(n) for n in ([names] if isinstance(names, str) else names) if n}
+    return [(n, r) for n, r in rows if normalize_seller(tab.val(r, tab.L.sales_rep)) in me]
 
 
 def _num(s) -> int:
@@ -711,12 +816,14 @@ def is_ban(g) -> bool:
     return True
 
 
-def _ban_targets(g) -> list:
+def _ban_targets(g, ctx=None) -> list:
+    """คนโดนแบน → ชื่อในรายงานแบน · แท็บรายชื่อสมาชิกชนะทะเบียน (n8n ใช้ Nickname ในแท็บนั้น — ใหม่ = ADMIN)"""
     from . import connect as C
     from .models import LineProfile
     out = []
     for uid in (g.extra or {}).get("mention") or []:
-        nick = _nick_of_uid(uid)
+        reg = _nick_of_uid(uid)
+        nick = member_name(ctx, uid=uid, nick=reg) or reg
         if not nick:
             p = LineProfile.objects.filter(user_id=uid).first()
             nick = (p.display_name or "").strip() if p else ""
@@ -724,7 +831,8 @@ def _ban_targets(g) -> list:
             out.append(nick)
     if not out and "mention" not in (g.extra or {}):
         for tag in re.findall(r"@([^\s@]+)", g.text or ""):
-            nick = C._tag_match(tag) or tag
+            reg = C._tag_match(tag)
+            nick = member_name(ctx, nick=reg, disp=tag) or reg or tag
             if nick and nick not in out:
                 out.append(nick)
     return out
@@ -741,7 +849,7 @@ def _thai_date(d: int, m: int, y: int):
         return None
 
 
-def ban_rows(g) -> list:
+def ban_rows(g, ctx=None) -> list:
     """ข้อความแบน → แถวของแท็บ "รายงานแบน" (1 คน 1 แถว) ตามหัวคอลัมน์ banDate|time|seller|…"""
     from dashboard.services.constants import normalize_seller
     text = g.text or ""
@@ -766,9 +874,10 @@ def ban_rows(g) -> list:
         unban = _dstr(ban_d + timedelta(days=1))
     elif re.search(r"จนกว่าจะกรอกเสร็จ|กรอกเสร็จปลดแบน|กรอกเสร็จ", text):
         unban = "จนกว่ากรอกเสร็จ"
-    by = _nick_of_uid(g.sender_id or "") or ""
+    reg = _nick_of_uid(g.sender_id or "")
+    by = member_name(ctx, uid=g.sender_id or "", nick=reg) or reg or ""
     rows = []
-    for nick in _ban_targets(g):
+    for nick in _ban_targets(g, ctx):
         rows.append({"banDate": _dstr(ban_d), "time": "%02d:%02d" % (at.hour, at.minute),
                      "seller": _t(normalize_seller(nick) or nick), "sellerDisplay": "", "banType": ban_type,
                      "reason": _t(reason or ban_type), "bannedBy": _t(by), "unbanDate": unban, "status": "แบน",
@@ -872,7 +981,7 @@ def _contact_keys(s: str) -> set:
 def handle_slip(g, d: dict, ctx: Ctx) -> dict:
     from dashboard.services.constants import normalize_seller
     from dashboard.services.google_sheets import LEADS_COL as L
-    row = slip_row(g, d)
+    row = slip_row(g, d, ctx)
     why = row.pop("_why", {})
     code = row[L.lead_code]
     at = timezone.localtime(g.sent_at or timezone.now()).date()
@@ -950,6 +1059,10 @@ def handle_report(g, p: dict, ctx: Ctx) -> dict:
     from .models import LineProfile
     prof = LineProfile.objects.filter(user_id=g.sender_id or "").select_related("employee").first()
     nick = (prof.employee.nickname if prof and prof.employee_id and prof.employee.active else "") if prof else ""
+    # ชื่อในชีตอาจไม่ใช่ชื่อเล่น (แท็บรายชื่อสมาชิกตั้ง "ใหม่" = ADMIN) — ถือว่าเป็นเจ้าของได้ทั้ง 2 ชื่อ
+    sheet = member_name(ctx, uid=g.sender_id or "", nick=nick)
+    names = [x for x in (nick, sheet) if x]
+    nick = nick or sheet
     if not nick:
         # ข้อความหน้าตาเป็นรายงานผล แต่ไม่รู้ว่าใครส่ง = ลงชีตไม่ได้ → แจ้งเจ้าของ (เดิมข้ามเงียบ)
         return {"action": "report-noemp", "reporter": g.sender_name or "ไม่ทราบชื่อ",
@@ -969,7 +1082,7 @@ def handle_report(g, p: dict, ctx: Ctx) -> dict:
                 rows = plain or rows
         if not rows:
             continue
-        mine = _owner_rows(t, rows, nick)
+        mine = _owner_rows(t, rows, names)
         empty = [(n, r) for n, r in rows if not t.val(r, L.sales_rep)]
         pick = (mine or (empty if len(rows) == 1 else []))
         if not pick:
@@ -990,7 +1103,7 @@ def handle_report(g, p: dict, ctx: Ctx) -> dict:
 
 
 def handle_ban(g, ctx: Ctx) -> dict:
-    rows = ban_rows(g)
+    rows = ban_rows(g, ctx)
     if not rows:
         return {"action": "skip", "why": "ข้อความแบนแต่หาชื่อคนโดนแบนไม่ได้"}
     if not ctx.write:
@@ -1860,6 +1973,48 @@ def repair_dates(tabs: list | None = None, apply: bool = False, ctx: Ctx | None 
             out["applied"] += len(fixes)
     if apply:
         _log(True, repaired=out["applied"], tabs=tabs)
+    return out
+
+
+def fix_member_names(tabs: list | None = None, apply: bool = False, ctx: Ctx | None = None) -> dict:
+    """แถวที่ช่องเซลล์เป็นชื่อเล่นในทะเบียน แต่แท็บรายชื่อสมาชิกตั้งชื่อในชีตไว้อีกแบบ (เช่น "ใหม่" → ADMIN) → แก้ให้ตรง
+
+    เขียนเฉพาะช่องเซลล์ · แก้เฉพาะชื่อที่เป็นชื่อเล่นในทะเบียนตรงตัว (ชื่ออื่นที่คนพิมพ์เองไม่แตะ) · ไม่ใส่ apply = ดูเฉยๆ
+    """
+    from dashboard.services.google_sheets import LEADS_COL as L
+
+    from .models import Employee
+    ctx = ctx or Ctx(write=apply)
+    today = timezone.localdate()
+    tabs = tabs or [tab_name(today), tab_name(_prev(today))]
+    nicks = set(Employee.objects.values_list("nickname", flat=True))
+    want = {}
+    out = {"tabs": [], "fix": [], "applied": 0}
+    for title in tabs:
+        t = ctx.tab(title)
+        if t is None:
+            out["tabs"].append({"tab": title, "error": "ไม่มีแท็บนี้"})
+            continue
+        fixes = {}
+        for i, r in enumerate(t.rows):
+            s = t.val(r, L.sales_rep)
+            if not s or s not in nicks:
+                continue
+            if s not in want:
+                want[s] = member_name(ctx, nick=s)
+            to = want[s]
+            if to and to != s:
+                fixes[i + 2] = to
+                out["fix"].append({"tab": title, "row": i + 2, "code": t.val(r, L.lead_code), "from": s, "to": to})
+        out["tabs"].append({"tab": title, "fix": len(fixes)})
+        if apply and fixes:
+            cells = {}
+            for n, to in fixes.items():
+                cells.update(t.cells(n, {L.sales_rep: to}))
+            ctx.lead_api().write(cells, "แก้ชื่อเซลล์ตามแท็บรายชื่อสมาชิก แท็บ %s" % title)
+            out["applied"] += len(fixes)
+    if apply:
+        _log(True, fixedNames=out["applied"], tabs=tabs)
     return out
 
 
