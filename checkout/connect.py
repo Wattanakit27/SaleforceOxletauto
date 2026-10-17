@@ -1036,6 +1036,23 @@ def tick(now=None) -> dict:
             out["chatMedia"] = r
     except Exception as e:
         out["chatMediaError"] = str(e)[:120]
+    try:                                     # ★ 17 ต.ค.69 หน้าคอมเมนต์ — ดึง Facebook/YouTube เป็นรอบ (thread แยก) + ลบเก่าวันละครั้ง
+        from .comments import tick_bg as _cm_tick, cleanup_daily as _cm_clean
+        r = _cm_tick(now)
+        if r:
+            out["comments"] = r
+        n = _cm_clean()
+        if n:
+            out["commentsDeleted"] = n
+    except Exception as e:
+        out["commentsError"] = str(e)[:120]
+    try:                                     # ★ 16 ต.ค.69 รูปที่เราส่งหาลูกค้า — ลบสำเนาเมื่อเกินอายุแชทลูกค้า (วันละครั้ง)
+        from .chatplus import cleanup_daily
+        n = cleanup_daily()
+        if n:
+            out["chatOutDeleted"] = n
+    except Exception as e:
+        out["chatOutError"] = str(e)[:120]
     try:                                     # ★ 11 ต.ค.69 หน้ารวมแชท: ดึงคืนเมื่อไม่ตอบ · เตือนนัด · ลบหลักฐานของลูกค้าที่ถูกลบ
         from .crm import tick as _crm_tick
         r = _crm_tick(now)
@@ -3690,6 +3707,9 @@ def _files(o, src: str, m) -> list:
     """ไฟล์แนบของข้อความ (รูป/วิดีโอ/เสียง/ไฟล์) — โหลดไม่ได้/ไม่มี = [] · พังต้องไม่ทำให้เปิดแชทไม่ได้"""
     if not m.has_media:
         return []
+    if m.direction == "out" and (m.extra or {}).get("out_file"):   # ★ 16 ต.ค.69 รูปที่เราส่งหาลูกค้า (chatplus.send_image)
+        from .chatplus import out_files
+        return out_files(m)
     try:
         from .chatmedia import files_json
         return files_json(o.id, src, m)

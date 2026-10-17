@@ -230,6 +230,11 @@ def api_inbox(request):
         rows = C.inbox(view, me=emp, admin=admin, q=request.GET.get("q", ""), seller_id=seller,
                        src=(request.GET.get("src") or "").strip(), flt=crm.clean_filters(request.GET))
 
+    try:                                         # ★ 16 ต.ค.69 ตัวเลขยังไม่อ่านต่อแถว (แอปมือถือ) — พังต้องไม่ทำให้รายชื่อโหลดไม่ขึ้น
+        from .chatplus import unread_counts
+        unread_counts(rows)
+    except Exception:
+        pass
     cnt = C.counts(emp, admin)
     if not admin and not on_duty:
         cnt["queue"] = 0
@@ -246,6 +251,11 @@ def api_inbox(request):
                               "late": sm["counts"].get("overdue", 0)}
             out["rr"] = LF.rr_json(None, 12)
             out["rrBoard"] = LF.rr_board()
+        except Exception:
+            pass
+        try:                                     # ★ 17 ต.ค.69 ตัวเลขบนเมนู "คอมเมนต์" = คอมเมนต์รอตอบ 7 วัน
+            from .comments import wait_count
+            cnt["comments"] = wait_count()
         except Exception:
             pass
         # ห้องพัก Lead ("ADMIN เก็บ Lead") — ลีดที่แอดมินพักใบร่างไว้ ยังไม่ได้เลข/เซลล์ (leadpark.py · จำผล 30 วิ)
@@ -382,7 +392,11 @@ def api_chat(request):
         "replyWhy": (FB_DATA_ONLY if fb_data_only else C.fb_reply_state(o)[1] if C.is_fb(o) else ""),
         "now": timezone.localtime().isoformat(timespec="seconds"),
     }
+    if acc == "preview" and not out["canClaim"]:   # ★ 16 ต.ค.69 บอกเหตุผลที่กดรับไม่ได้ (เดิมแอปเดาเอา)
+        out["claimWhy"] = ("ลูกค้าคนนี้มีคนรับไปแล้ว" if o.owner_id else
+                           "บัญชีนี้ยังไม่ผูกกับทะเบียนพนักงาน — ให้แอดมินตั้งชื่อเล่นในหน้าพนักงานก่อน")
     if admin:
+        out["sellers"] = C.seller_list()             # ★ 16 ต.ค.69 เมนู "โอนลูกค้า" ในแอป
         out["history"] = C.history(o)
         if C.is_fb(o):                               # ปุ่ม "ใช้แชทนี้ทดสอบการตอบ Facebook" (โหมด test)
             c = C.cfg()
@@ -402,6 +416,10 @@ def api_chat(request):
             try:                                  # ★ 11 ต.ค.69 หน้ารวมแชท: ขั้น · นัด · โทร · ใครเคยดูแล · ไฟแนนซ์ · รถตรง
                 from . import crm
                 out["crm"] = crm.detail_json(o, lead)
+                try:                              # ★ 17 ต.ค.69 แผงขวา "นัดดูรถ" — ลูกค้าพูดถึงวันมาดูรถในแชท (เสนอให้คนกดใส่ฟอร์ม)
+                    out["crm"]["apptHint"] = crm.appt_hint(o, msgs)
+                except Exception:
+                    out["crm"]["apptHint"] = None
             except Exception as e:
                 out["crmError"] = str(e)[:120]
             if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
@@ -686,19 +704,139 @@ def api_reply(request):
         return _j({"ok": False, "error": "ตอบได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
     if C.is_fb(o) and not ctx["admin"]:          # ★ 6 ต.ค.69 เจ้าของสั่ง: ไม่ใช่ LINE = สิทธิ์เก็บข้อมูลเท่านั้น
         return _j({"ok": False, "error": FB_DATA_ONLY}, 403)
+    from . import chatplus as X
     from .chat import ReplyError, send_reply
+    # ★ 16 ต.ค.69 แอปส่งแบบขึ้นข้อความทันที + ลองซ้ำเมื่อเน็ตหลุด → client_id เดิม = ไม่ส่งหาลูกค้าซ้ำ คืนข้อความเดิม
+    cid = X.clean_cid(body.get("client_id"))
+    key = ""
+    if cid:
+        state, info = X.lock_take(o.id, cid)
+        if state == "done":
+            m = X.done_message(info)
+            if m:
+                return _j({"ok": True, "message": m, "dup": True})
+        elif state == "busy":
+            return _j({"ok": False, "error": "ข้อความนี้กำลังส่งอยู่ — รอสักครู่แล้วดึงหน้าแชทใหม่"}, 409)
+        else:
+            key = info
     try:
         if C.is_fb(o):                               # ลูกค้า Facebook → Send API ของเพจ (fb_send.py)
             from .fb_send import send_reply as fb_send_reply
-            row = fb_send_reply(o, body.get("text") or "", ctx["user"])
+            src, row = "f", fb_send_reply(o, body.get("text") or "", ctx["user"])
         else:
-            row = send_reply(o.profile.user_id, body.get("text") or "", ctx["user"])
+            src, row = "l", send_reply(o.profile.user_id, body.get("text") or "", ctx["user"])
     except ReplyError as e:
+        X.lock_fail(key)
         return _j({"ok": False, "error": str(e)}, 400)
     except Exception as e:                       # เน็ตล่ม/LINE ไม่ตอบ — อย่าคืน 500 เปล่าๆ
+        X.lock_fail(key)
         return _j({"ok": False, "error": "ส่งไม่สำเร็จ: %s" % e}, 502)
-    return _j({"ok": True, "message": {"at": C._iso(row.sent_at), "text": row.text, "dir": "out",
-                                       "by": row.sent_by_name or "", "type": "text", "media": False}})
+    X.lock_done(key, src, row.pk)
+    return _j({"ok": True, "message": X.msg_json(src, row)})
+
+
+def api_reply_image(request):
+    """POST multipart `{id, file, client_id?}` — ส่งรูปหาลูกค้า (★ 16 ต.ค.69 แอปมือถือ · ★ 17 ต.ค.69 หน้าเว็บ Connect) · สิทธิ์เดียวกับตอบข้อความ"""
+    if request.method != "POST":
+        return _j({"ok": False, "error": "ต้องเป็น POST"}, 405)
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    o = _row(request, ctx, request.POST.get("id"))
+    if not o:
+        return _j({"ok": False, "error": "ไม่พบลูกค้ารายนี้"}, 404)
+    emp = ctx["emp"]
+    if not (ctx["admin"] or (emp and o.owner_id == emp.id)):
+        return _j({"ok": False, "error": "ส่งได้เฉพาะลูกค้าของคุณ — กด \"รับลูกค้า\" ก่อน"}, 403)
+    if C.is_fb(o) and not ctx["admin"]:
+        return _j({"ok": False, "error": FB_DATA_ONLY}, 403)
+    from . import chatplus as X
+    cid = X.clean_cid(request.POST.get("client_id"))
+    key = ""
+    if cid:
+        state, info = X.lock_take(o.id, cid)
+        if state == "done":
+            m = X.done_message(info)
+            if m:
+                return _j({"ok": True, "message": m, "dup": True})
+        elif state == "busy":
+            return _j({"ok": False, "error": "รูปนี้กำลังส่งอยู่ — รอสักครู่แล้วดึงหน้าแชทใหม่"}, 409)
+        else:
+            key = info
+    try:
+        src, row = X.send_image(o, request.FILES.get("file"), ctx["user"])
+    except X.ImageError as e:
+        X.lock_fail(key)
+        return _j({"ok": False, "error": str(e)}, 400)
+    except Exception as e:
+        X.lock_fail(key)
+        return _j({"ok": False, "error": "ส่งรูปไม่สำเร็จ: %s" % str(e)[:160]}, 502)
+    X.lock_done(key, src, row.pk)
+    return _j({"ok": True, "message": X.msg_json(src, row)})
+
+
+def api_canned(request):
+    """ข้อความสำเร็จรูป (★ 16 ต.ค.69) — GET = รายการ (ทุกคนที่เข้า Connect ได้) · POST `{action: save|delete}` = แอดมิน"""
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    from . import chatplus as X
+    if request.method == "POST":
+        if not ctx["admin"]:
+            return _j({"ok": False, "error": "แก้ข้อความสำเร็จรูปได้เฉพาะแอดมิน"}, 403)
+        b = _body(request)
+        act = (b.get("action") or "").strip()
+        if act == "save":
+            ok, msg = X.canned_save(str(b.get("id") or "").strip(), b.get("title") or "", b.get("text") or "")
+        elif act == "delete":
+            ok, msg = X.canned_delete(str(b.get("id") or "").strip())
+        else:
+            ok, msg = False, "ไม่รู้จักคำสั่งนี้"
+        if not ok:
+            return _j({"ok": False, "error": msg}, 400)
+        return _j({"ok": True, "message": msg, "items": X.canned_list(), "canEdit": True})
+    return _j({"ok": True, "items": X.canned_list(), "canEdit": bool(ctx["admin"])})
+
+
+def api_comments(request):
+    """หน้า "คอมเมนต์" (★ 17 ต.ค.69 · แอดมิน/ผู้บริหาร) — รวมคอมเมนต์ Facebook · YouTube · TikTok (รออนุมัติ)
+
+    GET `?platform=fb|yt|tt&status=wait|all|done&q=&limit=` · POST `{action: done, id, on}` = กด "จัดการแล้ว" ·
+    `{action: sync}` = ดึงตอนนี้ (ห่างกัน ≥2 นาที)
+    """
+    ctx = _ctx(request)
+    why = _deny(ctx)
+    if why:
+        return _j({"ok": False, "error": why}, 401 if not ctx else 403)
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "หน้าคอมเมนต์สำหรับแอดมินเท่านั้น"}, 403)
+    from . import comments as CM
+    if request.method == "POST":
+        b = _body(request)
+        act = (b.get("action") or "").strip()
+        if act == "done":
+            try:
+                cid = int(b.get("id") or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            r = CM.set_done(cid, ctx["name"], bool(b.get("on", True)))
+            if not r:
+                return _j({"ok": False, "error": "ไม่พบคอมเมนต์นี้"}, 404)
+            return _j({"ok": True, "row": CM.row_json(r)})
+        if act == "sync":
+            ok, msg = CM.request_sync(ctx["name"])
+            return _j({"ok": ok, "message": msg} if ok else {"ok": False, "error": msg}, 200 if ok else 429)
+        return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
+    g = request.GET
+    try:
+        limit = int(g.get("limit") or 60)
+    except ValueError:
+        limit = 60
+    d = CM.list_json(platform=(g.get("platform") or "").strip(), status=(g.get("status") or "wait").strip(),
+                     q=g.get("q") or "", limit=limit)
+    return _j(dict(d, ok=True))
 
 
 def api_assign(request):

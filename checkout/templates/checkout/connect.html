@@ -72,21 +72,15 @@
   .cn-tab .n.hot { background: var(--red); color: #fff; }
   /* ★ 11 ต.ค.69 รอบ 6 เจ้าของ "กรอบแดงซ้ำซ้อนกัน ลดอันล่างออก" — แท็บรายชื่อ (รอรับ/มีเจ้าของ/ทั้งหมด) เป็นแถบที่มีตัวเลข
      ซ้อนกับเมนูด้านบนซึ่งบอกตัวเลขเดียวกันอยู่แล้ว → หัวรายชื่อเหลือแถวเดียว: มุมมอง (dropdown) + ค้นหา + ปุ่มตัวกรอง
-     · ช่องทาง/เซลล์/ปุ่มลัด/ตัวกรองเพิ่ม อยู่ในกล่องที่กางจากปุ่ม "ตัวกรอง" · กรองอยู่ = ขึ้นบรรทัดสรุปให้เห็นเสมอ */
+     · ★ 17 ต.ค.69 เจ้าของ "ตัวกรองเยอะไป" + "เป็น Drop Down ดีกว่า" → ตัวกรองเป็น dropdown ตัวเดียว 5 ตัวเลือก
+       (รวมทุกช่องทาง · Facebook · LINE@ · TikTok · รอตอบกลับ) · กรองอยู่ = dropdown เป็นสีม่วง */
   .cn-tools { display: flex; gap: 6px; padding: 8px 10px 8px; align-items: center; }
   .cn-tools input, .cn-tools select { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2);
                                       background: var(--bg2); }
   .cn-tools select.cn-view { flex: 0 1 auto; max-width: 42%; font-weight: 700; color: var(--t1); cursor: pointer; }
-  .cn-fbtn { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: .5px solid var(--bd2);
-             background: var(--bg2); color: var(--t2); font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-  .cn-fbtn.on, .cn-fbtn.act { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
-  .cn-fbox { border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
-  .cn-frow { display: flex; gap: 6px; padding: 0 10px 6px; }
-  .cn-frow select { flex: 1; min-width: 0; padding: 6px 9px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); }
-  .cn-active { display: flex; align-items: center; gap: 6px; padding: 0 10px 6px; font-size: 12px; font-weight: 700; color: var(--blue); min-width: 0; }
-  .cn-active span { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cn-active button { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: .5px solid var(--bd2);
-                      background: var(--bg2); color: var(--red); cursor: pointer; }
+  .cn-tools select.cn-fsel { flex: 0 1 auto; max-width: 36%; font-weight: 700; color: var(--t2); cursor: pointer; }
+  .cn-tools select.cn-fsel.act { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+  .cn-fsel option { background: var(--bg); color: var(--t1); }   /* Windows: ตัวเลือกไม่ติดสีม่วงตามกล่อง */
   .cn-note { margin: 4px 10px 8px; padding: 10px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); line-height: 1.6; }
   .cn-rows { flex: 1; overflow-y: auto; border-top: .5px solid var(--bd); }
   .cn-row { display: flex; gap: 10px; padding: 11px 12px; border-bottom: .5px solid var(--bd); cursor: pointer; align-items: flex-start; }
@@ -124,6 +118,7 @@
   .tag.ch-line { background: #06c755; color: #fff; }
   .tag.ch-fb { background: #1877f2; color: #fff; }
   .tag.ch-tt { background: #111; color: #fff; }
+  .tag.ch-yt { background: #ff0000; color: #fff; }
   .tag.ch-ot { background: var(--t3); color: #fff; }
   .cn-empty { text-align: center; color: var(--t3); padding: 40px 20px; line-height: 1.7; }
 
@@ -179,6 +174,37 @@
                       border: .5px solid var(--bd2); background: var(--bg2); line-height: 1.5; }
   .cn-comp-why { padding: 12px 16px; background: var(--bg); border-top: .5px solid var(--bd2); color: var(--t3); }
   .cn-err { color: var(--red); padding: 0 16px 8px; background: var(--bg); }
+  /* ★ 17 ต.ค.69 ส่งรูปหาลูกค้า — ปุ่มรูป · วางรูป (Ctrl+V) · ลากไฟล์มาวางในแชท → ดูตัวอย่างก่อน แล้วกดส่งเอง */
+  .cn-comp .cn-ibtn { flex: none; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+                      border-radius: 10px; color: var(--t2); cursor: pointer; }
+  .cn-comp .cn-ibtn:hover { background: var(--bg2); color: var(--t1); }
+  .cn-imgp { display: flex; gap: 10px; align-items: center; padding: 8px 16px; background: var(--bg); border-top: .5px solid var(--bd2); }
+  .cn-imgp img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--bg2); flex: none; }
+  .cn-imgp .nm { flex: 1; min-width: 0; font-size: 13px; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cn-msgs.drop { outline: 2px dashed var(--blue); outline-offset: -8px; }
+  /* ★ 17 ต.ค.69 ข้อความสำเร็จรูป — กล่องลอยเหนือช่องพิมพ์ (ชุดเดียวกับแอป) */
+  #cn-comp-wrap { position: relative; }
+  button.cn-ibtn { border: 0; background: none; font: inherit; padding: 0; }
+  .cn-comp .cn-ibtn.on { background: var(--blue-bg); color: var(--blue); }
+  .cn-cnd { position: absolute; left: 12px; bottom: calc(100% + 6px); z-index: 30; width: min(440px, calc(100% - 24px)); max-height: min(420px, 60vh);
+            display: flex; flex-direction: column; background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px;
+            box-shadow: 0 8px 28px rgba(0,0,0,.18); overflow: hidden; }
+  .cn-cnd .hd { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 6px 14px; }
+  .cn-cnd .x, .cn-cnd .ib { border: 0; background: none; color: var(--t3); cursor: pointer; padding: 6px; border-radius: 8px; display: inline-flex; flex: none; }
+  .cn-cnd .x:hover, .cn-cnd .ib:hover { background: var(--bg3); color: var(--t1); }
+  .cn-cnd .q { margin: 0 12px 6px; padding: 7px 10px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t1); font: inherit; }
+  .cn-cnd .ls { overflow-y: auto; padding: 0 6px 6px; flex: 1; min-height: 0; }
+  .cn-cnd .it { display: flex; align-items: flex-start; gap: 2px; border-radius: 8px; }
+  .cn-cnd .it:hover { background: var(--bg2); }
+  .cn-cnd .pick { flex: 1; min-width: 0; text-align: left; border: 0; background: none; font: inherit; color: var(--t1); cursor: pointer;
+                  padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .cn-cnd .pick span { color: var(--t2); font-size: 13px; line-height: 1.45; white-space: pre-line;
+                       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cn-cnd .em { padding: 16px 12px; color: var(--t3); text-align: center; line-height: 1.5; }
+  .cn-cnd .ft { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-top: .5px solid var(--bd2); color: var(--t3); font-size: 12px; }
+  .cn-cnd .fm { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+  .cn-cnd .fm input, .cn-cnd .fm textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: .5px solid var(--bd2); background: var(--bg2); color: var(--t1); resize: vertical; }
+  .cn-cnd .fm .acts { display: flex; justify-content: flex-end; gap: 8px; }
   /* ★ 12 ต.ค.69 คำที่ระบบจับได้ (สีตามหมวด: ติดต่อ · รถ · การเงิน · เจตนา) · ป้ายที่มา · ค่าใหม่รอยืนยัน · ความพร้อมข้อมูล · ตอบด่วน */
   .kw { font: inherit; line-height: inherit; color: inherit; cursor: pointer; margin: 0; padding: 0 2px; border: 0; border-radius: 4px;
         background: var(--kw-bg); box-shadow: inset 0 -2px 0 var(--kw-ln); white-space: pre-wrap; text-align: inherit; }
@@ -257,7 +283,8 @@
   .pf-fld.ok input, .pf-fld.ok textarea, .pf-fld.ok select { border-color: var(--green); }
   .pf-note { font-size: 12px; color: var(--t3); margin: -2px 0 4px; }
   .pf-fld .bad { border-color: var(--red) !important; }
-  .pf-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+  .pf-g2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0 8px; }
+  .pf-g2 > .pf-fld { min-width: 0; }
   .pf-name-row { display: flex; align-items: center; gap: 4px; justify-content: center; }
   .pf-pen { border: 0; background: none; color: var(--green); cursor: pointer; font-size: 15px; padding: 2px 4px; }
   .pf-name-in { width: 100%; padding: 5px 8px; border-radius: 7px; border: .5px solid var(--blue); background: var(--bg); text-align: center; font-weight: 700; }
@@ -280,7 +307,36 @@
   .pf-done { font-size: 12px; color: var(--green); background: var(--green-bg); border-radius: 7px; padding: 5px 8px; margin: 6px 0; }
   .pf-skip { font-size: 12px; color: var(--t2); background: var(--bg2); border-radius: 7px; padding: 6px 8px; margin: 6px 0;
              display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .pf-assign.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .pf-assign.flash, .crm-form.flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* ★ 17 ต.ค.69 แผงขวา "เก็บข้อมูลจากแชท" — 4 หัวข้อบนสุด · ที่เหลือพับใน "ข้อมูลเพิ่มเติม" */
+  .pf-cap { margin: 12px 0 0; padding: 9px 10px; border-radius: 9px; background: var(--blue-bg); font-size: 12px; line-height: 1.55; color: var(--t2); }
+  .pf-cap .hd { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .pf-cap .hd b { color: var(--blue-dk); font-size: 13px; }
+  .pf-cap .hd span { margin-left: auto; font-weight: 800; color: var(--blue); }
+  .pf-cap .ck { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 10px; margin-top: 6px; font-size: 12.5px; }
+  .pf-cap .ck span { display: flex; gap: 5px; align-items: center; min-width: 0; }
+  .pf-cap .ck .ok { color: var(--green); }
+  .pf-cap .ck .no { color: var(--t3); }
+  .pf-cap .ck .no i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--t3); flex: none; margin: 0 1px; }
+  .pf-q > .pf-h { display: flex; align-items: center; gap: 7px; color: var(--t1); font-size: 13px; margin-bottom: 4px; }
+  .pf-q > .pf-h .n { width: 22px; height: 22px; border-radius: 6px; background: var(--blue-bg); color: var(--blue); flex: none;
+                     display: inline-flex; align-items: center; justify-content: center; }
+  .pf-q > .pf-h .st { margin-left: auto; display: inline-flex; gap: 3px; align-items: center; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .pf-q > .pf-h .st.ok { color: var(--green); }
+  .pf-q > .pf-h .st.no { color: var(--t3); font-weight: 600; }
+  .pf-hint { border: 1px solid var(--amber-mid); background: var(--amber-bg); border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 12.5px; line-height: 1.5; }
+  .pf-hint > b { color: var(--amber); }
+  .pf-hint .q { color: var(--t2); margin-top: 3px; word-break: break-word; }
+  .pf-hint .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+  details.pf-more > summary { cursor: pointer; padding: 11px 0; font-weight: 700; color: var(--t1); display: flex; align-items: center;
+                              flex-wrap: wrap; gap: 2px 7px; list-style: none; }
+  details.pf-more > summary::-webkit-details-marker { display: none; }
+  details.pf-more > summary .chev { display: inline-flex; color: var(--t3); transition: transform .15s; }
+  details.pf-more[open] > summary .chev { transform: rotate(90deg); }
+  details.pf-more > summary .badge { margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px;
+                                     background: var(--bg2); color: var(--t2); white-space: nowrap; }
+  details.pf-more > summary .sub { flex-basis: 100%; padding-left: 21px; font-size: 11.5px; font-weight: 500; color: var(--t3); }
+  details.pf-more[open] > summary { border-bottom: .5px solid var(--bd); }
   .pf-buy { border: 1px dashed var(--green); border-radius: 10px; padding: 10px; margin: 10px 0; background: var(--bg); }
   .pf-buy .pf-slip-text { margin: 8px 0; }
   .pf-buy-a { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -405,8 +461,6 @@
   .lc-shell .cn-tab svg { display: none; }
   .lc-shell .cn-tools { padding: 6px 8px 6px; }
   .lc-shell .cn-tools input, .lc-shell .cn-tools select { padding: 6px 9px; }
-  .lc-shell .cn-frow { padding: 0 8px 6px; }
-  .lc-shell .cn-active { padding: 0 8px 6px; }
   .lc-shell .cn-list, .lc-shell .cn-pane { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; overflow: hidden; }
   .lc-shell .cn-list { border-right: .5px solid var(--bd2); }
   .lc-shell .cn-row.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 #DB2777; }
@@ -500,6 +554,25 @@
   .lc-dbst .v { font-size: 17px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .lc-dbf { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); align-items: center; }
   .lc-dbf select { padding: 5px 9px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); font-size: 12px; }
+  /* ★ 17 ต.ค.69 หน้าคอมเมนต์ — รวมคอมเมนต์ Facebook · TikTok (รออนุมัติ) · YouTube */
+  .cm-row { display: flex; gap: 10px; padding: 12px 14px; border-bottom: .5px solid var(--bd); }
+  .cm-row:last-child { border-bottom: 0; }
+  .cm-row.done { opacity: .62; }
+  .cm-body { flex: 1; min-width: 0; }
+  .cm-meta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 12.5px; color: var(--t3); }
+  .cm-meta b { color: var(--t1); font-size: 13.5px; }
+  .cm-acc { color: var(--t2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-text { margin: 5px 0 6px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+  .cm-post { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--bg2); color: var(--t2);
+             text-decoration: none; font-size: 12.5px; max-width: 520px; }
+  .cm-post img { width: 54px; height: 40px; object-fit: cover; border-radius: 5px; flex: none; background: var(--bg3); }
+  .cm-post span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .cm-ad { color: var(--amber); }
+  .cm-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 7px; font-size: 12px; color: var(--t3); }
+  .cm-acts .btn { text-decoration: none; }
+  .cm-src { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 9px 14px; font-size: 12px; color: var(--t3); line-height: 1.5; }
+  .cm-src .bad { color: var(--red); }
+  .cm-tt { margin: 14px; padding: 16px; border-radius: 10px; background: var(--bg2); color: var(--t2); line-height: 1.7; }
   .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr); gap: 13px; align-items: start; }
   .lc-dbgrid.has-prof { grid-template-columns: minmax(0,1fr) 340px; }
   .lc-dbst > div.go { cursor: pointer; border-radius: 7px; padding: 2px 6px; margin: -2px -6px; }
@@ -714,19 +787,6 @@
   .tag.ap.late { background: var(--red); color: #fff; }
   .tag.match { background: var(--green-bg); color: var(--green); }
   html[data-theme="dark"] .tag.st-viewing, html[data-theme="dark"] .tag.st-finance, html[data-theme="dark"] .tag.ap:not(.late) { background: rgba(167,139,250,.18); color: #c4b5fd; }
-  .cn-quick { display: flex; gap: 5px; padding: 0 10px 6px; overflow-x: auto; scrollbar-width: none; }
-  .cn-quick::-webkit-scrollbar { display: none; }
-  .cn-quick.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-                   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
-  .cn-quick button { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 7px; border: .5px solid var(--bd2);
-                     background: var(--bg2); color: var(--t2); cursor: pointer; flex: none; }
-  .cn-quick button.on { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
-  .cn-quick button.clr { color: var(--red); }
-  .cn-fbox .cn-quick { flex-wrap: wrap; overflow: visible; }
-  .cn-fbox .cn-flt { border-bottom: 0; margin-bottom: 0; }
-  .cn-flt { padding: 0 10px 10px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 8px; border-bottom: .5px solid var(--bd); margin-bottom: 6px; }
-  .cn-flt label { font-size: 11.5px; color: var(--t3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .cn-flt input, .cn-flt select { padding: 5px 7px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg); font-size: 12.5px; min-width: 0; width: 100%; }
   /* ★ 11 ต.ค.69 Run Auto อยู่ในห้องพัก Lead (แท็บ "รอจ่ายเบอร์") — ดูแผนก่อน แล้วค่อยกดจ่าย */
   .lc-ra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); background: var(--blue-bg); }
   .lc-ra .tx { flex: 1; min-width: 220px; font-size: 12.5px; color: var(--t2); line-height: 1.5; }
@@ -781,7 +841,7 @@
   .lc-bars .r { display: grid; grid-template-columns: 120px minmax(0,1fr) 54px; gap: 8px; align-items: center; font-size: 12.5px; }
   .lc-bars .b { height: 10px; border-radius: 5px; background: var(--bg3); overflow: hidden; }
   .lc-bars .b i { display: block; height: 100%; background: linear-gradient(90deg,#7c3aed,#a78bfa); }
-  @media (max-width: 760px) { .cn-flt { grid-template-columns: minmax(0,1fr); } .lc-bars .r { grid-template-columns: 90px minmax(0,1fr) 44px; } }
+  @media (max-width: 760px) { .lc-bars .r { grid-template-columns: 90px minmax(0,1fr) 44px; } }
 </style>
 </head>
 <body>
@@ -818,19 +878,8 @@
       <div class="cn-tools" id="cn-tools">
         <select id="cn-view" class="cn-view" title="มุมมองรายชื่อ"></select>
         <input id="cn-q" type="search" placeholder="ค้นหาชื่อ / เบอร์" title="ค้นหาชื่อลูกค้า เบอร์โทร เลขลีด หรือข้อความ" autocomplete="off">
-        <button type="button" class="cn-fbtn" id="cn-fbtn" title="ช่องทาง · เซลล์ · ปุ่มลัด · ตัวกรองเพิ่ม">ตัวกรอง</button>
+        <select id="cn-fsel" class="cn-fsel" title="ตัวกรอง — ช่องทาง / รอตอบกลับ"></select>
       </div>
-      <div class="cn-fbox" id="cn-fbox" hidden>
-        <div class="cn-frow">
-          <select id="cn-src" title="ช่องทางที่ลูกค้าทักมา">
-            <option value="">ทุกช่องทาง</option><option value="line">LINE</option><option value="fb">Facebook</option>
-          </select>
-          <select id="cn-seller" style="display:none"></select>
-        </div>
-        <div class="cn-quick" id="cn-quick"></div>
-        <div class="cn-flt" id="cn-flt"></div>
-      </div>
-      <div class="cn-active" id="cn-active" hidden></div>
       <div id="cn-note"></div>
       <div class="cn-rows" id="cn-rows"><div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div></div>
     </aside>
@@ -875,6 +924,16 @@
     'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     'calendar': '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
     'copy': '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    'image': '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+    'canned': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/>',
+    'pencil': '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+    'trash': '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+    'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    'messages': '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+    'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+    'car': '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+    'user': '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
   };
   const ic = (n, sz) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${sz ? ` style="width:${sz}px;height:${sz}px"` : ''}>${ICONS[n] || ''}</svg>`;
@@ -884,7 +943,7 @@
   const TEAM_C = { A: 'var(--tA)', B: 'var(--tB)', C: 'var(--tC)', ADMIN: 'var(--amber-mid)' };
   // ป้ายช่องทางชุดเดียวทั้งหน้า (รายชื่อ · หัวแชท · ห้องพัก Lead) — `n` = ตัวเลขต่อท้าย (นับในห้องพัก)
   const CH_CLS = { line: ['ch-line', 'LINE'], fb: ['ch-fb', 'Facebook'], facebook: ['ch-fb', 'Facebook'],
-                   tiktok: ['ch-tt', 'TikTok'], other: ['ch-ot', 'อื่นๆ'] };
+                   tiktok: ['ch-tt', 'TikTok'], yt: ['ch-yt', 'YouTube'], other: ['ch-ot', 'อื่นๆ'] };
   const chTag = (s, n) => { const x = CH_CLS[s] || CH_CLS.line; return `<span class="tag ${x[0]}">${x[1]}${n != null ? ' ' + n : ''}</span>`; };
   const teamTag = t => t ? `<span class="tag team" style="background:${TEAM_C[t] || 'var(--t3)'}">ทีม ${h(t)}</span>` : '';
   const AV_C = ['#7c3aed', '#0d9488', '#db2777', '#2563eb', '#d97706', '#059669', '#9333ea', '#dc2626'];
@@ -954,12 +1013,14 @@
     openId: BOOT.openId ? (+BOOT.openId || 0) : 0, chat: null, pane: 'chat', loaded: false,
     histOpen: false, side: true, panel: 'inbox',
     // ★ 11 ต.ค.69 หน้ารวมแชท — ตัวกรอง (crm.FILTER_KEYS) · ตัวเลือกจากเซิร์ฟเวอร์ · ร่างที่พิมพ์ค้างไว้ต่อแชท
-    f: {}, fltOpen: false, crmOpts: null, alerts: null,
+    f: {}, alerts: null,
     raPlan: null, raOff: new Set(), raBusy: '', raDone: null,      // Run Auto ของห้องพัก Lead
     lostPick: 0, aiDraft: {}, sumDraft: {}, apptDraft: {}, callDraft: {}, callMedia: {},
     hl: true, pt: 'm',                     // ★ 12 ต.ค.69 ไฮไลต์คำที่ระบบจับได้ · คำลงท้ายของข้อความตอบด่วน (m = ครับ · f = ค่ะ)
+    moreOpen: false, hintNo: {},           // ★ 17 ต.ค.69 กาง "ข้อมูลเพิ่มเติม" ไว้ไหม (จำในเครื่อง) · กด "ไม่ใช่นัด" ไว้ต่อแชท
   };
   try { S.side = localStorage.getItem('cn_side') !== '0'; } catch (e) {}
+  try { S.moreOpen = localStorage.getItem('cn_more') === '1'; } catch (e) {}
   try { S.hl = localStorage.getItem('cn_hl') !== '0'; S.pt = localStorage.getItem('cn_pt') === 'f' ? 'f' : 'm'; } catch (e) {}
   const TABS_ADMIN = [
     // ★ 7 ต.ค.69 เอาแท็บ "เลยเวลา" ออก (เจ้าของสั่ง) — ทีมตอบลูกค้าในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา
@@ -976,6 +1037,7 @@
   // ★ 10 ต.ค.69 เมนูซ้ายแบบ "ศูนย์ควบคุมลีด" — แท็บรายชื่อ (รอรับ/มีเจ้าของ/ทั้งหมด/ของฉัน) อยู่ในกล่องแชทรวม
   const RAIL_ADMIN = [
     { p: 'inbox', l: 'กล่องแชทรวม', i: 'message-circle', sub: 'ชั้น 1 · แชท LINE@ และ Facebook มารวมที่นี่ก่อน — เปิดแชทแล้วกด "รับ lead จากแชทนี้แล้ว" ส่งเข้าห้องพัก Lead' },
+    { p: 'cmt', l: 'คอมเมนต์', i: 'messages', sub: 'คอมเมนต์ใต้โพสต์/โฆษณา Facebook และคลิป YouTube รวมที่เดียว · TikTok รออนุมัติสิทธิ์' },
     { p: 'dist', l: 'ห้องพัก Lead', i: 'phone', sub: 'ชั้น 2 · ใบร่างจากกลุ่ม ADMIN เก็บ Lead + แชทที่แอดมินกด "รับ lead จากแชทนี้แล้ว" — กดชื่อเซลล์เพื่อจ่ายเบอร์' },
     { p: 'db', l: 'ฐานข้อมูล Lead', i: 'database', sub: 'ค้นหาลูกค้าทุกคนในชีตลีด · คลิกแล้วเห็นประวัติ · ส่งต่อไม้ 2' },
     { p: 'pipe', l: 'ไปป์ไลน์', i: 'columns', sub: 'ดีลที่กำลังเดิน จอง → รอเซ็นต์ → รอผล → รอปล่อย → ปล่อย (จากชีตยอดขาย)' },
@@ -985,7 +1047,7 @@
   const RAIL_SELLER = [
     { p: 'inbox', l: 'แชทลูกค้า', i: 'message-circle', sub: 'ลูกค้ารอรับในวันเวรทีมคุณ + ลูกค้าของคุณ' },
   ];
-  const PANEL_PANE = { inbox: 'chat', dist: 'dist', db: 'db', pipe: 'pipe', dash: 'stats', rules: 'cfg' };
+  const PANEL_PANE = { inbox: 'chat', cmt: 'cmt', dist: 'dist', db: 'db', pipe: 'pipe', dash: 'stats', rules: 'cfg' };
   const TABS_SELLER = [
     { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
     { v: 'mine', l: 'ลูกค้าของฉัน', i: 'user-check', c: 'mine', hotKey: 'mineWaiting' },
@@ -1045,23 +1107,6 @@
       vs.innerHTML = opts.map(o => `<option value="${h(o[0])}">${h(o[1])}</option>`).join('');
       vs.value = S.view;
     }
-    // ตัวกรองช่องทาง: ห้องพัก Lead มี TikTok/อื่นๆ ด้วย (ใบร่างจากห้องพัก) · แท็บอื่นมีแต่แชท LINE/Facebook
-    const srcSel = $('cn-src'), hubView = ADMIN && S.view === 'tocode', sk = hubView ? 'hub' : 'std';
-    if (srcSel.dataset.k !== sk) {
-      srcSel.dataset.k = sk;
-      const opts = [['', 'ทุกช่องทาง'], ['line', 'LINE'], ['fb', 'Facebook']].concat(hubView ? [['tiktok', 'TikTok'], ['other', 'อื่นๆ']] : []);
-      srcSel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
-      srcSel.value = S.src;
-    }
-    const sel = $('cn-seller');
-    const showSel = ADMIN && (S.view === 'owned' || S.view === 'all') && S.pane === 'chat';
-    sel.style.display = showSel ? '' : 'none';
-    if (showSel && sel.dataset.n !== String(S.sellers.length)) {
-      sel.dataset.n = String(S.sellers.length);
-      sel.innerHTML = '<option value="0">เซลล์ทุกคน</option>' + S.sellers.map(s =>
-        `<option value="${s.id}">${h(s.name)} (ทีม ${h(s.team)})</option>`).join('');
-      sel.value = String(S.seller || 0);
-    }
     applyHub();
     renderRail();
   }
@@ -1076,7 +1121,6 @@
     if (v === '_cfg') { setPanel('rules'); return; }
     if (v === 'tocode' && ADMIN) { setPanel('dist'); return; }
     S.view = v; S.pane = 'chat';
-    if (v !== 'tocode' && (S.src === 'tiktok' || S.src === 'other')) S.src = '';   // TikTok/อื่นๆ มีแค่ในห้องพัก Lead
     if (ADMIN && v === 'tocode') {
       // เข้าห้องพัก Lead = เห็นบอร์ดก่อนเสมอ (แชทที่ค้างไว้ปิดไป — ไม่งั้นเปิดแท็บมาเจอแชทเต็มจอแทนบอร์ด)
       S.openId = 0; S.chat = null; hidePane();
@@ -1136,99 +1180,39 @@
     return t;
   }
 
-  // ── ★ 11 ต.ค.69 ตัวกรอง (สเปกข้อ 9) — ปุ่มลัดแถวเดียว + แผงตัวกรองเพิ่ม ──
-  const QUICK = [
-    { k: 'awaiting', v: '1', l: 'รอเราตอบ' }, { k: 'follow', v: 'today', l: 'ติดตามวันนี้' },
-    { k: 'noreply', v: '1', l: 'ลูกค้าไม่ตอบกลับ' }, { k: 'silent', v: '3', l: 'เงียบ 3+ วัน' },
-    { k: 'silent', v: '7', l: 'เงียบ 7+ วัน' }, { k: 'heat', v: 'hot', l: '🔥 ร้อน' }, { k: 'carmatch', v: '1', l: 'รถใหม่ตรง' },
-  ];
-  const FLT_PANEL = ['stage', 'heat', 'reason', 'car', 'pmin', 'pmax', 'dfrom', 'dto'];
-  function fltCount() { return Object.keys(S.f).length; }
-  // ตัวกรองที่ใช้อยู่ทั้งหมด (ปุ่มลัด · ตัวกรองเพิ่ม · ช่องทาง · เซลล์) — โชว์เป็นบรรทัดสรุปตอนกล่องตัวกรองพับอยู่
+  // ── ★ 17 ต.ค.69 ตัวกรอง = dropdown ตัวเดียว (เจ้าของ "ตัวกรองเยอะไป เหลือแค่นี้พอ" แล้ว "เป็น Drop Down ดีกว่า") ──
+  //   5 ตัวเลือก เลือกได้ทีละอย่าง: รวมทุกช่องทาง · Facebook · LINE@ · TikTok (→ src) · รอตอบกลับ (→ awaiting=1 ทุกช่องทาง)
+  //   (เดิม 11 ต.ค.69 มีปุ่มลัด 7 อัน + แผงขั้น/ความร้อน/เหตุผล/รุ่น/งบ/วันที่ + เลือกเซลล์ — เอาออกจากหน้าแล้ว เซิร์ฟเวอร์ยังรับได้)
+  //   TikTok: แชทใน Connect ตอนนี้มาจาก LINE@/Facebook เท่านั้น → เลือกแล้วรายชื่อว่าง (เซิร์ฟเวอร์คืน 0 แถว)
+  //   กระดิ่งแจ้งเตือนยังตั้งตัวกรองอื่นได้ (เงียบ N+ วัน · รถใหม่ตรง) → dropdown มีตัวเลือกที่ 6 ชื่อตัวกรองนั้น (ไม่กรองแบบมองไม่เห็น)
+  const FLT_OPTS = [['', 'รวมทุกช่องทาง'], ['fb', 'Facebook'], ['line', 'LINE@'], ['tiktok', 'TikTok'], ['aw', 'รอตอบกลับ']];
+  const FLT_LABEL = { awaiting: () => 'รอตอบกลับ', silent: v => 'เงียบ ' + v + '+ วัน', carmatch: () => 'รถใหม่ตรง' };
+  const fltLabel = (k, v) => (FLT_LABEL[k] ? FLT_LABEL[k](v) : 'ตัวกรองอื่น');
   function activeFilters() {
-    const out = [];
-    QUICK.forEach(q => { if (S.f[q.k] === q.v) out.push(q.l); });
-    const more = FLT_PANEL.filter(k => S.f[k] != null && S.f[k] !== '').length;
-    if (more) out.push('ตัวกรองเพิ่ม ' + more);
-    if (S.src) { const o = $('cn-src').selectedOptions[0]; out.push(o ? o.textContent : S.src); }
-    if (S.seller && $('cn-seller').style.display !== 'none') {
-      const s = (S.sellers || []).find(x => x.id === S.seller); out.push('เซลล์ ' + (s ? s.name : S.seller));
-    }
+    const out = Object.keys(S.f).map(k => fltLabel(k, S.f[k]));
+    if (S.src) { const o = FLT_OPTS.find(x => x[0] === S.src); out.push(o ? o[1] : S.src); }
     return out;
+  }
+  // ค่าที่ dropdown ควรโชว์ — นอกเหนือ 5 ตัวเลือก (ตัวกรองจากกระดิ่ง) = '_x'
+  function fltValue() {
+    const ks = Object.keys(S.f);
+    if (!ks.length) return S.src || '';
+    return ks.length === 1 && S.f.awaiting === '1' && !S.src ? 'aw' : '_x';
   }
   function clearFilters() {
     S.f = {}; S.src = ''; S.seller = 0;
-    $('cn-src').value = ''; $('cn-seller').value = '0';
-    renderFltPanel(true); renderQuick(); loadInbox(true);
+    renderFilter(); loadInbox(true);
   }
-  function renderQuick() {
-    const el = $('cn-quick'); if (!el) return;
-    const show = S.panel === 'inbox';
-    const act = activeFilters();
-    const fb = $('cn-fbtn');
-    fb.className = 'cn-fbtn' + (S.fltOpen ? ' on' : (act.length ? ' act' : ''));
-    fb.textContent = 'ตัวกรอง' + (act.length ? ' (' + act.length + ')' : '') + (S.fltOpen ? ' ▴' : ' ▾');
-    const ab = $('cn-active');
-    ab.hidden = !show || S.fltOpen || !act.length;
-    if (!ab.hidden) {
-      ab.innerHTML = `<span title="${h(act.join(' · '))}">กรองอยู่: ${h(act.join(' · '))}</span><button type="button">ล้าง</button>`;
-      ab.querySelector('button').onclick = clearFilters;
-    }
-    if (!show) { $('cn-fbox').hidden = true; return; }
-    const n = act.length;
-    el.innerHTML = QUICK.map((q, i) => `<button data-q="${i}" class="${S.f[q.k] === q.v ? 'on' : ''}">${h(q.l)}</button>`).join('')
-      + (n ? `<button data-q="clear" class="clr">ล้างตัวกรอง</button>` : '');
-    if (!el.dataset.wheel) {
-      el.dataset.wheel = '1';
-      // ล้อเมาส์ = เลื่อนแนวนอน (ปุ่มกรองยาวเกินกล่อง และไม่มีแถบเลื่อนให้เห็นแล้ว)
-      el.addEventListener('wheel', e => {
-        if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-        el.scrollLeft += e.deltaY; e.preventDefault();
-      }, { passive: false });
-      el.addEventListener('scroll', () => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
-    }
-    requestAnimationFrame(() => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
-    el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
-      const q = b.dataset.q;
-      if (q === 'clear') { clearFilters(); return; }
-      const it = QUICK[+q];
-      if (S.f[it.k] === it.v) delete S.f[it.k]; else S.f[it.k] = it.v;
-      renderFltPanel(true); renderQuick(); loadInbox(true);
-    });
-  }
-  // แผงวาดครั้งเดียว (ไม่วาดทับตอนรายชื่อรีเฟรชทุก 8 วิ — คนกำลังพิมพ์รุ่นรถ/ราคาอยู่) · `sync` = ตั้งค่าในช่องตาม S.f
-  function renderFltPanel(sync) {
-    const el = $('cn-flt'); if (!el) return;
-    $('cn-fbox').hidden = !S.fltOpen || S.panel !== 'inbox';
-    const O = S.crmOpts; if (!O) return;
-    if (!el.dataset.built) {
-      el.dataset.built = '1';
-      el.innerHTML = `
-        <label>ขั้นของลีด<select data-fk="stage"><option value="">ทุกขั้น</option>${O.stages.map(x => `<option value="${h(x.key)}">${h(x.label)}</option>`).join('')}</select></label>
-        <label>ความร้อน<select data-fk="heat"><option value="">ทั้งหมด</option>${O.heat.map(x => `<option value="${h(x.key)}">${h(x.label)}</option>`).join('')}</select></label>
-        <label>เหตุผลที่ไม่ซื้อ<select data-fk="reason"><option value="">ทั้งหมด</option>${O.lostReasons.map(x => `<option value="${h(x)}">${h(x)}</option>`).join('')}</select></label>
-        <label>รุ่นรถ<input data-fk="car" type="search" placeholder="เช่น City, D Max" autocomplete="off"></label>
-        <label>งบตั้งแต่ (บาท)<input data-fk="pmin" type="number" inputmode="numeric" min="0" step="10000" placeholder="เช่น 300000"></label>
-        <label>งบไม่เกิน (บาท)<input data-fk="pmax" type="number" inputmode="numeric" min="0" step="10000" placeholder="เช่น 500000"></label>
-        <label>คุยล่าสุดตั้งแต่<input data-fk="dfrom" type="date"></label>
-        <label>ถึง<input data-fk="dto" type="date"></label>`;
-      let _t = null;
-      el.querySelectorAll('[data-fk]').forEach(inp => {
-        // วันที่ใช้ change — Chrome ยิง input ทุกครั้งที่เลื่อนเดือนในปฏิทิน (บทเรียน 4 ต.ค.69: ตัวกรองกลายเป็นวันที่ไม่ได้เลือก)
-        const ev = (inp.tagName === 'SELECT' || inp.type === 'date') ? 'change' : 'input';
-        inp.addEventListener(ev, () => {
-          clearTimeout(_t);
-          _t = setTimeout(() => {
-            const k = inp.dataset.fk, v = (inp.value || '').trim();
-            if (inp.type === 'date' && v && !/^(19|20)\d\d-\d\d-\d\d$/.test(v)) return;   // ปีพิมพ์ยังไม่ครบ
-            if (v) S.f[k] = v; else delete S.f[k];
-            renderQuick(); loadInbox(true);
-          }, inp.tagName === 'SELECT' ? 0 : 450);
-        });
-      });
-      sync = true;
-    }
-    if (sync) el.querySelectorAll('[data-fk]').forEach(inp => { inp.value = S.f[inp.dataset.fk] || ''; });
+  function renderFilter() {
+    const el = $('cn-fsel'); if (!el) return;
+    const v = fltValue();
+    const opts = v === '_x' ? FLT_OPTS.concat([['_x', activeFilters().join(' · ')]]) : FLT_OPTS;
+    const sig = opts.map(o => o.join('=')).join('|');
+    // รายชื่อรีเฟรชทุก 8 วิ — กำลังกางเลือกอยู่ = ไม่วาดทับ (dropdown ที่กางอยู่จะปิดเอง)
+    if (document.activeElement === el) return;
+    if (el.dataset.sig !== sig) { el.dataset.sig = sig; el.innerHTML = opts.map(o => `<option value="${o[0]}">${h(o[1])}</option>`).join(''); }
+    el.value = v;
+    el.classList.toggle('act', v !== '');
   }
 
   // ── ★ 11 ต.ค.69 กระดิ่งแจ้งเตือน (สเปกข้อ 7) — ทุก 30 วิ ──
@@ -1251,9 +1235,9 @@
       const it = A.items[+x.dataset.al]; el.hidden = true;
       if (S.panel !== 'inbox') setPanel('inbox');
       if (it.id) { openChat(it.id); return; }
-      if (it.view) { S.f = {}; renderFltPanel(true); renderQuick(); pickTab(it.view); return; }
+      if (it.view) { S.f = {}; S.src = ''; renderFilter(); pickTab(it.view); return; }
       if (it.filter) {
-        S.f = Object.assign({}, it.filter); renderFltPanel(true); renderQuick();
+        S.f = Object.assign({}, it.filter); S.src = ''; renderFilter();
         pickTab(ADMIN ? 'all' : 'mine');
       }
     });
@@ -1621,7 +1605,12 @@
         mine: ADMIN ? 'ยังไม่มีลูกค้าที่คุณดูแล' : 'ยังไม่มีลูกค้าของคุณ — กดรับจากแท็บ "รอรับ" ในวันเวรของทีม',
         owned: 'ยังไม่มีลูกค้าที่มีเจ้าของ', all: 'ยังไม่มีลูกค้าทักเข้ามา',
       }[S.view] || 'ไม่มีรายการ';
-      el.innerHTML = S.note ? '' : `<div class="cn-empty">${h(fltCount() ? 'ไม่มีลูกค้าที่ตรงกับตัวกรอง — กด "ล้างตัวกรอง"' : empty)}</div>`;
+      if (S.note) { el.innerHTML = ''; return; }
+      const fl = activeFilters().length;
+      const msg = S.src === 'tiktok' ? 'ยังไม่มีแชท TikTok เข้าระบบ — แชทใน Connect ตอนนี้มาจาก LINE@ กับ Facebook'
+        : (fl ? 'ไม่มีลูกค้าที่ตรงกับตัวกรอง' : empty);
+      el.innerHTML = `<div class="cn-empty">${h(msg)}${fl ? `<div style="margin-top:10px"><button type="button" class="btn sm" id="cn-clr">ล้างตัวกรอง</button></div>` : ''}</div>`;
+      if (fl) $('cn-clr').onclick = clearFilters;
       return;
     }
     const top = el.scrollTop;
@@ -1658,8 +1647,7 @@
                        buyRoom: d.buyRoom || [], buyRoomDays: d.buyRoomDays || S.buyRoomDays || 14, buyLast: d.buyLast || S.buyLast || {},
                        lfStrip: d.lfStrip || S.lfStrip || null, rrBoard: d.rrBoard || S.rrBoard || [],
                        roomAuto: d.roomAuto !== undefined ? !!d.roomAuto : !!S.roomAuto });
-    if (d.crm && !S.crmOpts) { S.crmOpts = d.crm; renderFltPanel(true); }
-    renderTop(); renderTabs(); renderQuick(); renderList();
+    renderTop(); renderTabs(); renderFilter(); renderList();
     if (S.openId && !S.chat && S.pane === 'chat') openChat(S.openId);
   }
 
@@ -1805,6 +1793,16 @@
   function applySide() {
     const el = document.querySelector('.cn-chat'); if (el) el.classList.toggle('noside', !S.side);
   }
+  // ★ 17 ต.ค.69 ของที่อยู่ใน "ข้อมูลเพิ่มเติม" (พับไว้) — กางให้ก่อนเลื่อนไปหา
+  //   ระบบกางเอง = ไม่จำลงเครื่อง (ครั้งหน้ายังพับตามที่คนเลือกไว้) · แต่แผงที่วาดใหม่ระหว่างนี้ยังกางอยู่
+  let _moreAuto = false;
+  function openMore(el) {
+    for (let p = el && el.parentElement; p; p = p.parentElement) {
+      if (p.tagName !== 'DETAILS' || p.open) continue;
+      if (p.classList.contains('pf-more')) { _moreAuto = true; S.moreOpen = true; }
+      p.open = true;
+    }
+  }
   // ปุ่ม "จ่ายเบอร์" บนหัวแชท → พาไปกล่องจ่ายเบอร์ (เปิดคอลัมน์ข้อมูลลูกค้าที่ซ่อนไว้ / กางแบบพับบนจอแคบ)
   function goAssign() {
     let side = $('cn-side');
@@ -1820,6 +1818,7 @@
       if (dt) { dt.open = true; box = dt.querySelector('[data-box=assign]'); }
     }
     if (!box) { toast('เปิดกล่องจ่ายเบอร์ไม่ได้ — ลองกดชื่อลูกค้าอีกครั้ง'); return; }
+    openMore(box);                               // กล่องจ่ายเบอร์อยู่ใน "ข้อมูลเพิ่มเติม" (พับไว้)
     box.scrollIntoView({ block: 'center', behavior: 'smooth' });
     box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1800);
     const sel = box.querySelector('[data-x=emp]');
@@ -1903,6 +1902,7 @@
       if (dt) { dt.open = true; el = dt.querySelector(sel); }
     }
     if (!el) { toast('คำนี้ → ช่อง "' + (KW_NAME[f] || f) + '"'); return; }
+    openMore(el);
     const box = el.closest('.pf-fld') || el, cls = 'kw-' + (KW_CAT[f] || 'i');
     box.scrollIntoView({ block: 'center', behavior: 'smooth' });
     box.classList.add('flash', cls);
@@ -1947,8 +1947,7 @@
     } else {
       x += `<div class="pf-done" style="margin-top:8px">ข้อมูลครบแล้ว</div>`;
     }
-    return x + `<div class="kw-leg"><label><input type="checkbox" data-act="hl"${S.hl ? ' checked' : ''}> ไฮไลต์คำที่ระบบจับได้ในแชท</label>${
-      KW_LEG.map(([c, t]) => `<span class="kw kw-${c}">${t}</span>`).join('')}</div></div>`;
+    return x + `</div>`;                 // สวิตช์ไฮไลต์ + คำอธิบายสี อยู่ที่กล่อง "เก็บข้อมูลจากแชท" บนสุด (chatCapHtml)
   }
   // ลูกค้าพูดค่าใหม่ทีหลัง — ระบบไม่ทับค่าเดิมเอง ให้คนเลือก (connect.SUGG_KEY)
   const kwVal = (f, v) => f === 'income' && /^\d+$/.test(String(v || '')) ? Number(v).toLocaleString() : (f === 'phone' ? fmtPhone(String(v || '')) : (v || '–'));
@@ -1995,6 +1994,8 @@
     };
     document.querySelectorAll('[data-box=kw]').forEach(b => swap(b, kwBoxHtml(d)));
     document.querySelectorAll('[data-box=sugg]').forEach(b => swap(b, kwSuggHtml(d)));
+    document.querySelectorAll('[data-box=cap]').forEach(b => swap(b, chatCapHtml(d)));
+    topState(d).forEach(s => document.querySelectorAll(`[data-qst="${s[0]}"]`).forEach(el => { el.outerHTML = qStat(s); }));
     paintQuick();
   }
   // ประโยคถามต่อ/ตอบด่วน → ใส่ในช่องพิมพ์ (ไม่ส่งเอง — คนตรวจ/แก้ก่อนกดส่ง)
@@ -2030,26 +2031,32 @@
     });
   }
 
-  // ช่องของฟอร์ม — ชื่อ/ลำดับตามชีตลีด (คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py)
-  //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด)
+  // ★ 17 ต.ค.69 แผงขวา "เก็บข้อมูลจากแชท" (เจ้าของสั่ง · เลือก "4 หัวข้อขึ้นบนสุด" + "ไม่ใช้ AI")
+  //   4 หัวข้อที่ต้องเก็บจากแชท (รุ่นรถ · เบอร์/ไลน์ · ประวัติลูกค้า · นัดดูรถ) อยู่บนสุด
+  //   ที่เหลือ (ขั้นของลีด · จ่ายเบอร์ · ช่องอื่นของชีต · ใบจ่ายลีด) พับไว้ใน "ข้อมูลเพิ่มเติม"
+  //   ระบบจับคำในแชทเติมให้เอง (ตัวจับชุดเดิม ไม่ใช้ AI) · ทุกช่องแก้/วางเองได้ ถ้าระบบจับไม่ได้หรือจับผิด
+  //   [ช่อง, ป้าย, ชนิด] ชนิด: '' = ข้อความ · tel · area (หลายบรรทัด) · คีย์ต้องตรงกับ LEAD_FIELDS ใน connect.py
   //   ★ ช่องไหนในชีตเป็น dropdown → เป็นตัวเลือกชุดเดียวกับชีตเอง (`leadOptions.dropdowns` อ่านจากชีตทุกชั่วโมง)
-  //     ไม่ต้องกำหนดในลิสต์นี้ — ชีตเพิ่ม dropdown ช่องไหน ฟอร์มเปลี่ยนตามเอง
-  const LEAD_UI = [
-    { sec: 'ลูกค้า', rows: [[['customer_name', 'ชื่อลูกค้า']], [['phone', 'เบอร์โทร', 'tel'], ['line_id', 'ID LINE']]] },
+  //   ★ แต่ละช่องต้องอยู่ที่เดียว (data-f ซ้ำ = ค่า 2 ช่องไม่ตรงกัน)
+  const LEAD_TOP = {
+    car: [[['car_text', 'รถลูกค้าถาม']], [['car_model', 'CAR / สูตร']]],
+    contact: [[['phone', 'เบอร์โทร', 'tel'], ['line_id', 'ID LINE']]],
+    hist: [
+      [['occupation', 'อาชีพ'], ['income', 'รายได้']],
+      [['job_tenure', 'อายุงาน'], ['pay_history', 'ประวัติการผ่อน']],
+      [['customer_type', 'ประเภทลูกค้า'], ['customer_status', 'สถานะลูกค้า']],
+      [['admin_profile', 'PROFILE ลูกค้า จาก ADMIN', 'area']],
+    ],
+  };
+  const LEAD_UI = [                     // ช่องอื่นของชีตลีด — อยู่ใน "ข้อมูลเพิ่มเติม"
+    { sec: 'ลูกค้า', rows: [[['customer_name', 'ชื่อลูกค้า']]] },
     { sec: 'ข้อมูลลีด', rows: [
       [['code', 'Code (เลขลีด)'], ['lead_type', 'type']],
       [['channel', 'ช่องทาง'], ['branch', 'สาขา']],
       [['ads', 'ADS']], [['account', 'ชื่อ Account']],
       [['admin_name', 'Admin'], ['live_team', 'ทีมไลฟ์']],
       [['focus', 'FOCUS'], ['call_proof', 'แจ้งหลักฐานการโทร']],
-      [['car_text', 'รถลูกค้าถาม']], [['car_model', 'CAR / สูตร']],
       [['fill_note', 'มากรอกชีตกันเถอะ', 'area']],
-    ] },
-    { sec: 'โปรไฟล์ลูกค้า', rows: [
-      [['occupation', 'อาชีพ'], ['income', 'รายได้']],
-      [['job_tenure', 'อายุงาน'], ['pay_history', 'ประวัติการผ่อน']],
-      [['customer_type', 'ประเภทลูกค้า'], ['customer_status', 'สถานะลูกค้า']],
-      [['admin_profile', 'PROFILE ลูกค้า จาก ADMIN', 'area']],
     ] },
   ];
   let _DDF = {};                       // ตัวเลือก dropdown ของแชทที่เปิดอยู่ (ตั้งใน profileHtml)
@@ -2076,6 +2083,79 @@
     else inp = `<input type="${kind === 'tel' ? 'tel' : 'text'}" data-f="${f}" value="${h(v)}"${dis} autocomplete="off">`;
     return `<div class="pf-fld"><div class="pf-lab"><span>${h(label)}</span>${badge ? `<span style="display:flex;gap:4px;align-items:center">${badge}</span>` : ''}</div>${inp}</div>`;
   }
+  const rowsHtml = (L, rows, ed, sfx) => rows.map(row => {
+    const cells = row.map(([f, lab, kind]) => leadField(L, f, lab, kind, ed, sfx));
+    return row.length > 1 ? `<div class="pf-g2">${cells.join('')}</div>` : cells[0];
+  }).join('');
+
+  // สถานะของ 4 หัวข้อ — [คีย์, ชื่อ, ไอคอน, เก็บแล้วไหม, ข้อความสถานะ]
+  function topState(d) {
+    const L = d.lead || {}, has = f => !!(L[f] && String(L[f]).trim());
+    const hist = ['occupation', 'income', 'job_tenure', 'pay_history'].filter(has).length;
+    const vw = ((d.crm || {}).followups || []).filter(f => !f.done && f.kind === 'viewing');
+    return [
+      ['car', 'รุ่นรถที่สนใจ', 'car', has('car_text') || (has('car_model') && L.car_model !== 'ไม่ระบุรุ่นรถ'), ''],
+      ['contact', 'เบอร์ / ไลน์ ติดต่อ', 'phone', has('phone') || has('line_id'), ''],
+      ['hist', 'ประวัติลูกค้า', 'user', hist >= 4, hist + '/4'],
+      ['appt', 'นัดดูรถ', 'calendar', vw.length > 0, vw.length ? fmtWhen(vw[0].due) : ''],
+    ];
+  }
+  const qStat = s => `<span class="st ${s[3] ? 'ok' : 'no'}" data-qst="${s[0]}">${s[3] ? ic('check', 12) : ''}${h(s[4] || (s[3] ? 'มีแล้ว' : 'ยังไม่มี'))}</span>`;
+  const qHead = s => `<div class="pf-h"><span class="n">${ic(s[2], 13)}</span>${h(s[1])}${qStat(s)}</div>`;
+  function chatCapHtml(d) {
+    const st = topState(d), n = st.filter(s => s[3]).length;
+    return `<div class="pf-cap" data-box="cap"><div class="hd"><b>เก็บข้อมูลจากแชท</b><span>${n}/4</span></div>
+      <div>ระบบจับเบอร์ ไลน์ รุ่นรถ อาชีพ/รายได้ จากที่ลูกค้าพิมพ์ แล้วเติมให้เอง (ป้าย “จากแชท” กดดูข้อความต้นทางได้) ·
+        ระบบจับไม่ได้หรือจับผิด — คัดลอกจากแชทมาวาง/แก้ในช่องได้เลย</div>
+      <div class="ck">${st.map(s => `<span class="${s[3] ? 'ok' : 'no'}">${s[3] ? ic('check', 12) : '<i></i>'}${h(s[1])}</span>`).join('')}</div>
+      <div class="kw-leg"><label><input type="checkbox" data-act="hl"${S.hl ? ' checked' : ''}> ไฮไลต์คำที่ระบบจับได้ในแชท</label>${
+        KW_LEG.map(([c, t]) => `<span class="kw kw-${c}">${t}</span>`).join('')}</div></div>`;
+  }
+
+  // หัวข้อ 4 "นัดดูรถ" — นัดที่ค้าง (นัดติดตามด้วย ไม่งั้นหายจากแผง) · ลูกค้าพูดถึงวันนัดในแชท · ฟอร์มนัด (ค่าเริ่มต้น = นัดดูรถ)
+  function apptHtml(d, s) {
+    const K = d.crm || {}, id = d.row.id, ed = !!d.leadEditable;
+    const fl = K.followups || [];
+    const open = fl.filter(f => !f.done).sort((a, b) => (a.kind === 'viewing' ? 0 : 1) - (b.kind === 'viewing' ? 0 : 1));
+    const done = fl.filter(f => f.done).slice(0, 3);
+    const ad = S.apptDraft[id] || {};
+    let x = `<div class="pf-sec pf-q" data-q="appt">${qHead(s)}`;
+    const H = K.apptHint;
+    if (H && ed && S.hintNo[id] !== H.mid) {
+      const mi = (d.messages || []).findIndex(m => m.id === H.mid);
+      const used = ad.due === localDT(new Date(H.at));
+      x += `<div class="pf-hint"><b>${H.dir === 'out' ? 'ในแชทพูดถึงนัด' : 'ลูกค้าพูดถึงนัด'}</b> → <b>${h(fmtFull(H.at))}</b>
+        <div class="q">“${h(H.text)}”</div>
+        <div class="acts">${used ? '<span style="color:var(--green);font-size:12px">ใส่ในฟอร์มด้านล่างแล้ว — ตรวจแล้วกด "บันทึกนัด"</span>'
+          : `<button class="btn sm pri" data-act="hint-use">ใส่ในฟอร์มนัด</button>`}${
+          mi >= 0 ? `<button class="btn sm" data-act="hint-src" data-mi="${mi}">ดูในแชท</button>` : ''}<button class="btn sm" data-act="hint-no">ไม่ใช่นัด</button></div>
+        <div class="pf-note" style="margin:4px 0 0">ระบบอ่านวัน-เวลาจากข้อความ (ไม่ใช้ AI) — ยังไม่บันทึกจนกว่าจะกด "บันทึกนัด"</div></div>`;
+    }
+    x += open.map(f => `<div class="crm-it${f.late ? ' late' : ''}"><b>${h(f.kindLabel)}</b> ${h(fmtFull(f.due))}${f.who ? ' · @' + h(f.who) : ''}${f.late ? ' · <b style="color:var(--red)">เลยนัดแล้ว</b>' : ''}
+        ${f.note ? `<div>${h(f.note)}</div>` : ''}${ed ? `<div class="acts"><button class="btn sm pri" data-fdone="${f.id}">ทำแล้ว</button><button class="btn sm" data-fcancel="${f.id}">ยกเลิกนัด</button></div>` : ''}</div>`).join('')
+      + done.map(f => `<div class="crm-it done">${h(f.kindLabel)} ${h(fmtFull(f.due))} · ${h(f.result || 'ทำแล้ว')}${f.doneBy ? ' · ' + h(f.doneBy) : ''}</div>`).join('')
+      + (!open.length && !done.length ? '<div class="pf-note">ยังไม่มีนัด</div>' : '');
+    if (ed) {
+      x += `<div class="crm-form" data-box="appt">
+        <select data-x="kind"><option value="viewing"${ad.kind !== 'follow' ? ' selected' : ''}>นัดดูรถ (ขั้นเป็น "นัดดูรถ" ให้เอง)</option><option value="follow"${ad.kind === 'follow' ? ' selected' : ''}>นัดติดตาม</option></select>
+        <div class="crm-qd"><button data-qd="1">พรุ่งนี้ 10:00</button><button data-qd="3">อีก 3 วัน</button><button data-qd="7">อีก 7 วัน</button></div>
+        <input type="datetime-local" data-x="due" value="${h(ad.due || '')}">
+        <input type="text" data-x="note" maxlength="300" placeholder="รายละเอียด (ไม่บังคับ) เช่น มาดู City ที่สาขา" value="${h(ad.note || '')}">
+        <button class="btn sm pri" data-act="appt-add" style="width:100%">บันทึกนัด</button></div>`;
+    }
+    return x + `</div>`;
+  }
+
+  // ป้ายสถานะบนหัว "ข้อมูลเพิ่มเติม" — เห็นได้โดยไม่ต้องกาง
+  function moreBadge(d) {
+    const L = d.lead || {}, E = (d.crm || {}).extra || {};
+    if (L.code) return 'เลข ' + L.code;
+    if (L.buy) return 'ส่งจัดซื้อแล้ว';
+    if (L.deal === 'buy') return 'ลีดรับซื้อรถ';
+    if (L.noCode) return 'ไม่ต้องจ่ายเบอร์';
+    if (L.park) return 'รอจ่ายเบอร์';
+    return E.stageLabel || '';
+  }
 
   function profileHtml(d, sfx) {
     const p = d.profile, r = d.row, L = d.lead;
@@ -2086,22 +2166,20 @@
       <div class="pf-name-row"><span class="pf-name">${h(shownName)}</span>${L && ed ? `<button class="pf-pen" data-act="name" title="แก้ชื่อลูกค้า">✎</button>` : ''}</div>
       ${p.lineName && p.lineName !== shownName ? `<div class="pf-line">ชื่อใน ${p.src === 'fb' ? 'Facebook' : 'LINE'}: ${h(p.lineName)}</div>` : ''}
       ${p.src === 'fb' ? `<div class="pf-line">${chTag('fb')} ${h(p.page || '')}</div>${p.inbox ? `<a class="btn sm" href="${h(p.inbox)}" target="_blank" rel="noopener">เปิดใน Facebook ↗</a>` : ''}` : ''}
-      ${p.status ? `<div class="pf-status">\u201c${h(p.status)}\u201d</div>` : ''}`;
+      ${p.status ? `<div class="pf-status">“${h(p.status)}”</div>` : ''}`;
     if (L) {
       x += `<div class="pf-tags">${(L.tags || []).map(t => `<span class="pf-tag">${h(t)}${ed ? `<button data-tag-del="${h(t)}" title="เอาแท็กออก">×</button>` : ''}</span>`).join('')}
         ${ed ? `<input class="pf-tag-in" data-act="tag" placeholder="+ ใส่แท็ก" list="dl-tag-${sfx}">` : ''}</div>`;
     }
     x += `</div>`;
-    if (p.full && L) x += kwBoxHtml(d) + kwSuggHtml(d);  // ★ 12 ต.ค.69 ข้อมูลพร้อมจ่ายเบอร์ x/5 · ค่าใหม่รอคนตัดสิน
-    if (p.full && d.crm) x += crmHtml(d, sfx);          // ★ 11 ต.ค.69 ขั้น · นัด · โทร · สรุป (บนสุด — งานที่ต้องลงมือ)
-    x += `<div class="pf-sec">
-      <div class="pf-kv"><span>ผู้รับผิดชอบ</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>`;
+    const ownerKv = `<div class="pf-kv"><span>ผู้รับผิดชอบ</span><span>${r.owner ? h(r.owner) + (r.team ? ' · ทีม ' + h(r.team) : '') : 'ยังไม่มีคนรับ'}</span></div>`;
     if (!p.full) {
-      return x + `<div class="pf-kv"><span>ทักครั้งแรก</span><span>${h(fmtFull(p.firstSeen)) || '–'}</span></div></div>
+      return x + `<div class="pf-sec">${ownerKv}<div class="pf-kv"><span>ทักครั้งแรก</span><span>${h(fmtFull(p.firstSeen)) || '–'}</span></div></div>
         <div class="pf-sec pf-lock">ข้อมูลลีด เบอร์โทร และรถที่ลูกค้าหา เห็นได้หลังกด "รับลูกค้าคนนี้"</div>`;
     }
     // ช่องที่ระบบคำนวณเอง (ไม่ให้แก้ — แก้แล้วจะไม่ตรงกับของจริง)
-    x += `<div class="pf-kv"><span>ว/ด/ป · เวลา</span><span>${h(fmtFull(L ? L.leadAt : p.firstSeen)) || '–'}</span></div>
+    const calcSec = `<div class="pf-sec">${ownerKv}
+      <div class="pf-kv"><span>ว/ด/ป · เวลา</span><span>${h(fmtFull(L ? L.leadAt : p.firstSeen)) || '–'}</span></div>
       ${L ? `<div class="pf-kv"><span>วันเวลาที่ติดต่อ</span><span>${h(fmtFull(L.contactAt)) || 'ยังไม่ได้ตอบ'}</span></div>
       <div class="pf-kv"><span>จำนวนอัพเดท</span><span>${L.updates}</span></div>
       <div class="pf-kv"><span>อัพเดทล่าสุด</span><span>${h(fmtFull(L.lastUpdate)) || '–'}</span></div>` : ''}
@@ -2109,7 +2187,7 @@
       ${p.language ? `<div class="pf-kv"><span>ภาษา</span><span>${h(LANG[p.language] || p.language)}</span></div>` : ''}
     </div>`;
     if (!L) {
-      return x + (d.leadError ? `<div class="pf-sec pf-lock" style="color:var(--red)">${h(d.leadError)}</div>` : '');
+      return x + calcSec + (d.leadError ? `<div class="pf-sec pf-lock" style="color:var(--red)">${h(d.leadError)}</div>` : '');
     }
     const O = d.leadOptions || {};
     _DDF = O.dropdowns || {};
@@ -2117,62 +2195,76 @@
     const src = O.source || {};
     const ddNote = `<div class="pf-note">ตัวเลือกตาม dropdown ของชีตลีด${src.tab ? ' แท็บ ' + h(src.tab) : ''}${
       src.fallback ? ' (ชุดที่จำไว้ ยังอ่านชีตล่าสุดไม่ได้)' : ''}</div>`;
+    const st = topState(d), K = d.crm || {};
+
+    // ── บนสุด: เก็บข้อมูลจากแชท + 4 หัวข้อ ──
+    x += chatCapHtml(d) + kwSuggHtml(d);
+    if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
+    // 1. รุ่นรถที่สนใจ
+    x += `<div class="pf-sec pf-q" data-q="car">${qHead(st[0])}${rowsHtml(L, LEAD_TOP.car, ed, sfx)}`;
+    const needs = p.needs || [];
+    if (needs.length) x += `<div class="pf-h" style="margin:8px 0 4px">รถที่ลูกค้าหา (จากระบบจับความต้องการ)</div>${needs.map(n =>
+      `<div class="pf-need"><b>${h(n.car)}</b>${n.detail ? h(n.detail) + '<br>' : ''}<span style="color:var(--t3)">${h(n.status)}${n.waiting ? ' · รอรถที่ตรงสเปก' : ''}</span></div>`).join('')}`;
+    if ((K.cars || []).length) x += `<div class="pf-done">รถพร้อมขายที่ตรงกับลูกค้า: ${K.cars.map(c => `<b>${h(c.name || c.code)}</b>${c.year ? ' ' + h(c.year) : ''}${c.price ? ' ' + fmtBaht(c.price) : ''}`).join(' · ')}</div>`;
+    if (L.trade && L.deal !== 'buy') x += `<div class="pf-src" data-box="trade">ลูกค้ามีรถเทิร์น — "${h(L.trade.why || '')}" (ยังเป็นลีดขายรถ)</div>`;
+    x += `</div>`;
+    // 2. เบอร์ / ไลน์ ติดต่อ
+    x += `<div class="pf-sec pf-q" data-q="contact">${qHead(st[1])}${rowsHtml(L, LEAD_TOP.contact, ed, sfx)}`;
+    const otherPh = (p.phones || []).filter(n => n !== L.phone);       // เบอร์ที่เจอในแชท — กดเพื่อใช้เป็นเบอร์หลัก
+    if (otherPh.length && ed) x += `<div class="pf-phs"><span style="color:var(--t3);font-size:12px">ในแชท:</span>${otherPh.map(n =>
+      `<button class="pf-phc" data-phone="${h(n)}" title="ใช้เบอร์นี้">${h(fmtPhone(n))}</button>`).join('')}</div>`;
+    if (L.phone) x += `<div class="pf-phs"><a class="btn sm" href="tel:${h(L.phone)}">โทร ${h(fmtPhone(L.phone))}</a></div>`;
+    x += `</div>`;
+    // 3. ประวัติลูกค้า
+    x += `<div class="pf-sec pf-q" data-q="hist">${qHead(st[2])}${rowsHtml(L, LEAD_TOP.hist, ed, sfx)}</div>`;
+    // 4. นัดดูรถ
+    x += apptHtml(d, st[3]);
+
+    // ── ข้อมูลเพิ่มเติม (พับไว้ · จำว่ากางไว้ไหม) ──
+    let m = '';
+    m += kwBoxHtml(d);                                   // ★ 12 ต.ค.69 ข้อมูลพร้อมจ่ายเบอร์ x/5
+    if (d.crm) m += crmHtml(d, sfx);                     // ขั้นของลีด · โทร · สรุป · ใครเคยดูแล
+    m += calcSec;
     if (L.slip) {
-      x += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
+      m += `<div class="pf-src">ดึงข้อมูลจากใบจ่ายลีดใน "${h(L.slip.group || 'กลุ่มจ่ายเบอร์')}" (${h(fmtFull(L.slip.at))})</div>`;
     } else if (L.sheet && L.code === L.sheet.code) {
       // ★ 11 ต.ค.69 เบอร์นี้ได้เลขในชีตลีดแล้ว (จ่ายนอกระบบ) → ระบบเติมเลขให้เองแล้วเอาออกจากห้องพัก
       const sv = L.sheet.seller === 'ADMIN' ? 'เทเลเซลล์' : (L.sheet.seller || '');
       const other = (L.sheet.codes || []).filter(c => c !== L.sheet.code);
-      x += `<div class="pf-src">จ่ายเบอร์ในชีตลีดแล้ว — เบอร์นี้คือเลข <b>${h(L.sheet.code)}</b>${sv ? ' ของ @' + h(sv) : ''} (${h(String(L.sheet.date || ''))})${
+      m += `<div class="pf-src">จ่ายเบอร์ในชีตลีดแล้ว — เบอร์นี้คือเลข <b>${h(L.sheet.code)}</b>${sv ? ' ของ @' + h(sv) : ''} (${h(String(L.sheet.date || ''))})${
         other.length ? ' · เลขอื่นของเบอร์นี้ในรอบเดียวกัน: ' + h(other.join(', ')) : ''}</div>`;
     }
-    if (!ed) x += `<div class="pf-lock" style="margin:6px 0">ดูได้อย่างเดียว — แก้ได้เฉพาะเจ้าของลูกค้าและแอดมิน</div>`;
     if (L.assignedAt) {
-      x += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${
+      m += `<div class="pf-done">จ่ายเบอร์ <b>${h(L.code)}</b> แล้ว · ${h(fmtFull(L.assignedAt))}${L.assignedBy ? ' โดย ' + h(L.assignedBy) : ''}${
         L.codeDemo ? ' · ทดลอง (ยังไม่ลงชีต ไม่ได้ส่งเข้ากลุ่ม)' : postStatusHtml(L.post, d.codeHelp ? 'data-act="repost"' : 'disabled')}</div>`;
     } else if (L.noCode && !L.code) {
       // แอดมินกด "ไม่ต้องจ่ายเบอร์" ไว้ (ไม่ใช่ลีดขาย) — ออกจากแท็บจ่ายเบอร์แล้ว · กดเอากลับได้
-      x += `<div class="pf-skip"><span>ไม่ต้องจ่ายเบอร์${L.noCode.by ? ' · ' + h(L.noCode.by) : ''}${L.noCode.at ? ' ' + h(fmtFull(L.noCode.at)) : ''}</span>
+      m += `<div class="pf-skip"><span>ไม่ต้องจ่ายเบอร์${L.noCode.by ? ' · ' + h(L.noCode.by) : ''}${L.noCode.at ? ' ' + h(fmtFull(L.noCode.at)) : ''}</span>
         ${d.codeHelp ? `<button class="btn sm" data-act="nocode-undo">เอากลับมาจ่ายเบอร์</button>` : ''}</div>`;
     } else if (L.buy && !L.code) {
       // แอดมินส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว (ใบ "โค้ด : OC-…") — ลูกค้าอยากขายรถให้เรา ไม่ใช่ลีดขาย ไม่ต้องจ่ายเบอร์
       const B = L.buy;
-      x += `<div class="pf-done">ส่งจัดซื้อแล้ว <b>${h(B.code)}</b>${B.seller ? ' → @' + h(B.seller) : ''}
+      m += `<div class="pf-done">ส่งจัดซื้อแล้ว <b>${h(B.code)}</b>${B.seller ? ' → @' + h(B.seller) : ''}
         · ${h(fmtFull(B.at))}${B.by ? ' โดย ' + h(B.by) : ''}<br><span style="color:var(--t2)">ใน "${h(B.group || 'เคสHOT')}" — ลูกค้าอยากขายรถให้เรา</span></div>`;
     } else if (L.deal === 'buy' && !L.code) {
-      x += buyLeadBoxHtml(L, !!d.codeHelp);
+      m += buyLeadBoxHtml(L, !!d.codeHelp);
     } else if (d.codeHelp && !L.code) {
-      x += parkRowHtml(L) + assignBoxHtml(d, sfx) + `<div class="pf-note" style="margin:-4px 0 8px">ลูกค้าอยากขายรถให้เรา? <a href="#" data-act="deal-buy">ย้ายไปเป็นลีดรับซื้อรถ</a></div>`;
+      m += parkRowHtml(L) + assignBoxHtml(d, sfx) + `<div class="pf-note" style="margin:-4px 0 8px">ลูกค้าอยากขายรถให้เรา? <a href="#" data-act="deal-buy">ย้ายไปเป็นลีดรับซื้อรถ</a></div>`;
     }
-    if (L.trade && L.deal !== 'buy') x += `<div class="pf-src" data-box="trade">ลูกค้ามีรถเทิร์น — "${h(L.trade.why || '')}" (ยังเป็นลีดขายรถ)</div>`;
-    if (d.codeHelp && L.code) x += lfBoxHtml(d);
+    if (d.codeHelp && L.code) m += lfBoxHtml(d);
     LEAD_UI.forEach(sec => {
-      x += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}`;
-      sec.rows.forEach(row => {
-        const cells = row.map(([f, lab, kind]) => leadField(L, f, lab, kind, ed, sfx));
-        x += row.length > 1 ? `<div class="pf-g2">${cells.join('')}</div>` : cells[0];
-        // เบอร์ที่เจอในแชท — กดเพื่อใช้เป็นเบอร์หลัก
-        if (row.some(c => c[0] === 'phone')) {
-          const other = (p.phones || []).filter(n => n !== L.phone);
-          if (other.length && ed) x += `<div class="pf-phs"><span style="color:var(--t3);font-size:12px">ในแชท:</span>${other.map(n =>
-            `<button class="pf-phc" data-phone="${h(n)}" title="ใช้เบอร์นี้">${h(fmtPhone(n))}</button>`).join('')}</div>`;
-          if (L.phone) x += `<div class="pf-phs"><a class="btn sm" href="tel:${h(L.phone)}">โทร ${h(fmtPhone(L.phone))}</a></div>`;
-        }
-      });
-      x += `</div>`;
+      m += `<div class="pf-sec"><div class="pf-h">${h(sec.sec)}</div>${sec.sec === 'ข้อมูลลีด' ? ddNote : ''}${rowsHtml(L, sec.rows, ed, sfx)}</div>`;
     });
     // ★ 6 ต.ค.69 — ใบนี้ = หน้าตาเดียวกับที่ส่งเข้ากลุ่มจ่ายเบอร์ (pattern ที่เจ้าของกำหนด) · "ไลฟ์" ในใบ = ช่อง "ทีมไลฟ์"
     //   (คอลัมน์เดียวกันในชีต) — เลิกมีช่องพิมพ์ "ไลฟ์" แยก ไม่งั้นมี 2 ที่ให้กรอกเรื่องเดียวกัน
-    x += `<div class="pf-sec pf-slip"><div class="pf-h">ใบจ่ายลีด</div>
+    m += `<div class="pf-sec pf-slip"><div class="pf-h">ใบจ่ายลีด</div>
       <div class="pf-note">หน้าตาเดียวกับที่ส่งเข้ากลุ่มจ่ายเบอร์ · ไลฟ์ = ช่อง "ทีมไลฟ์" ด้านบน · ช่องทาง/ไลฟ์ใช้คำตาม dropdown ของชีต</div>
       ${leadField(L, 'more', 'เพิ่มเติม', 'area', ed, sfx)}
       <pre class="pf-slip-text">${h(L.slipText || '')}</pre>
       <button class="btn sm" data-act="copy-slip">คัดลอกใบจ่ายลีด</button></div>`;
-    const needs = p.needs || [];
-    if (needs.length) {
-      x += `<div class="pf-sec"><div class="pf-h">รถที่ลูกค้าหา (จากระบบจับความต้องการ)</div>${needs.map(n =>
-        `<div class="pf-need"><b>${h(n.car)}</b>${n.detail ? h(n.detail) + '<br>' : ''}<span style="color:var(--t3)">${h(n.status)}${n.waiting ? ' · รอรถที่ตรงสเปก' : ''}</span></div>`).join('')}</div>`;
-    }
+    const mb = moreBadge(d);
+    x += `<details class="pf-more"${S.moreOpen ? ' open' : ''}><summary><span class="chev">${ic('chevron-right', 14)}</span>ข้อมูลเพิ่มเติม${
+      mb ? `<span class="badge">${h(mb)}</span>` : ''}<span class="sub">ขั้นของลีด · จ่ายเบอร์ · ช่องอื่นของชีต · ใบจ่ายลีด</span></summary>${m}</details>`;
     return x + dls;
   }
 
@@ -2311,6 +2403,13 @@
   function bindProfile(el) {
     bindCrm(el);
     bindKw(el);
+    // ★ 17 ต.ค.69 "ข้อมูลเพิ่มเติม" — คนกาง/พับเอง = จำไว้ในเครื่อง (ระบบกางให้ตอนกดจ่ายเบอร์ = ไม่จำ)
+    const more = el.querySelector('details.pf-more');
+    if (more) more.addEventListener('toggle', () => {
+      S.moreOpen = more.open;
+      if (_moreAuto) { _moreAuto = false; return; }
+      try { localStorage.setItem('cn_more', more.open ? '1' : '0'); } catch (e) {}
+    });
     el.querySelectorAll('[data-f]').forEach(inp => {
       inp.addEventListener('change', () => {
         if (inp.tagName === 'SELECT') inp.classList.toggle('empty', !inp.value);
@@ -2472,22 +2571,8 @@
     const B = K.booking;
     if (B) x += `<div class="pf-done" style="color:var(--t1)">ชีตยอดขาย: <b>${h(B.status || '-')}</b>${B.car ? ' · ' + h(B.car) : ''}${B.date ? ' · จอง ' + h(B.date) : ''}${
       B.signDate ? ' · เซ็น ' + h(B.signDate) : ''}${B.resultDate ? ' · ผล ' + h(B.resultDate) : ''}${B.releaseDate ? ' · ปล่อย ' + h(B.releaseDate) : ''}${B.price ? ' · ' + fmtBaht(B.price) : ''}</div>`;
-    if ((K.cars || []).length) x += `<div class="pf-done">รถพร้อมขายที่ตรงกับลูกค้า: ${K.cars.map(c => `<b>${h(c.name || c.code)}</b>${c.year ? ' ' + h(c.year) : ''}${c.price ? ' ' + fmtBaht(c.price) : ''}`).join(' · ')}</div>`;
+    // รถพร้อมขายที่ตรง → หัวข้อ "รุ่นรถที่สนใจ" · นัดหมาย → หัวข้อ "นัดดูรถ" (★ 17 ต.ค.69 ย้ายขึ้นบนสุดของแผง)
     x += `</div>`;
-    // นัดหมาย
-    const open = (K.followups || []).filter(f => !f.done), done = (K.followups || []).filter(f => f.done);
-    const ad = S.apptDraft[id] || {};
-    x += `<div class="pf-sec"><div class="pf-h">นัดหมาย${open.length ? ' · ค้าง ' + open.length : ''}</div>
-      ${open.map(f => `<div class="crm-it${f.late ? ' late' : ''}"><b>${h(f.kindLabel)}</b> ${h(fmtFull(f.due))}${f.who ? ' · @' + h(f.who) : ''}${f.late ? ' · <b style="color:var(--red)">เลยนัดแล้ว</b>' : ''}
-        ${f.note ? `<div>${h(f.note)}</div>` : ''}${ed ? `<div class="acts"><button class="btn sm pri" data-fdone="${f.id}">ทำแล้ว</button><button class="btn sm" data-fcancel="${f.id}">ยกเลิกนัด</button></div>` : ''}</div>`).join('')}
-      ${done.map(f => `<div class="crm-it done">${h(f.kindLabel)} ${h(fmtFull(f.due))} · ${h(f.result || 'ทำแล้ว')}${f.doneBy ? ' · ' + h(f.doneBy) : ''}</div>`).join('')}
-      ${!open.length && !done.length ? '<div class="pf-note">ยังไม่มีนัด</div>' : ''}
-      ${ed ? `<div class="crm-form" data-box="appt">
-        <select data-x="kind"><option value="follow"${ad.kind !== 'viewing' ? ' selected' : ''}>นัดติดตาม</option><option value="viewing"${ad.kind === 'viewing' ? ' selected' : ''}>นัดดูรถ (ขั้นเป็น "นัดดูรถ" ให้เอง)</option></select>
-        <div class="crm-qd"><button data-qd="1">พรุ่งนี้ 10:00</button><button data-qd="3">อีก 3 วัน</button><button data-qd="7">อีก 7 วัน</button></div>
-        <input type="datetime-local" data-x="due" value="${h(ad.due || '')}">
-        <input type="text" data-x="note" maxlength="300" placeholder="รายละเอียด (ไม่บังคับ) เช่น มาดู City ที่สาขา" value="${h(ad.note || '')}">
-        <button class="btn sm pri" data-act="appt-add" style="width:100%">บันทึกนัด</button></div>` : ''}</div>`;
     // บันทึกการโทร
     const cd = S.callDraft[id] || {}, cm = S.callMedia[id] || [];
     x += `<div class="pf-sec"><div class="pf-h">บันทึกการโทร</div>
@@ -2598,6 +2683,19 @@
         if (r) { delete S.apptDraft[id]; paintProfile(true); }
       };
     }
+    // ★ 17 ต.ค.69 ลูกค้าพูดถึงนัดในแชท → ใส่ในฟอร์มนัด (ยังไม่บันทึก — คนตรวจแล้วกด "บันทึกนัด" เอง)
+    el.querySelectorAll('[data-act=hint-use]').forEach(b => b.onclick = () => {
+      const H = (S.chat.crm || {}).apptHint; if (!H) return;
+      S.apptDraft[id] = { kind: 'viewing', due: localDT(new Date(H.at)), note: (S.apptDraft[id] || {}).note || H.text };
+      paintProfile(true);
+      const f = el.querySelector('[data-box=appt]');
+      if (f) { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); f.classList.add('flash'); setTimeout(() => f.classList.remove('flash'), 1800); }
+    });
+    el.querySelectorAll('[data-act=hint-src]').forEach(b => b.onclick = () => goMsg(+b.dataset.mi, ''));
+    el.querySelectorAll('[data-act=hint-no]').forEach(b => b.onclick = () => {
+      const H = (S.chat.crm || {}).apptHint; if (!H) return;
+      S.hintNo[id] = H.mid; paintProfile(true);
+    });
     const cb = el.querySelector('[data-box=call]');
     if (cb) {
       const keep = () => { S.callDraft[id] = { result: q(cb, 'result').value, note: q(cb, 'note').value }; };
@@ -2694,7 +2792,7 @@
     return (m.files || []).map(f => {
       if (FILE_NOTE[f.state]) return `<span class="cn-mnote">${FILE_NOTE[f.state]}</span>`;
       const u = h(f.url);
-      if (f.kind === 'image') return `<a class="cn-mimg" href="${u}" target="_blank" rel="noopener" title="เปิดรูปเต็ม"><img src="${u}" alt="รูปที่ลูกค้าส่ง" loading="lazy"></a>`;
+      if (f.kind === 'image') return `<a class="cn-mimg" href="${u}" target="_blank" rel="noopener" title="เปิดรูปเต็ม"><img src="${u}" alt="${m.dir === 'out' ? 'รูปที่ส่งหาลูกค้า' : 'รูปที่ลูกค้าส่ง'}" loading="lazy"></a>`;
       if (f.kind === 'video') return `<video class="cn-mvid" controls preload="none" src="${u}"></video>`;
       if (f.kind === 'audio') return `<audio class="cn-maud" controls preload="none" src="${u}"></audio>`;
       return `<a class="cn-mfile" href="${u}&dl=1">${ic('paperclip', 14)} ${h(f.name || 'ไฟล์แนบ')}${f.size ? ' · ' + fmtSize(f.size) : ''}</a>`
@@ -2800,11 +2898,11 @@
         if (r.ok) openChat(id, true);
       };
     };
-    if (why) { w.innerHTML = `<div class="cn-comp-why">${h(why)}</div>` + ftHtml; bindFt(); return; }
+    if (why) { w.innerHTML = `<div class="cn-comp-why">${h(why)}</div>` + ftHtml; bindFt(); bindDrop(false); return; }
     // มือถือ: Enter = ขึ้นบรรทัด (กดปุ่มส่งเอา) — คำอธิบาย Enter/Shift+Enter มีแค่บนคอม
     const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
-    w.innerHTML = `<div class="cn-err" id="cn-err"></div>
-      <div class="cn-comp"><textarea id="cn-text" rows="1" placeholder="${coarse ? 'พิมพ์ข้อความถึงลูกค้า…' : 'พิมพ์ข้อความถึงลูกค้า… (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)'}"></textarea>
+    w.innerHTML = `<div id="cn-cnd"></div><div class="cn-err" id="cn-err"></div><div id="cn-imgp"></div>
+      <div class="cn-comp"><label class="cn-ibtn" title="ส่งรูป (วางรูปด้วย Ctrl+V หรือลากไฟล์มาวางในแชทก็ได้)">${ic('image', 20)}<input type="file" id="cn-file" accept="image/*" hidden></label><button type="button" class="cn-ibtn" id="cn-cnd-btn" title="ข้อความสำเร็จรูป">${ic('canned', 20)}</button><textarea id="cn-text" rows="1" placeholder="${coarse ? 'พิมพ์ข้อความถึงลูกค้า…' : 'พิมพ์ข้อความถึงลูกค้า… (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)'}"></textarea>
       <button class="btn pri" id="cn-send">${ic('send')} ส่ง</button></div>` + ftHtml;
     bindFt();
     const ta = $('cn-text');
@@ -2813,11 +2911,224 @@
       if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.isComposing) { e.preventDefault(); send(); }
     });
     $('cn-send').onclick = send;
+    $('cn-file').onchange = e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) pickImg(f); };
+    // วางรูปจากคลิปบอร์ด — มีข้อความติดมาด้วย (เช่นคัดลอกจาก Excel) = วางเป็นข้อความตามปกติ
+    ta.addEventListener('paste', e => {
+      const cd = e.clipboardData; if (!cd || cd.getData('text/plain')) return;
+      const f = Array.from(cd.files || []).find(x => /^image\//.test(x.type));
+      if (f) { e.preventDefault(); pickImg(f); }
+    });
+    bindDrop(true);
+    paintImgP();
+    CND.open = false; CND.edit = null;                // วาดช่องพิมพ์ใหม่ = กล่องข้อความสำเร็จรูปปิด
+    $('cn-cnd-btn').onclick = cndToggle;
+    const cb = $('cn-cnd');
+    cb.onclick = cndClick;
+    cb.oninput = e => { if (e.target.dataset.c === 'q') { CND.q = e.target.value; paintCndList(); } };
+    cb.onkeydown = e => {
+      if (e.key === 'Enter' && !e.isComposing && e.target.dataset.c === 'q') {
+        e.preventDefault(); const f = cndFiltered()[0]; if (f) cndPick(f);
+      }
+    };
+  }
+
+  // ★ 17 ต.ค.69 ข้อความสำเร็จรูป (หน้าเว็บ) — ชุดเดียวกับแอป (GET/POST /connect/api/canned · KV connect_canned)
+  //   เลือกแล้วไปอยู่ในช่องพิมพ์ (ไม่ส่งเอง) · แอดมินเพิ่ม/แก้/ลบได้ในกล่องเดียวกัน · Esc / คลิกที่อื่น = ปิด
+  const CND = { open: false, items: null, canEdit: false, err: '', q: '', edit: null, busy: false, focusQ: false };
+  const CND_MAX = 60;                               // ตรงกับ chatplus.CANNED_MAX
+  function cndFiltered() {
+    const q = CND.q.trim().toLowerCase(), all = CND.items || [];
+    return q ? all.filter(x => ((x.title || '') + ' ' + x.text).toLowerCase().includes(q)) : all;
+  }
+  function cndClose() {
+    CND.open = false; CND.edit = null; CND.q = ''; CND.focusQ = false;
+    const b = $('cn-cnd'); if (b) b.innerHTML = '';
+    const k = $('cn-cnd-btn'); if (k) k.classList.remove('on');
+  }
+  async function cndToggle() {
+    if (CND.open) { cndClose(); return; }
+    CND.open = true; CND.edit = null; CND.q = ''; CND.err = '';
+    CND.focusQ = !(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);   // มือถือไม่โฟกัสช่องค้น (คีย์บอร์ดเด้งบังรายการ)
+    $('cn-cnd-btn').classList.add('on');
+    paintCnd();                                     // โชว์รายการที่จำไว้ก่อน แล้วค่อยดึงใหม่ (แอดมินอาจเพิ่งแก้จากแอป)
+    const d = await api('/connect/api/canned');
+    if (!CND.open) return;
+    if (d.ok) { CND.items = d.items || []; CND.canEdit = !!d.canEdit; CND.err = ''; }
+    else CND.err = d.error || 'โหลดข้อความสำเร็จรูปไม่สำเร็จ';
+    if (!CND.edit) paintCnd();
+  }
+  function paintCnd() {
+    const b = $('cn-cnd'); if (!b) return;
+    if (!CND.open) { b.innerHTML = ''; return; }
+    const head = `<div class="hd"><b>ข้อความสำเร็จรูป</b><button type="button" class="x" data-c="close" title="ปิด (Esc)">${ic('x', 16)}</button></div>`;
+    const e = CND.edit;
+    if (e) {
+      const dis = CND.busy ? ' disabled' : '';
+      b.innerHTML = `<div class="cn-cnd">${head}<div class="fm">
+        <input data-c="title" maxlength="40" placeholder="หัวข้อสั้นๆ (ไม่บังคับ) เช่น ทักทาย / ขอเบอร์" value="${h(e.title)}">
+        <textarea data-c="text" maxlength="1000" rows="5" placeholder="ข้อความที่จะใส่ในช่องพิมพ์">${h(e.text)}</textarea>
+        <div class="acts"><button type="button" class="btn sm" data-c="back"${dis}>ยกเลิก</button>
+          <button type="button" class="btn pri sm" data-c="save"${dis}>${CND.busy ? 'กำลังบันทึก…' : 'บันทึก'}</button></div></div></div>`;
+      cndFit();
+      if (!CND.busy) b.querySelector(e.title || !e.id ? '[data-c=text]' : '[data-c=title]').focus();
+      return;
+    }
+    const all = CND.items;
+    const q = b.querySelector('[data-c=q]');
+    const hadFocus = !!q && document.activeElement === q;
+    const search = all && all.length > 5 ? `<input class="q" data-c="q" placeholder="ค้นข้อความ… (Enter = ใช้อันแรก)" value="${h(CND.q)}">` : '';
+    const foot = CND.canEdit && all ? `<div class="ft"><button type="button" class="btn sm" data-c="add"${all.length >= CND_MAX ? ' disabled title="ครบแล้ว — ลบอันที่ไม่ใช้ก่อน"' : ''}>${ic('plus', 14)} เพิ่มข้อความ</button><span>${all.length}/${CND_MAX}</span></div>` : '';
+    b.innerHTML = `<div class="cn-cnd">${head}${search}<div class="ls" id="cn-cnd-ls"></div>${foot}</div>`;
+    paintCndList();
+    cndFit();
+    const nq = b.querySelector('[data-c=q]');
+    if (nq && (hadFocus || CND.focusQ)) { CND.focusQ = false; nq.focus(); nq.setSelectionRange(nq.value.length, nq.value.length); }
+  }
+  // กล่องสูงไม่เกินที่ว่างเหนือช่องพิมพ์ในกรอบแชท (กรอบตัดส่วนที่ล้น — จอเตี้ย/หน้าต่างแคบ หัวกล่องกับปุ่มปิดจะหาย)
+  function cndFit() {
+    const box = document.querySelector('.cn-cnd'), pane = $('cn-pane'), wrap = $('cn-comp-wrap');
+    if (!box || !pane || !wrap) return;
+    const room = wrap.getBoundingClientRect().top - pane.getBoundingClientRect().top - 8;
+    box.style.maxHeight = Math.max(160, Math.min(420, room)) + 'px';
+  }
+  function paintCndList() {
+    const el = $('cn-cnd-ls'); if (!el) return;
+    if (CND.items === null) {
+      el.innerHTML = CND.err ? `<div class="em" style="color:var(--red)">${h(CND.err)}</div>` : `<div class="em">กำลังโหลด…</div>`;
+      return;
+    }
+    const list = cndFiltered();
+    el.innerHTML = list.length ? list.map(x => `<div class="it" data-id="${h(x.id)}">
+        <button type="button" class="pick" data-c="pick" title="ใส่ในช่องพิมพ์">${x.title ? `<b>${h(x.title)}</b>` : ''}<span>${h(x.text)}</span></button>
+        ${CND.canEdit ? `<button type="button" class="ib" data-c="edit" title="แก้">${ic('pencil', 15)}</button><button type="button" class="ib" data-c="del" title="ลบ">${ic('trash', 15)}</button>` : ''}</div>`).join('')
+      : `<div class="em">${CND.q.trim() ? 'ไม่พบข้อความที่ตรงกับคำค้น'
+          : (CND.canEdit ? 'ยังไม่มีข้อความสำเร็จรูป — กด "เพิ่มข้อความ" ด้านล่าง' : 'ยังไม่มีข้อความสำเร็จรูป — ให้แอดมินเพิ่มได้')}</div>`;
+  }
+  function cndClick(e) {
+    const t = e.target.closest('[data-c]'); if (!t || t.disabled) return;
+    const c = t.dataset.c, row = t.closest('[data-id]');
+    const it = row && (CND.items || []).find(x => x.id === row.dataset.id);
+    if (c === 'close') cndClose();
+    else if (c === 'pick' && it) cndPick(it);
+    else if (c === 'edit' && it) { CND.edit = { id: it.id, title: it.title || '', text: it.text }; paintCnd(); }
+    else if (c === 'add') { CND.edit = { id: '', title: '', text: '' }; paintCnd(); }
+    else if (c === 'back') { CND.edit = null; paintCnd(); }
+    else if (c === 'save') cndSave();
+    else if (c === 'del' && it) cndDel(it);
+  }
+  function cndPick(it) {
+    const ta = $('cn-text'); if (!ta) return;
+    ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + ' ' + it.text : it.text;
+    ta.dispatchEvent(new Event('input'));
+    cndClose();
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  async function cndSave() {
+    const b = $('cn-cnd'), e = CND.edit; if (!b || !e || CND.busy) return;
+    e.title = b.querySelector('[data-c=title]').value; e.text = b.querySelector('[data-c=text]').value;
+    if (!e.text.trim()) { toast('ยังไม่มีข้อความ'); return; }
+    CND.busy = true; paintCnd();
+    const d = await api('/connect/api/canned', { action: 'save', id: e.id, title: e.title, text: e.text });
+    CND.busy = false;
+    if (!d.ok) { toast(d.error || 'บันทึกไม่สำเร็จ', 4500); paintCnd(); return; }
+    CND.items = d.items || []; CND.edit = null;
+    toast(d.message || 'บันทึกแล้ว');
+    paintCnd();
+  }
+  async function cndDel(it) {
+    if (!confirm('ลบข้อความสำเร็จรูป "' + (it.title || it.text.slice(0, 30)) + '"? — ทุกคนจะไม่เห็นอันนี้อีก')) return;
+    const d = await api('/connect/api/canned', { action: 'delete', id: it.id });
+    if (!d.ok) { toast(d.error || 'ลบไม่สำเร็จ', 4500); return; }
+    CND.items = d.items || [];
+    toast(d.message || 'ลบแล้ว');
+    paintCnd();
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !CND.open) return;
+    cndClose(); const ta = $('cn-text'); if (ta) ta.focus();
+  });
+  // คลิกที่อื่น = ปิด (ยกเว้นกำลังเพิ่ม/แก้ — กันข้อความที่พิมพ์ค้างหาย)
+  document.addEventListener('mousedown', e => {
+    if (!CND.open || CND.edit || (e.target.closest && e.target.closest('#cn-cnd, #cn-cnd-btn'))) return;
+    cndClose();
+  });
+
+  // ★ 17 ต.ค.69 ส่งรูปหาลูกค้า (หน้าเว็บ) — ใช้ /connect/api/reply_image ตัวเดียวกับแอป (เซิร์ฟเวอร์ย่อรูป + ตัด EXIF/พิกัด GPS)
+  //   เลือกรูปแล้วโชว์ตัวอย่างก่อน กดส่งเอง · client_id เดิมทั้งรอบ = ส่งไม่ออกแล้วกดส่งอีกครั้ง ลูกค้าไม่ได้รูปเบิ้ล
+  let IMG = null;                                   // { id: แถวลูกค้า, file, url: objectURL, cid, busy }
+  const IMG_MAX_MB = 15;                            // ตรงกับ chatplus.MAX_IN_MB
+  const newCid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+  function dropImg() { if (IMG) { URL.revokeObjectURL(IMG.url); IMG = null; } paintImgP(); }
+  function pickImg(f) {
+    if (!S.chat || !$('cn-imgp')) return;
+    if (!/^image\//.test(f.type || '')) { toast('ส่งได้เฉพาะไฟล์รูป'); return; }
+    if (f.size > IMG_MAX_MB * 1048576) { toast('รูปใหญ่เกินไป (ไม่เกิน ' + IMG_MAX_MB + ' MB)', 4500); return; }
+    if (IMG && IMG.busy) { toast('รอรูปก่อนหน้าส่งเสร็จก่อน'); return; }
+    if (IMG) URL.revokeObjectURL(IMG.url);
+    IMG = { id: S.chat.row.id, file: f, url: URL.createObjectURL(f), cid: newCid(), busy: false };
+    const er = $('cn-err'); if (er) er.textContent = '';
+    paintImgP();
+  }
+  function paintImgP() {
+    const w = $('cn-imgp');
+    if (IMG && !IMG.busy && (!w || !S.chat || IMG.id !== S.chat.row.id)) { URL.revokeObjectURL(IMG.url); IMG = null; }   // เปลี่ยนแชท/ตอบไม่ได้แล้ว = ทิ้งรูปที่ค้าง
+    if (!w) return;
+    if (!IMG || IMG.id !== (S.chat && S.chat.row.id)) { w.innerHTML = ''; return; }
+    const b = IMG.busy ? ' disabled' : '';
+    w.innerHTML = `<div class="cn-imgp"><img src="${IMG.url}" alt="รูปที่จะส่ง">
+      <span class="nm">${h(IMG.file.name || 'รูปที่วาง')}${IMG.file.size ? ' · ' + fmtSize(IMG.file.size) : ''}</span>
+      <button class="btn sm" id="cn-img-x"${b}>ยกเลิก</button>
+      <button class="btn pri sm" id="cn-img-go"${b}>${ic('send')} ${IMG.busy ? 'กำลังส่ง…' : 'ส่งรูป'}</button></div>`;
+    $('cn-img-x').onclick = dropImg;
+    $('cn-img-go').onclick = sendImg;
+  }
+  // ลากไฟล์รูปมาวางตรงไหนก็ได้ในช่องแชท (ไม่งั้นพลาดนิดเดียว เบราว์เซอร์เปิดรูปทับหน้า Connect)
+  function bindDrop(on) {
+    const m = $('cn-msgs'); const el = m && m.parentElement; if (!el) return;
+    const isF = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    el.ondragover = on ? e => { if (!isF(e)) return; e.preventDefault(); m.classList.add('drop'); } : null;
+    el.ondragleave = on ? e => { if (!el.contains(e.relatedTarget)) m.classList.remove('drop'); } : null;
+    el.ondrop = on ? e => {
+      if (!isF(e)) return;
+      e.preventDefault(); m.classList.remove('drop');
+      const f = Array.from(e.dataTransfer.files || []).find(x => /^image\//.test(x.type));
+      if (f) pickImg(f); else toast('ส่งได้เฉพาะไฟล์รูป');
+    } : null;
+  }
+  async function sendImg() {
+    const p = IMG;
+    if (!p || p.busy || !S.chat || S.chat.row.id !== p.id) return;
+    if (BOOT.test && BOOT.test.as && !S.chat.row.sim
+        && !confirm('ลูกค้าคนนี้เป็น "ลูกค้าจริง" — รูปจะถึงเขาจริงในนาม ' + ME.name + ' ส่งไหม?')) return;
+    p.busy = true; paintImgP();
+    const er = $('cn-err'); if (er) er.textContent = '';
+    const fd = new FormData();
+    fd.append('id', p.id); fd.append('client_id', p.cid); fd.append('file', p.file, p.file.name || 'image.png');
+    let d;
+    try {
+      const r = await fetch('/connect/api/reply_image', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': csrf() } });
+      if (r.status === 401) { location.href = '/login/?next=' + encodeURIComponent('/connect/'); return; }
+      try { d = await r.json(); } catch (e) { d = { ok: false, error: 'ส่งรูปไม่สำเร็จ (' + r.status + ')' }; }
+    } catch (e) { d = { ok: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — กด "ส่งรูป" อีกครั้งได้ (ลูกค้าไม่ได้รูปซ้ำ)' }; }
+    p.busy = false;
+    if (!d.ok) {
+      if (IMG === p && $('cn-imgp')) { paintImgP(); const e2 = $('cn-err'); if (e2) e2.textContent = d.error || 'ส่งรูปไม่สำเร็จ'; }
+      else { if (IMG === p) dropImg(); toast(d.error || 'ส่งรูปไม่สำเร็จ', 4500); }
+      return;
+    }
+    if (IMG === p) dropImg();
+    if (S.chat && S.chat.row.id === p.id && !S.chat.messages.some(m => m.id === d.message.id)) {
+      S.chat.messages.push(d.message);
+      S.chat.row.awaiting = false;
+      paintHeader(); paintMsgs(false);
+    }
+    loadInbox(false);
   }
 
   async function send() {
     const ta = $('cn-text'); if (!ta || !S.chat) return;
-    const text = ta.value.trim(); if (!text) return;
+    const text = ta.value.trim(); if (!text) { if (IMG) sendImg(); return; }
     if (BOOT.test && BOOT.test.as && !S.chat.row.sim
         && !confirm('ลูกค้าคนนี้เป็น "ลูกค้าจริง" — ข้อความจะถึงเขาจริงในนาม ' + ME.name + ' ส่งไหม?')) return;
     const btn = $('cn-send'); btn.disabled = true; $('cn-err').textContent = '';
@@ -3143,6 +3454,7 @@
   function renderRail() {
     const c = S.counts || {};
     const cnt = { inbox: ADMIN ? (c.queue || 0) : ((c.queue || 0) + (c.mineWaiting || 0)), dist: (c.tocode || 0) + (c.parked || 0) + (c.pending || 0) + (c.buyroom || 0) };
+    if (ADMIN && c.comments != null) cnt.cmt = c.comments;
     $('lc-nav').innerHTML = rail().map(r => `<button class="lc-nb${S.panel === r.p ? ' on' : ''}" data-p="${r.p}" title="${h(r.sub || '')}">${ic(r.i)} ${h(r.l)}${
       cnt[r.p] != null ? `<span class="count${cnt[r.p] ? '' : ' z'}">${cnt[r.p]}</span>` : ''}</button>`).join('');
     $('lc-nav').querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
@@ -3174,6 +3486,7 @@
       if (prev !== 'dist') $('lc-page').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลด…</div>`;
       loadInbox(false);
     } else if (p === 'db') openDb();
+    else if (p === 'cmt') openCmt();
     else if (p === 'pipe') openPipe();
     else if (p === 'dash') openDash();
     else if (p === 'rules') openCfg();
@@ -3512,6 +3825,116 @@
   const DB_WHY = { code: 'crit', fwd: '', phone: 'warn', line: 'warn', book: 'brand' };
   const DB_LONG = new Set([10, 11, 18, 19, 23]);      // ADS · รถลูกค้าถาม · มากรอกชีต · PROFILE · ประวัติผ่อน = ช่องข้อความยาว
   let _dbT = null, _dbSeq = 0;
+  // ══════════════ ★ 17 ต.ค.69 หน้าคอมเมนต์ — รวมคอมเมนต์ Facebook · TikTok (รออนุมัติ) · YouTube ══════════════
+  //   ข้อมูลจาก /connect/api/comments (checkout/comments.py ดึงเป็นรอบ) · เปิดในแพลตฟอร์มเพื่อตอบ · กด "จัดการแล้ว" = ออกจากรายการรอตอบ
+  S.cm = { platform: '', status: 'wait', q: '', limit: 60, data: null };
+  let _cmSeq = 0, _cmT = null;
+  const CM_PF = { fb: ['Facebook', 'fb'], yt: ['YouTube', 'yt'], tt: ['TikTok', 'tiktok'] };
+  const CM_TABS = [['', 'ทั้งหมด'], ['fb', 'Facebook'], ['tt', 'TikTok'], ['yt', 'YouTube']];
+  async function openCmt(keep) {
+    const pg = $('lc-page');
+    // หัวหน้า (ตัวกรอง/ช่องค้น) วาดครั้งเดียวตอนเข้าหน้า — เปลี่ยนตัวกรองแล้ววาดแค่รายการ ไม่งั้นช่องค้นหลุดโฟกัสระหว่างพิมพ์
+    if (!$('lc-cm-rows')) { pg.innerHTML = cmShell(); bindCmShell(); }
+    const seq = ++_cmSeq;
+    if (!keep) $('lc-cm-rows').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลดคอมเมนต์…</div>`;
+    const q = new URLSearchParams({ platform: S.cm.platform, status: S.cm.status, q: S.cm.q, limit: S.cm.limit });
+    const d = await api('/connect/api/comments?' + q.toString());
+    if (seq !== _cmSeq || S.panel !== 'cmt') return;
+    S.cm.data = d;
+    if (d.ok && d.counts) { S.counts = Object.assign({}, S.counts, { comments: d.counts.all }); renderRail(); }
+    paintCmt();
+  }
+  function cmShell() {
+    return `<div class="lc-card">
+      <div class="lc-bh"><h2>คอมเมนต์</h2><span class="note" id="lc-cm-note"></span>
+        <button class="btn sm" id="lc-cm-sync" style="margin-left:auto" title="ดึงคอมเมนต์ใหม่เดี๋ยวนี้ ไม่ต้องรอรอบ">${ic('repeat', 14)} ดึงตอนนี้</button></div>
+      <div class="lc-dbf"><span class="lc-seg" id="lc-cm-pf"></span>
+        <select id="lc-cm-st" title="สถานะ"><option value="wait">รอตอบ</option><option value="all">ทั้งหมด</option><option value="done">ตอบแล้ว / จัดการแล้ว</option></select></div>
+      <div class="lc-dbtop" style="border-bottom:0"><label class="lc-dbs">${ic('list')}<input id="lc-cm-q" type="search" autocomplete="off" placeholder="ค้นข้อความ · ชื่อคนคอมเมนต์ · โพสต์/คลิป · เพจ/ช่อง" value="${h(S.cm.q)}"></label></div>
+      <div class="cm-src" id="lc-cm-src"></div>
+    </div>
+    <div class="lc-card"><div id="lc-cm-rows"></div></div>`;
+  }
+  function bindCmShell() {
+    $('lc-cm-st').value = S.cm.status;
+    $('lc-cm-st').onchange = () => { S.cm.status = $('lc-cm-st').value; S.cm.limit = 60; openCmt(); };
+    const qi = $('lc-cm-q');
+    qi.oninput = () => { clearTimeout(_cmT); _cmT = setTimeout(() => { S.cm.q = qi.value.trim(); S.cm.limit = 60; openCmt(); }, 450); };
+    $('lc-cm-sync').onclick = async () => {
+      const b = $('lc-cm-sync'); b.disabled = true;
+      const r = await api('/connect/api/comments', { action: 'sync' });
+      b.disabled = false;
+      toast(r.ok ? r.message : (r.error || 'ดึงไม่สำเร็จ'), 4500);
+      if (r.ok) { setTimeout(() => { if (S.panel === 'cmt') openCmt(true); }, 20000); setTimeout(() => { if (S.panel === 'cmt') openCmt(true); }, 60000); }
+    };
+  }
+  function cmSrcLine(key, name, s, every) {
+    if (!s) return '';
+    if (s.pending) return `<span><b>${name}</b> · ${h(s.note || 'รออนุมัติ')}</span>`;
+    if (!s.on) return `<span><b>${name}</b> · ยังไม่ได้เชื่อม</span>`;
+    if (!s.at) return `<span><b>${name}</b> · ยังไม่เคยดึง (ดึงเองทุก ${every} นาที)</span>`;
+    return `<span${s.ok === false ? ' class="bad"' : ''}><b>${name}</b> · ดึงล่าสุด ${h(fmtWhen(s.at))} · ทุก ${every} นาที${s.error ? ' · ' + h(s.error) : ''}</span>`;
+  }
+  function cmRow(r) {
+    const pf = CM_PF[r.platform] || ['อื่นๆ', 'other'];
+    const who = r.author || (r.platform === 'fb' ? 'ผู้ใช้ Facebook' : 'ไม่ทราบชื่อ');
+    const state = r.done
+      ? `<span class="tag" style="background:var(--bg3);color:var(--t2)">จัดการแล้ว${r.doneBy ? ' · ' + h(r.doneBy) : ''}</span>`
+      : (r.replied ? `<span class="tag" style="background:var(--green-bg);color:var(--green)">ตอบแล้ว</span>`
+                   : `<span class="tag" style="background:var(--amber-bg);color:var(--amber)">รอตอบ</span>`);
+    const title = r.postTitle || (r.platform === 'yt' ? 'คลิป YouTube' : 'โพสต์');
+    const post = (r.postUrl || r.thumb) ? `<a class="cm-post" href="${h(r.postUrl || r.url)}" target="_blank" rel="noopener" title="เปิด${h(r.platform === 'yt' ? 'คลิป' : 'โพสต์')}">${
+      r.thumb ? `<img src="${h(r.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span>${
+      r.isAd ? '<b class="cm-ad">โฆษณา</b> · ' : ''}${h(title)}</span></a>` : '';
+    const link = r.url || r.postUrl;
+    return `<div class="cm-row${r.done ? ' done' : ''}">${avHtml(who, r.authorPic)}<div class="cm-body">
+      <div class="cm-meta"><b>${h(who)}</b>${chTag(pf[1])}<span class="cm-acc" title="${h(r.account)}">${h(r.account)}</span>
+        <span title="${h(fmtFull(r.at))}">· ${h(fmtWhen(r.at))}</span>${state}</div>
+      <div class="cm-text">${h(r.text || '')}</div>
+      ${post}
+      <div class="cm-acts">${link ? `<a class="btn sm" href="${h(link)}" target="_blank" rel="noopener">เปิดใน ${pf[0]} ↗</a>` : ''}
+        <button class="btn sm" data-cmdone="${r.id}" data-on="${r.done ? 0 : 1}">${r.done ? 'ยกเลิก "จัดการแล้ว"' : ic('check', 13) + ' จัดการแล้ว'}</button>
+        ${r.likes ? `<span>ไลก์ ${r.likes}</span>` : ''}${r.replies ? `<span>คำตอบใต้คอมเมนต์ ${r.replies}</span>` : ''}</div>
+    </div></div>`;
+  }
+  function paintCmt() {
+    const d = S.cm.data || {};
+    const box = $('lc-cm-rows'); if (!box) return;
+    if (!d.ok) { box.innerHTML = `<div class="cn-empty" style="color:var(--red)">${h(d.error || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    const c = d.counts || {}, src = d.sources || {}, every = d.every || {};
+    $('lc-cm-pf').innerHTML = CM_TABS.map(([k, l]) => {
+      const n = k === '' ? c.all : c[k];
+      const pend = k === 'tt' && src.tt && src.tt.pending;
+      return `<button data-cmpf="${k}" class="${S.cm.platform === k ? 'on' : ''}">${h(l)}${pend ? ' · รออนุมัติ' : (n ? `<span class="n">${n}</span>` : '')}</button>`;
+    }).join('');
+    $('lc-cm-pf').querySelectorAll('[data-cmpf]').forEach(b => b.onclick = () => { S.cm.platform = b.dataset.cmpf; S.cm.limit = 60; openCmt(); });
+    $('lc-cm-note').textContent = `รอตอบ ${c.all || 0} · นับคอมเมนต์ ${d.waitDays || 7} วันล่าสุดที่เพจ/ช่องยังไม่ได้ตอบ`;
+    $('lc-cm-src').innerHTML = cmSrcLine('fb', 'Facebook', src.fb, every.fb || 10) + cmSrcLine('yt', 'YouTube', src.yt, every.yt || 15)
+      + cmSrcLine('tt', 'TikTok', src.tt, 0);
+    if (S.cm.platform === 'tt') {
+      box.innerHTML = `<div class="cm-tt"><b>TikTok — รออนุมัติ</b><br>${h((src.tt && src.tt.note) || 'รอ TikTok อนุมัติสิทธิ์อ่านคอมเมนต์')}<br>
+        <span style="font-size:12.5px;color:var(--t3)">สิทธิ์ที่ใช้ดึงยอดวิวอยู่ตอนนี้ (Login Kit) ไม่ให้อ่านคอมเมนต์ — ต้องได้สิทธิ์ของ TikTok API for Business ก่อน</span></div>`;
+      return;
+    }
+    const rows = d.rows || [];
+    if (!rows.length) {
+      const noSrc = !(src.fb && src.fb.on) && !(src.yt && src.yt.on);
+      box.innerHTML = `<div class="cn-empty">${noSrc ? 'ยังไม่ได้เชื่อม Facebook / YouTube กับระบบ'
+        : (S.cm.q ? 'ไม่พบคอมเมนต์ที่ตรงกับคำค้น'
+        : (S.cm.status === 'wait' ? `ไม่มีคอมเมนต์รอตอบใน ${d.waitDays || 7} วันล่าสุด` : 'ยังไม่มีคอมเมนต์ในช่วงนี้'))}</div>`;
+      return;
+    }
+    box.innerHTML = rows.map(cmRow).join('')
+      + (d.more ? `<div style="padding:12px;text-align:center"><button class="btn sm" id="lc-cm-more">ดูเพิ่ม</button></div>` : '');
+    if (d.more) $('lc-cm-more').onclick = () => { S.cm.limit += 60; openCmt(true); };
+    box.querySelectorAll('[data-cmdone]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const r = await api('/connect/api/comments', { action: 'done', id: +b.dataset.cmdone, on: b.dataset.on === '1' });
+      if (!r.ok) { b.disabled = false; toast(r.error || 'ทำไม่สำเร็จ'); return; }
+      openCmt(true);
+    });
+  }
+
   async function openDb(keep) {
     const pg = $('lc-page');
     if (!keep) { pg.innerHTML = dbShell(); S.db.limit = 150; }
@@ -3840,10 +4263,15 @@
   // ── ค้นหา / เลือกเซลล์ ──
   let _qT = null;
   $('cn-q').addEventListener('input', () => { clearTimeout(_qT); _qT = setTimeout(() => { S.q = $('cn-q').value.trim(); loadInbox(true); }, 350); });
-  $('cn-seller').addEventListener('change', () => { S.seller = +$('cn-seller').value || 0; renderQuick(); loadInbox(true); });
-  $('cn-src').addEventListener('change', () => { S.src = $('cn-src').value; renderQuick(); loadInbox(true); });
   $('cn-view').addEventListener('change', () => { $('cn-view').blur(); pickTab($('cn-view').value); });
-  $('cn-fbtn').addEventListener('click', () => { S.fltOpen = !S.fltOpen; renderFltPanel(); renderQuick(); });
+  $('cn-fsel').addEventListener('change', () => {
+    const el = $('cn-fsel'), v = el.value;
+    el.blur();
+    if (v === '_x') return;
+    S.f = v === 'aw' ? { awaiting: '1' } : {};
+    S.src = v === 'aw' ? '' : v;
+    renderFilter(); loadInbox(true);
+  });
 
   // ── นาฬิกาทุกวินาที (ไม่ยิงเซิร์ฟเวอร์) ──
   setInterval(() => {
@@ -3865,6 +4293,7 @@
 
   loadAlerts();
   setInterval(() => { if (!document.hidden) loadAlerts(); }, 30000);
+  setInterval(() => { if (!document.hidden && S.panel === 'cmt' && !(document.activeElement && document.activeElement.id === 'lc-cm-q')) openCmt(true); }, 60000);
   if (S.openId) showPane();
   setPanel(ADMIN && PANEL_PANE[BOOT.panel] && !S.openId ? BOOT.panel : 'inbox', true);
 })();

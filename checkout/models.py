@@ -1,6 +1,6 @@
 """
 ระบบเบิก-คืนรถส่วนกลาง (checkout/) — เฟส 1: โครงข้อมูล
-ดูสเปกเต็ม: docs/checkout_plan.md (+ ต้นฉบับ OXLET_CAR_CHECKOUT_SPEC.md)
+ดูคำอธิบายระบบใน CLAUDE.md หัวข้อ "ระบบเบิก-คืนรถ"
 
 - แยกเป็น app ระดับบน (ไม่ยัดใน cars/) เพราะเฟส 4 จะขยายไปตรวจ "ห้อง" ที่ไม่เกี่ยวกับรถ
   (เช็คชื่อเข้างาน / งานซ่อม-อู่นอก / ส่งมอบรถลูกค้า) ด้วยเครื่องตรวจตัวเดียว แค่เพิ่ม config
@@ -1235,3 +1235,47 @@ class ChatCall(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.at, self.get_result_display(), self.emp_name)
+
+
+class SocialComment(models.Model):
+    """**คอมเมนต์จากโซเชียล** (หน้า "คอมเมนต์" ใน Connect · 17 ต.ค.69) — 1 แถว = คอมเมนต์ระดับบนสุด 1 อัน
+
+    เจ้าของสั่ง *"เพิ่มหน้า Comment … รวมคอมเม้นจากทุกช่องทาง FB TT(รออนุมัติ) YT"*
+    ดึงเองเป็นรอบ ([comments.py](checkout/comments.py)) — Facebook ผ่าน `meta.get()` (ด่านแยกบริษัท) ·
+    YouTube ผ่าน API key ใบเดียวกับ youtube_sync · TikTok รออนุมัติสิทธิ์ (ยังไม่มีแถว)
+    คำตอบใต้คอมเมนต์ไม่เก็บเป็นแถว — เก็บแค่จำนวน + เพจ/ช่องเราตอบแล้วหรือยัง (`replied`)
+    """
+    FB, YT, TT = "fb", "yt", "tt"
+    PLATFORM_CHOICES = [(FB, "Facebook"), (YT, "YouTube"), (TT, "TikTok")]
+
+    platform = models.CharField("ช่องทาง", max_length=4, choices=PLATFORM_CHOICES, db_index=True)
+    ext_id = models.CharField("id คอมเมนต์ต้นทาง", max_length=120)
+    account_id = models.CharField("เพจ/ช่อง", max_length=64, db_index=True)
+    account_name = models.CharField("ชื่อเพจ/ช่อง", max_length=200, blank=True)
+    post_id = models.CharField("โพสต์/คลิป", max_length=120, blank=True, db_index=True)
+    post_title = models.CharField("โพสต์/คลิป (ตัดสั้น)", max_length=300, blank=True)
+    post_url = models.URLField("ลิงก์โพสต์", max_length=500, blank=True)
+    post_thumb = models.URLField("รูปโพสต์", max_length=1000, blank=True)
+    is_ad = models.BooleanField("เป็นโพสต์โฆษณา", default=False)
+    author_id = models.CharField("id คนคอมเมนต์", max_length=120, blank=True)
+    author_name = models.CharField("ชื่อคนคอมเมนต์", max_length=200, blank=True)
+    author_pic = models.URLField("รูปคนคอมเมนต์", max_length=1000, blank=True)
+    text = models.TextField("ข้อความ", blank=True)
+    url = models.URLField("ลิงก์คอมเมนต์", max_length=500, blank=True)
+    created_at = models.DateTimeField("คอมเมนต์เมื่อ", db_index=True)
+    like_count = models.IntegerField("ไลก์", default=0)
+    reply_count = models.IntegerField("คำตอบใต้คอมเมนต์", default=0)
+    replied = models.BooleanField("เพจ/ช่องเราตอบแล้ว", default=False, db_index=True)
+    replied_at = models.DateTimeField("ตอบเมื่อ", null=True, blank=True)
+    done_at = models.DateTimeField("กด \"จัดการแล้ว\" เมื่อ", null=True, blank=True, db_index=True)
+    done_by = models.CharField("จัดการแล้วโดย", max_length=80, blank=True)
+    fetched_at = models.DateTimeField("ดึงล่าสุด", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Connect — คอมเมนต์โซเชียล"
+        verbose_name_plural = "Connect — คอมเมนต์โซเชียล"
+        ordering = ["-created_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["platform", "ext_id"], name="uniq_social_comment")]
+
+    def __str__(self):
+        return "%s %s %s" % (self.platform, self.created_at, (self.text or "")[:40])

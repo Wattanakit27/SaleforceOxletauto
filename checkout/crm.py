@@ -285,6 +285,41 @@ def followups_json(o, limit: int = 12) -> list:
              "result": f.result, "late": bool(not f.done_at and f.due_at < now)} for f in rows]
 
 
+# ── ★ 17 ต.ค.69 แผงขวา "นัดดูรถ" — ข้อความในแชทที่พูดถึงวันมาดูรถ (เจ้าของสั่ง "เก็บข้อมูลจากแชท … ไม่ใช้ AI") ──
+#   อ่านด้วยตัวอ่านวันนัดชุดเดียวกับรายงานผลในห้องจ่ายเบอร์ (leadflow.parse_appt) · แค่ "เสนอ" ให้คนกดใส่ฟอร์มนัด ไม่บันทึกเอง
+HINT_DAYS = 3                             # ดูข้อความย้อนหลังกี่วัน
+HINT_MSGS = 40                            # ดูกี่ข้อความล่าสุด
+_VIEW_KW = re.compile(r"นัด|เข้ามา|มาดู|ดูรถ|เข้าเต็นท์|มาเต็นท์|มาที่ร้าน|จะมา|แวะมา|เข้าไปดู|ไปดู")
+# นัด "โทร" ไม่ใช่นัดดูรถ — ตัดออกก่อนหาคำนัด ("นัดโทรกลับพรุ่งนี้" ต้องไม่ถูกเสนอเป็นนัดดูรถ)
+_CALL_KW = re.compile(r"(?:นัด)?(?:โทร|ติดต่อ)\s*(?:กลับ|หา|มา|ไป)?")
+
+
+def appt_hint(o, msgs, now=None):
+    """ข้อความล่าสุดที่บอกวัน-เวลามาดูรถ (ยังไม่ถึงเวลา) → {at, text, mid, dir} · ไม่เจอ/มีนัดดูรถค้างอยู่แล้ว = None"""
+    now = now or timezone.now()
+    if o.followups.filter(done_at__isnull=True, kind=ChatFollowup.VIEWING).exists():
+        return None
+    from .leadflow import parse_appt
+    since = now - timedelta(days=HINT_DAYS)
+    for m in reversed((msgs or [])[-HINT_MSGS:]):
+        text = (m.get("text") or "").strip()
+        if not text or text.startswith("["):
+            continue
+        at = parse_datetime(m.get("at") or "")
+        if not at or at < since:
+            break
+        if not _VIEW_KW.search(_CALL_KW.sub(" ", text)):
+            continue
+        try:
+            dt = parse_appt(text, now=at)        # "พรุ่งนี้" นับจากวันที่ส่งข้อความ ไม่ใช่วันนี้
+        except Exception:
+            dt = None
+        if not dt or dt < now:
+            continue
+        return {"at": _iso(dt), "text": text[:160], "mid": m.get("id") or "", "dir": m.get("dir") or "in"}
+    return None
+
+
 def next_appt_map(ids) -> dict:
     """{chat_id: (kind, due_at)} — นัดที่ยังไม่ทำ ใกล้ที่สุด (โชว์ในรายชื่อ · query เดียวทั้งหน้า)"""
     out = {}

@@ -660,6 +660,62 @@ try:
     s_, d, _ = J(ADM, "/connect/api/config", {"pull_min": 3})
     ck("ตั้งค่าดึงคืนผิดผ่าน API = 400", s_ == 400, (s_, d))
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[17 ต.ค.69] แผงขวา \"นัดดูรถ\" — ข้อความในแชทที่พูดถึงวันมาดูรถ (crm.appt_hint · ไม่ใช้ AI)")
+    from datetime import datetime as _dt
+    from django.utils.dateparse import parse_datetime as _pd
+
+    def _m(text, ago_h, d="in", mid=None):
+        _N[0] += 1
+        return {"text": text, "at": C._iso(NOW - timedelta(hours=ago_h)), "dir": d, "id": mid or "l%d" % _N[0]}
+
+    def _at(ago_h, plus_days, hh, mm=0):
+        base = timezone.localtime(NOW - timedelta(hours=ago_h)).date() + timedelta(days=plus_days)
+        return timezone.make_aware(_dt(base.year, base.month, base.day, hh, mm))
+
+    o_hn = cust("ลูกค้านัด", owner=MAT, last_in=NOW - timedelta(hours=1))
+    m1 = _m("พรุ่งนี้ 10 โมงจะเข้ามาดูรถครับ", 1)
+    hint = crm.appt_hint(o_hn, [m1], now=NOW)
+    ck("ลูกค้าบอก \"พรุ่งนี้ 10 โมงจะเข้ามาดูรถ\" → เสนอวันนัด (พรุ่งนี้นับจากวันที่ส่ง)",
+       bool(hint) and _pd(hint["at"]) == _at(1, 1, 10) and hint["mid"] == m1["id"] and hint["dir"] == "in", hint)
+    ck("นัดโทรกลับ ≠ นัดดูรถ", crm.appt_hint(o_hn, [_m("นัดโทรกลับพรุ่งนี้บ่ายสองนะครับ", 1)], now=NOW) is None)
+    ck("วันนัดที่ผ่านไปแล้ว = ไม่เสนอ",
+       crm.appt_hint(o_hn, [_m("พรุ่งนี้ 10 โมงจะเข้ามาดูรถ", 50)], now=NOW) is None)
+    ck("ข้อความเก่ากว่า %d วัน = ไม่ดู" % crm.HINT_DAYS,
+       crm.appt_hint(o_hn, [_m("วันที่ 30/12 จะเข้ามาดูรถ", 24 * (crm.HINT_DAYS + 1))], now=NOW) is None)
+    ck("เลขเวลาลอยๆ ไม่มีคำนัด = ไม่เสนอ", crm.appt_hint(o_hn, [_m("ราคา 10.30 แสนใช่ไหม", 1)], now=NOW) is None)
+    ck("ข้อความที่ไม่ใช่ตัวอักษร ([รูป]) = ข้าม", crm.appt_hint(o_hn, [_m("[รูป] พรุ่งนี้จะมา", 1)], now=NOW) is None)
+    m_old, m_new = _m("เสาร์ 10 โมงจะมาดูรถ", 5), _m("ขอเปลี่ยนเป็นพรุ่งนี้บ่ายสองจะเข้ามาครับ", 1)
+    hint = crm.appt_hint(o_hn, [m_old, m_new], now=NOW)
+    ck("หลายข้อความ = ใช้ข้อความล่าสุด (ลูกค้าเปลี่ยนวัน)", bool(hint) and hint["mid"] == m_new["id"]
+       and _pd(hint["at"]) == _at(1, 1, 14), hint)
+    m_out = _m("นัดลูกค้าเข้ามาดูรถพรุ่งนี้ 11:00 นะครับ", 1, d="out")
+    hint = crm.appt_hint(o_hn, [m_out], now=NOW)
+    ck("เราพิมพ์ยืนยันนัดเอง → เสนอได้ (บอกว่าเป็นข้อความฝั่งเรา)", bool(hint) and hint["dir"] == "out"
+       and _pd(hint["at"]) == _at(1, 1, 11), hint)
+    ChatFollowup.objects.create(chat=o_hn, kind=ChatFollowup.VIEWING, due_at=NOW + timedelta(days=2), by_name="มัท")
+    ck("มีนัดดูรถค้างอยู่แล้ว = ไม่เสนอซ้ำ", crm.appt_hint(o_hn, [m1], now=NOW) is None)
+
+    # ผ่าน API จริง — เปิดแชทแล้วได้ crm.apptHint · บันทึกนัดดูรถแล้วหาย
+    o_ha = cust("ลูกค้านัดผ่านเว็บ", owner=MAT, last_in=NOW - timedelta(minutes=30), phone="0822223333")
+    GroupChat.objects.create(chat_type="user", message_id="hint-1", sender_id=o_ha.profile.user_id, direction="in",
+                             msg_type="text", text="สวัสดีครับ สนใจ City", sent_at=NOW - timedelta(hours=2))
+    GroupChat.objects.create(chat_type="user", message_id="hint-2", sender_id=o_ha.profile.user_id, direction="in",
+                             msg_type="text", text="พรุ่งนี้บ่ายสองจะแวะมาดูรถที่เต็นท์นะครับ",
+                             sent_at=NOW - timedelta(minutes=30))
+    s_, d, raw = J(SM, "/connect/api/chat?id=%d" % o_ha.id)
+    H = ((d.get("crm") or {}).get("apptHint") or {})
+    mids = [m.get("id") for m in d.get("messages") or []]
+    ck("เปิดแชทผ่าน API → ได้ apptHint ชี้ข้อความต้นทางที่มีอยู่ในแชท · ไม่มี LINE user id หลุด",
+       s_ == 200 and H.get("mid") in mids and _pd(H.get("at", "")) == _at(0.5, 1, 14) and not leak.search(raw), (s_, H))
+    s_, d, _ = J(SB, "/connect/api/chat?id=%d" % o_ha.id)
+    ck("เซลล์ที่ไม่ใช่เจ้าของ ไม่ได้ข้อมูลนัด/ข้อความ (403)", s_ == 403 and "crm" not in d, s_)
+    s_, d, _ = J(SM, "/connect/api/crm", {"action": "followup", "id": o_ha.id, "kind": "viewing",
+                                         "due": H.get("at", "")[:16], "note": "มาดู City"})
+    ck("บันทึกนัดดูรถจากค่าที่เสนอได้ → ขั้นเป็นนัดดูรถ", s_ == 200 and d["crm"]["extra"]["stage"] == "viewing", (s_, d))
+    s_, d, _ = J(SM, "/connect/api/chat?id=%d" % o_ha.id)
+    ck("มีนัดดูรถแล้ว → ไม่เสนอซ้ำ", s_ == 200 and not d["crm"].get("apptHint"), d.get("crm", {}).get("apptHint"))
+
 finally:
     _runner.teardown_databases(_old)
     shutil.rmtree(MEDIA_TMP, ignore_errors=True)

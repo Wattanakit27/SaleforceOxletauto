@@ -8,7 +8,7 @@ Django web app แสดง dashboard ยอดขาย/ลีด/ไลฟ์ 
 **Google Sheets** (ไม่มี local DB — `DATABASES = {}` ใน [oxlet/settings.py](oxlet/settings.py))
 UI เป็น Thai-language, timezone Asia/Bangkok
 
-**Deploy: Vercel** (`@vercel/python` builder via [vercel.json](vercel.json))
+**Deploy: VPS Hostinger** (`srv1793506` · gunicorn + nginx · ดู [deploy/DEPLOY.md](deploy/DEPLOY.md)) — _เดิมอยู่บน Vercel ถึง มิ.ย.69 · ลบ vercel.json แล้ว 16 ต.ค.69_
 
 ## Stack
 
@@ -27,7 +27,6 @@ UI เป็น Thai-language, timezone Asia/Bangkok
 
 ```
 manage.py
-vercel.json              # Vercel build + cron config
 .env                     # secrets — gitignored (ไม่ commit) · local เท่านั้น + Vercel env
 oxlet/
   settings.py            # config, env vars, ALLOWED_HOSTS, WhiteNoise, session
@@ -52,7 +51,6 @@ dashboard/
     magic_link.html      # /u/<token>/ — set cookie แล้ว redirect ไป /dashboard/
     seller.html          # /s/<token>/ — หน้าส่วนตัวของเซลล์ (filter+charts+KPI+lead detail modal + ฟอร์ม finance/loan + สแกนเอกสาร)
   static/dashboard/      # CSS + image (โลโก้บริษัท)
-README.md                # เอกสารประกอบ (overview)
 ```
 
 ## รันโปรเจกต์ (Dev)
@@ -114,7 +112,8 @@ python manage.py runserver
 | `/checkout/api/customers` | `api_customers` | **admin/ผู้บริหาร** GET: **แชทลูกค้าที่ทักเข้า LINE OA** — ไม่ใส่อะไร = รายชื่อลูกค้า (ชื่อ · LINE id · จำนวนข้อความ · ทักครั้งแรก/ล่าสุด · เข้ามาทางบัญชีไหน) · `?q=` ค้นหาชื่อ · `?user_id=` = บทสนทนาย้อนหลังของคนนั้น · **ซ่อน LINE id ของพนักงาน** (`LineProfile.is_employee`) แต่โชว์ของลูกค้า (เจ้าของขอไว้ทักกลับ) |
 | `/checkout/api/reply` | `api_reply` | **admin/ผู้บริหาร** POST `{user_id, text}`: **ตอบแชทลูกค้า** — ส่งผ่าน LINE push ด้วย token ของบัญชี OA ที่ลูกค้าคุยอยู่ + บันทึกลง `GroupChat` เป็น `direction=out` พร้อมชื่อคนตอบ · **ส่งสำเร็จเท่านั้นถึงบันทึก** (ดู section "ตอบแชทลูกค้า") |
 | `/connect/` | `connect_views.page` | **หน้า Connect — แชทลูกค้า LINE OA รวมที่เดียว** (3 ต.ค.69 · **11 ต.ค.69 หน้าตาใหม่ "ศูนย์ควบคุมลีด"** · `?p=dist\|db\|pipe\|dash\|rules` เปิดหน้านั้น · `?classic=1` = หน้าเดิม) · แอดมิน/ผู้บริหาร = เห็นทุกแชท + โอน/ปล่อยคืนคิว + ตั้งค่า · เซลล์ = เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ + คิวรอรับ (เฉพาะวันเวรทีม) · คนงาน = 403 · ไม่ login → `/login/?next=/connect/` · `?id=` เปิดแชทนั้นเลย · `?embed=1` = ฝังในแท็บแดชบอร์ด · ดู section "Connect" |
-| `/connect/api/inbox` · `chat` · `claim` · `reply` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `assign_lead {id, park}` = "รับ lead จากแชทนี้แล้ว" (ส่งเข้าห้องพัก · 11 ต.ค.69) · `assign_lead {id, kind:"buy"|"sell"}` = ตั้งเป็นลีดรับซื้อรถ/ลีดขายรถ (11 ต.ค.69) · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
+| `/connect/api/comments` | `connect_views.api_comments` | **แอดมิน/ผู้บริหาร** (17 ต.ค.69 · หน้า "คอมเมนต์" ใน Connect · `checkout/comments.py`) — GET `?platform=fb\|yt\|tt&status=wait\|all\|done&q=&limit=` = คอมเมนต์ Facebook (โพสต์เพจ+โฆษณา) · YouTube · TikTok รออนุมัติ + `counts` (รอตอบ 7 วัน) + `sources` (ดึงล่าสุด/พัง) · POST `{action:"done", id, on}` = จัดการแล้ว · `{action:"sync"}` = ดึงเดี๋ยวนี้ (ห่าง ≥2 นาที · 429) · เซลล์ 403 · ดู section "หน้าคอมเมนต์" |
+| `/connect/api/inbox` · `chat` · `claim` · `reply` · `reply_image` · `canned` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `assign_lead {id, park}` = "รับ lead จากแชทนี้แล้ว" (ส่งเข้าห้องพัก · 11 ต.ค.69) · `assign_lead {id, kind:"buy"|"sell"}` = ตั้งเป็นลีดรับซื้อรถ/ลีดขายรถ (11 ต.ค.69) · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -1533,7 +1532,7 @@ sender_id)` ≠ จำนวนคน**
 - **★ 11 ต.ค.69 รอบ 6 — เจ้าของ "กรอบแดงซ้ำซ้อนกัน ลดอันล่างออก"** (แถบเมนูด้านบน กับหัวรายชื่อ รอรับ/มีเจ้าของ/ทั้งหมด
   ที่เป็นแถบปุ่มมีตัวเลขเหมือนกัน · "กล่องแชทรวม 202" = "รอรับ 202")
   · **หัวรายชื่อเหลือแถวเดียว** (`#cn-tools`): **มุมมองเป็น dropdown** `#cn-view` (ตัวเลขอยู่ในชื่อตัวเลือก ·
-    ไม่วาดทับตอนกำลังเปิดเลือก — รายชื่อรีเฟรชทุก 8 วิ) + ค้นหา + ปุ่ม **"ตัวกรอง"** `#cn-fbtn`
+    ไม่วาดทับตอนกำลังเปิดเลือก — รายชื่อรีเฟรชทุก 8 วิ) + ค้นหา + ปุ่ม **"ตัวกรอง"** `#cn-fbtn` (★ 17 ต.ค.69 เป็น dropdown `#cn-fsel` แล้ว — ดูด้านล่าง)
   · ช่องทาง/เซลล์/ปุ่มลัด 7 ตัว/ตัวกรองเพิ่ม ย้ายเข้ากล่อง `#cn-fbox` ที่กางจากปุ่มนั้น (`S.fltOpen`)
   · **กรองอยู่ = ปุ่มเป็นสีม่วง + นับจำนวน + บรรทัด "กรองอยู่: … ล้าง"** (`#cn-active` · `activeFilters()`) — ตัวกรองที่ซ่อนอยู่ต้องเห็นเสมอ
     ไม่งั้นรายชื่อหายแล้วไม่มีใครรู้ว่าเพราะกรอง · "ล้าง" ล้างทั้ง S.f + ช่องทาง + เซลล์ (`clearFilters()`)
@@ -1544,6 +1543,12 @@ sender_id)` ≠ จำนวนคน**
     (ลูกค้า 2,314 · ข้อความ 33k): คำขอรายชื่อปกติ ~0.1 วิ แต่ **คำขอแรกของแต่ละ worker หลังรีสตาร์ท 2–3 วิ** · 4 ต้นเหตุ:
   1. **`scan_contacts` (เก็บตกเบอร์/ไอดีจากแชทเก่า) จำแค่ในหน่วยความจำ + ทำในคำขอรายชื่อ** → deploy ทีไร ทุก worker (5 ตัว)
      อ่านแชท 150 ห้องทีละห้องก่อนตอบ (prod เข้าเงื่อนไข **983 ห้อง** และไม่เคยไปถึงแถวที่ 151) · แก้: จำใน KV
+  · **★ 17 ต.ค.69 เจ้าของ "ตัวกรองเยอะไป เหลือแค่นี้พอ" แล้ว "ตัวกรองเป็น Drop Down ดีกว่า"** → ปุ่ม "ตัวกรอง" + กล่อง `#cn-fbox` + บรรทัด `#cn-active`
+    **เลิกแล้ว** แทนด้วย **dropdown `#cn-fsel` ตัวเดียว 5 ตัวเลือก (เลือกได้ทีละอย่าง)**: รวมทุกช่องทาง · Facebook · LINE@ · TikTok (→ `src`) ·
+    รอตอบกลับ (→ `awaiting=1` ทุกช่องทาง) · กรองอยู่ = dropdown สีม่วง · `FLT_OPTS`/`fltValue()`/`renderFilter()`
+    · เอาออก: ปุ่มลัด 6 ตัวที่เหลือ · แผงขั้น/ความร้อน/เหตุผล/รุ่น/งบ/วันที่ · dropdown เลือกเซลล์ (เซิร์ฟเวอร์ยังรับตัวกรองเดิมทุกตัว — แอป/กระดิ่งใช้ได้ต่อ)
+    · TikTok = ยังไม่มีแชท TikTok ใน Connect → รายชื่อว่างพร้อมบอกเหตุผล · รายชื่อว่างเพราะตัวกรอง = มีปุ่ม "ล้างตัวกรอง"
+    · **กระดิ่งตั้งตัวกรองอื่น (เงียบ N+ วัน / รถใหม่ตรง) = dropdown มีตัวเลือกที่ 6 ชื่อตัวกรองนั้น** (`_x` · ห้ามกรองแบบมองไม่เห็น) · เลือกอย่างอื่น = ล้างทิ้ง
      **`connect_cscan`** (`{chat id: เวลาข้อความล่าสุดที่สแกน}` · ตัดแถวที่ครบแล้วทิ้ง) + **`scan_contacts_bg()`** thread แยก +
      Postgres advisory lock `7_406_063` (worker เดียวสแกนทีละรอบ) · ดูผู้สมัคร 2,000 แถว (id+เวลา) แล้วทำทีละ 150 ที่ยังไม่เคยสแกน
   2. **`checkout_groupchat` ไม่มี index ที่ `sender_id`** → เปิดแชท/รีเฟรช 6 วิ/เก็บตก = อ่านทั้งตาราง 33k แถวทุกครั้ง
@@ -2074,7 +2079,7 @@ sender_id)` ≠ จำนวนคน**
     ทุกหน้าไม่มี JS error · ไม่ล้นจอ 1590/1180(ฝัง)/390
 
 - **★★★ 11 ต.ค.69 (รอบ 3) — หน้ารวมแชท (Chat Inbox): ขั้นของลีด · นัด · บันทึกการโทร · Run Auto · แจ้งเตือน · AI สรุป · วิเคราะห์**
-  ([crm.py](checkout/crm.py) · checkout migration **0035** · เว็บ [connect.html](checkout/templates/checkout/connect.html) + แอป [mobile/](mobile/))
+  ([crm.py](checkout/crm.py) · checkout migration **0035** · เว็บ [connect.html](checkout/templates/checkout/connect.html) + แอปมือถือ (โปรเจกต์แยก `C:\Users\watta\OneDrive\Desktop\Project OXLETAUTO\OxletautoMobile`))
   เจ้าของส่งสเปก 10 ข้อ ("รวมแชททุกช่องทาง … ปุ่มลัด") ถามว่าครบไหม แล้วสั่ง *"ทำหน้าเว็บและ Mobile App ออกมาเลย ใช้ฐานข้อมูลจากที่เรามี"*
   · **ของเดิมใช้ต่อทั้งหมด** (คิว/รับ/โอน/นาฬิกาตอบ/ข้อมูลลีด/จ่ายเบอร์/ไม้ 2/สมุดเบอร์) — ไฟล์ใหม่เพิ่มแค่ที่ยังไม่มี
   - **ขั้นของลีด** (`ChatLead.stage`) ลีดใหม่ → รอติดต่อ → ติดต่อแล้ว → นัดดูรถ → ยื่นไฟแนนซ์ → ปิดการขาย / ไม่สนใจ-ลูกค้าผี · คืนกองกลาง
@@ -2138,7 +2143,7 @@ sender_id)` ≠ จำนวนคน**
     ไม่ล้นจอ) · แอป `tsc` + `expo lint` + bundle iOS ผ่าน
 
 **⚠️ ต้องทำก่อนใช้จริง (ระบบพร้อม แต่ยังเปิดใช้จริงไม่ได้จนกว่าจะทำครบ)**
-1. `migrate` (checkout **0025** · เช็คชื่อในแอป = **0037** · งานจ่ายเบอร์ = **0034** · ลีดภายนอกจากห้องพัก Lead = **0029** · Facebook ใน Connect = **0030** · ส่งใบเข้ากลุ่มจ่ายเบอร์ = **0031** · สถานะลูกค้า (จับ keyword) = **0032** · ยังไม่อ่าน = **0033** · หน้ารวมแชท (ขั้น/นัด/โทร) = **0035** · index แชทลูกค้า (sender_id) = **0036**)
+1. `migrate` (checkout **0025** · เช็คชื่อในแอป = **0037** · งานจ่ายเบอร์ = **0034** · ลีดภายนอกจากห้องพัก Lead = **0029** · Facebook ใน Connect = **0030** · ส่งใบเข้ากลุ่มจ่ายเบอร์ = **0031** · สถานะลูกค้า (จับ keyword) = **0032** · ยังไม่อ่าน = **0033** · หน้ารวมแชท (ขั้น/นัด/โทร) = **0035** · index แชทลูกค้า (sender_id) = **0036** · หน้าคอมเมนต์ = **0038**)
 2. **`manage.py checkout_config --customer-chat on`** — ไม่เปิด = ลูกค้าที่ทักเข้ามาไม่เข้า Connect (หน้าเว็บขึ้นแถบแดงบอก)
 3. **`manage.py checkout_config --reply on`** — ยังล็อกไว้ตามที่เจ้าของสั่ง ("อย่าเพิ่งส่งข้อความหาลูกค้า")
    ระหว่างล็อก ดู/รับ/โอนได้ แต่กดส่งไม่ได้ (หน้าเว็บบอกเหตุผล)
@@ -2154,7 +2159,7 @@ sender_id)` ≠ จำนวนคน**
   "ส่งออกจากบอทตัวส่งบัญชีเดียว" (ต้องเป็นแบบนี้ ไม่งั้นส่งไม่ถึงลูกค้า)
 - แชทลูกค้า + แถว Connect **หายเมื่อลูกค้าเงียบเกิน 60 วัน** (`CUSTOMER_CHAT_KEEP_DAYS`) — ถ้าอยากเก็บแชทเซลล์ไว้นานกว่านี้
   ต้องตัดสินใจเรื่อง PDPA ก่อน
-- ยังไม่ผูกลูกค้า Connect กับลีดในชีต / ยังไม่มีข้อความสำเร็จรูป / ยังไม่มีแชท Facebook ในหน้านี้
+- ยังไม่ผูกลูกค้า Connect กับลีดในชีต / ยังไม่มีข้อความสำเร็จรูป (★ 17 ต.ค.69 มีแล้ว) / ยังไม่มีแชท Facebook ในหน้านี้
 
 **★ สถานะจริงบน prod (3 ต.ค.69 22:00)**: deploy `f652db2` + migrate 0025 + restart 21:58 → ลูกค้าคนแรกเข้าคิวเอง 21:59
 · เปิด `store_customer_chat` + `reply_customer` แล้ว (= **ตอบลูกค้าจริงได้แล้ว**) · ยังไม่มี `connect_config` (ใช้ค่าตั้งต้น)
@@ -2192,6 +2197,37 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
 - **Facebook** ลิงก์ fbcdn มีลายเซ็นหมดอายุ → หมดอายุแล้วขอลิงก์ใหม่ผ่านห้องสนทนาของเพจ (`meta.get` → ผ่านด่านเพจบริษัทอื่น)
   · **โหลดเฉพาะ https บนโดเมน FB** (`FB_HOSTS`) · redirect ตามเฉพาะไปโดเมน FB (ไม่ตาม = ไม่ยิงออกนอก) · webhook เก็บ `extra.attachments[].url` แล้ว
 - **★ ที่เก็บ = `CHAT_MEDIA_ROOT` (ค่าตั้งต้น `private_media/chat/{line,fb}/<pk แถวแชท>-<ลำดับ>.<นามสกุล>`) นอก `/media/`**
+### 💬 หน้า "คอมเมนต์" (Connect) — รวมคอมเมนต์ Facebook · TikTok (รออนุมัติ) · YouTube — [comments.py](checkout/comments.py) · 17 ต.ค.69
+เจ้าของสั่ง *"ระหว่าง กล่องแชทรวม กับ ห้องพัก Lead อยากให้เพิ่มหน้า Comment … รวมคอมเม้นจากทุกช่องทาง FB TT(รออนุมัติ) YT"*
+- **เมนูซ้ายของ Connect (แอดมินเท่านั้น)** ระหว่าง กล่องแชทรวม กับ ห้องพัก Lead · `?p=cmt` เปิดตรง · ป้ายตัวเลข = รอตอบ 7 วัน
+  (`inbox` ของแอดมินส่ง `counts.comments` = `comments.wait_count()`) · รีเฟรชเองทุก 60 วิตอนเปิดหน้านี้
+- **ตาราง `checkout_socialcomment`** (`SocialComment` · checkout migration **0038**) — 1 แถว/คอมเมนต์ระดับบนสุด · unique (platform, ext_id) ·
+  คำตอบใต้คอมเมนต์เก็บแค่ `reply_count` + **`replied` = เพจ/ช่องเราตอบแล้ว** (+ `replied_at`) · `done_at/done_by` = กด "จัดการแล้ว" (รอบดึงไม่ทับ)
+  · **"รอตอบ" = ยังไม่ replied + ยังไม่จัดการแล้ว + ไม่เก่ากว่า `WAIT_DAYS`=7 วัน** · เก่ากว่า `KEEP_DAYS`=90 วันลบเองวันละครั้ง
+- **ดึงเองเป็นรอบ** (`connect.tick` → `comments.tick_bg()` · thread แยก · ล็อก KV `comments_sync_lock` ค้างเกิน 15 นาทีรับช่วงได้ · สถานะ KV `comments_sync`)
+  · **Facebook ทุก `FB_EVERY_MIN`=10 นาที** — `/<page>/feed` (โพสต์ย้อน `POST_WINDOW_DAYS`=60 วัน · 4 หน้า×25) + **`/<page>/ads_posts`**
+    (`include_inline_create=true` · 2 หน้า · คอมเมนต์ใต้โฆษณาไม่อยู่ใน feed) · คอมเมนต์ 50 ล่าสุด/โพสต์ + คำตอบ 25 อัน (ดูว่าเพจตอบแล้วไหม)
+    · **ผ่าน `meta.get/paged` เท่านั้น** (ด่านแยกบริษัท) · page token · โควต้า Meta ≥ `fb_sync.STOP_USAGE_PCT` = ข้ามรอบ (เก็บไว้ให้แชท Messenger)
+    · คอมเมนต์ของเพจเองไม่เก็บ · รูป/สติกเกอร์ไม่มีข้อความ = "[รูป]" ฯลฯ · ⚠️ **ชื่อคนคอมเมนต์ Facebook มักไม่มา** (FB ปิดตั้งแต่ 2018) → หน้าเว็บขึ้น "ผู้ใช้ Facebook"
+    · รูปโพสต์เป็นลิงก์มีอายุ → อัปเดตให้วันละครั้ง (ไม่เขียนทุกรอบ)
+  · **YouTube ทุก `YT_EVERY_MIN`=15 นาที** — `commentThreads?allThreadsRelatedToChannelId=<UC…>&order=time` (1 หน่วย/หน้า · ช่องละ ≤2 หน้า×100)
+    · ช่องจากตาราง `dash_youtube_channel_snapshot` 7 วันล่าสุด (ไม่เปลืองโควต้า · ยังไม่มี = `resolve_channel` ตาม `YOUTUBE_CHANNELS`)
+    · ชื่อคลิปจาก `dash_youtube_video_snapshot` · คอมเมนต์ของช่องเองไม่เก็บ · ตอบแล้ว = มีคำตอบจากช่องเราใน `replies` (YouTube ส่งมาบางส่วน)
+    · ⚠️ API key ล็อก IP ไว้ที่ VPS — ในเครื่อง dev ได้ 403 · เห็นเฉพาะคอมเมนต์สาธารณะ (ที่ YouTube กักไว้รอตรวจไม่มา)
+  · **TikTok = รออนุมัติ** (Login Kit ที่ดึงยอดวิวไม่ให้คอมเมนต์ · ต้องได้ TikTok API for Business ก่อน) — แท็บโชว์ข้อความอธิบาย ไม่มีแถว
+  · ช่องหนึ่งพังไม่ลากช่องอื่น · เพจ/ช่องไหนพังขึ้นในบรรทัดสถานะของหน้า
+- **ปุ่ม "ดึงตอนนี้"** (`request_sync` · ห่างกัน ≥ `MANUAL_GAP_SEC`=120 วิ · กำลังดึงอยู่ = ปฏิเสธ) · **"จัดการแล้ว"** = ออกจากรายการรอตอบ (ยกเลิกได้)
+  · **ตอบคอมเมนต์จากหน้านี้ยังไม่ได้** — ปุ่ม "เปิดใน Facebook/YouTube ↗" ไปตอบที่แพลตฟอร์ม · ตอบแล้วรอบถัดไปเห็นว่า "ตอบแล้ว" เอง
+- **หน้าเว็บ** (`openCmt`/`paintCmt`/`cmRow` ใน connect.html): แท็บ ทั้งหมด/Facebook/TikTok·รออนุมัติ/YouTube (ตัวเลขรอตอบ) · สถานะ รอตอบ/ทั้งหมด/ตอบแล้ว ·
+  ช่องค้น (ข้อความ/ชื่อ/โพสต์/เพจ) · บรรทัดสถานะการดึงต่อช่องทาง · การ์ดคอมเมนต์ (รูปคน · ป้ายช่องทาง · เพจ/ช่อง · เวลา · ข้อความ · โพสต์/คลิป+รูป · ป้ายโฆษณา)
+  · **หัวหน้า (ตัวกรอง/ช่องค้น) วาดครั้งเดียวตอนเข้าหน้า** เปลี่ยนตัวกรองวาดแค่รายการ (เคยวาดทั้งหน้า = ช่องค้นหลุดโฟกัสระหว่างพิมพ์)
+- **ไม่มีอะไรส่งออกนอกระบบ** (อ่านอย่างเดียว) · `db_inventory.TABLES` มีคำอธิบายแล้ว (pii)
+- **Deploy**: `migrate` (checkout **0038**) + restart · รอบแรกเริ่มเองภายในนาทีถัดไป (ต้องมี `META_*` และ/หรือ `YOUTUBE_*` ตั้งอยู่แล้ว)
+- **เทสต์**: `python scripts/test_comments.py` (52 ข้อ · ปลอมที่ `requests` = Graph/YouTube) — ลองแกล้งไม่ข้ามคอมเมนต์ของเพจ/ไม่อัปเดตแถว/ไม่เช็คโควต้า แล้วล้ม 10 ข้อ
+  · ตรวจ UI ด้วยเบราว์เซอร์จริง (เมนู/ป้ายตัวเลข · จัดการแล้ว/ยกเลิก · กรอง · ค้นไม่หลุดโฟกัส · แท็บ TikTok · จอ 1280/375 ไม่ล้น · ไม่มี JS error)
+- **ยังไม่ได้ทำ**: ตอบคอมเมนต์จากหน้านี้ (FB ทำได้ด้วยสิทธิ์ที่มี · YouTube ต้อง OAuth รายช่อง) · ส่งข้อความส่วนตัวหาคนคอมเมนต์ FB (private reply) ·
+  รับคอมเมนต์ FB แบบทันทีผ่าน webhook `feed` (ต้องผูกสิทธิ์ในแอป Meta) · จับเบอร์/ความสนใจจากคอมเมนต์เข้าห้องพัก Lead · TikTok
+
   — nginx เสิร์ฟ `/media/` ให้ใครก็ได้ที่รู้ลิงก์ · ลูกค้าส่งบัตรประชาชน/สลิป/รายงานเครดิต → **เปิดได้ทางเดียวคือ `/connect/api/media`**
   ซึ่งเช็คสิทธิ์แบบเดียวกับเปิดแชท (`_access`) · คิวรอรับ (preview) เปิดได้เฉพาะไฟล์ในข้อความที่ลูกค้าส่งตั้งแต่เริ่มรอบ ·
   ข้อความต้องเป็นของลูกค้ารายนั้นจริง (LINE `sender_id` · FB `thread_id`) · แชทกลุ่มไม่เปิดผ่านทางนี้
@@ -2391,7 +2427,7 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
   · **ใช้ค่าใหม่ / คงค่าเดิม** = `POST /connect/api/lead {id, field, value}` ตามปกติ → ช่องเป็น "คน" + `save_lead_field` ล้างกล่องของช่องนั้น
   · **"ยังไม่รู้"** = `{id, field, dismiss: true}` → `dismiss_suggestion` จดที่ `auto["_sugg_no"]` (ไม่ถามค่านั้นซ้ำ · ค่าในช่องไม่เปลี่ยน · ระบบยังเปลี่ยนเป็นรุ่นจริงได้ตามกติกาเดิม)
   · `capture_profile` (ข้อความเข้า) save แบบ `update_fields` กรองเฉพาะช่องจริง (`_sugg` ไม่ใช่คอลัมน์) · `lead_json.sugg` ไม่ส่งช่องที่คนแก้แล้ว
-- **แอปมือถือ** ([mobile/src/lib/kw.tsx](mobile/src/lib/kw.tsx) + `chat/[id].tsx`): ไฮไลต์คำในบับเบิล (แตะ = เปิดแผงชี้ช่องนั้น) ·
+- **แอปมือถือ** (`src/lib/kw.tsx` + `chat/[id].tsx`): ไฮไลต์คำในบับเบิล (แตะ = เปิดแผงชี้ช่องนั้น) ·
   แถบ "ระบบจับได้ N ช่อง · รอยืนยัน M · พร้อมจ่ายเบอร์ x/5" แตะเปิดแผง (ความพร้อม · ค่าใหม่ใช้/คง/ยังไม่รู้ · ช่องที่ระบบเติม + "แชท 14:02" ย้อนไปข้อความ) ·
   แถบตอบด่วน + ครับ/ค่ะ · **ใช้ API ตัวเดียวกับเว็บ ไม่มี API ใหม่**
 - **★ บั๊กเก่าที่ไฮไลต์ทำให้เห็นทันที (แก้แล้ว)**: "ผ่อน**ได้เดือนละ 7,000**" ถูกอ่านเป็นรายได้ (`_INCOME_KW` มี "ได้ เดือนละ") → `income_in`
@@ -2409,6 +2445,28 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
   เพราะคนเดียวหารถได้หลายรอบ (รอบนี้ Yaris งบ 3 แสน · อีกสามเดือนมาหากระบะ) ยัดลงโปรไฟล์จะทับกัน
 - เก็บ: รุ่นที่หา · ปี · **งบสูงสุด/ต่ำสุด · ผ่อนไหวเดือนละ · ดาวน์ได้** · สถานะ
   (`new`/`lead`/`booked`/`won`/`rj`) · `evidence` (ข้อความที่ใช้สรุป — ไว้ตรวจว่าจับถูกไหม)
+### 🗂️ แผงขวาของแชท = "เก็บข้อมูลจากแชท" 4 หัวข้อบนสุด (17 ต.ค.69 · เจ้าของสั่ง)
+เจ้าของส่งสเปก *"ฝั่งขวาเก็บข้อมูล — เก็บข้อมูลจากแชทที่คุย Ai ดูดข้อมูล auto กรอกให้ / หรือแอดมิน copy จากแชทกรอกมือได้ ถ้า ai error
+-รุ่นรถที่สนใจ -เบอร์/ไลน์ ติดต่อ -ประวัติลูกค้า -นัดดูรถ"* แล้วเลือก **"4 หัวข้อขึ้นบนสุด"** + **"ไม่ใช้ AI"** (ใช้ตัวจับคำในเครื่องชุดเดิม)
+- **บนสุด** ([connect.html](checkout/templates/checkout/connect.html) `profileHtml`): กล่อง **"เก็บข้อมูลจากแชท x/4"** (`chatCapHtml` · ติ๊กว่าเก็บหัวข้อไหนแล้ว
+  \+ สวิตช์ไฮไลต์/คำอธิบายสีย้ายมาจากกล่องความพร้อม) → ค่าใหม่รอคนตัดสิน (`kwSuggHtml`) → 4 หัวข้อ (`.pf-q[data-q]` · หัวข้อมีป้ายสถานะ `data-qst`):
+  1. **รุ่นรถที่สนใจ** — รถลูกค้าถาม · CAR/สูตร · รถที่ลูกค้าหา (CustomerNeed) · รถพร้อมขายที่ตรง (ย้ายมาจาก crmHtml) · ป้ายมีรถเทิร์น
+  2. **เบอร์ / ไลน์ ติดต่อ** — เบอร์ · ID LINE · เบอร์อื่นที่เจอในแชท (กดใช้) · ปุ่มโทร
+  3. **ประวัติลูกค้า** — อาชีพ/รายได้ · อายุงาน/ประวัติผ่อน · ประเภท/สถานะลูกค้า · PROFILE จาก ADMIN (ครบ = 4 ช่องแรก)
+  4. **นัดดูรถ** (`apptHtml` · ย้ายมาจาก crmHtml) — นัดที่ค้าง (รวมนัดติดตาม ไม่งั้นหายจากแผง) · ฟอร์มนัด **ค่าเริ่มต้น = นัดดูรถ** (เดิมนัดติดตาม)
+- **พับไว้ใน `<details class="pf-more">` "ข้อมูลเพิ่มเติม"** (ป้ายบนหัวบอกเลขลีด/ลีดรับซื้อ/ขั้น · `moreBadge`): ความพร้อม x/5 · ขั้นของลีด · โทร · สรุป ·
+  ใครเคยดูแล · ช่องคำนวณ (ผู้รับผิดชอบ/วันที่) · กล่องจ่ายเบอร์/รับ lead/ลีดรับซื้อ · นาฬิกาโทร · ช่องอื่นของชีต (`LEAD_UI` เหลือ ลูกค้า + ข้อมูลลีด) · ใบจ่ายลีด
+  · คนกาง/พับเอง = จำใน localStorage **`cn_more`** · **ระบบกางให้** (`openMore()` — ปุ่ม "จ่ายเบอร์" บนหัวแชท `goAssign` / กดคำในแชท `kwGo`) **ไม่จำ** (`_moreAuto`)
+  · **ช่องแต่ละช่องอยู่ที่เดียวเท่านั้น** (`LEAD_TOP` + `LEAD_UI` · data-f ซ้ำ = 2 ช่องค่าไม่ตรงกัน)
+- **"ลูกค้าพูดถึงนัด"** — **`crm.appt_hint(o, msgs)`** (ไม่ใช้ AI · ตัวอ่านวันนัดชุดเดียวกับรายงานผล `leadflow.parse_appt`) → `api_chat` ส่ง **`crm.apptHint`**
+  = `{at, text, mid, dir}` · ดูข้อความล่าสุด `HINT_MSGS`=40 ใน `HINT_DAYS`=3 วัน ใหม่→เก่า · ต้องมีคำนัดดูรถ (`_VIEW_KW`) หลังตัดคำนัดโทร (`_CALL_KW` — "นัดโทรกลับ" ไม่ใช่นัดดูรถ) ·
+  "พรุ่งนี้" นับจากวันที่ส่งข้อความ · เวลาผ่านไปแล้ว = ไม่เสนอ · **มีนัดดูรถค้างอยู่ = ไม่เสนอ** · ทั้งข้อความลูกค้าและที่เราพิมพ์ยืนยัน
+  · หน้าเว็บ: **"ใส่ในฟอร์มนัด"** (เติม `S.apptDraft` · ยังไม่บันทึก — คนตรวจแล้วกด "บันทึกนัด") · "ดูในแชท" · "ไม่ใช่นัด" (ซ่อนในหน้านี้ `S.hintNo`)
+- **⚠️ ชื่อฟังก์ชันใน connect.html ชนกันได้เงียบๆ** — รอบแรกตั้งชื่อ `capHtml` ซ้ำกับของห้องพัก Lead (มือเซลล์วันนี้) → function ที่ประกาศทีหลังชนะ
+  กล่องบนสุดกลายเป็น "ยังไม่มีเซลล์ในทีมของคิวจ่ายวน" · **เพิ่มฟังก์ชันใหม่ให้ grep ชื่อก่อนเสมอ**
+- ไม่มี migration · แอปมือถือไม่ได้แก้ (แผงนี้เป็นของเว็บ) · **เทสต์**: `test_crm.py` [17 ต.ค.69] (13 ข้อ · 158 รวม) · Chrome จริง 19/19
+  (ลำดับ 4 หัวข้อ · ไม่มีช่องซ้ำ · ใส่ในฟอร์มนัดแล้วไม่หายตอนแชทรีเฟรช · บันทึกนัดแล้วติ๊ก · ปุ่มจ่ายเบอร์กางให้ · จอ 1400/390 ไม่ล้น · ไม่มี JS error)
+
 - **★ หัวใจอยู่ที่ `reject_kind` + `waiting`** — ปิดเคสเพราะ **ราคา/ไม่มีรถ** ไม่ใช่การเสียลูกค้า
   แต่เป็น **ใบสั่งซื้อที่รอของ** → `mark_reject()` ตั้ง `waiting=True` ให้เอง (`WAITABLE`)
   · ส่วน **เครดิตไม่ผ่าน/ซื้อที่อื่นแล้ว/เงียบไป** = `waiting=False` **ห้ามทักซ้ำ**
@@ -3863,7 +3921,9 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
 **ทุกครั้งที่เพิ่ม/แก้ feature → ต้องอัพเดท CLAUDE.md ด้วย** (โดยเฉพาะ section URL routes, Sheet column gotchas, Roles, Concepts)
 - Commit รวมกับไฟล์ source เดียวกัน ห้ามแยก
 
-## Deploy บน Vercel
+## Deploy บน Vercel (ประวัติ — เลิกใช้แล้ว)
+
+> **เลิกใช้ตั้งแต่ มิ.ย.69** — ย้ายไป VPS Hostinger แล้ว (ดู [deploy/DEPLOY.md](deploy/DEPLOY.md)) · ลบ `vercel.json`/`.vercelignore` แล้ว 16 ต.ค.69 · เก็บหัวข้อนี้ไว้เพราะรายชื่อ env ยังใช้อ้างอิงได้
 
 1. **env vars บน Vercel dashboard** (Settings → Environment Variables) — **ตั้งแค่ 8 SECRET เท่านั้น** (Vercel จำกัด ~15 ตัว). ค่าที่ไม่ลับ inline เป็น default ใน [settings.py](oxlet/settings.py) แล้ว → ไม่ต้องตั้งบน Vercel:
    - **7 SECRET (จำเป็น)**: `GOOGLE_PRIVATE_KEY`, `DJANGO_SECRET_KEY`, `OXLET_ADMIN_PASSWORD`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY` · _(`OXLET_SELLER_PASSWORD` เลิกใช้แล้ว มิ.ย.69 — ตัด login รหัสรวมออก เหลือ LINE Login)_
@@ -4236,7 +4296,7 @@ Meta ส่ง `cost_per_action_type` มารายแถวอยู่แล
   - **เก็บดิสก์**: `_save_local_media` บันทึก `MEDIA_ROOT/cars/<code>/...` ผ่าน `default_storage` → คืน `{id: path, url: /media/...}` · nginx เสิร์ฟ `location /media/` · `_media_urls` token ที่มี "/" → `/media/<path>` (วิดีโอเล่นตรงใน `<video>` ได้ ต่างจาก Drive ที่ต้อง /view). `MEDIA_URL="/media/"` (leading slash จำเป็น)
   - **Storage backend (ImageField)** เลือกตามลำดับ Drive > Supabase(legacy) > ดิสก์ VPS · Drive เป็นออปชั่นสำหรับรูปรายงาน/วิดีโอ ไม่ใช่ของบังคับ
 - **QR**: gen PNG ต่อ request ด้วย `qrcode`+`Pillow` (ไม่เก็บไฟล์) ชี้ไป `{SITE_URL}/track/scan/<code>/` → ต้องตั้ง **`SITE_URL`** เป็นโดเมน prod **ก่อนปริ้น QR**
-- **deps เพิ่ม** ([requirements.txt](requirements.txt)): `psycopg2-binary`, `qrcode[pil]`, `Pillow` · **[vercel.json](vercel.json) ขยาย `maxLambdaSize` 15→50mb** (ไม่งั้น build ไม่ผ่าน)
+- **deps เพิ่ม** ([requirements.txt](requirements.txt)): `psycopg2-binary`, `qrcode[pil]`, `Pillow` · **`vercel.json` (ลบแล้ว 16 ต.ค.69) ขยาย `maxLambdaSize` 15→50mb** (ไม่งั้น build ไม่ผ่าน)
 - **settings ที่เพิ่มเข้า sales เดิม**: INSTALLED_APPS (+admin/auth/contenttypes/messages/cars) · MIDDLEWARE (+Authentication/Message/XFrameOptions) · `X_FRAME_OPTIONS="SAMEORIGIN"` (กัน iframe เซลล์ของ sales พัง) · TEMPLATES DIRS (+`templates/`) + context_processors (auth/messages/cars.context.nav) · sales ใช้ signed-cookie session เหมือนเดิม (Django auth ทำงานบน signed_cookies ได้)
 - **Django 5.0**: `LogoutView` รับเฉพาะ POST → [base.html](templates/base.html) ปุ่มออกเป็น form POST (ไม่ใช่ลิงก์ GET)
 - **env ที่ต้องตั้งบน Vercel (ใหม่)**: `DATABASE_URL` (Supabase pooled 6543, SECRET) **หรือ** `POSTGRES_URL` (Vercel Postgres ใส่ให้เอง) · `SITE_URL` (โดเมน canonical — มี default แล้ว) · ออปชั่น (เก็บรูป): `SUPABASE_STORAGE_BUCKET`+`SUPABASE_URL`+`SUPABASE_SECRET_KEY` · ออปชั่น (push): `LINE_CHANNEL_TOKEN`/`LINE_GROUP_ID`
@@ -5121,13 +5181,14 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --dry-run --limit 5
 cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
 ```
 
-### 📱 แอปมือถือ (เวอร์ชันทดลอง · Expo Go) — [mobile/](mobile/) · 9 ต.ค.69
+### 📱 แอปมือถือ (เวอร์ชันทดลอง · Expo Go) — โปรเจกต์แยก `C:\Users\watta\OneDrive\Desktop\Project OXLETAUTO\OxletautoMobile` · 9 ต.ค.69
+- **★ 16 ต.ค.69 แยกออกเป็นโปรเจกต์ของตัวเองแล้ว** (เจ้าของสั่ง "ไม่เอากองรวมกัน") — โฟลเดอร์ `C:\Users\watta\OneDrive\Desktop\Project OXLETAUTO\OxletautoMobile` · git แยก (ประวัติ 17 commit ติดมาครบ · ยังไม่มี remote GitHub) · **ฝั่งเซิร์ฟเวอร์ยังอยู่ใน SaleForce** (`/api/m/*` · `MobileTokenMiddleware` · `mobile_auth.py` · `mobile_home.py` · `scripts/test_mobile_api.py`) · path `src/...` ในหัวข้อนี้ = ในโปรเจกต์แอป
 *"ทำ Demo ลง iOS ก่อนได้ไหม ฉันขอประเมินดูก่อนว่าควรจะจ่ายดีไหม · เรื่องแชท เรื่องสแกน QR Code เหมือนต้องใช้ใน Mobile ง่ายที่สุด"*
 (เจ้าของเลือกให้ต่อ **เซิร์ฟเวอร์จริง**)
 
 - **ทำไม Expo Go**: ทางเดียวที่ลงแอปจริงบน iPhone ได้ **ฟรี ไม่ต้องมี Mac ไม่ต้องจ่าย $99** · ข้อจำกัด: ไม่มี push ·
   ต้องเปิดผ่าน Expo Go + คอมรัน `npx expo start` วง Wi-Fi เดียวกัน · ใช้ได้เฉพาะ native module ที่มากับ Expo Go
-  (camera/image-picker/secure-store/web-browser/crypto มีครบ) · Expo **SDK 57** + Expo Router (`mobile/src/app/`)
+  (camera/image-picker/secure-store/web-browser/crypto มีครบ) · Expo **SDK 57** + Expo Router (`src/app/`)
 - **★ ไม่มี API ชุดใหม่ — แอปเรียก API เดิมของเว็บทั้งหมด** ด้วย `Authorization: Bearer`
   · **[dashboard/middleware.py](dashboard/middleware.py) `MobileTokenMiddleware`** (อยู่หลัง AuthenticationMiddleware
   ก่อน TrackSessionBridgeMiddleware) ใส่ `oxlet_user` ลง session ชั่วคราว **ไม่ส่งคุกกี้กลับ** · ข้าม CSRF เฉพาะคำขอที่ใช้ token
@@ -5154,14 +5215,14 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
 - **★ 11 ต.ค.69 รูปที่ลูกค้าส่งขึ้นในแชทแล้ว** — `<Image source={{uri, headers: authHeaders()}}>` (ลิงก์ `/connect/api/media` ต้องแนบ token ·
   `authHeaders()` ใน `src/lib/api.ts`) · แตะรูป = ดูเต็มจอ · ~~วิดีโอ/เสียง/ไฟล์อื่น = บอกให้เปิดในหน้าเว็บ~~ (13 ต.ค.69 เปิดในแอปได้แล้ว — ดูข้อถัดไป)
 - **★ 13 ต.ค.69 — 3 อย่างที่เคยต้องไปทำในหน้าเว็บ ทำในแอปได้แล้ว** (ไม่มี API ใหม่ · ไม่มี migration · ใช้ endpoint เดิมของเว็บผ่าน Bearer)
-  - **วิดีโอ/ข้อความเสียง/ไฟล์ที่ลูกค้าส่ง** ([lib/files.tsx](mobile/src/lib/files.tsx)) — แตะ = โหลดลงเครื่องก่อน (`expo-file-system`
+  - **วิดีโอ/ข้อความเสียง/ไฟล์ที่ลูกค้าส่ง** (`src/lib/files.tsx`) — แตะ = โหลดลงเครื่องก่อน (`expo-file-system`
     `File.downloadFileAsync` + header token · โฟลเดอร์ `cache/chat-files/` ชื่อไฟล์ = id ในระบบ `m=l123.0` · โหลดซ้ำไม่ยิงเน็ต) แล้ว
     วิดีโอ/เสียง = เล่นในแอป (`expo-video` · ไฟล์ในเครื่อง ไม่ต้องพึ่ง Range ของเซิร์ฟเวอร์) · ไฟล์อื่น = หน้าแชร์ของเครื่อง (`expo-sharing`)
     · เซิร์ฟเวอร์ตอบ error เป็น JSON แล้วถูกเขียนลงไฟล์ = ตรวจไฟล์เล็ก <4KB ที่ขึ้นต้น `{` แล้วลบทิ้ง + บอกเหตุผล
-  - **ความด่วน + ธงงานค้างของรถ** ([lib/carmarks.tsx](mobile/src/lib/carmarks.tsx) · ใต้กล่องเปลี่ยนสเตปในหน้ารถ) → `/track/api/set_priority` · `set_flags`
+  - **ความด่วน + ธงงานค้างของรถ** (`src/lib/carmarks.tsx` · ใต้กล่องเปลี่ยนสเตปในหน้ารถ) → `/track/api/set_priority` · `set_flags`
     · `m_car` ส่ง `priorities` + `flagDefs` (`proof` = ปลดแล้วต้องมีหลักฐาน · `done` = ชื่อตอนงานเสร็จ) · สิทธิ์ใช้ `canPriority`/`flagPerms`
     ที่มากับ `car_json` อยู่แล้ว (ช่องที่ไม่มีสิทธิ์ = สวิตช์ปิด · เซิร์ฟเวอร์ตรวจซ้ำ) · ปลด "ยังไม่ได้ถ่ายรูป" = ฟอร์มแนบรูป+หมายเหตุก่อน (สวิตช์ยังติดจนกว่าจะยืนยัน)
-  - **บันทึกสถานะลูกค้า (Z) จากรายการตามด่วน** ([lib/leadstatus.tsx](mobile/src/lib/leadstatus.tsx)) → `/crm/api/lead_status` ตัวเดียวกับหน้า `/crm/`
+  - **บันทึกสถานะลูกค้า (Z) จากรายการตามด่วน** (`src/lib/leadstatus.tsx`) → `/crm/api/lead_status` ตัวเดียวกับหน้า `/crm/`
     · ตัวเลือกมากับ `follow.zOptions` (`crm_page._z_options` · เทเลเซลล์ได้ลิสต์ว่าง = ไม่มีปุ่ม เพราะ API ตอบ 400)
     · **รายการตามด่วนจำผลไว้ฝั่งเซิร์ฟเวอร์ ~1–2 นาที** (แคช 60 วิของ mobile_home + fetch_all_sheets ต่อ worker) → แอปจำค่าที่เพิ่งบันทึกไว้ 10 นาที
       (`shownStatus` · ป้าย "✓ บันทึกแล้ว") กันโชว์ค่าเก่าแล้วนึกว่าไม่ติด · ล้างตอนออกจากระบบ (`clearHome` → `clearSavedStatus`)
@@ -5178,6 +5239,34 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   - **`GET /api/m/home`** ([mobile_home.py](dashboard/services/mobile_home.py)) — **ไม่มีสูตรใหม่สักตัว** ประกอบจากตัวเดียวกับเว็บ/LINE:
     ตามด่วน+ดีลค้าง = `fetch_dashboard.seller_followups` · ยอดเดือน = `monthlySummary` ที่ cron อุ่นไว้ · คะแนน = `compute_diligence_scores` ·
     ใบจ่ายลีด = `leadflow.seller_tasks` · งานจัดซื้อ = `purchase_page.summary` · เช็คชื่อ = `CheckIn` (ของตัวเอง `checkin` · แอดมินทั้งบริษัท `staff`
+- **★★ 16 ต.ค.69 — แชทแบบแอปทั่วไป + ฝั่งเซิร์ฟเวอร์ [checkout/chatplus.py](checkout/chatplus.py)** (เจ้าของ "ทำตามที่แนะนำ ทั้งฟังก์ชันหลัก ฟังก์ชันรอง · UI ตามเว็บชาวบ้าน")
+  - **กันส่งซ้ำ `client_id`** — `reply` / `reply_image` รับ `client_id` (แอปส่งแบบขึ้นข้อความทันที แล้วลองซ้ำเมื่อเน็ตหลุด)
+    · ล็อกเป็นแถวใน `dash_kv` key `reply_cid:<ChatOwner.id>:<client_id>` (ใช้ร่วมทุก gunicorn worker) · ส่งสำเร็จ = จดแถวแชท ·
+    **ส่งซ้ำ client_id เดิม = คืนข้อความเดิม (`dup: true`) ไม่ยิง LINE อีก** · ส่งล้ม = ปลดล็อก (กดส่งอีกครั้งได้) · รอบก่อนยังส่งอยู่ = 409 ·
+    ล็อกค้างเกิน 90 วิ (worker ตายกลางทาง) = รับช่วงต่อ · ล็อกเก่าเกิน 2 วันกวาดทิ้ง · ไม่ส่ง client_id (หน้าเว็บเดิม) = ทำงานเหมือนเดิม
+    · `reply` คืนข้อความรูปแบบเดียวกับ `messages()` แล้ว (มี `id` `l<pk>`/`f<pk>`)
+  - **ส่งรูปหาลูกค้า `POST /connect/api/reply_image` (multipart `id, file, client_id`)** — สิทธิ์/สวิตช์ล็อก/ลูกค้าจำลอง กติกาเดียวกับตอบข้อความ
+    · **★ 17 ต.ค.69 หน้าเว็บ Connect ส่งรูปได้แล้ว** (`connect.html` `pickImg/sendImg`): ปุ่มรูปซ้ายช่องพิมพ์ · วางรูป Ctrl+V
+      (คลิปบอร์ดมีข้อความติดมา = วางเป็นข้อความตามเดิม) · ลากไฟล์มาวางในช่องแชท → **โชว์ตัวอย่างก่อน กด "ส่งรูป" เอง** (ช่องพิมพ์ว่าง + Enter = ส่งรูป)
+      · client_id เดิมทั้งรอบ = เน็ตหลุดแล้วกดส่งอีกครั้ง ลูกค้าไม่ได้รูปเบิ้ล · `connect_classic.html` (`?classic=1`) ไม่ได้ทำ
+    · Pillow ย่อด้านยาว ≤2048 + รูปตัวอย่าง 640 (LINE บังคับ ≤1MB) · **หมุนตาม EXIF แล้วตัด EXIF ทิ้ง (พิกัด GPS ในรูปห้ามหลุดถึงลูกค้า)** · รับเฉพาะรูป
+    · LINE/Facebook ต้องดึงรูปจากลิงก์ https สาธารณะ → สำเนาที่ **`MEDIA_ROOT/chat_out/<uuid>.jpg`** (ชื่อสุ่มเดาไม่ได้ · ไม่ใช่ `private_media`)
+      · ลบเองเมื่อเกิน `CUSTOMER_CHAT_KEEP_DAYS` (60) วันละครั้งจาก `connect.tick` · `SITE_URL` ไม่ใช่ https = ปฏิเสธ (ยกเว้นลูกค้าจำลอง)
+    · บันทึก `GroupChat`/`FbChat` ขาออก `msg_type=image` `text="[รูป]"` `extra.out_file` **เฉพาะตอนส่งสำเร็จ** · ส่งล้ม = ลบไฟล์ทิ้ง
+    · `connect._files` ข้อความขาออกที่มี `out_file` = ลิงก์ `/media/chat_out/…` ตรง (ไม่ผ่าน `/connect/api/media`)
+  - **ข้อความสำเร็จรูป `GET/POST /connect/api/canned`** — KV `connect_canned` · ทุกคนที่เข้า Connect ได้เห็น · `{action: save|delete}` แอดมินเท่านั้น ·
+    สูงสุด 60 ข้อความ · หัวข้อ ≤40 · ข้อความ ≤1000 · แก้ในแอป (แท็บ "ฉัน" → ข้อความสำเร็จรูป) หรือในหน้าเว็บ
+    · **★ 17 ต.ค.69 หน้าเว็บ Connect มีปุ่มข้อความสำเร็จรูปแล้ว** (`connect.html` `cndToggle/paintCnd`): ปุ่มข้างปุ่มรูป → กล่องลอยเหนือช่องพิมพ์ ·
+      เลือกแล้วต่อท้ายช่องพิมพ์ (ไม่ส่งเอง) · เกิน 5 ข้อความมีช่องค้น (Enter = ใช้อันแรก) · แอดมินเพิ่ม/แก้/ลบในกล่องเดียวกัน ·
+      Esc / คลิกที่อื่น = ปิด (ยกเว้นกำลังแก้) · ดึงรายการใหม่ทุกครั้งที่เปิด (แก้จากแอปแล้วเห็นทันที)
+  - **`inbox` ทุกแถวมี `unreadCount`** (`chatplus.unread_counts` · นับเฉพาะแถวที่ยังไม่อ่าน · เพดาน 99 · ยังไม่อ่าน = อย่างน้อย 1)
+  - **`chat` เพิ่ม `sellers`** (แอดมิน · เมนูโอนลูกค้า) + **`claimWhy`** (ดูตัวอย่างคิวแต่กดรับไม่ได้ เพราะอะไร)
+  - ไม่มี migration · **เทสต์ `python scripts/test_chatplus.py` (52 ข้อ · ปลอมแค่ `requests`)** — ลองถอดตัวกันส่งซ้ำแล้วล้ม 5 ข้อ (จับได้จริง)
+    · `test_connect` 732/732 · `test_crm` 145/145 · `test_mobile_api` 76/76 · `test_chat_media` 131/131 (ต้องมี zxing-cpp)
+  - **ฝั่งแอป** (โปรเจกต์ OxletautoMobile): ส่งทันที+ส่งอีกครั้ง · ส่งรูป · ข้อความสำเร็จรูป · ป้ายคั่นวัน · รวมกลุ่มข้อความ · กดค้าง=คัดลอก/โทร ·
+    ปุ่มลงล่างสุด · ร่างต่อแชท · เมนูสามจุด (งาน/นัด · ไม่ต้องตอบ · โอน · คืนกองกลาง) · ไทม์ไลน์รวมในหน้างานกับลูกค้า · toast · หน้าโหลดไม่ได้มีปุ่มลองใหม่ ·
+    แถบเชื่อมต่อไม่ได้ · หยุดดึงตอนแอปอยู่เบื้องหลัง · ไอคอนแทนอิโมจิ · **ขนาดตัวหนังสือ 3 ระดับ** · **ภาษา ไทย/อังกฤษ/พม่า/เขมร สำหรับหน้าคนงาน**
+    (ชื่อสเตปคัดจาก `templates/scan.html` `STAGE_I18N` — แก้ชื่อสเตปต้องแก้แอปด้วย `src/lib/i18n.ts`) · ดู README ของแอป
     — "ยังไม่มา" นับเฉพาะคนที่**เลยเวลาเข้างานของตัวเองแล้ว**) · คิวรถคนงาน = รถในสเตปที่ `STAGE_OWNER` เป็นทีมเขา (เรียงแบบบอร์ด) · รถที่ฉันเบิก = `CarMovement` ค้างของชื่อเล่นฉัน
     · **ทุกส่วนห่อ try แยก** (พัง = `errors[<ส่วน>]` · ส่วนอื่นยังมา) · จำผลส่วนหนัก 60 วิ/process
   - **★ แยกสมอง "ตามด่วน" ออกจาก `build_followup_messages` เป็นฟังก์ชันระดับโมดูล** (`fu_idle/fu_cadence/fu_skip/fu_booked/fu_urgency/
@@ -5190,8 +5279,8 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
     · ไม่มี Run Auto / ตั้งเลขเอง / ไม้ 2 (ใช้เว็บ) · ป้ายแท็บ = `summary.counts.tocode + parked` (**`/connect/api/summary` ของแอดมินเพิ่ม `parked`**)
   - **รถ (`(tabs)/cars.tsx`)** = `/track/api/cars` · ค้นหา · กรอง พร้อมขาย/ค้างนาน/ออกนอกลาน/ฉันเบิกอยู่/รายเฟส · **`cars_api` เพิ่ม `out`
     ต่อคัน** (`{who, purpose, mine, since}` — ชื่อเล่นเท่านั้น · เว็บไม่ได้ใช้ ไม่กระทบบอร์ด)
-  - **เบิก-คืนรถในหน้ารถ** ([lib/checkout.tsx](mobile/src/lib/checkout.tsx)) = `/checkout/api/car_out` · `car_return` เดิม · รูปขั้นต่ำ + ติ๊กมุม
-    (ไม่ครบยังบันทึกได้ กติกาเดียวกับเว็บ) · คืนรถแทนคนอื่นถามก่อน · ตัวอัปโหลดรูปย้ายมา [lib/media.tsx](mobile/src/lib/media.tsx) ใช้ร่วมกับเปลี่ยนสเตป
+  - **เบิก-คืนรถในหน้ารถ** (`src/lib/checkout.tsx`) = `/checkout/api/car_out` · `car_return` เดิม · รูปขั้นต่ำ + ติ๊กมุม
+    (ไม่ครบยังบันทึกได้ กติกาเดียวกับเว็บ) · คืนรถแทนคนอื่นถามก่อน · ตัวอัปโหลดรูปย้ายมา `src/lib/media.tsx` ใช้ร่วมกับเปลี่ยนสเตป
   - **ฉัน** = เช็คชื่อวันนี้ + คะแนนแยก 6 ด้าน (เซลล์) · **ออกจากระบบ/หมดเวลา = ล้างข้อมูลหน้า "วันนี้" ในเครื่อง** (`clearHome` — เครื่องเดียวใช้หลายคน)
   - **เช็คชื่อด้วยเซลฟี่+พิกัดแบบในต้นแบบ ไม่ได้ทำ** — ระบบจริงเช็คชื่อด้วยรูปในกลุ่ม LINE ผ่าน n8n (แอปแค่โชว์ผล)
   - **เทสต์**: `python scripts/test_mobile_home.py` (73 ข้อ · [3c] สถานะลูกค้าผ่าน token · test client จริง · ปลอมแค่ชีต/ผลแดชบอร์ด) — ตามด่วน/ดีลค้าง/ใบจ่ายลีดไม่มีของคนอื่น ·
@@ -5200,7 +5289,7 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
 - **ยังไม่มี**: push แจ้งเตือน · ส่งรูปหาลูกค้า · Run Auto/ไม้ 2/ตั้งเลขเอง ในห้องพัก (ใช้เว็บ) · หน้าแบบ `/crm/` (ไปป์ไลน์/รายงาน)
 - **ต้นแบบ + วิดีโอสอน** (9 ต.ค.69 · **ย้ายออกจากโปรเจกต์แล้ว 10 ต.ค.69** → `Downloads/oxlet-mobile-prototype/` เครื่องผู้พัฒนา · ต้นแบบ https://claude.ai/artifact/XEmbwUNwLcbPEz2fj1iADH · คู่มือวิดีโอมีเสียงพากย์ https://claude.ai/artifact/9Rrspbmts7eZV1GGsKHoec): ต้นแบบ HTML 4 บทบาท (ข้อมูลสมมติ) + หัวข้อทรัพยากร/ค่าใช้จ่าย (50–60 คน: เซิร์ฟเวอร์เดิมพอ · ปีแรก ~4,400 บาท) · วิดีโอสอนเซลล์/แอดมิน (Playwright + เสียงพากย์ — ชุดแรกทำด้วย Gemini TTS · **10 ต.ค.69 ห้ามใช้ API พากย์เสียงแล้ว** `tts.py` เปลี่ยนเป็นเสียง Windows ออฟไลน์ "Microsoft Pattara") · **ข้อค้นพบจากการวัด: nginx ไม่บีบอัด JSON (`gzip_types` ถูกคอมเมนต์ไว้ = บีบแค่ HTML)** · worker 5 ตัวตึงตอนอัปรูปพร้อมกัน 8 โมง
 - **เทสต์**: `python scripts/test_mobile_api.py` (76 ข้อ · รวมความด่วน/ธงผ่าน token · test client จริงทั้งสาย middleware · ปลอมแค่ชีตพนักงาน)
-  · แอป: `cd mobile && npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)
+  · แอป (ในโฟลเดอร์ OxletautoMobile): `npx tsc --noEmit && npx expo lint && npx expo-doctor` (ผ่านหมด · bundle iOS ผ่าน)
 - **⚠️ `npx expo lint` ครั้งแรกติด peer dependency** (npm ดึง react-dom 19.3 ที่ไม่ตรง react 19.2.3) →
   ติดตั้ง eslint เองด้วย `--legacy-peer-deps` แล้ว (อยู่ใน devDependencies แล้ว)
 
