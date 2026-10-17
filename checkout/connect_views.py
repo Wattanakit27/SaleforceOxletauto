@@ -803,8 +803,9 @@ def api_canned(request):
 def api_comments(request):
     """หน้า "คอมเมนต์" (★ 17 ต.ค.69 · แอดมิน/ผู้บริหาร) — รวมคอมเมนต์ Facebook · YouTube · TikTok (รออนุมัติ)
 
-    GET `?platform=fb|yt|tt&status=wait|all|done&q=&limit=` · POST `{action: done, id, on}` = กด "จัดการแล้ว" ·
-    `{action: sync}` = ดึงตอนนี้ (ห่างกัน ≥2 นาที)
+    GET `?platform=fb|yt|tt&status=wait|all|done&cat=greet|interest|attack|complaint|none&q=&limit=` ·
+    POST `{action: done, id, on}` = กด "จัดการแล้ว" · `{action: category, id, cat}` = จัดประเภทลูกค้าเอง
+    (cat "auto" = คืนให้ระบบจัด · "" = ไม่จัดประเภท) · `{action: sync}` = ดึงตอนนี้ (ห่างกัน ≥2 นาที)
     """
     ctx = _ctx(request)
     why = _deny(ctx)
@@ -825,6 +826,18 @@ def api_comments(request):
             if not r:
                 return _j({"ok": False, "error": "ไม่พบคอมเมนต์นี้"}, 404)
             return _j({"ok": True, "row": CM.row_json(r)})
+        if act == "category":
+            try:
+                cid = int(b.get("id") or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            try:
+                r = CM.set_category(cid, str(b.get("cat") if b.get("cat") is not None else "").strip(), ctx["name"])
+            except ValueError as e:
+                return _j({"ok": False, "error": str(e)}, 400)
+            if not r:
+                return _j({"ok": False, "error": "ไม่พบคอมเมนต์นี้"}, 404)
+            return _j({"ok": True, "row": CM.row_json(r)})
         if act == "sync":
             ok, msg = CM.request_sync(ctx["name"])
             return _j({"ok": ok, "message": msg} if ok else {"ok": False, "error": msg}, 200 if ok else 429)
@@ -835,7 +848,7 @@ def api_comments(request):
     except ValueError:
         limit = 60
     d = CM.list_json(platform=(g.get("platform") or "").strip(), status=(g.get("status") or "wait").strip(),
-                     q=g.get("q") or "", limit=limit)
+                     q=g.get("q") or "", limit=limit, cat=(g.get("cat") or "").strip())
     return _j(dict(d, ok=True))
 
 

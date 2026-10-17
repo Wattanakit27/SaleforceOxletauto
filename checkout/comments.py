@@ -21,6 +21,7 @@
 """
 from __future__ import annotations
 
+import re
 import threading
 import time
 from datetime import timedelta
@@ -148,13 +149,17 @@ def _upsert(platform: str, items: list) -> dict:
     for x in items:
         r = have.get(x["ext_id"])
         if not r:
-            new.append(SC(platform=platform, fetched_at=now, **x))
+            r = SC(platform=platform, fetched_at=now, **x)
+            _apply_cat(r)
+            new.append(r)
             continue
         changed = False
         for k in _UPD:
             if getattr(r, k) != x[k]:
                 setattr(r, k, x[k])
                 changed = True
+        if (changed or r.category_v < CLASSIFY_V) and _apply_cat(r):   # ข้อความถูกแก้ = จัดประเภทใหม่ (ถ้าคนยังไม่ได้แก้)
+            changed = True
         # รูปโพสต์ของ Facebook เป็นลิงก์มีอายุ (เปลี่ยนทุกครั้งที่ขอ) — ต่อให้วันละครั้ง ไม่เขียนทุกรอบ
         if changed or (x["post_thumb"] != r.post_thumb and (now - r.fetched_at).total_seconds() > 86400):
             r.post_thumb = x["post_thumb"]
@@ -163,7 +168,7 @@ def _upsert(platform: str, items: list) -> dict:
     if new:
         SC.objects.bulk_create(new, batch_size=200, ignore_conflicts=True)
     if upd:
-        SC.objects.bulk_update(upd, list(_UPD) + ["post_thumb", "fetched_at"], batch_size=200)
+        SC.objects.bulk_update(upd, list(_UPD) + _CAT_F + ["post_thumb", "fetched_at"], batch_size=200)
     return {"seen": len(items), "new": len(new), "updated": len(upd)}
 
 
@@ -182,6 +187,104 @@ def _dt(v):
 def _cut(s, n):
     s = (s or "").strip()
     return s if len(s) <= n else s[:n - 1] + "…"
+
+
+# ─────────────────────────────────────────────────────────────
+#  จำแนกประเภทลูกค้า (★ 17 ต.ค.69 · เจ้าของสั่ง) — จับจากคำ ไม่ใช้ AI (ผลเหมือนเดิมทุกครั้ง · บอกได้ว่าจับจากคำไหน)
+#  ลำดับชนะ: โจมตีแบรนด์ > คอมเพลน > สนใจ/ถามราคา > ทักทาย/พูดคุยเล่น · ไม่เข้าอะไร = "" (ยังไม่จัดประเภท)
+#  ⚠️ ภาษาไทยไม่เว้นวรรค — คำสั้นจับกลางคำอื่นได้ ("เท่" ใน "เท่าไหร่" · "ชอบ" ใน "รับผิดชอบ" · "แย่" ใน "แย่ง")
+#     เพิ่มคำใหม่ต้องใส่ขอบกันไว้ + เพิ่มเทสต์ใน scripts/test_comments.py
+#  แก้กติกา = เพิ่ม CLASSIFY_V → แถวที่ระบบจัดไว้ (ไม่ใช่คนจัด) ถูกจัดใหม่เองตอนเปิดหน้า
+# ─────────────────────────────────────────────────────────────
+CLASSIFY_V = 1
+CATS = [(k, v) for k, v in SC.CAT_CHOICES]
+CAT_KEYS = [k for k, _ in CATS]
+_NEG = re.compile(r"(?:ไม่|ไม่ได้|ไม่ใช่|ยังไม่|ไม่เคย|ไม่ค่อย)\s*$")
+
+# (ประเภท, คำ, ตัดเมื่อมี "ไม่" นำหน้า)
+_RULES = [
+    ("attack", r"โกง|ต้มตุ๋น|มิจฉาชีพ|ย้อมแมว|ขายฝัน|หน้าเลือด|ห่วยแตก|ขยะ|ตอแหล|เตือนภัย|ประจาน|scam|fraud", True),
+    ("attack", r"หลอก(?:ลวง|ขาย|เงิน|ลูกค้า|ตังค์)?|18\s*มงกุ[ฎฏ]|สิบแปดมงกุ[ฎฏ]|อย่า(?:ไป)?ซื้อ|ไม่แนะนำ|ไม่ซื่อสัตย์", True),
+    ("attack", r"(?:กรอ|หมุน|ย้อน|ตีกลับ)\s*ไมล์|ไมล์\s*(?:กรอ|หมุน|ย้อน|ปลอม)|(?:โก่ง|ฟัน|ปั่น)ราคา", True),
+    ("attack", r"ระวัง(?:ร้าน|เต็นท์|โดน|ถูก)|แฉ(?!ะ)", False),
+    ("attack", r"เหี้ย|เหี่ย|สัส|สัด(?!ส่วน|ว์)|ส้นตีน|ไอ้สัตว์|อีสัตว์|ระยำ|ชาติชั่ว|ชิบหาย|ฉิบหาย|ควาย|กาก(?!บาท|เพชร)|เลว", True),
+    ("complaint", r"ร้องเรียน|ไม่พอใจ|ไม่ประทับใจ|ไม่(?:ยอม)?รับผิดชอบ|ไม่ตรงปก|ไม่ตรง(?:ตาม)?(?:ที่|รูป|ปก)|คอมเพล|complain", False),
+    ("complaint", r"ผิดหวัง|แย่(?!ง)|ห่วย|เคลม|โดนเท|เทลูกค้า|หยาบคาย|ไม่สุภาพ|พูดจา(?:ไม่ดี|แย่)|ไม่ใส่ใจ|บริการไม่ดี", True),
+    ("complaint", r"(?:ไม่|ยังไม่)(?:มีใคร|มีคน)?\s*(?:ตอบ|อ่าน|ติดต่อกลับ|โทรกลับ)|อ่านแล้วเงียบ", False),
+    ("complaint", r"โทร(?:ไป)?\s*ไม่(?:ติด|รับ)|ไม่รับสาย|ติดต่อไม่(?:ได้|ติด)|รอนาน|รอ(?:มา)?(?:หลาย|ตั้ง)\s*(?:วัน|อาทิตย์|เดือน)|ช้า(?:มาก|จัง|เกิน)", False),
+    ("complaint", r"(?:ขอ)?(?:คืน)?เงินคืน|คืนเงิน|ยังไม่ได้(?:เล่ม|ป้าย|ทะเบียน|รถ|เงิน|รับ)", False),
+    ("complaint", r"(?:ซื้อ|ออกรถ)\S{0,25}(?:เสีย|พัง|มีปัญหา)", False),
+    ("interest", r"สนใจ|interested", True),
+    ("interest", r"ราคา|เท่า(?:ไหร่|ไร|ไร่|หร่|รัย)|กี่(?:บาท|แสน|หมื่น)|กี่บ\.|how\s*much|price", False),
+    ("interest", r"ผ่อน(?!คลาย)|ดาวน์(?!โหลด)|ออกรถ|จอง(?!หอง)|ไฟแนน|จัดไฟ|บูโร|เครดิต|แบล็[คก]ลิส|เงินเดือน|รายได้", False),
+    ("interest", r"ยัง(?:อยู่|มี|ขาย|ว่าง)\s*(?:ไหม|มั้ย|มัย|ป่าว|ปะ|รึ|หรือ|ยัง|\?)|อยู่(?:ไหม|มั้ย|มัย)|ขาย(?:แล้ว)?(?:ยัง|หรือยัง)", False),
+    ("interest", r"ไมล์|กี่โล|กี่กิโล|สเป[คก]|รายละเอียด|สอบถาม|เบอร์|(?<!ออน)ไลน์|ไอดี|line\s*id", False),
+    ("interest", r"(?<![a-z])(?:ib|inbox|cf|dm|pm)(?![a-z])|ทัก(?!ทาย)|ติดต่อ", False),
+    ("interest", r"ดูรถ|(?:ไป|มา|นัด|เข้าไป)ดู(?:ได้|ที่|คัน)|ขอดู|ขอรูป|สาขา|พิกัด|อยู่(?:ที่)?ไหน|ร้านอยู่|แผนที่|location", False),
+    ("interest", r"เทิร์น|เทริน|(?:ผ่าน|อนุมัติ|จัดได้|ออกได้)\s*(?:ไหม|มั้ย|มัย|ป่าว)|อยาก(?:ได้|ซื้อ)|ต้องการ(?:รถ|ซื้อ)|หารถ|มีรถ", False),
+    ("interest", r"ต่างจังหวัด|รถ(?:ปี|รุ่น)(?:ไหน|อะไร)|ปี(?:ไหน|อะไร)|รุ่น(?:ไหน|อะไร)|มีสี|สีอื่น|available", False),
+    ("interest", r"0[689]\d[\s-]?\d{3}[\s-]?\d{4}", False),
+    ("greet", r"สวัสดี|หวัดดี|ทักทาย|ขอบคุณ|ขอบใจ|(?<![a-z])(?:hello|hi|thank|thanks|wow|nice|good|cool|great|love)(?![a-z])", False),
+    ("greet", r"(?<!\d)5{3,}(?!\d)|ฮ่า{2,}|ฮาๆ|ฮามาก|อิอิ|คิคิ|(?<![a-z])lol(?![a-z])|ขำ|ตลก|ว้าว", False),
+    ("greet", r"สวย|หล่อ|น่ารัก|เท่(?!า)|เจ๋ง|(?<!ขนม)ปัง|สุดยอด|เยี่ยม|ดีมาก|เก่ง|โดนใจ|ถูกใจ|(?<!ผิด)ชอบ|แจ่ม|เริ่ด|เลิศ|ประทับใจ", True),
+    ("greet", r"เชียร์|เอาใจช่วย|ติดตาม|รอดู|รอชม|คลิปดี|น่าใช้|น่าขับ|ขับดี", True),
+]
+_CRX = [(c, re.compile(p, re.I), neg) for c, p, neg in _RULES]
+_PRIO = {"attack": 0, "complaint": 1, "interest": 2, "greet": 3}
+_ONLY_SYMBOLS = re.compile(r"^[^0-9A-Za-z฀-๿]+$")
+
+
+def _norm_txt(t: str) -> str:
+    t = str(t or "").replace("เเ", "แ").replace("ํา", "ำ")
+    return re.sub(r"[​-‍﻿]", "", t).lower()
+
+
+def classify(text: str) -> tuple[str, str]:
+    """คืน (ประเภท, คำที่จับได้) · ไม่เข้าอะไร = ("", "")"""
+    raw = (text or "").strip()
+    if not raw:
+        return "", ""
+    if raw in ("[สติกเกอร์]", "[GIF]"):
+        return "greet", raw.strip("[]")
+    t = _norm_txt(raw)
+    best = None
+    for cat, rx, neg in _CRX:
+        if best and _PRIO[cat] >= _PRIO[best[0]]:
+            continue
+        for m in rx.finditer(t):
+            if neg and _NEG.search(t[max(0, m.start() - 8):m.start()]):
+                continue
+            best = (cat, m.group(0).strip()[:40])
+            break
+    if best:
+        return best
+    if _ONLY_SYMBOLS.match(t.replace(" ", "")):
+        return "greet", "อีโมจิ"
+    return "", ""
+
+
+def _apply_cat(r) -> bool:
+    """จัดประเภทแถวที่ระบบดูแล (คนยังไม่ได้แก้) · คืน True ถ้าค่าเปลี่ยน"""
+    if r.category_by:
+        return False
+    cat, why = classify(r.text)
+    changed = (r.category, r.category_why, r.category_v) != (cat, why, CLASSIFY_V)
+    r.category, r.category_why, r.category_v = cat, why, CLASSIFY_V
+    return changed
+
+
+_CAT_F = ["category", "category_why", "category_v"]
+
+
+def classify_pending(limit: int = 3000) -> int:
+    """แถวที่ระบบจัดไว้ด้วยกติการุ่นเก่า (หรือยังไม่เคยจัด — ก่อน migrate 0039) → จัดใหม่ · คนจัดเองไม่แตะ"""
+    rows = list(SC.objects.filter(category_by="", category_v__lt=CLASSIFY_V)
+                .only("id", "text", "category", "category_why", "category_v", "category_by")[:limit])
+    for r in rows:
+        _apply_cat(r)
+    if rows:
+        SC.objects.bulk_update(rows, _CAT_F, batch_size=300)
+    return len(rows)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -473,6 +576,7 @@ def row_json(r: SC) -> dict:
         "at": timezone.localtime(r.created_at).isoformat(timespec="seconds"),
         "likes": r.like_count, "replies": r.reply_count, "replied": r.replied,
         "done": bool(r.done_at), "doneBy": r.done_by,
+        "cat": r.category, "catWhy": r.category_why, "catBy": r.category_by,
     }
 
 
@@ -485,7 +589,13 @@ def sources() -> dict:
             SC.TT: {"on": False, "pending": True, "note": TT_NOTE}}
 
 
-def list_json(platform: str = "", status: str = "wait", q: str = "", limit: int = 60) -> dict:
+def list_json(platform: str = "", status: str = "wait", q: str = "", limit: int = 60, cat: str = "") -> dict:
+    """`cat` = ประเภทลูกค้า (CAT_KEYS) · "none" = ยังไม่จัดประเภท · ว่าง = ทุกประเภท
+    `catCounts` นับตามตัวกรองอื่นที่เลือกอยู่ (ช่องทาง/สถานะ/คำค้น) ยกเว้นตัวกรองประเภทเอง"""
+    try:
+        classify_pending()
+    except Exception:
+        pass
     now = timezone.now()
     limit = max(20, min(int(limit or 60), 300))
     base = SC.objects.all()
@@ -499,14 +609,40 @@ def list_json(platform: str = "", status: str = "wait", q: str = "", limit: int 
     if q:
         base = base.filter(Q(text__icontains=q) | Q(author_name__icontains=q) | Q(post_title__icontains=q)
                            | Q(account_name__icontains=q))
+    cat_counts = {k: 0 for k in CAT_KEYS}
+    cat_counts["none"] = 0
+    for r in base.values("category").annotate(n=Count("id")):
+        cat_counts[r["category"] if r["category"] in CAT_KEYS else "none"] += r["n"]
+    cat_counts["all"] = sum(cat_counts[k] for k in CAT_KEYS) + cat_counts["none"]
+    if cat in CAT_KEYS:
+        base = base.filter(category=cat)
+    elif cat == "none":
+        base = base.exclude(category__in=CAT_KEYS)
     rows = list(base.order_by("-created_at", "-id")[:limit + 1])
     counts = {p: 0 for p in PLATFORMS}
     for r in SC.objects.filter(_wait_q(now)).values("platform").annotate(n=Count("id")):
         counts[r["platform"]] = r["n"]
     counts["all"] = sum(counts[p] for p in PLATFORMS)
     return {"rows": [row_json(r) for r in rows[:limit]], "more": len(rows) > limit, "counts": counts,
+            "catCounts": cat_counts, "cats": [list(c) for c in CATS],
             "sources": sources(), "waitDays": WAIT_DAYS,
             "every": {SC.FB: FB_EVERY_MIN, SC.YT: YT_EVERY_MIN}}
+
+
+def set_category(cid: int, cat: str, by: str) -> SC | None:
+    """คนจัดประเภทเอง (รอบดึงไม่ทับ) · cat="auto" = คืนให้ระบบจัด · cat="" = ไม่จัดประเภท"""
+    r = SC.objects.filter(pk=cid).first()
+    if not r:
+        return None
+    if cat == "auto":
+        r.category_by = ""
+        _apply_cat(r)
+    else:
+        if cat not in CAT_KEYS and cat != "":
+            raise ValueError("ประเภทไม่ถูกต้อง")
+        r.category, r.category_why, r.category_by = cat, "", (by or "แอดมิน")[:80]
+    r.save(update_fields=_CAT_F + ["category_by"])
+    return r
 
 
 def set_done(cid: int, by: str, on: bool = True) -> SC | None:

@@ -309,6 +309,79 @@ try:
     ck("ลบคอมเมนต์เก่ากว่า 90 วัน", n == 1 and not SC.objects.filter(ext_id="old1").exists(), n)
     ck("วันเดียวกันไม่ลบซ้ำ", CM.cleanup_daily() is None)
 
+    print("[8] จำแนกประเภทลูกค้า (★ 17 ต.ค.69)")
+    CASES = [
+        ("ราคาเท่าไหร่ครับ", "interest"), ("ผ่อนเดือนละเท่าไหร่", "interest"), ("คันนี้ยังอยู่ไหม", "interest"),
+        ("สนใจครับ ib", "interest"), ("เบอร์ 0812345678", "interest"), ("โทร 0815554321", "interest"),
+        ("เงินเดือน 15000 ผ่านไหม", "interest"), ("อยากได้กระบะ งบ 3 แสน", "interest"), ("How much?", "interest"),
+        ("สวยมากกก ราคา?", "interest"),
+        ("สวัสดีครับ", "greet"), ("555", "greet"), ("เท่มาก", "greet"), ("รถสวยมาก", "greet"), ("[สติกเกอร์]", "greet"),
+        ("👍👍❤️", "greet"), ("ติดตามครับ", "greet"), ("ร้านนี้ไม่โกงครับ ซื้อมาแล้วดีมาก", "greet"),
+        ("ร้านนี้โกง อย่าซื้อ", "attack"), ("ไมล์กรอมาแน่นอน", "attack"), ("ระวังร้านนี้ หลอกลวง", "attack"),
+        ("เหี้ยไรเนี่ย", "attack"), ("ซื้อไปแล้วรถเสีย โกงชัดๆ", "attack"),
+        ("ทักไปไม่ตอบเลย", "complaint"), ("ซื้อไปเดือนเดียวรถเสีย ไม่รับผิดชอบ", "complaint"),
+        ("โทรไปไม่รับสาย", "complaint"), ("ผิดหวังมาก บริการแย่", "complaint"),
+        ("ทักแชทไปแล้ว ยังไม่มีคนตอบเลย สนใจคันนี้", "complaint"), ("ยังไม่ได้เล่มเลยครับ", "complaint"),
+    ]
+    for t, want in CASES:
+        got = CM.classify(t)
+        ck("%s → %s" % (t, want), got[0] == want and got[1], got)
+    TRAPS = [  # ภาษาไทยไม่เว้นวรรค — คำสั้นต้องไม่จับกลางคำอื่น
+        ("ผ่อนคลายดี", "interest"), ("ดาวน์โหลดแอปที่ไหน", "interest"), ("ไม่สนใจ", "interest"),
+        ("เท่าไหร่", "greet"), ("รับผิดชอบดีมาก", "complaint"), ("แย่งกันซื้อ", "complaint"),
+        ("ขายออนไลน์ด้วยหรอ", "interest"), ("Toyota Hilux Revo", "greet"), ("สัดส่วนดี", "attack"),
+        ("กากบาท", "attack"), ("ไม่ผิดหวังครับ", "complaint"), ("ทักทายครับ", "interest"),
+    ]
+    for t, bad in TRAPS:
+        got = CM.classify(t)
+        ck("กับดัก: %s ≠ %s" % (t, bad), got[0] != bad, got)
+    ck("[รูป] / ชื่อคนล้วน = ยังไม่จัดประเภท", CM.classify("[รูป]") == ("", "") and CM.classify("Somchai Jaidee") == ("", ""))
+
+    def row(ext):
+        return SC.objects.get(ext_id=ext)
+    ck("ดึงมาแล้วจัดประเภทให้เลย", row("p1_c1").category == "interest" and row("ad1_c1").category == "interest"
+       and row("t3").category == "interest" and row("p1_c6").category == "", [(x.ext_id, x.category) for x in SC.objects.all()])
+    ck("จดคำที่จับได้ + รุ่นตัวจัด", row("p1_c1").category_why == "ราคา" and row("p1_c1").category_v == CM.CLASSIFY_V,
+       (row("p1_c1").category_why, row("p1_c1").category_v))
+    # ข้อความถูกแก้ (ฝั่งต้นทาง) → แถวที่ระบบจัด = จัดใหม่ · แถวที่คนจัด = ไม่ทับ
+    SC.objects.filter(ext_id="p1_c2").update(text="โกงชัดๆ", category="attack", category_why="โกง")
+    CM.set_category(row("ad1_c1").id, "complaint", "กวาง")
+    SC.objects.filter(ext_id="ad1_c1").update(text="แก้ข้อความ")
+    CM.sync_fb()
+    ck("ข้อความเปลี่ยน → ระบบจัดใหม่", row("p1_c2").category == "interest", (row("p1_c2").text, row("p1_c2").category))
+    ck("คนจัดเองแล้ว รอบดึงไม่ทับ", row("ad1_c1").category == "complaint" and row("ad1_c1").category_by == "กวาง",
+       (row("ad1_c1").category, row("ad1_c1").category_by))
+    # แถวเก่า (ก่อน migrate) / กติการุ่นเก่า → จัดใหม่ตอนเปิดหน้า · คนจัดไม่แตะ
+    SC.objects.filter(ext_id__in=["t3", "ad1_c1"]).update(category_v=0)
+    SC.objects.filter(ext_id="t3").update(category="", category_why="")
+    d = CM.list_json(status="all")
+    ck("เปิดหน้า = จัดแถวที่ยังไม่จัดให้", row("t3").category == "interest" and row("t3").category_v == CM.CLASSIFY_V)
+    ck("…แต่ไม่แตะแถวที่คนจัด", row("ad1_c1").category == "complaint" and row("ad1_c1").category_v == 0)
+    cc = d["catCounts"]
+    ck("นับตามประเภท (ทั้งหมด)", cc["all"] == SC.objects.count() and cc["complaint"] == 1 and cc["none"] == 1, cc)
+    d = CM.list_json(status="all", cat="interest")
+    ck("กรองประเภท สนใจ/ถามราคา", d["rows"] and {r["cat"] for r in d["rows"]} == {"interest"}, [r["cat"] for r in d["rows"]])
+    ck("ตัวเลขประเภทไม่ถูกตัวกรองประเภทเองบีบ", d["catCounts"]["all"] == cc["all"], d["catCounts"])
+    d = CM.list_json(status="all", cat="none")
+    ck("กรอง ยังไม่จัดประเภท", [r["text"] for r in d["rows"]] == ["[รูป]"], [r["text"] for r in d["rows"]])
+    d = CM.list_json(platform="yt", status="all")
+    ck("ตัวเลขประเภทตามช่องทางที่เลือก", d["catCounts"]["all"] == 2, d["catCounts"])
+    ck("row_json มีประเภท + คนจัด", any(r["cat"] == "interest" and r["catWhy"] for r in d["rows"]))
+    r_ = CM.set_category(row("ad1_c1").id, "auto", "x")
+    ck("คืนให้ระบบจัด (ข้อความ \"ผ่อนเดือนละเท่าไหร่\" = สนใจ)", r_.category_by == "" and r_.category == "interest" and r_.category_v == CM.CLASSIFY_V, (r_.category, r_.category_by))
+    r_ = CM.set_category(row("t1").id, "", "กวาง")
+    ck("ตั้ง 'ไม่จัดประเภท' เอง", r_.category == "" and r_.category_by == "กวาง")
+    s_, d = J(ADM, "/connect/api/comments", {"action": "category", "id": row("p1_c1").id, "cat": "attack"})
+    ck("API: แอดมินจัดประเภท", s_ == 200 and d["row"]["cat"] == "attack" and d["row"]["catBy"] == "admin", (s_, d))
+    s_, d = J(ADM, "/connect/api/comments", {"action": "category", "id": row("p1_c1").id, "cat": "มั่ว"})
+    ck("API: ประเภทมั่ว = 400", s_ == 400, (s_, d))
+    s_, d = J(ADM, "/connect/api/comments", {"action": "category", "id": 999999, "cat": "greet"})
+    ck("API: ไม่พบ = 404", s_ == 404, s_)
+    s_, d = J(SEL, "/connect/api/comments", {"action": "category", "id": row("p1_c1").id, "cat": "greet"})
+    ck("API: เซลล์จัดประเภทไม่ได้", s_ == 403 and row("p1_c1").category == "attack", s_)
+    s_, d = J(ADM, "/connect/api/comments?status=all&cat=attack")
+    ck("API: กรอง cat ผ่าน GET", s_ == 200 and [r["cat"] for r in d["rows"]] == ["attack"] and d.get("cats"), (s_, d.get("catCounts")))
+
 finally:
     _runner.teardown_databases(_old)
 
