@@ -1271,7 +1271,7 @@ class SocialComment(models.Model):
     done_by = models.CharField("จัดการแล้วโดย", max_length=80, blank=True)
     fetched_at = models.DateTimeField("ดึงล่าสุด", default=timezone.now)
     # ★ 17 ต.ค.69 จำแนกประเภทลูกค้า — ระบบจัดจากคำในคอมเมนต์ (ไม่ใช้ AI · comments.classify) · คนแก้ได้
-    CAT_CHOICES = [("greet", "ทักทาย/พูดคุยเล่น"), ("interest", "สนใจ/ถามราคา"),
+    CAT_CHOICES = [("greet", "ทักทาย/พูดคุยเล่น"), ("interest", "สนใจ/สอบถาม"),
                    ("attack", "โจมตีแบรนด์"), ("complaint", "คอมเพลน")]
     category = models.CharField("ประเภทลูกค้า", max_length=12, choices=CAT_CHOICES, blank=True, db_index=True)
     category_why = models.CharField("จัดจากคำว่า", max_length=60, blank=True)

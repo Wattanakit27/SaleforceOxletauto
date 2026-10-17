@@ -235,6 +235,17 @@ def api_inbox(request):
         unread_counts(rows)
     except Exception:
         pass
+    if view == "tocode" and admin and rows:      # ★ 17 ต.ค.69 ตัวหน้าที่ระบบจะใช้ (lead_code · จำผล 2 นาที) — โชว์บนการ์ดก่อนกดชื่อเซลล์
+        try:
+            leads = {x.chat_id: x for x in C.ChatLead.objects.filter(chat_id__in=[r["id"] for r in rows[:60]])}
+            objs = ChatOwner.objects.select_related("profile", "fb_profile", "owner").in_bulk(list(leads))
+            for r in rows[:60]:
+                o, ld = objs.get(r["id"]), leads.get(r["id"])
+                if o and ld and not (ld.code or "").strip():
+                    sg = C.suggest_prefix(ld, C.team_of(o.owner) if o.owner_id else "", o=o)
+                    r["pfx"], r["pfxWhy"] = C.build_prefix(sg["base"], sg["admin"], False), sg["why"]
+        except Exception:
+            pass
     cnt = C.counts(emp, admin)
     if not admin and not on_duty:
         cnt["queue"] = 0
@@ -423,7 +434,7 @@ def api_chat(request):
             except Exception as e:
                 out["crmError"] = str(e)[:120]
             if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
-                out["codeHelp"] = C.code_help(o, lead)
+                out["codeHelp"] = C.code_help(o, lead, msgs)
                 try:                              # ★ 10 ต.ค.69 เบอร์ซ้ำ · คิวจ่ายวน · ส่งต่อไม้ 2 · นาฬิกาโทร
                     from . import leadflow as LF
                     ch = out["codeHelp"]
@@ -466,6 +477,11 @@ def api_assign_lead(request):
     if "park" in body:                            # ★ 11 ต.ค.69 ติ๊ก "รับ lead จากแชทนี้แล้ว" → เข้าห้องพัก Lead / เอาออก
         ok, msg = C.mark_park(o, bool(body.get("park")), by=ctx["name"] or "แอดมิน")
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
+    if "doc" in body:                             # ★ 17 ต.ค.69 ติ๊ก "มีเอกสารยืนยันรายได้" (เกณฑ์ HLD) · null = ให้ระบบดูจากแชท
+        from . import lead_code
+        v = body.get("doc")
+        ok, msg = lead_code.mark_doc(o, None if v is None else bool(v), by=ctx["name"] or "แอดมิน")
+        return _j({"ok": ok, "message": msg})
     if "kind" in body:                            # ★ 11 ต.ค.69 ลีดรับซื้อรถ ("buy") / ลีดขายรถ ("sell") — แอดมินตั้งเอง
         ok, msg = C.set_deal_kind(o, str(body.get("kind") or ""), by=ctx["name"] or "แอดมิน")
         return _j({"ok": ok, "message" if ok else "error": msg}, 200 if ok else 400)
@@ -480,7 +496,7 @@ def api_assign_lead(request):
     emp = Employee.objects.filter(pk=eid).first() if eid else None
     base, adm, rej = str(body.get("base") or ""), bool(body.get("admin")), bool(body.get("reject"))
     if not base and emp:                          # ★ 10 ต.ค.69 กดชื่อเซลล์ในห้องพัก Lead = จ่ายเลย → ตัวหน้าตามที่ระบบแนะนำ
-        sg = C.suggest_prefix(C.lead_of(o), C.team_of(emp))
+        sg = C.suggest_prefix(C.lead_of(o), C.team_of(emp), o=o)
         base, adm, rej = sg["base"], bool(sg["admin"]), bool(sg["reject"])
     ok, msg = C.assign_lead(o, emp, base, adm, rej, str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
     if not ok:

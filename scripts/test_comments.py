@@ -322,6 +322,9 @@ try:
         ("ทักไปไม่ตอบเลย", "complaint"), ("ซื้อไปเดือนเดียวรถเสีย ไม่รับผิดชอบ", "complaint"),
         ("โทรไปไม่รับสาย", "complaint"), ("ผิดหวังมาก บริการแย่", "complaint"),
         ("ทักแชทไปแล้ว ยังไม่มีคนตอบเลย สนใจคันนี้", "complaint"), ("ยังไม่ได้เล่มเลยครับ", "complaint"),
+        # ★ 17 ต.ค.69 (รอบ 2) สอบถาม — เจ้าของยกตัวอย่าง "สีบรอนเงินมีมียัง"
+        ("สีบรอนเงินมีมียัง", "interest"), ("ขาว", "interest"), ("สีขาวครับ", "interest"), ("ดำมีไหม", "interest"),
+        ("จริงไหม", "interest"), ("ได้ไหมครับ", "interest"), ("ยังอยู่?", "interest"), ("รับซื้อรถไหม", "interest"),
     ]
     for t, want in CASES:
         got = CM.classify(t)
@@ -331,6 +334,7 @@ try:
         ("เท่าไหร่", "greet"), ("รับผิดชอบดีมาก", "complaint"), ("แย่งกันซื้อ", "complaint"),
         ("ขายออนไลน์ด้วยหรอ", "interest"), ("Toyota Hilux Revo", "greet"), ("สัดส่วนดี", "attack"),
         ("กากบาท", "attack"), ("ไม่ผิดหวังครับ", "complaint"), ("ทักทายครับ", "interest"),
+        ("ไฟไหม้", "interest"), ("สมัยก่อน", "interest"), ("ปะทะกันเลย", "interest"), ("ขาวสวยมาก", "interest"),
     ]
     for t, bad in TRAPS:
         got = CM.classify(t)

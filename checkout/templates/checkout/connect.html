@@ -273,6 +273,11 @@
   .pf-fld { margin: 7px 0; }
   .pf-lab { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--t3); font-size: 12px; margin-bottom: 3px; }
   .pf-lab > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .pf-pfx { color: var(--t3); font-size: 12px; line-height: 1.55; }
+  .pf-pfx b { color: var(--t1); }
+  .pf-pfx details { margin-top: 3px; }
+  .pf-pfx summary { cursor: pointer; color: var(--blue); }
+  .pf-pfx-r { padding-left: 10px; }
   .pf-auto { font-size: 10.5px; padding: 0 5px; border-radius: 5px; background: var(--blue-bg); color: var(--blue); white-space: nowrap; }
   .pf-fld input[type=text], .pf-fld input[type=tel], .pf-fld textarea, .pf-fld select {
     width: 100%; padding: 6px 9px; border-radius: 7px; border: .5px solid var(--bd2); background: var(--bg2); font-size: 13px; }
@@ -555,51 +560,57 @@
   .lc-dbf { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px 14px; border-bottom: .5px solid var(--bd); align-items: center; }
   .lc-dbf select { padding: 5px 9px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); font-size: 12px; }
   /* ★ 17 ต.ค.69 หน้าคอมเมนต์ — รวมคอมเมนต์ Facebook · TikTok (รออนุมัติ) · YouTube */
-  /* แถวคอมเมนต์ = กริดตายตัว: รูปคน | หัว (ชื่อ ··· ประเภท สถานะ เวลา ชิดขวา) · เพจ/ช่อง · ข้อความ · โพสต์ · ปุ่ม
-     ป้ายทุกตัวกว้างตายตัว + ปุ่ม/ช่องเลือกสูงเท่ากัน → ทุกแถวตรงกัน (17 ต.ค.69 เจ้าของ "เรียงดูแปลกๆ ให้มันเท่ากัน") */
-  .cm-row { display: grid; grid-template-columns: 38px minmax(0, 1fr); column-gap: 12px; padding: 13px 16px; border-bottom: .5px solid var(--bd); }
-  .cm-row:last-child { border-bottom: 0; }
+  /* การ์ดคอมเมนต์ — ★ 17 ต.ค.69 (รอบ 3) เจ้าของ "ตัวหนังสือจาง · พื้นที่เหลือเยอะไม่จำเป็น"
+     จอกว้างเรียงเป็นการ์ดหลายคอลัมน์ (เดิมแถวเดียวกว้างทั้งจอ เนื้อหาอยู่ซ้าย ป้าย/เวลาไปอยู่สุดขวา)
+     ในการ์ด: รูปคน | หัว (ชื่อ ··· ประเภท สถานะ เวลา) · เพจ/ช่อง · ข้อความ · โพสต์ · ปุ่ม (ชิดล่าง การ์ดข้างกันปุ่มตรงกัน)
+     ป้ายกว้างตายตัว + ปุ่ม/ช่องเลือกสูงเท่ากัน → ทุกการ์ดตรงกัน (เจ้าของ "เรียงดูแปลกๆ ให้มันเท่ากัน") */
+  #lc-cm-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(560px, 100%), 1fr)); gap: 10px; margin-bottom: 13px; }
+  #lc-cm-rows > .cn-empty, #lc-cm-rows > .cm-tt, #lc-cm-rows > .cm-morewrap { grid-column: 1 / -1; }
+  #lc-cm-rows > .cn-empty { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; }
+  .cm-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; padding: 12px 14px;
+            border: .5px solid var(--bd2); border-radius: 10px; background: var(--bg); min-width: 0; }
   .cm-row.done { opacity: .62; }
-  .cm-body { min-width: 0; }
+  .cm-body { min-width: 0; display: flex; flex-direction: column; }
   .cm-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-  .cm-who { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t1); font-size: 13.5px; }
+  .cm-who { flex: 1 1 110px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t1); font-size: 14px; font-weight: 800; }
   .cm-right { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
   .cm-right .tag { justify-content: center; height: 22px; box-sizing: border-box; }
-  .cm-st { min-width: 72px; }
-  .cm-right .cm-cat { min-width: 112px; }
-  .cm-time { min-width: 76px; text-align: right; font-size: 12px; color: var(--t3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .cm-sub { display: flex; align-items: center; gap: 7px; margin-top: 3px; min-width: 0; font-size: 12px; }
+  .cm-st { min-width: 74px; }
+  .cm-right .cm-cat { min-width: 104px; }
+  .cm-time { min-width: 70px; text-align: right; font-size: 12.5px; color: var(--t2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cm-sub { display: flex; align-items: center; gap: 7px; margin-top: 3px; min-width: 0; font-size: 12.5px; }
   .cm-sub .tag { min-width: 74px; justify-content: center; height: 20px; box-sizing: border-box; flex: none; }
-  .cm-acc { flex: 1; min-width: 0; color: var(--t3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cm-text { margin: 7px 0 8px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; color: var(--t1); }
-  .cm-post { display: flex; gap: 10px; align-items: center; width: 100%; max-width: 640px; box-sizing: border-box; min-height: 56px;
-             padding: 6px 10px 6px 6px; border-radius: 8px; background: var(--bg2); color: var(--t2); text-decoration: none; font-size: 12.5px; }
-  .cm-pth { position: relative; flex: none; width: 64px; height: 44px; border-radius: 6px; overflow: hidden; background: var(--bg3);
+  .cm-acc { flex: 1; min-width: 0; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-text { margin: 8px 0; white-space: pre-wrap; word-break: break-word; line-height: 1.55; color: var(--t1); font-size: 14.5px; font-weight: 600; }
+  .cm-post { display: flex; gap: 10px; align-items: center; width: 100%; box-sizing: border-box; min-height: 54px;
+             padding: 5px 10px 5px 5px; border-radius: 8px; background: var(--bg2); color: var(--t1); text-decoration: none; font-size: 12.5px; }
+  .cm-pth { position: relative; flex: none; width: 60px; height: 44px; border-radius: 6px; overflow: hidden; background: var(--bg3);
             display: flex; align-items: center; justify-content: center; color: var(--t3); }
   .cm-pth img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .cm-ptt { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.45; }
   .cm-ad { color: var(--amber); }
-  .cm-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--t3); }
+  .cm-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; padding-top: 8px; font-size: 12.5px; color: var(--t2); }
   .cm-acts .btn, .cm-acts .cm-catsel { height: 30px; box-sizing: border-box; }
-  .cm-acts .btn { text-decoration: none; }
-  .cm-acts .cm-open { width: 140px; }                     /* "เปิดใน Facebook" = "เปิดใน YouTube" */
-  .cm-acts [data-cmdone] { width: 132px; }                 /* "จัดการแล้ว" = "ยกเลิก จัดการแล้ว" */
-  .cm-acts .cm-catsel { width: 260px; }                    /* ข้อความในช่องเลือกยาวไม่เท่ากัน */
-  .cm-stat { margin-left: auto; white-space: nowrap; }
+  .cm-acts .btn { text-decoration: none; color: var(--t1); }
+  .cm-acts .cm-open { width: 132px; }                     /* "เปิดใน Facebook" = "เปิดใน YouTube" */
+  .cm-acts [data-cmdone] { width: 120px; }                 /* "จัดการแล้ว" = "ยกเลิก จัดการแล้ว" */
+  .cm-acts .cm-catsel { flex: 1 1 190px; min-width: 0; max-width: 300px; }   /* การ์ดข้างกันกว้างเท่ากัน = ช่องนี้กว้างเท่ากัน */
+  .cm-stat { white-space: nowrap; flex-basis: 100%; }
   @media (max-width: 600px) {
+    #lc-cm-rows { gap: 8px; }
     .cm-row { grid-template-columns: 34px minmax(0, 1fr); column-gap: 10px; padding: 12px; }
     .cm-row > .cn-av { width: 34px; height: 34px; }
     .cm-head { flex-wrap: wrap; row-gap: 4px; }
     .cm-right .cm-cat { min-width: 0; }
     .cm-time { min-width: 0; }
-    .cm-stat { margin-left: 0; }
     .cm-acts .cm-open, .cm-acts [data-cmdone] { width: auto; flex: 1 1 0; }
-    .cm-acts .cm-catsel { width: 100%; }
+    .cm-acts .cm-catsel { flex-basis: 100%; max-width: none; }
   }
-  .cm-src { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 9px 14px; font-size: 12px; color: var(--t3); line-height: 1.5; }
+  .cm-src { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 9px 14px; font-size: 12.5px; color: var(--t2); line-height: 1.5; }
   .cm-src .bad { color: var(--red); }
   .cm-tt { margin: 14px; padding: 16px; border-radius: 10px; background: var(--bg2); color: var(--t2); line-height: 1.7; }
-  .cm-fl { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--t3); min-width: 0; }
+  .cm-fl { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--t2); font-weight: 700; min-width: 0; }
+  .cm-fl select { color: var(--t1); font-size: 12.5px; }
   .cm-fl > span { white-space: nowrap; }
   .cm-fl select { max-width: 100%; min-width: 0; }
   .lc-dbf select.on { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-dk); font-weight: 700; }
@@ -608,7 +619,7 @@
   .tag.c-interest { background: var(--green-bg); color: var(--green); }
   .tag.c-attack { background: var(--red-bg); color: var(--red); }
   .tag.c-complaint { background: var(--amber-bg); color: var(--amber); }
-  .cm-catsel { font-size: 12px; padding: 4px 7px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); color: var(--t2); max-width: 100%; }
+  .cm-catsel { font-size: 12.5px; padding: 4px 7px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); color: var(--t1); max-width: 100%; }
   @media (max-width: 600px) { .cm-fl { flex: 1 1 100%; } .cm-fl select { flex: 1; } }
   .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr); gap: 13px; align-items: start; }
   .lc-dbgrid.has-prof { grid-template-columns: minmax(0,1fr) 340px; }
@@ -2374,7 +2385,7 @@
       </div>
       <label class="ck"><input type="checkbox" data-x="admin"${vAdmin ? ' checked' : ''}> A — ลีดของแอดมิน</label>
       <label class="ck"><input type="checkbox" data-x="reject"${vReject ? ' checked' : ''}> R — เคสรีเจ็ค</label>
-      <div style="color:var(--t3);font-size:12px">ระบบแนะนำ <b>${h(sugCode)}</b> — ${h(sg.why || '')}</div>
+      ${pfxHelpHtml(sg, sugCode)}
       <div style="margin:6px 0 2px;color:var(--t3);font-size:12px">เลขที่จะได้:</div>
       <div class="pf-code" data-x="preview"></div>
       ${postNoteHtml(P || { on: false }, P && P.fb ? 'ลูกค้าเป็นของเซลล์ในระบบ (เก็บข้อมูลเท่านั้น)' : 'โอนแชทให้เซลล์ (ตอบลูกค้าผ่าน Connect)')}
@@ -2406,6 +2417,18 @@
     }
     return x + `</div>`;
   }
+  // ★ 17 ต.ค.69 ตัวหน้าอัตโนมัติ (checkout/lead_code.py) — บอกว่าทำไมได้ตัวหน้านี้ + ติ๊กเอกสารรายได้เองได้
+  const PFX_LABEL = { HLD: 'Very Hot', WLD: 'Hot', LD: 'Moderate', NLD: 'Moderate', BLD: 'BLD', TLD: 'TLD', TALD: 'TLD' };
+  function pfxHelpHtml(sg, code) {
+    const rs = sg.reasons || [];
+    const lab = PFX_LABEL[sg.base] ? ` · ${PFX_LABEL[sg.base]}` : '';
+    let x = `<div class="pf-pfx"><div>ระบบแนะนำ <b>${h(code)}</b>${h(lab)} — ${h(sg.why || '')}</div>`;
+    if (rs.length > 1) x += `<details><summary>เกณฑ์ที่เข้าทั้งหมด ${rs.length} ข้อ</summary>${rs.map(([k, t]) =>
+      `<div class="pf-pfx-r"><b>${h(k)}</b> ${h(t)}</div>`).join('')}</details>`;
+    if (sg.auto) x += `<label class="ck" style="margin-top:4px"><input type="checkbox" data-doc${sg.doc ? ' checked' : ''}>
+      มีเอกสารยืนยันรายได้ (สลิป/ใบรับรองเงินเดือน/statement)${sg.doc && sg.docAuto ? ' <span class="pf-auto">เห็นจากแชท</span>' : ''}</label>`;
+    return x + `</div>`;
+  }
   function codePreview(box) {
     const ch = (S.chat || {}).codeHelp; if (!ch || !box) return;
     const q = k => box.querySelector(`[data-x="${k}"]`);
@@ -2419,6 +2442,7 @@
   // ข้อความ (จำนวน + ตัวสุดท้าย) อยู่ในลายเซ็นด้วย — ป้าย "จากแชท 14:02" / ความพร้อม (รูปรถ) / ปุ่มถามต่อ อิงแชท
   const profSig = d => JSON.stringify([d.row.id, d.profile, d.lead, d.leadEditable, d.row.owner, d.row.team,
                                        d.codeHelp && d.codeHelp.task, d.codeHelp && d.codeHelp.dup, d.crm,
+                                       d.codeHelp && d.codeHelp.suggest,      // ★ 17 ต.ค.69 ตัวหน้าที่แนะนำเปลี่ยน (ติ๊กเอกสาร/ลูกค้าให้ข้อมูลเพิ่ม) = วาดใหม่
                                        S.lostPick === d.row.id, S.aiDraft[d.row.id] || null, d.canReply, d.replyOn,
                                        (d.messages || []).length, ((d.messages || []).slice(-1)[0] || {}).id || '']);
   function paintProfile(force) {
@@ -2481,6 +2505,16 @@
     };
     const box = el.querySelector('[data-box=assign]');
     if (box) {
+      const dk = box.querySelector('[data-doc]');
+      if (dk) dk.onchange = async () => {            // ★ 17 ต.ค.69 มีเอกสารยืนยันรายได้ → เกณฑ์ HLD (ตัวหน้าคิดใหม่)
+        const id = S.chat.row.id, sg = (S.chat.codeHelp || {}).suggest || {};
+        dk.disabled = true;
+        const r = await api('/connect/api/assign_lead', { id, doc: dk.checked });
+        if (!r.ok) { dk.disabled = false; dk.checked = !dk.checked; toast(r.error || 'บันทึกไม่สำเร็จ'); return; }
+        if (S.assignDraft && S.assignDraft.id === id && S.assignDraft.base === sg.base) S.assignDraft = null;   // ยังไม่ได้เลือกตัวหน้าเอง = ตามที่ระบบคิดใหม่
+        toast(r.message, 2500);
+        openChat(id, true);
+      };
       box.querySelectorAll('[data-x]').forEach(x => x.addEventListener('change', () => {
         const q = k => box.querySelector(`[data-x="${k}"]`);
         S.assignDraft = { id: S.chat.row.id, base: q('base').value, emp: +(q('emp').value || 0),
@@ -3566,7 +3600,7 @@
     const more = S.distMore === x.kind + ':' + x.id;
     return `<div class="lc-lead${x.mins >= 30 ? ' pool' : ''}" data-lead="${h(x.kind)}:${h(x.id)}">
       <div>
-        <div class="who"><span class="code">${h(x.prefix || '')}</span><span class="lc-chip">ยังไม่มีเลข</span> ${h(x.name)}
+        <div class="who"><span class="code"${x.prefixWhy ? ` title="ตัวหน้าที่ระบบจะใช้: ${h(x.prefixWhy)}"` : ''}>${h(x.prefix || '')}</span><span class="lc-chip">ยังไม่มีเลข</span> ${h(x.name)}
           <span class="lc-origin${chat ? '' : ' direct'}">${chat ? 'จากแชท' : 'ใบร่าง/สายเข้า'}</span></div>
         <div class="det">${h(x.car || 'ไม่ระบุรุ่นรถ')}</div>
         <div class="det m">${h(x.line)}</div>
@@ -3589,7 +3623,7 @@
     (S.rows || []).forEach(r => out.push({ kind: 'chat', id: r.id, r, name: r.name, src: SRC_KEY[r.src] || 'line', car: r.car || '',
       line: 'แชท ' + (r.src === 'fb' ? 'Facebook' : 'LINE@') + (r.parkedBy ? ' · ติ๊กรับ lead โดย ' + r.parkedBy : '') + ' · ' + (r.preview || ''),
       since: r.parkedAt || r.since || r.lastAt || new Date(nowMs()).toISOString(),
-      hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, prefix: '' }));
+      hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, prefix: r.pfx || '', prefixWhy: r.pfxWhy || '' }));
     (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src).forEach(i => out.push({ kind: 'park', id: i.id, i, name: pWho(i),
       src: SRC_KEY[i.source] || 'other', car: i.car || '', line: 'ใบร่างจากกลุ่ม ' + (P.room || 'ADMIN เก็บ Lead') + (i.channel ? ' · ' + i.channel : '') + (i.by ? ' · พักโดย ' + i.by : ''),
       since: i.at, hasPhone: !!i.phone, hasLine: !!i.lineId, dup: i.dup || null, prefix: i.prefix, reposts: i.reposts }));
@@ -3742,7 +3776,7 @@
         ${P.plan.map(p => { const k = raKey(p), off = S.raOff.has(k);
           return `<div class="row${p.dup ? ' dup' : ''}${off ? ' off' : ''}"><label><input type="checkbox" data-rak="${h(k)}"${off ? '' : ' checked'}${S.raBusy ? ' disabled' : ''}>
             ${chTag(SRC_KEY[p.src] || 'other')}<span class="nm">${h(p.name)}</span></label>
-            <span class="to">→ @${h(p.to)}</span><span class="why">${h(p.why)}</span></div>`; }).join('') || '<div class="sk">ไม่มีใบที่จ่ายได้ในรอบนี้</div>'}
+            ${p.pfx ? `<span class="lc-chip" title="${h(p.pfxWhy || 'ตัวหน้าตามใบร่าง')}">${h(p.pfx)}</span>` : ''}<span class="to">→ @${h(p.to)}</span><span class="why">${h(p.why)}</span></div>`; }).join('') || '<div class="sk">ไม่มีใบที่จ่ายได้ในรอบนี้</div>'}
         ${(P.skipped || []).map(s => `<div class="sk">ข้าม ${h(s.name)} — ${h(s.why)}</div>`).join('')}
         <div class="acts"><span class="note" style="font-size:12px;color:var(--t3)">${post.on
           ? `ใบละ 1 ข้อความเข้า "${h(post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(post.rejectRoom || 'REJECT')}")`
@@ -3869,7 +3903,7 @@
   const CM_PF = { fb: ['Facebook', 'fb'], yt: ['YouTube', 'yt'], tt: ['TikTok', 'tiktok'] };
   const CM_TABS = [['', 'ทุกช่องทาง'], ['fb', 'Facebook'], ['tt', 'TikTok'], ['yt', 'YouTube']];
   // ★ 17 ต.ค.69 จำแนกประเภทลูกค้า — ระบบจัดจากคำในคอมเมนต์ (comments.classify · ไม่ใช้ AI) · แก้รายคอมเมนต์ได้
-  const CM_CATS = [['greet', 'ทักทาย/พูดคุยเล่น'], ['interest', 'สนใจ/ถามราคา'], ['attack', 'โจมตีแบรนด์'], ['complaint', 'คอมเพลน']];
+  const CM_CATS = [['greet', 'ทักทาย/พูดคุยเล่น'], ['interest', 'สนใจ/สอบถาม'], ['attack', 'โจมตีแบรนด์'], ['complaint', 'คอมเพลน']];
   const cmCatName = k => (CM_CATS.find(c => c[0] === k) || [k, 'ยังไม่จัดประเภท'])[1];
   async function openCmt(keep) {
     const pg = $('lc-page');
@@ -3895,7 +3929,7 @@
       <div class="lc-dbtop" style="border-bottom:0"><label class="lc-dbs">${ic('list')}<input id="lc-cm-q" type="search" autocomplete="off" placeholder="ค้นข้อความ · ชื่อคนคอมเมนต์ · โพสต์/คลิป · เพจ/ช่อง" value="${h(S.cm.q)}"></label></div>
       <div class="cm-src" id="lc-cm-src"></div>
     </div>
-    <div class="lc-card"><div id="lc-cm-rows"></div></div>`;
+    <div id="lc-cm-rows"></div>`;
   }
   function bindCmShell() {
     $('lc-cm-st').value = S.cm.status;
@@ -3999,7 +4033,7 @@
       return;
     }
     box.innerHTML = rows.map(cmRow).join('')
-      + (d.more ? `<div style="padding:12px;text-align:center"><button class="btn sm" id="lc-cm-more">ดูเพิ่ม</button></div>` : '');
+      + (d.more ? `<div class="cm-morewrap" style="padding:4px;text-align:center"><button class="btn sm" id="lc-cm-more">ดูเพิ่ม</button></div>` : '');
     if (d.more) $('lc-cm-more').onclick = () => { S.cm.limit += 60; openCmt(true); };
     box.querySelectorAll('[data-cmdone]').forEach(b => b.onclick = async () => {
       b.disabled = true;

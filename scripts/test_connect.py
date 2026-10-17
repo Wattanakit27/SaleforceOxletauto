@@ -881,7 +881,7 @@ try:
     ck("ไม่มี type + ช่องทาง TikTok → TLD", sp("", "LIVE Tiktok / ช่องขายบอส")["base"] == "TLD")
     ck("TikTokAds → TALD", sp("", "TikTokAds")["base"] == "TALD")
     ck("ไม่มีอะไรเลย → NLD", sp()["base"] == "NLD")
-    ck("type RJ → แนะนำ R", sp("RJ")["reject"] is True)
+    ck("★ 17 ต.ค.69 ลีดใหม่ไม่ติ๊ก R ให้เอง (R = ส่งต่อไม้ 2 เท่านั้น · เจ้าของยืนยัน)", sp("RJ")["reject"] is False)
     ck("จ่ายให้เทเลเซลล์ → แนะนำ A", sp("Moderate", team="ADMIN")["admin"] is True)
     ck("ประกอบตัวหน้า R+A+ฐาน", C.build_prefix("NLD", True, True) == "RANLD" and C.build_prefix("xx") == "NLD")
 

@@ -2479,7 +2479,8 @@ def save_lead_field(o, field: str, value, by: str = ""):
 #    · เติมหน้า **A** = ลีดของแอดมิน (ANLD/AWLD/AHLD) · **R** = เคสรีเจ็ค (RNLD/RTLD)
 #    · **เลขรันใช้ร่วมกันทุกตัวหน้า** (8395 TLD → 8396 NLD → 8397 NLD …) · เดือน = เดือนที่จ่าย
 # ─────────────────────────────────────────────────────────────
-CODE_BASES = [("NLD", "Moderate"), ("WLD", "Hot"), ("HLD", "Very Hot"), ("BLD", "BLD"),
+# ★ 17 ต.ค.69 เพิ่ม LD (Moderate · ให้ข้อมูลแต่เครดิตอ่อน) — ตัวหน้าอัตโนมัติดู checkout/lead_code.py
+CODE_BASES = [("NLD", "Moderate"), ("LD", "Moderate"), ("WLD", "Hot"), ("HLD", "Very Hot"), ("BLD", "BLD"),
               ("TLD", "TLD"), ("TALD", "TLD")]
 _TYPE_BASE = {"moderate": "NLD", "merhot": "NLD", "hot": "WLD", "very hot": "HLD", "bld": "BLD",
               "tld": "TLD", "tld / hot": "TLD"}
@@ -3248,10 +3249,14 @@ def scan_contacts_bg(limit: int = 150) -> bool:
     return True
 
 
-def suggest_prefix(lead, assignee_team: str = "") -> dict:
-    """ตัวหน้าที่ควรใช้ — ตาม type (ถ้ากรอกแล้ว) ไม่งั้นตามช่องทาง · คนเปลี่ยนเองได้ที่หน้าเว็บ"""
-    t = (lead.lead_type or "").strip().lower()
-    ch = (lead.channel or "").lower().replace(" ", "")
+def suggest_prefix(lead, assignee_team: str = "", o=None, msgs=None) -> dict:
+    """ตัวหน้าที่ควรใช้ · คนเปลี่ยนเองได้ที่หน้าเว็บ
+    ลำดับ: type ที่กรอกแล้ว → ช่องทาง TikTok/TikTokAds → ★ 17 ต.ค.69 **เกณฑ์ของเจ้าของจากข้อมูลในแชท**
+    (`lead_code.for_chat` · HLD/WLD/LD/BLD/NLD · บอกเหตุผล) → NLD
+    ★ 17 ต.ค.69 **ไม่ติ๊ก R ให้เอง** — เจ้าของยืนยันว่า R = ส่งต่อเคสให้ไม้ 2/แอดมิน ไม่ใช่ลีดใหม่ (ใช้ "ส่งต่อไม้ 2")"""
+    t = (getattr(lead, "lead_type", "") or "").strip().lower()
+    ch = (getattr(lead, "channel", "") or "").lower().replace(" ", "")
+    reasons, auto_code = [], None
     if t in _TYPE_BASE:
         base, why = _TYPE_BASE[t], "ตาม type \"%s\"" % lead.lead_type
     elif "tiktokads" in ch:
@@ -3260,9 +3265,22 @@ def suggest_prefix(lead, assignee_team: str = "") -> dict:
         base, why = "TLD", "ช่องทาง TikTok"
     else:
         base, why = "NLD", "ค่าตั้งต้น (Moderate)"
-    reject = t in ("rj", "hot rj", "hot rb")
+        if o is None and getattr(lead, "chat_id", None):
+            o = getattr(lead, "chat", None)
+        if o is not None:
+            try:
+                from . import lead_code
+                auto_code = lead_code.for_chat(o, lead, msgs)
+                base, why, reasons = auto_code["base"], auto_code["why"], auto_code["reasons"]
+            except Exception as e:
+                why = "ค่าตั้งต้น (Moderate) — อ่านแชทไม่สำเร็จ: %s" % str(e)[:60]
     admin = assignee_team == "ADMIN"
-    return {"base": base, "admin": admin, "reject": reject, "why": why}
+    out = {"base": base, "admin": admin, "reject": False, "why": why, "reasons": reasons}
+    if auto_code is not None:
+        out["auto"] = True
+        out["doc"] = bool(auto_code.get("doc"))
+        out["docAuto"] = bool(auto_code.get("docAuto"))
+    return out
 
 
 def build_prefix(base: str, admin: bool = False, reject: bool = False) -> str:
@@ -3314,9 +3332,9 @@ def next_code(prefix: str) -> str:
     return "%s%d-%d" % (prefix, timezone.localdate().month, last_running() + 1)
 
 
-def code_help(o, lead) -> dict:
+def code_help(o, lead, msgs=None) -> dict:
     """ข้อมูลให้หน้าเว็บประกอบตัวอย่างเลขลีดก่อนกด "จ่ายเบอร์" (เลขจริงคำนวณใหม่ตอนกด กันซ้ำ)"""
-    sug = suggest_prefix(lead, team_of(o.owner) if o.owner_id else "")
+    sug = suggest_prefix(lead, team_of(o.owner) if o.owner_id else "", o=o, msgs=msgs)
     return {"suggest": sug, "bases": [{"key": b, "type": t} for b, t in CODE_BASES],
             "month": timezone.localdate().month, "next": last_running() + 1,
             "post": post_help(sim=is_sim_row(o), fb=is_fb(o))}

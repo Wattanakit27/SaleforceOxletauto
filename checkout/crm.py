@@ -745,6 +745,14 @@ def room_plan(src: str = "", limit: int = AUTO_LIMIT) -> dict:
             pick = min(cand, key=lambda x: (load.get(x["id"], 0), x["_last"], x["name"]))
             target, why = pick["emp"], "คิวจ่ายวน"
         load[target.id] = load.get(target.id, 0) + 1
+        if kind == "chat" and ld is not None:   # ★ 17 ต.ค.69 ตัวหน้าที่ assign_lead จะใช้ (ตัวเดียวกัน · lead_code)
+            try:
+                sg = C.suggest_prefix(ld, C.team_of(target), o=o)
+                ref = dict(ref, pfx=C.build_prefix(sg["base"], sg["admin"], False), pfxWhy=sg["why"])
+            except Exception:
+                pass
+        elif kind == "park":
+            ref = dict(ref, pfx=C.build_prefix(ref["base"] or "NLD", ref["admin"], ref["reject"]))
         plan.append(dict(ref, emp=target.id, to=target.nickname, why=why, dup=bool(dup),
                          since=at.isoformat() if at else ""))
     return {"ok": True, "plan": plan, "skipped": skipped, "total": total, "limit": int(limit or AUTO_LIMIT),
