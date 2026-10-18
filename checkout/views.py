@@ -853,6 +853,8 @@ def api_employees(request):
     if not _admin(request):
         return JsonResponse({"ok": False, "error": "ต้อง login admin"}, status=401)
     from .models import Employee
+    from . import departments as _dept
+    synced = []           # สิทธิ์ระบบรถที่เปลี่ยนตามแผนกในคำขอนี้
 
     if request.method == "POST":
         try:
@@ -867,6 +869,13 @@ def api_employees(request):
         if not nick:
             return JsonResponse({"ok": False, "error": "ต้องมีชื่อเล่น"}, status=400,
                                 json_dumps_params={"ensure_ascii": False})
+        # ★ 18 ต.ค.69 แผนก (checkout/departments.py) — ไม่ส่งมา = คงค่าเดิม · ค่ามั่ว = ฟ้อง ไม่เงียบ
+        dept_in = b.get("department")
+        if dept_in is not None:
+            dept_in = str(dept_in).strip()
+            if dept_in and dept_in not in _dept.LABEL:
+                return JsonResponse({"ok": False, "error": "ไม่รู้จักแผนก \"%s\"" % dept_in[:30]}, status=400,
+                                    json_dumps_params={"ensure_ascii": False})
         fields = {
             "display_name": (b.get("displayName") or "").strip()[:120],
             "position": (b.get("position") or "").strip()[:80],
@@ -894,7 +903,14 @@ def api_employees(request):
             row.nickname = nick
             for k, v in fields.items():
                 setattr(row, k, v)
+            # แผนก: เลือกค่าใหม่ หรือกด "ยืนยัน" ค่าที่ระบบเดาไว้ = คนตัดสินแล้ว → ใช้ตั้งสิทธิ์ระบบรถได้
+            #   (แก้ช่องอื่นเฉยๆ ไม่นับว่ายืนยันแผนก — กันค่าเดาถูกยืนยันโดยไม่ได้ตั้งใจ)
+            dept_changed = dept_in is not None and dept_in != row.department
+            if dept_changed or (dept_in is not None and b.get("confirmDept")):
+                row.department = dept_in
+                row.department_auto = False
             row.save()
+            synced = _dept.sync_track_role(row) if (dept_changed or b.get("confirmDept")) else []
             if reopened:
                 # แอดมินติ๊ก "เช็คชื่อ" คืนเอง → ไม่ต้องจำแล้วว่าระบบเคยปิดเพราะออกจากกลุ่ม
                 try:
@@ -920,7 +936,9 @@ def api_employees(request):
             if Employee.objects.filter(nickname=nick).exists():
                 return JsonResponse({"ok": False, "error": "ชื่อเล่นนี้มีอยู่แล้ว"}, status=400,
                                     json_dumps_params={"ensure_ascii": False})
-            Employee.objects.create(nickname=nick, source=Employee.MANUAL, **fields)
+            # คนใหม่ยังไม่มีบัญชี LINE ที่ผูก — สิทธิ์ระบบรถตั้งให้ตอน login ครั้งแรก (bridge)
+            Employee.objects.create(nickname=nick, source=Employee.MANUAL, department=dept_in or "",
+                                    department_auto=False, **fields)
             people.invalidate()
 
     # ★ 6 ต.ค.69 — คนที่ติ๊ก "ไม่ต้องเช็คชื่อ" แต่ **เช็คชื่อเข้ามาจริง** = ติ๊กผิดแน่ๆ
@@ -941,10 +959,19 @@ def api_employees(request):
     except Exception:
         left = {}
 
+    emps = list(Employee.objects.all().prefetch_related("line_accounts"))
+    try:
+        from cars.roles import ROLE_LABEL as _RL
+        tracks = _dept.track_roles_map(emps)
+    except Exception:
+        _RL, tracks = {}, {}
     rows = []
-    for e in Employee.objects.all().prefetch_related("line_accounts"):
+    for e in emps:
         rows.append({
             "id": e.pk, "nickname": e.nickname, "displayName": e.display_name,
+            # ★ 18 ต.ค.69 แผนก · ระบบเดาให้ (ยังไม่ยืนยัน = ยังไม่ตั้งสิทธิ์ระบบรถตาม) · สิทธิ์ระบบรถของบัญชีที่ผูกตอนนี้
+            "department": e.department, "departmentAuto": bool(e.department and e.department_auto),
+            "trackRoles": [_RL.get(g, g) for g in tracks.get(e.pk, [])],
             "position": e.position, "workStart": e.work_start, "dayOff": e.day_off,
             "groupId": e.group_id, "note": e.note, "active": e.active,
             "noteDate": e.note_date.isoformat() if e.note_date else "",
@@ -966,7 +993,15 @@ def api_employees(request):
             # จำนวนบัญชี LINE ที่ผูกไว้ — **ไม่ส่ง id ออกไป**
             "lineAccounts": len(list(e.line_accounts.all())),
         })
-    return JsonResponse({"ok": True, "count": len(rows), "employees": rows},
+    try:
+        from cars.roles import ROLE_LABEL as _RL2
+    except Exception:
+        _RL2 = {}
+    return JsonResponse({"ok": True, "count": len(rows), "employees": rows,
+                         "departments": _dept.options(),
+                         # สิทธิ์ระบบรถที่เพิ่งเปลี่ยนตามแผนก — บอกแค่บทบาทเดิม → ใหม่ (ไม่ส่งชื่อบัญชี = มี LINE id)
+                         "synced": [{"from": _RL2.get(a, a) or "ไม่มีบทบาท", "to": _RL2.get(c, c)}
+                                    for _u, a, c in synced]},
                         json_dumps_params={"ensure_ascii": False})
 
 

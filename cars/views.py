@@ -1071,10 +1071,22 @@ def manage_users(request):
         elif action == "set_role":
             u = User.objects.filter(pk=request.POST.get("user_id")).first()
             role_key = request.POST.get("role") or ""
+            _locked = None
+            if u:
+                try:      # ★ 18 ต.ค.69 บัญชีที่ผูกพนักงาน + แผนกยืนยันแล้ว = สิทธิ์ตามแผนก (แก้ที่หน้าพนักงาน)
+                    from checkout import departments as _dept
+                    _locked = _dept.dept_for_username(u.username)
+                except Exception:
+                    _locked = None
             if not u:
                 messages.error(request, "ไม่พบผู้ใช้")
             elif u.is_superuser:
                 messages.error(request, "เปลี่ยนบทบาท superuser ไม่ได้ (เป็นผู้บริหารเสมอ)")
+            elif _locked:
+                from checkout.departments import LABEL as _DL
+                messages.error(request, "บัญชีของ %s ตั้งสิทธิ์ตามแผนก \"%s\" ในทะเบียนพนักงาน — เปลี่ยนแผนกที่หน้า "
+                               "แดชบอร์ด → ตั้งค่า → พนักงาน (เปลี่ยนตรงนี้จะถูกตั้งกลับตอน login ครั้งถัดไป)"
+                               % (_locked[1], _DL.get(_locked[0], _locked[0])))
             else:
                 roles.set_user_role(u, role_key)
                 messages.success(request, f"ตั้ง {u.username} เป็น {roles.ROLE_LABEL.get(role_key, 'ไม่มีบทบาท')}")
@@ -1117,9 +1129,22 @@ def manage_users(request):
             return nick or disp or (u.get_full_name() or "").strip() or u.username
         return (u.get_full_name() or "").strip() or u.username
 
+    # ★ 18 ต.ค.69 บัญชีที่สิทธิ์มาจากแผนกในทะเบียนพนักงาน (ยืนยันแล้ว) — ล็อกช่องเปลี่ยนบทบาท
+    dept_lock = {}
+    try:
+        from checkout.departments import LABEL as _DL
+        from checkout.models import LineProfile
+        for uid, dep, auto, nick in (LineProfile.objects.exclude(employee=None).exclude(user_id="")
+                                     .values_list("user_id", "employee__department", "employee__department_auto",
+                                                  "employee__nickname")):
+            if dep and not auto:
+                dept_lock["line_" + uid] = "%s (%s)" % (_DL.get(dep, dep), nick)
+    except Exception:
+        dept_lock = {}
     rows = [
         {"u": u, "role": roles.get_role(u), "role_label": roles.role_label(u),
-         "label": _label(u), "is_line": u.username.startswith("line_")}
+         "label": _label(u), "is_line": u.username.startswith("line_"),
+         "dept": dept_lock.get(u.username, "")}
         for u in User.objects.order_by("-is_active", "username")
     ]
     return render(request, "manage_users.html", {"rows": rows, "roles": roles.ROLES})

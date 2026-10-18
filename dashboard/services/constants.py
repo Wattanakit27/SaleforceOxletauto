@@ -169,6 +169,14 @@ def team_id_of(position: str) -> str:
     low = p.lower()
     if low in ("admin", "เทเลเซลล์", "เทเลเซล", "เทเลเซลส์", "telesale", "telesales"):
         return "ADMIN"
+    # ★ 18 ต.ค.69 — ตำแหน่งใต้แผนก "เซลล์" เขียนได้ทั้ง "ทีม A" และ "เซลล์ทีม A" (ตัวอย่างของเจ้าของ)
+    #   ตัดคำว่าเซลล์ข้างหน้าออกก่อน แล้วใช้กติกาเดิม (ต้องเป็น "ทีม + รหัสสั้น" เท่านั้น)
+    for pre in ("เซลล์", "เซล", "sales ", "sale "):
+        if low.startswith(pre) and len(p) > len(pre):
+            rest = p[len(pre):].strip()
+            if rest.lower().startswith(("ทีม", "team")):
+                p, low = rest, rest.lower()
+            break
 
     # ⚠️ "ขึ้นต้นด้วยคำว่าทีม" อย่างเดียวไม่พอ — **"ทีมโปรดักชัน" คือแผนก ไม่ใช่ทีมขาย**
     #   (วัดจริงบน prod 24/09: แซน อยู่ทีมขาย B แต่ในทะเบียนเป็น "ทีมโปรดักชัน"

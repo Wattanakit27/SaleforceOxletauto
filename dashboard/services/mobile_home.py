@@ -60,6 +60,15 @@ def role_of(user: dict) -> str:
         return "admin"
     if pos == "worker":
         return "worker"
+    # ★ 18 ต.ค.69 — มีแผนกในทะเบียนพนักงาน = แท็บตามแผนก (checkout/departments.py)
+    #   ไม่มีแผนก = กติกาเดิมข้างล่าง · แผนกไม่ยกใครเป็นแอดมิน (ต้อง login มาเป็นแอดมินอยู่แล้ว)
+    try:
+        from checkout import departments as _dept
+        r = _dept.app_role_of(user)
+        if r:
+            return r
+    except Exception:
+        pass
     try:
         from . import purchase_page
         nick = (user.get("nickname") or user.get("seller_name") or "").strip()
@@ -377,17 +386,30 @@ def admin_home(request, user, emp, out):
 # ─────────────────────────────────────────────────────────────
 #  คนงาน (ช่าง/ฝ่ายทะเบียน/ล้างรถ/โปรดักชัน/QC/อู่สี)
 # ─────────────────────────────────────────────────────────────
-def _team_queue(request) -> dict:
+def _team_queue(request, user=None) -> dict:
     """รถที่อยู่ในสเตปที่ทีมของฉันเป็นเจ้าของงาน (STAGE_OWNER — ตารางเดียวกับป้าย "→ ฝ่าย" บนปุ่มสเตป)
     เรียงเหมือนบอร์ด: ติดธงงานค้างก่อน → ความด่วน → ค้างนานสุดก่อน"""
     from cars import constants as CC
     from cars import roles
     u = getattr(request, "user", None)
     role = roles.get_role(u) if (u and u.is_authenticated) else ""
+    # ★ 18 ต.ค.69 คนงานที่เข้าด้วย LINE (แผนกฝ่ายทะเบียน/QC/…) — คำขอของแอปไม่ได้ผ่าน bridge ของ /track/
+    #   → อ่านบทบาทจากบัญชี line_<id> ของเขาเอง · ยังไม่เคยเข้าระบบรถ = ใช้บทบาทตามแผนกที่ยืนยันแล้ว
+    uid = str((user or {}).get("user_id") or "")
+    if not role and uid and not uid.startswith("django_"):
+        try:
+            from django.contrib.auth.models import User
+            du = User.objects.filter(username="line_" + uid, is_active=True).first()
+            role = (roles.get_role(du) or "") if du else ""
+            if not role:
+                from checkout import departments as _dept
+                role = _dept.track_role_for_line(uid)
+        except Exception:
+            role = role or ""
     label = roles.ROLE_LABEL.get(role, "") if role else ""
     if not label:
         return {"role": "", "roleLabel": "", "rows": [], "total": 0,
-                "note": "บัญชีนี้ยังไม่มีบทบาทในระบบติดตามรถ — ให้แอดมินตั้งที่ /track/users/"}
+                "note": "บัญชีนี้ยังไม่มีบทบาทในระบบติดตามรถ — ให้แอดมินตั้งแผนกที่ แดชบอร์ด → ตั้งค่า → พนักงาน"}
     mine = {k for k, own in CC.STAGE_OWNER.items() if label in own}
     pr = {k: i for i, k in enumerate(CC.PRIORITY_KEYS)}
     cars = [c for c in _active_cars() if c.stage in mine]
@@ -397,7 +419,7 @@ def _team_queue(request) -> dict:
 
 
 def worker_home(request, user, emp, out):
-    _part(out, "queue", lambda: _team_queue(request))
+    _part(out, "queue", lambda: _team_queue(request, user))
 
 
 # ─────────────────────────────────────────────────────────────

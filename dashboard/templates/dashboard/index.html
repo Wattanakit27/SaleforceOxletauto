@@ -8255,6 +8255,8 @@
     //    ★ ไม่โชว์ LINE user id ของพนักงาน (กติกาเดิม) — บอกแค่ว่าผูกไว้กี่บัญชี
     //      คนเดียวมีได้หลายบัญชีเพราะ id ออกต่อ provider ของบอทแต่ละตัว
     let _empRows = [], _empQ = '';
+    // ★ 18 ต.ค.69 แผนก (checkout/departments.py) — ตัวเลือกมากับ API · _empDept = ตัวกรองแผนก ('' = ทั้งหมด · '-' = ยังไม่ระบุ)
+    let _empDepts = [], _empDept = '';
     // 🕘 เช็คชื่อเข้างานรายวัน — ★ 16 ก.ย.69 (ย้ายจากชีต "เช็คชื่อ" มาเก็บใน Postgres)
     //    n8n อ่านรูปเช็คอินในกลุ่ม → บันทึกลงตาราง · หน้านี้อ่านอย่างเดียว
     let _ckiDate = '';
@@ -8692,6 +8694,7 @@
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || ('HTTP ' + r.status));
         _empRows = d.employees || [];
+        _empDepts = d.departments || [];
       } catch (e) {
         box.innerHTML = `<div style="text-align:center;padding:24px;color:var(--red)">เปิดไม่ได้: ${h(String(e.message||e))}</div>`
           + `<div style="text-align:center"><button onclick="document.getElementById('emp-overlay').remove()" style="padding:8px 16px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t2);cursor:pointer">ปิด</button></div>`;
@@ -8727,10 +8730,42 @@
       return `<input id="${id}" value="${h(val||'')}" placeholder="${h(ph||'')}"${auto} style="width:${w||'100%'};font-size:var(--fs-body);padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`;
     }
 
+    // ★ 18 ต.ค.69 dropdown แผนก — เลือกแล้วบันทึก + ยืนยันแผนกทันที (สิทธิ์ระบบรถเปลี่ยนตาม)
+    function _empDeptSel(id, val, rowId) {
+      const auto = rowId ? ` onchange="empSave(${rowId},'dept')"` : '';
+      const v = val || '';
+      const opts = _empDepts.map(d => `<option value="${h(d.key)}" ${v === d.key ? 'selected' : ''}>${h(d.label)}</option>`).join('');
+      return `<select id="${id}"${auto} style="width:112px;font-size:var(--fs-body);padding:5px 7px;border-radius:7px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1)">`
+        + `<option value="" ${v ? '' : 'selected'}>— ยังไม่ระบุ —</option>${opts}</select>`;
+    }
+    function _empDeptInfo(e) {
+      const d = _empDepts.find(x => x.key === e.department);
+      let t = '';
+      if (e.departmentAuto) {
+        t += `<div style="font-size:var(--fs-body);font-weight:700;color:var(--amber);white-space:nowrap" title="ระบบเดาให้จากบทบาทระบบรถ/ตำแหน่งเดิม — ยังไม่ได้ไปเปลี่ยนสิทธิ์ของใคร กดยืนยันถ้าถูกต้อง หรือเลือกแผนกใหม่">ระบบเดา · <a href="#" onclick="empSave(${e.id},'dept');return false" style="color:var(--blue)">ยืนยัน</a></div>`;
+      }
+      if (d) t += `<div style="font-size:var(--fs-body);color:var(--t3);white-space:nowrap" title="แท็บในแอป · สิทธิ์กดสเตปรถ">แอป: ${h(d.app)} · รถ: ${h(d.track)}</div>`;
+      const tr = e.trackRoles || [];
+      if (tr.length && d && !e.departmentAuto && !(tr.length === 1 && tr[0] === d.track)) {
+        t += `<div style="font-size:var(--fs-body);color:var(--red);white-space:nowrap" title="สิทธิ์ระบบรถของบัญชีที่ผูกไว้ยังไม่ตรงแผนก — จะถูกตั้งให้ตรงตอน login ครั้งถัดไป">ระบบรถตอนนี้: ${h(tr.join(', '))}</div>`;
+      } else if (tr.length && e.departmentAuto) {
+        t += `<div style="font-size:var(--fs-body);color:var(--t3);white-space:nowrap">ระบบรถตอนนี้: ${h(tr.join(', '))}</div>`;
+      }
+      return t;
+    }
+    function _empPosList() {
+      const seen = new Set();
+      _empDepts.forEach(d => (d.hints || []).forEach(x => seen.add(x)));
+      _empRows.forEach(e => { if (e.position) seen.add(e.position); });
+      return `<datalist id="emp_pos_list">${[...seen].sort().map(x => `<option value="${h(x)}">`).join('')}</datalist>`;
+    }
+
     function renderEmployees() {
       const box = document.getElementById('emp-box'); if (!box) return;
       const q = (_empQ || '').trim().toLowerCase();
-      const rows = _empRows.filter(e => !q || [e.nickname, e.displayName, e.position].join(' ').toLowerCase().includes(q));
+      const _dLabel = k => ((_empDepts.find(x => x.key === k) || {}).label || '');
+      const rows = _empRows.filter(e => (!q || [e.nickname, e.displayName, e.position, _dLabel(e.department)].join(' ').toLowerCase().includes(q))
+        && (!_empDept || (_empDept === '-' ? !e.department : e.department === _empDept)));
       const linked = _empRows.filter(e => (e.lineAccounts || 0) > 0).length;
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
         <div style="font-size:var(--fs-h);font-weight:800;color:var(--t1)">พนักงาน ${_empRows.length} คน</div>
@@ -8741,12 +8776,23 @@
       // ★ 6 ต.ค.69 — ปิด "เช็คชื่อ" ไว้ แต่เช็คชื่อเข้ามาจริง = ติ๊กผิด (เคสนิด: หายจากตารางเช็คชื่อที่ส่งเข้า LINE ทุกวัน)
       const offIn = _empRows.filter(e => e.trackCheckin === false && (e.checkinsWhileOff || 0) > 0);
       if (offIn.length) html += `<div style="font-size:var(--fs-body);font-weight:700;color:var(--red);background:var(--bg2);border:.5px solid var(--red-mid);border-radius:10px;padding:8px 11px;margin-bottom:10px;line-height:1.7">ช่อง "เช็คชื่อ" ถูกปิดไว้ แต่เช็คชื่อเข้ามาจริง ${offIn.length} คน — ไม่ขึ้นในตารางเช็คชื่อที่ส่งเข้า LINE และขาดก็ไม่ถูกตาม: ${offIn.map(e => h(e.nickname) + ' (' + e.checkinsWhileOff + ' วันใน 14 วัน)').join(' · ')}<br><span style="font-weight:500;color:var(--t2)">ถ้าเขาต้องเช็คชื่อ ให้ติ๊กช่อง "เช็คชื่อ" ในแถวของเขา · ถ้าเป็นผู้บริหารจริงก็ปล่อยไว้ได้</span></div>`;
-      html += `<input value="${h(_empQ)}" oninput="_empQ=this.value;renderEmployees()" placeholder="ค้นหา ชื่อเล่น / ชื่อ LINE / ตำแหน่ง" style="width:100%;font-size:var(--fs-body);padding:8px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);margin-bottom:12px">`;
+      html += `<input value="${h(_empQ)}" oninput="_empQ=this.value;renderEmployees()" placeholder="ค้นหา ชื่อเล่น / ชื่อ LINE / แผนก / ตำแหน่ง" style="width:100%;font-size:var(--fs-body);padding:8px 11px;border-radius:10px;border:.5px solid var(--bd2);background:var(--bg2);color:var(--t1);margin-bottom:8px">`;
+      // ★ 18 ต.ค.69 แผนก = ตัวกำหนดแท็บในแอป + สิทธิ์กดสเตปรถ · ตำแหน่ง = รายละเอียดใต้แผนก (ทีม A / ออฟฟิศ บ้านเก่า)
+      {
+        const _cnt = k => _empRows.filter(e => e.active && (k === '-' ? !e.department : e.department === k)).length;
+        const _chip = (k, label, n) => `<button onclick="_empDept='${k}';renderEmployees()" style="font-size:var(--fs-body);padding:4px 10px;border-radius:7px;cursor:pointer;border:.5px solid ${_empDept===k?'var(--blue)':'var(--bd2)'};background:${_empDept===k?'var(--blue-bg)':'var(--bg2)'};color:${_empDept===k?'var(--blue)':'var(--t2)'};font-weight:${_empDept===k?700:400}">${h(label)} ${n}</button>`;
+        let ch = _chip('', 'ทั้งหมด', _empRows.filter(e => e.active).length);
+        _empDepts.forEach(d => { const n = _cnt(d.key); if (n) ch += _chip(d.key, d.label, n); });
+        const nn = _cnt('-'); if (nn) ch += _chip('-', 'ยังไม่ระบุแผนก', nn);
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${ch}</div>`;
+        const guessed = _empRows.filter(e => e.active && e.departmentAuto).length;
+        html += `<div style="font-size:var(--fs-body);color:var(--t3);margin-bottom:12px;line-height:1.7">แผนก = แท็บที่เห็นในแอป + สิทธิ์กดสเตปรถ (เปลี่ยนแผนก = สิทธิ์ระบบรถของบัญชี LINE ที่ผูกเปลี่ยนตามทันที) · ตำแหน่ง = รายละเอียดใต้แผนก เช่น ทีม A · สิทธิ์ดูข้อมูลขาย/ลูกค้าทั้งหมดยังตั้งที่ "จัดการแอดมิน" ที่เดิม${guessed ? ` · <b style="color:var(--amber)">ระบบเดาแผนกให้ ${guessed} คน — ตรวจแล้วกด "ยืนยัน" (ยังไม่ยืนยัน = ยังไม่ไปเปลี่ยนสิทธิ์ของใคร)</b>` : ''}</div>`;
+      }
 
       html += `<div style="border:.5px solid var(--bd2);border-radius:12px;padding:10px;margin-bottom:14px;background:var(--bg2)">
         <div style="font-size:var(--fs-body);font-weight:700;color:var(--t2);margin-bottom:7px">➕ เพิ่มพนักงานใหม่</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;align-items:center">
-          ${_empInput('emp_n_nick','','ชื่อเล่น *')}${_empInput('emp_n_dn','','ชื่อที่ตั้งใน LINE')}${_empInput('emp_n_pos','','ตำแหน่ง/ทีม')}${_empInput('emp_n_ws','','เวลาเข้างาน 8:00')}${_empDay('emp_n_off','')}${_empInput('emp_n_note','','หมายเหตุ (ลา/สาย)')}
+          ${_empInput('emp_n_nick','','ชื่อเล่น *')}${_empInput('emp_n_dn','','ชื่อที่ตั้งใน LINE')}${_empDeptSel('emp_n_dept','')}${_empInput('emp_n_pos','','ตำแหน่ง เช่น ทีม A')}${_empInput('emp_n_ws','','เวลาเข้างาน 8:00')}${_empDay('emp_n_off','')}${_empInput('emp_n_note','','หมายเหตุ (ลา/สาย)')}
           <button onclick="empAdd()" style="font-size:var(--fs-body);padding:7px 12px;border-radius:9px;border:none;background:var(--green);color:#fff;font-weight:700;cursor:pointer">เพิ่ม</button>
         </div>
         <div id="emp_n_msg" style="font-size:var(--fs-body);color:var(--t3);margin-top:6px"></div></div>`;
@@ -8754,19 +8800,20 @@
       html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:var(--fs-body)">
         <thead><tr style="color:var(--t3);font-size:var(--fs-body);text-align:left">
           <th style="padding:6px 5px">ชื่อเล่น</th><th style="padding:6px 5px">ชื่อที่ตั้งใน LINE</th>
-          <th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
+          <th style="padding:6px 5px" title="แผนก = แท็บในแอป + สิทธิ์กดสเตปรถ">แผนก</th><th style="padding:6px 5px">ตำแหน่ง</th><th style="padding:6px 5px">เวลาเข้างาน</th>
           <th style="padding:6px 5px">วันหยุด</th><th style="padding:6px 5px" title="ใช้เฉพาะวันที่เขียน แล้วหายเอง — ถ้าลายาว (ลาคลอด) ให้ติ๊ก &quot;ค้างไว้&quot;">หมายเหตุ (ลา/สาย)</th><th style="padding:6px 5px">LINE</th>
           <th style="padding:6px 5px" title="ติ๊กออกสำหรับผู้บริหาร — จะไม่ขึ้นในหน้าเช็คชื่อเข้างานเลย">เช็คชื่อ</th>
           <th style="padding:6px 5px" title="ติ๊ก = ถูกแท็กในข้อความรอบสาย ตอนมีคนยังไม่เช็คชื่อ (หัวหน้า/ผู้บริหาร)">แจ้งเตือน</th>
           <th style="padding:6px 5px" title="เช็คชื่อในแอป: ติ๊ก = กดได้ทุกที่ (งานนอกสาขา) · ไม่ติ๊ก = ต้องอยู่ในรัศมีสาขา (ตั้งพิกัดสาขาที่ ตั้งค่าส่งเช็คชื่อเข้าไลน์)">นอกสถานที่</th>
           <th style="padding:6px 5px">ใช้งาน</th><th style="padding:6px 5px"></th></tr></thead><tbody>`;
-      if (!rows.length) html += `<tr><td colspan="12" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
+      if (!rows.length) html += `<tr><td colspan="13" style="padding:18px;text-align:center;color:var(--t3)">ยังไม่มีข้อมูล — กด "เพิ่มพนักงานใหม่" หรือให้ผู้ดูแลรันคำสั่งย้ายจากชีต</td></tr>`;
       rows.forEach(e => {
         const acc = e.lineAccounts || 0;
         html += `<tr style="border-top:.5px solid var(--bd2)">
           <td style="padding:5px;white-space:nowrap">${_empInput('emp_nick_'+e.id, e.nickname, '', '92px', e.id)}${e.needsInfo?' <span title="ระบบเพิ่มให้เองตอนเจอในกลุ่ม — ยังไม่มีใครกรอกตำแหน่ง/เวลาเข้างาน" style="font-size:var(--fs-body);font-weight:700;color:var(--amber)">ใหม่</span>':''}${e.needsNick?' <span title="ชื่อนี้คือชื่อที่เขาตั้งไว้ใน LINE — ระบบใส่ให้ชั่วคราว ยังไม่มีใครตั้งชื่อเล่นจริง · พิมพ์ทับได้เลย" style="font-size:var(--fs-body);font-weight:700;color:var(--amber)">ยังเป็นชื่อ LINE</span>':''}</td>
           <td style="padding:5px">${_empInput('emp_dn_'+e.id, e.displayName, '', '150px', e.id)}</td>
-          <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px', e.id)}</td>
+          <td style="padding:5px">${_empDeptSel('emp_dept_'+e.id, e.department, e.id)}${_empDeptInfo(e)}</td>
+          <td style="padding:5px">${_empInput('emp_pos_'+e.id, e.position, '', '120px', e.id).replace('<input ', '<input list="emp_pos_list" ')}</td>
           <td style="padding:5px">${_empInput('emp_ws_'+e.id, e.workStart, '', '72px', e.id)}</td>
           <td style="padding:5px">${_empDay('emp_off_'+e.id, e.dayOff, '92px', e.id)}</td>
           <td style="padding:5px;white-space:nowrap">${_empInput('emp_note_'+e.id, e.note, '', '150px', e.id)}
@@ -8786,8 +8833,9 @@
             <button onclick="empDel(${e.id},'${h(e.nickname)}')" style="font-size:var(--fs-body);padding:5px 8px;border-radius:8px;border:.5px solid var(--red-mid);background:var(--red-bg);color:var(--red);cursor:pointer">ลบ</button>
           </td></tr>`;
       });
-      html += `</tbody></table></div><div id="emp_msg" style="font-size:var(--fs-body);color:var(--t3);margin-top:10px"></div>`;
+      html += `</tbody></table></div><div id="emp_msg" style="font-size:var(--fs-body);color:var(--t3);margin-top:10px"></div>` + _empPosList();
       box.innerHTML = html;
+      const np = document.getElementById('emp_n_pos'); if (np) np.setAttribute('list', 'emp_pos_list');
     }
 
     function _empV(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
@@ -8816,9 +8864,17 @@
           return false;
         }
         _empRows = d.employees || _empRows;
+        if (d.departments) _empDepts = d.departments;
         if (rowId) {
           // ★ ไม่วาดตารางใหม่ — คนกำลังแก้อยู่กลางตาราง ถ้าวาดใหม่จะเด้งกลับบนสุดทุกครั้ง
-          _empRowMsg(rowId, '✓ บันทึกแล้ว');
+          const sy = d.synced || [];
+          _empRowMsg(rowId, sy.length ? ('✓ บันทึกแล้ว · สิทธิ์ระบบรถ ' + sy.map(x => x.from + ' → ' + x.to).join(', ')) : '✓ บันทึกแล้ว');
+          // ช่องแผนกเปลี่ยน = วาดเฉพาะช่องแผนกของแถวนั้นใหม่ (ป้ายระบบเดา/แอป/รถ) — ไม่วาดทั้งตาราง
+          if (body && body.department !== undefined) {
+            const e2 = _empRows.find(x => x.id === rowId);
+            const sel = document.getElementById('emp_dept_' + rowId);
+            if (e2 && sel && sel.parentElement) sel.parentElement.innerHTML = _empDeptSel('emp_dept_' + rowId, e2.department, rowId) + _empDeptInfo(e2);
+          }
         } else {
           renderEmployees();
           _empMsg(msgId, '✓ บันทึกแล้ว', 'var(--green)');
@@ -8834,14 +8890,17 @@
     function empAdd() {
       const nick = _empV('emp_n_nick');
       if (!nick) { _empMsg('emp_n_msg', 'ใส่ชื่อเล่นก่อน', 'var(--red)'); return; }
-      _empPost({action:'save', nickname:nick, displayName:_empV('emp_n_dn'), position:_empV('emp_n_pos'),
+      _empPost({action:'save', nickname:nick, displayName:_empV('emp_n_dn'), department:_empV('emp_n_dept'), position:_empV('emp_n_pos'),
                 workStart:_empV('emp_n_ws'), dayOff:_empV('emp_n_off'), note:_empV('emp_n_note'), active:true}, 'emp_n_msg');
     }
 
-    function empSave(id) {
+    function empSave(id, src) {
       const act = document.getElementById('emp_act_' + id);
       const trk = document.getElementById('emp_trk_' + id);
+      // src === 'dept' = มาจากช่องแผนก (เลือกใหม่/กดยืนยัน) → ยืนยันแผนก + ตั้งสิทธิ์ระบบรถตาม
+      //   แก้ช่องอื่นไม่นับว่ายืนยันแผนกที่ระบบเดาไว้
       _empPost({action:'save', id:id, nickname:_empV('emp_nick_'+id), displayName:_empV('emp_dn_'+id),
+                department:_empV('emp_dept_'+id), confirmDept: src === 'dept',
                 position:_empV('emp_pos_'+id), workStart:_empV('emp_ws_'+id), dayOff:_empV('emp_off_'+id),
                 note:_empV('emp_note_'+id), active: act ? act.checked : true,
                 trackCheckin: trk ? trk.checked : true,

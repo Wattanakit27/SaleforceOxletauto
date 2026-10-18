@@ -724,6 +724,9 @@
   /* กฎและเส้นทาง */
   .lc-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap: 13px; align-items: start; }
   .lc-rule { padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; border-bottom: .5px solid var(--bd); }
+  .ac-list { max-height: 260px; overflow: auto; margin: 4px 0 8px; }
+  .ac-row { display: flex; gap: 8px; padding: 3px 0; border-bottom: .5px solid var(--bd); flex-wrap: wrap; }
+  .ac-at { color: var(--t3); min-width: 92px; } .ac-id { min-width: 52px; } .ac-ch { color: var(--t3); min-width: 34px; } .ac-d { min-width: 96px; }
   .lc-rule:last-child { border-bottom: 0; }
   .lc-rule .tx { min-width: 0; flex: 1; }
   .lc-rule .tt { font-weight: 700; font-size: 13px; }
@@ -1072,13 +1075,15 @@
   try { S.hl = localStorage.getItem('cn_hl') !== '0'; S.pt = localStorage.getItem('cn_pt') === 'f' ? 'f' : 'm'; } catch (e) {}
   const TABS_ADMIN = [
     // ★ 7 ต.ค.69 เอาแท็บ "เลยเวลา" ออก (เจ้าของสั่ง) — ทีมตอบลูกค้าในแอป LINE OA Manager ซึ่ง LINE ไม่ส่งกลับมา
-    //   → แชทที่ตอบไปแล้วค้างเป็น "เลยเวลา" ไปหมด ตัวเลขไม่มีความหมาย · แท็บแรกของแอดมินจึงเป็น "รอรับ"
-    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
+    //   → แชทที่ตอบไปแล้วค้างเป็น "เลยเวลา" ไปหมด ตัวเลขไม่มีความหมาย
+    // ★ 18 ต.ค.69 เจ้าของ "อยากให้หน้าหลักเป็นรวมแชท รอรับน่าจะไม่ได้ใช้" → แอดมินเปิดมาเจอ "ทั้งหมด" (ข้อความล่าสุดก่อน)
+    //   · "รอรับ" ย้ายไปท้ายรายการ (ยังเลือกได้ — เซลล์ยังใช้คิวรอรับในวันเวร)
+    { v: 'all', l: 'ทั้งหมด', i: 'list', c: 'all' },
     // ลูกค้าที่คุยในระบบแล้วแต่ยังไม่มีเลขลีด — งานจ่ายเบอร์ของแอดมิน (connect.to_code)
     { v: 'tocode', l: 'ห้องพัก Lead', i: 'hash', c: 'tocode' },
     { v: 'mine', l: 'ของฉัน', i: 'user-check', c: 'mine', needEmp: true },
     { v: 'owned', l: 'มีเจ้าของ', i: 'users', c: 'owned' },
-    { v: 'all', l: 'ทั้งหมด', i: 'list', c: 'all' },
+    { v: 'queue', l: 'รอรับ', i: 'inbox', c: 'queue', hot: true },
     { v: '_stats', l: 'สถิติ', i: 'chart' },
     { v: '_cfg', l: 'ตั้งค่า', i: 'sliders' },
   ];
@@ -1316,6 +1321,13 @@
     return `<div class="pf-dup">${ic('alert', 13)} เบอร์นี้เคยเป็นลีด <b>${h(dp.code || '-')}</b> ของ <b>@${h(dp.seller || 'ไม่ทราบ')}</b>${
       dp.date ? ' (' + h(fmtDay(dp.date)) + ')' : ''}${dp.more ? ` · และอีก ${dp.more} ครั้ง` : ''}
       — ลูกค้าคนเดียวไม่ควรได้เซลล์ 2 คน${dp.sellerId ? `<br><button class="hub-sel" data-pick="${dp.sellerId}">จ่ายให้ @${h(dp.seller)} (เจ้าของเดิม)</button>` : ''}</div>`;
+  }
+  // ★ 18 ต.ค.69 จ่ายแล้วหรือยัง: ใบจ่ายลีดที่ตรงแค่ชื่อ (ชื่อซ้ำกันได้) / ID LINE เคยได้เลข
+  function maybeHtml(ch) {
+    let t = '';
+    if (ch.lidDup) t += `<div class="pf-dup">${ic('alert', 13)} ID LINE นี้เคยได้เลข <b>${h(ch.lidDup.code || '-')}</b> (${h(ch.lidDup.where || '')}) — ลูกค้าเก่า ตรวจก่อนจ่ายใหม่</div>`;
+    if (ch.maybe) t += `<div class="pf-dup">${ic('alert', 13)} ชื่อตรงกับใบจ่ายลีด <b>${h(ch.maybe.code || '-')}</b>${ch.maybe.tag ? ' (@' + h(ch.maybe.tag) + ')' : ''}${ch.maybe.at ? ' · ' + h(fmtWhen(ch.maybe.at)) : ''} — อาจจ่ายไปแล้ว (เบอร์/ID LINE ไม่ตรงหรือไม่มี)</div>`;
+    return t;
   }
   function rrHtml(rr) {
     if (!rr || !rr.length) return '';
@@ -2343,6 +2355,7 @@
   }
   // ★ 11 ต.ค.69 ติ๊ก "รับ lead จากแชทนี้แล้ว" → ส่งเข้าห้องพัก Lead
   //   (เจ้าของสั่ง: ข้อมูลยังไม่ครบ ยังไม่ให้แชทเข้าห้องเอง 100% — รอคนติ๊กก่อน · สวิตช์ room_chat_auto ในหน้ากฎ)
+  //   ★ 18 ต.ค.69 แชทเข้าห้องเองแล้ว (roomAuto) → แถวนี้ว่าง · เหลือป้าย "อยู่ในห้องพัก" ของแชทที่เคยติ๊กไว้
   // ★ 11 ต.ค.69 ลีดรับซื้อรถ (ลูกค้าอยากขายรถให้เรา) — ไม่จ่ายเบอร์ให้เซลล์ · คัดลอกใบเคสรับซื้อไปโพสต์ในกลุ่มเคสHOT ของจัดซื้อ
   //   ระบบเจอใบในกลุ่ม = "ส่งจัดซื้อแล้ว" ออกจากแท็บรับซื้อรถเอง · เจ้าของ "มันจะมี lead รับซื้อรถกับ lead ขายรถ แยกไว้ด้วย"
   function buyLeadBoxHtml(L, admin) {
@@ -2378,7 +2391,7 @@
     const P = ch.post || null, live = !!(P && P.on);
     return `<div class="pf-assign" data-box="assign">
       <div class="pf-h" style="margin-bottom:6px">จ่ายเบอร์ <span class="pf-auto">${live ? 'ส่งเข้ากลุ่มจริง' : 'ทดลอง'}</span></div>
-      ${dupHtml(ch.dup)}${rrHtml(ch.rr)}
+      ${dupHtml(ch.dup)}${maybeHtml(ch)}${rrHtml(ch.rr)}
       <div class="pf-g2">
         <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
         <div class="pf-fld"><div class="pf-lab"><span>จ่ายให้เซลล์</span></div><select data-x="emp"><option value="">— เลือก —</option>${sellers}</select></div>
@@ -3358,6 +3371,7 @@
     };
     $('cf-save').onclick = saveCfg;
     if ($('lf-save')) $('lf-save').onclick = saveLf;
+    CPG().querySelectorAll('[data-acopen]').forEach(a => a.onclick = e => { e.preventDefault(); const id = +a.dataset.acopen; if (id) { setPanel('inbox'); openChat(id); } });
     const fbMsg = t => { const e = $('cf-fbsub-msg'); if (e) e.innerHTML = t; };
     if ($('cf-fbsub')) $('cf-fbsub').onclick = async () => {
       fbMsg('กำลังผูก…');
@@ -3421,7 +3435,8 @@
       <div class="fld"><label>เพดานต่อคนต่อวัน</label>${num('cap_day', c.cap_day, 0, 100)} ใบ <span style="color:var(--t3)">(0 = ไม่จำกัด)</span></div>
       ${ck('need_checkin', c.need_checkin, 'ต้องเช็คชื่อเข้างานวันนี้แล้วถึงจะได้ใบ', '')}
       ${ck('auto_assign', c.auto_assign, 'จ่ายวนอัตโนมัติ: ใบร่างในห้องพัก Lead ที่รอเกิน', '')}
-      <div class="fld"><label>รอเกิน</label>${num('auto_after_min', c.auto_after_min, 1, 120)} นาที <span style="color:var(--t3)">· เบอร์ซ้ำ = ไม่จ่ายเอง (รอแอดมินตัดสิน) · แชท LINE/FB ไม่จ่ายเอง</span></div>
+      <div class="fld"><label>รอเกิน</label>${num('auto_after_min', c.auto_after_min, 1, 120)} นาที <span style="color:var(--t3)">· เบอร์ซ้ำ/ID LINE เคยได้เลข = ไม่จ่ายเอง (รอแอดมินตัดสิน) · แชท LINE/FB ใช้ "จ่ายลีดขายจากแชท" ข้างล่าง · จ่ายเฉพาะใบร่างที่โพสต์หลังเปิดสวิตช์${c.auto_since ? ' (เปิดเมื่อ ' + lfSince(c.auto_since) + ')' : ''}</span></div>
+      ${acCardHtml(c, F.autoChat || {})}
       ${ck('auto_pull', c.auto_pull, 'เลยเวลา/กดขอผ่าน → จ่ายใหม่ให้คนถัดไปในคิวเอง (เลขเดิม)', '')}
       <div class="fld"><label>จ่ายใหม่อัตโนมัติได้สูงสุด</label>${num('pull_max', c.pull_max, 0, 5)} ครั้งต่อใบ</div>
       <div class="d" style="margin-top:8px;color:var(--t3)">อ่านห้องจ่ายเบอร์ล่าสุด: ${h(fmtWhen(st.at)) || '–'}${st.reports != null ? ` (ใบ ${st.slips || 0} · รายงาน ${st.reports || 0})` : ''}
@@ -3429,8 +3444,36 @@
       <div style="margin-top:8px"><button class="btn sm pri" id="lf-save">บันทึกงานจ่ายเบอร์</button> <span id="lf-msg"></span></div>
     </div>`;
   }
+  // ── ★ 18 ต.ค.69 จ่ายลีดขายจากแชท (autochat.py) — ปิด / จดอย่างเดียว / จ่ายจริง ──
+  const AC_NAME = { off: 'ปิด', observe: 'จดอย่างเดียว (ไม่จ่ายจริง)', on: 'จ่ายจริง' };
+  const AC_D = { would: ['จะจ่าย', 'var(--blue)'], assigned: ['จ่ายแล้ว', 'var(--green)'], failed: ['จ่ายไม่สำเร็จ', 'var(--red)'],
+                 skip: ['ข้าม', 'var(--t3)'], human: ['แอดมินจ่ายแล้ว', 'var(--amber)'] };
+  function acCardHtml(c, A) {
+    const L = A.last || {}, rec = A.recent || [];
+    const opt = m => `<option value="${m}"${(c.auto_chat || 'off') === m ? ' selected' : ''}>${AC_NAME[m]}</option>`;
+    const rows = rec.slice(0, 15).map(r => {
+      const d = AC_D[r.d] || [r.d, 'var(--t3)'];
+      return `<div class="ac-row"><span class="ac-at">${h(fmtWhen(r.at))}</span>
+        <a href="#" data-acopen="${+r.chat || 0}" class="ac-id">#${+r.chat || 0}</a><span class="ac-ch">${h(r.ch || '')}</span>
+        <b class="ac-d" style="color:${d[1]}">${d[0]}</b>
+        <span>${r.to ? '→ @' + h(r.to) + (r.pfx ? ' (' + h(r.pfx) + ')' : '') + ' · ' : ''}${h(r.why || '')}${r.code ? ' · ' + h(r.code) : ''}</span></div>`;
+    }).join('');
+    return `<div class="d" style="margin-top:10px"><b>จ่ายลีดขายจากแชท (LINE / Facebook)</b> — ลูกค้าให้เบอร์/ID LINE แล้ว ไม่มีใครจ่ายภายในเวลา "รอเกิน" ข้างบน → ระบบจ่ายวนเอง
+        <br>ข้ามให้แอดมินตัดสินเมื่อ: ได้เลขแล้ว (ใบ/ชีตตรงเบอร์หรือ ID LINE) · ตรงแค่ชื่อ (อาจจ่ายแล้ว) · มีใบร่างในกลุ่มพักลีด · ลูกค้าคนเดียวทักหลายช่องทาง · ลูกค้าเก่า · ลีดรับซื้อ
+        <br>ดูเฉพาะลูกค้าที่ให้ช่องทางติดต่อ <b>หลังเปลี่ยนโหมด</b>${c.auto_chat_since ? ' (' + lfSince(c.auto_chat_since) + ')' : ''} · จ่ายเฉพาะเวลาทำการ · ไม่เกิน 3 ใบต่อนาที</div>
+      <div class="fld"><label>โหมด</label><select id="lf-auto_chat">${['off', 'observe', 'on'].map(opt).join('')}</select>
+        <span style="color:var(--t3)">แนะนำ "จดอย่างเดียว" ก่อน แล้วเทียบกับที่แอดมินทำจริง</span></div>
+      ${L.at ? `<div class="d" style="color:var(--t3)">รอบล่าสุด ${h(fmtWhen(L.at))}${L.error ? ' · <span style="color:var(--red)">' + h(L.error) + '</span>'
+        : ` · ตรวจ ${L.checked || 0} · จะจ่าย ${L.would || 0} · จ่ายแล้ว ${L.assigned || 0} · ข้าม ${L.skipped || 0} · แอดมินจ่ายเอง ${L.human || 0}${L.failed ? ' · <b style="color:var(--red)">ไม่สำเร็จ ' + L.failed + '</b>' : ''}`}</div>` : ''}
+      ${rows ? `<div class="ac-list">${rows}</div>` : ''}`;
+  }
   async function saveLf() {
     const v = id => $('lf-' + id), body = { action: 'config' };
+    if (v('auto_chat')) {
+      body.auto_chat = v('auto_chat').value;
+      if (body.auto_chat === 'on' && CFG.lf.cfg.auto_chat !== 'on'
+          && !confirm('เปิด "จ่ายลีดขายจากแชท" แบบจ่ายจริง?\nระบบจะออกเลข + ส่งใบเข้าห้องจ่ายเบอร์ + แท็กเซลล์เอง')) return;
+    }
     ['card_on', 'report_on', 'remind_on', 'auto_assign', 'auto_pull', 'need_checkin'].forEach(k => { body[k] = v(k).checked; });
     ['call_min', 'remind_min', 'auto_after_min', 'pull_max', 'cap_day'].forEach(k => { body[k] = +v(k).value; });
     body.rr_teams = Array.from(document.querySelectorAll('[data-lfteam]')).filter(x => x.checked).map(x => x.dataset.lfteam);
@@ -3548,7 +3591,7 @@
     } catch (e) {}
     renderRail();
     if (p === 'inbox') {
-      if (S.view === 'tocode' || !S.view) S.view = ADMIN ? 'queue' : '';
+      if (S.view === 'tocode' || !S.view) S.view = ADMIN ? 'all' : '';
       if (!S.openId) renderBlank();
       loadInbox(true);
     } else if (p === 'dist') {
@@ -3562,7 +3605,7 @@
     else if (p === 'dash') openDash();
     else if (p === 'rules') openCfg();
     // เปิดตรงมาที่หน้าอื่น (?p=) — ยังต้องโหลดรายชื่อเซลล์/ตัวเลขบนเมนูซ้ายหนึ่งรอบ
-    if (first && p !== 'inbox' && p !== 'dist') { S.view = ADMIN ? 'queue' : ''; loadInbox(false); }
+    if (first && p !== 'inbox' && p !== 'dist') { S.view = ADMIN ? 'all' : ''; loadInbox(false); }
     if (!first) $('lc-page').scrollTop = 0;
   }
   window.__lcGo = setPanel;
@@ -3597,6 +3640,9 @@
     const dup = x.dup ? `<div class="lc-merge">${ic('alert', 13)} <span><b>เบอร์ซ้ำ</b> — เคยเป็นลีด <b>${h(x.dup.code || '-')}</b> ของ <b>@${h(x.dup.seller || '?')}</b>${
       x.dup.date ? ' (' + h(x.dup.date) + ')' : ''} · ลูกค้าคนเดียวไม่ควรได้เซลล์ 2 คน</span>${x.dup.sellerId
       ? `<button class="btn sm" data-asg="${h(x.kind)}:${h(x.id)}" data-emp="${x.dup.sellerId}">จ่ายให้ @${h(x.dup.seller)} (เจ้าของเดิม)</button>` : ''}</div>` : '';
+    // ★ 18 ต.ค.69 แชทเข้าห้องเอง — ใบจ่ายลีดที่ชื่อตรง (เบอร์/ID LINE ไม่ตรง) = อาจจ่ายไปแล้ว เปิดแชทดูก่อนกดจ่าย
+    const maybe = x.maybe ? `<div class="lc-merge">${ic('alert', 13)} <span><b>อาจจ่ายไปแล้ว</b> — ชื่อตรงกับใบจ่ายลีด <b>${h(x.maybe.code || '-')}</b>${
+      x.maybe.tag ? ' (@' + h(x.maybe.tag) + ')' : ''}${x.maybe.at ? ' · ' + h(fmtWhen(x.maybe.at)) : ''} · เบอร์/ID LINE ไม่ตรงหรือไม่มี</span></div>` : '';
     const more = S.distMore === x.kind + ':' + x.id;
     return `<div class="lc-lead${x.mins >= 30 ? ' pool' : ''}" data-lead="${h(x.kind)}:${h(x.id)}">
       <div>
@@ -3605,7 +3651,7 @@
         <div class="det">${h(x.car || 'ไม่ระบุรุ่นรถ')}</div>
         <div class="det m">${h(x.line)}</div>
         <div class="tags">${chTag(x.src)} ${idPills}${x.reposts ? `<span class="lc-chip">โพสต์ซ้ำ ${x.reposts}</span>` : ''}</div>
-        ${dup}
+        ${dup}${maybe}
       </div>
       <div class="acts">
         <div class="lc-sla" data-since="${h(x.since)}"><span class="num">${h(slaOf(x.since).text)}</span><small>พักมาแล้ว</small></div>
@@ -3623,7 +3669,7 @@
     (S.rows || []).forEach(r => out.push({ kind: 'chat', id: r.id, r, name: r.name, src: SRC_KEY[r.src] || 'line', car: r.car || '',
       line: 'แชท ' + (r.src === 'fb' ? 'Facebook' : 'LINE@') + (r.parkedBy ? ' · ติ๊กรับ lead โดย ' + r.parkedBy : '') + ' · ' + (r.preview || ''),
       since: r.parkedAt || r.since || r.lastAt || new Date(nowMs()).toISOString(),
-      hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, prefix: r.pfx || '', prefixWhy: r.pfxWhy || '' }));
+      hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, maybe: r.maybe || null, prefix: r.pfx || '', prefixWhy: r.pfxWhy || '' }));
     (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src).forEach(i => out.push({ kind: 'park', id: i.id, i, name: pWho(i),
       src: SRC_KEY[i.source] || 'other', car: i.car || '', line: 'ใบร่างจากกลุ่ม ' + (P.room || 'ADMIN เก็บ Lead') + (i.channel ? ' · ' + i.channel : '') + (i.by ? ' · พักโดย ' + i.by : ''),
       since: i.at, hasPhone: !!i.phone, hasLine: !!i.lineId, dup: i.dup || null, prefix: i.prefix, reposts: i.reposts }));
@@ -3745,7 +3791,7 @@
       <div style="min-width:0">
         <div class="lc-card"><div class="lc-bh"><h2>มือเซลล์วันนี้</h2><span class="lc-chip">เวรรับแชท: ทีม ${h((S.duty || {}).today || '-')}</span></div>${capHtml()}</div>
         <div class="lc-card"><div class="lc-bh"><h2>กติกา</h2><a class="btn sm" style="margin-left:auto" data-p="rules">ตั้งค่า</a></div>
-          <div class="lc-rl">${ruleState(!!S.roomAuto)} แชทที่ให้เบอร์/ID LINE เข้าห้องพักเอง (ปิด = เข้าเมื่อแอดมินกด "รับ lead")</div>
+          <div class="lc-rl">${ruleState(!!S.roomAuto)} แชทที่ให้เบอร์/ID LINE เข้าห้องพักเอง</div>
           <div class="lc-rl">${ruleState(true)} แอดมินเลือกเซลล์ ระบบออกเลขให้ (เลขรันชุดเดียวทุกตัวหน้า กันเลขซ้ำ)</div>
           <div class="lc-rl">${ruleState(ch.post && ch.post.on)} ส่งใบจ่ายลีดเข้าห้องจ่ายเบอร์ + แท็ก @เซลล์ (เลข R เข้าห้อง REJECT)</div>
           <div class="lc-rl">${ruleState(true)} ต้องรายงานผลภายใน <b>${LC.callMin || 15} นาที</b> หลังใบถึงกลุ่ม (นาฬิกาโทร)</div>
@@ -4313,10 +4359,15 @@
 
   // ── กฎและเส้นทาง: สวิตช์ใช้งานได้จริง (บันทึกทันที) + สองเส้นทาง · ตั้งค่าละเอียดอยู่ด้านล่าง ──
   const RULES = [
-    { t: 'แอดมินคัดก่อน เซลล์ถึงได้รับ', d: 'ห้องพัก Lead รับใบร่างจากกลุ่ม ADMIN เก็บ Lead + แชทที่แอดมินกด "รับ lead จากแชทนี้แล้ว" · ปุ่ม "ไม่ต้องจ่ายเบอร์" สำหรับคนที่ไม่ใช่ลีดขาย', fixed: true },
-    { t: 'แชทที่ให้เบอร์/ID LINE เข้าห้องพักเอง (ไม่ต้องกดรับ)', d: 'ปิด (ค่าตั้งต้น) = แชทเข้าห้องพักเมื่อแอดมินกด "รับ lead จากแชทนี้แล้ว" เท่านั้น · เปิด = ระบบจับเบอร์/ID LINE/รูป QR จากแชทแล้วส่งเข้าห้องเอง (รอข้อมูลพร้อมก่อน)', src: 'c', k: 'room_chat_auto' },
+    // ★ 18 ต.ค.69 เลิกสวิตช์ room_chat_auto ในหน้านี้ — แชทเข้าห้องพักเองเสมอ (เจ้าของ "เราส่งไปเองเลยดีกว่า")
+    { t: 'แชทที่ให้เบอร์/ID LINE เข้าห้องพัก Lead เอง', d: 'ระบบจับเบอร์/ID LINE/รูป QR จากแชทแล้วส่งเข้าห้องพักเอง ไม่ต้องกดรับ · ใบร่างจากกลุ่ม ADMIN เก็บ Lead ก็เข้าเอง · แชทที่แอดมินจ่ายเบอร์ไปแล้ว (ใบในกลุ่ม/ชีตลีด ตรงเบอร์หรือ ID LINE) ระบบเอาออกให้เอง · ปุ่ม "ไม่ต้องจ่ายเบอร์" สำหรับคนที่ไม่ใช่ลีดขาย', fixed: true },
     { t: 'ส่งใบจ่ายลีดเข้าห้องจ่ายเบอร์ + แท็ก @เซลล์', d: 'ทุกครั้งที่กดจ่าย ส่งจากบอทตัวส่ง (เลข R เข้าห้อง REJECT) · ปิด = โหมดทดลอง เก็บในระบบอย่างเดียว', src: 'c', k: 'slip_post', out: true },
-    { t: 'จ่ายวนตามคิว (อัตโนมัติ)', d: 'ใบร่างในห้องพักที่รอเกินเวลาที่ตั้ง → จ่ายให้คนได้ใบน้อยสุด ข้ามคนหยุด/เต็มมือ · เบอร์ซ้ำไม่จ่ายเอง · แชท LINE/FB ไม่จ่ายเอง', src: 'lf', k: 'auto_assign', out: true },
+    { t: 'จ่ายวนตามคิว (อัตโนมัติ)', d: () => { const L2 = ((CFG || {}).lf || {}).cfg || {};
+        return `ใบร่างในห้องพักที่รอเกิน ${L2.auto_after_min || 10} นาที → จ่ายให้คนได้ใบน้อยสุด ข้ามคนหยุด/เต็มมือ · เบอร์ซ้ำ/ID LINE เคยได้เลขไม่จ่ายเอง · แชท LINE/FB ใช้สวิตช์ข้างล่าง · จ่ายเฉพาะใบร่างที่โพสต์หลังเปิดสวิตช์${L2.auto_since ? ' (เปิดเมื่อ ' + lfSince(L2.auto_since) + ')' : ''}`; },
+      src: 'lf', k: 'auto_assign', out: true },
+    { t: 'จ่ายลีดขายจากแชท (LINE / Facebook)', d: () => { const L2 = ((CFG || {}).lf || {}).cfg || {};
+        return `ลูกค้าให้เบอร์/ID LINE แล้วไม่มีใครจ่ายเกิน ${L2.auto_after_min || 10} นาที → จ่ายวนเอง · ข้ามเมื่อจ่ายแล้ว (ตรงเบอร์/ID LINE) · ตรงแค่ชื่อ · มีใบร่าง · ลูกค้าเก่า · ทักหลายช่องทาง · "จดอย่างเดียว" = ตัดสินแต่ไม่จ่าย ไว้เทียบกับที่แอดมินทำ${L2.auto_chat_since ? ' (เปลี่ยนโหมดเมื่อ ' + lfSince(L2.auto_chat_since) + ')' : ''}`; },
+      src: 'lf', k: 'auto_chat', tri: ['off', 'observe', 'on'] },
     { t: 'ดึงคืนเมื่อเลยเวลา', d: 'ไม่รายงานผลภายในเวลาที่ตั้ง หรือกดขอผ่าน → จ่ายใหม่ให้คนถัดไปในคิว เลขเดิม ใบเดิม แท็กคนใหม่', src: 'lf', k: 'auto_pull', out: true },
     { t: 'การ์ดปุ่ม รับเคส / ขอผ่าน ในห้องจ่ายเบอร์', d: 'แนบต่อท้ายใบในข้อความเดียวกัน (ไม่เพิ่มโควต้า) · ปุ่มตอบด้วย reply ฟรี · กดได้เฉพาะคนที่ได้เคส', src: 'lf', k: 'card_on', out: true },
     { t: 'รายงานผล → การ์ดยืนยันแชทส่วนตัว → ลงชีต', d: 'เซลล์พิมพ์ "เลข + ผล" ในห้อง · ถ้ามีข้อมูลจริง (อาชีพ/รายได้/นัด/จอง) ส่งการ์ดให้กดยืนยันก่อนลงชีตลีด', src: 'lf', k: 'report_on', out: true },
@@ -4330,6 +4381,10 @@
     { t: 'ดึงลูกค้าแชทคืนเมื่อเซลล์ไม่ตอบ (15 นาที)', d: 'รับลูกค้าแล้วไม่ตอบจนเลยเส้นตาย + เกิน 15 นาทีหลังรับ → คืนคิวให้คนอื่นรับ · ⚠️ ทีมยังตอบในแอป LINE OA Manager (LINE ไม่ส่งกลับมา) — เปิดตอนนี้จะดึงลูกค้าที่ตอบไปแล้วคืนผิดๆ', src: 'c', k: 'pull_min', num: 15, out: true },
     { t: 'เตือนนัดลูกค้าทาง LINE (หน้ารวมแชท)', d: 'นัดติดตาม/นัดดูรถที่บันทึกในแชท → เตือนเข้าแชทส่วนตัวเซลล์ 30 นาทีก่อนถึงเวลา (ครั้งเดียว) · ในหน้าเว็บ/แอปขึ้นกระดิ่งอยู่แล้วแม้ปิดสวิตช์นี้', src: 'c', k: 'appt_line', out: true },
   ];
+  function lfSince(iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
   function ruleVal(r) {
     if (r.fixed) return true;
     const C2 = (CFG || {}).cfg || {}, L2 = ((CFG || {}).lf || {}).cfg || {};
@@ -4339,8 +4394,9 @@
     if (!ADMIN) return '';
     return `<div class="lc-rules">
       <div class="lc-card"><div class="lc-bh"><h2>กติกาการจ่ายลีด</h2><span class="note">กดสวิตช์ = บันทึกทันที · สีเขียว = เปิด</span></div>
-        ${RULES.map((r, i) => `<div class="lc-rule"><div class="tx"><div class="tt">${h(r.t)}</div><div class="ds">${h(r.d)}</div></div>
-          <button class="lc-sw${ruleVal(r) ? ' on' : ''}${r.fixed ? ' fixed' : ''}" data-rule="${i}" aria-pressed="${ruleVal(r)}" title="${r.fixed ? 'ทำงานตลอด' : 'กดเพื่อเปิด/ปิด'}"></button></div>`).join('')}</div>
+        ${RULES.map((r, i) => `<div class="lc-rule"><div class="tx"><div class="tt">${h(r.t)}</div><div class="ds">${h(typeof r.d === 'function' ? r.d() : r.d)}</div></div>
+          ${r.tri ? `<span class="lc-seg">${r.tri.map(m => `<button data-acm="${m}" class="${((((CFG || {}).lf || {}).cfg || {}).auto_chat || 'off') === m ? 'on' : ''}">${m === 'off' ? 'ปิด' : m === 'observe' ? 'จดอย่างเดียว' : 'จ่ายจริง'}</button>`).join('')}</span>`
+            : `<button class="lc-sw${ruleVal(r) ? ' on' : ''}${r.fixed ? ' fixed' : ''}" data-rule="${i}" aria-pressed="${ruleVal(r)}" title="${r.fixed ? 'ทำงานตลอด' : 'กดเพื่อเปิด/ปิด'}"></button>`}</div>`).join('')}</div>
       <div>
         <div class="lc-card"><div class="lc-bh"><h2>สองเส้นทางที่ต้องรองรับ</h2></div>
           <div class="lc-lane"><div class="lt"><span class="lc-origin">จากแชท</span> แชทมาก่อน เบอร์มาทีหลัง</div>
@@ -4356,6 +4412,17 @@
       </div></div>`;
   }
   function bindRules() {
+    CPG().querySelectorAll('[data-acm]').forEach(b => b.onclick = async () => {
+      const m = b.dataset.acm, cur = ((((CFG || {}).lf || {}).cfg || {}).auto_chat) || 'off';
+      if (m === cur) return;
+      if (m === 'on' && !confirm('เปิด "จ่ายลีดขายจากแชท" แบบจ่ายจริง?\nระบบจะออกเลข + ส่งใบเข้าห้องจ่ายเบอร์ + แท็กเซลล์เอง')) return;
+      b.disabled = true;
+      const res = await api('/connect/api/leadflow', { action: 'config', auto_chat: m });
+      b.disabled = false;
+      if (!res.ok) { toast(res.error || 'บันทึกไม่สำเร็จ', 6000); return; }
+      toast('จ่ายลีดขายจากแชท: ' + AC_NAME[m]);
+      openCfg();
+    });
     CPG().querySelectorAll('[data-rule]').forEach(b => b.onclick = async () => {
       const r = RULES[+b.dataset.rule];
       if (!r || r.fixed) return;

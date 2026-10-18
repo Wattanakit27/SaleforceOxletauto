@@ -44,6 +44,8 @@
           <td>
             {% if r.u.is_superuser %}
               <span class="sm mut">ผู้บริหารเสมอ</span>
+            {% elif r.dept %}
+              <span class="sm mut" title="สิทธิ์ระบบรถตั้งตามแผนกในทะเบียนพนักงาน — เปลี่ยนแผนกที่ แดชบอร์ด → ตั้งค่า → พนักงาน">ตามแผนก: {{ r.dept }}</span>
             {% else %}
             <form method="post" class="row" style="gap:6px">
               {% csrf_token %}

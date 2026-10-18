@@ -124,6 +124,46 @@ def m_home(request):
     return _j(mobile_home.build(request, user, lazy=request.GET.get("lazy") == "1"))
 
 
+@require_GET
+def m_charts(request):
+    """กราฟหน้า "ภาพรวม"/"วันนี้" ของแอป — ตัวเลขชุดเดียวกับกราฟแท็บภาพรวมของแดชบอร์ด (★ 18 ต.ค.69)
+    แอดมิน = ทั้งทีม · เซลล์ = ของตัวเอง + อันดับคะแนน (ชื่อ+คะแนน) · คนงาน = 403
+    ★ จัดซื้อ = กราฟรับซื้อรถของตัวเอง (`mode=buy` เสมอ) · แอดมินส่ง `?mode=buy` = กราฟจัดซื้อทั้งทีม
+    `?range=month|prev|year` (เดือนนี้ · เดือนก่อน · ทั้งปี) · services/mobile_charts.py"""
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from .services import mobile_charts
+    from .services.constants import normalize_seller
+    from .services.mobile_home import role_of
+    user = dict(tok.user)
+    role = role_of(user)
+    rng = request.GET.get("range") or "month"
+    if role == "buyer" or (role == "admin" and request.GET.get("mode") == "buy"):
+        from .services import purchase_page
+        keys, who = [], ""
+        if role == "buyer":       # ชื่อมาจาก token เท่านั้น — ส่งชื่อคนอื่นมาใน query ไม่มีผล
+            keys = purchase_page.owner_keys((user.get("nickname") or user.get("seller_name") or "").strip())
+            if not keys:
+                return _j({"ok": False, "error": "บัญชีนี้ยังไม่ได้จับคู่ชื่อกับชีตจัดซื้อ"}, 403)
+            who = keys[0]
+        try:
+            return _j(mobile_charts.build_buyer(rng, buyer_keys=keys, who=who))
+        except Exception as e:
+            return _j({"ok": False, "error": "อ่านข้อมูลแดชบอร์ดไม่ได้: %s" % e}, 500)
+    if role not in ("admin", "seller"):
+        return _j({"ok": False, "error": "กราฟดูได้เฉพาะแอดมิน/ผู้บริหาร เซลล์ และจัดซื้อ"}, 403)
+    # เซลล์ = ของตัวเองเท่านั้น (ชื่อมาจาก token ไม่รับจาก query) · แอดมิน = ทั้งทีม
+    raw = (user.get("seller_name") or user.get("nickname") or "").strip()
+    seller = (normalize_seller(raw) or raw) if role == "seller" else ""
+    if role == "seller" and not seller:
+        return _j({"ok": False, "error": "บัญชีนี้ยังไม่มีชื่อเซลล์"}, 403)
+    try:
+        return _j(mobile_charts.build(rng, seller=seller))
+    except Exception as e:
+        return _j({"ok": False, "error": "อ่านข้อมูลแดชบอร์ดไม่ได้: %s" % e}, 500)
+
+
 @csrf_exempt
 def m_checkin(request):
     """เช็คชื่อเข้างานจากแอป — ★ 14 ต.ค.69 (checkout/checkin_app.py)

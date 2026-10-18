@@ -86,10 +86,13 @@ DEFAULTS = {
     "pull_min": 0,
     # เตือนนัดลูกค้า (นัดติดตาม/นัดดูรถ) ทาง LINE แชทส่วนตัวเซลล์ 30 นาทีก่อนถึงเวลา — ปิดโดยปริยาย
     "appt_line": False,
-    # ★ 11 ต.ค.69 แชทเข้าห้องพัก Lead ยังไง — False (ค่าตั้งต้น) = เฉพาะแชทที่แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว"
-    #   (เจ้าของสั่ง "ข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100 · อย่างน้อยก็รอคนไปติ๊ก") · ใบร่างจากกลุ่ม
-    #   ADMIN เก็บ Lead เข้าห้องเองเหมือนเดิม · True = แชทที่ให้เบอร์/ID LINE เข้าห้องเอง (แบบ 4 ต.ค.69)
-    "room_chat_auto": False,
+    # แชทเข้าห้องพัก Lead ยังไง — True = แชทที่ให้เบอร์/ID LINE เข้าห้องเอง · False = เฉพาะแชทที่แอดมินติ๊ก
+    #   "รับ lead จากแชทนี้แล้ว" · ใบร่างจากกลุ่ม ADMIN เก็บ Lead เข้าห้องเองทั้ง 2 แบบ
+    #   ★ 18 ต.ค.69 กลับมาเข้าเอง (เจ้าของ "ต่อไปนี้ไม่มีแล้วการให้แอดมินมากดรับหลีดไปพัก เราส่งไปเองเลยดีกว่า")
+    #   · ตัวจับ "จ่ายแล้วหรือยัง" ด้วย ID LINE (leadmatch) เคลียร์แชทที่แอดมินจ่ายไปแล้วออกจากห้องเอง
+    #   · หน้ากฎไม่มีสวิตช์นี้แล้ว · ค่าบนเซิร์ฟเวอร์ถูกเปลี่ยนเป็นเปิดด้วย migration 0041
+    #   (11 ต.ค.69 เคยปิดไว้: "ข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100")
+    "room_chat_auto": True,
 }
 FB_REPLY_MODES = ("off", "test", "on")
 
@@ -285,18 +288,18 @@ def save_cfg(c: dict) -> bool:
         return False
 
 
-_ROOM_AUTO = {"at": 0.0, "val": False}
+_ROOM_AUTO = {"at": 0.0, "val": True}
 
 
 def room_auto() -> bool:
     """แชทที่ให้เบอร์/ID LINE เข้าห้องพัก Lead เอง (`room_chat_auto`) — จำ 20 วิ
-    (รายชื่อเรียกต่อแถว ห้ามอ่าน KV ทุกแถว) · อ่านไม่ได้ = ไม่เข้าเอง (ต้องติ๊ก)"""
+    (รายชื่อเรียกต่อแถว ห้ามอ่าน KV ทุกแถว) · อ่านไม่ได้ = ค่าตั้งต้น (เข้าเอง)"""
     import time as _t
     if _t.monotonic() - _ROOM_AUTO["at"] > 20:
         try:
             _ROOM_AUTO["val"] = bool(cfg().get("room_chat_auto"))
         except Exception:
-            _ROOM_AUTO["val"] = False
+            _ROOM_AUTO["val"] = bool(DEFAULTS["room_chat_auto"])
         _ROOM_AUTO["at"] = _t.monotonic()
     return _ROOM_AUTO["val"]
 
@@ -1833,6 +1836,18 @@ def find_slip(phone: str = "", line_name: str = ""):
 #     เลขเก่ากว่านั้น = ลูกค้าเก่ากลับมาใหม่ → ไม่เดาให้ ยังอยู่ในห้องพักพร้อมป้าย "เบอร์ซ้ำ" ให้คนตัดสิน
 SHEET_KEY = "_sheet"
 SHEET_MATCH_DAYS = 14
+MAYBE_KEY = "_maybe"              # ★ 18 ต.ค.69 ใบจ่ายลีดที่ตรงแค่ชื่อ — {code, at, tag, how} ให้แอดมินดู · ระบบจ่ายวนข้าม
+
+
+def _sheet_lid(lead, o):
+    """ID LINE นี้ได้เลขในชีตลีดแล้วในรอบที่คุยกันอยู่ (ชีตเขียน "ID LINE : xxx" ในช่องเบอร์) — กติกาเดียวกับ sheet_match"""
+    if not lead.line_id:
+        return None
+    try:
+        from . import leadmatch as LM
+        return LM.sheet_by_lid(lead.line_id, o.last_in_at, chat_lead_pk=lead.pk)
+    except Exception:
+        return None
 
 
 def sheet_match(phone: str, last_in=None, chat_lead_pk=None) -> dict | None:
@@ -2163,6 +2178,7 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
     `events` = แชททั้ง 2 ฝั่ง (dict จาก `messages()`) — ใช้จับลีดรับซื้อจากข้อความของเรา/รูปที่ลูกค้าส่ง
     """
     lead = lead_of(o)
+    had_contact = bool(lead.phone or lead.line_id)
     # ★ 4 ต.ค.69 — ลูกค้าจำลองก็เติมให้ (เดิมข้ามทั้งหมด → เจ้าของทดสอบด้วยลูกค้าจำลองแล้วเห็นฟอร์มว่างทุกช่อง
     #   นึกว่าระบบไม่เติมอะไรเลย) · เติมจากแชทของตัวเอง + ค่าตั้งต้นของระบบได้ · **ยกเว้นค้นใบจ่ายลีด** (ดูข้างล่าง)
     auto = dict(lead.auto or {})
@@ -2260,6 +2276,11 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
         changed.append("_slip_at")
         # ชื่อไลน์ใช้หาใบจ่ายลีดได้เฉพาะลูกค้า LINE (ใบเขียน "ชื่อไลน์ :") · ลูกค้า FB หาด้วยเบอร์อย่างเดียว
         hit = find_slip(lead.phone or (ph[0] if ph else ""), "" if is_fb(o) else o.profile.display_name)
+        if not hit and lead.line_id:
+            # ★ 18 ต.ค.69 ลูกค้าเพจส่วนใหญ่ไม่ให้เบอร์ ให้ ID LINE → แอดมินจับคู่ใบด้วย ID LINE
+            #   (วัดจริง: แชทที่จ่ายแล้ว 90 ราย ตัวจับเดิมรู้แค่ 3) · ย้อนเฉพาะรอบที่คุยกันอยู่
+            from . import leadmatch as LM
+            hit = LM.slip_by_lid(lead.line_id, since=(o.last_in_at or now) - timedelta(days=SHEET_MATCH_DAYS))
         if hit:
             d, g = hit
             for f, k in (("code", "lead_code"), ("ads", "ads"), ("account", "account"),
@@ -2280,8 +2301,9 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
             # จ่ายให้ใคร = คนที่ถูกแท็กท้ายใบ (ชื่อ LINE คำแรก → ชื่อเล่นในทะเบียน) · ใครโพสต์ใบ = แอดมินที่จ่าย
             auto["_slip"] = {"at": _iso(g.sent_at), "group": g.group_name or "", "tag": d.get("assigned", ""),
                              "seller": tag_nick(d.get("assigned", "")), "by": _poster(g)}
-        elif "code" not in auto and (sh := sheet_match(lead.phone or (ph[0] if ph else ""), o.last_in_at,
-                                                       chat_lead_pk=lead.pk)):
+        elif "code" not in auto and (sh := (sheet_match(lead.phone or (ph[0] if ph else ""), o.last_in_at,
+                                                        chat_lead_pk=lead.pk)
+                                            or _sheet_lid(lead, o))):
             # ★ 11 ต.ค.69 ไม่มีใบในกลุ่ม แต่เบอร์นี้ได้เลขในชีตลีดแล้วในรอบที่คุยกันอยู่ = จ่ายนอกระบบไปแล้ว
             #   (ช่อง code ที่คนเคยแก้/ลบเอง = "คน" → ไม่เติมกลับ)
             put("code", sh["code"], "ชีตลีด")
@@ -2298,6 +2320,20 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
                 d = bh[0]
                 if d.get("phone"):
                     put("phone", (phones_in([d["phone"]]) or [d["phone"]])[0], "ใบเคสรับซื้อ")
+        # ★ 18 ต.ค.69 ใบที่ตรงแค่ "ชื่อ" = อาจจ่ายแล้ว (ชื่อซ้ำกันได้) → ไม่ตัดสินเอง แค่บอกแอดมิน + ระบบจ่ายวนข้าม
+        mh = None
+        if not lead.code and BUY_KEY not in auto:
+            try:
+                from . import leadmatch as LM
+                mh = LM.name_hint(o, lead, since=(o.last_in_at or now) - timedelta(days=SHEET_MATCH_DAYS))
+            except Exception:
+                mh = auto.get(MAYBE_KEY)
+        if mh != auto.get(MAYBE_KEY):
+            if mh:
+                auto[MAYBE_KEY] = mh
+            else:
+                auto.pop(MAYBE_KEY, None)
+            changed.append(MAYBE_KEY)
 
     def stale_sys(field) -> tuple:
         """ค่าที่ระบบเคยใส่ไว้แต่ "ไม่อยู่ในตัวเลือกของชีต" (เช่น "LINE OA" ก่อนมี dropdown) → ยอมให้แก้ให้ตรงชีต"""
@@ -2349,6 +2385,8 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
         if cm:
             put("lead_type", dd_pick("lead_type", dict(CODE_BASES).get(cm.group(1).lstrip("R").lstrip("A"), "")), SYSTEM)
 
+    if not had_contact and _stamp_contact(o, lead, auto):
+        changed.append(CONTACT_AT_KEY)
     if changed:
         lead.auto = auto
         lead.save()
@@ -2506,6 +2544,8 @@ def to_code(qs):
       อย่างน้อยก็รอคนไปติ๊กว่าไปรับ lead มาจากแชทนี้แล้ว"* → ค่าตั้งต้น (`room_chat_auto` ปิด) = **เฉพาะแชทที่
       แอดมินติ๊ก "รับ lead จากแชทนี้แล้ว"** (`PARK_KEY`) · ระบบยังจับเบอร์/ID ลงข้อมูลลีดให้เหมือนเดิม แค่ไม่ส่งเข้าห้องเอง
       · ติ๊กแล้ว = คนตัดสินแล้ว ไม่ต้องรอเบอร์/ประวัติคุย · เปิดสวิตช์ = กติกาเดิม (ให้เบอร์/ID แล้วเข้าห้องเอง)
+
+    ★ 18 ต.ค.69 กลับมาเข้าเอง (`room_chat_auto` เปิดเป็นค่าตั้งต้น · เจ้าของ "เราส่งไปเองเลยดีกว่า")
     """
     if not room_auto():
         return qs.filter(lead__auto__has_key=PARK_KEY).filter(_no_code_q()).filter(_sell_q())
@@ -2969,6 +3009,7 @@ def capture_contact(o, msgs=None, extra=None) -> bool:
         return False
     lead = lead or lead_of(o)
     auto = dict(lead.auto or {})
+    had = bool(lead.phone or lead.line_id)
     got = []
     if ph and not lead.phone and auto.get("phone") != HUMAN:
         lead.phone, auto["phone"] = ph[0], "แชท"
@@ -2976,6 +3017,8 @@ def capture_contact(o, msgs=None, extra=None) -> bool:
     if ids and not lead.line_id and auto.get("line_id") != HUMAN:
         lead.line_id, auto["line_id"] = ids[0], "แชท"
         got.append("line_id")
+    if got and not had:
+        _stamp_contact(o, lead, auto)
     if got:
         lead.auto = auto
         lead.save(update_fields=got + ["auto", "updated_at"])
@@ -2983,6 +3026,18 @@ def capture_contact(o, msgs=None, extra=None) -> bool:
 
 
 QR_SRC = "รูป QR"                  # ป้ายที่มาในฟอร์มลีด ("จากรูป QR")
+CONTACT_AT_KEY = "_contact_at"     # ★ 18 ต.ค.69 เวลาที่ลูกค้าให้ช่องทางติดต่อครั้งแรก (ระบบจ่ายวนจากแชทนับจากตรงนี้)
+
+
+def _stamp_contact(o, lead, auto) -> bool:
+    """ลีดเพิ่งได้ช่องทางติดต่อครั้งแรก → จดเวลา = ข้อความล่าสุดของลูกค้า (ไม่ใช่ "ตอนนี้")
+    ตัวเก็บตกแชทเก่า (`scan_contacts`) เติมเบอร์ให้แชทเมื่อหลายวันก่อนได้ — ถ้าจดเป็นตอนนี้
+    ระบบจ่ายวนจะเข้าใจว่าเป็นลีดใหม่หลังเปิดสวิตช์ แล้วจ่ายลีดเก่าที่แอดมินอาจจัดการไปแล้ว"""
+    if CONTACT_AT_KEY in auto or not (lead.phone or lead.line_id):
+        return False
+    at = o.last_in_at or timezone.now()
+    auto[CONTACT_AT_KEY] = timezone.localtime(min(at, timezone.now())).isoformat(timespec="seconds")
+    return True
 
 
 def capture_qr(o, value: str, ref: str = "") -> bool:
@@ -2999,8 +3054,11 @@ def capture_qr(o, value: str, ref: str = "") -> bool:
         return False
     lead = lead or lead_of(o)
     auto = dict(lead.auto or {})
+    had = bool(lead.phone or lead.line_id)
     lead.line_id, auto["line_id"] = v, QR_SRC
     auto["_qr"] = {"at": timezone.now().isoformat(timespec="seconds"), "msg": ref[:24]}
+    if not had:
+        _stamp_contact(o, lead, auto)
     lead.auto = auto
     lead.save(update_fields=["line_id", "auto", "updated_at"])
     return True
@@ -3318,7 +3376,41 @@ def last_running() -> int:
         mm = _ANY_CODE.match(c or "")
         if mm:
             nums.append(int(mm.group(3)))
+    nums += _sheet_running(max(nums) if nums else 0)
     return max(nums) if nums else 0
+
+
+SHEET_RUN_ROWS = 600      # แถวท้ายๆ ของแท็บเดือนนี้ในสำเนาชีตลีด
+SHEET_RUN_GAP = 30        # นับเฉพาะเลขในชีตที่นำหน้าใบในกลุ่มไม่เกินนี้
+
+
+def _sheet_running(base: int) -> list:
+    """★ 18 ต.ค.69 เลขรันที่แอดมินลงในชีตลีดตรงๆ (ไม่ได้โพสต์ใบในกลุ่ม) — กันระบบออกเลขชนกับเลขนั้น
+
+    อ่านจากสำเนาชีตใน Postgres (`dash_lead_sheet_row` · อัปเดตทุก 10 นาที) ไม่ยิง Google ตอนออกเลข
+    · **แท็บเดือนนี้เท่านั้น** + นำหน้าใบในกลุ่มไม่เกิน `SHEET_RUN_GAP` — ชีตมีเลขพิมพ์ผิดจริง
+      (วัด prod 18 ต.ค.69: แท็บ ก.ย. แถว 2397–2400 = TLD9-9662..9665 แทน 7662..7665 · นำหน้าใบล่าสุด 9522 อยู่ 143)
+      ถ้านับ ระบบจะกระโดดไปออก 9666 · แอดมินลงชีตล่วงหน้าจริงมักนำแค่ไม่กี่เลข
+    · ไม่มีใบในกลุ่มเลย (`base` = 0) = ไม่นับชีต (ไม่มีอะไรให้เทียบว่าเลขไหนพิมพ์ผิด) · อ่านไม่ได้ = ไม่นับ
+    """
+    if not base:
+        return []
+    try:
+        from dashboard.models import LeadSheetRow
+        first = timezone.localdate().replace(day=1)
+        codes = (LeadSheetRow.objects.filter(tab_month=first).exclude(code="")
+                 .order_by("-row_no").values_list("code", flat=True)[:SHEET_RUN_ROWS])
+    except Exception:
+        return []
+    out = []
+    for c in codes:
+        mm = _ANY_CODE.match(re.sub(r"[ 	]", "", (c or "").split("/")[0]))
+        if not mm or mm.group(1).upper().startswith("R"):
+            continue
+        n = int(mm.group(3))
+        if base < n <= base + SHEET_RUN_GAP:
+            out.append(n)
+    return out
 
 
 def code_taken(code: str, chat_lead_pk=None, ext_pk=None) -> bool:

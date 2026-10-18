@@ -59,7 +59,10 @@ DEFAULTS = {
     "remind_on": False,             # เตือนนัดลูกค้า (จากรายงานที่ยืนยันแล้ว) ก่อนถึงเวลา
     "remind_min": 60,
     "auto_assign": False,           # จ่ายวนอัตโนมัติ — ใบร่างในห้องพัก Lead ที่รอเกิน auto_after_min
-    "auto_after_min": 3,
+    "auto_after_min": 10,           # ★ 18 ต.ค.69 เจ้าของสั่ง 10 นาที (ให้แอดมินกดเลือกเซลล์เองได้ก่อน)
+    "auto_since": "",               # เปิดจ่ายวนเมื่อไหร่ — จ่ายเฉพาะใบร่างที่โพสต์หลังเวลานี้ (ไม่ไล่จ่ายใบเก่าที่ค้าง)
+    "auto_chat": "off",             # ★ 18 ต.ค.69 จ่ายลีดขายจากแชทเอง: off · observe (จดอย่างเดียว) · on (จ่ายจริง) — autochat.py
+    "auto_chat_since": "",          # เปลี่ยนโหมดเมื่อไหร่ — ดูเฉพาะลูกค้าที่ให้เบอร์/ID LINE หลังเวลานี้
     "auto_pull": False,             # เลยเวลา/กดขอผ่าน → จ่ายใหม่ให้คนถัดไปในคิวเอง (เลขเดิม)
     "pull_max": 2,                  # จ่ายใหม่อัตโนมัติได้กี่ครั้งต่อใบ (กันวน)
     # ── คิวจ่ายวน ──
@@ -101,18 +104,38 @@ def cfg() -> dict:
             c[k] = DEFAULTS[k]
     teams = [str(t).strip().upper() for t in (c.get("rr_teams") or []) if str(t).strip()]
     c["rr_teams"] = [t for t in teams if re.fullmatch(r"[A-Z0-9]{1,2}|ADMIN", t)] or list(DEFAULTS["rr_teams"])
+    if c.get("auto_chat") not in AUTO_CHAT_MODES:
+        c["auto_chat"] = "off"
     return c
+
+
+AUTO_CHAT_MODES = ("off", "observe", "on")
 
 
 def clean_cfg(body: dict) -> tuple[dict, list]:
     """ค่าจากหน้าตั้งค่า → (ค่าที่จะบันทึก, ปัญหา) · ค่าผิด = ฟ้องพร้อมบอกช่อง ไม่เงียบ"""
     c, errs = cfg(), []
+    was_auto = c["auto_assign"]
     names = {"call_min": "เวลาที่ต้องรายงานผล", "remind_min": "เตือนนัดก่อนกี่นาที",
              "auto_after_min": "จ่ายวนเมื่อรอเกินกี่นาที", "pull_max": "จ่ายใหม่อัตโนมัติสูงสุด",
              "cap_day": "เพดานใบต่อคนต่อวัน"}
     for k in _BOOL:
         if k in body:
             c[k] = bool(body[k])
+    # ★ 18 ต.ค.69 เจ้าของ "ห้องพักหลีดตั้งแต่ตอนนี้ … เข้าเองอัตโนมัติ" — เปิดสวิตช์ = จ่ายเฉพาะใบร่างที่โพสต์หลังจากนี้
+    #   ใบร่างเก่าที่ค้างอยู่ (บางใบค้างเพราะตั้งใจไม่จ่าย/ลูกค้าเก่า) ต้องไม่ถูกจ่ายรวดเดียวตอนกดเปิด
+    if c["auto_assign"] and not was_auto:
+        c["auto_since"] = _iso(timezone.now())
+    elif not c["auto_assign"]:
+        c["auto_since"] = ""
+    # ★ 18 ต.ค.69 จ่ายจากแชท — เปลี่ยนโหมดเมื่อไหร่ เริ่มนับใหม่ (ไม่ไล่จ่าย/จดลูกค้าที่ให้เบอร์มาก่อนหน้า)
+    if "auto_chat" in body:
+        m = str(body.get("auto_chat") or "").strip()
+        if m not in AUTO_CHAT_MODES:
+            errs.append("จ่ายลีดจากแชทอัตโนมัติ ต้องเป็น ปิด / จดอย่างเดียว / จ่ายจริง")
+        elif m != c["auto_chat"]:
+            c["auto_chat"] = m
+            c["auto_chat_since"] = "" if m == "off" else _iso(timezone.now())
     for k, (lo, hi) in _INT.items():
         if k in body:
             try:
@@ -1260,6 +1283,13 @@ def tick(now=None) -> dict:
             out["autoAssign"] = _auto_assign(c, now)
         except Exception as e:
             out["autoError"] = str(e)[:120]
+    if c.get("auto_chat", "off") != "off":
+        try:                                    # ★ 18 ต.ค.69 จ่ายลีดขายจากแชท (thread แยก · autochat.py)
+            r = __import__("checkout.autochat", fromlist=["tick_bg"]).tick_bg(now)
+            if r:
+                out["autoChat"] = r
+        except Exception as e:
+            out["autoChatError"] = str(e)[:120]
     if c["remind_on"]:
         try:
             out["reminded"] = _remind(c, now)
@@ -1302,16 +1332,43 @@ def _auto_assign(c, now) -> list:
 
     ลูกค้าแชทใน Connect ไม่จ่ายอัตโนมัติ (ยังต้องดูว่าเป็นลีดขายจริงไหม) — หน้าเว็บแค่เลือกคนถัดไปในคิวไว้ให้
     """
+    from django.utils.dateparse import parse_datetime
     from . import leadpark
     done, skipped = [], []
+    since = parse_datetime(c.get("auto_since") or "") if c.get("auto_since") else None
     b = leadpark.board(cache_sec=0)
     for it in b.get("waiting") or []:
         if it.get("code") or (it.get("waitMin") or 0) < c["auto_after_min"]:
+            continue
+        at = parse_datetime(it.get("at") or "")
+        if since and (not at or at < since):        # ใบร่างที่โพสต์ก่อนเปิดสวิตช์ = แอดมินจัดการเอง
             continue
         phone = it.get("phone") or ""
         if phone and dup_info(phone):
             skipped.append({"id": it["id"], "why": "เบอร์ซ้ำ"})
             continue
+        # ★ 18 ต.ค.69 ลูกค้าเพจส่วนใหญ่ให้ ID LINE ไม่ให้เบอร์ — ID LINE เคยได้เลข / ชื่อตรงกับแชทที่ระบบเพิ่งจ่าย = ข้าม
+        try:
+            from . import leadmatch as LM
+            lt = LM.lid_taken(it.get("lineId") or "", days=0)
+            if lt:
+                skipped.append({"id": it["id"], "why": "ID LINE เคยได้เลข %s (%s)" % (lt["code"], lt["where"])})
+                continue
+            fb = None
+            chl = (it.get("channel") or "").lower()
+            if chl:
+                fb = any(k in chl for k in ("เพจ", "page", "fb", "facebook", "เฟส"))
+            for nm in (it.get("account"), it.get("name")):
+                ct = LM.chat_name_taken(nm or "", fb=fb)
+                if ct:
+                    skipped.append({"id": it["id"], "why": "ชื่อตรงกับแชท #%s ที่ระบบเพิ่งจ่าย %s" % (ct["chat"], ct["code"])})
+                    break
+            else:
+                ct = None
+            if ct:
+                continue
+        except Exception:
+            pass
         emp = rr_pick(c=c)
         if not emp:
             skipped.append({"id": it["id"], "why": "ไม่มีเซลล์ว่างในคิว"})

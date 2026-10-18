@@ -348,6 +348,8 @@ def api_inbox(request):
                     r["hasPhone"], r["hasLine"] = bool(ld.phone), bool(ld.line_id)
                     r["car"] = ld.car_model or ld.car_text or ""
                     r["dup"] = LF.dup_info(ld.phone, exclude_code=ld.code) if ld.phone else None
+                    # ★ 18 ต.ค.69 แชทเข้าห้องพักเองแล้ว — ใบจ่ายลีดที่ชื่อตรง (เบอร์/ID ไม่ตรง) = อาจจ่ายไปแล้ว ให้แอดมินเห็นบนการ์ด
+                    r["maybe"] = (ld.auto or {}).get(C.MAYBE_KEY) or None
                 for r in pend:                   # กลุ่ม "รอกดรับ" โชว์เบอร์/ID ที่ลูกค้าให้ (ลูกค้า ไม่ใช่ id พนักงาน · รูป QR = แค่บอกว่ามี)
                     ld = leads.get(r["id"])
                     if ld:
@@ -439,6 +441,10 @@ def api_chat(request):
                     from . import leadflow as LF
                     ch = out["codeHelp"]
                     ch["dup"] = LF.dup_info(lead.phone, exclude_code=lead.code) if lead.phone else None
+                    if not lead.code:                 # ★ 18 ต.ค.69 ใบที่ตรงแค่ชื่อ / ID LINE เคยได้เลข — บอกก่อนกดจ่าย
+                        from . import leadmatch as LM
+                        ch["maybe"] = (lead.auto or {}).get(C.MAYBE_KEY) or None
+                        ch["lidDup"] = LM.lid_taken(lead.line_id, days=0, exclude_lead=lead.pk) if lead.line_id else None
                     ch["rr"] = LF.rr_json()
                     ch["fwd"] = LF.fwd_code(lead.code) if lead.code else ""
                     t = o.lead_tasks.order_by("-id").first()
@@ -553,7 +559,17 @@ def api_leadflow(request):
     return _j({"ok": True, "cfg": c, "rr": LF.rr_json(c, 20), "tasks": LF.tasks_json(1),
                "summary": LF.summary(), "sellers": C.seller_list(),
                "state": LF._kv(LF.KV_STATE), "auto": LF._kv("leadflow_auto_last"),
-               "postback": LF._kv("leadflow_postback_last"), "needs": {"at": LF._kv(LF.KV_NEEDS).get("at", "")}})
+               "postback": LF._kv("leadflow_postback_last"), "needs": {"at": LF._kv(LF.KV_NEEDS).get("at", "")},
+               "autoChat": _autochat_status()})
+
+
+def _autochat_status() -> dict:
+    """★ 18 ต.ค.69 จ่ายลีดขายจากแชทอัตโนมัติ — โหมด + การตัดสินล่าสุด (อ้างเลขแชท ไม่มีชื่อ/เบอร์ลูกค้า)"""
+    try:
+        from . import autochat
+        return autochat.status_json()
+    except Exception as e:
+        return {"mode": "off", "error": str(e)[:120]}
 
 
 def _admin_get(request):

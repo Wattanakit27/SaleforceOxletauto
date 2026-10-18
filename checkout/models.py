@@ -391,7 +391,12 @@ class Employee(models.Model):
 
     nickname = models.CharField("ชื่อเล่น", max_length=80, unique=True)
     display_name = models.CharField("ชื่อที่ตั้งใน LINE", max_length=120, blank=True, db_index=True)
-    position = models.CharField("ตำแหน่ง/ทีม", max_length=80, blank=True)
+    # ★ 18 ต.ค.69 (เจ้าของสั่ง) — แผนก = ตัวกำหนดบทบาทในแอป + สิทธิ์ระบบรถ · ตำแหน่ง = รายละเอียดใต้แผนก
+    #   คีย์อยู่ใน checkout/departments.py (exec/admin/telesale/sales/purchasing/registration/qc/…)
+    #   `department_auto` = ระบบเดาให้ (migration 0042) ยังไม่มีคนยืนยัน → **ยังไม่ไปเปลี่ยนสิทธิ์ระบบรถของใคร**
+    department = models.CharField("แผนก", max_length=20, blank=True, db_index=True)
+    department_auto = models.BooleanField("แผนกที่ระบบเดาให้ (ยังไม่มีคนยืนยัน)", default=False)
+    position = models.CharField("ตำแหน่ง (ใต้แผนก · เช่น ทีม A)", max_length=80, blank=True)
     work_start = models.CharField("เวลาเข้างาน", max_length=16, blank=True)
     day_off = models.CharField("วันหยุด", max_length=40, blank=True)
     group_id = models.CharField("กลุ่ม LINE ที่ผูกไว้", max_length=64, blank=True)

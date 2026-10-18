@@ -673,7 +673,17 @@ def _bridge_line_to_django_user(request, line_user_id, display_name="", make_exe
         user.first_name = display_name[:150]
         user.save(update_fields=["first_name"])
     from cars import roles as _troles
-    if make_super:
+    # ★ 18 ต.ค.69 — แผนกในทะเบียนพนักงาน (ยืนยันแล้ว) = บทบาทระบบรถของบัญชีนี้ (เจ้าของเลือก "ตามแผนกอัตโนมัติ")
+    #   แผนกที่ระบบเดาไว้/ยังไม่ระบุ = "" → ใช้กติกาเดิมข้างล่าง · superuser ไม่แตะ
+    try:
+        from checkout import departments as _dept
+        _want = "" if make_super else _dept.track_role_for_line(line_user_id)
+    except Exception:
+        _want = ""
+    if _want and not user.is_superuser:
+        if _troles.get_role(user) != _want:
+            _troles.set_user_role(user, _want)
+    elif make_super:
         # ★ แอดมินระบบ (รหัสผ่าน break-glass) = superuser เสมอ · เติมย้อนหลังให้บัญชีเก่าด้วย
         #   (บั๊กเดิม: บัญชีถูกสร้างไว้ก่อนโดยไม่มีบทบาท → เข้า /track/ แล้วทำอะไรไม่ได้
         #    และเข้า /track/users/ ไปตั้งบทบาทเองก็ไม่ได้ = ล็อกตัวเองออก)

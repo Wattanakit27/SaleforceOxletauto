@@ -2463,7 +2463,24 @@ try:
     # ═════════════════════════════════════════════════════════════════════
     print("[34] ห้องพัก Lead รับแชทเมื่อแอดมินติ๊ก \"รับ lead จากแชทนี้แล้ว\" (11 ต.ค.69 · \"ข้อมูลยังไม่ครบ ยังไม่พร้อมทำออโต้ 100\")")
     from checkout import crm as CRM
-    ck("ค่าตั้งต้น = ต้องติ๊ก (ไม่เข้าห้องเอง)", C.DEFAULTS["room_chat_auto"] is False)
+    ck("★ 18 ต.ค.69 ค่าตั้งต้น = เข้าห้องเอง (เจ้าของ \"เราส่งไปเองเลยดีกว่า\")", C.DEFAULTS["room_chat_auto"] is True)
+    # migration 0041: ค่าที่บันทึกไว้ว่า "ปิด" บนเซิร์ฟเวอร์ → เปิด · ค่าอื่นใน config ต้องอยู่ครบ
+    import importlib
+    from django.apps import apps as _apps
+    from dashboard.models import KVStore as _KV
+    _m41 = importlib.import_module("checkout.migrations.0041_room_chat_auto_on")
+    _keep = C.cfg()
+    C.save_cfg(dict(_keep, room_chat_auto=False))
+    _m41.forward(_apps, None)
+    _d41 = _KV.objects.get(key="connect_config").data
+    ck("migration 0041 เปลี่ยนค่าที่บันทึกว่าปิด → เปิด", _d41.get("room_chat_auto") is True, _d41.get("room_chat_auto"))
+    ck("migration 0041 ไม่แตะค่าอื่น", _d41.get("anchor_team") == _keep.get("anchor_team") and _d41.get("open") == _keep.get("open"))
+    C._ROOM_AUTO["at"] = 0.0
+    ck("หลัง migrate อ่านค่าได้เปิด", C.room_auto() is True)
+    _KV.objects.filter(key="connect_config").delete()
+    _m41.forward(_apps, None)
+    ck("migration 0041 ไม่มีค่าที่บันทึก = ไม่สร้างอะไร", not _KV.objects.filter(key="connect_config").exists())
+    C.save_cfg(_keep)
     _cc, _ce = C.clean_cfg({"room_chat_auto": True})
     ck("ตั้งสวิตช์ผ่านหน้ากฎได้", _cc.get("room_chat_auto") is True and not _ce, _ce)
     C.save_cfg(dict(C.cfg(), room_chat_auto=False))

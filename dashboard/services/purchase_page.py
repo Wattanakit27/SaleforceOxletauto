@@ -45,7 +45,17 @@ def owner_keys(nickname: str) -> list:
 
 
 def is_purchaser(nickname: str, position: str = "") -> bool:
-    """คนนี้เป็นทีมจัดซื้อไหม — ดูตำแหน่งในทะเบียนก่อน แล้วค่อยดูรายชื่อที่จับคู่ไว้"""
+    """คนนี้เป็นทีมจัดซื้อไหม — แผนกในทะเบียน (ยืนยันแล้ว) ชนะ · ไม่งั้นดูตำแหน่ง แล้วค่อยดูรายชื่อที่จับคู่ไว้"""
+    try:          # ★ 18 ต.ค.69 แผนก (checkout/departments.py)
+        from checkout.models import Employee
+        e = Employee.objects.filter(nickname=str(nickname or "").strip()).only("department", "department_auto").first()
+        if e and e.department:
+            if e.department == "purchasing":
+                return True
+            if not e.department_auto:        # คนยืนยันแล้วว่าอยู่แผนกอื่น = ไม่ใช่จัดซื้อ
+                return False
+    except Exception:
+        pass
     if "จัดซื้อ" in str(position or ""):
         return True
     return bool(OWNER_ALIAS.get(str(nickname or "").strip()))

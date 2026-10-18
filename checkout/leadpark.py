@@ -85,14 +85,36 @@ def _norm(s) -> str:
     return re.sub(r"[\s@\-_.]", "", str(s or "")).lower()
 
 
+# ★ 18 ต.ค.69 คำที่แอดมินพิมพ์ในช่อง ID LINE แทน "ไอดีจริง" — ลูกค้าส่งรูป QR มาแทน → "QR code" (+ แนบรูปตามมา)
+#   วัดจริงบน prod 30 วัน: 96 จาก 709 ใบร่าง (QR code / Qr code / qr code / QR CODE / QR codde / QR)
+#   เดิมคำนี้กลายเป็นคีย์ "l:qrcode" ใบเดียวกันหมด → ลูกค้าคนละคนถูกนับเป็น "โพสต์ซ้ำ" (7 วัน = 13 ใบหายจากห้องพัก)
+#   + จับคู่กับใบจริงของลูกค้าคนอื่นที่เขียน QR code เหมือนกัน (ขึ้นว่าจ่ายแล้วทั้งที่ยังไม่จ่าย)
+_LID_JUNK = re.compile(r"(?i)q\s*r\s*[-_.]?\s*c\s*o\s*[a-z]{0,3}|(?<![a-z])qr(?![a-z])|line\s*@|@\s*line"
+                       r"|คิวอาร์(?:\s*โค้?๊?ด)?|(?:แนบ|ส่ง)?\s*รูป(?:ภาพ)?")
+_LID_STOP = {"line", "idline", "lineid", "qrcode", "none", "null", "nan"}
+
+
+def clean_line_id(v) -> str:
+    """ช่อง ID LINE → ไอดีจริง · "" ถ้าเป็นคำแทนรูป QR / Line@ / ชื่อภาษาไทย · "Qr code / yingat9015" → "yingat9015"
+
+    ไอดี LINE เป็นตัวอังกฤษ/ตัวเลขเสมอ → เหลือตัวอังกฤษ-ตัวเลขไม่ถึง 4 ตัว = ไม่ใช่ไอดี
+    """
+    s = re.sub(r"[/|,]+", " ", _LID_JUNK.sub(" ", str(v or ""))).strip(" -:\t")
+    n = _norm(s)
+    if n in _LID_STOP or len(re.sub(r"[^a-z0-9]", "", n)) < 4:
+        return ""
+    return s
+
+
 def keys(d: dict) -> tuple[set, str]:
     """ตัวตนของลีด → (คีย์แข็ง, คีย์อ่อน)
 
     คีย์แข็ง = เบอร์โทร + ID LINE (ที่ไม่ใช่เบอร์) — ตรงกัน 1 ตัว = คนเดียวกันแน่
     คีย์อ่อน = ชื่อ Account + ช่องทาง — ใช้เฉพาะตอน "ไม่มีคีย์แข็งเลย" (ชื่อ TikTok สั้นๆ อย่าง "B." ซ้ำกันได้)
+    ช่อง ID LINE ที่เขียน "QR code" (ลูกค้าส่งรูปแทน) ไม่นับเป็นไอดี (`clean_line_id`)
     """
     strong = {"p:" + p for p in (d.get("phones") or [])}
-    lid = _norm(d.get("line_id"))
+    lid = _norm(clean_line_id(d.get("line_id")))
     if len(lid) >= 4 and not lid.isdigit():
         strong.add("l:" + lid)
     acc = _norm(d.get("account"))
