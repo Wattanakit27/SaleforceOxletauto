@@ -50,6 +50,15 @@ def check_signature(raw: bytes, header: str) -> bool | None:
     return hmac.compare_digest(h[7:], want)
 
 
+def _ref(r) -> dict:
+    """referral ของโฆษณา (webhook) — เก็บเฉพาะที่ใช้ระบุโฆษณา"""
+    r = r if isinstance(r, dict) else {}
+    ctx = r.get("ads_context_data") or {}
+    return {"source": str(r.get("source") or "")[:20], "type": str(r.get("type") or "")[:30],
+            "ad_id": str(r.get("ad_id") or "")[:40],
+            "ads_context_data": {"ad_title": str(ctx.get("ad_title") or "")[:200], "post_id": str(ctx.get("post_id") or "")[:60]}}
+
+
 def _msg_type(m: dict) -> str:
     if m.get("sticker_id"):
         return "sticker"
@@ -139,7 +148,10 @@ def handle_payload(data: dict) -> dict:
                                 "attachments": [{"type": a.get("type"),
                                                  "url": str(((a.get("payload") or {}).get("url")) or "")[:1000]}
                                                 for a in att if isinstance(a, dict)],
-                                "app_id": m.get("app_id")},
+                                "app_id": m.get("app_id"),
+                                # ★ 19 ต.ค.69 ลูกค้ากดโฆษณาแบบทักแชท → Meta บอก ad id ตรงๆ (fb_ads.py ใช้แทนการเดาจากการ์ด)
+                                **({"referral": _ref(m.get("referral") or ev.get("referral"))}
+                                   if (m.get("referral") or ev.get("referral")) else {})},
                          has_media=bool(att), channel=pid,
                          direction=FbChat.OUT if echo else FbChat.IN, sent_at=at)
             if _sent_from_connect(row):

@@ -218,7 +218,7 @@ _YEAR_RE = re.compile(r"ปี\s*(\d{2,4})\s*(?:[-–ถึง/]\s*(\d{2,4}))?")
 # ชื่อรุ่นที่คนพิมพ์เป็นไทย — สต็อกเก็บเป็นอังกฤษ ไม่แปลงก็จับคู่ไม่เจอ
 _TH_MODEL = {
     "แคมรี่": "camry", "แคมรี": "camry", "ซีวิค": "civic", "ซิตี้": "city",
-    "ยาริส": "yaris", "อัลเมร่า": "almera", "ฟอร์จูนเนอร์": "fortuner",
+    "ยาริส": "yaris", "อัลเมร่า": "almera", "ฟอร์จูนเนอร์": "fortuner", "ฟอร์จูน": "fortuner",
     "วีออส": "vios", "แจ๊ส": "jazz", "แอคคอร์ด": "accord", "มาร์ช": "march",
     "อัลติส": "altis", "รีโว่": "revo", "วีโก้": "vigo", "ดีแม็ก": "d-max",
     "ปาเจโร่": "pajero", "เทอร์ร่า": "terra", "ครอส": "cross", "ซิตี": "city",
@@ -237,6 +237,19 @@ _TH_MODEL = {
 }
 # ยาวก่อนเสมอ — "ยาริสครอส" ต้องชนะ "ยาริส"/"ครอส" (ไม่งั้นได้รุ่นกว้างกว่าที่ลูกค้าบอก)
 _TH_MODEL_KEYS = sorted(_TH_MODEL, key=len, reverse=True)
+
+
+def th_fold(s: str) -> str:
+    """★ 19 ต.ค.69 ภาษาไทยพิมพ์ได้หลายแบบ — ตัดตัวการันต์ (ร์ ด์ ต์) + วรรณยุกต์ + ู→ุ
+    ("ฟอจูนเนอร์" / "ฟอร์จูนเนอ" / "ฟอจุนเนอ" = ฟอร์จูนเนอร์ · เคสจริง NLD10-9681 ลูกค้าพิมพ์ "ฟอจูนเนอร์" แล้วไม่จับ)"""
+    s = re.sub(r"[ก-ฮ]์", "", s or "")
+    s = re.sub(r"[่-์]", "", s)
+    return s.replace("ู", "ุ")
+
+
+# ชื่อที่พับแล้วสั้นกว่า 5 ตัว (มาร์ช → "มาช") ไม่ใช้แบบพับ — ไปโดนคำอื่น ("มาชมรถ") · ใช้แบบตรงตัวอย่างเดียว
+_TH_FOLD_KEYS = sorted({(th_fold(k), v) for k, v in _TH_MODEL.items() if len(th_fold(k)) >= 5},
+                       key=lambda x: len(x[0]), reverse=True)
 
 
 def _year4(v: int) -> int:
@@ -278,6 +291,12 @@ def parse_specs(text: str) -> dict:
         if th in low:
             out["car_model"] = _TH_MODEL[th]
             break
+    else:
+        fl = th_fold(low)
+        for th, en in _TH_FOLD_KEYS:
+            if th in fl:
+                out["car_model"] = en
+                break
     return out
 
 

@@ -40,7 +40,8 @@ MAX_MSG_PAGES = 20           # ห้องเดียวดึงข้อค�
 
 _CONV_FIELDS = "id,updated_time,message_count,unread_count,can_reply,link,participants"
 _MSG_FIELDS = ("id,created_time,from,to,message,tags,sticker,"
-               "attachments{id,mime_type,name,size,image_data,video_data,file_url}")
+               "attachments{id,mime_type,name,size,image_data,video_data,file_url,generic_template}")
+# ★ 19 ต.ค.69 generic_template = การ์ดโฆษณาในห้องแชท (ลูกค้ากดโฆษณาแบบทักแชท) → fb_ads.py จับว่ามาจากโฆษณาตัวไหน
 
 
 def _clean(m: dict) -> dict:
@@ -61,6 +62,9 @@ def _clean(m: dict) -> dict:
 def _msg_type(m: dict) -> str:
     if m.get("sticker"):
         return "sticker"
+    from .fb_ads import TEMPLATE, is_card_msg
+    if is_card_msg(m):
+        return TEMPLATE                  # การ์ดโฆษณา — ไม่ใช่ไฟล์ให้ดาวน์โหลด
     att = ((m.get("attachments") or {}).get("data") or [])
     if att:
         mt = (att[0].get("mime_type") or "").lower()
@@ -104,7 +108,7 @@ def _sync_thread(cid: str, pid: str, pt: str, floor, collect: list | None = None
                 sender_id=str(f.get("id") or "")[:64], sender_name=(f.get("name") or "")[:120],
                 msg_type=_msg_type(m), text=m.get("message") or "",
                 sticker_id=str(m.get("sticker") or "")[:300],
-                extra=_clean(m), has_media=bool(att), channel=pid,
+                extra=_clean(m), has_media=bool(att) and _msg_type(m) != "template", channel=pid,
                 direction=FbChat.OUT if out else FbChat.IN,
                 sent_at=ct))
             if ct and (oldest is None or ct < oldest):

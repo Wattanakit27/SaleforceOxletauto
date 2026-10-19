@@ -2141,7 +2141,12 @@
     const src = A[f] === 'แชท' ? kwSrc(L, f) : null;
     let badge = '';
     if (src) badge = `<button type="button" class="kw-src kw-${KW_CAT[f] || 'i'}" data-src="${f}" data-mi="${src.i}" title="ระบบเติมให้อัตโนมัติจากแชท${h(why)} — กดเพื่อดูข้อความต้นทาง · แก้ได้">จากแชท ${h(shortAt(src.at))}</button>`;
-    else if (A[f] && A[f] !== 'คน') badge = `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])}${h(why)} — แก้ได้">จาก${h(A[f])}</span>`;
+    else if (A[f] && A[f] !== 'คน') {
+      // ★ 19 ต.ค.69 ช่อง ADS จากการ์ดโฆษณา Facebook — บอกชื่อโฆษณาใน Ads Manager + แคมเปญ (ad id เก็บในฐานข้อมูล)
+      const ad = f === 'ads' && L.ad ? L.ad : null;
+      const adTip = ad ? ` · โฆษณา: ${ad.ad_name || 'ยังจับคู่ไม่ได้'}${ad.campaign_name ? ' · แคมเปญ: ' + ad.campaign_name : ''}${ad.ad_id ? ' · ad id ' + ad.ad_id : ''}` : '';
+      badge = `<span class="pf-auto" title="ระบบเติมให้อัตโนมัติจาก${h(A[f])}${h(why)}${h(adTip)} — แก้ได้">จาก${h(A[f])}</span>`;
+    }
     if ((L.sugg || {})[f]) badge = `<span class="pf-sgm" title="ลูกค้าพูดค่าใหม่ — ดูกล่อง &quot;รอคนตัดสิน&quot; ด้านบน">ค่าใหม่รอยืนยัน</span>` + badge;
     const dis = ed ? '' : ' disabled';
     const opts = Array.isArray(_DDF[f]) && _DDF[f].length ? _DDF[f] : null;
@@ -3852,7 +3857,8 @@
         ${doneItems(true).map(doneCardHtml).join('') || '<div class="cn-empty">ยังไม่มีลีดที่จ่ายเบอร์ในช่วงนี้</div>'}`;
     } else {
       const skipped = (P.skipped || []).map(i => `<div class="lc-rl"><b>${h(pWho(i))}</b> ${srcTag(i.source)}<span class="lc-chip">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div>`).join('');
-      body = `<div class="lc-bh" style="background:var(--bg2)"><button class="btn sm${S.addOpen ? '' : ' pri'}" data-addopen="1" title="กรอกลีดที่ไม่ได้มาทางแชท — ระบบออกเลขให้ แล้วส่งใบลงกลุ่ม ADMIN เก็บ Lead">${ic('plus', 14)} เพิ่มลีดเอง (TikTok / ไลฟ์ / โทรเข้า)</button>
+      const _fOff = !!(P.form && P.form.on === false);   // ★ 20 ต.ค.69 พักการรันเลข = ฟอร์มนี้พักด้วย (มันจองเลข)
+      body = `<div class="lc-bh" style="background:var(--bg2)"><button class="btn sm${S.addOpen ? '' : ' pri'}" data-addopen="1"${_fOff ? ' disabled' : ''} title="${_fOff ? 'พักการรันเลขอยู่ — ใช้กลุ่ม ADMIN เก็บ Lead แบบเดิมไปก่อน' : 'กรอกลีดที่ไม่ได้มาทางแชท — ระบบออกเลขให้ แล้วส่งใบลงกลุ่ม ADMIN เก็บ Lead'}">${ic('plus', 14)} เพิ่มลีดเอง (TikTok / ไลฟ์ / โทรเข้า)${_fOff ? ' · พักอยู่' : ''}</button>
         <span class="note">ลีดได้เลขตั้งแต่ตอนเก็บ (ป้าย "จองเลขแล้ว") · ที่ยังไม่มีเลข ออกเลขตอนกดจ่าย ต่อจากเลขรันล่าสุด <b>${h(String(ch.next || '…'))}</b> · ${
         ch.post && ch.post.on ? `ใบเข้าห้อง "${h(ch.post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(ch.post.rejectRoom || 'REJECT')}")` : 'โหมดทดลอง — เก็บในระบบอย่างเดียว ไม่ส่งเข้ากลุ่ม'}
         · ปุ่มที่มีกรอบชมพู = คิวถัดไป</span></div>

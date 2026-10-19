@@ -512,6 +512,9 @@ def fb_preview(m) -> str:
     """ข้อความ 1 บรรทัดของแถว FbChat — ชนิดที่ไม่ใช่ตัวอักษรบอกเป็นคำ (แบบเดียวกับ preview_of ของ LINE)"""
     if (m.text or "").strip():
         return m.text
+    if m.msg_type == "template":               # ★ 19 ต.ค.69 การ์ดโฆษณา (ลูกค้ากดโฆษณาแบบทักแชท)
+        from .fb_ads import preview
+        return preview(m)
     return {"sticker": "[สติกเกอร์]", "image": "[รูป]", "video": "[วิดีโอ]", "audio": "[เสียง]",
             "file": "[ไฟล์]"}.get(m.msg_type or "", "[ข้อความ]")
 
@@ -742,6 +745,11 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
         capture_profile(o, extra=[{"dir": "in", "text": preview or ""}])
     except Exception:
         pass
+    try:                                       # ★ 19 ต.ค.69 เก็บลีดอัตโนมัติ — ส่งใบลงกลุ่มทันที ไม่รอรอบ cron (thread แยก)
+        from .autolead import kick_chat
+        kick_chat(o, preview or "")
+    except Exception:
+        pass
     if picture:
         o.picture_url, o.picture_at = picture[:500], timezone.now()
         ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=o.picture_at)
@@ -864,6 +872,14 @@ def note_fb_batch(fp, msgs):
         capture_profile(o)
     except Exception:
         pass
+    live_in = [fb_preview(m) for m in rows
+               if m.direction != FbChat.OUT and (now - m.sent_at) <= timedelta(minutes=FB_LIVE_MIN)]
+    if live_in:                                # ★ 19 ต.ค.69 เก็บลีดอัตโนมัติ — ส่งใบทันทีหลังดึงข้อความรอบนี้ (ข้อความเก่า/รอบเที่ยงคืนไม่นับ)
+        try:
+            from .autolead import kick_chat
+            kick_chat(o, "\n".join(live_in))
+        except Exception:
+            pass
     if new_round and c.get("notify_sellers"):
         try:
             _notify_new(o, c)
@@ -1198,6 +1214,18 @@ def _iso(dt):
     return timezone.localtime(dt).isoformat(timespec="seconds") if dt else ""
 
 
+def _auto_code(o, ld) -> str:
+    """เลขที่ระบบเก็บลีดจองไว้ (ป้าย "รอจ่าย" ในรายชื่อ) · แชทของบัญชีทดสอบ = เลขทดสอบ + "ทดสอบ" """
+    if o.pk in _test_ids():
+        try:
+            from .autolead import test_code_of
+            c = test_code_of(o.pk)
+            return ("%s ทดสอบ" % c) if c else ""
+        except Exception:
+            return ""
+    return ((ld.auto or {}).get("_autolead") or {}).get("code", "") if ld and not ld.code else ""
+
+
 def row_json(o, me=None, now=None, appt_map=None, matches=None, pend=None) -> dict:
     """`appt_map`/`matches`/`pend` = ส่งมาจาก inbox() (ถามฐานข้อมูลครั้งเดียวทั้งหน้า) · ไม่ส่ง = ถามเองทีละแถว"""
     now = now or timezone.now()
@@ -1229,7 +1257,7 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None, pend=None) -> di
         # เลขเคสรับซื้อ (OC-…) — ลูกค้าที่อยากขายรถให้เรา ถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว
         "buyCode": ((ld.auto or {}).get(BUY_KEY) or {}).get("code", "") if ld else "",
         # ★ 19 ต.ค.69 เลขที่ระบบเก็บลีดอัตโนมัติจองไว้ (ใบอยู่กลุ่ม ADMIN เก็บ Lead · ยังไม่จ่ายเซลล์)
-        "autoCode": (((ld.auto or {}).get("_autolead") or {}).get("code", "") if ld and not ld.code else ""),
+        "autoCode": _auto_code(o, ld),
         # ★ 11 ต.ค.69 ให้เบอร์/LINE แล้ว แต่ยังไม่มีเลขลีด = ป้าย "รอจ่ายเบอร์" ในรายชื่อ
         #   (เดิมรู้ได้ทางเดียวคือเปิดห้องพัก Lead — ในกล่องแชทรวมไม่มีอะไรบอกว่าแชทนี้กลายเป็นลีดแล้ว)
         "contact": ("qr" if (ld.auto or {}).get("line_id") == QR_SRC and not ld.phone else "yes")
@@ -1642,7 +1670,7 @@ _CP_STOP = re.compile(r"คัน(?!จริง)|ที่รีวิว|ร�
 _CP_SPEC = re.compile(r"(?:ปี|ป\.)\s*\d{2,4}|^ปี$|(?<!\d)(?:19[89]\d|20[0-4]\d)(?!\d)|ประตู|เกียร์|ออโต้|ธรรมดา|ดีเซล|เบนซิน|"
                       r"ไฮบริด|เทอร์โบ|โทโบ|^สี\S|ตัว(?:ท็อป|ท๊อป|top|เตี้ย|สูง|รอง|ล่าง|ไฮบริด|สันดา)|ไมล์|โฉม|หน้าใหม่|หน้ายาว|"
                       r"หน้าเก่า|แคป|ตอนเดียว|สองตอน|ยกสูง|เตี้ย|เจน\s?\d|ที่นั่ง|กระบะ|กะบะ|เก๋ง|ขึ้นไป|มือ\s?2|มือสอง|"
-                      r"สันดา[ปบ]|^หมื่น|^แสน|^พัน|^\d{2}(?:[-–]\d{2})?\+?$")
+                      r"สันดา[ปบ]|ขับ\s?[24]|4wd|4x4|2wd|ยกสูง|^หมื่น|^แสน|^พัน|^\d{2}(?:[-–]\d{2})?\+?$")
 _CP_LATIN = re.compile(r"^[a-z0-9.+:/()\-]{1,14}$")
 _CP_JOIN = re.compile(r"^(?:กับ|และ|หรือ|/|,|&|\+)$")
 _CP_BUDGET = re.compile(r"(?:งบ|ราคา|ไม่เกิน|ผ่อน)\S*\s*[\d,.]+\s*(?:บาท|พัน|หมื่น|แสน|k)?")
@@ -1775,6 +1803,28 @@ def car_phrase(text: str) -> str:
     if b and b.group(0) not in s:
         s = (s + " " + b.group(0)).strip()
     return s[:40]
+
+
+# ★ 20 ต.ค.69 เจ้าของ "แท็กช่องทางให้ถูกตาม dropdown ของ sheet" — เพจ Facebook → ตัวเลือกช่องทางที่ขึ้นต้นด้วย "เพจ"
+#   2 เพจของอ๊อกเล็ตธ์ออโต้ชื่อต่างกันแค่คำท้าย → ระบุเอง (วัดจากใบจ่ายลีดจริง: เพจ …สำนักงานใหญ่ แอดมินเขียน "เพจบ้านเก่า" 273/279 ·
+#   เพจ 482041925229408 = "เพจอ่อนนุช" 65/77) · เพจอื่น = ตัวเลือก "เพจ X" ที่ X อยู่ในชื่อเพจ ("เพจ Guru" ↔ "Guru เจมส์ รถมือสอง")
+#   ชีตไม่มีตัวเลือกของเพจนั้น / ตรงหลายตัว = ไม่เติม (ไม่เดา · แอดมินเพิ่มตัวเลือกในชีตแล้วระบบเห็นเองภายใน 1 ชม.)
+FB_PAGE_CHANNEL = {"2302089596486628": "บ้านเก่า", "482041925229408": "อ่อนนุช", "650823708107550": "guru"}
+
+
+def _fb_channel(page_id) -> str:
+    pid = str(page_id or "")
+    opts = [(o, re.sub(r"\s+", "", o).lower()) for o in dd_options("channel")]
+    opts = [(o, n) for o, n in opts if n.startswith("เพจ")]
+    kw = FB_PAGE_CHANNEL.get(pid)
+    if kw:
+        hit = [o for o, n in opts if kw in n]
+    else:
+        name = re.sub(r"\s+", "", fb_page_name(pid) or "").lower()
+        if not name or name == pid:
+            return ""
+        hit = [o for o, n in opts if len(n) > 5 and n[3:] in name]
+    return hit[0] if len(hit) == 1 else ""
 
 
 def _line_channel() -> str:
@@ -2177,6 +2227,42 @@ def assigned_list(me=None, days: int = 7, limit: int = 150) -> list:
     return out[:limit]
 
 
+AD_SRC = "โฆษณา"          # auto[ช่อง] = รุ่นรถจากข้อความต้อนรับของโฆษณา (ลูกค้าพิมพ์รุ่นเองทีหลัง = แทนได้)
+AD_KEY = "_adcar"          # auto[AD_KEY] = รุ่นที่เจอในข้อความต้อนรับ ("" = ดูแล้วไม่มี · ไม่ดูซ้ำ)
+AD_GREET_SEC = 120         # ข้อความต้อนรับ = ข้อความเพจที่ออกก่อนข้อความแรกของลูกค้าไม่เกินเท่านี้
+
+
+def _ad_car(o, events=None) -> str:
+    """รุ่นรถในข้อความต้อนรับของเพจ (โฆษณาแบบทักแชท) → ชื่อตัวเลือก "CAR / สูตร" ของชีต · ไม่เจอ = ""
+
+    ข้อความต้อนรับ = ข้อความขาออกที่ไม่ได้ส่งจาก Connect · ออกก่อนข้อความแรกของลูกค้าไม่เกิน AD_GREET_SEC วินาที
+    (หรือตามหลังไม่เกิน FB_AUTO_SEC — ตอบอัตโนมัติ) · ได้เฉพาะรุ่นที่ตรงตัวเลือกชีตชัด ไม่เอารุ่นกว้าง"""
+    from datetime import datetime as _dtm
+    try:
+        ev = events if events is not None else messages(o, limit=60)
+    except Exception:
+        return ""
+    first_in = next((m for m in ev if m.get("dir") != "out" and m.get("at")), None)
+    if not first_in:
+        return ""
+    try:
+        t_in = _dtm.fromisoformat(first_in["at"])
+    except Exception:
+        return ""
+    for m in ev:
+        if m.get("dir") != "out" or not m.get("text") or (m.get("by") or "") not in ("", "ตอบอัตโนมัติ (เพจ)", "ตอบใน Facebook"):
+            continue
+        try:
+            gap = (t_in - _dtm.fromisoformat(m["at"])).total_seconds()
+        except Exception:
+            continue
+        if -FB_AUTO_SEC <= gap <= AD_GREET_SEC:
+            h = car_in(m["text"])
+            if h and h[0] and h[0] != UNSPEC_MODEL:
+                return h[0]
+    return ""
+
+
 def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
     """เติมข้อมูลลีดอัตโนมัติ — **เฉพาะช่องที่ว่างและยังไม่เคยเติม** ไม่ทับสิ่งที่คนพิมพ์เด็ดขาด
 
@@ -2212,6 +2298,16 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
     ph = phones_in(msgs)
     if ph:
         put("phone", ph[0], "แชท")
+    # ★ 19 ต.ค.69 ลูกค้า Facebook มาจากโฆษณา → ช่อง ADS = ข้อความบนการ์ดโฆษณา (ลงใบในกลุ่ม LINE) + ad id/ชื่อโฆษณา (ฐานข้อมูล)
+    ad_new = False
+    if is_fb(o):
+        try:
+            from . import fb_ads
+            ch = fb_ads.apply(o, lead, auto, put)
+            changed += [f for f in ch if f not in changed]
+            ad_new = bool(ch)
+        except Exception:
+            pass
     # รถที่ลูกค้าถาม: ข้อความแรกที่บอกรุ่นชัด (ตรงตัวเลือก "CAR / สูตร") → ได้ทั้ง 2 ช่องจากข้อความเดียวกัน
     #   ไม่มีข้อความไหนบอกรุ่นชัด ("สนใจ city" · "อีซูซุ" = รุ่นไหน?) → ได้แค่ "รถลูกค้าถาม" ให้คนเลือกรุ่นเอง
     #   ★ 2 ช่องต้องมาจากข้อความเดียวกัน — ไม่งั้นได้ "รถลูกค้าถาม: Civic" คู่กับ "CAR/สูตร: Camry"
@@ -2223,8 +2319,8 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
     if clear_i is not None:
         # "ไม่ระบุรุ่นรถ" ที่ระบบใส่ไว้ตอนลูกค้าบอกแค่ยี่ห้อ → แทนด้วยรุ่นจริงได้เมื่อลูกค้าบอกรุ่นชัด
         put("car_model", hits[clear_i][0], "แชท",
-            over=("แชท",) if unspec and lead.car_model == unspec else ())
-        put("car_text", _car_context(msgs, hits, clear_i), "แชท", over=("แชท",))   # แทนข้อความกำกวมที่ระบบเติมไว้ได้
+            over=("แชท", AD_SRC) if unspec and lead.car_model == unspec else (AD_SRC,))
+        put("car_text", _car_context(msgs, hits, clear_i), "แชท", over=("แชท", AD_SRC))   # แทนข้อความกำกวมที่ระบบเติมไว้ได้
     elif first_i is not None:
         said = _car_context(msgs, hits, first_i)[:LEAD_FIELDS["car_text"]]
         cur = lead.car_text or ""
@@ -2233,12 +2329,29 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
             lead.car_text = said
             changed.append("car_text")
         else:
-            put("car_text", said, "แชท")
+            put("car_text", said, "แชท", over=(AD_SRC,))
         # ★ 7 ต.ค.69 (เจ้าของ: "รถตามสูตรไม่ผูกแชทให้") — บอกแค่ยี่ห้อ/รุ่นกว้าง ("อีซูซุ" "city") = "ไม่ระบุรุ่นรถ"
         #   ไม่เดารุ่น: วัดจริง ส.ค.–ต.ค. ลูกค้าพิมพ์ "city" แอดมินเลือก 5 ประตู 37% · 4 ประตู 20% · ไม่ระบุรุ่นรถ 12%
         #   "civic" → FC แค่ 49% · อีซูซุ → D Max 6 จาก 14 — ไม่มีรุ่นไหนเกินครึ่งชัด เดาผิดแย่กว่าบอกว่ายังไม่รู้
         if unspec:
             put("car_model", unspec, "แชท")
+    # ★ 19 ต.ค.69 ลูกค้าทักจากโฆษณา Facebook แล้วไม่ได้พิมพ์ชื่อรุ่นเอง ("สีดำมีไหม") → รุ่นจากข้อความต้อนรับของเพจ
+    #   (เคสจริง NLD10-9682: เพจทัก "สนใจ Yaris ativ มีให้เลือกมากกว่า 10 คัน" ลูกค้าตอบ "สีดำมีไหม") · ดูครั้งเดียวต่อแชท
+    #   รุ่นจากชื่อโฆษณาก่อน ("Yaris Ativ จว6456" · การ์ดโฆษณาในห้องแชท) แล้วค่อยข้อความต้อนรับ · การ์ดใหม่ = ดูใหม่
+    if first_i is None and not lead.car_text and (AD_KEY not in auto or ad_new) and is_fb(o):
+        ad = ""
+        info = auto.get("_ad") or {}
+        for t in (info.get("ad_name"), info.get("subtitle"), info.get("title")):
+            h = car_in(t or "")
+            if h and h[0] and h[0] != UNSPEC_MODEL:
+                ad = h[0]
+                break
+        ad = ad or _ad_car(o, events)
+        auto[AD_KEY] = ad or ""
+        changed.append(AD_KEY)
+        if ad:
+            put("car_model", ad, AD_SRC)
+            put("car_text", ad, AD_SRC)
     # ★ 12 ต.ค.69 คำแนะนำให้คนเลือก (ไม่ทับเอง): เบอร์ใหม่ที่ลูกค้าพิมพ์ทีหลัง · รุ่นย่อยของชื่อรุ่นกว้าง ("city" → 4/5 ประตู)
     sg = dict(auto.get(SUGG_KEY) or {})
     no = auto.get(SUGG_NO_KEY) or {}
@@ -2350,10 +2463,12 @@ def autofill(o, msgs=None, slip_min=None, events=None) -> ChatLead:
         return (SYSTEM,) if auto.get(field) == SYSTEM and v and not dd_pick(field, v) else ()
 
     # ช่องทาง = ลูกค้าทักเข้า LINE OA → "LINE@" ตาม dropdown ของชีต
-    #   ★ ลูกค้า FB ไม่เดาช่องทาง — ชีตแยก "เพจบ้านเก่า"/"เพจอ่อนนุช" แต่ชื่อจริง 2 เพจต่างกันแค่คำท้าย ระบบบอกไม่ได้ว่าเพจไหนคือช่องไหน
-    #     → เติม "ชื่อ Account" = ชื่อใน Facebook แทน (ใบจ่ายลีดของลีด FB ใส่ชื่อบัญชีลูกค้าช่องนี้)
+    #   ลูกค้า FB → "ชื่อ Account" = ชื่อใน Facebook + ★ 20 ต.ค.69 ช่องทาง = ตัวเลือก "เพจ…" ของชีตตามเพจที่ทักเข้ามา (`_fb_channel`)
     if is_fb(o):
         put("account", o.fb_profile.display_name, SYSTEM)
+        fch = _fb_channel(o.fb_profile.channel)
+        if fch:
+            put("channel", fch, SYSTEM, over=stale_sys("channel"))
     else:
         put("channel", _line_channel(), SYSTEM, over=stale_sys("channel"))
     # สาขา = สาขาที่ลีดของเซลล์คนนี้ไปจริงในชีตเดือนล่าสุด (ยังไม่มีเจ้าของ = สาขาที่ลีดเกือบทั้งหมดไป)
@@ -2422,6 +2537,10 @@ def lead_json(o, lead=None) -> dict:
         "sugg": {f: s for f, s in ((lead.auto or {}).get(SUGG_KEY) or {}).items()
                  if (lead.auto or {}).get(f) != HUMAN},
         "slip": (lead.auto or {}).get("_slip") or None,
+        # ★ 19 ต.ค.69 ลูกค้ามาจากโฆษณา Facebook ตัวไหน (ป้ายช่อง ADS) — ไม่มี LINE/PSID ในนี้
+        "ad": ({k: v for k, v in ((lead.auto or {}).get("_ad") or {}).items()
+                if k in ("title", "subtitle", "ad_id", "ad_name", "adset_name", "campaign_name", "how", "ad_ids")}
+               if (lead.auto or {}).get("_ad") else None),
         "sheet": (lead.auto or {}).get(SHEET_KEY) or None,     # ★ 11 ต.ค.69 เลขที่ได้จากชีตลีด (จ่ายนอกระบบ)
         # ช่องอัตโนมัติ (คำนวณจากระบบ ไม่ให้แก้มือ — แก้แล้วจะไม่ตรงกับของจริง)
         "leadAt": _iso(p.first_seen),
@@ -2556,9 +2675,21 @@ def to_code(qs):
 
     ★ 18 ต.ค.69 กลับมาเข้าเอง (`room_chat_auto` เปิดเป็นค่าตั้งต้น · เจ้าของ "เราส่งไปเองเลยดีกว่า")
     """
+    tid = _test_ids()
+    if tid:                                   # ★ 19 ต.ค.69 แชทของบัญชีทดสอบ — ใบไปกลุ่มทดสอบ ไม่ขึ้นห้องพัก Lead จริง
+        qs = qs.exclude(pk__in=tid)
     if not room_auto():
         return qs.filter(lead__auto__has_key=PARK_KEY).filter(_no_code_q()).filter(_sell_q())
     return qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(_sell_q())
+
+
+def _test_ids() -> list:
+    """แชทของบัญชีทดสอบเก็บลีด (`autolead.test_chats`) · อ่านไม่ได้ = ไม่มี"""
+    try:
+        from .autolead import test_chat_ids
+        return test_chat_ids()
+    except Exception:
+        return []
 
 
 def _no_code_q():
@@ -2596,6 +2727,8 @@ def pending_park(qs, days: int = PENDING_DAYS):
     """
     if room_auto():
         return qs.none()
+    if _test_ids():
+        qs = qs.exclude(pk__in=_test_ids())
     qs = (qs.filter(_engaged_q()).filter(_no_code_q()).filter(_contact_q()).filter(_sell_q())
           .filter(~Q(lead__auto__has_key=PARK_KEY)))
     if days:
@@ -2605,7 +2738,7 @@ def pending_park(qs, days: int = PENDING_DAYS):
 
 def pending_one(o, lead) -> bool:
     """แชทนี้อยู่ในกลุ่ม "รอกดรับ" ไหม (แถวเดียว · ป้ายในรายชื่อ/หัวแชท) — ตรงกับ `pending_park`"""
-    if not lead or room_auto() or (lead.code or "").strip() or not (lead.phone or lead.line_id):
+    if not lead or room_auto() or (lead.code or "").strip() or not (lead.phone or lead.line_id) or o.pk in _test_ids():
         return False
     auto = lead.auto or {}
     if NOCODE_KEY in auto or BUY_KEY in auto or PARK_KEY in auto or BUYLEAD_KEY in auto:
@@ -2617,7 +2750,7 @@ def pending_one(o, lead) -> bool:
 
 def in_room(lead) -> bool:
     """แชทนี้อยู่ในห้องพัก Lead ไหม (ป้ายในรายชื่อ · ไม่เช็ค "คุยในระบบแล้ว" แบบ `to_code` — ใช้บอกคน ไม่ใช่นับ)"""
-    if not lead or (lead.code or "").strip():
+    if not lead or (lead.code or "").strip() or lead.chat_id in _test_ids():
         return False
     auto = lead.auto or {}
     if NOCODE_KEY in auto or BUY_KEY in auto or BUYLEAD_KEY in auto:

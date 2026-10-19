@@ -41,7 +41,7 @@ MSG_PREFIX = "auto-lead-"    # GroupChat.message_id ของใบที่ร�
 WEB_PREFIX = "web-park-"     # GroupChat.message_id ของใบร่างที่เพิ่มจากฟอร์มในเว็บ
 WHAT = "เก็บลีดอัตโนมัติ (กลุ่ม ADMIN เก็บ Lead)"
 WHAT_WARN = "เตือนเลขลีด (ห้องจ่ายเบอร์)"
-AFTER_MIN = 2
+AFTER_MIN = 0                # ★ 19 ต.ค.69 เจ้าของเลือก "ส่งทันที" (เดิม 2 นาที) — ลูกค้าพิมพ์รุ่นรถตามมาทีหลัง = บอทอ้างใบเดิมแล้วส่งใบอัปเดต
 MAX_PER_RUN = 10
 RETRY_MIN = 5
 MAX_TRIES = 5
@@ -54,6 +54,27 @@ GROUP_BATCH = 100
 BG = True                    # เทสต์ปิด (ทำในที่ ไม่แตก thread)
 _LOCK_KEY = 7_406_068        # Postgres advisory lock — อ่านข้อความกลุ่มทีละ worker (เลขไม่ชนของ leadflow/leadsheet/autochat)
 _RUN = {"at": 0.0}
+
+# ★ 19 ต.ค.69 กลุ่มทดสอบ (เจ้าของสร้างกลุ่ม "TestBot" · "ทดลองงานจริงเดะเละ")
+TEST_KEY = "autolead_test"   # KV {seq, items:[{kind, code, num, strong, weak, chat?, at, qt, sent, up}]} — เลขทดสอบแยก ไม่กินเลขรันจริง
+TEST_MSG_PREFIX = "auto-lead-t"
+TEST_NOTE = "🧪 ทดสอบ — เลขทดสอบ ไม่ใช่เลขจริง (ห้ามเอาไปใช้ในห้องจ่ายเบอร์)"
+TEST_RESET_WORDS = ("ล้างทดสอบ", "reset")
+TEST_ITEMS_MAX = 200
+# ★ 19 ต.ค.69 ลูกค้าพิมพ์ข้อมูลเพิ่มหลังระบบส่งใบไปแล้ว (ส่งทันที = รุ่นรถมักตามมาทีหลัง) → บอทอ้างใบเดิมแล้วส่งใบอัปเดต
+# ★ 20 ต.ค.69 ซ้อมก่อนใช้จริง (เจ้าของสั่ง "วันนี้ส่งลงกลุ่มนี้ไปก่อน อย่าพึ่งส่งลงกลุ่มจริง")
+#   พักการรันเลขอยู่ + เปิด `show` → ลูกค้าจริงที่ให้เบอร์/ID LINE = ใบหน้าตาเดียวกับใบจริงแต่ **ไม่มีเลขรัน** (`NLD10-`)
+#   ส่งเข้ากลุ่มทดสอบเท่านั้น · ไม่จองเลข · ไม่แตะกลุ่ม ADMIN เก็บ Lead · ไม่มีบรรทัดทดสอบ/ชื่อโฆษณาต่อท้าย
+SHOW_KEY = "_alshow"         # ChatLead.auto[SHOW_KEY] = {code, base, at, ok, error, qt, sent, up, tries} หรือ {skip, at}
+SHOW_MSG_PREFIX = "auto-lead-s"
+WHAT_SHOW = "เก็บลีดอัตโนมัติ (ใบไม่มีเลข · กลุ่มทดสอบ)"
+
+UPDATE_HOURS = 6             # อัปเดตได้ภายในกี่ชั่วโมงหลังส่งใบ (หลังนั้นแอดมินคงจัดการไปแล้ว)
+UPDATE_MAX = 3               # ต่อใบ — กันบอทพูดถี่ในกลุ่ม
+UPDATE_QUIET_SEC = 45        # รอลูกค้าพิมพ์จบก่อน (ข้อความล่าสุดเก่ากว่านี้)
+UPD_FIELDS = (("car", "รุ่นรถ"), ("name", "ชื่อลูกค้า"), ("phone", "เบอร์"), ("line_id", "ID LINE"),
+              ("more", "ข้อมูลเพิ่มเติม"), ("ads", "ADS"), ("live", "ไลฟ์"))
+_TEST_IDS = {"at": 0.0, "ids": []}
 
 
 # ── ค่าตั้ง ─────────────────────────────────────────────────────────────
@@ -80,8 +101,19 @@ def cfg() -> dict:
         after = max(0, min(60, int(d.get("after_min", AFTER_MIN))))
     except (TypeError, ValueError):
         after = AFTER_MIN
+    chats = []
+    for x in (d.get("test_chats") or []):
+        try:
+            chats.append(int(x))
+        except (TypeError, ValueError):
+            pass
     return {"enabled": bool(d.get("enabled", True)), "since": str(d.get("since") or ""), "after_min": after,
-            "drafts": bool(d.get("drafts", True)), "warn": bool(d.get("warn", True))}
+            "drafts": bool(d.get("drafts", True)), "warn": bool(d.get("warn", True)),
+            # ★ 19 ต.ค.69 บอทอ้างใบตัวเองเมื่อลูกค้าพิมพ์เพิ่ม — ในกลุ่มจริงปิดไว้ก่อน (ลองในกลุ่ม TestBot ก่อน · ที่นั่นเปิดเสมอ)
+            "update": bool(d.get("update", False)),
+            "test_group": str(d.get("test_group") or ""), "test_group_name": str(d.get("test_group_name") or ""),
+            "test_chats": chats,
+            "show": bool(d.get("show", False)), "show_since": str(d.get("show_since") or "")}
 
 
 def save_cfg(c: dict) -> bool:
@@ -89,10 +121,32 @@ def save_cfg(c: dict) -> bool:
         from dashboard.services import cache_store
         cache_store.set_kv(CFG_KEY, {"enabled": bool(c.get("enabled")), "since": c.get("since") or "",
                                      "after_min": int(c.get("after_min", AFTER_MIN)),
-                                     "drafts": bool(c.get("drafts", True)), "warn": bool(c.get("warn", True))})
+                                     "drafts": bool(c.get("drafts", True)), "warn": bool(c.get("warn", True)),
+                                     "update": bool(c.get("update", False)),
+                                     "test_group": c.get("test_group") or "",
+                                     "test_group_name": c.get("test_group_name") or "",
+                                     "test_chats": [int(x) for x in (c.get("test_chats") or [])],
+                                     "show": bool(c.get("show", False)), "show_since": c.get("show_since") or ""})
+        _TEST_IDS["at"] = 0.0
         return True
     except Exception:
         return False
+
+
+def show_on(c: dict | None = None) -> bool:
+    """ซ้อมด้วยลูกค้าจริง: พักการรันเลข + มีกลุ่มทดสอบ + เปิด `show` (เปิดรันเลขจริงเมื่อไหร่ = เลิกซ้อมเอง)"""
+    c = c or cfg()
+    return bool(c.get("show") and c.get("test_group") and not c.get("enabled"))
+
+
+def set_show(on: bool) -> dict:
+    """เปิด = เริ่มนับจากตอนนี้ (ลูกค้าที่ให้เบอร์ก่อนหน้านี้ไม่ส่ง)"""
+    c = cfg()
+    if on and not c["show"]:
+        c["show_since"] = timezone.now().isoformat(timespec="seconds")
+    c["show"] = bool(on)
+    save_cfg(c)
+    return c
 
 
 def set_enabled(on: bool) -> dict:
@@ -106,11 +160,18 @@ def set_enabled(on: bool) -> dict:
 
 
 def set_switch(name: str, on: bool) -> dict:
-    """สวิตช์ย่อย `drafts` (บอทรันเลขใบร่างในกลุ่ม) / `warn` (เตือนในห้องจ่ายเบอร์)"""
+    """สวิตช์ย่อย `drafts` (บอทรันเลขใบร่างในกลุ่ม) / `warn` (เตือนในห้องจ่ายเบอร์) / `update` (บอทส่งใบอัปเดตในกลุ่มจริง)"""
     c = cfg()
-    if name in ("drafts", "warn"):
+    if name in ("drafts", "warn", "update"):
         c[name] = bool(on)
         save_cfg(c)
+    return c
+
+
+def set_after(minutes: int) -> dict:
+    c = cfg()
+    c["after_min"] = max(0, min(60, int(minutes)))
+    save_cfg(c)
     return c
 
 
@@ -306,15 +367,24 @@ def _quote(g) -> str:
     return q if q and (g.channel or "") == _push_key() else ""
 
 
-def _push(gid: str, text: str, quote: str = "", what: str = WHAT) -> tuple:
-    """push ข้อความเดียวเข้ากลุ่มด้วยบอทตัวส่ง → (ok, error, line message id)
+def _sent_quote(resp: str) -> str:
+    """quoteToken ของข้อความที่บอทเพิ่งส่ง (LINE คืนมากับ push) — ใช้อ้างใบตัวเองตอนส่งใบอัปเดต"""
+    import json
+    try:
+        return str(((json.loads(resp or "{}") or {}).get("sentMessages") or [{}])[0].get("quoteToken") or "")[:300]
+    except Exception:
+        return ""
+
+
+def _push_ex(gid: str, text: str, quote: str = "", what: str = WHAT) -> tuple:
+    """push ข้อความเดียวเข้ากลุ่มด้วยบอทตัวส่ง → (ok, error, line message id, quoteToken ของข้อความนี้)
     อ้างข้อความเดิมไม่ได้ (quoteToken หมดอายุ/ผิดบัญชี) = ส่งซ้ำแบบไม่อ้าง — ข้อความต้องถึงกลุ่มก่อน"""
     from dashboard.services.line_channels import push_token
     from dashboard.services.line_notify import push_line_message
     from .slippost import _sent_id, explain
     token = push_token()
     if not token:
-        return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง", ""
+        return False, "ยังไม่ได้ตั้ง LINE token ของบอทตัวส่ง", "", ""
     try:
         msg = {"type": "text", "text": text[:4800]}
         if quote:
@@ -324,9 +394,14 @@ def _push(gid: str, text: str, quote: str = "", what: str = WHAT) -> tuple:
         else:
             sc, resp = push_line_message(gid, [msg], token, what=what)
         ok = sc == 200
-        return ok, ("" if ok else explain(sc, resp)), (_sent_id(resp) if ok else "")
+        return ok, ("" if ok else explain(sc, resp)), (_sent_id(resp) if ok else ""), (_sent_quote(resp) if ok else "")
     except Exception as e:
-        return False, "ต่อ LINE ไม่ได้: %s" % str(e)[:120], ""
+        return False, "ต่อ LINE ไม่ได้: %s" % str(e)[:120], "", ""
+
+
+def _push(gid: str, text: str, quote: str = "", what: str = WHAT) -> tuple:
+    ok, err, mid, _qt = _push_ex(gid, text, quote, what)
+    return ok, err, mid
 
 
 def _send(text: str, res: dict, mid: str, extra: dict, quote: str = "") -> dict:
@@ -343,9 +418,10 @@ def _send(text: str, res: dict, mid: str, extra: dict, quote: str = "") -> dict:
         res.update(ok=False, error="ไม่พบกลุ่ม ADMIN เก็บ Lead ที่บอทตัวส่งอยู่")
         eventlog.log("line_send", name=WHAT, ok=False, error=res["error"])
         return res
-    ok, err, line_mid = _push(room["id"], text, quote)
+    ok, err, line_mid, qt = _push_ex(room["id"], text, quote)
     res.update(ok=ok, error=err, room=room.get("name") or "")
     if ok:
+        res["qt"] = qt
         mid = mid[:64]
         if not GroupChat.objects.filter(message_id=mid).exists():
             GroupChat.objects.create(
@@ -395,17 +471,27 @@ def _contact_at(lead):
     return _dt((lead.auto or {}).get(CONTACT_AT_KEY) or "")
 
 
-def candidates(c=None, now=None, limit: int = 200) -> list:
+def candidates(c=None, now=None, limit: int = 200, pk=None, show: bool = False) -> list:
     """แชทในห้องพัก (คุยในระบบแล้ว · ยังไม่มีเลข · มีเบอร์/ID LINE · ลีดขาย) ที่ยังไม่เคยส่ง
-    + ให้ช่องทางติดต่อหลังเปิดสวิตช์ + เกิน after_min นาทีแล้ว"""
+    + ให้ช่องทางติดต่อหลังเปิดสวิตช์ + เกิน after_min นาทีแล้ว · `pk` = เช็คแชทเดียว (ข้อความเพิ่งเข้า)
+    · แชทของบัญชีทดสอบ (`test_chats`) ไม่เข้าทางจริง — ใบไปกลุ่มทดสอบแทน (`_test_chat`)
+    · `show` = โหมดซ้อม (ใบไม่มีเลขลงกลุ่มทดสอบ) — นับตั้งแต่ `show_since` · ยังไม่เคยส่งใบซ้อม"""
     from . import connect as C
     from .models import ChatOwner
     c = c or cfg()
     now = now or timezone.now()
-    since = parse_datetime(c["since"]) if c.get("since") else None
+    s = c.get("show_since") if show else c.get("since")
+    since = parse_datetime(s) if s else None
     qs = (ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
           .filter(C._engaged_q()).filter(C._no_code_q()).filter(C._contact_q()).filter(C._sell_q())
-          .exclude(lead__auto__has_key=KEY).order_by("-last_in_at")[:limit])
+          .exclude(lead__auto__has_key=KEY))
+    if show:
+        qs = qs.exclude(lead__auto__has_key=SHOW_KEY)
+    if pk:
+        qs = qs.filter(pk=pk)
+    if c.get("test_chats"):
+        qs = qs.exclude(pk__in=c["test_chats"])
+    qs = qs.order_by("-last_in_at")[:limit]
     out = []
     for o in qs:
         lead = o.lead
@@ -441,8 +527,8 @@ def _fields(o, lead, code: str) -> dict:
     from . import connect as C
     f = C.slip_fields(o, lead)
     f["code"] = code
-    if not f.get("channel"):
-        f["channel"] = "Facebook" if C.is_fb(o) else "LINE@"
+    if not f.get("channel") and not C.is_fb(o):
+        f["channel"] = C._line_channel()          # ★ 20 ต.ค.69 ตามตัวเลือกชีต · FB = ตามเพจ (autofill `_fb_channel`) ไม่มีตัวเลือก = "-"
     if not f.get("account"):
         f["account"] = getattr(C.cust(o), "display_name", "") or ""
     return f
@@ -450,15 +536,18 @@ def _fields(o, lead, code: str) -> dict:
 
 def _post(o, lead, res: dict) -> dict:
     from .slippost import body
-    return _send(body(_fields(o, lead, res["code"])), res, "%s%s-%s" % (MSG_PREFIX, lead.pk, res["num"]),
-                 {"chat": o.id})
+    f = _fields(o, lead, res["code"])
+    res = _send(body(f), res, "%s%s-%s" % (MSG_PREFIX, lead.pk, res["num"]), {"chat": o.id})
+    if res.get("ok"):
+        res["sent"] = _snap(f)                    # ช่องที่ส่งไปแล้ว — ลูกค้าพิมพ์เพิ่มทีหลัง = เทียบกับตรงนี้ (ใบอัปเดต)
+    return res
 
 
-def _save(obj, res: dict):
+def _save(obj, res: dict, key: str = KEY):
     """เก็บผลการจองลง .auto[KEY] ของ ChatLead / ExtLead (อ่านค่าล่าสุดจากฐานข้อมูลก่อน — ช่องอื่นใน auto ไม่หาย)"""
     M = type(obj)
     auto = dict(M.objects.filter(pk=obj.pk).values_list("auto", flat=True).first() or {})
-    auto[KEY] = res
+    auto[key] = res
     M.objects.filter(pk=obj.pk).update(auto=auto, updated_at=timezone.now())
     obj.auto = auto
 
@@ -485,6 +574,17 @@ def _reserve(obj, prefix: str, extra: dict) -> dict | None:
     return {k: v for k, v in res.items() if k != "sending"}
 
 
+def _ensure_ad(o):
+    """★ 19 ต.ค.69 แชท FB ที่เก็บข้อความไว้ก่อนมีการ์ดโฆษณา → ถาม Graph ครั้งเดียวก่อนส่งใบ (ช่อง Ads ในใบจะได้ไม่ว่าง)"""
+    if not getattr(o, "fb_profile_id", None):
+        return
+    try:
+        from .fb_ads import ensure_card
+        ensure_card(o)
+    except Exception:
+        pass
+
+
 def _forget():
     try:
         from . import leadmatch, leadpark
@@ -497,6 +597,7 @@ def _forget():
 def collect_one(o, dry: bool = False) -> dict:
     """แชทเดียว → จองเลข + ส่งใบ · คืน {d: posted|failed|skip|would, why, code?}"""
     from . import connect as C
+    _ensure_ad(o)
     lead = C.autofill(o)
     if (lead.code or "").strip():
         return {"d": "skip", "why": "มีเลขลีดแล้ว (%s)" % lead.code}
@@ -520,6 +621,70 @@ def collect_one(o, dry: bool = False) -> dict:
     _save(lead, res)
     _forget()
     return {"d": "posted" if res.get("ok") else "failed", "why": res.get("error") or "", "code": res["code"]}
+
+
+def _show_post(o, lead, sh: dict) -> dict:
+    """ส่งใบซ้อม (ไม่มีเลขรัน) เข้ากลุ่มทดสอบ — ใบเหมือนจริงเป๊ะ ไม่มีบรรทัดอื่นต่อท้าย"""
+    from .slippost import body
+    c = cfg()
+    f = _fields(o, lead, sh["code"])
+    text = body(f)
+    ok, err, line_mid, qt = _push_ex(c["test_group"], text, "", what=WHAT_SHOW)
+    if ok:
+        _store_out(c["test_group"], c["test_group_name"], "%s%s-%s" % (SHOW_MSG_PREFIX, lead.pk, uuid.uuid4().hex[:6]),
+                   text, {"chat": o.pk, "show": True}, line_mid)
+    return dict(sh, ok=ok, error=err, qt=qt or sh.get("qt") or "", sent=_snap(f) if ok else {},
+                tries=int(sh.get("tries") or 0) + 1, tried=timezone.now().isoformat(timespec="seconds"))
+
+
+def show_one(o) -> dict:
+    """★ 20 ต.ค.69 โหมดซ้อม: แชทเดียว → ใบไม่มีเลขรัน (`NLD10-`) เข้ากลุ่มทดสอบ · ไม่จองเลข · คืน {d, why, code}"""
+    from django.db import transaction
+    from . import connect as C
+    from .models import ChatLead
+    _ensure_ad(o)
+    lead = C.autofill(o)
+    now = timezone.now().isoformat(timespec="seconds")
+    if (lead.code or "").strip():
+        return {"d": "skip", "why": "มีเลขลีดแล้ว (%s)" % lead.code}
+    auto = lead.auto or {}
+    if C.BUY_KEY in auto or C.BUYLEAD_KEY in auto or C.NOCODE_KEY in auto:
+        return {"d": "skip", "why": "ไม่ใช่ลีดขาย"}
+    why = _already_posted(o, lead)
+    if why:
+        _save(lead, {"skip": why, "at": now}, SHOW_KEY)
+        return {"d": "skip", "why": why}
+    sg = C.suggest_prefix(lead, o=o)
+    code = "%s%d-" % (C.build_prefix(sg["base"], bool(sg.get("admin")), False), timezone.localdate().month)
+    with transaction.atomic():                    # ข้อความเข้า (thread) + cron ทำแชทเดียวกันพร้อมกัน = ส่งครั้งเดียว
+        cur = ChatLead.objects.select_for_update().get(pk=lead.pk)
+        if SHOW_KEY in (cur.auto or {}):
+            return {"d": "skip", "why": "ส่งใบซ้อมไปแล้ว"}
+        a = dict(cur.auto or {})
+        a[SHOW_KEY] = {"code": code, "base": sg["base"], "at": now, "ok": False, "sending": True}
+        ChatLead.objects.filter(pk=cur.pk).update(auto=a)
+    lead.auto = a
+    sh = _show_post(o, lead, {"code": code, "base": sg["base"], "at": now, "up": 0})
+    _save(lead, sh, SHOW_KEY)
+    return {"d": "posted" if sh.get("ok") else "failed", "why": sh.get("error") or "", "code": code}
+
+
+def _retry_show(now, out: list):
+    """ใบซ้อมที่ส่งไม่สำเร็จ → ส่งใหม่ทุก RETRY_MIN นาที ไม่เกิน MAX_TRIES ครั้ง"""
+    from .models import ChatLead
+    for lead in (ChatLead.objects.filter(auto__has_key=SHOW_KEY, code="").select_related("chat", "chat__profile",
+                                                                                        "chat__fb_profile")
+                 .order_by("-updated_at")[:50]):
+        sh = (lead.auto or {}).get(SHOW_KEY) or {}
+        if not sh.get("code") or sh.get("ok") or sh.get("skip") or int(sh.get("tries") or 0) >= MAX_TRIES:
+            continue
+        t = _dt(sh.get("tried") or sh.get("at") or "")
+        if t and now - t < timedelta(minutes=RETRY_MIN):
+            continue
+        sh = _show_post(lead.chat, lead, sh)
+        _save(lead, sh, SHOW_KEY)
+        out.append({"chat": lead.chat_id, "d": "posted" if sh.get("ok") else "failed", "code": sh.get("code"),
+                    "why": sh.get("error") or "", "retry": True, "show": True})
 
 
 # ── 2. ใบร่างในกลุ่ม ADMIN เก็บ Lead (+ ฟอร์มเว็บ) ─────────────────────
@@ -693,6 +858,13 @@ def form_help() -> dict:
 
 
 def add_manual(data: dict, by: str = "", force: bool = False) -> dict:
+    if not cfg()["enabled"]:                      # ★ 20 ต.ค.69 เจ้าของสั่งพักการรันเลข — ฟอร์มนี้จองเลข จึงพักด้วย
+        return {"ok": False, "status": 400,
+                "error": "พักการรันเลขอยู่ — ตอนนี้ยังเพิ่มลีดผ่านฟอร์มนี้ไม่ได้ ให้พักใบร่างในกลุ่ม ADMIN เก็บ Lead แบบเดิมไปก่อน"}
+    return _add_manual(data, by, force)
+
+
+def _add_manual(data: dict, by: str = "", force: bool = False) -> dict:
     """ฟอร์มในเว็บ → ใบร่างในห้องพัก Lead + จองเลข + ส่งใบเลขเต็มลงกลุ่ม ADMIN เก็บ Lead
 
     คืน `{ok, code, posted, error, message, mid}` · ลูกค้าเดิม (มีเลขแล้ว) และไม่ได้ยืนยัน = `{ok: False, status: 409, dup}`"""
@@ -808,8 +980,9 @@ def warn_slip(g, f: dict | None = None) -> dict:
 # ── อ่านข้อความกลุ่ม (webhook + cron เก็บตก) ───────────────────────────
 
 class _Lock:
-    def __init__(self):
+    def __init__(self, key: int = _LOCK_KEY):
         self.got = False
+        self.key = key
 
     def __enter__(self):
         from django.db import connection
@@ -817,7 +990,7 @@ class _Lock:
             self.got = True
             return self
         with connection.cursor() as cur:
-            cur.execute("SELECT pg_try_advisory_lock(%s)", [_LOCK_KEY])
+            cur.execute("SELECT pg_try_advisory_lock(%s)", [self.key])
             self.got = bool(cur.fetchone()[0])
         return self
 
@@ -826,7 +999,7 @@ class _Lock:
         if self.got and connection.vendor == "postgresql":
             try:
                 with connection.cursor() as cur:
-                    cur.execute("SELECT pg_advisory_unlock(%s)", [_LOCK_KEY])
+                    cur.execute("SELECT pg_advisory_unlock(%s)", [self.key])
             except Exception:
                 pass
         return False
@@ -841,7 +1014,9 @@ def process_groups(limit: int = GROUP_BATCH, now=None) -> dict:
     from . import leadpark as LP
     from .models import GroupChat
     c = cfg()
-    if not c["enabled"] or not (c["drafts"] or c["warn"]):
+    tg = c["test_group"]
+    real = c["enabled"] and (c["drafts"] or c["warn"])
+    if not real and not tg:                       # ★ 20 ต.ค.69 พักการรันเลขจริง = กลุ่มทดสอบยังใช้ได้
         return {"off": True}
     now = now or timezone.now()
     out = []
@@ -860,9 +1035,12 @@ def process_groups(limit: int = GROUP_BATCH, now=None) -> dict:
         gids = C._lead_group_ids()
         if gids:
             q |= Q(group_id__in=gids)
+        filt = Q(text__icontains="lead no") & q
+        if tg:
+            filt |= Q(group_id=tg)               # กลุ่มทดสอบ — ทุกข้อความ (คำสั่ง "ล้างทดสอบ" ด้วย)
         rows = list(GroupChat.objects.filter(id__gt=last, id__lte=top, chat_type=GroupChat.GROUP,
-                                             direction=GroupChat.IN, text__icontains="lead no")
-                    .filter(q).order_by("id")[:limit])
+                                             direction=GroupChat.IN)
+                    .filter(filt).order_by("id")[:limit])
         if len(rows) >= limit:
             top = rows[-1].id                    # ที่เหลือทำรอบหน้า
         for g in rows:
@@ -874,13 +1052,19 @@ def process_groups(limit: int = GROUP_BATCH, now=None) -> dict:
                 continue
             park = any(h in (g.group_name or "").lower() for h in LP.PARK_HINTS)
             try:
-                if park and c["drafts"]:
+                if tg and g.group_id == tg:
+                    r = _test_group_msg(g)
+                    if r.get("d") != "skip":
+                        r["msg"], r["test"] = g.id, True
+                        out.append(r)
+                    continue
+                if park and c["enabled"] and c["drafts"]:
                     d = LP.parse_draft(g.text or "")
                     if d:
                         r = number_draft(g, d, quote=_quote(g))
                         r["msg"] = g.id
                         out.append(r)
-                elif not park and c["warn"] and g.group_id in gids:
+                elif not park and c["enabled"] and c["warn"] and g.group_id in gids:
                     r = warn_slip(g)
                     if r.get("d") == "warned":
                         r["msg"] = g.id
@@ -893,7 +1077,8 @@ def process_groups(limit: int = GROUP_BATCH, now=None) -> dict:
                 except Exception:
                     pass
         _set_kv(PTR_KEY, {"last_id": top, "at": now.isoformat(timespec="seconds")})
-    summary = {k: sum(1 for r in out if r["d"] == k) for k in ("posted", "failed", "dup", "hidden", "skip", "warned")}
+    summary = {k: sum(1 for r in out if r["d"] == k)
+               for k in ("posted", "failed", "dup", "hidden", "skip", "warned", "ok", "reset")}
     if out:
         _set_kv(LAST_GROUP_KEY, dict(summary, at=now.isoformat(timespec="seconds"), rows=out[:30]))
     summary["rows"] = out[:30]
@@ -901,13 +1086,475 @@ def process_groups(limit: int = GROUP_BATCH, now=None) -> dict:
 
 
 def kick(data=None):
-    """เรียกจาก `_checkout_ingest` (อยู่ใน thread แล้ว) หลังเก็บแชท — มีใบ ("lead no") ในข้อความที่เข้ามา = ทำเลย"""
+    """เรียกจาก `_checkout_ingest` (อยู่ใน thread แล้ว) หลังเก็บแชท — มีใบ ("lead no") ในข้อความที่เข้ามา = ทำเลย
+    (ข้อความจากกลุ่มทดสอบ = ทำเลยทุกข้อความ)"""
     c = cfg()
-    if not c["enabled"] or not (c["drafts"] or c["warn"]):
+    if not (c["enabled"] and (c["drafts"] or c["warn"])) and not c["test_group"]:
         return None
-    if data is not None and "lead no" not in str(data).lower():
-        return None
+    if data is not None:
+        raw = str(data)
+        if "lead no" not in raw.lower() and not (c["test_group"] and c["test_group"] in raw):
+            return None
     return process_groups()
+
+
+# ── ★ 19 ต.ค.69 ส่งทันทีที่ข้อความลูกค้าเข้า ─────────────────────────────
+
+def _record_chat_rows(rows: list, now=None):
+    if not rows:
+        return
+    now = now or timezone.now()
+    out = {k: sum(1 for r in rows if r.get("d") == k) for k in ("posted", "failed", "skip", "would")}
+    _set_kv("autolead_last", dict(out, rows=rows[:30], at=now.isoformat(timespec="seconds"), via="ข้อความเข้า"))
+
+
+def kick_chat(o, text: str = "") -> object:
+    """ข้อความลูกค้าเพิ่งเข้า (LINE `connect.note_customer_message` / FB `connect.note_fb_batch`) → เช็คแชทนี้เลย ไม่รอ cron
+    · ได้ช่องทางติดต่อแล้ว = จองเลข + ส่งใบทันที (`after_min` = 0) · ส่งใบไปแล้ว = รอลูกค้าพิมพ์จบแล้วส่งใบอัปเดต
+    · บัญชีทดสอบ (`test_chats`) = ใบไปกลุ่มทดสอบ (`_test_chat`) · ทำใน thread (อ่านแชท + ยิง LINE) ไม่หน่วงตัวรับข้อความ"""
+    c = cfg()
+    if o is None:
+        return None
+    test = o.pk in c["test_chats"]
+    show = not test and show_on(c)
+    if test and not c["test_group"]:
+        return None
+    if not test and not c["enabled"] and not show:
+        return None                               # พักการรันเลขจริง (บัญชีทดสอบยังไปกลุ่มทดสอบได้)
+    if show and not c["show_since"]:
+        return None
+    if not test and not show and not c["since"]:
+        return None                               # ยังไม่เคยเริ่มรอบแรก (cron จดเวลาเริ่ม) — ไม่ส่งย้อนหลัง
+    if BG:
+        from . import connect as C
+        if not getattr(C, "BG_FILL", True):       # เทสต์ชุดอื่นที่ส่งข้อความเข้า — ไม่แตก thread ชนฐานข้อมูลทดสอบ
+            return None
+
+    def _work():
+        new = False
+        try:
+            if test:
+                r = _test_chat(o, text, c)
+                new = r.get("d") in ("posted", "failed", "dup")
+            elif show:
+                rows = []
+                for oo in candidates(c, pk=o.pk, show=True):
+                    r = show_one(oo)
+                    r["chat"], r["show"] = oo.id, True
+                    rows.append(r)
+                _record_chat_rows(rows)
+                new = any(r.get("d") in ("posted", "failed") for r in rows)
+            elif c["after_min"] <= 0:
+                rows = []
+                for oo in candidates(c, pk=o.pk):
+                    r = collect_one(oo)
+                    r["chat"] = oo.id
+                    rows.append(r)
+                _record_chat_rows(rows)
+                new = any(r.get("d") in ("posted", "failed") for r in rows)
+            if not new and (test or show or c["update"]):
+                if BG:
+                    time.sleep(UPDATE_QUIET_SEC)  # รอลูกค้าพิมพ์จบ — ข้อความถัดไปมาก่อน = thread นั้นทำแทน (เช็คใน update_chat)
+                update_chat(o)
+        except Exception as e:
+            try:
+                from dashboard.services import eventlog
+                eventlog.log("autolead", name="ข้อความเข้า", ok=False, chat=o.pk, error=str(e)[:300])
+            except Exception:
+                pass
+        finally:
+            if BG:
+                try:
+                    from django.db import connection
+                    connection.close()
+                except Exception:
+                    pass
+
+    if not BG:
+        return _work()
+    import threading
+    threading.Thread(target=_work, daemon=True).start()
+    return {"started": True}
+
+
+# ── ★ 19 ต.ค.69 ใบอัปเดต — ลูกค้าพิมพ์ข้อมูลเพิ่มหลังส่งใบ บอทอ้างใบเดิม ───────────────
+
+def _snap(f: dict) -> dict:
+    return {k: str(f.get(k) or "").strip() for k, _ in UPD_FIELDS}
+
+
+def _changes(sent: dict, f: dict) -> list:
+    """ช่องที่ได้ค่าใหม่ (ไม่ว่าง และต่างจากที่ส่งไปแล้ว) → ชื่อช่องภาษาคน"""
+    out = []
+    for k, label in UPD_FIELDS:
+        new = str(f.get(k) or "").strip()
+        if new and new != str((sent or {}).get(k) or "").strip():
+            out.append(label)
+    return out
+
+
+def _upd_text(code: str, labels: list, f: dict) -> str:
+    from .slippost import body
+    return ("🔄 อัปเดต Lead No. %s — ลูกค้าพิมพ์%sเพิ่ม (คัดลอกใบนี้แทนใบเดิม)\n" % (code, " / ".join(labels))) + body(f)
+
+
+def _store_out(gid: str, gname: str, mid: str, text: str, extra: dict, line_mid: str):
+    from .models import GroupChat
+    try:
+        if not GroupChat.objects.filter(message_id=mid[:64]).exists():
+            GroupChat.objects.create(
+                chat_type=GroupChat.GROUP, group_id=gid, group_name=(gname or "")[:120], message_id=mid[:64],
+                sender_id="", sender_name="ระบบเก็บลีด", msg_type="text", text=text,
+                extra=dict(extra or {}, source="autolead", line_mid=line_mid), channel=_push_key()[:24],
+                direction=GroupChat.OUT, sent_by_name="ระบบเก็บลีด", sent_at=timezone.now())
+    except Exception:
+        pass
+
+
+def update_chat(o, now=None) -> dict:
+    """แชทที่ระบบส่งใบไปแล้ว + ลูกค้าพิมพ์ข้อมูลเพิ่ม (รุ่นรถ/ชื่อ/เบอร์/ID LINE) → ใบอัปเดตอ้างใบเดิม
+
+    กลุ่มจริง = สวิตช์ `update` (ปิดโดยปริยาย) · กลุ่มทดสอบ = เปิดเสมอ · รอลูกค้าพิมพ์จบ `UPDATE_QUIET_SEC` วินาที ·
+    ภายใน `UPDATE_HOURS` ชม. หลังส่งใบ · ไม่เกิน `UPDATE_MAX` ครั้งต่อใบ · จ่ายเซลล์ไปแล้ว (มี code) = ไม่ส่ง"""
+    from . import connect as C
+    from .models import ChatOwner
+    c = cfg()
+    now = now or timezone.now()
+    test = o.pk in c["test_chats"]
+    show = not test and show_on(c)
+    if (test and not c["test_group"]) or (not test and not show and not (c["enabled"] and c["update"])):
+        return {"d": "off"}
+    with _Lock(_LOCK_KEY + 1) as lk:
+        if not lk.got:
+            return {"d": "busy"}
+        o = (ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead").filter(pk=o.pk).first())
+        if not o:
+            return {"d": "skip"}
+        if o.last_in_at and (now - o.last_in_at).total_seconds() < UPDATE_QUIET_SEC - 3:
+            return {"d": "wait"}                  # ลูกค้ายังพิมพ์อยู่ — ข้อความล่าสุดจะเรียกเอง
+        lead = C.autofill(o)
+        if test:
+            st = _test_state()
+            it = next((x for x in reversed(st["items"]) if x.get("kind") == "chat" and x.get("chat") == o.pk), None)
+            if not it or not it.get("ok"):
+                return {"d": "skip"}
+            at = _dt(it.get("at") or "")
+            if not at or now - at > timedelta(hours=UPDATE_HOURS) or int(it.get("up") or 0) >= UPDATE_MAX:
+                return {"d": "skip"}
+            f = _fields(o, lead, it["code"])
+            if (it.get("sent") or {}).get("phone"):
+                f["phone"] = it["sent"]["phone"]   # ใบทดสอบใช้เบอร์ในข้อความที่ส่งมา (ทดสอบซ้ำด้วยเบอร์ใหม่ได้)
+            ch = _changes(it.get("sent") or {}, f)
+            if not ch:
+                return {"d": "same"}
+            text = _upd_text(it["code"], ch, f) + "\n" + TEST_NOTE
+            ok, err, line_mid, _qt = _push_ex(c["test_group"], text, it.get("qt") or "", what=WHAT_TEST)
+            if ok:
+                _store_out(c["test_group"], c["test_group_name"], "%s%s-u%d-%s" % (TEST_MSG_PREFIX, it["num"],
+                           int(it.get("up") or 0) + 1, uuid.uuid4().hex[:6]), text, {"chat": o.pk, "test": True}, line_mid)
+                _test_patch(it["code"], sent=_snap(f), up=int(it.get("up") or 0) + 1,
+                            upd_at=now.isoformat(timespec="seconds"))
+            return {"d": "updated" if ok else "failed", "code": it["code"], "why": err, "fields": ch, "test": True}
+        if show:
+            sh = (lead.auto or {}).get(SHOW_KEY) or {}
+            if not sh.get("ok") or not sh.get("sent") or (lead.code or "").strip():
+                return {"d": "skip"}
+            at = _dt(sh.get("at") or "")
+            if not at or now - at > timedelta(hours=UPDATE_HOURS) or int(sh.get("up") or 0) >= UPDATE_MAX:
+                return {"d": "skip"}
+            f = _fields(o, lead, sh["code"])
+            ch = _changes(sh["sent"], f)
+            if not ch:
+                return {"d": "same"}
+            text = _upd_text(sh["code"], ch, f)
+            ok, err, line_mid, _qt = _push_ex(c["test_group"], text, sh.get("qt") or "", what=WHAT_SHOW)
+            if ok:
+                n = int(sh.get("up") or 0) + 1
+                _store_out(c["test_group"], c["test_group_name"], "%s%s-u%d-%s" % (SHOW_MSG_PREFIX, lead.pk, n,
+                           uuid.uuid4().hex[:6]), text, {"chat": o.pk, "show": True, "update": n}, line_mid)
+                _save(lead, dict(sh, sent=_snap(f), up=n, upd_at=now.isoformat(timespec="seconds")), SHOW_KEY)
+            return {"d": "updated" if ok else "failed", "code": sh["code"], "why": err, "fields": ch, "show": True}
+        res = reserved(lead)
+        if not res or not res.get("ok") or not res.get("sent") or (lead.code or "").strip():
+            return {"d": "skip"}
+        at = _dt(res.get("at") or "")
+        if not at or now - at > timedelta(hours=UPDATE_HOURS) or int(res.get("up") or 0) >= UPDATE_MAX:
+            return {"d": "skip"}
+        f = _fields(o, lead, res["code"])
+        ch = _changes(res["sent"], f)
+        if not ch:
+            return {"d": "same"}
+        from .weblead import park_room
+        room = park_room()
+        if not room["id"]:
+            return {"d": "failed", "why": "ไม่พบกลุ่ม ADMIN เก็บ Lead ที่บอทตัวส่งอยู่"}
+        text = _upd_text(res["code"], ch, f)
+        ok, err, line_mid, _qt = _push_ex(room["id"], text, res.get("qt") or "")
+        if ok:
+            n = int(res.get("up") or 0) + 1
+            _store_out(room["id"], room.get("name") or "", "%s%s-%s-u%d" % (MSG_PREFIX, lead.pk, res["num"], n), text,
+                       {"chat": o.pk, "update": n}, line_mid)
+            _save(lead, dict(res, sent=_snap(f), up=n, upd_at=now.isoformat(timespec="seconds")))
+        return {"d": "updated" if ok else "failed", "code": res["code"], "why": err, "fields": ch}
+
+
+def _updates(now, out: list):
+    """รอบ cron เก็บตก — แชทที่ลูกค้าพิมพ์ต่อหลังส่งใบ (thread ของข้อความเข้าตายไปก่อน/รีสตาร์ท)"""
+    from .models import ChatLead, ChatOwner
+    c = cfg()
+    since = now - timedelta(hours=UPDATE_HOURS)
+    chats = []
+    if c["test_group"]:
+        st = _test_state()
+        for it in st["items"]:
+            at = _dt(it.get("at") or "")
+            if it.get("kind") == "chat" and it.get("ok") and at and at >= since and int(it.get("up") or 0) < UPDATE_MAX:
+                last = _dt(it.get("upd_at") or "") or at
+                chats.append((it["chat"], last))
+    for on, key in ((c["update"] and c["enabled"], KEY), (show_on(c), SHOW_KEY)):
+        if not on:
+            continue
+        for lead in ChatLead.objects.filter(auto__has_key=key, code="", updated_at__gte=since).order_by("-updated_at")[:40]:
+            res = (lead.auto or {}).get(key) or {}
+            at = _dt(res.get("at") or "")
+            if res.get("ok") and res.get("sent") and at and at >= since and int(res.get("up") or 0) < UPDATE_MAX:
+                chats.append((lead.chat_id, _dt(res.get("upd_at") or "") or at))
+    seen = set()
+    for cid, last in chats:
+        if cid in seen:
+            continue
+        seen.add(cid)
+        o = ChatOwner.objects.filter(pk=cid, last_in_at__gt=last).first()
+        if not o:
+            continue
+        r = update_chat(o, now)
+        if r.get("d") in ("updated", "failed"):
+            r["chat"] = cid
+            out.append(r)
+
+
+# ── ★ 19 ต.ค.69 กลุ่มทดสอบ (TestBot) ────────────────────────────────────
+# บัญชีทดสอบทักเข้า OA/เพจ → ใบไปกลุ่มทดสอบ · ใบร่าง/ใบเต็ม/คำสั่ง "ล้างทดสอบ" ในกลุ่มทดสอบ → บอทตอบในกลุ่มทดสอบ
+# เลขทดสอบมีตัวนับของตัวเอง (KV TEST_KEY · เลข 4 หลัก 0001…) — ไม่กินเลขรันจริง ไม่ลงชีต ไม่ขึ้นห้องพัก Lead จริง
+
+WHAT_TEST = "เก็บลีดอัตโนมัติ (กลุ่มทดสอบ)"
+
+
+def test_chat_ids() -> list:
+    """แชทของบัญชีทดสอบ — `connect.to_code`/`pending_park` ตัดออกจากห้องพัก Lead จริง · จำ 20 วิ"""
+    if time.time() - _TEST_IDS["at"] > 20:
+        try:
+            _TEST_IDS["ids"] = list(cfg()["test_chats"])
+        except Exception:
+            _TEST_IDS["ids"] = []
+        _TEST_IDS["at"] = time.time()
+    return _TEST_IDS["ids"]
+
+
+def test_code_of(chat_id) -> str:
+    """เลขทดสอบล่าสุดของแชทนี้ (ป้ายในรายชื่อแชท) · ไม่มี = """""
+    for it in reversed(_test_state()["items"]):
+        if it.get("kind") == "chat" and it.get("chat") == chat_id:
+            return it.get("code") or ""
+    return ""
+
+
+def _test_state() -> dict:
+    st = _kv(TEST_KEY)
+    try:
+        seq = int(st.get("seq") or 0)
+    except (TypeError, ValueError):
+        seq = 0
+    return {"seq": seq, "items": list(st.get("items") or []), "reset_at": st.get("reset_at") or ""}
+
+
+def _test_write(st: dict):
+    st["items"] = list(st.get("items") or [])[-TEST_ITEMS_MAX:]
+    _set_kv(TEST_KEY, st)
+
+
+def _test_add(item: dict):
+    from . import connect as C
+    with C.code_lock():
+        st = _test_state()
+        st["items"].append(item)
+        _test_write(st)
+
+
+def _test_patch(code: str, **kw):
+    from . import connect as C
+    with C.code_lock():
+        st = _test_state()
+        for it in reversed(st["items"]):
+            if it.get("code") == code and it.get("kind") in ("chat", "draft"):
+                it.update(kw)
+                break
+        _test_write(st)
+
+
+def _test_next(prefix: str) -> tuple:
+    from . import connect as C
+    with C.code_lock():
+        st = _test_state()
+        st["seq"] += 1
+        _test_write(st)
+    num = st["seq"]
+    return "%s%d-%04d" % (prefix, timezone.localdate().month, num), num
+
+
+def test_reset() -> int:
+    """ล้างเลขทดสอบทั้งหมด (คำสั่ง "ล้างทดสอบ" ในกลุ่มทดสอบ / manage.py autolead --test-reset)"""
+    n = len(_test_state()["items"])
+    _set_kv(TEST_KEY, {"seq": 0, "items": [], "reset_at": timezone.now().isoformat(timespec="seconds")})
+    return n
+
+
+def _test_holder(items: list, strong: set, weak: str = "") -> dict | None:
+    for it in reversed(items):
+        if it.get("kind") in ("chat", "draft") and it.get("ok") and \
+                _match(set(strong or ()), weak or "", set(it.get("strong") or ()), it.get("weak") or ""):
+            return it
+    return None
+
+
+def _test_say(text: str, quote: str = "") -> dict:
+    return _say(cfg()["test_group"], text, quote, what=WHAT_TEST)
+
+
+def _test_post(f: dict, prefix: str, extra: dict, quote: str = "") -> dict:
+    """ออกเลขทดสอบ + ส่งใบเลขเต็มเข้ากลุ่มทดสอบ (หน้าตาเดียวกับใบจริง + บรรทัดบอกว่าเป็นเลขทดสอบ)"""
+    from .slippost import body
+    c = cfg()
+    code, num = _test_next(prefix)
+    f = dict(f, code=code)
+    text = body(f) + "\n" + TEST_NOTE
+    ok, err, line_mid, qt = _push_ex(c["test_group"], text, quote, what=WHAT_TEST)
+    if ok:
+        _store_out(c["test_group"], c["test_group_name"], "%s%s-%s" % (TEST_MSG_PREFIX, num, uuid.uuid4().hex[:6]),
+                   text, dict(extra, test=True), line_mid)
+    _test_add(dict(extra, code=code, num=num, at=timezone.now().isoformat(timespec="seconds"), ok=ok, error=err,
+                   qt=qt, sent=_snap(f), up=0))
+    return {"d": "posted" if ok else "failed", "code": code, "why": err}
+
+
+def _test_chat(o, text: str, c: dict) -> dict:
+    """ข้อความจากบัญชีทดสอบ — ให้เบอร์/ID LINE ใหม่ = ใบทดสอบใหม่ (ทดสอบซ้ำได้ด้วยเบอร์ใหม่) · เบอร์เดิม = บอกเลขเดิม"""
+    from . import connect as C
+    _ensure_ad(o)
+    lead = C.autofill(o)
+    st = _test_state()
+    ph = C.phones_in([text]) if text else []
+    if ph:
+        strong, phone = {"p:" + p for p in ph}, ph[0]
+    elif (lead.phone or lead.line_id) and not any(it.get("chat") == o.pk for it in st["items"]):
+        strong, phone = lead_keys(lead), ""
+    else:
+        return {"d": "wait"}                      # ไม่ได้ให้ช่องทางติดต่อใหม่ — ข้อมูลอื่น = ใบอัปเดต (update_chat)
+    h = _test_holder(st["items"], strong, "")
+    if h:
+        _test_say("ลูกค้ารายนี้มีเลข %s แล้ว — ระบบจริงไม่ส่งใบซ้ำ\n%s\n(เริ่มใหม่: พิมพ์ \"ล้างทดสอบ\" ในกลุ่มนี้ หรือส่งเบอร์อื่น)"
+                  % (h["code"], TEST_NOTE), h.get("qt") or "")
+        return {"d": "dup", "code": h["code"]}
+    sg = C.suggest_prefix(lead, o=o)
+    prefix = C.build_prefix(sg["base"], bool(sg.get("admin")), False)
+    f = _fields(o, lead, "")
+    if phone:
+        f["phone"] = phone
+    return _test_post(f, prefix, {"kind": "chat", "chat": o.pk, "strong": sorted(strong), "weak": "",
+                                  "who": _who([phone] if phone else C.phones_in([lead.phone or ""]), lead.line_id or "", ""),
+                                  "why": (sg.get("why") or "")[:120]})
+
+
+def _test_group_msg(g) -> dict:
+    """ข้อความในกลุ่มทดสอบ: "ล้างทดสอบ" · ใบร่าง (= กลุ่ม ADMIN เก็บ Lead) · ใบเต็มมีเลข (= ห้องจ่ายเบอร์)"""
+    from . import leadpark as LP
+    from .leadgroup import parse_leadsheet
+    t = (g.text or "").strip()
+    q = _quote(g)
+    if t.lower() in TEST_RESET_WORDS:
+        n = test_reset()
+        _test_say("ล้างข้อมูลทดสอบแล้ว (%d รายการ) — เลขทดสอบเริ่มนับใหม่ ✅" % n, q)
+        return {"d": "reset", "n": n}
+    if "lead no" not in t.lower():
+        return {"d": "skip"}
+    d = LP.parse_draft(t)
+    if d:
+        return _test_draft(g, d, q)
+    f = parse_leadsheet(t)
+    if f:
+        return _test_warn(g, f, q)
+    return {"d": "skip"}
+
+
+def _test_draft(g, d: dict, q: str) -> dict:
+    """ใบร่างในกลุ่มทดสอบ = จำลองกลุ่ม ADMIN เก็บ Lead (บอทตอบใบเลขเต็ม · ลูกค้าเดิม = บอกเลขเดิม)"""
+    from . import connect as C
+    from . import leadpark as LP
+    if d.get("reject"):
+        _test_say("ใบ R (ไม้ 2 ใช้เลขเดิม + /1) — ระบบไม่ออกเลขใหม่ให้ใบนี้\n" + TEST_NOTE, q)
+        return {"d": "skip", "why": "ใบ R"}
+    strong, weak = LP.keys(d)
+    if not strong and not weak:
+        _test_say("ใบร่างไม่มีเบอร์/ID LINE/ชื่อ Account — ระบบระบุตัวลูกค้าไม่ได้ เลยไม่ออกเลข\n" + TEST_NOTE, q)
+        return {"d": "skip", "why": "ไม่มีตัวระบุลูกค้า"}
+    h = _test_holder(_test_state()["items"], strong, weak)
+    if h:
+        _test_say("ลูกค้ารายนี้มีเลข %s แล้ว — ซ่อนใบร่างนี้ไว้ในห้องพัก Lead ไม่ออกเลขซ้ำครับ\n%s" % (h["code"], TEST_NOTE), q)
+        return {"d": "hidden", "code": h["code"]}
+    base = _draft_base(d)
+    prefix = C.build_prefix(base, bool(d.get("admin")), False)
+    f = {"ads": d.get("ads") or "", "account": d.get("account") or "", "name": d.get("name") or "",
+         "line_id": d.get("line_id") or "", "line_name": "", "phone": (d.get("phones") or [""])[0],
+         "channel": C.dd_pick("channel", d.get("channel") or "") or d.get("channel") or "", "car": d.get("car") or "",
+         "live": C.dd_pick("live_team", d.get("live") or "") or d.get("live") or "", "more": d.get("more") or ""}
+    return _test_post(f, prefix, {"kind": "draft", "strong": sorted(strong), "weak": weak, "mid": g.message_id,
+                                  "who": _who(d.get("phones") or (), d.get("line_id") or "", d.get("account") or "")}, q)
+
+
+def _test_warn(g, f: dict, q: str) -> dict:
+    """ใบเต็ม (มีเลข) ในกลุ่มทดสอบ = จำลองห้องจ่ายเบอร์ — เตือนแบบเดียวกับ `warn_slip` แต่เทียบกับเลขทดสอบ
+    ใบไม่มีปัญหา = บอกว่าไม่มีปัญหา (ห้องจริงบอทเงียบ — ในกลุ่มทดสอบบอกไว้ให้รู้ว่าอ่านแล้ว)"""
+    from .connect import _ANY_CODE
+    from .leadpark import _phones, keys
+    code = (f.get("lead_code") or "").upper()
+    mm = _ANY_CODE.match(code)
+    if not mm:
+        return {"d": "skip"}
+    if code.startswith("R") or f.get("lead_slash"):
+        _test_say("ใบ R / ไม้ 2 — ในห้องจ่ายเบอร์จริงบอทไม่เตือนใบแบบนี้\n" + TEST_NOTE, q)
+        return {"d": "skip", "why": "ใบ R"}
+    num = int(mm.group(3))
+    phones = _phones(f.get("phone"), f.get("line_id"))
+    strong, _ = keys({"phones": phones, "line_id": f.get("line_id") or "", "account": "", "channel": ""})
+    who = _who(phones, f.get("line_id") or "", f.get("account") or "")
+    now = timezone.now()
+    items = _test_state()["items"]
+    text = ""
+    own = next((it for it in reversed(items) if it.get("num") == num and it.get("kind") in ("chat", "draft")), None)
+    if own and strong and own.get("strong"):
+        if not (strong & set(own["strong"])):
+            text = ("⚠️ เลข %s ระบบจองไว้ให้ลูกค้าอีกราย (%s) ในกลุ่ม ADMIN เก็บ Lead แล้ว — เลขชนกัน ตรวจใบนี้ก่อนนะครับ"
+                    % (code, own.get("who") or "ลูกค้าอีกราย"))
+    if not text and strong:
+        h = _test_holder(items, strong, "")
+        if h and h["num"] != num:
+            text = ("⚠️ %s ระบบจองเลข %s ไว้แล้วในกลุ่ม ADMIN เก็บ Lead · ใบนี้ใช้เลขใหม่ %s — ใช้เลขเดิมแทนนะครับ "
+                    "ไม่งั้นชีตจะมี 2 แถว" % (who, h["code"], code))
+    if not text and strong:
+        since = now - timedelta(hours=RENUM_HOURS)
+        rs = next((it for it in reversed(items) if it.get("kind") == "slip" and it.get("num") != num
+                   and strong & set(it.get("strong") or ()) and (_dt(it.get("at") or "") or now) >= since), None)
+        if rs:
+            text = ("⚠️ %s ได้เลข %s%s ไปเมื่อ %s แล้ว · ใบนี้ออกเลขใหม่ %s — ถ้าจ่ายใหม่/เปลี่ยนเซลล์ ให้ใช้เลขเดิมนะครับ "
+                    "(ระบบลงชีตจะแก้ชื่อเซลล์ในแถวเดิมให้)" % (who, rs["code"], (" (@%s)" % rs["tag"]) if rs.get("tag") else "",
+                                                             _hm(rs.get("at")), code))
+    _test_add({"kind": "slip", "code": code, "num": num, "strong": sorted(strong), "weak": "",
+               "tag": (f.get("assigned") or "")[:40], "at": now.isoformat(timespec="seconds")})
+    if text:
+        _test_say(text + "\n🧪 ทดสอบ — ในห้องจ่ายเบอร์จริงบอทจะเตือนแบบนี้", q)
+        return {"d": "warned", "code": code, "why": text}
+    _test_say("🧪 ใบ %s ไม่มีปัญหา — ในห้องจ่ายเบอร์จริงบอทจะเงียบ (ไม่ตอบอะไร)" % code, q)
+    return {"d": "ok", "code": code}
 
 
 # ── รอบ cron ────────────────────────────────────────────────────────────
@@ -947,7 +1594,36 @@ def run(now=None, dry: bool = False, limit: int = MAX_PER_RUN) -> dict:
     now = now or timezone.now()
     c = cfg()
     if not c["enabled"]:
-        return {"off": True}
+        if not c["test_group"] or dry:
+            return {"off": True}
+        out = {"off": True}                       # ★ 20 ต.ค.69 พักการรันเลขจริง — กลุ่มทดสอบยังทำงาน
+        try:
+            out["groups"] = {k: v for k, v in process_groups(now=now).items() if k != "rows"}
+        except Exception as e:
+            out["groups"] = {"error": str(e)[:150]}
+        rows = []
+        if show_on(c) and c["show_since"]:        # ★ โหมดซ้อม — ลูกค้าจริงได้ใบไม่มีเลขในกลุ่มทดสอบ
+            for o in candidates(c, now, show=True)[:limit]:
+                try:
+                    r = show_one(o)
+                except Exception as e:
+                    r = {"d": "failed", "why": "พัง: %s" % str(e)[:150]}
+                r["chat"], r["show"] = o.id, True
+                rows.append(r)
+            try:
+                _retry_show(now, rows)
+            except Exception as e:
+                rows.append({"d": "failed", "why": "ส่งใบซ้อมใหม่พัง: %s" % str(e)[:150]})
+        try:
+            _updates(now, rows)
+        except Exception as e:
+            rows.append({"d": "failed", "why": "ใบอัปเดตพัง: %s" % str(e)[:150]})
+        out["rows"] = rows[:30]
+        if [r for r in rows if r.get("show")]:
+            _set_kv("autolead_last", dict({k: sum(1 for r in rows if r.get("d") == k)
+                                           for k in ("posted", "failed", "skip", "updated")},
+                                          rows=rows[:30], at=now.isoformat(timespec="seconds"), via="ซ้อม (กลุ่มทดสอบ)"))
+        return out
     grp = {}
     if not dry:
         try:
@@ -971,7 +1647,11 @@ def run(now=None, dry: bool = False, limit: int = MAX_PER_RUN) -> dict:
             _retry_failed(now, rows)
         except Exception as e:
             rows.append({"d": "failed", "why": "ส่งใหม่พัง: %s" % str(e)[:150]})
-    out = {k: sum(1 for r in rows if r["d"] == k) for k in ("posted", "failed", "skip", "would")}
+        try:
+            _updates(now, rows)
+        except Exception as e:
+            rows.append({"d": "failed", "why": "ใบอัปเดตพัง: %s" % str(e)[:150]})
+    out = {k: sum(1 for r in rows if r["d"] == k) for k in ("posted", "failed", "skip", "would", "updated")}
     out["rows"] = rows[:30]
     if grp:
         out["groups"] = {k: v for k, v in grp.items() if k != "rows"}
@@ -986,7 +1666,8 @@ def tick_bg(now=None) -> dict:
     if time.time() - _RUN["at"] < 50:
         return {}
     _RUN["at"] = time.time()
-    if not cfg()["enabled"]:
+    c0 = cfg()
+    if not c0["enabled"] and not c0["test_group"]:
         return {}
     if not BG:
         return run(now)

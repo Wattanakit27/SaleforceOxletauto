@@ -980,6 +980,10 @@ class ChatLead(models.Model):
     live = models.CharField("ไลฟ์", max_length=60, blank=True)
     more = models.TextField("เพิ่มเติม", blank=True)
     tags = models.JSONField("แท็ก", default=list, blank=True)
+    # ★ 19 ต.ค.69 ลูกค้า Facebook ที่มาจากโฆษณา — ad id + ชื่อโฆษณา (Ads Manager) ไว้ผูกยอดปิดการขายกับโฆษณาภายหลัง
+    #   (ช่อง ADS ด้านบน = ข้อความบนการ์ดโฆษณาที่ลงใบในกลุ่ม LINE · รายละเอียดใน auto["_ad"] · checkout/fb_ads.py)
+    ad_id = models.CharField("ad id (Facebook)", max_length=40, blank=True, db_index=True)
+    ad_name = models.CharField("ชื่อโฆษณา (Ads Manager)", max_length=200, blank=True)
 
     # ★ 11 ต.ค.69 หน้ารวมแชท — "ขั้นของลีด" (คนละเรื่องกับสถานะลูกค้าคอลัมน์ Z ของชีต)
     #   ว่าง = ระบบคิดให้เอง (ลีดใหม่ / รอติดต่อ / ติดต่อแล้ว) · คนตั้งแล้ว = ใช้ค่าที่ตั้ง · ดู crm.STAGES

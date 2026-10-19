@@ -14,6 +14,12 @@
   [8] จ่ายเซลล์ใบร่างที่จองไว้ = เลขเดิม · แอดมินคัดลอกใบไปแท็กเองแล้ว = ไม่จ่ายซ้ำ (ทั้งใบร่างและแชท)
   [9] เตือนในห้องจ่ายเบอร์: เลขชน · ออกเลขใหม่ให้ลูกค้าที่จองไว้ · ออกเลขใหม่ให้ลูกค้าที่เพิ่งได้เลข · ใช้ถูก/R/ปิด = ไม่เตือน
   [10] ฟอร์มเพิ่มลีดเอง (API): แอดมินเท่านั้น · ตรวจข้อมูล · ลูกค้าเดิม = 409 แล้วยืนยันได้ · ใบร่าง + เลข + ใบลงกลุ่ม · ขึ้นห้องพัก
+  [11] รุ่นรถ: พิมพ์ไทยไม่ตรงตัว ("ฟอจูนเนอร์ 2.8 ขับ4") · รุ่นจากข้อความต้อนรับของโฆษณา Facebook
+  [12] ส่งทันที (ข้อความเข้า = ส่งใบเลย) · ลูกค้าพิมพ์รุ่นรถทีหลัง = บอทอ้างใบเดิมแล้วส่งใบอัปเดต (สวิตช์ update)
+  [13] กลุ่มทดสอบ: บัญชีทดสอบ → ใบเลขทดสอบเข้ากลุ่มทดสอบ (ไม่กินเลขจริง/ไม่ขึ้นห้องพัก) · ใบร่าง/ใบเต็ม/ล้างทดสอบในกลุ่ม
+  [14] ลูกค้า Facebook จากโฆษณา: การ์ดโฆษณาในแชท → ช่อง ADS (ข้อความบนการ์ด) ลงใบ + ad id/ชื่อโฆษณาในฐานข้อมูล ·
+       ชื่อซ้ำหลายตัว = ใช้เงินมากสุด · webhook บอก ad id = ใช้ตรงๆ · รุ่นรถจากชื่อโฆษณา · ซิงก์ไม่ถือการ์ดเป็นไฟล์
+  [15] พักการรันเลข (--off): แชท/ใบร่าง/ฟอร์มเว็บไม่ได้เลข · กลุ่มทดสอบยังใช้ได้ · เปิดกลับ = ไม่ส่งย้อนหลัง
 
 ฐานข้อมูลทดสอบแยก · ปลอมที่ขอบระบบเท่านั้น (`requests` = LINE/Google)
 """
@@ -101,7 +107,7 @@ def _post(url, *a, **k):
             return _R(400, {"message": "Invalid quote token"})
         PUSHES.append((to, m0.get("text") or ""))
         QUOTES.append(m0.get("quoteToken") or "")
-        return _R(200, {"sentMessages": [{"id": "sm-%d" % len(PUSHES)}]})
+        return _R(200, {"sentMessages": [{"id": "sm-%d" % len(PUSHES), "quoteToken": "qt-%d" % len(PUSHES)}]})
     return _R(200, {})
 
 
@@ -223,6 +229,8 @@ try:
     # ย้อนเวลาเริ่มเป็น 15 นาทีก่อน เพื่อทดสอบลูกค้าที่ให้เบอร์หลังเปิด
     c = AL.cfg()
     c["since"] = (timezone.now() - timedelta(minutes=15)).isoformat(timespec="seconds")
+    ck("★ ค่าตั้งต้น = ส่งทันที (รอ 0 นาที)", c["after_min"] == 0, c["after_min"])
+    c["after_min"] = 2                            # [2]–[10] ทดสอบกติกา "รอ N นาที" · ส่งทันทีทดสอบที่ [12]
     AL.save_cfg(c)
 
     # ═════════════════════════════════════════════════════════════════════
@@ -557,6 +565,411 @@ try:
     ck("★ ทั้งหมดนี้ไม่มีลีดภายนอกถูกจ่ายเซลล์เองโดยระบบ",
        set(ExtLead.objects.exclude(code="").values_list("assigned_by", flat=True)) <= {"กวาง"},
        list(ExtLead.objects.exclude(code="").values_list("assigned_by", flat=True)))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[11] รุ่นรถ: พิมพ์ไทยไม่ตรงตัว · รุ่นจากข้อความต้อนรับของโฆษณา")
+    from checkout.leadgroup import parse_specs
+    ck("★ \"ฟอจูนเนอร์\" (ขาด ร์) = Fortuner", parse_specs("หา ฟอจูนเนอร์ 2.8 ขับ4.")["car_model"] == "fortuner",
+       parse_specs("หา ฟอจูนเนอร์ 2.8 ขับ4."))
+    ck("\"ฟอจุนเนอ\" / \"เรนเจอ\" ก็จับได้", parse_specs("ฟอจุนเนอ").get("car_model") == "fortuner"
+       and parse_specs("เรนเจอ ปี 20").get("car_model") == "ranger")
+    ck("★ คำสั้นไม่จับผิด (\"มาชมรถ\" ≠ March)", not parse_specs("มาชมรถได้ไหมครับ").get("car_model"),
+       parse_specs("มาชมรถได้ไหมครับ"))
+    ck("★ รถลูกค้าถาม = รุ่น + สเปก (ขับ4 · ปี)", C.car_phrase("หา  ฟอจูนเนอร์ 2.8  ขับ4.  ปี2017. ราคาไม่เกิน 550,000. ครับ")
+       == "ฟอจูนเนอร์ 2.8 ขับ4 ปี2017", C.car_phrase("หา  ฟอจูนเนอร์ 2.8  ขับ4.  ปี2017. ราคาไม่เกิน 550,000. ครับ"))
+    t0 = timezone.now() - timedelta(minutes=5)
+    iso = lambda t: t.isoformat()  # noqa: E731
+    ev = [{"dir": "out", "text": "สวัสดี พิชิต! สนใจ Yaris ativ มีให้เลือกมากกว่า 10 คัน", "at": iso(t0), "by": "ตอบใน Facebook"},
+          {"dir": "in", "text": "สีดำมีไหม", "at": iso(t0 + timedelta(seconds=1)), "by": ""}]
+    ad = C._ad_car(None, ev)
+    ck("★ ลูกค้าตอบแค่ \"สีดำมีไหม\" → รุ่นจากข้อความต้อนรับของโฆษณา", ad and "yaris" in ad.lower() and "ativ" in ad.lower(), ad)
+    ev2 = [dict(ev[0], at=iso(t0 - timedelta(minutes=10))), ev[1]]
+    ck("ข้อความเพจที่เก่ากว่า 2 นาทีก่อนลูกค้าทัก ไม่ใช่ข้อความต้อนรับ", not C._ad_car(None, ev2), C._ad_car(None, ev2))
+    ev3 = [dict(ev[0], by="กวาง"), ev[1]]
+    ck("แอดมินพิมพ์เอง (ผ่าน Connect) ไม่นับเป็นข้อความต้อนรับ", not C._ad_car(None, ev3), C._ad_car(None, ev3))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[12] ส่งทันที + ใบอัปเดต (ลูกค้าพิมพ์รุ่นรถทีหลัง)")
+
+    def umsg(o, text, ago_sec):
+        MID[0] += 1
+        at = timezone.now() - timedelta(seconds=ago_sec)
+        GroupChat.objects.create(chat_type="user", group_id="", group_name="", message_id="u-%d" % MID[0],
+                                 sender_id=o.profile.user_id, sender_name=o.profile.display_name, msg_type="text",
+                                 direction="in", text=text, sent_at=at)
+        ChatOwner.objects.filter(pk=o.pk).update(last_in_at=at, last_at=at)
+        return fresh(o)
+
+    c = AL.cfg()
+    c.update(after_min=0, update=True, since=(timezone.now() - timedelta(minutes=30)).isoformat(timespec="seconds"))
+    AL.save_cfg(c)
+    LM.forget()
+    LP.forget()
+    o12 = chat("ส่งทันที", phone="", contact_ago=None, ago_min=0)
+    o12 = umsg(o12, "สวัสดีครับ", 200)
+    o12 = umsg(o12, "0851110001", 120)
+    C.capture_contact(o12)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o12), "0851110001")
+    r12 = res_of(o12)
+    ck("★ ข้อความเข้า = จองเลข + ส่งใบทันที (ไม่รอ cron)", r12.get("ok") and len(park_pushes()) and len(PUSHES) - n0 == 1,
+       (r12, PUSHES[n0:]))
+    ck("จำ quoteToken ของใบตัวเอง + ช่องที่ส่งไปแล้ว", r12.get("qt") and (r12.get("sent") or {}).get("phone") == "0851110001",
+       r12)
+    o12 = umsg(o12, "สนใจ ฟอจูนเนอร์ 2.8 ปี2017 ครับ", 60)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o12), "สนใจ ฟอจูนเนอร์ 2.8 ปี2017 ครับ")
+    new = PUSHES[n0:]
+    ck("★ ลูกค้าพิมพ์รุ่นรถทีหลัง → ใบอัปเดตลงกลุ่มเดิม อ้างใบเดิม",
+       len(new) == 1 and new[0][0] == PARK and "อัปเดต Lead No. %s" % r12.get("code") in new[0][1]
+       and "ฟอจูนเนอร์" in new[0][1] and QUOTES[-1] == r12.get("qt"), (new, QUOTES[-1:]))
+    ck("ใบอัปเดตบอกว่าเพิ่มอะไร (รุ่นรถ) + เป็นใบเต็มให้คัดลอก", new and "รุ่นรถ" in new[0][1] and "Ac Lead No." in new[0][1], new)
+    ck("เก็บรอบอัปเดตไว้ (up=1)", res_of(o12).get("up") == 1, res_of(o12))
+    n0 = len(PUSHES)
+    r = AL.update_chat(fresh(o12))
+    ck("ไม่มีอะไรใหม่ → ไม่ส่งซ้ำ", r.get("d") == "same" and len(PUSHES) == n0, r)
+    o12 = umsg(o12, "ขอบคุณครับ", 2)
+    r = AL.update_chat(fresh(o12))
+    ck("ลูกค้ายังพิมพ์อยู่ (ข้อความล่าสุดเพิ่งเข้า) → รอ", r.get("d") == "wait", r)
+    c = AL.cfg()
+    c["update"] = False
+    AL.save_cfg(c)
+    o12b = chat("ปิดใบอัปเดต", phone="", contact_ago=None, ago_min=0)
+    o12b = umsg(o12b, "0851110002", 120)
+    C.capture_contact(o12b)
+    AL.kick_chat(fresh(o12b), "0851110002")
+    o12b = umsg(o12b, "สนใจ ฟอจูนเนอร์", 60)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o12b), "สนใจ ฟอจูนเนอร์")
+    ck("ปิดสวิตช์ update → กลุ่มจริงไม่มีใบอัปเดต", len(PUSHES) == n0 and res_of(o12b).get("ok"), (PUSHES[n0:], res_of(o12b)))
+    ck("★ ใบอัปเดตเก็บด้วย message id ของระบบ (ไม่ขึ้นเป็นใบร่าง/ไม่ใช้จับคู่)",
+       GroupChat.objects.filter(group_id=PARK, message_id__startswith=AL.MSG_PREFIX, text__contains="อัปเดต").exists())
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[13] กลุ่มทดสอบ (TestBot)")
+    TG = "C" + "5" * 32
+    lg = cache_store.get_kv("line_groups")["data"]
+    lg[TG] = {"name": "TestBot", "channels": ["push"]}
+    cache_store.set_kv("line_groups", lg)
+    pt = LineProfile.objects.create(user_id="U" + "9" * 32, display_name="Wattanakit", is_employee=True)
+    ot = ChatOwner.objects.create(profile=pt, awaiting_since=timezone.now(), last_in_at=timezone.now() - timedelta(minutes=3),
+                                  last_at=timezone.now())
+    c = AL.cfg()
+    c.update(test_group=TG, test_group_name="TestBot", test_chats=[ot.pk])
+    AL.save_cfg(c)
+    AL._TEST_IDS["at"] = 0
+    real0 = C.last_running()
+    tg_pushes = lambda: [t for to, t in PUSHES if to == TG]  # noqa: E731
+    n0 = len(PUSHES)
+    ot = umsg(ot, "0899990001", 120)
+    AL.kick_chat(fresh(ot), "0899990001")
+    tp = tg_pushes()
+    ck("★ บัญชีทดสอบ (พนักงานก็ได้) ให้เบอร์ → ใบเลขทดสอบเข้ากลุ่มทดสอบ", len(tp) == 1 and re.search(r"-0001\b", tp[0])
+       and "0899990001" in tp[0] and AL.TEST_NOTE in tp[0], tp)
+    ck("★ ไม่ส่งอะไรเข้ากลุ่มจริง", all(to == TG for to, _ in PUSHES[n0:]), PUSHES[n0:])
+    ck("★ เลขทดสอบไม่กินเลขรันจริง", C.last_running() == real0, (C.last_running(), real0))
+    ck("★ แชทบัญชีทดสอบไม่ขึ้นห้องพัก Lead จริง", not C.to_code(ChatOwner.objects.filter(pk=ot.pk)).exists()
+       and not AL.candidates(pk=ot.pk))
+    ck("ป้ายในรายชื่อแชท = เลขทดสอบ + ทดสอบ", "0001" in C.row_json(fresh(ot)).get("autoCode", "")
+       and "ทดสอบ" in C.row_json(fresh(ot)).get("autoCode", ""), C.row_json(fresh(ot)).get("autoCode"))
+    ck("เก็บใบทดสอบลงคลังแชทกลุ่มทดสอบ", GroupChat.objects.filter(group_id=TG, direction="out",
+                                                                  message_id__startswith=AL.TEST_MSG_PREFIX).exists())
+    first_qt = AL._test_state()["items"][-1].get("qt")
+    n0 = len(PUSHES)
+    ot = umsg(ot, "0899990001", 100)
+    AL.kick_chat(fresh(ot), "0899990001")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ เบอร์เดิม → บอกว่ามีเลขแล้ว (ระบบจริงไม่ส่งซ้ำ) อ้างใบเดิม", len(tp) == 1 and "มีเลข" in tp[0] and "0001" in tp[0]
+       and QUOTES[-1] == first_qt, (tp, QUOTES[-1:]))
+    n0 = len(PUSHES)
+    ot = umsg(ot, "0899990002", 90)
+    AL.kick_chat(fresh(ot), "0899990002")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("ส่งเบอร์ใหม่ = ทดสอบซ้ำได้ (เลขทดสอบถัดไป)", len(tp) == 1 and re.search(r"-0002\b", tp[0]), tp)
+    ot = umsg(ot, "สนใจ แคมรี่ ปี 2019 ครับ", 60)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(ot), "สนใจ แคมรี่ ปี 2019 ครับ")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ลูกค้าพิมพ์รุ่นรถทีหลัง → ใบอัปเดตในกลุ่มทดสอบ (เปิดเสมอแม้สวิตช์กลุ่มจริงปิด)",
+       len(tp) == 1 and "อัปเดต" in tp[0] and "แคมรี่" in tp[0] and "0002" in tp[0] and AL.TEST_NOTE in tp[0], tp)
+    # ใบร่าง / ใบเต็ม / ล้างทดสอบ ในกลุ่มทดสอบ
+    n0 = len(PUSHES)
+    gd = gmsg(TG, "TestBot", "Ac Lead No. TLD10-\nAds : -\nชื่อ Account: ทดสอบใบร่าง\nชื่อลูกค้า : -\nID LINE : -\n"
+                             "เบอร์โทร : 0899990003\nช่องทาง : TIKTOK ช่องขายบอส\nรถ : Civic\nไลฟ์ : -\nเพิ่มเติม : -", 0)
+    rg = AL.process_groups()
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ใบร่างในกลุ่มทดสอบ → บอทตอบใบเลขทดสอบ (TLD)", len(tp) == 1 and re.search(r"TLD10-0003\b", tp[0])
+       and "0899990003" in tp[0], (rg, tp))
+    ck("★ ใบร่างในกลุ่มทดสอบไม่สร้างลีดจริง/ไม่ขึ้นห้องพัก", not ExtLead.objects.filter(message_id=gd.message_id).exists())
+    n0 = len(PUSHES)
+    gmsg(TG, "TestBot", "Ac Lead No. TLD10-\nAds : -\nชื่อ Account: ทดสอบใบร่าง\nชื่อลูกค้า : -\nID LINE : -\n"
+                        "เบอร์โทร : 0899990003\nช่องทาง : TIKTOK ช่องขายบอส\nรถ : -\nไลฟ์ : -\nเพิ่มเติม : -", 0)
+    AL.process_groups()
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("ใบร่างลูกค้าเดิม → บอกเลขเดิม (ระบบจริงซ่อนใบร่าง)", len(tp) == 1 and "0003" in tp[0] and "มีเลข" in tp[0], tp)
+    n0 = len(PUSHES)
+    gmsg(TG, "TestBot", "Ac Lead No. TLD10-0003\nAds : -\nชื่อ Account: คนอื่น\nชื่อลูกค้า : -\nID LINE : -\n"
+                        "เบอร์โทร : 0899990099\nช่องทาง : LINE@\nรถ : -\nไลฟ์ : -\nเพิ่มเติม : -\n@มัท", 0)
+    AL.process_groups()
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ใบเต็มใช้เลขที่จองให้อีกราย → เตือนเลขชน (จำลองห้องจ่ายเบอร์)", len(tp) == 1 and "เลขชน" in tp[0], tp)
+    n0 = len(PUSHES)
+    gmsg(TG, "TestBot", "Ac Lead No. TLD10-0003\nAds : -\nชื่อ Account: ทดสอบใบร่าง\nชื่อลูกค้า : -\nID LINE : -\n"
+                        "เบอร์โทร : 0899990003\nช่องทาง : LINE@\nรถ : -\nไลฟ์ : -\nเพิ่มเติม : -\n@มัท", 0)
+    AL.process_groups()
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("ใบเต็มถูกต้อง → บอกว่าไม่มีปัญหา (ห้องจริงบอทเงียบ)", len(tp) == 1 and "ไม่มีปัญหา" in tp[0], tp)
+    n0 = len(PUSHES)
+    gmsg(TG, "TestBot", "ล้างทดสอบ", 0)
+    AL.process_groups()
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ พิมพ์ \"ล้างทดสอบ\" → ล้างเลขทดสอบ เริ่มนับใหม่", len(tp) == 1 and "ล้าง" in tp[0]
+       and AL._test_state()["seq"] == 0 and not AL._test_state()["items"], (tp, AL._test_state()))
+    ck("★ ทั้งหมดในกลุ่มทดสอบไม่แตะเลขรันจริง/ห้องจ่ายเบอร์", C.last_running() == real0
+       and not [1 for to, _ in PUSHES if to == ROOM and "ทดสอบ" in _], C.last_running())
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[14] ลูกค้า Facebook จากโฆษณา → ADS + ad id")
+    from decimal import Decimal
+
+    from checkout import fb_ads as FA
+    from checkout import fb_sync as FS
+    from checkout.models import FbChat, FbProfile
+    from dashboard.models import MetaAdDaily
+    today = timezone.localdate()
+
+    def ad_row(ad_id, name, spend, day=today, adset="ชลบุรี", camp="9.6.69 บ้านเก่า INBOX Yaris"):
+        MetaAdDaily.objects.create(date=day, account_id="381", campaign_id="c-" + ad_id, campaign_name=camp,
+                                   adset_id="s-" + ad_id, adset_name=adset, ad_id=ad_id, ad_name=name, spend=Decimal(spend))
+
+    ad_row("900001", "Yaris Ativ จว6456", "120.00")
+    ad_row("900002", "ระหว่าง Mazda3 กับ Yaris Ativ รุ่นไหนดี", "50.00")
+    ad_row("900003", "กองทัพ CITY ถูกที่สุดในตลาด", "300.00", adset="5 จังหวัด")
+    ad_row("900004", "กองทัพ CITY ถูกที่สุดในตลาด", "80.00", adset="ชลบุรี")
+    UID[0] += 1
+    PAGE = "2302089596486628"
+
+    def fb_chat(name, card=None, texts=(), ref=None):
+        UID[0] += 1
+        th = "t_%d" % UID[0]
+        fp = FbProfile.objects.create(user_id="psid%d" % UID[0], display_name=name, channel=PAGE, thread_id=th)
+        now = timezone.now()
+        t0 = now - timedelta(minutes=10)
+        if card:
+            MID[0] += 1
+            m = {"id": "m_card%d" % MID[0], "message": "", "attachments": {"data": [{"generic_template": card}]}}
+            FbChat.objects.create(thread_id=th, message_id=m["id"], sender_id=PAGE, msg_type=FS._msg_type(m), text="",
+                                  extra=FS._clean(m), has_media=False, channel=PAGE, direction="out", sent_at=t0)
+        for i, t in enumerate(texts):
+            MID[0] += 1
+            ex = {"referral": ref} if (ref and i == 0) else {}
+            FbChat.objects.create(thread_id=th, message_id="m_in%d" % MID[0], sender_id=fp.user_id, msg_type="text",
+                                  text=t, extra=ex, channel=PAGE, direction="in",
+                                  sent_at=t0 + timedelta(seconds=5 + i))
+        o = ChatOwner.objects.create(fb_profile=fp, awaiting_since=t0, last_in_at=t0 + timedelta(seconds=10), last_at=t0)
+        return fresh(o)
+
+    gm = {"id": "m_x", "attachments": {"data": [{"generic_template": {"title": "รีบจอง ก่อนหมด !!!", "subtitle": "จว6456 ",
+                                                                      "media_url": "https://www.facebook.com/ads/image/?d=x"}}]}}
+    ck("★ ซิงก์: การ์ดโฆษณาเป็นชนิด template (ไม่ใช่ไฟล์ให้ดาวน์โหลด)", FS._msg_type(gm) == "template", FS._msg_type(gm))
+    ck("ขอ generic_template จาก Graph API ด้วย", "generic_template" in FS._MSG_FIELDS)
+    o14 = fb_chat("ลูกค้าโฆษณา Ativ", {"title": "รีบจอง ก่อนหมด !!!", "subtitle": "จว6456 ", "media_url": "x"},
+                  ["สีดำมีไหม", "0861110001"])
+    l14 = C.autofill(o14)
+    ad = (l14.auto or {}).get(FA.CARD_KEY) or {}
+    ck("★ ช่อง ADS = ข้อความบรรทัดล่างของการ์ด (ตามที่เห็นใน Messenger)", l14.ads == "จว6456" and l14.auto.get("ads") == "โฆษณา",
+       (l14.ads, l14.auto.get("ads")))
+    ck("★ ad id + ชื่อโฆษณาเก็บในฐานข้อมูล", l14.ad_id == "900001" and l14.ad_name == "Yaris Ativ จว6456"
+       and ad.get("how") == "unique" and ad.get("campaign_name"), (l14.ad_id, l14.ad_name, ad))
+    ck("รุ่นรถจากชื่อโฆษณา (ลูกค้าไม่ได้พิมพ์รุ่นเอง)", "ativ" in (l14.car_model or "").lower(), (l14.car_model, l14.car_text))
+    ck("รายชื่อแชทบอกว่าเป็นการ์ดโฆษณา", C.fb_preview(FbChat.objects.filter(thread_id=o14.fb_profile.thread_id,
+                                                                             msg_type="template").first()).startswith("[การ์ดโฆษณา]"))
+    lj = C.lead_json(fresh(o14))
+    ck("หน้าแชทได้รายละเอียดโฆษณา (ป้ายช่อง ADS) ไม่มี PSID", (lj.get("ad") or {}).get("ad_name") == "Yaris Ativ จว6456"
+       and "psid" not in json.dumps(lj.get("ad"), ensure_ascii=False), lj.get("ad"))
+    o14b = fb_chat("ลูกค้า Mazda3 vs Ativ", {"title": "คันสุดท้าย รีบจอง ก่อนหมด", "subtitle": "ระหว่าง Mazda3 กับ Yaris Ativ รุ่นไหนดี"},
+                   ["ราคาเท่าไหร่"])
+    l14b = C.autofill(o14b)
+    ck("★ เคสในรูปของเจ้าของ: ADS = \"ระหว่าง Mazda3 กับ Yaris Ativ รุ่นไหนดี\" + ad id ตรงโฆษณาชื่อเดียวกัน",
+       l14b.ads == "ระหว่าง Mazda3 กับ Yaris Ativ รุ่นไหนดี" and l14b.ad_id == "900002", (l14b.ads, l14b.ad_id))
+    o14c = fb_chat("ลูกค้า City", {"title": "รีบจอง ก่อนหมด!!!", "subtitle": "กองทัพ CITY ถูกที่สุดในตลาด"}, ["สนใจครับ"])
+    l14c = C.autofill(o14c)
+    adc = (l14c.auto or {}).get(FA.CARD_KEY) or {}
+    ck("★ โฆษณาชื่อเดียวกันหลายชิ้น → ตัวที่ใช้เงินมากสุดวันนั้น + จดทุกตัวเลือก", l14c.ad_id == "900003"
+       and adc.get("how") == "spend" and set(adc.get("ad_ids") or []) == {"900003", "900004"}, (l14c.ad_id, adc))
+    o14d = fb_chat("ลูกค้า webhook", None, ["สนใจ"], ref={"source": "ADS", "type": "OPEN_THREAD", "ad_id": "900004",
+                                                           "ads_context_data": {"ad_title": "กองทัพ CITY"}})
+    l14d = C.autofill(o14d)
+    ck("★ webhook บอก ad id (referral) → ใช้ตรงๆ ไม่เดา", l14d.ad_id == "900004"
+       and ((l14d.auto or {}).get(FA.CARD_KEY) or {}).get("how") == "exact", (l14d.ad_id, (l14d.auto or {}).get(FA.CARD_KEY)))
+    # ★ 20 ต.ค.69 เคสจริง NLD10-9681: การ์ด "มุมมอง Fortuner ขับ 4" · รายชื่อโฆษณามีทั้ง "fortuner" (ปี 2022 หยุดแล้ว)
+    #   กับ "มุมมอง Fortuner ขับ 4" (ตัวจริง เปิดอยู่) → เดิมคะแนนเท่ากัน ตัวเก่าชนะ
+    from dashboard.services import cache_store as CS
+    CS.set_kv(FA.CATALOG_KEY, {"at": timezone.now().isoformat(timespec="seconds"), "ads": [
+        {"ad_id": "6303493111441", "ad_name": "fortuner", "adset_id": "", "adset_name": "", "campaign_id": "",
+         "campaign_name": "รวม 10/5/2022", "status": "CAMPAIGN_PAUSED"},
+        {"ad_id": "6276893996841", "ad_name": "Fortuner", "adset_id": "", "adset_name": "", "campaign_id": "",
+         "campaign_name": "07 September 21", "status": "PAUSED"},
+        {"ad_id": "120252067122070548", "ad_name": "มุมมอง Fortuner ขับ 4", "adset_id": "", "adset_name": "",
+         "campaign_id": "", "campaign_name": "1.8.69 บ้านเก่า INBOX Fortuner", "status": "ACTIVE"}]})
+    mf = FA.match_ad({"title": "", "subtitle": "มุมมอง Fortuner ขับ 4"})
+    ck("★ ชื่อโฆษณาตรงการ์ดเป๊ะ ชนะชื่อกว้างๆ ของโฆษณาเก่า (\"Fortuner\" ปี 2022)",
+       mf["ad_id"] == "120252067122070548" and mf["ad_ids"] == ["120252067122070548"] and mf["how"] == "unique", mf)
+    CS.set_kv(FA.CATALOG_KEY, {})
+    o14e = fb_chat("ลูกค้าไม่ได้มาจากโฆษณา", None, ["สวัสดีครับ"])
+    l14e = C.autofill(o14e)
+    ck("ลูกค้าที่ไม่ได้มาจากโฆษณา → ไม่เติม ADS/ad id", not l14e.ads and not l14e.ad_id, (l14e.ads, l14e.ad_id))
+    # คนแก้ช่อง ADS เองแล้ว → การ์ดใหม่ไม่ทับ
+    ChatLead.objects.filter(pk=l14.pk).update(ads="แอดมินพิมพ์เอง", auto=dict(l14.auto, ads="คน"))
+    MID[0] += 1
+    mm = {"id": "m_card%d" % MID[0], "attachments": {"data": [{"generic_template": {"title": "ใหม่", "subtitle": "ระหว่าง Mazda3 กับ Yaris Ativ รุ่นไหนดี"}}]}}
+    FbChat.objects.create(thread_id=o14.fb_profile.thread_id, message_id=mm["id"], sender_id=PAGE, msg_type="template", text="",
+                          extra=mm, channel=PAGE, direction="out", sent_at=timezone.now())
+    l14 = C.autofill(fresh(o14))
+    ck("★ ช่อง ADS ที่คนแก้แล้ว → การ์ดใหม่ไม่ทับ (ad id เปลี่ยนตามโฆษณาล่าสุดได้)", l14.ads == "แอดมินพิมพ์เอง" and l14.ad_id == "900002",
+       (l14.ads, l14.ad_id))
+    # ใบที่ลงกลุ่มมีบรรทัด Ads ตามการ์ด
+    c = AL.cfg()
+    c.update(after_min=0, test_chats=[], since=(timezone.now() - timedelta(minutes=30)).isoformat(timespec="seconds"))
+    AL.save_cfg(c)
+    o14f = fb_chat("ลูกค้าโฆษณาให้เบอร์", {"title": "รีบจอง ก่อนหมด!!", "subtitle": "มุมมอง Fortuner ขับ 4"}, ["สนใจ", "0861110009"])
+    ad_row("900009", "มุมมอง Fortuner ขับ 4", "60.00")
+    C.capture_contact(o14f)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o14f), "0861110009")
+    new = [t for to, t in PUSHES[n0:] if to == PARK]
+    ck("★ ใบที่ลงกลุ่ม ADMIN เก็บ Lead: \"Ads : มุมมอง Fortuner ขับ 4\" + รุ่นรถจากโฆษณา",
+       len(new) == 1 and "Ads : มุมมอง Fortuner ขับ 4" in new[0] and "Fortuner" in new[0].split("รถ :")[1], new)
+    ck("ad id ของลีดนี้อยู่ในฐานข้อมูล", ChatLead.objects.get(chat=o14f).ad_id == "900009", ChatLead.objects.get(chat=o14f).ad_id)
+    ck("★ ช่องทางลีด FB = ตัวเลือกชีตตามเพจ (เพจ …สำนักงานใหญ่ → เพจบ้านเก่า)", ChatLead.objects.get(chat=o14f).channel == "เพจบ้านเก่า"
+       and new and "ช่องทาง : เพจบ้านเก่า" in new[0], (ChatLead.objects.get(chat=o14f).channel, new[:1]))
+    ck("เพจ 482041925229408 → เพจอ่อนนุช · เพจ Guru → เพจ Guru", C._fb_channel("482041925229408") == "เพจอ่อนนุช"
+       and C._fb_channel("650823708107550") == "เพจ Guru", (C._fb_channel("482041925229408"), C._fb_channel("650823708107550")))
+    cache_store.set_kv("meta_page_names", {"765581723300455": "บอสเจมส์ ทะเบียนเทพ"})
+    ck("★ เพจที่ชีตยังไม่มีตัวเลือก \"เพจ…\" → ไม่เดา (ไม่เอาช่อง TikTok ชื่อคล้ายกันมาใส่)", C._fb_channel("765581723300455") == ""
+       and C._fb_channel("999") == "", C._fb_channel("765581723300455"))
+    ck("card_from_extra: ข้อความทั่วไป = ไม่ใช่การ์ด", FA.card_from_extra({"message": "hi"}) is None)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[15] พักการรันเลข (--off) — กลุ่มทดสอบยังใช้ได้")
+    AL.set_enabled(False)
+    c = AL.cfg()
+    c.update(drafts=True, warn=True, test_chats=[ot.pk])
+    AL.save_cfg(c)
+    AL._TEST_IDS["at"] = 0
+    real0 = C.last_running()
+    n0 = len(PUSHES)
+    o15 = chat("ลูกค้าตอนพัก", phone="", contact_ago=None, ago_min=0)
+    o15 = umsg(o15, "0871110001", 60)
+    C.capture_contact(o15)
+    AL.kick_chat(fresh(o15), "0871110001")
+    AL._RUN["at"] = 0
+    r15 = AL.run()
+    ck("★ พักอยู่: ลูกค้าให้เบอร์ → ไม่จองเลข ไม่ส่งใบ", not res_of(o15) and not [1 for to, _ in PUSHES[n0:] if to == PARK],
+       (res_of(o15), PUSHES[n0:], r15))
+    d15 = draft("ใบร่างตอนพัก", 0, phone="0871110002")
+    AL.process_groups()
+    ck("★ พักอยู่: ใบร่างในกลุ่ม ADMIN เก็บ Lead → บอทไม่รันเลข", not ext_res(d15.message_id)
+       and not [1 for to, _ in PUSHES[n0:] if to == PARK], (ext_res(d15.message_id), PUSHES[n0:]))
+    slip("NLD10-%d" % (real0 - 3), "คนอื่นตอนพัก", 0, phone="0871110002")   # เลขต่ำกว่าเลขล่าสุด (ใบในห้องนับเลขรันอยู่แล้ว)
+    AL.process_groups()
+    ck("พักอยู่: ห้องจ่ายเบอร์ไม่มีคำเตือน", not [1 for to, _ in PUSHES[n0:] if to == ROOM], PUSHES[n0:])
+    st, js = J(ADM, {"channel": "LINE@", "phone": "0871110003"})
+    ck("★ พักอยู่: ฟอร์มเพิ่มลีดเองไม่จองเลข (บอกเหตุผล)", st == 400 and "พัก" in (js.get("error") or ""), (st, js))
+    ck("★ เลขรันจริงไม่ขยับตอนพัก", C.last_running() == real0, (C.last_running(), real0))
+    tg0 = len(PUSHES)
+    ot = umsg(ot, "0899990077", 50)
+    AL.kick_chat(fresh(ot), "0899990077")
+    gmsg(TG, "TestBot", "Ac Lead No. NLD10-\nAds : -\nชื่อ Account: ทดสอบตอนพัก\nชื่อลูกค้า : -\nID LINE : -\n"
+                        "เบอร์โทร : 0899990078\nช่องทาง : LINE@\nรถ : -\nไลฟ์ : -\nเพิ่มเติม : -", 0)
+    AL._RUN["at"] = 0
+    r15b = AL.run()
+    tp = [t for to, t in PUSHES[tg0:] if to == TG]
+    ck("★ พักอยู่: กลุ่มทดสอบยังทำงาน (แชทบัญชีทดสอบ + ใบร่างในกลุ่มทดสอบ)", len(tp) == 2
+       and all(AL.TEST_NOTE in t for t in tp), (tp, r15b))
+    ck("หน้าเว็บรู้ว่าพักอยู่ (ปุ่มฟอร์มพัก)", AL.form_help().get("on") is False, AL.form_help())
+    AL.set_enabled(True)
+    AL._RUN["at"] = 0
+    n0 = len(PUSHES)
+    AL.run()
+    ck("★ เปิดกลับ = เริ่มนับใหม่ ลูกค้าที่ให้เบอร์ตอนพักไม่ถูกส่งย้อนหลัง", not res_of(o15)
+       and not [1 for to, _ in PUSHES[n0:] if to == PARK], (res_of(o15), PUSHES[n0:]))
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[16] ซ้อม (--show on): ลูกค้าจริงให้เบอร์ → ใบไม่มีเลขรัน เข้ากลุ่มทดสอบเท่านั้น")
+    AL.set_enabled(False)
+    LM.forget()
+    LP.forget()
+    o16a = chat("ให้เบอร์ก่อนเปิดซ้อม", phone="", contact_ago=None, ago_min=0)
+    o16a = umsg(o16a, "0881110000", 1800)
+    C.capture_contact(o16a)
+    AL.set_show(True)
+    c = AL.cfg()
+    c["show_since"] = (timezone.now() - timedelta(minutes=10)).isoformat(timespec="seconds")
+    AL.save_cfg(c)
+    ck("ซ้อมทำงานเมื่อพักการรันเลข + มีกลุ่มทดสอบ", AL.show_on(), AL.cfg())
+    real0 = C.last_running()
+    n0 = len(PUSHES)
+    show_of = lambda o: (ChatLead.objects.get(chat=o).auto or {}).get(AL.SHOW_KEY) or {}  # noqa: E731
+    o16 = chat("ลูกค้าซ้อม", phone="", contact_ago=None, ago_min=0)
+    o16 = umsg(o16, "0881110001", 120)
+    C.capture_contact(o16)
+    AL.kick_chat(fresh(o16), "0881110001")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ข้อความเข้า = ใบเข้ากลุ่มทดสอบทันที (ใบเดียว)", len(tp) == 1 and len(PUSHES) - n0 == 1, PUSHES[n0:])
+    ck("★ ใบไม่มีเลขรัน (Lead No. ลงท้ายด้วย -) และไม่มีบรรทัดอื่นต่อท้าย", tp and re.match(r"Ac Lead No\. [A-Z]+\d{1,2}-\n", tp[0])
+       and tp[0].rstrip().endswith("เพิ่มเติม : -") and AL.TEST_NOTE not in tp[0] and "ทดสอบ" not in tp[0]
+       and "0881110001" in tp[0], tp)
+    ck("★ ไม่ลงกลุ่มจริง · ไม่จองเลข · เลขรันไม่ขยับ", not [1 for to, _ in PUSHES[n0:] if to in (PARK, ROOM)]
+       and not res_of(o16) and C.last_running() == real0, (res_of(o16), C.last_running(), real0))
+    sh16 = show_of(o16)
+    ck("จำใบซ้อมไว้ (quoteToken + ช่องที่ส่ง)", sh16.get("ok") and sh16.get("qt") and (sh16.get("sent") or {}).get("phone"), sh16)
+    ck("เก็บใบซ้อมลงคลังแชทกลุ่มทดสอบ (ขาออก)", GroupChat.objects.filter(group_id=TG, direction="out",
+                                                                       message_id__startswith=AL.SHOW_MSG_PREFIX).exists())
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o16), "0881110001")
+    AL._RUN["at"] = 0
+    AL.run()
+    ck("★ ส่งแล้วไม่ส่งซ้ำ (ข้อความเข้าอีก + รอบ cron)", not [1 for to, t in PUSHES[n0:] if to == TG and "0881110001" in t],
+       PUSHES[n0:])
+    ck("รอบ cron ส่งลูกค้ารายอื่นที่ให้เบอร์หลังเปิดซ้อม (ไม่มีเลข · กลุ่มทดสอบเท่านั้น)",
+       all(to == TG and re.match(r"Ac Lead No\. [A-Z]+\d{1,2}-\n", t) for to, t in PUSHES[n0:]), PUSHES[n0:])
+    ck("ลูกค้าที่ให้เบอร์ก่อนเปิดซ้อม → ไม่ส่งย้อนหลัง", not show_of(o16a), show_of(o16a))
+    o16 = umsg(o16, "สนใจ แคมรี่ ปี 2019 ครับ", 60)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o16), "สนใจ แคมรี่ ปี 2019 ครับ")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ลูกค้าพิมพ์รุ่นรถทีหลัง → ใบอัปเดตอ้างใบซ้อมเดิม (กลุ่มทดสอบ)", len(tp) == 1 and "อัปเดต" in tp[0] and "แคมรี่" in tp[0]
+       and QUOTES[-1] == sh16.get("qt") and not [1 for to, _ in PUSHES[n0:] if to in (PARK, ROOM)], (tp, QUOTES[-1:]))
+    # ส่งไม่สำเร็จ → ส่งใหม่รอบ cron
+    FAIL_TO.add(TG)
+    o16b = chat("ลูกค้าซ้อม LINE ล่ม", phone="", contact_ago=None, ago_min=0)
+    o16b = umsg(o16b, "0881110002", 120)
+    C.capture_contact(o16b)
+    AL.kick_chat(fresh(o16b), "0881110002")
+    ck("LINE ล่ม → จดว่าส่งไม่สำเร็จ", show_of(o16b).get("ok") is False and show_of(o16b).get("tries") == 1, show_of(o16b))
+    FAIL_TO.discard(TG)
+    lb = ChatLead.objects.get(chat=o16b)
+    a = dict(lb.auto)
+    a[AL.SHOW_KEY] = dict(a[AL.SHOW_KEY], tried=(timezone.now() - timedelta(minutes=10)).isoformat(timespec="seconds"))
+    ChatLead.objects.filter(pk=lb.pk).update(auto=a)
+    n0 = len(PUSHES)
+    AL._RUN["at"] = 0
+    AL.run()
+    ck("★ รอบ cron ส่งใบซ้อมที่ล่มใหม่ (ครั้งเดียว)", show_of(o16b).get("ok") and len([1 for to, _ in PUSHES[n0:] if to == TG]) == 1,
+       (show_of(o16b), PUSHES[n0:]))
+    # ปิดซ้อม / เปิดรันเลขจริง = เลิกซ้อม
+    AL.set_show(False)
+    o16c = chat("ลูกค้าตอนปิดซ้อม", phone="", contact_ago=None, ago_min=0)
+    o16c = umsg(o16c, "0881110003", 120)
+    C.capture_contact(o16c)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o16c), "0881110003")
+    ck("ปิดซ้อม → ไม่ส่งอะไร", len(PUSHES) == n0 and not show_of(o16c), PUSHES[n0:])
+    AL.set_show(True)
+    AL.set_enabled(True)
+    ck("เปิดรันเลขจริง → ซ้อมหยุดเอง", not AL.show_on(), AL.cfg())
+    AL.set_show(False)
 
 finally:
     _runner.teardown_databases(_old)
