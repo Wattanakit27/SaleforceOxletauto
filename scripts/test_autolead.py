@@ -811,10 +811,18 @@ try:
         {"ad_id": "6276893996841", "ad_name": "Fortuner", "adset_id": "", "adset_name": "", "campaign_id": "",
          "campaign_name": "07 September 21", "status": "PAUSED"},
         {"ad_id": "120252067122070548", "ad_name": "มุมมอง Fortuner ขับ 4", "adset_id": "", "adset_name": "",
-         "campaign_id": "", "campaign_name": "1.8.69 บ้านเก่า INBOX Fortuner", "status": "ACTIVE"}]})
+         "campaign_id": "", "campaign_name": "1.8.69 บ้านเก่า INBOX Fortuner", "status": "ACTIVE"},
+        {"ad_id": "52618590613645", "ad_name": "อ่อนนุช ออก CIVIC FE ได้ไหม", "adset_id": "", "adset_name": "",
+         "campaign_id": "", "campaign_name": "26.9.69 เพจอ่อนนุช INBOX เก๋งกลาง CIVIC FE อ่อนนุช", "status": "ACTIVE"}]})
     mf = FA.match_ad({"title": "", "subtitle": "มุมมอง Fortuner ขับ 4"})
     ck("★ ชื่อโฆษณาตรงการ์ดเป๊ะ ชนะชื่อกว้างๆ ของโฆษณาเก่า (\"Fortuner\" ปี 2022)",
        mf["ad_id"] == "120252067122070548" and mf["ad_ids"] == ["120252067122070548"] and mf["how"] == "unique", mf)
+    # ★ เคสจริงหลัง fb_adcards: ยอดรายวันมีแต่บัญชีบ้านเก่า → การ์ด "อ่อนนุช …" เคยได้โฆษณาบ้านเก่าที่ชื่อสั้นกว่า
+    ad_row("900021", "ออก CIVIC FE ได้ไหม", "200.00", camp="1.5.69 บ้านเก่า INBOX เก๋งกลาง CIVIC FE ชลบุรี")
+    mo = FA.match_ad({"title": "", "subtitle": "อ่อนนุช ออก CIVIC FE ได้ไหม"})
+    ck("★ ยอดรายวันตรงไม่เป๊ะ → ดูรายชื่อโฆษณาทุกบัญชี ได้ตัวเพจอ่อนนุชที่ชื่อตรงเป๊ะ", mo["ad_id"] == "52618590613645", mo)
+    mb = FA.match_ad({"title": "", "subtitle": "ออก CIVIC FE ได้ไหม"})
+    ck("การ์ดบ้านเก่า → โฆษณาบ้านเก่า (ยอดรายวันตรงเป๊ะ ไม่หยิบของเพจอ่อนนุช)", mb["ad_id"] == "900021", mb)
     CS.set_kv(FA.CATALOG_KEY, {})
     # ★ 20 ต.ค.69 บน prod `fb_adcards --apply` ล้ม 300/300 — ถาม `/t_…/messages` ตรง ด่าน meta ไม่รู้จัก id ห้องใน process ใหม่
     #   ตอนนี้ถามผ่าน `/<page>/conversations?user_id=` · จำลอง process ใหม่ (ล้าง _known) แล้วเติมการ์ดให้แถวเก่า
@@ -842,6 +850,11 @@ try:
     try:
         nfix = FA.refetch_thread(o14r.fb_profile)
         bf = FA.backfill(days=1, limit=50)
+        lr = ChatLead.objects.get(chat=o14r)
+        ar = dict(lr.auto or {})
+        ar[FA.CARD_KEY] = dict(ar.get(FA.CARD_KEY) or {}, ad_id="111", ad_name="ผิด")
+        ChatLead.objects.filter(pk=lr.pk).update(auto=ar, ad_id="111", ad_name="ผิด")
+        bf2 = FA.backfill(days=1, limit=50, rematch=True)
     finally:
         requests.get = _get
         S.META_ACCESS_TOKEN, S.META_PAGE_IDS, S.META_AD_ACCOUNTS = old_cfg
@@ -849,6 +862,9 @@ try:
        nfix == 1 and FbChat.objects.get(message_id="m_oldcard").msg_type == "template"
        and not [u for u in seen if "/%s/messages" % th in u], (nfix, seen))
     ck("backfill บอกเหตุผลเมื่อล้ม (ไม่เงียบ)", "why" in bf and (not bf["errors"] or bf["why"]), bf)
+    ck("★ --rematch: แชทที่จับคู่ผิดไว้แล้ว → จับคู่ใหม่ได้โฆษณาที่ถูก (นับใน changed)",
+       ChatLead.objects.get(chat=o14r).ad_id == "900001" and bf2.get("changed", 0) >= 1 and not bf2["errors"],
+       (ChatLead.objects.get(chat=o14r).ad_id, bf2))
     o14e = fb_chat("ลูกค้าไม่ได้มาจากโฆษณา", None, ["สวัสดีครับ"])
     l14e = C.autofill(o14e)
     ck("ลูกค้าที่ไม่ได้มาจากโฆษณา → ไม่เติม ADS/ad id", not l14e.ads and not l14e.ad_id, (l14e.ads, l14e.ad_id))

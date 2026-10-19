@@ -172,8 +172,15 @@ def match_ad(card: dict, at=None) -> dict:
         return out
     rows = [r for r in MetaAdDaily.objects.filter(date__gte=day - timedelta(days=DAILY_DAYS), date__lte=day)
             .values(*fields) if _hit(card, r["ad_name"])]
-    if not rows:
-        rows = [dict(a, date=None, spend=0) for a in _catalog() if _hit(card, a.get("ad_name"))]
+    top = max((_strength(card, r["ad_name"]) for r in rows), default=0)
+    if top < 3:
+        # ★ 20 ต.ค.69 ยอดรายวันที่เก็บไว้ยังไม่ตรงเป๊ะ → ดูรายชื่อโฆษณาทุกบัญชีด้วย ตรงกว่า = ใช้ตัวนั้น
+        #   (เคสจริง: การ์ด "อ่อนนุช ออก CIVIC FE ได้ไหม" ได้โฆษณาบ้านเก่า "ออก CIVIC FE ได้ไหม" เพราะยอดรายวันมีแต่บัญชีบ้านเก่า
+        #    ส่วนตัวจริงอยู่บัญชีเพจอ่อนนุชที่เพิ่งเริ่มเก็บ — ไม่ดูรายชื่อเลยเพราะยอดรายวันมีตัวที่ "พอตรง" แล้ว)
+        cat = [dict(a, date=None, spend=0) for a in _catalog() if _strength(card, a.get("ad_name")) > top]
+        if cat:
+            best = max(_strength(card, a.get("ad_name")) for a in cat)
+            rows = [a for a in cat if _strength(card, a.get("ad_name")) == best]
     if not rows:
         return out
     # ตรงชัดกว่าก่อน → วันที่ใกล้วันที่ลูกค้าทักที่สุด → ยังเปิดอยู่ → ใช้เงินมากสุด → โฆษณาใหม่กว่า (id มากกว่า)
@@ -281,23 +288,35 @@ def ensure_card(o) -> bool:
     return bool(n)
 
 
-def backfill(days: int = 7, limit: int = 300) -> dict:
-    """ครั้งเดียวหลัง deploy: แชท FB ที่ลูกค้าทักใน `days` วัน → เติมการ์ดโฆษณา + จับคู่โฆษณา (autofill)"""
+def backfill(days: int = 7, limit: int = 300, rematch: bool = False) -> dict:
+    """ครั้งเดียวหลัง deploy: แชท FB ที่ลูกค้าทักใน `days` วัน → เติมการ์ดโฆษณา + จับคู่โฆษณา (autofill)
+    `rematch` = จับคู่ชื่อโฆษณาใหม่ให้แชทที่จับคู่ไปแล้วด้วย (หลังแก้วิธีจับคู่ · ช่อง ADS ที่คนแก้แล้วไม่แตะเหมือนเดิม)"""
     from . import connect as C
-    from .models import ChatOwner
+    from .models import ChatLead, ChatOwner
     since = timezone.now() - timedelta(days=days)
-    out = {"chats": 0, "cards": 0, "matched": 0, "errors": 0, "why": []}
+    out = {"chats": 0, "cards": 0, "matched": 0, "changed": 0, "errors": 0, "why": []}
     for o in (ChatOwner.objects.select_related("fb_profile", "lead").filter(fb_profile__isnull=False, last_in_at__gte=since)
               .order_by("-last_in_at")[:limit]):
         out["chats"] += 1
         try:
             if not latest_card(o):
                 refetch_thread(o.fb_profile)
+            before = ""
+            if rematch and latest_card(o):
+                lead0 = ChatLead.objects.filter(chat=o).first()
+                if lead0 and CARD_KEY in (lead0.auto or {}):
+                    before = lead0.ad_id or ""
+                    a = dict(lead0.auto)
+                    a.pop(CARD_KEY, None)
+                    ChatLead.objects.filter(pk=lead0.pk).update(auto=a)
+                    o = ChatOwner.objects.select_related("fb_profile", "lead").get(pk=o.pk)
             if latest_card(o):
                 out["cards"] += 1
                 lead = C.autofill(o)
                 if (lead.ad_id or "").strip():
                     out["matched"] += 1
+                if before and (lead.ad_id or "") != before:
+                    out["changed"] += 1
         except Exception as e:
             out["errors"] += 1
             w = "%s: %s" % (type(e).__name__, str(e)[:160])

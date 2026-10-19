@@ -5,6 +5,7 @@
     manage.py fb_adcards --apply             ครั้งเดียวหลัง deploy: ถาม Facebook การ์ดโฆษณาของแชทที่เก็บไว้ก่อนมีฟีเจอร์
                                              (ข้อความ 25 อันล่าสุดต่อห้อง) แล้วเติมช่อง ADS + ad id (ช่องที่คนแก้แล้วไม่แตะ)
     manage.py fb_adcards --apply --days 14   ย้อนกี่วัน (ค่าตั้งต้น 7)
+    manage.py fb_adcards --apply --rematch   จับคู่ชื่อโฆษณาใหม่ให้แชทที่จับคู่ไปแล้วด้วย (หลังแก้วิธีจับคู่)
 """
 import io
 import json
@@ -19,6 +20,7 @@ class Command(BaseCommand):
         p.add_argument("--apply", action="store_true")
         p.add_argument("--days", type=int, default=7)
         p.add_argument("--limit", type=int, default=300)
+        p.add_argument("--rematch", action="store_true")
         p.add_argument("--out", default="")
 
     def handle(self, *a, **o):
@@ -30,7 +32,7 @@ class Command(BaseCommand):
         from checkout.models import ChatLead
         lines = []
         if o["apply"]:
-            r = fb_ads.backfill(days=o["days"], limit=o["limit"])
+            r = fb_ads.backfill(days=o["days"], limit=o["limit"], rematch=o["rematch"])
             lines.append("เติมแล้ว: %s" % json.dumps(r, ensure_ascii=False))
         since = timezone.now() - timedelta(days=o["days"])
         qs = ChatLead.objects.filter(chat__fb_profile__isnull=False, chat__last_in_at__gte=since)
