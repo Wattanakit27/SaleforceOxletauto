@@ -113,7 +113,7 @@ python manage.py runserver
 | `/checkout/api/reply` | `api_reply` | **admin/ผู้บริหาร** POST `{user_id, text}`: **ตอบแชทลูกค้า** — ส่งผ่าน LINE push ด้วย token ของบัญชี OA ที่ลูกค้าคุยอยู่ + บันทึกลง `GroupChat` เป็น `direction=out` พร้อมชื่อคนตอบ · **ส่งสำเร็จเท่านั้นถึงบันทึก** (ดู section "ตอบแชทลูกค้า") |
 | `/connect/` | `connect_views.page` | **หน้า Connect — แชทลูกค้า LINE OA รวมที่เดียว** (3 ต.ค.69 · **11 ต.ค.69 หน้าตาใหม่ "ศูนย์ควบคุมลีด"** · `?p=dist\|db\|pipe\|dash\|rules` เปิดหน้านั้น · `?classic=1` = หน้าเดิม) · แอดมิน/ผู้บริหาร = เห็นทุกแชท + โอน/ปล่อยคืนคิว + ตั้งค่า · เซลล์ = เห็นเต็มเฉพาะลูกค้าที่ตัวเองรับ + คิวรอรับ (เฉพาะวันเวรทีม) · คนงาน = 403 · ไม่ login → `/login/?next=/connect/` · `?id=` เปิดแชทนั้นเลย · `?embed=1` = ฝังในแท็บแดชบอร์ด · ดู section "Connect" |
 | `/connect/api/comments` | `connect_views.api_comments` | **แอดมิน/ผู้บริหาร** (17 ต.ค.69 · หน้า "คอมเมนต์" ใน Connect · `checkout/comments.py`) — GET `?platform=fb\|yt\|tt&status=wait\|all\|done&cat=greet\|interest\|attack\|complaint\|none&q=&limit=` = คอมเมนต์ Facebook (โพสต์เพจ+โฆษณา) · YouTube · TikTok รออนุมัติ + `counts` (รอตอบ 7 วัน) + `catCounts` (ประเภทลูกค้า) + `sources` (ดึงล่าสุด/พัง) · POST `{action:"done", id, on}` = จัดการแล้ว · `{action:"category", id, cat}` = จัดประเภทลูกค้าเอง (`auto` = ให้ระบบจัด) · `{action:"sync"}` = ดึงเดี๋ยวนี้ (ห่าง ≥2 นาที · 429) · เซลล์ 403 · ดู section "หน้าคอมเมนต์" |
-| `/connect/api/inbox` · `chat` · `claim` · `reply` · `reply_image` · `canned` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `assign_lead {id, park}` = "รับ lead จากแชทนี้แล้ว" (ส่งเข้าห้องพัก · 11 ต.ค.69) · `assign_lead {id, kind:"buy"|"sell"}` = ตั้งเป็นลีดรับซื้อรถ/ลีดขายรถ (11 ต.ค.69) · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
+| `/connect/api/inbox` · `chat` · `claim` · `reply` · `reply_image` · `canned` · `assign` · `dismiss` · `lead` · `assign_lead` · `park_assign` · `park_add` · `fb_test` · `fb_webhook` · `config` · `stats` · `summary` · `test` | `connect_views.*` | API ของ Connect — **เช็คสิทธิ์ฝั่งเซิร์ฟเวอร์ทุกตัว** · POST ต้องมี CSRF (ไม่ใช่ csrf_exempt) · อ้างลูกค้าด้วย `ChatOwner.id` **ไม่ส่ง LINE user id ออก** · `summary` = ตัวเลขบนเมนู (แอดมิน: รอรับ · เซลล์: ลูกค้าของฉันที่รอตอบ+คิว) · `inbox?view=tocode` = แท็บ "ห้องพัก Lead" (แอดมิน · ศูนย์กระจายลีดทุกช่องทาง) · `inbox?src=line|fb|tiktok|other` = ตัวกรองช่องทาง · `assign_lead {id, skip}` = "ไม่ต้องจ่ายเบอร์" · `assign_lead {id, park}` = "รับ lead จากแชทนี้แล้ว" (ส่งเข้าห้องพัก · 11 ต.ค.69) · `assign_lead {id, kind:"buy"|"sell"}` = ตั้งเป็นลีดรับซื้อรถ/ลีดขายรถ (11 ต.ค.69) · `park_assign` = จ่ายเบอร์ใบร่างในห้องพัก · `{…, resend: true}` = ส่งใบเข้ากลุ่มจ่ายเบอร์อีกครั้ง (6 ต.ค.69) · `park_add` = ฟอร์มเพิ่มลีดเองในห้องพัก (จองเลข + ใบลงกลุ่ม ADMIN เก็บ Lead · 19 ต.ค.69) · `fb_test` = แชททดสอบการตอบ Facebook · `fb_webhook` = ผูกเพจกับ Messenger webhook (GET ตรวจ · POST ผูก) |
 | `/api/admin/refresh_data` | `admin_refresh_data` | admin POST: สั่ง sync + precompute เดี๋ยวนี้ (ปุ่มรีเฟรชในหน้าสถานะระบบ) — คำนวณสดจาก Google ~10 วิ |
 | `/api/admin/trends` | `admin_trends` | admin GET: JSON เทรนด์ followup (`FollowupLog` รายวัน + `SellerWeekly` รายสัปดาห์ + `rounds`) — endpoint สำรอง (หน้า dashboard ฝัง inline ผ่าน `trends_json` context แล้ว · ดู section "เก็บสถิติ followup + เทรนด์") |
 | `/api/admin/report_config` | `admin_report_config` | admin: GET=อ่าน, POST=บันทึก config "รายงานเข้าไลน์รายวัน" (`{enabled,time,mode,test_id,group_id}` · เก็บ KVStore `report_line_config`) — เมนูจัดการ "รายงานเข้าไลน์" (ดู section "รายงานเข้าไลน์") |
@@ -2296,7 +2296,8 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
   · **ไม่ใส่ช่อง code** → แชทยังอยู่ในห้องพัก Lead → ส่งใบเลขเต็ม **ไม่แท็กเซลล์** ลงกลุ่ม (`weblead.park_room` · บอทตัวส่ง) +
   เก็บ `GroupChat` (`message_id` ขึ้นต้น `auto-lead-` · `extra.source="autolead"`)
 - **ไม่จ่ายเซลล์เอง** — แอดมินกดชื่อเซลล์ในห้องพัก (ปุ่มเดิม) → `assign_lead` **ใช้เลขที่จองไว้** (+ตัวหน้าเดิมถ้าไม่ส่ง base) → ใบ + แท็กเข้าห้องจ่ายเบอร์ → ลงชีต
-  · เลขที่จองไว้ถูกใช้มือในห้องจ่ายเบอร์แล้ว (`num_used_in_rooms`) / `code_taken` = ออกเลขใหม่ + บอกในข้อความ
+  · `code_for_assign`: ใบในห้องจ่ายเบอร์ใช้เลขนี้ **กับลูกค้าคนเดียวกัน** แล้ว (แอดมินคัดลอกใบไปแท็กเอง · `room_use.same`) = **ห้ามจ่ายซ้ำ** ·
+    ใช้กับลูกค้าคนอื่น / `code_taken` = ออกเลขใหม่ + บอกในข้อความ
 - `last_running()` นับเลขที่จองไว้ (`reserved_nums`) · กลุ่ม ADMIN เก็บ Lead = kind admin ไม่ใช่ห้องจ่ายเบอร์ → ใบนี้ไม่ลงชีต/ไม่ถูกนับในกลุ่ม
   · ⚠️ แอดมินออกเลขมือในห้องจ่ายเบอร์ต้องดูเลขในกลุ่ม ADMIN เก็บ Lead ด้วย
 - ใบ `auto-lead-` ไม่ขึ้นเป็นใบร่างซ้ำ (`leadpark._scan`) · ไม่ใช้จับคู่ (`leadmatch.index`) · แอดมินพักใบร่าง/โพสต์ใบเองแล้ว (เบอร์/ID/ชื่อ) หรือ `_maybe` = ไม่ส่ง (จด `{skip}`)
@@ -2304,7 +2305,35 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
 - สวิตช์ KV `autolead_config` **เปิดโดยปริยาย** · รอบแรกจด `since` = ตอนนั้น (ไม่ส่งย้อนหลัง) · `manage.py autolead [--off|--on|--preview|--run]`
   · ผลรอบล่าสุด KV `autolead_last` · cron → `connect.tick` → `tick_bg` (thread · ≤10 แชท/รอบ)
 - **จ่ายอัตโนมัติยังปิด**: `leadflow_config.auto_chat` (off) · `auto_assign` (False) — ไม่เกี่ยวกับตัวนี้
-- ไม่มี migration · เทสต์ `python scripts/test_autolead.py` (36 ข้อ)
+- **★★ 19 ต.ค.69 (ค่ำ) "ทำทั้งคู่ให้ระบบทำงานร่วมกันได้ละค่อยๆตัดไลน์"** — ทุกลีดได้เลขตั้งแต่ตอนเก็บ ไม่ว่ามาทางไหน (ตัวนับ+ล็อกชุดเดียว):
+  | ทาง | ระบบทำอะไร | เก็บเลขที่ |
+  |---|---|---|
+  | แชท LINE/FB (ข้างบน) | จองเลข → ใบเลขเต็มลงกลุ่ม | `ChatLead.auto["_autolead"]` |
+  | **แอดมินพักใบร่างในกลุ่ม ADMIN เก็บ Lead** (TikTok/ไลฟ์/โทรเข้า แบบเดิม) | **บอทจองเลข → ตอบใบเลขเต็มในกลุ่ม (อ้างใบร่าง · quoteToken)** | `ExtLead.auto["_autolead"]` (migration **0043**) |
+  | **ฟอร์ม "เพิ่มลีดเอง" ในห้องพัก Lead** | ประกอบใบร่าง (`message_id` `web-park-…` เก็บในคลังแชทกลุ่ม) → ทางเดียวกับข้อบน (ใบเลขเต็มลงกลุ่ม) | `ExtLead.auto["_autolead"]` |
+  · **`number_draft`**: ใบร่างที่ `leadpark._scan` รวมเป็นลีดเดียว (โพสต์ซ้ำ) = จอง/ซ่อนที่ใบแรกเสมอ · โพสต์ซ้ำ = บอกเลขเดิม (ไม่ถี่กว่า 30 นาที) ·
+    ใบ R = ไม่ออกเลข (ไม้ 2 ใช้เลขเดิม+/1) · ลูกค้าที่มีเลขจองไว้แล้ว (`holder` · แชท/ใบร่างอื่น 7 วัน) หรือเพิ่งได้เลขในห้องจ่ายเบอร์ (`recent_slip` 2 วัน)
+    = **ซ่อนใบร่าง** (`ExtLead.no_code` · "ซ่อนไว้" เอากลับได้) + บอกเลขเดิมในกลุ่ม · ได้เลขในห้องจ่ายเบอร์แล้ว (`_asg`) = ข้าม
+  · **เตือนในห้องจ่ายเบอร์** (`warn_slip` · ข้อความขาเข้าเท่านั้น · ไม่นับ R//n) ตอบในห้องเดียวกัน (อ้างใบ): (ก) ใช้เลขที่จองไว้ให้ลูกค้าอีกราย = เลขชน ·
+    (ข) ลูกค้าที่จองเลขไว้แล้วแต่ใบนี้ใช้เลขใหม่ · (ค) ลูกค้าเพิ่งได้เลขอื่นภายใน 24 ชม. (`RENUM_HOURS`) → "ใช้เลขเดิม" (ระบบลงชีตแก้เซลล์ในแถวเดิมให้) ·
+    เตือนเฉพาะที่ชัด (เบอร์/ID LINE ตรงหรือไม่ตรงจริง) · จด `dash_event_log` kind=`autolead`
+  · **อ่านข้อความกลุ่ม** `process_groups` ตัวชี้ KV `autolead_ptr` (GroupChat.id · ครั้งแรก = ข้อความล่าสุด ไม่ไล่ย้อน) · **ขยับตัวชี้ก่อนทำ = ทำอย่างมากครั้งเดียว**
+    (ล่มกลางทาง = ใบนั้นไม่ได้เลข ดีกว่าบอทพูดซ้ำในกลุ่ม) · ใบเก่ากว่า 3 ชม. ไม่ตอบ · ข้อความเดียวกัน 2 แถว (บอท 2 ตัว) = ทำครั้งเดียว ·
+    advisory lock `7_406_068` · เรียกจาก `_checkout_ingest` (`kick` · มี "lead no" ในข้อความ) + cron ทุกนาที (`run`) · ผล KV `autolead_groups_last`
+  · `store_chat` เก็บ `extra["quote"]` (quoteToken ของข้อความกลุ่ม) · อ้างได้เฉพาะข้อความที่บอทตัวส่งได้ยินเอง · อ้างไม่ได้ (400) = ส่งซ้ำแบบไม่อ้าง
+  · **API `POST /connect/api/park_add`** (แอดมิน) `{channel, live, account, name, line_id, phone, car, ads, more, base, admin, force?}` —
+    ต้องมีเบอร์/ID LINE/ชื่อ Account · เบอร์ผิด = 400 · **ลูกค้าเดิม = 409 + เลขเดิม** → หน้าเว็บถามยืนยัน → `force` (ใบร่างเดิมที่ซ่อนไว้ถูกเอากลับมาจองเลข)
+  · หน้าเว็บ (ห้องพัก Lead → รอจ่ายเบอร์): ปุ่ม **"+ เพิ่มลีดเอง (TikTok / ไลฟ์ / โทรเข้า)"** กางฟอร์มในหน้า (ไม่ใช่หน้าต่างลอย · ช่องทาง/ทีมไลฟ์ = dropdown ชีต ·
+    เลือกช่องทาง TikTok = ตัวหน้า TLD ให้เอง · ที่กรอกค้างไม่หายตอนรายการรีเฟรช `S.addDraft`) · การ์ดใบร่างโชว์เลขที่จองไว้ + "จองเลขแล้ว · รอจ่ายเซลล์" ·
+    "เพิ่มในเว็บ" · ส่งลงกลุ่มยังไม่สำเร็จ = บอกเหตุผล · กล่อง "ตั้งเลข/เซลล์เอง" เลขที่จะได้ = เลขที่จองไว้ · กติกามี 2 บรรทัดใหม่ (`parked.form`)
+  · `leadpark.board()` ใส่ `reserved` + `base/admin` ตามที่จอง + `webForm` · `leadpark.assign` ใช้เลขที่จองไว้ (`code_for_assign`) · `last_running` นับเลขที่จองไว้ของ ExtLead ด้วย ·
+    ส่งไม่สำเร็จส่งใหม่ทุก 5 นาที (แชท + ใบร่าง)
+  · สวิตช์ย่อยใน `autolead_config`: **`drafts`** (บอทรันเลขใบร่าง) · **`warn`** (เตือนห้องจ่ายเบอร์) — เปิดโดยปริยาย ·
+    `manage.py autolead --drafts on|off --warn on|off` (สถานะบอกตัวชี้ + รอบล่าสุดของข้อความกลุ่ม)
+  · ⚠️ ทีมควรคัดลอกใบจากกลุ่ม ADMIN เก็บ Lead ไปแท็กในห้องจ่ายเบอร์ (หรือกดชื่อเซลล์ในเว็บ) — พิมพ์เลขใหม่ = บอทเตือน
+  · **Deploy**: `migrate` (checkout **0043**) + restart · รอบแรกเริ่มอ่านจากข้อความล่าสุด
+- เทสต์ `python scripts/test_autolead.py` (80 ข้อ · [7]–[10] ใบร่าง/จ่ายเซลล์/เตือน/ฟอร์ม API) · ตรวจหน้าเว็บด้วย Chrome จริง (dev server ปิด token LINE ·
+  stub เฉพาะ POST · จอ 1400/390 · ไม่ล้นจอ · ที่กรอกไม่หาย · ยืนยันลูกค้าเดิมแล้วส่ง force)
 
 ### 🏷️ ตัวหน้าเลขลีดอัตโนมัติ (run code auto) — [lead_code.py](checkout/lead_code.py) · 17 ต.ค.69 (เจ้าของสั่ง)
 ตอนจ่ายเบอร์ ระบบเลือกตัวหน้า **LD / NLD / BLD / WLD / HLD** เองจากข้อมูลในแชท + ช่องข้อมูลลีด — **ไม่ใช้ AI** · บอกเหตุผลทุกครั้ง · แอดมินเปลี่ยนเองได้

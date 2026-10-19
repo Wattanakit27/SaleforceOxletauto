@@ -1053,6 +1053,8 @@ class ExtLead(models.Model):
     # แอดมินกด "ไม่ต้องจ่ายเบอร์" (ลีดซ้ำ/ไม่ใช่ลีดขาย) — ออกจากรายการรอเลข
     no_code = models.BooleanField("ไม่ต้องจ่ายเบอร์", default=False)
     no_code_by = models.CharField("กดไม่ต้องจ่ายโดย", max_length=80, blank=True)
+    # ★ 19 ต.ค.69 เลขที่ระบบจองไว้ตอนเก็บลีด (`checkout/autolead.py` · auto["_autolead"]) — จ่ายเซลล์แล้วใช้เลขนี้
+    auto = models.JSONField("ข้อมูลระบบ (เลขที่จองไว้)", default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -3530,17 +3530,13 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
             res_note = ""
             if not code:
                 # ★ 19 ต.ค.69 ระบบเก็บลีดอัตโนมัติจองเลขไว้แล้ว (ใบในกลุ่ม ADMIN เก็บ Lead) → ใช้เลขเดิม
-                #   เลขนั้นถูกใช้ในห้องจ่ายเบอร์ไปแล้ว (แอดมินออกเลขมือชน) = ออกเลขใหม่ + บอก
-                from django.utils.dateparse import parse_datetime
+                #   แอดมินคัดลอกใบไปแท็กในห้องจ่ายเบอร์เองแล้ว (ลูกค้าคนเดียวกัน) = ห้ามจ่ายซ้ำ
+                #   เลขนั้นถูกใช้กับลูกค้าคนอื่น (แอดมินออกเลขมือชน) = ออกเลขใหม่ + บอก
                 from . import autolead
-                rv = autolead.reserved(lead)
-                if rv:
-                    cand = "%s%s-%s" % (prefix, rv.get("month") or timezone.localdate().month, rv["num"])
-                    used = autolead.num_used_in_rooms(rv["num"], since=parse_datetime(rv.get("at") or ""))
-                    if used or code_taken(cand, chat_lead_pk=lead.pk):
-                        res_note = " · เลขที่จองไว้ %s ถูกใช้ไปแล้ว (%s) — ออกเลขใหม่" % (rv.get("code"), used or "ในระบบ")
-                    else:
-                        code = cand
+                code, res_note, stop = autolead.code_for_assign(
+                    lead, prefix, autolead.lead_keys(lead), lambda c: code_taken(c, chat_lead_pk=lead.pk))
+                if stop:
+                    raise _Undo(stop)
             code = code or next_code(prefix)
             if code_taken(code, chat_lead_pk=lead.pk):
                 raise _Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)

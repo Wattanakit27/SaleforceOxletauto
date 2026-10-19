@@ -195,6 +195,8 @@ def _scan(days: int, now):
         items.append({
             "strong": x["strong"], "weak": x["weak"], "_asg": asg, "_at": at, "_mids": [x["g"].message_id],
             "id": x["g"].message_id, "reposts": 0,
+            # ★ 19 ต.ค.69 ลีดที่แอดมินเพิ่มจากฟอร์มในเว็บ (ไม่ได้พิมพ์ใบร่างใน LINE)
+            "webForm": (x["g"].message_id or "").startswith("web-park-"),
             "at": _iso(at), "by": x["g"].sender_name or "", "room": x["g"].group_name or "",
             "prefix": d["prefix"], "type": d["type"], "base": d["base"], "reject": d["reject"], "admin": d["admin"],
             "source": source_of(d.get("channel")),
@@ -256,6 +258,12 @@ def board(days: int = DAYS, now=None, cache_sec: int = 30) -> dict:
                          "post": {k: v for k, v in (e.post_info or {}).items() if k != "mid"} or None}
         if e and e.no_code and not e.code:
             it["skipped"] = {"by": e.no_code_by, "at": _iso(e.updated_at)}
+        rv = ((e.auto or {}).get("_autolead") or {}) if e and not e.code else {}
+        if rv.get("num"):
+            # ★ 19 ต.ค.69 ระบบจองเลขให้แล้ว (ใบเลขเต็มอยู่ในกลุ่ม ADMIN เก็บ Lead) — กดชื่อเซลล์ = จ่ายด้วยเลขนี้
+            it["reserved"] = {"code": rv.get("code") or "", "ok": bool(rv.get("ok")), "error": rv.get("error") or "",
+                              "room": rv.get("room") or "", "src": rv.get("src") or "", "at": rv.get("at") or ""}
+            it["base"], it["admin"] = rv.get("base") or it["base"], bool(rv.get("admin"))
         done = [t for t in (r["_asgAt"], sys_at) if t]
         end = min(done) if done else now
         it["doneAt"] = _iso(end) if done else ""
@@ -378,11 +386,19 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
     code = (code or "").strip().upper()
     if code and not C._CODE_RE.match(code):
         return False, "เลขลีดไม่ถูกรูปแบบ — ต้องเป็นแบบ TLD10-8410 (ตัวหน้า + เดือน + เลขรัน)", e
+    note = ""
     try:
         with C.code_lock():
             e = type(e).objects.get(pk=e.pk)
             if e.code:
                 raise C._Undo("ลีดนี้จ่ายเบอร์ %s ไปแล้ว — ไม่ออกเลขทับ" % e.code)
+            if not code:
+                # ★ 19 ต.ค.69 ระบบจองเลขไว้ตอนเก็บลีด (ใบร่างในกลุ่ม/ฟอร์มเว็บ · autolead.py) → ใช้เลขเดิม
+                from . import autolead as AL
+                code, note, stop = AL.code_for_assign(e, prefix, AL.ext_keys(e)[0],
+                                                      lambda c: C.code_taken(c, ext_pk=e.pk))
+                if stop:
+                    raise C._Undo(stop)
             code = code or C.next_code(prefix)
             if C.code_taken(code, ext_pk=e.pk):
                 raise C._Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)
@@ -400,10 +416,10 @@ def assign(mid: str, emp, base: str, admin: bool = False, reject: bool = False, 
         leadflow.before_post(code, emp, by, ext=e, phone=e.phone, customer=e.customer_name or e.account,
                              car=e.car_text, demo=True)
         why = "บัญชีทดสอบ — ไม่ส่งเข้ากลุ่มจริง" if C.slip_post_on(c) else "ทดลอง — ยังไม่ลงชีต ไม่โพสต์กลุ่ม"
-        return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)" % (code, emp.nickname, why), e
+        return True, "จ่ายเบอร์ %s ให้ %s แล้ว (%s)%s" % (code, emp.nickname, why, note), e
     from . import slippost
     info = _post(e, emp, by, c)
-    return True, slippost.summary(code, emp.nickname, info), e
+    return True, slippost.summary(code, emp.nickname, info) + note, e
 
 
 def slip_fields(e) -> dict:

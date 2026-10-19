@@ -4009,6 +4009,13 @@ def _checkout_ingest(data):
                 handle_events(data)
             except Exception:
                 pass
+            # ★ 19 ต.ค.69 — ใบร่างในกลุ่ม ADMIN เก็บ Lead = บอทตอบเลขรันทันที · ใบในห้องจ่ายเบอร์ที่เลขผิด = บอทเตือน
+            #   (checkout/autolead.py · อ่านจาก GroupChat ต้องอยู่หลัง store_chat · แยก try — cron เก็บตกให้ทุกนาที)
+            try:
+                from checkout.autolead import kick as _al_kick
+                _al_kick(data)
+            except Exception:
+                pass
             ingest_group_events(data)    # สร้างเคสเบิก-คืน (เฉพาะกลุ่มที่ตั้งไว้)
         except Exception as e:
             # ★ ก.ย.69 — เดิม `except: pass` เฉยๆ: งานอยู่คนละ thread กับ response

@@ -744,6 +744,9 @@ def store_chat(data) -> int:
             #   ข้อความ "@ชื่อ" ที่พิมพ์เองไม่ได้แท็กจริง = ไม่อยู่ในนี้ · เก็บ [] ไว้ด้วย = รู้ว่า "ไม่มีใครถูกแท็ก"
             extra["mention"] = [m.get("userId") for m in ((msg.get("mention") or {}).get("mentionees") or [])
                                 if isinstance(m, dict) and m.get("type") == "user" and m.get("userId")][:20]
+            # ★ 19 ต.ค.69 — บอทตอบเลขลีดโดยอ้างใบร่างที่แอดมินโพสต์ (`autolead.number_draft`) · ใช้ได้กับบัญชีที่ได้ยินเท่านั้น
+            if msg.get("quoteToken"):
+                extra["quote"] = str(msg.get("quoteToken"))[:300]
         try:
             # ★ ก.ย.69 — เก็บ user id + โปรไฟล์ลงตาราง `LineProfile` ไปในตัว (เจ้าของสั่ง)
             #   รวมงาน "เทียบชีตพนักงาน → ไม่ใช่พนักงานค่อยถาม LINE → upsert โปรไฟล์"

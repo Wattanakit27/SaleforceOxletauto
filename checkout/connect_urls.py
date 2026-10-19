@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/lead", V.api_lead, name="connect_lead"),            # แก้ข้อมูลลีด 1 ช่อง
     path("api/assign_lead", V.api_assign_lead, name="connect_assign_lead"),   # ปุ่มจ่ายเบอร์ (ทดลอง)
     path("api/park_assign", V.api_park_assign, name="connect_park_assign"),   # จ่ายเบอร์ลีดภายนอก (ห้องพัก Lead)
+    path("api/park_add", V.api_park_add, name="connect_park_add"),   # ★ 19 ต.ค.69 ฟอร์มเพิ่มลีดเอง → จองเลข + ใบลงกลุ่ม ADMIN เก็บ Lead
     path("api/leadflow", V.api_leadflow, name="connect_leadflow"),   # งานจ่ายเบอร์: นาฬิกาโทร/จ่ายวน/ไม้ 2 (แอดมิน)
     path("api/leaddb", V.api_leaddb, name="connect_leaddb"),         # ฐานข้อมูล Lead (ชีตลีด · แอดมิน)
     path("api/pipeline", V.api_pipeline, name="connect_pipeline"),   # ไปป์ไลน์เคสจอง (แอดมิน)

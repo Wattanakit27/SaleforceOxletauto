@@ -510,6 +510,14 @@
   .lc-pr .a .t { font-size: 12px; color: var(--t3); white-space: nowrap; }
   .lc-pend-f { padding: 7px 14px 10px; font-size: 12px; color: var(--t3); }
   .lc-pend-f a { cursor: pointer; color: var(--blue); font-weight: 700; }
+  /* ★ 19 ต.ค.69 ฟอร์ม "เพิ่มลีดเอง" (TikTok/ไลฟ์/โทรเข้า) → จองเลข + ใบลงกลุ่ม ADMIN เก็บ Lead */
+  .lc-add { border-bottom: .5px solid var(--bd2); background: var(--bg2); padding: 10px 14px 12px; }
+  .lc-add .pf-g3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0 10px; }
+  .lc-add .pf-g3 > .pf-fld { min-width: 0; }
+  .lc-add .pf-fld input { background: var(--bg); }
+  .lc-add .acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .lc-add .acts small { color: var(--t3); }
+  @media (max-width: 700px) { .lc-add .pf-g3 { grid-template-columns: minmax(0,1fr); } }
   .lc-lead .who { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
   .lc-lead .code { font-size: 11.5px; font-weight: 700; color: var(--t3); letter-spacing: .02em; }
   .lc-lead .det { font-size: 12.5px; color: var(--t2); margin-top: 3px; }
@@ -1372,7 +1380,7 @@
     const dr = S.parkDraft[i.id] || { base: sugBase, emp: 0, admin: !!i.admin, reject: !!i.reject };
     const bases = (ch.bases || []).map(b => `<option value="${h(b.key)}"${b.key === dr.base ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
     const sellers = S.sellers.map(s => `<option value="${s.id}"${s.id === dr.emp ? ' selected' : ''}>${h(s.name)} · ทีม ${h(s.team)}</option>`).join('');
-    return `<div class="pf-assign" data-park="${h(i.id)}">
+    return `<div class="pf-assign" data-park="${h(i.id)}" data-rcode="${h((i.reserved && i.reserved.code) || '')}">
       ${dupHtml(i.dup)}${rrHtml(((S.leadflow || {}).rr) || [])}
       <div class="pf-g2">
         <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้า</span></div><select data-x="base">${bases}</select></div>
@@ -1401,7 +1409,7 @@
                  ['รถ', i.car], ['ไลฟ์', i.live], ['Ads', i.ads], ['เพิ่มเติม', i.more]]
       .filter(x => x[1]).map(x => `${h(x[0])}: <b>${h(x[1])}</b>`).join('<br>');
     return `<details class="cn-prow" data-pk="${h(i.id)}"${S.parkOpen.has(i.id) ? ' open' : ''}><summary>
-      <div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag code">${ic('hash', 12)} ${h(i.prefix)}</span></div>
+      <div class="cn-rh"><span class="cn-rn">${h(pWho(i))}</span>${srcTag(i.source)}<span class="tag code">${ic('hash', 12)} ${h((i.reserved && i.reserved.code) || i.prefix)}</span></div>
       <div class="cn-rp">${h([i.car, i.channel].filter(Boolean).join(' · ') || '—')}</div>
       <div class="cn-rm"><span class="tag q">ใบร่างในห้องพัก</span>${i.phone ? `<span class="tag">โทร ${h(fmtPhone(i.phone))}</span>` : ''}
         <span class="tag">พักโดย ${h(i.by || '-')}</span>${i.reposts ? `<span class="tag">โพสต์ซ้ำ ${i.reposts}</span>` : ''}
@@ -1576,7 +1584,10 @@
 
   function parkPreview(box) {
     const ch = (S.parked || {}).codeHelp || {}, q = k => box.querySelector(`[data-x="${k}"]`);
-    q('preview').textContent = (q('reject').checked ? 'R' : '') + (q('admin').checked ? 'A' : '') + q('base').value + (ch.month || '') + '-' + (ch.next || '…');
+    // ★ 19 ต.ค.69 ระบบจองเลขไว้แล้ว = เลขที่จะได้คือเลขที่จองไว้ (เปลี่ยนตัวหน้าได้ เลขรันเดิม)
+    const rm = String(box.dataset.rcode || '').match(/(\d{1,2})-(\d{3,6})$/);
+    q('preview').textContent = (q('reject').checked ? 'R' : '') + (q('admin').checked ? 'A' : '') + q('base').value
+      + (rm ? rm[1] + '-' + rm[2] : (ch.month || '') + '-' + (ch.next || '…'));
   }
 
   function bindPark(el) {
@@ -3650,11 +3661,11 @@
     return `<div class="lc-lead${x.mins >= 30 ? ' pool' : ''}" data-lead="${h(x.kind)}:${h(x.id)}">
       <div>
         <div class="who"><span class="code"${x.prefixWhy ? ` title="ตัวหน้าที่ระบบจะใช้: ${h(x.prefixWhy)}"` : ''}>${h(x.prefix || '')}</span>${x.auto ? '<span class="lc-chip" title="ระบบจองเลขนี้ไว้แล้ว และส่งใบลงกลุ่ม ADMIN เก็บ Lead · กดชื่อเซลล์ = จ่ายด้วยเลขนี้">จองเลขแล้ว · รอจ่ายเซลล์</span>' : '<span class="lc-chip">ยังไม่มีเลข</span>'} ${h(x.name)}
-          <span class="lc-origin${chat ? '' : ' direct'}">${chat ? 'จากแชท' : 'ใบร่าง/สายเข้า'}</span></div>
+          <span class="lc-origin${chat ? '' : ' direct'}">${chat ? 'จากแชท' : (x.i && x.i.webForm ? 'เพิ่มในเว็บ' : 'ใบร่าง/สายเข้า')}</span></div>
         <div class="det">${h(x.car || 'ไม่ระบุรุ่นรถ')}</div>
         <div class="det m">${h(x.line)}</div>
         <div class="tags">${chTag(x.src)} ${idPills}${x.reposts ? `<span class="lc-chip">โพสต์ซ้ำ ${x.reposts}</span>` : ''}</div>
-        ${dup}${maybe}
+        ${dup}${maybe}${x.autoErr ? `<div class="lc-hint" style="justify-content:flex-start;color:var(--amber)">ส่งใบลงกลุ่ม ADMIN เก็บ Lead ยังไม่สำเร็จ: ${h(x.autoErr)} — ระบบส่งใหม่เองทุก 5 นาที (เลขยังจองไว้)</div>` : ''}
       </div>
       <div class="acts">
         <div class="lc-sla" data-since="${h(x.since)}"><span class="num">${h(slaOf(x.since).text)}</span><small>พักมาแล้ว</small></div>
@@ -3675,8 +3686,11 @@
       hasPhone: !!r.hasPhone, hasLine: !!r.hasLine, dup: r.dup || null, maybe: r.maybe || null, prefix: r.autoCode || r.pfx || '', prefixWhy: r.pfxWhy || '',
       auto: r.autoCode || '' }));
     (P.waiting || []).filter(i => !S.src || SRC_KEY[i.source] === S.src).forEach(i => out.push({ kind: 'park', id: i.id, i, name: pWho(i),
-      src: SRC_KEY[i.source] || 'other', car: i.car || '', line: 'ใบร่างจากกลุ่ม ' + (P.room || 'ADMIN เก็บ Lead') + (i.channel ? ' · ' + i.channel : '') + (i.by ? ' · พักโดย ' + i.by : ''),
-      since: i.at, hasPhone: !!i.phone, hasLine: !!i.lineId, dup: i.dup || null, prefix: i.prefix, reposts: i.reposts }));
+      src: SRC_KEY[i.source] || 'other', car: i.car || '',
+      line: (i.webForm ? 'เพิ่มในเว็บ' : 'ใบร่างจากกลุ่ม ' + (P.room || 'ADMIN เก็บ Lead')) + (i.channel ? ' · ' + i.channel : '') + (i.by ? (i.webForm ? ' · โดย ' : ' · พักโดย ') + i.by : ''),
+      since: i.at, hasPhone: !!i.phone, hasLine: !!i.lineId, dup: i.dup || null, prefix: (i.reserved && i.reserved.code) || i.prefix, reposts: i.reposts,
+      // ★ 19 ต.ค.69 บอทจองเลขให้ใบร่างแล้ว (ใบเลขเต็มอยู่ในกลุ่ม ADMIN เก็บ Lead) — กดชื่อเซลล์ = จ่ายด้วยเลขนี้
+      auto: (i.reserved && i.reserved.code) || '', autoErr: i.reserved && !i.reserved.ok ? (i.reserved.error || 'ยังส่งไม่สำเร็จ') : '' }));
     out.forEach(x => { x.mins = Math.floor((nowMs() - Date.parse(x.since)) / 60000); });
     return out.sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
   }
@@ -3747,6 +3761,70 @@
         <span class="cnt">${x.today}</span></div>`;
     }).join('');
   }
+  // ★ 19 ต.ค.69 ฟอร์ม "เพิ่มลีดเอง" — ลีด TikTok/ไลฟ์/โทรเข้า กรอกในเว็บแทนพิมพ์ใบร่างใน LINE (เจ้าของ "ค่อยๆตัดไลน์")
+  //   ระบบจองเลขรันต่อจากเดิม + ส่งใบเลขเต็มลงกลุ่ม ADMIN เก็บ Lead → ลีดขึ้นในรายการรอจ่ายเบอร์ (กดชื่อเซลล์จ่ายต่อ)
+  //   ที่กรอกค้างเก็บใน S.addDraft (รายการวาดใหม่ทุก 8 วิ ห้ามทำให้ที่พิมพ์หาย)
+  S.addOpen = false; S.addDraft = {}; S.addBusy = false;
+  function addBaseFor(ch) {
+    const c = String(ch || '').toLowerCase().replace(/\s/g, '');
+    return c.includes('tiktokads') ? 'TALD' : (c.includes('tiktok') ? 'TLD' : 'NLD');
+  }
+  function addFormHtml() {
+    if (!S.addOpen) return '';
+    const F = (S.parked || {}).form || {}, D = S.addDraft;
+    const opt = (list, v) => '<option value="">— เลือก —</option>' + (list || []).map(x => `<option${x === v ? ' selected' : ''}>${h(x)}</option>`).join('')
+      + (v && !(list || []).includes(v) ? `<option selected>${h(v)}</option>` : '');
+    const base = D.base || addBaseFor(D.channel);
+    const bases = (F.bases || []).map(b => `<option value="${h(b.key)}"${b.key === base ? ' selected' : ''}>${h(b.key)} · ${h(b.type)}</option>`).join('');
+    const inp = (k, lab, ph, type) => `<div class="pf-fld"><div class="pf-lab"><span>${h(lab)}</span></div><input type="${type || 'text'}" data-add="${k}" value="${h(D[k] || '')}" placeholder="${h(ph || '')}"></div>`;
+    return `<div class="lc-add">
+      <div class="pf-g3">
+        <div class="pf-fld"><div class="pf-lab"><span>ช่องทาง</span></div><select data-add="channel">${opt(F.channels, D.channel || '')}</select></div>
+        <div class="pf-fld"><div class="pf-lab"><span>ทีมไลฟ์</span></div><select data-add="live">${opt(F.lives, D.live || '')}</select></div>
+        <div class="pf-fld"><div class="pf-lab"><span>ตัวหน้าเลขลีด</span></div><select data-add="base">${bases}</select></div>
+        ${inp('account', 'ชื่อ Account (TikTok/FB)')}${inp('name', 'ชื่อลูกค้า')}${inp('phone', 'เบอร์โทร', '08x-xxx-xxxx', 'tel')}
+        ${inp('line_id', 'ID LINE', 'ไม่มีเว้นว่างไว้')}${inp('car', 'รถที่สนใจ')}${inp('ads', 'Ads')}
+      </div>
+      ${inp('more', 'เพิ่มเติม')}
+      <label class="ck"><input type="checkbox" data-add="admin"${D.admin ? ' checked' : ''}> A — ลีดของแอดมิน</label>
+      <div class="acts"><button class="btn pri sm" data-addgo="1"${S.addBusy ? ' disabled' : ''}>${ic('hash', 14)} ${S.addBusy ? 'กำลังออกเลข…' : 'ออกเลข + ส่งใบลงกลุ่ม ' + h(F.room || 'ADMIN เก็บ Lead')}</button>
+        <button class="btn sm" data-addx="1">ปิด</button>
+        <small>ต้องมีเบอร์โทร / ID LINE / ชื่อ Account อย่างน้อย 1 อย่าง · ระบบไม่จ่ายเซลล์ให้ — กดชื่อเซลล์ในรายการต่อเอง</small></div>
+    </div>`;
+  }
+  async function addLead(force) {
+    const F = (S.parked || {}).form || {}, D = Object.assign({}, S.addDraft);
+    if (!D.base) D.base = addBaseFor(D.channel);
+    if (!force && !confirm(`ออกเลขลีดใหม่ แล้วส่งใบลงกลุ่ม "${F.room || 'ADMIN เก็บ Lead'}" เลยไหม?`)) return;
+    S.addBusy = true; renderDist();
+    const r = await api('/connect/api/park_add', Object.assign(D, { force: !!force }));
+    S.addBusy = false;
+    if (!r.ok && r.dup) {
+      if (confirm(`${r.error}\n\nยังจะเพิ่มเป็นลีดใหม่ (ออกเลขใหม่) ใช่ไหม?`)) return addLead(true);
+      renderDist(); return;
+    }
+    toast(r.ok ? r.message : (r.error || 'เพิ่มลีดไม่สำเร็จ'), r.ok && r.posted ? 6000 : 9000);
+    if (r.ok) { S.addDraft = {}; S.addOpen = false; }
+    renderDist(); loadInbox(false);
+  }
+  function bindAdd(pg) {
+    pg.querySelectorAll('[data-addopen]').forEach(b => b.onclick = () => { S.addOpen = !S.addOpen; renderDist(); });
+    pg.querySelectorAll('[data-addx]').forEach(b => b.onclick = () => { S.addOpen = false; renderDist(); });
+    pg.querySelectorAll('[data-add]').forEach(x => {
+      const save = () => { S.addDraft[x.dataset.add] = x.type === 'checkbox' ? x.checked : x.value; };
+      x.addEventListener('input', save);
+      x.addEventListener('change', () => {
+        save();
+        if (x.dataset.add === 'base') S.addDraft.baseSet = true;
+        if (x.dataset.add === 'channel' && !S.addDraft.baseSet) {       // เปลี่ยนช่องทาง = ตัวหน้าตาม (จนกว่าจะเลือกตัวหน้าเอง)
+          S.addDraft.base = addBaseFor(x.value);
+          const b = pg.querySelector('[data-add=base]');
+          if (b) b.value = S.addDraft.base;
+        }
+      });
+    });
+    pg.querySelectorAll('[data-addgo]').forEach(b => b.onclick = () => addLead(false));
+  }
   function ruleState(on) { return on ? '<span class="lc-chip ok">เปิด</span>' : '<span class="lc-chip">ปิด</span>'; }
   function renderDist() {
     const pg = $('lc-page');
@@ -3774,9 +3852,11 @@
         ${doneItems(true).map(doneCardHtml).join('') || '<div class="cn-empty">ยังไม่มีลีดที่จ่ายเบอร์ในช่วงนี้</div>'}`;
     } else {
       const skipped = (P.skipped || []).map(i => `<div class="lc-rl"><b>${h(pWho(i))}</b> ${srcTag(i.source)}<span class="lc-chip">ซ่อนโดย ${h((i.skipped && i.skipped.by) || '-')}</span><button class="btn sm" data-unskip="${h(i.id)}">เอากลับมาจ่ายเบอร์</button></div>`).join('');
-      body = `<div class="lc-bh" style="background:var(--bg2)"><span class="note">เลขลีดออกตอนกดจ่าย ต่อจากเลขรันล่าสุด <b>${h(String(ch.next || '…'))}</b> · ${
+      body = `<div class="lc-bh" style="background:var(--bg2)"><button class="btn sm${S.addOpen ? '' : ' pri'}" data-addopen="1" title="กรอกลีดที่ไม่ได้มาทางแชท — ระบบออกเลขให้ แล้วส่งใบลงกลุ่ม ADMIN เก็บ Lead">${ic('plus', 14)} เพิ่มลีดเอง (TikTok / ไลฟ์ / โทรเข้า)</button>
+        <span class="note">ลีดได้เลขตั้งแต่ตอนเก็บ (ป้าย "จองเลขแล้ว") · ที่ยังไม่มีเลข ออกเลขตอนกดจ่าย ต่อจากเลขรันล่าสุด <b>${h(String(ch.next || '…'))}</b> · ${
         ch.post && ch.post.on ? `ใบเข้าห้อง "${h(ch.post.room || 'กลุ่มจ่ายเบอร์')}" พร้อมแท็ก @เซลล์ (เลข R → "${h(ch.post.rejectRoom || 'REJECT')}")` : 'โหมดทดลอง — เก็บในระบบอย่างเดียว ไม่ส่งเข้ากลุ่ม'}
         · ปุ่มที่มีกรอบชมพู = คิวถัดไป</span></div>
+        ${addFormHtml()}
         ${pendHtml()}
         ${raHtml(items.length)}
         ${items.map(distLeadHtml).join('') || `<div class="cn-empty">${(S.pending || []).length && !S.roomAuto ? 'ยังไม่มีลีดที่กดรับแล้ว — กด "รับ lead" ข้างบนก่อน แล้วค่อยจ่ายเบอร์' : 'ไม่มีลีดรอจ่ายเบอร์ 👍'}</div>`}
@@ -3797,6 +3877,8 @@
         <div class="lc-card"><div class="lc-bh"><h2>กติกา</h2><a class="btn sm" style="margin-left:auto" data-p="rules">ตั้งค่า</a></div>
           <div class="lc-rl">${ruleState(!!S.roomAuto)} แชทที่ให้เบอร์/ID LINE เข้าห้องพักเอง</div>
           <div class="lc-rl">${ruleState(true)} แอดมินเลือกเซลล์ ระบบออกเลขให้ (เลขรันชุดเดียวทุกตัวหน้า กันเลขซ้ำ)</div>
+          <div class="lc-rl">${ruleState(!!(P.form && P.form.on && P.form.drafts))} ใบร่างในกลุ่ม ADMIN เก็บ Lead ได้เลขทันที (บอทตอบใบเลขเต็มในกลุ่ม)</div>
+          <div class="lc-rl">${ruleState(!!(P.form && P.form.on && P.form.warn))} บอทเตือนในห้องจ่ายเบอร์ เมื่อออกเลขใหม่ให้ลูกค้าที่มีเลขแล้ว / เลขชน</div>
           <div class="lc-rl">${ruleState(ch.post && ch.post.on)} ส่งใบจ่ายลีดเข้าห้องจ่ายเบอร์ + แท็ก @เซลล์ (เลข R เข้าห้อง REJECT)</div>
           <div class="lc-rl">${ruleState(true)} ต้องรายงานผลภายใน <b>${LC.callMin || 15} นาที</b> หลังใบถึงกลุ่ม (นาฬิกาโทร)</div>
           <div class="lc-rl">${ruleState(LC.cardOn)} แนบการ์ดปุ่ม รับเคส/ขอผ่าน ต่อท้ายใบ</div>
@@ -3936,7 +4018,7 @@
       toast(r.ok ? r.message : (r.error || 'ทำไม่สำเร็จ')); loadInbox(false);
     });
     pg.querySelectorAll('[data-p]').forEach(b => b.onclick = () => setPanel(b.dataset.p));
-    bindPark(pg); bindClock(pg); bindRa(pg);
+    bindPark(pg); bindClock(pg); bindRa(pg); bindAdd(pg);
     pg.querySelectorAll('.hub-done[data-id]').forEach(r => r.onclick = () => { S.backTo = 'dist'; setPanel('inbox'); openChat(+r.dataset.id); });
   }
 

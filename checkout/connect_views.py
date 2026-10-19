@@ -282,6 +282,11 @@ def api_inbox(request):
                                   "post": C.post_help()}     # กดจ่ายแล้วส่งเข้ากลุ่มไหน (บอกก่อนกด)
                 for it in pk.get("assigned") or []:      # แท็กท้ายใบ (ชื่อ LINE คำแรก) → ชื่อเล่นในทะเบียน
                     it["sellerNick"] = C.tag_nick(it.get("seller") or "")
+                try:                                     # ★ 19 ต.ค.69 ฟอร์ม "เพิ่มลีดเอง" (TikTok/ไลฟ์/โทรเข้า) + สถานะบอทรันเลข
+                    from .autolead import form_help
+                    pk["form"] = form_help()
+                except Exception:
+                    pass
                 # ★ 10 ต.ค.69 เบอร์นี้เคยเป็นลีดของใคร (สมุดเบอร์ · ไม่ยิงเน็ต) — บอกก่อนกดจ่าย
                 from . import leadflow as LF
                 for it in pk.get("waiting") or []:
@@ -679,6 +684,24 @@ def api_park_assign(request):
     if not ok:
         return _j({"ok": False, "error": msg}, 400)
     return _j({"ok": True, "message": msg, "code": e.code, "slip": LP.slip_text(e), "post": _post_out(e)})
+
+
+def api_park_add(request):
+    """★ 19 ต.ค.69 ฟอร์ม **"เพิ่มลีดเอง"** ในห้องพัก Lead (TikTok / ไลฟ์ / โทรเข้า · แอดมิน)
+    POST `{channel, live, account, name, line_id, phone, car, ads, more, base, admin, force?}`
+
+    → ใบร่างในห้องพัก Lead + จองเลขรันต่อจากเดิม + ส่งใบเลขเต็มลงกลุ่ม ADMIN เก็บ Lead (`autolead.add_manual`)
+    · ลูกค้าเดิม (มีเลขแล้ว) = 409 พร้อมเลขเดิม — หน้าเว็บถามยืนยันแล้วส่ง `force: true`
+    · ไม่จ่ายเซลล์ (แอดมินกดชื่อเซลล์ในห้องพักต่อเอง)"""
+    ctx, body, bad = _post_guard(request)
+    if bad:
+        return bad
+    if not ctx["admin"]:
+        return _j({"ok": False, "error": "เพิ่มลีดได้เฉพาะแอดมิน"}, 403)
+    from . import autolead
+    res = autolead.add_manual(body, by=ctx["name"] or "แอดมิน", force=bool(body.get("force")))
+    status = res.pop("status", 200 if res.get("ok") else 400)
+    return _j(res, status)
 
 
 def api_lead(request):
