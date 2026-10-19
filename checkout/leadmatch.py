@@ -80,7 +80,8 @@ def index(force: bool = False) -> list:
     from .leadpark import parse_draft
     since = timezone.now() - timedelta(days=INDEX_DAYS)
     gids = _lead_group_ids()
-    base = GroupChat.objects.filter(chat_type=GroupChat.GROUP, sent_at__gte=since, text__icontains="lead no")
+    base = (GroupChat.objects.filter(chat_type=GroupChat.GROUP, sent_at__gte=since, text__icontains="lead no")
+            .exclude(message_id__startswith="auto-lead-"))     # ★ 19 ต.ค.69 ใบของระบบเก็บลีดเอง ไม่ใช่ของแอดมิน
     qs = base.filter(Q(group_id__in=gids) | _park_q()) if gids else base.filter(_park_q())
     out = []
     for pk, gid, gname, text, at in qs.values_list("pk", "group_id", "group_name", "text", "sent_at").iterator():

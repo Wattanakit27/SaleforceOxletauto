@@ -502,8 +502,13 @@ def api_assign_lead(request):
     emp = Employee.objects.filter(pk=eid).first() if eid else None
     base, adm, rej = str(body.get("base") or ""), bool(body.get("admin")), bool(body.get("reject"))
     if not base and emp:                          # ★ 10 ต.ค.69 กดชื่อเซลล์ในห้องพัก Lead = จ่ายเลย → ตัวหน้าตามที่ระบบแนะนำ
-        sg = C.suggest_prefix(C.lead_of(o), C.team_of(emp), o=o)
-        base, adm, rej = sg["base"], bool(sg["admin"]), bool(sg["reject"])
+        from .autolead import reserved
+        rv = reserved(C.lead_of(o))
+        if rv:                                    # ★ 19 ต.ค.69 ระบบเก็บลีดจองเลขไว้แล้ว → ตัวหน้าเดียวกับใบในกลุ่ม ADMIN เก็บ Lead
+            base, adm, rej = rv.get("base") or "NLD", bool(rv.get("admin")), False
+        else:
+            sg = C.suggest_prefix(C.lead_of(o), C.team_of(emp), o=o)
+            base, adm, rej = sg["base"], bool(sg["admin"]), bool(sg["reject"])
     ok, msg = C.assign_lead(o, emp, base, adm, rej, str(body.get("code") or ""), by=ctx["name"] or "แอดมิน")
     if not ok:
         return _j({"ok": False, "error": msg}, 400)

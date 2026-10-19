@@ -2288,6 +2288,24 @@ dropdown: Sheets API ปลอม (หัวตารางสลับตำแ
   · "ตรงแค่ชื่อ" ส่วนใหญ่คือจ่ายแล้วจริง (ลูกค้าเพจส่ง QR ใบเขียน "QR code") — ระบบไม่จ่ายซ้ำ แต่ก็ไม่ได้ยืนยันเอง
 - ไม่มี migration · **เทสต์** `python scripts/test_autochat.py` (69 ข้อ · ปลอมที่ `requests`) · test_connect/leadflow/crm/park_qr/lead_code/chatplus/mobile ผ่านเหมือนเดิม
 
+### 📥 เก็บลีดอัตโนมัติ → เลขรันต่อจากเดิม → ใบลงกลุ่ม "ADMIN เก็บ Lead" — [autolead.py](checkout/autolead.py) · 19 ต.ค.69
+เจ้าของ *"เก็บ Lead auto ลง Line กลุ่มและลงระบบของเราเพื่อให้แอดมินจ่ายต่อก็พอ · อย่าเพิ่งให้มันจ่าย Lead auto · อยากให้รันต่อจากเดิมได้เลย code number"*
+(เลือกกลุ่ม **ADMIN เก็บ Lead** — ถามแล้ว)
+- ลูกค้าให้เบอร์/ID LINE (`_contact_at`) **หลังเปิดสวิตช์** + รอ `after_min` 2 นาที → `autofill` → **จองเลขรัน** (`last_running()+1` ใน `code_lock`
+  · ตัวหน้าตาม `suggest_prefix`) เก็บที่ `ChatLead.auto["_autolead"]` = `{code, num, month, base, admin, ok, error, room, tries}`
+  · **ไม่ใส่ช่อง code** → แชทยังอยู่ในห้องพัก Lead → ส่งใบเลขเต็ม **ไม่แท็กเซลล์** ลงกลุ่ม (`weblead.park_room` · บอทตัวส่ง) +
+  เก็บ `GroupChat` (`message_id` ขึ้นต้น `auto-lead-` · `extra.source="autolead"`)
+- **ไม่จ่ายเซลล์เอง** — แอดมินกดชื่อเซลล์ในห้องพัก (ปุ่มเดิม) → `assign_lead` **ใช้เลขที่จองไว้** (+ตัวหน้าเดิมถ้าไม่ส่ง base) → ใบ + แท็กเข้าห้องจ่ายเบอร์ → ลงชีต
+  · เลขที่จองไว้ถูกใช้มือในห้องจ่ายเบอร์แล้ว (`num_used_in_rooms`) / `code_taken` = ออกเลขใหม่ + บอกในข้อความ
+- `last_running()` นับเลขที่จองไว้ (`reserved_nums`) · กลุ่ม ADMIN เก็บ Lead = kind admin ไม่ใช่ห้องจ่ายเบอร์ → ใบนี้ไม่ลงชีต/ไม่ถูกนับในกลุ่ม
+  · ⚠️ แอดมินออกเลขมือในห้องจ่ายเบอร์ต้องดูเลขในกลุ่ม ADMIN เก็บ Lead ด้วย
+- ใบ `auto-lead-` ไม่ขึ้นเป็นใบร่างซ้ำ (`leadpark._scan`) · ไม่ใช้จับคู่ (`leadmatch.index`) · แอดมินพักใบร่าง/โพสต์ใบเองแล้ว (เบอร์/ID/ชื่อ) หรือ `_maybe` = ไม่ส่ง (จด `{skip}`)
+- ส่ง LINE ไม่สำเร็จ = เลขยังจอง · ส่งใหม่ทุก 5 นาที ≤5 ครั้ง · หน้าเว็บ: ป้าย "จองเลขแล้ว · รอจ่ายเซลล์" (การ์ดห้องพัก/รายชื่อ `row_json.autoCode`) + กล่องจ่ายเบอร์บอกเลขที่จองไว้ (`codeHelp.reserved`)
+- สวิตช์ KV `autolead_config` **เปิดโดยปริยาย** · รอบแรกจด `since` = ตอนนั้น (ไม่ส่งย้อนหลัง) · `manage.py autolead [--off|--on|--preview|--run]`
+  · ผลรอบล่าสุด KV `autolead_last` · cron → `connect.tick` → `tick_bg` (thread · ≤10 แชท/รอบ)
+- **จ่ายอัตโนมัติยังปิด**: `leadflow_config.auto_chat` (off) · `auto_assign` (False) — ไม่เกี่ยวกับตัวนี้
+- ไม่มี migration · เทสต์ `python scripts/test_autolead.py` (36 ข้อ)
+
 ### 🏷️ ตัวหน้าเลขลีดอัตโนมัติ (run code auto) — [lead_code.py](checkout/lead_code.py) · 17 ต.ค.69 (เจ้าของสั่ง)
 ตอนจ่ายเบอร์ ระบบเลือกตัวหน้า **LD / NLD / BLD / WLD / HLD** เองจากข้อมูลในแชท + ช่องข้อมูลลีด — **ไม่ใช้ AI** · บอกเหตุผลทุกครั้ง · แอดมินเปลี่ยนเองได้
 - **เกณฑ์ของเจ้าของ** (ข้อความเต็มอยู่หัวไฟล์ — แก้เกณฑ์ที่ `decide()` ที่เดียว):

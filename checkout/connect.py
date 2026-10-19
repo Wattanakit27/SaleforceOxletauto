@@ -1026,6 +1026,13 @@ def tick(now=None) -> dict:
             out["leadflow"] = r
     except Exception as e:
         out["leadflowError"] = str(e)[:120]
+    try:                                     # ★ 19 ต.ค.69 เก็บลีดอัตโนมัติ: จองเลขรัน + ส่งใบลงกลุ่ม ADMIN เก็บ Lead (ไม่จ่ายเซลล์ · thread แยก)
+        from .autolead import tick_bg as _al_tick
+        r = _al_tick(now)
+        if r:
+            out["autolead"] = r
+    except Exception as e:
+        out["autoleadError"] = str(e)[:120]
     try:                                     # ห้องพัก Lead: ลีดที่แอดมินจ่ายเบอร์ในกลุ่มแล้ว → จับคู่ใบ/จ่ายให้ใคร เอง (thread แยก)
         r = slip_sweep_bg()
         if r:
@@ -1221,6 +1228,8 @@ def row_json(o, me=None, now=None, appt_map=None, matches=None, pend=None) -> di
         "code": (ld.code or "") if ld else "",          # เลขลีด — โชว์เป็นป้ายในรายชื่อ (จ่ายแล้ว/มาจากใบจ่ายลีด)
         # เลขเคสรับซื้อ (OC-…) — ลูกค้าที่อยากขายรถให้เรา ถูกส่งเข้ากลุ่มเคสHOT ของจัดซื้อแล้ว
         "buyCode": ((ld.auto or {}).get(BUY_KEY) or {}).get("code", "") if ld else "",
+        # ★ 19 ต.ค.69 เลขที่ระบบเก็บลีดอัตโนมัติจองไว้ (ใบอยู่กลุ่ม ADMIN เก็บ Lead · ยังไม่จ่ายเซลล์)
+        "autoCode": (((ld.auto or {}).get("_autolead") or {}).get("code", "") if ld and not ld.code else ""),
         # ★ 11 ต.ค.69 ให้เบอร์/LINE แล้ว แต่ยังไม่มีเลขลีด = ป้าย "รอจ่ายเบอร์" ในรายชื่อ
         #   (เดิมรู้ได้ทางเดียวคือเปิดห้องพัก Lead — ในกล่องแชทรวมไม่มีอะไรบอกว่าแชทนี้กลายเป็นลีดแล้ว)
         "contact": ("qr" if (ld.auto or {}).get("line_id") == QR_SRC and not ld.phone else "yes")
@@ -3376,6 +3385,11 @@ def last_running() -> int:
         mm = _ANY_CODE.match(c or "")
         if mm:
             nums.append(int(mm.group(3)))
+    try:                                          # ★ 19 ต.ค.69 เลขที่ระบบเก็บลีดอัตโนมัติจองไว้ (ใบอยู่กลุ่ม ADMIN เก็บ Lead ไม่ใช่ห้องจ่ายเบอร์)
+        from .autolead import reserved_nums
+        nums += reserved_nums()
+    except Exception:
+        pass
     nums += _sheet_running(max(nums) if nums else 0)
     return max(nums) if nums else 0
 
@@ -3427,9 +3441,21 @@ def next_code(prefix: str) -> str:
 def code_help(o, lead, msgs=None) -> dict:
     """ข้อมูลให้หน้าเว็บประกอบตัวอย่างเลขลีดก่อนกด "จ่ายเบอร์" (เลขจริงคำนวณใหม่ตอนกด กันซ้ำ)"""
     sug = suggest_prefix(lead, team_of(o.owner) if o.owner_id else "", o=o, msgs=msgs)
-    return {"suggest": sug, "bases": [{"key": b, "type": t} for b, t in CODE_BASES],
-            "month": timezone.localdate().month, "next": last_running() + 1,
-            "post": post_help(sim=is_sim_row(o), fb=is_fb(o))}
+    out = {"suggest": sug, "bases": [{"key": b, "type": t} for b, t in CODE_BASES],
+           "month": timezone.localdate().month, "next": last_running() + 1,
+           "post": post_help(sim=is_sim_row(o), fb=is_fb(o))}
+    try:                                          # ★ 19 ต.ค.69 เลขที่ระบบเก็บลีดอัตโนมัติจองไว้ = เลขที่จะได้ตอนกดจ่าย
+        from .autolead import reserved
+        rv = reserved(lead)
+        if rv:
+            out.update(month=rv.get("month") or out["month"], next=rv["num"],
+                       reserved={"code": rv.get("code"), "ok": bool(rv.get("ok")), "room": rv.get("room") or "",
+                                 "error": rv.get("error") or ""})
+            if rv.get("base"):
+                sug["base"] = rv["base"]
+    except Exception:
+        pass
+    return out
 
 
 def slip_post_on(c=None) -> bool:
@@ -3501,6 +3527,20 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
                 # มีเลขแล้ว (จากใบจ่ายลีดจริง/คนกรอก/จ่ายไปแล้ว) — ห้ามออกเลขทับ ไม่งั้นเลขจริงที่ผูกกับชีตหาย
                 # กรณีหน้าเว็บค้างของเก่าอยู่ / แอดมินอีกคนเพิ่งกดจ่ายไป ก็โดนกันที่นี่
                 raise _Undo("ลูกค้ารายนี้มีเลขลีด %s แล้ว — ไม่ออกเลขใหม่ทับ (จะเปลี่ยนเซลล์ใช้ปุ่ม \"โอน\")" % lead.code)
+            res_note = ""
+            if not code:
+                # ★ 19 ต.ค.69 ระบบเก็บลีดอัตโนมัติจองเลขไว้แล้ว (ใบในกลุ่ม ADMIN เก็บ Lead) → ใช้เลขเดิม
+                #   เลขนั้นถูกใช้ในห้องจ่ายเบอร์ไปแล้ว (แอดมินออกเลขมือชน) = ออกเลขใหม่ + บอก
+                from django.utils.dateparse import parse_datetime
+                from . import autolead
+                rv = autolead.reserved(lead)
+                if rv:
+                    cand = "%s%s-%s" % (prefix, rv.get("month") or timezone.localdate().month, rv["num"])
+                    used = autolead.num_used_in_rooms(rv["num"], since=parse_datetime(rv.get("at") or ""))
+                    if used or code_taken(cand, chat_lead_pk=lead.pk):
+                        res_note = " · เลขที่จองไว้ %s ถูกใช้ไปแล้ว (%s) — ออกเลขใหม่" % (rv.get("code"), used or "ในระบบ")
+                    else:
+                        code = cand
             code = code or next_code(prefix)
             if code_taken(code, chat_lead_pk=lead.pk):
                 raise _Undo("เลข %s ถูกใช้กับลูกค้าคนอื่นแล้ว" % code)
@@ -3527,6 +3567,7 @@ def assign_lead(o, emp, base: str, admin: bool = False, reject: bool = False, co
     except _Undo as e:
         return False, str(e)
     fb_tail = (" · ลูกค้า Facebook: %s ได้สิทธิ์เก็บข้อมูลเท่านั้น (ตอบแชทไม่ได้)" % emp.nickname) if is_fb(o) else ""
+    fb_tail = res_note + fb_tail
     if not real:
         from . import leadflow                   # นาฬิกาโทรเดินด้วย (ทดสอบหน้าจอได้) — ไม่มีอะไรส่งออก
         leadflow.before_post(code, emp, by, chat=o, phone=lead.phone, customer=lead.customer_name or lead.account,

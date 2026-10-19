@@ -158,6 +158,7 @@ def _scan(days: int, now):
     park_q, asg_q = _rooms(PARK_HINTS), _rooms(ASSIGN_HINTS)
     rows = list(GroupChat.objects.filter(chat_type=GroupChat.GROUP, sent_at__gte=since, sent_at__lte=now)
                 .filter(park_q | asg_q).filter(text__icontains="lead no")
+                .exclude(message_id__startswith="auto-lead-")      # ★ 19 ต.ค.69 ใบของระบบเก็บลีด — แชทอยู่ในห้องพักแล้ว ไม่ขึ้นซ้ำ
                 .order_by("sent_at", "id").only("group_name", "sender_name", "text", "sent_at", "message_id"))
     room = (GroupChat.objects.filter(chat_type=GroupChat.GROUP).filter(park_q)
             .order_by("-sent_at").values_list("group_name", flat=True).first()) or ""
