@@ -816,6 +816,39 @@ try:
     ck("★ ชื่อโฆษณาตรงการ์ดเป๊ะ ชนะชื่อกว้างๆ ของโฆษณาเก่า (\"Fortuner\" ปี 2022)",
        mf["ad_id"] == "120252067122070548" and mf["ad_ids"] == ["120252067122070548"] and mf["how"] == "unique", mf)
     CS.set_kv(FA.CATALOG_KEY, {})
+    # ★ 20 ต.ค.69 บน prod `fb_adcards --apply` ล้ม 300/300 — ถาม `/t_…/messages` ตรง ด่าน meta ไม่รู้จัก id ห้องใน process ใหม่
+    #   ตอนนี้ถามผ่าน `/<page>/conversations?user_id=` · จำลอง process ใหม่ (ล้าง _known) แล้วเติมการ์ดให้แถวเก่า
+    from django.conf import settings as S
+    from dashboard.services import meta as MT
+    old_cfg = (S.META_ACCESS_TOKEN, S.META_PAGE_IDS, S.META_AD_ACCOUNTS)
+    S.META_ACCESS_TOKEN, S.META_PAGE_IDS, S.META_AD_ACCOUNTS = "tok", [PAGE], ["381"]
+    MT._known.clear()
+    MT._PT_CACHE.clear()
+    o14r = fb_chat("ลูกค้าเก่าก่อนมีการ์ด", None, ["สนใจ"])
+    th = o14r.fb_profile.thread_id
+    FbChat.objects.create(thread_id=th, message_id="m_oldcard", sender_id=PAGE, msg_type="text", text="",
+                          extra={}, channel=PAGE, direction="out", sent_at=timezone.now() - timedelta(minutes=11))
+    seen = []
+
+    def _get_graph(url, *a, **k):
+        seen.append(url)
+        if url.endswith("/" + PAGE):
+            return _R(200, {"access_token": "pt", "id": PAGE})
+        if url.endswith("/%s/conversations" % PAGE):
+            return _R(200, {"data": [{"id": th, "messages": {"data": [
+                {"id": "m_oldcard", "attachments": {"data": [{"generic_template": {"title": "รีบจอง", "subtitle": "จว6456"}}]}}]}}]})
+        return _R(404, {"error": {"message": "unexpected %s" % url}})
+    requests.get = _get_graph
+    try:
+        nfix = FA.refetch_thread(o14r.fb_profile)
+        bf = FA.backfill(days=1, limit=50)
+    finally:
+        requests.get = _get
+        S.META_ACCESS_TOKEN, S.META_PAGE_IDS, S.META_AD_ACCOUNTS = old_cfg
+    ck("★ เติมการ์ดให้แถวเก่าได้ใน process ใหม่ (ถามผ่านห้องแชทของเพจ ไม่ถาม /t_… ตรง)",
+       nfix == 1 and FbChat.objects.get(message_id="m_oldcard").msg_type == "template"
+       and not [u for u in seen if "/%s/messages" % th in u], (nfix, seen))
+    ck("backfill บอกเหตุผลเมื่อล้ม (ไม่เงียบ)", "why" in bf and (not bf["errors"] or bf["why"]), bf)
     o14e = fb_chat("ลูกค้าไม่ได้มาจากโฆษณา", None, ["สวัสดีครับ"])
     l14e = C.autofill(o14e)
     ck("ลูกค้าที่ไม่ได้มาจากโฆษณา → ไม่เติม ADS/ad id", not l14e.ads and not l14e.ad_id, (l14e.ads, l14e.ad_id))

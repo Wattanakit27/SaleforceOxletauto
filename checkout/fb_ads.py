@@ -235,12 +235,18 @@ def refetch_thread(fp) -> int:
     """ถาม Graph API การ์ดโฆษณาของห้องนี้ (ข้อความ 25 อันล่าสุด) → แก้แถว FbChat ที่เก็บไว้แล้วให้มีการ์ด · คืนจำนวนที่แก้"""
     from dashboard.services import meta
     from .models import FbChat
-    if not fp or not fp.thread_id or not fp.channel:
+    if not fp or not fp.thread_id or not fp.channel or not fp.user_id:
         return 0
     pt = meta.page_token(fp.channel)
-    d = meta.get("/%s/messages" % fp.thread_id, _token=pt, fields="id,attachments{generic_template}", limit=25)
+    # ★ 20 ต.ค.69 ถามผ่านห้องแชทของเพจ (`/<page>/conversations?user_id=`) ไม่ใช่ `/<thread>/messages` ตรง —
+    #   id ห้อง `t_…` ผ่านด่าน meta ได้เฉพาะเมื่อเคยเห็นในคำตอบของ process นี้ · คำสั่ง fb_adcards / worker ใหม่ = ไม่เคยเห็น
+    #   → เคยล้มทุกห้อง (300/300) บน prod · ขึ้นต้นด้วยเพจของเรา = ผ่านด่านเสมอ และได้เฉพาะห้องของลูกค้าคนนี้กับเพจนี้
+    d = meta.get("/%s/conversations" % fp.channel, _token=pt, user_id=fp.user_id,
+                 fields="id,messages.limit(25){id,attachments{generic_template}}")
+    convs = d.get("data") or []
+    conv = next((x for x in convs if str(x.get("id") or "") == fp.thread_id), None) or (convs[0] if convs else {})
     n = 0
-    for m in d.get("data") or []:
+    for m in ((conv.get("messages") or {}).get("data") or []):
         if not is_card_msg(m):
             continue
         row = FbChat.objects.filter(message_id=str(m.get("id") or "")[:160]).first()
@@ -280,7 +286,7 @@ def backfill(days: int = 7, limit: int = 300) -> dict:
     from . import connect as C
     from .models import ChatOwner
     since = timezone.now() - timedelta(days=days)
-    out = {"chats": 0, "cards": 0, "matched": 0, "errors": 0}
+    out = {"chats": 0, "cards": 0, "matched": 0, "errors": 0, "why": []}
     for o in (ChatOwner.objects.select_related("fb_profile", "lead").filter(fb_profile__isnull=False, last_in_at__gte=since)
               .order_by("-last_in_at")[:limit]):
         out["chats"] += 1
@@ -292,6 +298,9 @@ def backfill(days: int = 7, limit: int = 300) -> dict:
                 lead = C.autofill(o)
                 if (lead.ad_id or "").strip():
                     out["matched"] += 1
-        except Exception:
+        except Exception as e:
             out["errors"] += 1
+            w = "%s: %s" % (type(e).__name__, str(e)[:160])
+            if w not in out["why"] and len(out["why"]) < 5:   # ★ ล้มแล้วต้องบอกว่าเพราะอะไร (เคยล้ม 300/300 แบบไม่มีเหตุผล)
+                out["why"].append(w)
     return out
