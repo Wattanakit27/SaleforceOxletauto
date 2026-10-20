@@ -246,10 +246,11 @@ try:
     ck("★ ใบของเคสที่มี 3 รูป = ใบ + อัลบัม 1 ข้อความ", len(first) == 2 and first[0]["type"] == "text"
        and first[1]["type"] == "flex", [m["type"] for m in first])
     rows = first[1]["contents"]["body"]["contents"]
-    ck("★ อัลบัม 3 รูป = แถวบน 1 รูป (2:1) + แถวล่าง 2 รูป (1:1) · ตัดขอบพอดีช่อง",
-       [len(r["contents"]) for r in rows] == [1, 2] and rows[0]["contents"][0]["aspectRatio"] == "2:1"
-       and all(c["aspectRatio"] == "1:1" for c in rows[1]["contents"])
+    ck("★ อัลบัม 3 รูป = 2 คอลัมน์แบบอัลบัม LINE: แถวบน 2 ช่อง (1:1) + เศษท้ายเต็มแถว (2:1) · ตัดขอบพอดีช่อง",
+       [len(r["contents"]) for r in rows] == [2, 1] and rows[1]["contents"][0]["aspectRatio"] == "2:1"
+       and all(c["aspectRatio"] == "1:1" for c in rows[0]["contents"])
        and all(c["aspectMode"] == "cover" for r in rows for c in r["contents"]), rows)
+    ck("ส่งครบทุกรูป = ไม่มีบรรทัดท้ายอัลบัม (หน้าตาเหมือนอัลบัม)", "footer" not in first[1]["contents"])
     out_dir = os.path.join(settings.MEDIA_ROOT, "chat_out")
     saved = [os.path.join(out_dir, x) for x in os.listdir(out_dir)] if os.path.isdir(out_dir) else []
     ck("สำเนารูป (เต็ม + ตัวอย่าง) อยู่ใน media/chat_out", len(saved) == 10, len(saved))
@@ -295,15 +296,15 @@ try:
     ck("ข้อความ FB แนบ 4 รูป = 4 รูป (เดิมนับเป็น 1)",
        BS.img_total([{"files": [{"kind": "image"}] * 4}, {"type": "image", "files": []}]) == 5)
     ck("ไม่มีรูป = ไม่มีอัลบัม", BS.album([]) is None)
-    u = [("https://x.test/m/%d.jpg" % i, "https://x.test/m/%d_p.jpg" % i) for i in range(8)]
-    a8 = BS.album(u, total=9)
+    u = [("https://x.test/m/%d.jpg" % i, "https://x.test/m/%d_p.jpg" % i) for i in range(12)]
+    a8 = BS.album(u, total=14)
     r8 = a8["contents"]["body"]["contents"]
-    ck("เกิน 6 รูป = 6 ช่อง (3+3) + บอกว่าลูกค้าส่งทั้งหมด 9 รูป", [len(r["contents"]) for r in r8] == [3, 3]
-       and "ทั้งหมด 9 รูป" in a8["contents"]["footer"]["contents"][0]["text"], a8["contents"]["footer"])
+    ck("เกิน 10 รูป = 10 ช่อง (2×5) + บอกว่าลูกค้าส่งทั้งหมด 14 รูป", [len(r["contents"]) for r in r8] == [2] * 5
+       and "ทั้งหมด 14 รูป" in a8["contents"]["footer"]["contents"][0]["text"], a8["contents"]["footer"])
     ck("1 รูป = ช่องเดียว 4:3", BS.album(u[:1])["contents"]["body"]["contents"][0]["contents"][0]["aspectRatio"] == "4:3")
     ck("ทุกช่องในแถวเดียวกันขนาดเท่ากัน (2/4/5 รูป)", all(
         len({c["aspectRatio"] for c in r["contents"]}) == 1
-        for n in (2, 4, 5) for r in BS.album(u[:n])["contents"]["body"]["contents"]))
+        for n in (2, 4, 5, 9, 10) for r in BS.album(u[:n])["contents"]["body"]["contents"]))
     ck("altText บอกจำนวนรูป (ข้อความแจ้งเตือนบนมือถือ)", "4 รูป" in BS.album(u[:4])["altText"])
 
     print("\n[7] รูปถูก LINE ปฏิเสธ → ส่งใบอย่างเดียว ไม่ทิ้งสำเนารูป")

@@ -26,7 +26,7 @@ MSG_PREFIX = "auto-buy-"
 WHAT = "เคสรับซื้อ (กลุ่มทดสอบ)"
 DEFAULT_GROUP_NAME = "TestBot02"
 BACKFILL_N = 5
-PHOTO_MAX = 6                      # ★ ส่งเป็นอัลบัม (Flex ข้อความเดียว · ช่องรูปขนาดเท่ากัน) ไม่ใช่รูปทีละข้อความ
+PHOTO_MAX = 10                     # ★ ส่งเป็นอัลบัม (Flex ข้อความเดียว · 2 คอลัมน์ ช่องเท่ากัน) ไม่ใช่รูปทีละข้อความ
 UPDATE_HOURS, UPDATE_MAX, UPDATE_QUIET_SEC = 6, 3, 45
 RETRY_MIN, MAX_TRIES, MAX_PER_RUN = 5, 5, 10
 MORE_MAX_MSGS, MORE_MAX, MSG_MAX = 5, 400, 120
@@ -325,36 +325,39 @@ def _photo_urls(msg_ids: list) -> tuple:
     return urls, rels
 
 
-# แถวของอัลบัม (จำนวนรูปต่อแถว) ตามจำนวนรูป — แบบเดียวกับอัลบัมในแชท LINE
-_ALBUM_ROWS = {1: (1,), 2: (2,), 3: (1, 2), 4: (2, 2), 5: (2, 3), 6: (3, 3)}
+GAP = "2px"                         # ช่องไฟระหว่างรูป (บางเหมือนอัลบัมในแชท LINE)
 
 
 def album(urls: list, total: int = 0) -> dict | None:
-    """[(รูปเต็ม, รูปตัวอย่าง)] → Flex ข้อความเดียว: ช่องรูปขนาดเท่ากันเป็นตาราง (ตัดขอบให้พอดีช่อง) · แตะ = เปิดรูปเต็ม
-    LINE Messaging API ส่ง "อัลบัม" จริงไม่ได้ (รูปทีละข้อความ = ขนาดไม่เท่ากัน เรียงยาว) → ใช้ Flex แทน"""
+    """[(รูปเต็ม, รูปตัวอย่าง)] → Flex ข้อความเดียว หน้าตาแบบอัลบัมในแชท LINE: 2 คอลัมน์ ช่องสี่เหลี่ยมจัตุรัสเท่ากัน
+    (ตัดขอบให้พอดีช่อง) · จำนวนคี่ = แถวสุดท้ายรูปเดียวเต็มความกว้าง · แตะ = เปิดรูปเต็ม
+    LINE Messaging API ส่งอัลบัมจริงไม่ได้ (อัลบัมเกิดเฉพาะตอนคนเลือกหลายรูปส่งจากแอป · บอทส่งรูป = ทีละข้อความ
+    ขนาดไม่เท่ากัน) → ทำ Flex ให้หน้าตาเหมือน"""
     urls = [u for u in (urls or []) if u and u[0] and u[1]][:PHOTO_MAX]
     if not urls:
         return None
-    rows, i, body = _ALBUM_ROWS[len(urls)], 0, []
-    for k in rows:
-        ar = "1:1" if k > 1 else ("4:3" if len(rows) == 1 else "2:1")
-        cells = []
-        for full, prev in urls[i:i + k]:
-            cells.append({"type": "image", "url": prev, "size": "full", "aspectRatio": ar, "aspectMode": "cover",
-                          "flex": 1, "action": {"type": "uri", "label": "ดูรูป", "uri": full}})
-        i += k
-        body.append({"type": "box", "layout": "horizontal", "spacing": "xs", "contents": cells})
+
+    def cell(u, ar):
+        return {"type": "image", "url": u[1], "size": "full", "aspectRatio": ar, "aspectMode": "cover", "flex": 1,
+                "action": {"type": "uri", "label": "ดูรูป", "uri": u[0]}}
+
+    body = []
+    for i in range(0, len(urls), 2):
+        pair = urls[i:i + 2]
+        if len(pair) == 2:
+            body.append({"type": "box", "layout": "horizontal", "spacing": GAP,
+                         "contents": [cell(pair[0], "1:1"), cell(pair[1], "1:1")]})
+        else:                                     # รูปเดียว / เศษท้าย = เต็มความกว้าง
+            body.append({"type": "box", "layout": "horizontal",
+                         "contents": [cell(pair[0], "4:3" if len(urls) == 1 else "2:1")]})
+    bubble = {"type": "bubble", "size": "giga",
+              "body": {"type": "box", "layout": "vertical", "spacing": GAP, "paddingAll": "0px", "contents": body}}
     total = max(int(total or 0), len(urls))
-    note = "รูปรถจากแชทลูกค้า %d รูป" % len(urls)
-    if total > len(urls):
-        note += " (ลูกค้าส่งมาทั้งหมด %d รูป)" % total
-    return {"type": "flex", "altText": "รูปรถ %d รูป (ใบเคสรับซื้อ)" % len(urls),
-            "contents": {"type": "bubble", "size": "giga",
-                         "body": {"type": "box", "layout": "vertical", "spacing": "xs", "paddingAll": "0px",
-                                  "contents": body},
-                         "footer": {"type": "box", "layout": "vertical", "paddingAll": "10px",
-                                    "contents": [{"type": "text", "text": note + " · แตะรูปเพื่อดูเต็ม",
-                                                  "size": "xs", "color": "#888888", "wrap": True}]}}}
+    if total > len(urls):                         # ส่งไม่ครบทุกรูป = บอกไว้ (ดูรูปที่เหลือในหน้า Connect)
+        bubble["footer"] = {"type": "box", "layout": "vertical", "paddingAll": "8px",
+                            "contents": [{"type": "text", "size": "xs", "color": "#888888", "wrap": True,
+                                          "text": "ลูกค้าส่งมาทั้งหมด %d รูป (แสดง %d รูปแรก)" % (total, len(urls))}]}
+    return {"type": "flex", "altText": "รูปรถ %d รูป (ใบเคสรับซื้อ)" % len(urls), "contents": bubble}
 
 
 # ── ส่งเข้ากลุ่มทดสอบ ──────────────────────────────────────────────────
