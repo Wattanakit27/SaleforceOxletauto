@@ -340,6 +340,7 @@ def forget():
 #  จ่ายเบอร์ลีดภายนอกจากหน้า Connect — ★ 6 ต.ค.69 ส่งเข้ากลุ่มจ่ายเบอร์จริง + แท็กเซลล์ (ไม่ลงชีต · slippost.py)
 # ─────────────────────────────────────────────────────────────
 KEEP_DAYS = 90         # ExtLead มีข้อมูลลูกค้า (เบอร์/ID LINE) — อายุเท่าแชทกลุ่มที่เป็นต้นทาง
+PROFILE_KEY = "_prof"   # ExtLead.auto — อาชีพ/รายได้/อายุงาน/ประวัติการผ่อน จากใบร่าง (แบบใบใหม่ 20 ต.ค.69)
 
 
 def _draft_msg(mid: str):
@@ -358,7 +359,8 @@ def _ext_for(g, d):
         account=(d.get("account") or "")[:120], customer_name=(d.get("name") or "")[:120],
         line_id=(d.get("line_id") or "")[:80], phone=((d.get("phones") or [""])[0])[:40],
         channel=(d.get("channel") or "")[:80], car_text=(d.get("car") or "")[:300],
-        live=(d.get("live") or "")[:60], ads=(d.get("ads") or "")[:120], more=d.get("more") or ""))
+        live=(d.get("live") or "")[:60], ads=(d.get("ads") or "")[:120], more=d.get("more") or "",
+        auto={PROFILE_KEY: _profile_from(d)}))
     return e
 
 
@@ -427,9 +429,29 @@ def slip_fields(e) -> dict:
     (ใบร่างพิมพ์ "Live tiktok ช่องขายบอส" → ชีต "LIVE Tiktok / ช่องขายบอส" · "live sale" → "Live Sale")
     ตรงตัวเลือกไม่ได้ = ใช้ที่แอดมินพิมพ์ไว้ตามเดิม (ไม่เดา)"""
     from . import connect as C
-    return {"code": e.code, "ads": e.ads, "account": e.account, "name": e.customer_name, "line_id": e.line_id,
-            "line_name": "", "phone": e.phone, "channel": C.dd_pick("channel", e.channel) or e.channel,
-            "car": e.car_text, "live": C.dd_pick("live_team", e.live) or e.live, "more": e.more}
+    return dict({"code": e.code, "ads": e.ads, "account": e.account, "name": e.customer_name, "line_id": e.line_id,
+                 "line_name": "", "phone": e.phone, "channel": C.dd_pick("channel", e.channel) or e.channel,
+                 "car": e.car_text, "live": C.dd_pick("live_team", e.live) or e.live, "more": e.more},
+                **_profile_of(e))
+
+
+def _profile_of(e) -> dict:
+    """★ 20 ต.ค.69 อาชีพ/รายได้/อายุงาน/ประวัติการผ่อน ที่แอดมินพิมพ์ในใบร่าง (แบบใบใหม่) → ใบที่ส่งต่อมีครบ
+    เก็บไว้ที่ `auto["_prof"]` ตอนสร้างแถว · แถวที่สร้างก่อนมีช่องนี้ = อ่านจากใบร่างเดิมในคลังแชท (หมดอายุ = ว่าง)"""
+    from .slippost import PROFILE_KEYS
+    prof = (e.auto or {}).get(PROFILE_KEY)
+    if prof is None and e.message_id:
+        try:
+            t = GroupChat.objects.filter(message_id=e.message_id).values_list("text", flat=True).first()
+            prof = _profile_from(parse_fields(t or "")) if t else {}
+        except Exception:
+            prof = {}
+    return {k: (prof or {}).get(k, "") for k in PROFILE_KEYS}
+
+
+def _profile_from(d: dict) -> dict:
+    from .slippost import PROFILE_KEYS
+    return {k: d[k] for k in PROFILE_KEYS if d.get(k)}
 
 
 def post_body(e) -> str:
@@ -494,9 +516,7 @@ def skip(mid: str, on: bool, by: str = ""):
 def slip_text(e) -> str:
     """ใบจ่ายลีดของลีดภายนอก (ปุ่มคัดลอก) — pattern เดียวกับที่ส่งเข้ากลุ่ม + @เซลล์ (`parse_leadsheet` อ่านกลับได้)"""
     from . import slippost
-    lines = [slippost.body(slip_fields(e))]
-    if e.seller_name:
-        lines.append("@%s" % e.seller_name)
+    lines = [slippost.with_tag(slippost.body(slip_fields(e)), e.seller_name or "")]
     if e.code_demo:
         # เลขโหมดทดลองยังไม่ได้จองในชีต — กันเผลอก๊อปไปวางในกลุ่มจริงแล้วเลขชนกับของแอดมิน
         lines.insert(0, "⚠️ ทดลอง — เลขนี้ยังไม่ได้จองในชีตจริง")

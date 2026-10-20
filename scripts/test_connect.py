@@ -49,6 +49,11 @@ _LF.BG_SLOW = False          # งานจ่ายเบอร์: ไม่�
 from checkout import chatmedia as _CM  # noqa: E402
 _CM.BG = False               # โหลดรูปในแชท: tick() เคยแตก thread ชน SQLite ("database table is locked" ใน [8])
 from checkout.models import ChatOwner, ChatOwnerLog, Employee, GroupChat, LineProfile  # noqa: E402
+from checkout.leadgroup import parse_fields as _pf  # noqa: E402
+
+# ★ 20 ต.ค.69 แบบใบจ่ายลีดใหม่ (slippost.body) — ส่วนกลางของใบที่ไม่ขึ้นกับลูกค้า
+SLIP_TAIL = ["", "เพิ่มเติม  :  ", "อาชีพ :    ", "รายได้ :    ", "อายุงาน :   ", "ประวัติการผ่อน :  ", "",
+             "เวลาจ่าย ", "ส่งหลักฐาน ", "ติดต่อได้เลยนะครับ", ""]
 from dashboard.services import cache_store  # noqa: E402
 
 # ── ขอบระบบ: LINE + Google (ห้ามออกเน็ตจริงในเทสต์) ──────────────────────
@@ -810,7 +815,7 @@ try:
     back = parse_leadsheet(st) or {}
     ck("ใบจ่ายลีดย่อ: อ่านกลับด้วยตัวแกะของกลุ่มจ่ายเบอร์ได้", back.get("lead_code") == "TLD9-7376"
        and back.get("phone") == "0811112222" and back.get("assigned") == "เอหนึ่ง", back)
-    ck("ใบจ่ายลีดย่อ: ไลฟ์ว่าง = ขีด", "ไลฟ์ : -" in st, st)
+    ck("ใบจ่ายลีดย่อ: ไลฟ์ว่าง = ไม่มีบรรทัดไลฟ์ (แบบใบ 20 ต.ค.69)", "ไลฟ์" not in st, st)
     # ผ่านหน้าเว็บ
     s_, d = J(SA1, "/connect/api/chat?id=%d" % o1.id)
     ck("เจ้าของเปิดแชท = ได้ข้อมูลลีด + แก้ได้", s_ == 200 and d.get("lead", {}).get("code") == "TLD9-7376"
@@ -1122,7 +1127,8 @@ try:
        ld.car_text == "อีซูซุ ปี2015-2017" and ld.auto.get("car_text") == "แชท", (ld.car_text, ld.auto))
     ck("ไม่เดารุ่นให้ (อีซูซุ มีหลายรุ่นในชีต) → \"ไม่ระบุรุ่นรถ\" (7 ต.ค.69)", ld.car_model == "ไม่ระบุรุ่นรถ", ld.car_model)
     ck("ใบจ่ายลีดขึ้นรถแล้ว (เดิม \"รถ : -\")",
-       "รถ : อีซูซุ ปี2015-2017" in C.slip_text(ChatOwner.objects.get(pk=o5id)), C.slip_text(ChatOwner.objects.get(pk=o5id)))
+       _pf(C.slip_text(ChatOwner.objects.get(pk=o5id))).get("car") == "อีซูซุ ปี2015-2017",
+       C.slip_text(ChatOwner.objects.get(pk=o5id)))
     ld = _car(["อีซูซุ"])
     ld = _car(["อีซูซุ", "ปี2015-2017"], fresh=False)
     ck("★ ลูกค้าพิมพ์ปีตามมาทีหลัง → เติมต่อจากของเดิมที่ระบบใส่ไว้", ld.car_text == "อีซูซุ ปี2015-2017", ld.car_text)
@@ -2043,10 +2049,9 @@ try:
         ck("★ แท็กเซลล์ด้วยไอดีฝั่งบอทตัวส่ง (textV2 · กดแล้วเด้งหาคน)", m0.get("type") == "textV2"
            and m0["substitution"]["seller"]["mentionee"]["userId"] == A1_PUSH and m0["text"].endswith("{seller}"), m0)
         tx = m0.get("text", "")
-        # ★ 6 ต.ค.69 เจ้าของกำหนด pattern จากรูป: 11 บรรทัด · ช่องว่าง = "-" · แท็กบรรทัดสุดท้าย · ไม่มีบรรทัดอื่นแทรก
-        want = ["Ac Lead No. " + ld.code, "Ads : -", "ชื่อ Account: -", "ชื่อลูกค้า : -", "ID LINE : -",
-                "ชื่อไลน์ : ลูกค้าส่งจริง", "เบอร์โทร : 0866000601", "ช่องทาง : LINE@", "รถ : -",
-                "ไลฟ์ : -", "เพิ่มเติม : -", "{seller}"]
+        # ★ 20 ต.ค.69 แบบใบใหม่ของเจ้าของ: ช่องว่าง = เว้นว่าง · ข้อมูลลูกค้า 4 บรรทัด · เวลาจ่าย/ส่งหลักฐาน · แท็กท้ายสุด
+        want = ["Ac Lead No. " + ld.code, "Ads  :  ", "ชื่อ Account :    ", "ชื่อลูกค้า :     ", "ID LINE :    ",
+                "ชื่อไลน์ :  ลูกค้าส่งจริง", "เบอร์โทร :    0866000601", "ช่องทาง  :   LINE@", "รถ :     "] + SLIP_TAIL + ["{seller}"]
         ck("★ ใบที่ส่งตรง pattern ที่เจ้าของกำหนดทุกบรรทัด", tx.split("\n") == want, tx.split("\n"))
         pi = ld.post_info or {}
         ck("จด post_info: สำเร็จ + ห้อง + แท็กได้", pi.get("ok") and pi.get("group") == ASG and pi.get("tagged") is True
@@ -2149,7 +2154,7 @@ try:
         txt = SENT[0]["messages"][0]["text"] if SENT else ""
         ck("★ ลูกค้า Facebook: ส่งเข้ากลุ่ม + แท็ก + บอกว่าเซลล์ได้สิทธิ์เก็บข้อมูลเท่านั้น", s_ == 200 and len(SENT) == 1
            and SENT[0]["messages"][0]["type"] == "textV2" and "เก็บข้อมูลเท่านั้น" in d.get("message", "")
-           and "ชื่อไลน์ : -" in txt and "เบอร์โทร : 0866000609" in txt and txt.endswith("{seller}"), (d, txt))
+           and not _pf(txt).get("line_name") and _pf(txt).get("phone") == "0866000609" and txt.endswith("{seller}"), (d, txt))
         ck("ลูกค้า Facebook: เป็นลูกค้าของเซลล์ในระบบ", ChatOwner.objects.get(pk=F1.id).owner_id == A1.id)
         s_, d = J(SA1, "/connect/api/chat?id=%d" % F1.id)
         ck("★ ลูกค้า Facebook: เซลล์เปิดดู+กรอกข้อมูลลีดได้ แต่ตอบไม่ได้", s_ == 200 and d.get("leadEditable") is True
@@ -2190,13 +2195,13 @@ try:
            and m0.get("type") == "textV2" and ex.code_demo is False and (ex.post_info or {}).get("ok")
            and (d.get("post") or {}).get("ok"), (s_, d))
         ck("★ ใบของลีดภายนอก: ข้อมูลจากใบร่าง + ช่องทาง/ไลฟ์เป็นคำตาม dropdown ของชีต",
-           m0.get("text", "").split("\n") == ["Ac Lead No. " + ex.code, "Ads : -", "ชื่อ Account: คนส่งจริง",
-                                               "ชื่อลูกค้า : -", "ID LINE : -", "ชื่อไลน์ : -", "เบอร์โทร : 0866000620",
-                                               "ช่องทาง : LIVE Tiktok / ช่องขายบอส", "รถ : Yaris ativ", "ไลฟ์ : Live Sale",
-                                               "เพิ่มเติม : -", "{seller}"], m0.get("text", "").split("\n"))
+           m0.get("text", "").split("\n") == ["Ac Lead No. " + ex.code, "Ads  :  ", "ชื่อ Account :    คนส่งจริง",
+                                               "ชื่อลูกค้า :     ", "ID LINE :    ", "ชื่อไลน์ :  ", "เบอร์โทร :    0866000620",
+                                               "ช่องทาง  :   LIVE Tiktok / ช่องขายบอส", "รถ :     Yaris ativ",
+                                               "ไลฟ์ :  Live Sale"] + SLIP_TAIL + ["{seller}"], m0.get("text", "").split("\n"))
         sx = LP.slip_text(ExtLead.objects.get(pk=ex.pk))
         ck("ปุ่มคัดลอกของลีดภายนอก = pattern เดียวกัน + @เซลล์", sx.split("\n")[:-1] == m0.get("text", "").split("\n")[:-1]
-           and sx.endswith("\n@เอหนึ่ง"), sx)
+           and sx.endswith("\n\n@เอหนึ่ง"), sx)
         b = LP.board(cache_sec=0)
         ab = next((i for i in b["assigned"] if i["account"] == "คนส่งจริง"), {})
         ck("★ ห้องพักเห็นใบที่ระบบส่ง (จับคู่ใบจริงในห้องจ่ายเบอร์) + สถานะการส่ง",
@@ -2220,9 +2225,9 @@ try:
         bjo = ChatOwner.objects.select_related("profile").get(pk=BJ.id)
         bjo.profile.display_name = ""
         st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
-        ck("★ ใบจ่ายลีด = pattern ในรูปเป๊ะ (ลูกค้า Ben Jao)", st.split("\n") == [
-            "Ac Lead No. -", "Ads : -", "ชื่อ Account: Ben Jao", "ชื่อลูกค้า : -", "ID LINE : hannork", "ชื่อไลน์ : -",
-            "เบอร์โทร : -", "ช่องทาง : -", "รถ : -", "ไลฟ์ : -", "เพิ่มเติม : -"], st.split("\n"))
+        ck("★ ใบจ่ายลีด = แบบใบของเจ้าของเป๊ะ (ลูกค้า Ben Jao · ยังไม่จ่าย = \"@\" เปล่าท้ายใบ)", st.split("\n") == [
+            "Ac Lead No. ", "Ads  :  ", "ชื่อ Account :    Ben Jao", "ชื่อลูกค้า :     ", "ID LINE :    hannork", "ชื่อไลน์ :  ",
+            "เบอร์โทร :    ", "ช่องทาง  :   ", "รถ :     "] + SLIP_TAIL + ["@"], st.split("\n"))
         ps = parse_leadsheet("Ac Lead No. NLD10-1234\n" + "\n".join(st.split("\n")[1:]) + "\n@เอหนึ่ง") or {}
         ck("อ่านใบกลับ: \"-\" = ช่องว่าง (ไม่เอา \"-\" ไปเติมข้อมูล)", ps.get("account") == "Ben Jao"
            and ps.get("line_id") == "hannork" and "channel" not in ps and "car" not in ps and ps.get("assigned") == "เอหนึ่ง", ps)
@@ -2241,10 +2246,11 @@ try:
            and C.dd_pick("live_team", "Live  Productions") == "Live Productions")
         ChatLead.objects.filter(pk=bj.pk).update(live="live infu", live_team="", channel="TikTok แซน")
         st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
-        ck("ใบ: ช่องทาง/ไลฟ์ เป็นคำตาม dropdown", "ช่องทาง : Tiktok ช่องแซน" in st and "ไลฟ์ : Live Infu" in st, st)
+        ck("ใบ: ช่องทาง/ไลฟ์ เป็นคำตาม dropdown", _pf(st).get("channel") == "Tiktok ช่องแซน"
+           and _pf(st).get("live") == "Live Infu", st)
         ChatLead.objects.filter(pk=bj.pk).update(live_team="Live boss")
         st = C.slip_text(bjo, ChatLead.objects.get(pk=bj.pk))
-        ck("ใบ: ไลฟ์ = ช่องทีมไลฟ์ก่อน (คอลัมน์เดียวกันในชีต)", "ไลฟ์ : Live boss" in st, st)
+        ck("ใบ: ไลฟ์ = ช่องทีมไลฟ์ก่อน (คอลัมน์เดียวกันในชีต)", _pf(st).get("live") == "Live boss", st)
 
         # ── ปิดสวิตช์ = โหมดทดลองเดิม ──
         C.save_cfg(dict(C.cfg(), slip_post=False))

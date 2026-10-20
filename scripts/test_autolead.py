@@ -131,6 +131,12 @@ GS.fetch_lead_dropdowns = _no_sheet
 OK, BAD = [], []
 
 
+def fld(text, key):
+    """ค่าช่องในใบ (อ่านด้วยตัวอ่านใบจริง — ไม่ผูกกับจำนวนช่องว่างหลังป้าย)"""
+    from checkout.leadgroup import parse_fields
+    return parse_fields(text or "").get(key, "")
+
+
 def ck(name, cond, got=""):
     (OK if cond else BAD).append(name)
     print(("  ok   " if cond else "  FAIL ") + name + ("" if cond else "   ได้: %r" % (got,)))
@@ -243,7 +249,8 @@ try:
     ck("★ ส่งลงกลุ่ม ADMIN เก็บ Lead สำเร็จ", rv.get("ok") is True and len(park_pushes()) == 1, (rv, PUSHES))
     txt = park_pushes()[0] if park_pushes() else ""
     ck("ใบมีเลขเต็ม + เบอร์ลูกค้า", rv.get("code", "?") in txt and "0811111111" in txt, txt)
-    ck("★ ใบไม่แท็กเซลล์ (ไม่มี @)", "@" not in txt.replace("LINE@", ""), txt)
+    ck("★ ใบไม่แท็กเซลล์ (บรรทัด @ ท้ายใบว่างไว้ให้แอดมินแท็ก)",
+       txt.endswith("ติดต่อได้เลยนะครับ\n\n@") and not fld(txt, "assigned"), txt)
     ck("ไม่ได้ส่งอะไรเข้าห้องจ่ายเบอร์", not [t for to, t in PUSHES if to == ROOM], PUSHES)
     l1 = ChatLead.objects.get(chat=o1)
     ck("★ ช่องเลขลีดยังว่าง (ยังไม่จ่ายเซลล์)", not l1.code and not l1.assigned_at, (l1.code, l1.assigned_at))
@@ -358,7 +365,7 @@ try:
     ck("★ บอทตอบใบเลขเต็มในกลุ่ม ADMIN เก็บ Lead (อ้างใบร่าง)",
        len(new) == 1 and new[0][0] == PARK and rv.get("code", "?") in new[0][1] and QUOTES[-1] == "q-1", (new, QUOTES[-1:]))
     ck("ใบที่ตอบ = ใบจ่ายลีด (เบอร์ลูกค้าครบ · ไม่แท็กเซลล์)",
-       bool(new) and "0820000001" in new[0][1] and "@" not in new[0][1].replace("LINE@", ""), new)
+       bool(new) and "0820000001" in new[0][1] and new[0][1].endswith("\n\n@") and not fld(new[0][1], "assigned"), new)
     ck("ใบที่ตอบเก็บลงคลังแชท", GroupChat.objects.filter(message_id__startswith=AL.MSG_PREFIX + "x").exists())
     b = LP.board(cache_sec=0)
     it = next((i for i in b["waiting"] if i["id"] == d1.message_id), None)
@@ -888,10 +895,10 @@ try:
     AL.kick_chat(fresh(o14f), "0861110009")
     new = [t for to, t in PUSHES[n0:] if to == PARK]
     ck("★ ใบที่ลงกลุ่ม ADMIN เก็บ Lead: \"Ads : มุมมอง Fortuner ขับ 4\" + รุ่นรถจากโฆษณา",
-       len(new) == 1 and "Ads : มุมมอง Fortuner ขับ 4" in new[0] and "Fortuner" in new[0].split("รถ :")[1], new)
+       len(new) == 1 and fld(new[0], "ads") == "มุมมอง Fortuner ขับ 4" and "Fortuner" in fld(new[0], "car"), new)
     ck("ad id ของลีดนี้อยู่ในฐานข้อมูล", ChatLead.objects.get(chat=o14f).ad_id == "900009", ChatLead.objects.get(chat=o14f).ad_id)
     ck("★ ช่องทางลีด FB = ตัวเลือกชีตตามเพจ (เพจ …สำนักงานใหญ่ → เพจบ้านเก่า)", ChatLead.objects.get(chat=o14f).channel == "เพจบ้านเก่า"
-       and new and "ช่องทาง : เพจบ้านเก่า" in new[0], (ChatLead.objects.get(chat=o14f).channel, new[:1]))
+       and new and fld(new[0], "channel") == "เพจบ้านเก่า", (ChatLead.objects.get(chat=o14f).channel, new[:1]))
     ck("เพจ 482041925229408 → เพจอ่อนนุช · เพจ Guru → เพจ Guru", C._fb_channel("482041925229408") == "เพจอ่อนนุช"
        and C._fb_channel("650823708107550") == "เพจ Guru", (C._fb_channel("482041925229408"), C._fb_channel("650823708107550")))
     cache_store.set_kv("meta_page_names", {"765581723300455": "บอสเจมส์ ทะเบียนเทพ"})
@@ -967,7 +974,7 @@ try:
     tp = [t for to, t in PUSHES[n0:] if to == TG]
     ck("★ ข้อความเข้า = ใบเข้ากลุ่มทดสอบทันที (ใบเดียว)", len(tp) == 1 and len(PUSHES) - n0 == 1, PUSHES[n0:])
     ck("★ ใบไม่มีเลขรัน (Lead No. ลงท้ายด้วย -) และไม่มีบรรทัดอื่นต่อท้าย", tp and re.match(r"Ac Lead No\. [A-Z]+\d{1,2}-\n", tp[0])
-       and tp[0].rstrip().endswith("เพิ่มเติม : -") and AL.TEST_NOTE not in tp[0] and "ทดสอบ" not in tp[0]
+       and tp[0].endswith("ติดต่อได้เลยนะครับ\n\n@") and AL.TEST_NOTE not in tp[0] and "ทดสอบ" not in tp[0]
        and "0881110001" in tp[0], tp)
     ck("★ ไม่ลงกลุ่มจริง · ไม่จองเลข · เลขรันไม่ขยับ", not [1 for to, _ in PUSHES[n0:] if to in (PARK, ROOM)]
        and not res_of(o16) and C.last_running() == real0, (res_of(o16), C.last_running(), real0))
@@ -1058,7 +1065,9 @@ try:
     n0 = len(PUSHES)
     AL.kick_chat(fresh(o17), "0881117001")
     tp = [t for to, t in PUSHES[n0:] if to == TG]
-    ck("★ ใบซ้อม: บรรทัดเพิ่มเติมมีข้อมูลลูกค้า", len(tp) == 1 and "เพิ่มเติม : จัดไฟแนนซ์ค่ะ ดาวน์2แสน เงินเดือน 25,000" in tp[0], tp)
+    ck("★ ใบซ้อม: บรรทัดเพิ่มเติมมีข้อมูลลูกค้า (ข้อความมีดาวน์ด้วย = เก็บทั้งข้อความ) + บรรทัดรายได้",
+       len(tp) == 1 and fld(tp[0], "more") == "จัดไฟแนนซ์ค่ะ ดาวน์2แสน เงินเดือน 25,000"
+       and fld(tp[0], "income") == "25,000", tp)
 
     # ═════════════════════════════════════════════════════════════════════
     print("[18] --show-resend: ส่งใบซ้อมของทุกเคสวันนี้ใหม่ด้วยตัวจับล่าสุด (กลุ่มทดสอบเท่านั้น)")
@@ -1076,7 +1085,7 @@ try:
     ck("★ ส่งเข้ากลุ่มทดสอบเท่านั้น (หัวข้อ 1 ข้อความ + ใบ) · ไม่แตะกลุ่มจริง", new and all(to == TG for to, _ in new)
        and "ส่งเคสวันนี้ใหม่" in new[0][1] and r18["sent"] == len(new) - 1, (r18, new[:2]))
     ck("★ เคสที่เคยหลุด (ไอดีไลน์ลอยๆ) ได้ใบ + ไอดีอยู่ในใบ + เพิ่มเติมมีงบ",
-       any("ID LINE : nokky2520" in t and "งบ 4 แสน" in t for _, t in new), [t for _, t in new if "nokky" in t])
+       any(fld(t, "line_id") == "nokky2520" and "งบ 4 แสน" in t for _, t in new), [t for _, t in new if "nokky" in t])
     ck("ลูกค้าที่ให้ช่องทางติดต่อก่อนวันนี้ → ไม่ส่ง", not any("0881118888" in t for _, t in new))
     ck("ใบซ้อมใหม่ไม่มีเลขรัน · เลขรันจริงไม่ขยับ", all(re.match(r"Ac Lead No\. [A-Z]+\d{1,2}-\n", t) for _, t in new[1:])
        and C.last_running() == real0, C.last_running())

@@ -2582,16 +2582,17 @@ def slip_fields(o, lead) -> dict:
             "line_id": lead.line_id, "line_name": "" if fb else (p.display_name or ""), "phone": lead.phone,
             "channel": dd_pick("channel", lead.channel) or lead.channel,
             "car": lead.car_text or lead.car_model,
-            "live": lead.live_team or dd_pick("live_team", lead.live) or lead.live, "more": lead.more}
+            "live": lead.live_team or dd_pick("live_team", lead.live) or lead.live, "more": lead.more,
+            # ★ 20 ต.ค.69 แบบใบใหม่มีบรรทัดข้อมูลลูกค้า — ค่าที่ระบบจับจากแชท/คนแก้ในหน้า Connect (ช่องเดียวกับชีตลีด U–X)
+            "occupation": lead.occupation, "income": lead.income, "job_tenure": lead.job_tenure,
+            "pay_history": lead.pay_history}
 
 
 def slip_text(o, lead=None) -> str:
     """ใบจ่ายลีด (ปุ่มคัดลอก) — pattern เดียวกับที่ส่งเข้ากลุ่ม (`slippost.body`) + @เจ้าของ · อ่านกลับได้"""
     from . import slippost
     lead = lead or lead_of(o)
-    lines = [slippost.body(slip_fields(o, lead))]
-    if o.owner_id:
-        lines.append("@%s" % o.owner.nickname)
+    lines = [slippost.with_tag(slippost.body(slip_fields(o, lead)), o.owner.nickname if o.owner_id else "")]
     if lead.code_demo:
         # เลขจากโหมดทดลองยังไม่ได้จองในชีต — กันเผลอก๊อปไปวางในกลุ่มจริงแล้วเลขชนกับของแอดมิน
         lines.insert(0, "⚠️ ทดลอง — เลขนี้ยังไม่ได้จองในชีตจริง")

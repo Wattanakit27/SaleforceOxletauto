@@ -128,11 +128,15 @@ eq((m["to"], m["auth"]), ("Cpark", "Bearer tok-push"), "ปลายทาง = 
 t = m["text"]
 mon = timezone.localtime().month
 eq(t.splitlines()[0], "Ac Lead No. NLD%d-" % mon, "บรรทัดแรก = ใบร่าง (ไม่มีเลขรัน)")
-for part, what in [("ชื่อลูกค้า : สมชาย ใจดี", "ชื่อ"), ("เบอร์โทร : 081-234-5678", "เบอร์"),
-                   ("ช่องทาง : web oxlet", "ช่องทางตรงตัวเลือกชีต"),
-                   ("รถ : TOYOTA Hilux Revo 2018 · ทะเบียน 5กน1573 · รหัส CS03560 · ราคา 429,000 บาท", "รถ"),
-                   ("ขอผ่อนเดือนละ 8 พัน", "ข้อความลูกค้า"), ("a@b.co", "อีเมล"), ("toyota-hilux-revo-2018", "ลิงก์รถ")]:
+from checkout.leadgroup import parse_fields  # noqa: E402
+pf = parse_fields(t)
+for key, val, what in [("name", "สมชาย ใจดี", "ชื่อ"), ("phone", "081-234-5678", "เบอร์"),
+                       ("channel", "web oxlet", "ช่องทางตรงตัวเลือกชีต"),
+                       ("car", "TOYOTA Hilux Revo 2018 · ทะเบียน 5กน1573 · รหัส CS03560 · ราคา 429,000 บาท", "รถ")]:
+    eq(pf.get(key), val, "ใบมี%s" % what)
+for part, what in [("ขอผ่อนเดือนละ 8 พัน", "ข้อความลูกค้า"), ("a@b.co", "อีเมล"), ("toyota-hilux-revo-2018", "ลิงก์รถ")]:
     eq(part in t, True, "ใบมี%s" % what)
+eq(t.endswith("ติดต่อได้เลยนะครับ\n\n@"), True, "ท้ายใบตามแบบใหม่ (บรรทัด @ ว่างให้แอดมินแท็ก)")
 eq(parse_leadsheet(t), None, "ไม่ถูกอ่านเป็นใบจ่ายจริง (ยังไม่มีเลข)")
 g = GroupChat.objects.filter(message_id="web-lead-7").first()
 eq(bool(g), True, "เก็บลงคลังแชทกลุ่ม")

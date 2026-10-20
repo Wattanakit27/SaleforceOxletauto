@@ -97,7 +97,7 @@ def receive(d: dict) -> dict:
     from dashboard.services.line_channels import key_of_token, push_token
     from dashboard.services.line_notify import push_line_message
     from .models import GroupChat
-    from .slippost import _sent_id, body, explain
+    from .slippost import _sent_id, body, explain, with_tag
 
     if not (_s(d.get("phone")) or _s(d.get("name"))):
         return {"ok": False, "status": 422, "error": "ไม่มีชื่อและเบอร์โทร"}
@@ -111,7 +111,7 @@ def receive(d: dict) -> dict:
         eventlog.log("line_send", name=WHAT, ok=False, error="ไม่พบกลุ่ม ADMIN เก็บ Lead ที่บอทตัวส่งอยู่")
         return {"ok": False, "status": 503, "error": "ยังไม่พบกลุ่ม ADMIN เก็บ Lead ที่บอทตัวส่งอยู่ — ตั้งได้ที่ connect_config.web_lead_group"}
 
-    text = body(draft_fields(d))
+    text = with_tag(body(draft_fields(d)))       # ★ 20 ต.ค.69 แบบใบใหม่ — บรรทัด "@" ว่างไว้ให้แอดมินแท็กเซลล์
     token = push_token()
     pushed, err, line_mid = False, "", ""
     if not token:

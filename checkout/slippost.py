@@ -136,37 +136,75 @@ def mention_id(emp, group_id: str, token: str = "") -> tuple:
 
 
 # ─────────────────────────────────────────────────────────────
-#  ตัวใบ — ★ 6 ต.ค.69 เจ้าของสั่ง "จัดเลยให้มันอยู่ใน pattern นี้" (รูปใบจ่ายลีดในหน้า Connect):
+#  ตัวใบ — ★ 20 ต.ค.69 เจ้าของสั่ง "เปลี่ยนรูปแบบเป็นแบบนี้" (= แบบที่แอดมินเริ่มใช้ในห้องจ่ายเบอร์ตั้งแต่ 20 ก.ย.69 ·
+#  วัดจริง 30 วัน 104 ใบ) — ป้ายและช่องว่างก๊อปจากแบบของเจ้าของตรงตัว:
 #
-#      Ac Lead No. NLD10-8821
-#      Ads : -
-#      ชื่อ Account: Ben Jao
-#      ชื่อลูกค้า : -
-#      ID LINE : hannork
-#      ชื่อไลน์ : -
-#      เบอร์โทร : -
-#      ช่องทาง : -
-#      รถ : -
-#      ไลฟ์ : -
-#      เพิ่มเติม : -
-#      @เซลล์                ← แท็กต่อท้ายตอนส่ง (messages) / ตอนคัดลอก (slip_text)
+#      Ac Lead No. LD10-9xxx
+#      Ads  :
+#      ชื่อ Account :    <ชื่อ>
+#      ชื่อลูกค้า :
+#      ID LINE :    <ไอดี>
+#      ชื่อไลน์ :
+#      เบอร์โทร :
+#      ช่องทาง  :   Line@
+#      รถ :
+#      ไลฟ์ :  <ทีมไลฟ์>          ← มีเฉพาะลีดที่มีทีมไลฟ์ (แบบของเจ้าของไม่มีบรรทัดนี้ แต่ชีตจ่ายเบอร์อ่านทีมไลฟ์จากบรรทัดนี้)
+#      <ว่าง>
+#      เพิ่มเติม  :
+#      อาชีพ :    <…>
+#      รายได้ :    16,000-20,000
+#      อายุงาน :   <…>
+#      ประวัติการผ่อน :  <…>
+#      <ว่าง>
+#      เวลาจ่าย
+#      ส่งหลักฐาน
+#      ติดต่อได้เลยนะครับ
+#      <ว่าง>
+#      @เซลล์                     ← `with_tag` (ยังไม่จ่าย = "@" เปล่า ให้แอดมินแท็กเอง) · ส่งเข้ากลุ่ม = `messages`
 #
-#  ช่องว่าง = "-" · ไม่มีบรรทัดอื่นแทรก (เดิมมี "จ่ายโดย" / ลิงก์ Connect / "ติดต่อได้เลยนะครับ" — ตัดออกตามที่สั่ง)
-#  ใช้ตัวเดียวกันทั้ง "ส่งเข้ากลุ่ม" และ "คัดลอกใบจ่ายลีด" ทั้งลูกค้าแชทและลีดภายนอก — ห้ามแยกเขียนอีกชุด
+#  ช่องว่าง = เว้นว่าง (6 ต.ค.69 เคยใส่ "-") · ใช้ตัวเดียวกันทั้ง "ส่งเข้ากลุ่ม" และ "คัดลอกใบจ่ายลีด"
+#  ทั้งลูกค้าแชทและลีดภายนอก — ห้ามแยกเขียนอีกชุด · `leadgroup.parse_leadsheet` อ่านกลับได้ (มีเทสต์)
 # ─────────────────────────────────────────────────────────────
-_ROWS = [("Ac Lead No. ", "code"), ("Ads : ", "ads"), ("ชื่อ Account: ", "account"), ("ชื่อลูกค้า : ", "name"),
-         ("ID LINE : ", "line_id"), ("ชื่อไลน์ : ", "line_name"), ("เบอร์โทร : ", "phone"), ("ช่องทาง : ", "channel"),
-         ("รถ : ", "car"), ("ไลฟ์ : ", "live"), ("เพิ่มเติม : ", "more")]
+_HEAD = [("Ac Lead No. ", "code"), ("Ads  :  ", "ads"), ("ชื่อ Account :    ", "account"), ("ชื่อลูกค้า :     ", "name"),
+         ("ID LINE :    ", "line_id"), ("ชื่อไลน์ :  ", "line_name"), ("เบอร์โทร :    ", "phone"),
+         ("ช่องทาง  :   ", "channel"), ("รถ :     ", "car")]
+_LIVE = ("ไลฟ์ :  ", "live")
+_PROFILE = [("เพิ่มเติม  :  ", "more"), ("อาชีพ :    ", "occupation"), ("รายได้ :    ", "income"),
+            ("อายุงาน :   ", "job_tenure"), ("ประวัติการผ่อน :  ", "pay_history")]
+_FOOT = ["เวลาจ่าย ", "ส่งหลักฐาน ", "ติดต่อได้เลยนะครับ"]
+PROFILE_KEYS = ("occupation", "income", "job_tenure", "pay_history")
+TAG_SEP = "\n\n@"
 
 
 def _v(s) -> str:
     # ค่าหลายบรรทัด (เพิ่มเติม) ต่อเป็นบรรทัดเดียว — บรรทัดถัดไปที่มี ":" จะถูกอ่านเป็นช่องอื่นของใบ
-    return re.sub(r"\s*\n\s*", " · ", str(s or "").strip())
+    v = re.sub(r"\s*\n\s*", " · ", str(s or "").strip())
+    return "" if not v.strip("-–— ") else v
+
+
+def money(s) -> str:
+    """รายได้ "16000-20000" → "16,000-20,000" (เลข 4–7 หลักเท่านั้น · ข้อความอื่นคงเดิม)"""
+    return re.sub(r"(?<![\d,.])(\d{4,7})(?![\d,.])", lambda m: "{:,}".format(int(m.group(1))), str(s or ""))
 
 
 def body(f: dict) -> str:
-    """ใบจ่ายลีดตาม pattern ด้านบน (ไม่รวมแท็ก) — `leadgroup.parse_leadsheet` อ่านกลับได้"""
-    return "\n".join(h + (_v(f.get(k)) or "-") for h, k in _ROWS)[:_MAX_TEXT]
+    """ใบจ่ายลีดตามแบบด้านบน (ไม่รวมแท็ก — ผู้เรียกใช้ `with_tag` / `messages`)"""
+    rows = list(_HEAD)
+    if _v(f.get("live")):
+        rows.append(_LIVE)
+    lines = [h + _v(f.get(k)) for h, k in rows]
+    lines.append("")
+    for h, k in _PROFILE:
+        v = f.get(k)
+        lines.append(h + _v(money(v) if k == "income" else v))
+    lines.append("")
+    lines += _FOOT
+    return "\n".join(lines)[:_MAX_TEXT]
+
+
+def with_tag(text: str, nick: str = "") -> str:
+    """ใบ + บรรทัดแท็กท้ายใบ (เว้นบรรทัดก่อนแท็ก ตามแบบ) · ยังไม่มีเซลล์ = "@" เปล่าให้แอดมินแท็กเอง"""
+    return text + TAG_SEP + (nick or "")
 
 
 def messages(text: str, nick: str, uid: str, mention: bool) -> list:
@@ -174,10 +212,10 @@ def messages(text: str, nick: str, uid: str, mention: bool) -> list:
     if mention and uid:
         # textV2 ใช้ {…} เป็นตัวแทนที่ — ข้อความลูกค้าที่มีวงเล็บปีกกา ต้องไม่ถูกตีความเป็นตัวแทนที่
         safe = text.replace("{", "(").replace("}", ")")
-        return [{"type": "textV2", "text": safe + "\n{seller}",
+        return [{"type": "textV2", "text": safe + "\n\n{seller}",
                  "substitution": {"seller": {"type": "mention",
                                              "mentionee": {"type": "user", "userId": uid}}}}]
-    return [{"type": "text", "text": text + "\n@" + (nick or "")}]
+    return [{"type": "text", "text": with_tag(text, nick)}]
 
 
 def explain(code: int, resp: str = "") -> str:
@@ -213,7 +251,7 @@ def _store(room: dict, code: str, text: str, nick: str, info: dict, by: str, cha
             chat_type=GroupChat.GROUP, group_id=room["id"], group_name=(room.get("name") or "")[:120],
             message_id=(info.get("mid") or ("connect-" + uuid.uuid4().hex))[:64],
             sender_id="", sender_name=(by or "ระบบ")[:80], msg_type="text",
-            text=text + "\n@" + (nick or ""), extra={"source": "connect", "code": code, "tagged": info.get("tagged")},
+            text=with_tag(text, nick), extra={"source": "connect", "code": code, "tagged": info.get("tagged")},
             channel=(channel or "")[:24], direction=GroupChat.OUT, sent_by_name=(by or "")[:80],
             sent_at=timezone.now())
     except Exception:

@@ -73,7 +73,9 @@ UPDATE_HOURS = 6             # อัปเดตได้ภายในกี�
 UPDATE_MAX = 3               # ต่อใบ — กันบอทพูดถี่ในกลุ่ม
 UPDATE_QUIET_SEC = 45        # รอลูกค้าพิมพ์จบก่อน (ข้อความล่าสุดเก่ากว่านี้)
 UPD_FIELDS = (("car", "รุ่นรถ"), ("name", "ชื่อลูกค้า"), ("phone", "เบอร์"), ("line_id", "ID LINE"),
-              ("more", "ข้อมูลเพิ่มเติม"), ("ads", "ADS"), ("live", "ไลฟ์"))
+              ("more", "ข้อมูลเพิ่มเติม"), ("ads", "ADS"), ("live", "ไลฟ์"),
+              # ★ 20 ต.ค.69 แบบใบใหม่ — ลูกค้าบอกอาชีพ/รายได้ทีหลัง = ใบอัปเดต (ใบที่ส่งก่อนมีช่องพวกนี้ไม่นับ — ดู `_changes`)
+              ("occupation", "อาชีพ"), ("income", "รายได้"), ("job_tenure", "อายุงาน"), ("pay_history", "ประวัติการผ่อน"))
 _TEST_IDS = {"at": 0.0, "ids": []}
 
 
@@ -532,11 +534,21 @@ _INFO_RE = re.compile(r"ดาวน์|ดาว\s*\d|ผ่อน|งบ|เ�
                       r"เข้าไปดู|เข้ามาดู|ดูรถ|ลองขับ|ทดลองขับ|อยู่แถว|อยู่จังหวัด|อายุ\s*\d")
 NOTE_MAX_MSGS = 6
 NOTE_MAX_CHARS = 450
+# ★ 20 ต.ค.69 แบบใบใหม่มีบรรทัด อาชีพ/รายได้/อายุงาน/ประวัติการผ่อน แยกแล้ว → ข้อความลูกค้าที่บอก "แค่ 4 เรื่องนี้"
+#   ไม่ต้องซ้ำใน "เพิ่มเติม" (แบบของเจ้าของ: เพิ่มเติมว่าง ข้อมูลอยู่ใน 4 บรรทัด) · ที่เหลือ = ข้อมูลที่ 4 บรรทัดไม่มีที่ลง
+_EXTRA_RE = re.compile(r"ดาวน์|ดาว\s*\d|งบ|ซื้อสด|เงินสด|ไฟแนนซ์|จัดไฟ|ผ่อน\s*(?:ไหว|ได้|เดือนละ|ประมาณ|ไม่เกิน|สบาย)|"
+                       r"ค่างวด|งวดละ|เครดิต|บูโร|แบล็ค|ล่าช้า|ค้างชำระ|เทิร์น|เทริน|แลกรถ|ค้ำ|"
+                       r"เดือนหน้า|ปีหน้า|ต้นปี|ปลายปี|สิ้นปี|สิ้นเดือน|ต้นเดือน|พรุ่งนี้|มะรืน|เสาร์|อาทิตย์|นัด|"
+                       r"เข้าไปดู|เข้ามาดู|ดูรถ|ลองขับ|ทดลองขับ|อยู่แถว|อยู่จังหวัด|อายุ\s*\d")
+_PROFILE_LABELS = {"อาชีพ": "occupation", "รายได้": "income", "อายุงาน": "job_tenure", "ประวัติผ่อน": "pay_history"}
+_SKIP_LABELS = {"ชื่อ", "เบอร์", "ไลน์", "line", "สนใจ"}        # มีบรรทัดของตัวเองในใบอยู่แล้ว
 
 
-def customer_notes(o, msgs=None) -> str:
+def customer_notes(o, msgs=None, have=()) -> str:
     """ข้อความลูกค้าที่มีข้อมูล (ดาวน์/ผ่อน/เงินเดือน/อาชีพ/เครดิต/เทิร์น/แผนออกรถ/นัด) → บรรทัดเดียว คั่น " / " · ไม่มี = \"\"
-    ตัดเบอร์/ไอดีออกก่อนดู (ข้อความที่มีแต่ช่องทางติดต่อไม่นับ) · ล่าสุด NOTE_MAX_MSGS ข้อความ เรียงตามเวลา"""
+    ตัดเบอร์/ไอดีออกก่อนดู (ข้อความที่มีแต่ช่องทางติดต่อไม่นับ) · ล่าสุด NOTE_MAX_MSGS ข้อความ เรียงตามเวลา
+    `have` = ช่องข้อมูลลูกค้าที่ใบมีค่าแล้ว (occupation/income/job_tenure/pay_history) — ข้อความที่บอกแค่เรื่องพวกนั้นไม่ซ้ำลงเพิ่มเติม
+    · ข้อความแบบฟอร์ม ("อาชีพ : … จังหวัด : …") = เก็บเฉพาะป้ายที่ใบไม่มีบรรทัดให้"""
     from . import connect as C
     from . import lead_keywords as K
     if msgs is None:
@@ -544,6 +556,7 @@ def customer_notes(o, msgs=None) -> str:
             msgs = C.messages(o, limit=80)
         except Exception:
             return ""
+    have = set(have or ())
     out = []
     for m in msgs:
         if (m.get("dir") or "in") != "in":
@@ -558,7 +571,25 @@ def customer_notes(o, msgs=None) -> str:
                 hit = any(s[2] in ("occupation", "income", "job_tenure", "pay_history") for s in K.spans(bare))
             except Exception:
                 hit = False
-        if hit and t not in out:
+        if not hit:
+            continue
+        if have:
+            try:
+                lab = K.labels(K.norm(bare))
+                if len(lab) >= 2:                 # แบบฟอร์ม → เก็บเฉพาะป้ายที่ใบไม่มีบรรทัดให้
+                    rest = ["%s : %s" % (k, v) for k, v in lab.items()
+                            if k not in _SKIP_LABELS and _PROFILE_LABELS.get(k) not in have
+                            and not (k == "เครดิต" and "pay_history" in have)]
+                    t = " / ".join(rest)
+                    if not t:
+                        continue
+                elif not _EXTRA_RE.search(bare):
+                    got = {k for k, _ in K.extract([bare]).items() if k in _PROFILE_LABELS.values()}
+                    if got and got <= have:
+                        continue                  # บอกแค่อาชีพ/รายได้/อายุงาน/ประวัติผ่อน — อยู่ใน 4 บรรทัดแล้ว
+            except Exception:
+                pass
+        if t not in out:
             out.append(t[:120])
     text = " / ".join(out[-NOTE_MAX_MSGS:])
     return text[:NOTE_MAX_CHARS]
@@ -566,23 +597,30 @@ def customer_notes(o, msgs=None) -> str:
 
 def _fields(o, lead, code: str) -> dict:
     from . import connect as C
+    from .slippost import PROFILE_KEYS
     f = C.slip_fields(o, lead)
     f["code"] = code
     if not f.get("channel") and not C.is_fb(o):
         f["channel"] = C._line_channel()          # ★ 20 ต.ค.69 ตามตัวเลือกชีต · FB = ตามเพจ (autofill `_fb_channel`) ไม่มีตัวเลือก = "-"
     if not f.get("account"):
         f["account"] = getattr(C.cust(o), "display_name", "") or ""
-    notes = customer_notes(o)
+    notes = customer_notes(o, have=[k for k in PROFILE_KEYS if str(f.get(k) or "").strip()])
     if notes:
         more = (f.get("more") or "").strip()
         f["more"] = notes if (not more or more == "-") else "%s / %s" % (more, notes)
     return f
 
 
+def _slip(f: dict) -> str:
+    """ใบที่ระบบเก็บลีดส่ง (ยังไม่จ่ายเซลล์) = แบบใบใหม่ + บรรทัด "@" เปล่าท้ายใบ ให้แอดมินแท็กเซลล์ตอนคัดลอกไปห้องจ่ายเบอร์"""
+    from .slippost import body, with_tag
+    return with_tag(body(f))
+
+
 def _post(o, lead, res: dict) -> dict:
     from .slippost import body
     f = _fields(o, lead, res["code"])
-    res = _send(body(f), res, "%s%s-%s" % (MSG_PREFIX, lead.pk, res["num"]), {"chat": o.id})
+    res = _send(_slip(f), res, "%s%s-%s" % (MSG_PREFIX, lead.pk, res["num"]), {"chat": o.id})
     if res.get("ok"):
         res["sent"] = _snap(f)                    # ช่องที่ส่งไปแล้ว — ลูกค้าพิมพ์เพิ่มทีหลัง = เทียบกับตรงนี้ (ใบอัปเดต)
     return res
@@ -673,7 +711,7 @@ def _show_post(o, lead, sh: dict) -> dict:
     from .slippost import body
     c = cfg()
     f = _fields(o, lead, sh["code"])
-    text = body(f)
+    text = _slip(f)
     ok, err, line_mid, qt = _push_ex(c["test_group"], text, "", what=WHAT_SHOW)
     if ok:
         _store_out(c["test_group"], c["test_group_name"], "%s%s-%s" % (SHOW_MSG_PREFIX, lead.pk, uuid.uuid4().hex[:6]),
@@ -942,7 +980,7 @@ def _post_ext(e, res: dict, quote: str = "") -> dict:
     from .slippost import body
     f = slip_fields(e)
     f["code"] = res["code"]
-    return _send(body(f), res, "%sx%s-%s" % (MSG_PREFIX, e.pk, res["num"]), {"ext": e.message_id}, quote)
+    return _send(_slip(f), res, "%sx%s-%s" % (MSG_PREFIX, e.pk, res["num"]), {"ext": e.message_id}, quote)
 
 
 # ── 3. ฟอร์ม "เพิ่มลีดเอง" ในห้องพัก Lead ──────────────────────────────
@@ -993,7 +1031,7 @@ def _add_manual(data: dict, by: str = "", force: bool = False) -> dict:
     if base not in {k for k, _ in C.CODE_BASES}:
         base = _draft_base({"channel": f["channel"]})
     prefix = C.build_prefix(base, bool((data or {}).get("admin")), False)
-    text = body(dict(f, code="%s%d-" % (prefix, timezone.localdate().month), line_name=""))
+    text = _slip(dict(f, code="%s%d-" % (prefix, timezone.localdate().month), line_name=""))
     d = LP.parse_draft(text)
     if not d:
         return {"ok": False, "status": 400, "error": "ประกอบใบร่างไม่ได้"}
@@ -1295,6 +1333,8 @@ def _changes(sent: dict, f: dict) -> list:
     """ช่องที่ได้ค่าใหม่ (ไม่ว่าง และต่างจากที่ส่งไปแล้ว) → ชื่อช่องภาษาคน"""
     out = []
     for k, label in UPD_FIELDS:
+        if sent and k not in sent:
+            continue                              # ใบที่ส่งก่อนมีช่องนี้ — ไม่งั้นหลัง deploy ทุกใบเด้งใบอัปเดตพร้อมกัน
         new = str(f.get(k) or "").strip()
         if new and new != str((sent or {}).get(k) or "").strip():
             out.append(label)
@@ -1303,7 +1343,7 @@ def _changes(sent: dict, f: dict) -> list:
 
 def _upd_text(code: str, labels: list, f: dict) -> str:
     from .slippost import body
-    return ("🔄 อัปเดต Lead No. %s — ลูกค้าพิมพ์%sเพิ่ม (คัดลอกใบนี้แทนใบเดิม)\n" % (code, " / ".join(labels))) + body(f)
+    return ("🔄 อัปเดต Lead No. %s — ลูกค้าพิมพ์%sเพิ่ม (คัดลอกใบนี้แทนใบเดิม)\n" % (code, " / ".join(labels))) + _slip(f)
 
 
 def _store_out(gid: str, gname: str, mid: str, text: str, extra: dict, line_mid: str):
@@ -1355,7 +1395,7 @@ def update_chat(o, now=None) -> dict:
             ch = _changes(it.get("sent") or {}, f)
             if not ch:
                 return {"d": "same"}
-            text = _upd_text(it["code"], ch, f) + "\n" + TEST_NOTE
+            text = _upd_text(it["code"], ch, f) + "\n\n" + TEST_NOTE
             ok, err, line_mid, _qt = _push_ex(c["test_group"], text, it.get("qt") or "", what=WHAT_TEST)
             if ok:
                 _store_out(c["test_group"], c["test_group_name"], "%s%s-u%d-%s" % (TEST_MSG_PREFIX, it["num"],
@@ -1535,7 +1575,7 @@ def _test_post(f: dict, prefix: str, extra: dict, quote: str = "") -> dict:
     c = cfg()
     code, num = _test_next(prefix)
     f = dict(f, code=code)
-    text = body(f) + "\n" + TEST_NOTE
+    text = _slip(f) + "\n\n" + TEST_NOTE
     ok, err, line_mid, qt = _push_ex(c["test_group"], text, quote, what=WHAT_TEST)
     if ok:
         _store_out(c["test_group"], c["test_group_name"], "%s%s-%s" % (TEST_MSG_PREFIX, num, uuid.uuid4().hex[:6]),
