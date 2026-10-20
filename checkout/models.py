@@ -1297,3 +1297,37 @@ class SocialComment(models.Model):
 
     def __str__(self):
         return "%s %s %s" % (self.platform, self.created_at, (self.text or "")[:40])
+
+
+class KeywordRule(models.Model):
+    """คำที่ระบบจับจากแชท + แท็กลูกค้าอัตโนมัติ (★ 21 ต.ค.69 · ย้ายจากโค้ดมาฐานข้อมูล — แก้ได้ที่ /crm/?p=auto)
+
+    1 แถว = 1 เรื่องที่จับ (ยี่ห้อ 1 ยี่ห้อ · รุ่น 1 รุ่น · ช่วงรายได้ 1 ช่วง · อาชีพ 1 กลุ่ม · กฎแท็กของเรา 1 กฎ …)
+    จับเมื่อข้อความมี **คำที่จับ** (`words`) หรือเข้า **รูปแบบขั้นสูง** (`pattern` · regex — ค่าตั้งต้นของระบบที่ย้ายมาจากโค้ด)
+    ตัวอ่าน = `checkout/kwdb.py` (จำไว้ต่อ process · เปลี่ยนเมื่อมีคนแก้ — KV `keyword_version`)
+    """
+    key = models.CharField("รหัส", max_length=80, unique=True)
+    group = models.CharField("หมวด", max_length=20, db_index=True)
+    name = models.CharField("ชื่อ / แท็ก", max_length=60)
+    value = models.CharField("ค่าที่ลงช่อง / บทบาท", max_length=120, blank=True)
+    parent = models.CharField("อยู่ใต้ (ยี่ห้อของรุ่น · หมวดของอาชีพ)", max_length=60, blank=True)
+    words = models.JSONField("คำที่จับ", default=list, blank=True)
+    pattern = models.TextField("รูปแบบขั้นสูง (regex)", blank=True)
+    not_words = models.JSONField("คำยกเว้น", default=list, blank=True)
+    extra = models.JSONField("ค่าเพิ่มเติม", default=dict, blank=True)
+    tag = models.BooleanField("ติดแท็กลูกค้า", default=False)
+    active = models.BooleanField("เปิดใช้", default=True)
+    order = models.IntegerField("ลำดับ", default=0)
+    system = models.BooleanField("ค่าตั้งต้นของระบบ", default=False)
+    edited = models.BooleanField("คนแก้แล้ว", default=False)
+    updated_by = models.CharField("แก้ล่าสุดโดย", max_length=80, blank=True)
+    created_at = models.DateTimeField("สร้างเมื่อ", auto_now_add=True)
+    updated_at = models.DateTimeField("แก้ล่าสุด", auto_now=True)
+
+    class Meta:
+        verbose_name = "ระบบอัตโนมัติ — คำที่จับ / แท็ก"
+        verbose_name_plural = "ระบบอัตโนมัติ — คำที่จับ / แท็ก"
+        ordering = ["group", "order", "id"]
+
+    def __str__(self):
+        return "%s:%s" % (self.group, self.name)

@@ -214,8 +214,11 @@ r = A.get("/crm/api/auto", secure=True)
 g = r.json()
 ok(r.status_code == 200 and g["rules"][0]["count"] == 2 and g["last"].get("changed") == 2,
    "GET: กฎ + ติดอยู่ 2 ราย + ผลอ่านย้อนหลังล่าสุด", g.get("rules"))
-ok(len(g.get("builtin") or []) == 8 and all("how" in b and "count" in b for b in g["builtin"]),
-   "GET: ระบบจับในตัว 8 เรื่อง (ดูอย่างเดียว)")
+_gk = {x["k"] for x in g.get("groups") or []}
+ok({"brand", "model", "income_band", "occupation", "status", "custom"} <= _gk
+   and any(r["group"] == "model" and r["name"] == "D Max" for r in g.get("rows") or [])
+   and all("count" in r and "readable" in r for r in g.get("rows") or []),
+   "GET: หมวด + คำทุกแถวจากฐานข้อมูล (ยี่ห้อ/รุ่น/รายได้/อาชีพ/สถานะ) แก้ได้ในหน้านี้")
 ok(not LEAK.search(r.content.decode()), "GET ไม่มี LINE user id หลุด")
 
 print("\n[6] ข้อความใหม่เข้า → ติดแท็กเอง")

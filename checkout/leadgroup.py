@@ -221,27 +221,8 @@ _MONTHLY_RE = re.compile(r"ผ่อน\D{0,8}" + _NUM)
 _YEAR_RE = re.compile(r"ปี\s*(\d{2,4})\s*(?:[-–ถึง/]\s*(\d{2,4}))?")
 
 # ชื่อรุ่นที่คนพิมพ์เป็นไทย — สต็อกเก็บเป็นอังกฤษ ไม่แปลงก็จับคู่ไม่เจอ
-_TH_MODEL = {
-    "แคมรี่": "camry", "แคมรี": "camry", "ซีวิค": "civic", "ซิตี้": "city",
-    "ยาริส": "yaris", "อัลเมร่า": "almera", "ฟอร์จูนเนอร์": "fortuner", "ฟอร์จูน": "fortuner",
-    "วีออส": "vios", "แจ๊ส": "jazz", "แอคคอร์ด": "accord", "มาร์ช": "march",
-    "อัลติส": "altis", "รีโว่": "revo", "วีโก้": "vigo", "ดีแม็ก": "d-max",
-    "ปาเจโร่": "pajero", "เทอร์ร่า": "terra", "ครอส": "cross", "ซิตี": "city",
-    # ★ 4 ต.ค.69 — ชื่อที่ลูกค้าพิมพ์ในแชท LINE OA (หน้า Connect เติมช่อง "CAR / สูตร" จากตรงนี้)
-    #   ฝั่งอังกฤษต้องเขียนให้ตรงตัวเลือกในชีตเมื่อตัดช่องว่าง/ขีดออก ("d-max" = "D Max" · "mu-x" = "MuX")
-    "ดีแม็ค": "d-max", "ดีแมค": "d-max", "ดีแมก": "d-max", "ดีแม๊ก": "d-max",
-    "มิวเอ็กซ์": "mu-x", "มิวเอ็ก": "mu-x", "มิวเซเว่น": "mu-7",
-    "ไทรทัน": "triton", "ไททัน": "triton", "เรนเจอร์": "ranger", "เอเวอเรสต์": "everest",
-    "เอ็กซ์แพนเดอร์": "xpander", "เวลอซ": "veloz", "อินโนว่า": "innova", "คอมมิวเตอร์": "commuter",
-    "เอชอาร์วี": "hrv", "ซีอาร์วี": "crv", "บีอาร์วี": "brv", "บริโอ้": "brio", "สวิฟ": "swift",
-    "ซิลฟี่": "sylphy", "เทียน่า": "teana", "มิราจ": "mirage", "อัลพาร์ด": "alphard", "เวลไฟร์": "vellfire",
-    "มาสด้า2": "mazda2", "มาสด้า 2": "mazda2", "มาสด้า3": "mazda3", "มาสด้า 3": "mazda3",
-    "ยาริสครอส": "yaris cross", "ยาริส ครอส": "yaris cross", "ยาริสเอทีฟ": "yaris ativ",
-    "ยาริส เอทีฟ": "yaris ativ", "เอทีฟ": "yaris ativ",
-    "โคโรล่าครอส": "corolla cross", "โคโรลล่าครอส": "corolla cross", "โคโรล่า ครอส": "corolla cross",
-}
-# ยาวก่อนเสมอ — "ยาริสครอส" ต้องชนะ "ยาริส"/"ครอส" (ไม่งั้นได้รุ่นกว้างกว่าที่ลูกค้าบอก)
-_TH_MODEL_KEYS = sorted(_TH_MODEL, key=len, reverse=True)
+#   ★ 21 ต.ค.69 ย้ายไปฐานข้อมูล (หมวด model · คำไทยของแต่ละรุ่น → ค่าอังกฤษ) แก้ได้ที่ /crm/?p=auto
+#   เทียบยาวก่อนเสมอ — "ยาริสครอส" ต้องชนะ "ยาริส"/"ครอส" (ไม่งั้นได้รุ่นกว้างกว่าที่ลูกค้าบอก) · `kwdb.th_model()`
 
 
 def th_fold(s: str) -> str:
@@ -252,9 +233,7 @@ def th_fold(s: str) -> str:
     return s.replace("ู", "ุ")
 
 
-# ชื่อที่พับแล้วสั้นกว่า 5 ตัว (มาร์ช → "มาช") ไม่ใช้แบบพับ — ไปโดนคำอื่น ("มาชมรถ") · ใช้แบบตรงตัวอย่างเดียว
-_TH_FOLD_KEYS = sorted({(th_fold(k), v) for k, v in _TH_MODEL.items() if len(th_fold(k)) >= 5},
-                       key=lambda x: len(x[0]), reverse=True)
+# ชื่อที่พับแล้วสั้นกว่า 5 ตัว (มาร์ช → "มาช") ไม่ใช้แบบพับ — ไปโดนคำอื่น ("มาชมรถ") · ใช้แบบตรงตัวอย่างเดียว (kwdb.th_model fold)
 
 
 def _year4(v: int) -> int:
@@ -292,13 +271,15 @@ def parse_specs(text: str) -> dict:
                 out["car_year_max"] = b
 
     low = t.lower()
-    for th in _TH_MODEL_KEYS:
+    from . import kwdb
+    tm = kwdb.th_model()
+    for th in tm["keys"]:
         if th in low:
-            out["car_model"] = _TH_MODEL[th]
+            out["car_model"] = tm["map"][th]
             break
     else:
         fl = th_fold(low)
-        for th, en in _TH_FOLD_KEYS:
+        for th, en in tm["fold"]:
             if th in fl:
                 out["car_model"] = en
                 break

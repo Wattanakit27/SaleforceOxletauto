@@ -188,11 +188,14 @@ def api_lead_status(request):
 
 @require_http_methods(["GET", "POST"])
 def api_auto(request):
-    """หน้า **ระบบอัตโนมัติ** (★ 20 ต.ค.69 · แอดมินเท่านั้น) — กฎแท็กลูกค้าจากคำในแชท (`checkout/autotag.py`)
+    """หน้า **ระบบอัตโนมัติ** (★ 20 ต.ค.69 · แอดมินเท่านั้น) — คำที่ระบบจับจากแชท + แท็กลูกค้าอัตโนมัติ
 
-    GET = กฎทั้งหมด (+ ติดแท็กอยู่กี่ราย) · ระบบจับในตัว (ดูอย่างเดียว) · ผลอ่านย้อนหลังล่าสุด
-    POST `{action: "save", rule}` เพิ่ม/แก้ · `{action: "delete", id}` · `{action: "toggle", id, on}` ·
-    `{action: "preview", rule}` ทดสอบกับแชทย้อนหลัง (ยังไม่ติดแท็กใคร)
+    ★ 21 ต.ค.69 คำทั้งหมดย้ายจากโค้ดมาอยู่ในตาราง `checkout_keywordrule` (`checkout/kwdb.py`) แก้ได้ในหน้านี้
+    GET = หมวด + ทุกแถว (+ ลูกค้าที่ติดแท็กจากแถวนั้น) · จำนวนที่ระบบเติมให้ต่อหมวด · ผลอ่านย้อนหลังล่าสุด
+    POST `{action: "save", row}` เพิ่ม/แก้แถว · `{action: "toggle", key, field: active|tag, on}` · `{action: "delete", key}` ·
+    `{action: "reset", key}` คืนค่าเดิมของระบบ · `{action: "preview", row}` ทดสอบกับแชทย้อนหลัง · `{action: "test", text}` ลองพิมพ์ ·
+    `{action: "rescan"}` อ่านแชทย้อนหลังติดแท็กใหม่เดี๋ยวนี้
+    (รูปแบบเดิมของกฎแท็กของเรา `{action: save|preview, rule}` · `{action: toggle|delete, id}` ยังใช้ได้)
     """
     user, _seller, admin, why = _who(request)
     if why == "login":
@@ -200,35 +203,66 @@ def api_auto(request):
     if why or not admin:
         return _j({"ok": False, "error": "หน้านี้สำหรับแอดมินเท่านั้น"}, 403)
     from checkout import autotag as AT
+    from checkout import kwdb as KW
     by = (user.get("nickname") or user.get("display_name") or "แอดมิน")[:80]
     if request.method == "GET":
+        KW._load(force=True)
         cnt = AT.rule_counts()
-        rs = [dict(r, count=cnt.get(r["id"], 0)) for r in AT.rules(cache=False)]
-        return _j({"ok": True, "rules": rs, "builtin": AT.builtin_stats(), "scopes": AT.SCOPES,
-                   "scanDays": AT.SCAN_DAYS, "last": AT.last_run(), "busy": bool(AT._RUN.get("busy")),
-                   "limits": {"rules": AT.RULE_MAX, "words": AT.WORDS_MAX, "tag": AT.TAG_LEN, "wordMin": AT.WORD_MIN}})
+        rows = [dict(KW.row_json(r), count=cnt.get(r["key"], 0)) for r in KW.all_rows()]
+        rs = [dict(r, count=cnt.get(r["id"], 0)) for r in AT.rules()]
+        return _j({"ok": True, "groups": KW.GROUPS, "rows": rows, "rules": rs, "fill": AT.fill_stats(),
+                   "source": KW.source(), "scopes": AT.SCOPES, "scanDays": AT.SCAN_DAYS, "last": AT.last_run(),
+                   "busy": bool(AT._RUN.get("busy")),
+                   "limits": {"rules": AT.RULE_MAX, "words": KW.WORDS_MAX, "tag": AT.TAG_LEN, "name": KW.NAME_LEN,
+                              "wordMin": KW.WORD_MIN}})
     try:
         body = json.loads(request.body or b"{}")
     except Exception:
         return _j({"ok": False, "error": "ข้อมูลไม่ถูกต้อง"}, 400)
     act = str(body.get("action") or "")
+    out = {}
+    if act == "test":
+        return _j(AT.test_text(body.get("text") or ""))
     if act == "preview":
-        res = AT.preview(body.get("rule") or {})
+        res = AT.preview(body.get("rule") or {}) if "rule" in body else AT.preview_row(body.get("row") or {})
         return _j(res, 200 if res.get("ok") else 400)
-    if act == "save":
+    if act == "rescan":
+        AT.rescan_bg(by)
+        ok, msg = True, "กำลังอ่านแชทย้อนหลัง %d วันและติดแท็กใหม่ตามคำปัจจุบัน" % AT.SCAN_DAYS
+    elif act == "save" and "rule" in body:
         ok, msg, rule = AT.save_rule(body.get("rule") or {}, by=by)
-    elif act == "delete":
-        ok, msg = AT.delete_rule(body.get("id"), by=by)
-        rule = None
-    elif act == "toggle":
+        out["rule"] = rule
+    elif act == "save":
+        ok, msg, row = KW.save(body.get("row") or {}, by=by)
+        out["row"] = KW.row_json(row) if row else None
+        if ok and row and row["group"] in KW.TAG_GROUPS + ("occupation",):
+            AT.rescan_bg(by)
+            msg += " — กำลังติดแท็กให้แชทย้อนหลัง %d วัน" % AT.SCAN_DAYS
+    elif act == "toggle" and body.get("id") and not body.get("key"):
         ok, msg = AT.toggle(body.get("id"), bool(body.get("on")), by=by)
-        rule = None
+    elif act == "toggle":
+        ok, msg, row = KW.toggle(body.get("key"), str(body.get("field") or "active"), bool(body.get("on")), by=by)
+        if ok and row and row["group"] in KW.TAG_GROUPS:
+            AT.rescan_bg(by)
+    elif act == "delete" and body.get("id") and not body.get("key"):
+        ok, msg = AT.delete_rule(body.get("id"), by=by)
+    elif act == "delete":
+        grp = next((r["group"] for r in KW.all_rows() if r["key"] == str(body.get("key") or "")), "")
+        ok, msg = KW.delete(body.get("key"), by=by)
+        if ok and grp in KW.TAG_GROUPS:
+            AT.rescan_bg(by)
+    elif act == "reset":
+        ok, msg = KW.reset(body.get("key"), by=by)
+        if ok:
+            AT.rescan_bg(by)
     else:
         return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
     if ok:
         try:
             from .services import eventlog
-            eventlog.log("crm", name="ระบบอัตโนมัติ: " + act, target=by, ok=True, rule=(rule or {}).get("tag") or body.get("id"))
+            eventlog.log("crm", name="ระบบอัตโนมัติ: " + act, target=by, ok=True,
+                         key=body.get("key") or body.get("id") or ((body.get("row") or {}).get("name"))
+                         or ((body.get("rule") or {}).get("tag")))
         except Exception:
             pass
-    return _j({"ok": ok, "message": msg if ok else "", "error": "" if ok else msg, "rule": rule}, 200 if ok else 400)
+    return _j(dict(out, ok=ok, message=msg if ok else "", error="" if ok else msg), 200 if ok else 400)

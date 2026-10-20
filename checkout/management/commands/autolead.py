@@ -13,6 +13,9 @@
     manage.py autolead --show on|off         ซ้อม: ตอนพักการรันเลข ลูกค้าจริงที่ให้เบอร์ = ใบไม่มีเลข (NLD10-) เข้ากลุ่มทดสอบเท่านั้น
     manage.py autolead --show-resend         ส่งใบซ้อมของทุกเคสวันนี้ใหม่ (ตัวจับล่าสุด) เข้ากลุ่มทดสอบ · --dry = ดูอย่างเดียว
                                              · --since "2026-10-20 00:00" = นับตั้งแต่เวลานั้น
+    manage.py autolead --buy-group TestBot02 กลุ่มทดสอบใบเคสรับซื้อ (ไม่ตั้ง = หากลุ่มชื่อ TestBot02 เอง · off = เลิกส่ง)
+    manage.py autolead --buy-send [--limit 5] [--dry]
+                                             ส่งเคสรับซื้อของวันนี้ (ใบตัวอย่าง + รูปรถ · ปิดบังเบอร์/ชื่อ) เข้ากลุ่มทดสอบรับซื้อ
     manage.py autolead --preview             แชทไหนจะได้เลขอะไร (ไม่จองเลข ไม่ส่ง LINE)
     manage.py autolead --run                 ทำรอบเดียวเดี๋ยวนี้ (แชท + ข้อความกลุ่มที่ค้าง + ใบอัปเดต)
 """
@@ -66,6 +69,9 @@ class Command(BaseCommand):
         p.add_argument("--test-reset", dest="test_reset", action="store_true")
         p.add_argument("--show", default="")
         p.add_argument("--show-resend", dest="show_resend", action="store_true")
+        p.add_argument("--buy-group", dest="buy_group", default="")
+        p.add_argument("--buy-send", dest="buy_send", action="store_true")
+        p.add_argument("--limit", type=int, default=5)
         p.add_argument("--dry", action="store_true")
         p.add_argument("--since", default="")
         p.add_argument("--preview", action="store_true")
@@ -129,6 +135,29 @@ class Command(BaseCommand):
                             c["show_since"] or "-"))
         else:
             lines.append("  ซ้อม (ใบไม่มีเลขลงกลุ่มทดสอบ): ปิด (--show on)")
+        from checkout import buyshow as BS
+        if o["buy_group"]:
+            try:
+                BS.set_group(o["buy_group"])
+            except ValueError as e:
+                raise CommandError(str(e))
+        bc = BS.ready(persist=False)
+        lines.append("  ใบเคสรับซื้อตัวอย่าง: %s · กลุ่ม %s · ส่งเคสวันนี้รอบแรก %s"
+                     % ("เปิด" if bc["on"] else "ปิด", ("%s (%s)" % (bc["group_name"] or "-", bc["group"])) if bc["group"]
+                        else "ยังไม่มี (สร้างกลุ่มชื่อ TestBot02 + เชิญบอท หรือ --buy-group)",
+                        json.dumps(bc["backfill"], ensure_ascii=False) if bc["backfill"] else "ยังไม่ส่ง"))
+        if o["buy_send"]:
+            r = BS.backfill(limit=max(1, min(10, o["limit"])), dry=o["dry"])
+            if r.get("error"):
+                raise CommandError(r["error"])
+            lines.append("%s: ส่ง %d · ไม่สำเร็จ %d · จะส่ง %d · ใบจริงที่ส่งจัดซื้อแล้ว %s"
+                         % ("ดูอย่างเดียว" if o["dry"] else "ส่งเคสรับซื้อวันนี้", r["sent"], r["failed"], r["would"],
+                            ", ".join(r["real"]) or "-"))
+            for x in r["rows"]:
+                lines.append("  แชท #%s · %s · รูป %s · เลขไมล์ %s · ทะเบียน %s · ขายเพราะ %s · เพิ่มเติม %s%s"
+                             % (x["chat"], x["d"], x.get("sent_photos", x["photos"]),
+                                *("มี" if x[k] else "-" for k in ("mile", "plate", "reason", "more")),
+                                (" · " + x["why"]) if x.get("why") else ""))
         ptr = AL._kv(AL.PTR_KEY)
         lines.append("  อ่านข้อความกลุ่มถึง: %s" % (("#%s (%s)" % (ptr.get("last_id"), ptr.get("at") or "-"))
                                                  if ptr else "ยังไม่เริ่ม (เริ่มจากข้อความล่าสุดตอนรอบแรก)"))

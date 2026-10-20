@@ -140,6 +140,23 @@ button{cursor:pointer}
 .afrow b{flex:none}
 .afrow .tx{color:var(--ink2);min-width:0;flex:1 1 260px}
 .afrow mark{background:var(--brand-xl);color:inherit;border-radius:3px;padding:0 2px}
+/* ★ 21 ต.ค.69 คำในฐานข้อมูล: ยี่ห้อ→รุ่น · รูปแบบเดิม · ลองพิมพ์ */
+.kw.rx{background:none;border-style:dashed;color:var(--ink2)}
+.kwb{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.kwb>.rule{border:0;padding:4px 4px 0}
+.kwm{display:flex;flex-direction:column;gap:8px;padding-left:18px;border-left:2px solid var(--brand-s);margin-left:10px}
+.kwm .rule{padding:9px 12px}
+.kwtool{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.kwt{display:flex;gap:8px;align-items:flex-start}
+.kwt textarea.in{height:auto;min-height:44px;padding:8px 10px;flex:1 1 auto}
+.kwres{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:8px}
+.kwr{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;background:var(--soft);border:1px solid var(--line);min-width:0}
+.kwr b{overflow-wrap:anywhere}
+.lk{background:none;border:0;color:var(--brand-d);padding:0;cursor:pointer}
+.in.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.kfx summary{cursor:pointer;font-weight:600;font-size:var(--fs-body)}
+.kfx textarea.in{height:auto;min-height:92px;padding:8px 10px}
+.afg textarea.in{padding:8px 10px}
 /* แดชบอร์ด */
 .hero{position:relative;overflow:hidden;background:var(--hero);background-image:linear-gradient(var(--hero-grid) 1px,transparent 1px),linear-gradient(90deg,var(--hero-grid) 1px,transparent 1px);background-size:32px 32px;border:1px solid var(--hero-line);border-radius:16px;padding:22px 24px;display:flex;flex-wrap:wrap;gap:20px}
 .hero .l{flex:1 1 280px;display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -389,6 +406,7 @@ const S = {
   pipeF: 'all', pipeMore: {}, custF: 'all', q: '', sel: null, custLimit: 60,
   range: 'r30', cust: {}, stock: null, stockF: 'show', stockQ: '', taskI: 0, chatId: '',
   sum: null, form: null,
+  auto: null, kwTab: 'car', kwQ: '', kwMore: {}, kf: null, kfPrev: null, kwTest: null,
 };
 (function(){ const p = new URLSearchParams(location.search); if (p.get('sel')) S.sel = p.get('sel'); if (p.get('id')) S.chatId = p.get('id'); })();
 function setUrl(){ const p = new URLSearchParams(); if (BOOT.admin && S.seller) p.set('seller', S.seller); if (S.page !== 'dash') p.set('p', S.page);
@@ -911,16 +929,30 @@ function tick(){
     el.className = 'pill ' + (late ? 'p-bad' : 'p-br'); }); }
 setInterval(tick, 1000);
 
-/* ════════ ระบบอัตโนมัติ (★ 20 ต.ค.69 · แอดมิน) — กฎแท็กลูกค้าจากคำในแชท · checkout/autotag.py ════════ */
+/* ════════ ระบบอัตโนมัติ (★ 20 ต.ค.69 · แอดมิน) — ★ 21 ต.ค.69 คำทั้งหมดที่ระบบจับอยู่ในฐานข้อมูล แก้ได้ที่นี่
+   checkout/kwdb.py (คำ) · checkout/autotag.py (แท็กลูกค้า) · API /crm/api/auto ════════ */
+const KW_TABS = [
+  {k:'car', l:'รถที่สนใจ', g:['brand','model']},
+  {k:'money', l:'รายได้', g:['income_band','income_kw']},
+  {k:'profile', l:'อาชีพ / โปรไฟล์', g:['occupation','cust_type','tenure_kw','pay']},
+  {k:'status', l:'สถานะ / ลีดรับซื้อ', g:['status','deal','buy_info']},
+  {k:'contact', l:'ไอดีไลน์', g:['contact']},
+  {k:'guard', l:'คำกันจับผิด', g:['guard']},
+  {k:'custom', l:'กฎแท็กของเรา', g:['custom']},
+];
 async function loadAuto(){
   S.autoLoading = true;
   const d = await api('/crm/api/auto');
   S.autoLoading = false; S.auto = d.ok ? d : {error: d.error || 'โหลดไม่ได้'};
-  if (S.page === 'auto' && !afBusy()) render();
+  if (S.page === 'auto' && !kwBusy()) render();
+  else if (S.page === 'auto'){ const el = document.getElementById('kw-status'); if (el && d.ok) el.innerHTML = kwStatusHtml(S.auto); }
   clearTimeout(S.autoT);
   if (S.auto.busy) S.autoT = setTimeout(loadAuto, 4000); }
-function afBusy(){ const a = document.activeElement; return !!(a && a.closest && a.closest('#af-card') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
-function afRule(){ const f = S.af || {}; return {id: f.id || '', tag: f.tag || '', words: f.words || '', not_words: f.not_words || '', scope: f.scope || 'in', on: f.on !== false}; }
+function kwBusy(){ const a = document.activeElement; return !!(a && a.closest && a.closest('#kf-card,#kw-test,#kw-q') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
+function kwG(k){ return ((S.auto || {}).groups || []).find(g => g.k === k) || {}; }
+function kwRows(g){ return ((S.auto || {}).rows || []).filter(r => r.group === g); }
+function kwRow(key){ return ((S.auto || {}).rows || []).find(r => r.key === key); }
+function kwTypeName(v){ const r = kwRows('cust_type').find(x => x.value === v); return r ? r.name : v; }
 async function autoPost(body){
   const d = await api('/crm/api/auto', body);
   if (!d.ok){ toast(d.error || 'บันทึกไม่ได้', true); await loadAuto(); return false; }
@@ -928,76 +960,191 @@ async function autoPost(body){
 function kwChips(ws, cls){ return (ws || []).map(w => `<span class="kw ${cls||''}">${h(w)}</span>`).join(''); }
 function hiWord(text, w){ const t = String(text || ''); const i = t.toLowerCase().indexOf(String(w || '').toLowerCase());
   if (!w || i < 0) return h(t); return h(t.slice(0, i)) + '<mark>' + h(t.slice(i, i + w.length)) + '</mark>' + h(t.slice(i + w.length)); }
-function afPrevHtml(){ const p = S.afPrev; if (!p) return '';
+function kwPrevHtml(){ const p = S.kfPrev; if (!p) return '';
   if (p.loading) return '<div class="mini">กำลังอ่านแชทย้อนหลัง…</div>';
   if (p.error) return `<div class="err">${h(p.error)}</div>`;
-  return `<div class="afp"><b>แชท ${n0(p.days)} วันล่าสุด ${n0(p.chats)} ราย · เข้ากฎนี้ ${n0(p.matched)} ราย</b>${p.matched ? '' : ' <span class="mini">— ลองเพิ่มคำ หรือคำอาจสะกดไม่ตรงกับที่ลูกค้าพิมพ์</span>'}
+  return `<div class="afp"><b>แชท ${n0(p.days)} วันล่าสุด ${n0(p.chats)} ราย · มีข้อความที่เข้าแถวนี้ ${n0(p.matched)} ราย</b>${p.matched ? '' : ' <span class="mini">— ลองเพิ่มคำ หรือคำอาจสะกดไม่ตรงกับที่ลูกค้าพิมพ์</span>'}
     ${(p.samples || []).length ? `<div class="mini" style="margin-top:6px">ตัวอย่างล่าสุด (กดเพื่อเปิดแชท) — ดูว่าจับถูกไหมก่อนบันทึก</div><div class="afs">${p.samples.map(s =>
       `<button class="afrow" data-act="autoOpen" data-id="${s.id}"><b>${h(s.name || 'ลูกค้า #' + s.id)}</b><span class="kw">${h(s.word)}</span><span class="tx">${hiWord(s.text, s.word)}</span></button>`).join('')}</div>` : ''}</div>`; }
-function paintAf(){ const el = document.getElementById('af-prev'); if (el) el.innerHTML = afPrevHtml();
-  document.querySelectorAll('[data-act="autoTest"]').forEach(b => b.disabled = !!(S.afPrev && S.afPrev.loading)); }
-function afForm(){ const f = S.af; if (!f) return ''; const A = S.auto || {}, L = A.limits || {};
-  const scopes = A.scopes || {in:'ข้อความลูกค้า', all:'ข้อความลูกค้าและของเรา'};
-  return `<section class="card" id="af-card"><div class="ch"><h2>${f.id ? 'แก้กฎ' : 'เพิ่มกฎใหม่'}</h2></div>
-    <div class="afg">
-      <label>ชื่อแท็ก<input class="in" id="af-tag" data-af="tag" maxlength="${L.tag || 30}" value="${h(f.tag)}" placeholder="เช่น ถามดาวน์ / อยากผ่อนน้อย / ลูกค้าต่างจังหวัด"></label>
-      <label>ดูข้อความของ<select class="in" data-af="scope">${Object.keys(scopes).map(k => `<option value="${k}" ${f.scope === k ? 'selected' : ''}>${h(scopes[k])}</option>`).join('')}</select></label>
-      <label class="wide">คำที่จับ <span class="mini">— บรรทัดละคำ หรือคั่นด้วย , · ข้อความมีคำไหนก็ได้ = ติดแท็ก (อย่างน้อย ${L.wordMin || 2} ตัวอักษร)</span>
-        <textarea class="in" data-af="words" rows="4" placeholder="ดาวน์เท่าไหร่&#10;ดาวน์กี่บาท&#10;ไม่มีดาวน์">${h(f.words)}</textarea></label>
-      <label class="wide">คำยกเว้น <span class="mini">— ข้อความไหนมีคำนี้ = ไม่นับข้อความนั้น (ไม่ใส่ก็ได้)</span>
-        <textarea class="in" data-af="not_words" rows="2" placeholder="สมัครงาน">${h(f.not_words)}</textarea></label>
-      <label class="chk"><input type="checkbox" data-af="on" ${f.on !== false ? 'checked' : ''}> เปิดใช้ทันที</label>
-    </div>
-    <div class="fr"><button class="btn" data-act="autoTest">ทดสอบกับแชทย้อนหลัง</button><button class="btn pri" data-act="autoSave">${ic('bolt',16)}บันทึกกฎ</button>
-      <button class="btn" data-act="autoCancel">ยกเลิก</button></div>
-    <div id="af-prev">${afPrevHtml()}</div>
-    <div class="mini">ภาษาไทยไม่เว้นวรรค — คำสั้นอาจไปจับกลางคำอื่น (เช่น "ขาย" จับ "ขายดี") กด "ทดสอบ" ดูตัวอย่างก่อนบันทึก
-      · บันทึกแล้วระบบติดแท็กให้แชทย้อนหลัง ${n0(A.scanDays || 60)} วัน และทุกข้อความใหม่ที่เข้ามา</div></section>`; }
+function paintKf(){ const el = document.getElementById('kf-prev'); if (el) el.innerHTML = kwPrevHtml();
+  document.querySelectorAll('[data-act="kwPreview"]').forEach(b => b.disabled = !!(S.kfPrev && S.kfPrev.loading)); }
+
+/* ── ฟอร์มเพิ่ม/แก้แถว ── */
+function kfFrom(r, group, parent){
+  r = r || {}; const ex = r.extra || {};
+  return {key: r.key || '', group: r.group || group, name: r.name || '', value: r.value || '', parent: r.parent || parent || '',
+    words: (r.words || []).join('\n'), not_words: (r.not_words || []).join('\n'), pattern: r.pattern || '',
+    min: ex.min == null ? '' : ex.min, max: ex.max == null ? '' : ex.max, neg: ex.neg || '', check: ex.check !== false,
+    spell: (ex.spell || []).join('\n'), scope: ex.scope || 'in', always: !!ex.always,
+    tag: r.key ? !!r.tag : ['brand','model','income_band','custom'].includes(r.group || group), active: r.key ? !!r.active : true,
+    system: !!r.system, showRx: !!(r.pattern) }; }
+function kfRow(){ const f = S.kf || {};
+  const extra = {};
+  if (f.group === 'income_band'){ extra.min = f.min; extra.max = f.max === '' ? null : f.max; }
+  if (f.group === 'pay'){ extra.neg = f.neg; extra.always = !!f.always; }
+  if (f.group === 'status'){ extra.check = !!f.check; extra.spell = f.spell; }
+  if (f.group === 'cust_type') extra.spell = f.spell;
+  if (f.group === 'custom') extra.scope = f.scope;
+  return {key: f.key, group: f.group, name: f.name, value: f.value, parent: f.parent, words: f.words, not_words: f.not_words,
+    pattern: f.pattern, extra, tag: !!f.tag, active: !!f.active}; }
+function kwFormHtml(){
+  const f = S.kf; if (!f) return ''; const g = kwG(f.group), roles = g.roles || {}, L = (S.auto || {}).limits || {};
+  const nameLbl = {brand:'ชื่อยี่ห้อ (= ชื่อแท็ก)', model:'ชื่อรุ่น (= ชื่อแท็ก)', income_band:'ชื่อแท็ก', custom:'ชื่อแท็ก',
+    cust_type:'ชื่อประเภทลูกค้า (= ชื่อแท็ก)', status:'สถานะ (= ชื่อแท็ก)', pay:'ข้อความที่ลงช่องประวัติผ่อน (= ชื่อแท็ก)'}[f.group] || 'ชื่อ';
+  const sel = (k, opts) => `<select class="in" data-kf="${k}">${opts.map(o => `<option value="${h(o[0])}" ${String(f[k]) === String(o[0]) ? 'selected' : ''}>${h(o[1])}</option>`).join('')}</select>`;
+  const fl = [];
+  fl.push(`<label>${h(nameLbl)}<input class="in" id="kf-name" data-kf="name" maxlength="${L.name || 60}" value="${h(f.name)}"></label>`);
+  if (Object.keys(roles).length) fl.push(`<label>บทบาท${sel('value', [['', '— เลือก —']].concat(Object.keys(roles).map(k => [k, roles[k]])))}</label>`);
+  if (f.group === 'model'){
+    fl.push(`<label>ยี่ห้อ${sel('parent', [['', '— เลือกยี่ห้อ —']].concat(kwRows('brand').map(b => [b.name, b.name])))}</label>`);
+    fl.push(`<label>ค่าที่ใช้เทียบตัวเลือก CAR/สูตร <span class="mini">— ภาษาอังกฤษ เช่น d-max (ว่าง = ใช้ชื่อรุ่น)</span><input class="in" data-kf="value" value="${h(f.value)}"></label>`); }
+  if (f.group === 'occupation'){
+    fl.push(`<label>ประเภทลูกค้าของอาชีพนี้${sel('parent', [['', '— ไม่ระบุ —']].concat(kwRows('cust_type').map(t => [t.value, t.name])))}</label>`);
+    fl.push(`<label>คำที่ลงช่องอาชีพ <span class="mini">— ว่าง = ใช้คำที่ลูกค้าพิมพ์</span><input class="in" data-kf="value" value="${h(f.value)}"></label>`); }
+  if (f.group === 'cust_type') fl.push(`<label>รหัส <span class="mini">— ใช้ผูกกับอาชีพ (ว่าง = ใช้ชื่อ)</span><input class="in" data-kf="value" value="${h(f.value)}" ${f.system ? 'disabled' : ''}></label>`);
+  if (f.group === 'status') fl.push(`<label>ค่าที่ลงช่องสถานะลูกค้า <span class="mini">— ว่าง = ใช้ชื่อ</span><input class="in" data-kf="value" value="${h(f.value)}"></label>`);
+  if (f.group === 'income_band'){
+    fl.push(`<label>ตั้งแต่ (บาท/เดือน)<input class="in" data-kf="min" inputmode="numeric" value="${h(f.min)}"></label>`);
+    fl.push(`<label>ถึง (ไม่ถึง) <span class="mini">— ว่าง = ไม่มีเพดาน</span><input class="in" data-kf="max" inputmode="numeric" value="${h(f.max)}"></label>`); }
+  if (f.group === 'pay') fl.push(`<label>ถ้ามีคำปฏิเสธนำหน้า ลงช่องเป็น <span class="mini">— ว่าง = ไม่นับ</span><input class="in" data-kf="neg" value="${h(f.neg)}" placeholder="เช่น ไม่ติดบูโร"></label>`);
+  if (f.group === 'custom') fl.push(`<label>ดูข้อความของ${sel('scope', Object.entries((S.auto || {}).scopes || {in:'ข้อความลูกค้า', all:'ข้อความลูกค้าและของเรา'}))}</label>`);
+  if (f.group !== 'income_band'){
+    fl.push(`<label class="wide">คำที่จับ <span class="mini">— บรรทัดละคำ หรือคั่นด้วย , · ข้อความมีคำไหนก็ได้ = เข้าแถวนี้ (อย่างน้อย ${L.wordMin || 2} ตัวอักษร · คำอังกฤษต้องขึ้นต้นคำ · ช่องว่างในคำ = มีหรือไม่มีก็ได้)</span>
+      <textarea class="in" data-kf="words" rows="4">${h(f.words)}</textarea></label>`); }
+  if (f.group === 'custom') fl.push(`<label class="wide">คำยกเว้น <span class="mini">— ข้อความไหนมีคำนี้ = ไม่นับข้อความนั้น (ไม่ใส่ก็ได้)</span>
+      <textarea class="in" data-kf="not_words" rows="2">${h(f.not_words)}</textarea></label>`);
+  if (f.group === 'status' || f.group === 'cust_type') fl.push(`<label class="wide">ตัวสะกดของตัวเลือกในชีต <span class="mini">— บรรทัดละแบบ (ว่าง = ใช้ชื่อ)</span>
+      <textarea class="in" data-kf="spell" rows="2">${h(f.spell)}</textarea></label>`);
+  if (f.group === 'status') fl.push(`<label class="chk"><input type="checkbox" data-kf="check" ${f.check ? 'checked' : ''}> มีคำปฏิเสธนำหน้า ("ไม่…") = ไม่นับ</label>`);
+  if (f.group !== 'income_band' && f.group !== 'cust_type' && f.group !== 'custom') fl.push(`<details class="wide kfx" ${f.showRx ? 'open' : ''}><summary>รูปแบบขั้นสูง (regex)${f.system ? ' — ค่าเดิมของระบบที่ย้ายมาจากโค้ด' : ''}</summary>
+      <div class="mini" style="margin:6px 0">ใช้คู่กับ "คำที่จับ" (เข้าอันไหนก็ได้) · สำหรับคนที่เขียน regex เป็น — ไม่แน่ใจให้เพิ่มเป็นคำที่จับแทน</div>
+      <textarea class="in mono" data-kf="pattern" rows="4" spellcheck="false">${h(f.pattern)}</textarea></details>`);
+  if (g.tag && f.group !== 'custom') fl.push(`<label class="chk"><input type="checkbox" data-kf="tag" ${f.tag ? 'checked' : ''}> ติดแท็กลูกค้า (ชื่อแท็ก = ชื่อแถวนี้)</label>`);
+  fl.push(`<label class="chk"><input type="checkbox" data-kf="active" ${f.active ? 'checked' : ''}> เปิดใช้</label>`);
+  const canPrev = !['income_band', 'cust_type'].includes(f.group);
+  return `<section class="card kf" id="kf-card"><div class="ch"><h2>${f.key ? 'แก้' : 'เพิ่ม'}${h(g.name || '')}${f.key ? ' — ' + h(f.name) : ''}</h2></div><div class="mini">${h(g.desc || '')}</div>
+    <div class="afg">${fl.join('')}</div>
+    <div class="fr">${canPrev ? '<button class="btn" data-act="kwPreview">ทดสอบกับแชทย้อนหลัง</button>' : ''}<button class="btn pri" data-act="kwSave">${ic('bolt',16)}บันทึก</button>
+      <button class="btn" data-act="kwCancel">ยกเลิก</button></div>
+    <div id="kf-prev">${kwPrevHtml()}</div>
+    <div class="mini">บันทึกแล้วทุกหน้าจอที่จับคำ (แชท · ใบเก็บลีด · ข้อมูลลูกค้า) ใช้คำใหม่ภายใน ~15 วิ${g.tag ? ' · แท็กลูกค้าย้อนหลังให้ ' + n0((S.auto || {}).scanDays || 60) + ' วัน' : ''}
+      · ภาษาไทยไม่เว้นวรรค — คำสั้นอาจไปจับกลางคำอื่น กด "ทดสอบ" ดูตัวอย่างก่อนบันทึก</div></section>`; }
+
+/* ── แถว ── */
+function kwRowHtml(r){
+  if (S.kf && S.kf.key === r.key) return kwFormHtml();
+  const g = kwG(r.group), roles = g.roles || {}, ex = r.extra || {};
+  const role = roles[r.value] ? `<span class="pill p-mute">${h(roles[r.value])}</span>` : '';
+  const par = r.group === 'occupation' && r.parent ? `<span class="pill p-teal">${h(kwTypeName(r.parent))}</span>` : '';
+  const tagSw = g.tag && r.group !== 'custom' ? `<label class="sw" title="ติดแท็กลูกค้าด้วยชื่อแถวนี้"><input type="checkbox" data-kt="tag" data-key="${h(r.key)}" ${r.tag ? 'checked' : ''}><span>ติดแท็ก</span></label>` : '';
+  const cnt = g.tag && r.tag ? `<span class="mini">ติดอยู่ ${n0(r.count)} ราย</span>` : '';
+  const badge = r.system ? (r.edited ? '<span class="pill p-warn">แก้จากค่าเดิมแล้ว</span>' : '') : (r.group === 'custom' ? '' : '<span class="pill p-br">เพิ่มเอง</span>');
+  const btns = `<button class="btn sm" data-act="kwEdit" data-key="${h(r.key)}">${ic('edit',14)}แก้ไข</button>`
+    + (r.system ? (r.edited ? `<button class="btn sm" data-act="kwReset" data-key="${h(r.key)}">คืนค่าเดิม</button>` : '')
+                : `<button class="btn sm" data-act="kwDel" data-key="${h(r.key)}">${ic('trash',14)}ลบ</button>`);
+  const lines = [];
+  if (r.group === 'income_band') lines.push(`รายได้ ${n0(ex.min)}${ex.max != null ? ' – ' + n0(ex.max) : ' ขึ้นไป'} บาท/เดือน (จากช่อง "รายได้" ของลูกค้า)`);
+  if (r.group === 'pay' && ex.neg) lines.push(`มีคำปฏิเสธนำหน้า → "${ex.neg}"`);
+  if (r.group === 'status') lines.push((ex.check ? 'มีคำปฏิเสธนำหน้า = ไม่นับ · ' : '') + 'ตัวเลือกชีต: ' + (ex.spell || []).join(' / '));
+  if (r.group === 'cust_type') lines.push('ตัวสะกดในชีต: ' + (ex.spell || []).join(' / '));
+  if (r.group === 'occupation') lines.push('ลงช่องอาชีพเป็น: ' + (r.value || 'คำที่ลูกค้าพิมพ์'));
+  if (r.group === 'model' && r.value) lines.push('เทียบตัวเลือก CAR/สูตร ด้วย: ' + r.value);
+  if (r.group === 'custom') lines.push('ดู' + (((S.auto || {}).scopes || {})[ex.scope || 'in'] || ''));
+  const rx = r.readable || [], more = S.kwMore[r.key];
+  return `<div class="rule ${r.active ? '' : 'off'}" id="kr-${h(r.key)}">
+    <div class="rh"><label class="sw" title="${r.active ? 'ปิดใช้' : 'เปิดใช้'}"><input type="checkbox" data-kt="active" data-key="${h(r.key)}" ${r.active ? 'checked' : ''}><span>${r.active ? 'เปิด' : 'ปิด'}</span></label>
+      <span class="pill p-br tagp">${h(r.name)}</span>${role}${par}${tagSw}${cnt}${badge}<span class="grow"></span>${btns}</div>
+    ${(r.words || []).length ? `<div class="rw"><span class="mini lbl">คำที่จับ</span>${kwChips(r.words)}</div>` : ''}
+    ${rx.length ? `<div class="rw"><span class="mini lbl" title="ค่าเดิมของระบบ (regex) แสดงแบบอ่านง่าย — ดูแบบเต็มได้ในปุ่มแก้ไข">รูปแบบเดิม</span>${kwChips(more ? rx : rx.slice(0, 12), 'rx')}${rx.length > 12 && !more ? `<button class="lk mini" data-act="kwMore" data-key="${h(r.key)}">+ อีก ${rx.length - 12}</button>` : ''}</div>` : ''}
+    ${(r.not_words || []).length ? `<div class="rw"><span class="mini lbl">ยกเว้น</span>${kwChips(r.not_words, 'no')}</div>` : ''}
+    ${lines.length ? `<div class="mini">${lines.map(h).join(' · ')}</div>` : ''}
+    ${r.updated_by ? `<div class="mini">แก้ล่าสุดโดย ${h(r.updated_by)} ${h(ago(r.updated_at))}</div>` : ''}</div>`; }
+
+function kwNewBtn(g, parent, label){ return `<button class="btn sm" data-act="kwNew" data-g="${g}" data-parent="${h(parent || '')}">${ic('plus',14)}${h(label)}</button>`; }
+function kwNewForm(g, parent){ const f = S.kf; return f && !f.key && f.group === g && (f.parent || '') === (parent || '') ? kwFormHtml() : ''; }
+function kwMatch(r){ const q = (S.kwQ || '').trim().toLowerCase(); if (!q) return true;
+  return [r.name, r.value].concat(r.words || [], r.readable || []).some(x => String(x || '').toLowerCase().includes(q)); }
+function kwFill(g){ const F = (S.auto || {}).fill || {}; const n = (F.count || {})[g]; return n == null ? '' : `<span class="mini">ระบบเติมช่องให้ ${n0(n)} รายใน ${n0(F.days || 30)} วัน</span>`; }
+
+function kwCarHtml(){
+  const brands = kwRows('brand'), models = kwRows('model'), names = new Set(brands.map(b => b.name));
+  const by = {}; models.forEach(m => { const k = names.has(m.parent) ? m.parent : ''; (by[k] = by[k] || []).push(m); });
+  const blocks = brands.map(b => {
+    const ms = by[b.name] || [], show = ms.filter(m => kwMatch(m) || kwMatch(b));
+    if (!kwMatch(b) && !show.length) return '';
+    return `<div class="kwb">${kwRowHtml(b)}<div class="kwm">${show.map(kwRowHtml).join('')}${kwNewForm('model', b.name)}
+      <div>${kwNewBtn('model', b.name, 'เพิ่มรุ่นของ ' + b.name)}</div></div></div>`; }).join('');
+  const orphan = (by[''] || []).filter(kwMatch);
+  return `<section class="card"><div class="ch"><h2>ยี่ห้อ + รุ่นรถ (${n0(brands.length)} ยี่ห้อ · ${n0(models.length)} รุ่น)</h2>${kwFill('brand')}</div>
+    <div class="mini">${h(kwG('model').desc || '')}</div>
+    <div class="kwtool">${kwNewBtn('brand', '', 'เพิ่มยี่ห้อ')}</div>${kwNewForm('brand', '')}
+    ${blocks || '<div class="empty">ไม่เจอคำที่ค้นหา</div>'}
+    ${orphan.length ? `<div class="kwb"><div class="mini">รุ่นที่ยังไม่ได้ผูกยี่ห้อ</div><div class="kwm">${orphan.map(kwRowHtml).join('')}</div></div>` : ''}</section>`; }
+
+function kwGroupHtml(gk){
+  const g = kwG(gk), rs = kwRows(gk), show = rs.filter(kwMatch);
+  const addLbl = {custom:'เพิ่มกฎ', income_band:'เพิ่มช่วงรายได้'}[gk] || 'เพิ่ม';
+  return `<section class="card"><div class="ch"><h2>${h(g.name || gk)} (${n0(rs.length)})</h2>${kwFill(gk)}</div>
+    <div class="mini">${h(g.desc || '')}</div>
+    <div class="kwtool">${kwNewBtn(gk, '', addLbl)}</div>${kwNewForm(gk, '')}
+    ${show.length ? show.map(kwRowHtml).join('') : `<div class="empty">${rs.length ? 'ไม่เจอคำที่ค้นหา' : (gk === 'custom' ? 'ยังไม่มีกฎของเรา — กด "เพิ่มกฎ" แล้วใส่คำที่อยากให้ระบบจับ เช่น ลูกค้าถามเรื่องดาวน์ → แท็ก "ถามดาวน์"' : 'ยังไม่มีแถว')}</div>`}</section>`; }
+
+function kwTestRes(res){ if (!res) return '';
+  if (res.loading) return '<div class="mini">กำลังดู…</div>';
+  const f = res.fields || [], t = res.tags || [];
+  if (!f.length && !t.length) return '<div class="mini">ระบบไม่จับอะไรจากข้อความนี้</div>';
+  return `<div class="kwres">${f.map(x => `<div class="kwr"><span class="mini">${h(x.field)}</span><b>${h(x.value)}</b>${x.word ? `<span class="kw rx">${h(x.word)}</span>` : ''}</div>`).join('')}</div>
+    ${t.length ? `<div class="rw" style="margin-top:8px"><span class="mini lbl">แท็กที่ติด</span>${t.map(x => `<span class="pill p-br tagp" title="${h(x.word)}">${h(x.tag)}</span>`).join(' ')}</div>` : ''}`; }
+function kwTestHtml(){ const T = S.kwTest || {};
+  return `<section class="card" id="kw-test"><div class="ch"><h2>ลองพิมพ์ข้อความลูกค้า</h2><span class="mini">ดูว่าระบบจับอะไร + ติดแท็กอะไร (ไม่บันทึก)</span></div>
+    <div class="kwt"><textarea class="in" id="kw-test-in" rows="2" placeholder="เช่น สนใจดีแม็กปี 20 เงินเดือน 25,000 ทำงานโรงงานมา 3 ปี ไม่ติดบูโร">${h(T.text || '')}</textarea>
+      <button class="btn pri" data-act="kwTest">${ic('search',16)}ดูผล</button></div>
+    <div id="kw-test-res">${kwTestRes(T.res)}</div></section>`; }
+
+function kwStatusHtml(A){ const last = A.last || {};
+  return A.busy ? '<div class="note" style="background:var(--brand-s);color:var(--brand-d)">กำลังอ่านแชทย้อนหลังและติดแท็กให้ตามคำล่าสุด…</div>'
+    : last.error ? `<div class="err">อ่านแชทย้อนหลังรอบล่าสุดไม่สำเร็จ: ${h(last.error)}</div>`
+    : last.at ? `<div class="mini">ติดแท็กย้อนหลังล่าสุด ${h(ago(last.at))}${last.by ? ' (' + h(last.by) + ')' : ''} · แชท ${n0(last.chats)} ราย · ลูกค้าที่มีแท็กจากระบบอัตโนมัติ ${n0(last.tagged)} ราย</div>` : ''; }
 function pageAuto(){
   const A = S.auto;
-  const acts = BOOT.admin ? `<button class="btn pri" data-act="autoNew">${ic('plus',16)}เพิ่มกฎ</button>` : '';
+  const acts = `<button class="btn" data-act="kwRescan" title="อ่านแชทย้อนหลังแล้วติดแท็กใหม่ตามคำปัจจุบัน">${ic('refresh',16)}ติดแท็กย้อนหลังใหม่</button>`;
   const head = header('งานขาย · ระบบอัตโนมัติ', 'ระบบอัตโนมัติ',
-    'แท็กลูกค้าให้เองจากคำที่พิมพ์ในแชท LINE / Facebook — แท็กไปขึ้นในรายชื่อแชทและข้อมูลลูกค้าของ Connect (ช่อง "แท็ก")', acts);
+    'คำทั้งหมดที่ระบบใช้จับข้อมูลจากแชท LINE / Facebook และแท็กลูกค้า (ยี่ห้อ · รุ่น · ช่วงรายได้ …) — เก็บในฐานข้อมูล แก้ได้ที่หน้านี้ · แท็กขึ้นในรายชื่อแชทและข้อมูลลูกค้าของ Connect', acts);
   if (!A) return head + '<div class="load">กำลังโหลด…</div>';
   if (A.error) return head + `<div class="err">${h(A.error)}</div>`;
-  const last = A.last || {};
-  const status = A.busy ? '<div class="note" style="background:var(--brand-s);color:var(--brand-d)">กำลังอ่านแชทย้อนหลังและติดแท็กให้ตามกฎล่าสุด…</div>'
-    : last.error ? `<div class="err">อ่านแชทย้อนหลังรอบล่าสุดไม่สำเร็จ: ${h(last.error)}</div>`
-    : last.at ? `<div class="mini">อ่านแชทย้อนหลังล่าสุด ${h(ago(last.at))}${last.by ? ' (หลัง ' + h(last.by) + ' แก้กฎ)' : ''} · แชท ${n0(last.chats)} ราย · ลูกค้าที่มีแท็กจากระบบอัตโนมัติ ${n0(last.tagged)} ราย</div>` : '';
-  const rs = A.rules || [];
-  const list = rs.length ? rs.map(r => `<div class="rule ${r.on ? '' : 'off'}">
-      <div class="rh"><label class="sw" title="${r.on ? 'ปิดกฎ' : 'เปิดกฎ'}"><input type="checkbox" data-act="autoToggle" data-id="${h(r.id)}" ${r.on ? 'checked' : ''}><span>${r.on ? 'เปิด' : 'ปิด'}</span></label>
-        <span class="pill p-br tagp">${h(r.tag)}</span><span class="mini">ติดอยู่ ${n0(r.count)} ราย</span><span class="grow"></span>
-        <button class="btn sm" data-act="autoEdit" data-id="${h(r.id)}">${ic('edit',14)}แก้ไข</button>
-        <button class="btn sm" data-act="autoDel" data-id="${h(r.id)}">${ic('trash',14)}ลบ</button></div>
-      <div class="rw"><span class="mini lbl">คำที่จับ</span>${kwChips(r.words)}</div>
-      ${(r.not_words || []).length ? `<div class="rw"><span class="mini lbl">ยกเว้น</span>${kwChips(r.not_words, 'no')}</div>` : ''}
-      <div class="mini">ดู${h((A.scopes || {})[r.scope] || r.scope)}${r.by ? ' · แก้ล่าสุดโดย ' + h(r.by) : ''}${r.at ? ' ' + h(ago(r.at)) : ''}</div></div>`).join('')
-    : '<div class="empty">ยังไม่มีกฎของเรา — กด "เพิ่มกฎ" แล้วใส่คำที่อยากให้ระบบจับ เช่น ลูกค้าถามเรื่องดาวน์ → แท็ก "ถามดาวน์"</div>';
-  const bi = A.builtin || [];
-  const biRows = bi.map(b => `<tr><td><b>${h(b.name)}</b><div class="mini">ลงช่อง: ${h(b.to)}</div></td><td class="muted">${h(b.how)}${(b.top || []).length ? `<div class="mini" style="margin-top:4px">${b.top.map(x => h(x[0]) + ' ' + n0(x[1])).join(' · ')}</div>` : ''}</td><td style="text-align:right;white-space:nowrap"><b>${n0(b.count)}</b><div class="mini">ราย</div></td></tr>`).join('');
-  return head + status + afForm()
-    + `<section class="card"><div class="ch"><h2>กฎแท็กของเรา (${n0(rs.length)})</h2><span class="mini">เพิ่ม · แก้ · ลบ · เปิด/ปิดได้เอง</span></div>${list}</section>`
-    + `<section class="card"><div class="ch"><h2>ระบบจับในตัว</h2><span class="mini">อยู่ในโค้ด แก้จากหน้านี้ไม่ได้ — ตัวเลข = ลูกค้าที่ระบบเติมให้ใน ${n0((bi[0] || {}).days || 30)} วัน</span></div>
-      <div class="tbl"><table><thead><tr><th>เรื่อง</th><th>จับจากคำอะไร</th><th style="text-align:right">เติมให้</th></tr></thead><tbody>${biRows}</tbody></table></div></section>`; }
+  const status = `<div id="kw-status">${kwStatusHtml(A)}</div>`;
+  const src = A.source && A.source !== 'db' ? '<div class="note">ตารางคำยังไม่ถูกสร้างบนเซิร์ฟเวอร์ (ยังไม่ได้ migrate) — ที่เห็นคือค่าตั้งต้นจากโค้ด แก้ได้หลัง migrate</div>' : '';
+  const tab = KW_TABS.find(t => t.k === S.kwTab) || KW_TABS[0];
+  const tabs = `<div class="chips">${KW_TABS.map(t => `<button class="chip ${t.k === tab.k ? 'on' : ''}" data-act="kwTab" data-k="${t.k}">${h(t.l)}<span class="n">${n0(t.g.reduce((s, g) => s + kwRows(g).length, 0))}</span></button>`).join('')}</div>`;
+  const search = `<div class="kwtool"><input class="in" id="kw-q" data-act="kwQ" value="${h(S.kwQ || '')}" placeholder="ค้นหาคำ / ชื่อ เช่น ดีแม็ก, บูโร" style="max-width:320px"></div>`;
+  const body = tab.k === 'car' ? kwCarHtml() : tab.g.map(kwGroupHtml).join('');
+  return head + src + status + kwTestHtml() + tabs + search + body; }
 
 /* ── กดปุ่ม (ผูกที่เดียว) ── */
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   const a = t.dataset.act;
   if (a === 'nav'){ S.page = t.dataset.k; S.form = null; setUrl(); render(); window.scrollTo(0, 0); return; }
-  if (a === 'autoNew'){ S.af = {id:'', tag:'', words:'', not_words:'', scope:'in', on:true}; S.afPrev = null; render();
-    const i = document.getElementById('af-tag'); if (i) i.focus(); return; }
-  if (a === 'autoEdit'){ const r = ((S.auto || {}).rules || []).find(x => x.id === t.dataset.id); if (!r) return;
-    S.af = {id:r.id, tag:r.tag, words:(r.words||[]).join('\n'), not_words:(r.not_words||[]).join('\n'), scope:r.scope || 'in', on:!!r.on};
-    S.afPrev = null; render(); const f = document.getElementById('af-card'); if (f) f.scrollIntoView({behavior:'smooth', block:'start'}); return; }
-  if (a === 'autoCancel'){ S.af = null; S.afPrev = null; render(); return; }
-  if (a === 'autoTest'){ t.disabled = true; S.afPrev = {loading:true}; paintAf();
-    const d = await api('/crm/api/auto', {action:'preview', rule: afRule()}); S.afPrev = d.ok ? d : {error: d.error || 'ทดสอบไม่ได้'}; paintAf(); return; }
-  if (a === 'autoSave'){ t.disabled = true; const ok = await autoPost({action:'save', rule: afRule()}); if (ok){ S.af = null; S.afPrev = null; render(); } else t.disabled = false; return; }
-  if (a === 'autoDel'){ const r = ((S.auto || {}).rules || []).find(x => x.id === t.dataset.id);
-    if (!r || !confirm('ลบกฎ "' + r.tag + '" ?\nแท็กที่ระบบติดให้จากกฎนี้จะถูกเอาออกจากลูกค้าทุกราย (แท็กที่คนใส่เองไม่โดน)')) return;
-    t.disabled = true; await autoPost({action:'delete', id: r.id}); return; }
+  if (a === 'kwTab'){ S.kwTab = t.dataset.k; S.kf = null; S.kfPrev = null; render(); return; }
+  if (a === 'kwNew'){ S.kf = kfFrom(null, t.dataset.g, t.dataset.parent || ''); S.kfPrev = null; render();
+    const i = document.getElementById('kf-name'); if (i){ i.focus(); i.scrollIntoView({behavior:'smooth', block:'center'}); } return; }
+  if (a === 'kwEdit'){ const r = kwRow(t.dataset.key); if (!r) return; S.kf = kfFrom(r); S.kfPrev = null; render();
+    const f = document.getElementById('kf-card'); if (f) f.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+  if (a === 'kwCancel'){ S.kf = null; S.kfPrev = null; render(); return; }
+  if (a === 'kwPreview'){ t.disabled = true; S.kfPrev = {loading:true}; paintKf();
+    const d = await api('/crm/api/auto', {action:'preview', row: kfRow()}); S.kfPrev = d.ok ? d : {error: d.error || 'ทดสอบไม่ได้'}; paintKf(); return; }
+  if (a === 'kwSave'){ t.disabled = true; const ok = await autoPost({action:'save', row: kfRow()}); if (ok){ S.kf = null; S.kfPrev = null; render(); } else t.disabled = false; return; }
+  if (a === 'kwDel'){ const r = kwRow(t.dataset.key);
+    if (!r || !confirm('ลบ "' + r.name + '" ?' + (kwG(r.group).tag ? '\nแท็กที่ระบบติดให้จากแถวนี้จะถูกเอาออกจากลูกค้าทุกราย (แท็กที่คนใส่เองไม่โดน)' : ''))) return;
+    t.disabled = true; await autoPost({action:'delete', key: r.key}); return; }
+  if (a === 'kwReset'){ const r = kwRow(t.dataset.key); if (!r || !confirm('คืนค่าเดิมของระบบให้ "' + r.name + '" ?\nคำ/รูปแบบที่แก้ไว้จะหายไป')) return;
+    t.disabled = true; await autoPost({action:'reset', key: r.key}); return; }
+  if (a === 'kwRescan'){ t.disabled = true; await autoPost({action:'rescan'}); return; }
+  if (a === 'kwMore'){ S.kwMore[t.dataset.key] = 1; render(); return; }
+  if (a === 'kwTest'){ const i = document.getElementById('kw-test-in'); const text = i ? i.value : '';
+    S.kwTest = {text, res:{loading:true}}; const el = document.getElementById('kw-test-res'); if (el) el.innerHTML = kwTestRes(S.kwTest.res);
+    const d = await api('/crm/api/auto', {action:'test', text}); S.kwTest.res = d.ok ? d : {fields:[], tags:[]};
+    const el2 = document.getElementById('kw-test-res'); if (el2) el2.innerHTML = kwTestRes(S.kwTest.res); return; }
   if (a === 'autoOpen'){ S.chatId = t.dataset.id; S.page = 'chat'; setUrl(); render(); window.scrollTo(0, 0); return; }
   if (a === 'theme'){ const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', cur); try { localStorage.setItem('oxlet_theme', cur); } catch(x){} renderSide(); return; }
   if (a === 'refresh'){ t.disabled = true; S.cust = {}; S.stock = null; await load(true); toast('ดึงข้อมูลใหม่แล้ว'); return; }
@@ -1032,11 +1179,14 @@ document.addEventListener('click', async e => {
   if (a === 'checkphoneGo'){ await checkPhone(); return; }
 });
 document.addEventListener('change', async e => { const t = e.target; if (!t || !t.dataset) return;
-  if (t.dataset.act === 'autoToggle'){ t.disabled = true; await autoPost({action:'toggle', id: t.dataset.id, on: t.checked}); return; }
-  if (t.dataset.af && S.af){ S.af[t.dataset.af] = t.type === 'checkbox' ? t.checked : t.value; } });
+  if (t.dataset.kt){ t.disabled = true; await autoPost({action:'toggle', key: t.dataset.key, field: t.dataset.kt, on: t.checked}); return; }
+  if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.type === 'checkbox' ? t.checked : t.value; } });
 let _qt = null;
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return;
-  if (t.dataset.af && S.af){ S.af[t.dataset.af] = t.value; return; }
+  if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.value; return; }
+  if (t.id === 'kw-test-in'){ S.kwTest = Object.assign(S.kwTest || {}, {text: t.value}); return; }
+  if (t.dataset.act === 'kwQ'){ clearTimeout(_qt); const v = t.value;
+    _qt = setTimeout(() => { S.kwQ = v; render(); const el = document.getElementById('kw-q'); if (el){ el.focus(); el.setSelectionRange(v.length, v.length); } }, 250); return; }
   if (t.dataset.act === 'custQ' || t.dataset.act === 'stockQ'){ clearTimeout(_qt); const id = t.id, v = t.value;
     _qt = setTimeout(() => { if (id === 'cust-q') { S.q = v; S.custLimit = 60; } else S.stockQ = v; render();
       const el = document.getElementById(id); if (el){ el.focus(); el.setSelectionRange(v.length, v.length); } }, 250); } });

@@ -750,6 +750,11 @@ def note_customer_message(user_id: str, at=None, preview: str = "", picture: str
         kick_chat(o, preview or "")
     except Exception:
         pass
+    try:                                       # ★ 21 ต.ค.69 ลีดรับซื้อ → ใบเคสรับซื้อตัวอย่างลงกลุ่มทดสอบ (TestBot02 · thread แยก)
+        from .buyshow import kick as _buy_kick
+        _buy_kick(o)
+    except Exception:
+        pass
     if picture:
         o.picture_url, o.picture_at = picture[:500], timezone.now()
         ChatOwner.objects.filter(pk=o.pk).update(picture_url=o.picture_url, picture_at=o.picture_at)
@@ -878,6 +883,11 @@ def note_fb_batch(fp, msgs):
         try:
             from .autolead import kick_chat
             kick_chat(o, "\n".join(live_in))
+        except Exception:
+            pass
+        try:
+            from .buyshow import kick as _buy_kick
+            _buy_kick(o)
         except Exception:
             pass
     if new_round and c.get("notify_sellers"):
@@ -1049,6 +1059,13 @@ def tick(now=None) -> dict:
             out["autolead"] = r
     except Exception as e:
         out["autoleadError"] = str(e)[:120]
+    try:                                     # ★ 21 ต.ค.69 ใบเคสรับซื้อตัวอย่าง → กลุ่มทดสอบ TestBot02 (thread แยก)
+        from .buyshow import tick_bg as _buy_tick
+        r = _buy_tick(now)
+        if r:
+            out["buyshow"] = r
+    except Exception as e:
+        out["buyshowError"] = str(e)[:120]
     try:                                     # ห้องพัก Lead: ลีดที่แอดมินจ่ายเบอร์ในกลุ่มแล้ว → จับคู่ใบ/จ่ายให้ใคร เอง (thread แยก)
         r = slip_sweep_bg()
         if r:
@@ -1086,6 +1103,13 @@ def tick(now=None) -> dict:
             out["crm"] = r
     except Exception as e:
         out["crmError"] = str(e)[:120]
+    try:                                     # ★ 21 ต.ค.69 แท็กอัตโนมัติ: อ่านแชทย้อนหลังวันละครั้ง (ตี 3 · thread แยก)
+        from .autotag import maybe_daily
+        r = maybe_daily(now)
+        if r:
+            out["autotag"] = r
+    except Exception as e:
+        out["autotagError"] = str(e)[:120]
     c = cfg()
     rows = list(ChatOwner.objects.select_related("owner", "profile", "fb_profile")
                 .filter(awaiting_since__isnull=False, escalated_at__isnull=True, due_at__lte=now)
@@ -1545,28 +1569,12 @@ def _vocab() -> dict:
 # ยี่ห้อที่ลูกค้าพิมพ์เป็นไทย (★ 4 ต.ค.69 — เจ้าของแจ้ง "ลูกค้าก็บอกอยู่นะ อีซูซุ" แต่ใบจ่ายลีดขึ้น "รถ : -")
 #   บอกแค่ยี่ห้อ = รู้ว่าลูกค้าถามรถ แต่ไม่รู้รุ่น (อีซูซุ = D Max / MuX / Mu7?) → ได้ "รถลูกค้าถาม" อย่างเดียว
 #   ยกเว้นยี่ห้อที่ชีตใช้ตัวเลือกระดับยี่ห้ออยู่แล้ว (Benz · BMW · MG · Hyundai · Kia) → ได้ "CAR / สูตร" ด้วย
-_TH_BRAND = {
-    "อีซูซุ": "isuzu", "อิซูซุ": "isuzu", "โตโยต้า": "toyota", "โตโยตา": "toyota", "ฮอนด้า": "honda",
-    "ฮอนดา": "honda", "นิสสัน": "nissan", "นิสัน": "nissan", "มาสด้า": "mazda", "มาสดา": "mazda",
-    "มิตซูบิชิ": "mitsubishi", "มิตซู": "mitsubishi", "ฟอร์ด": "ford", "เชฟโรเลต": "chevrolet",
-    "ซูซูกิ": "suzuki", "เบนซ์": "benz", "เบ๊นซ์": "benz", "บีเอ็ม": "bmw", "เอ็มจี": "mg",
-    "ฮุนได": "hyundai", "ซูบารุ": "subaru", "เล็กซัส": "lexus", "วอลโว่": "volvo", "ฮาวาล": "haval",
-}
-_KIA_TH = re.compile(r"เกีย(?!ร)")          # "เกียร์ออโต้" ไม่ใช่ Kia (คำนี้โผล่บ่อยในแชทซื้อรถ)
-_BRAND_EN = re.compile(r"(?<![a-z0-9])(isuzu|toyota|honda|nissan|mazda|mitsubishi|ford|chevrolet|chevy|suzuki|"
-                       r"benz|mercedes|bmw|mg|hyundai|kia|subaru|lexus|volvo|haval|byd|gwm|neta|peugeot)(?![a-z])")
-
-
+#   ★ 21 ต.ค.69 คำของแต่ละยี่ห้ออยู่ในฐานข้อมูล (หมวด brand · แก้ได้ที่ /crm/?p=auto · ค่าตั้งต้น kw_defaults.BRANDS)
 def brand_in(text: str) -> str:
-    """ยี่ห้อรถในข้อความ (ชื่อภาษาอังกฤษตัวเล็ก) · ไม่มี = ค่าว่าง"""
-    low = (text or "").lower()
-    for th, en in _TH_BRAND.items():
-        if th in low:
-            return en
-    if _KIA_TH.search(low):
-        return "kia"
-    m = _BRAND_EN.search(low)
-    return {"mercedes": "benz", "chevy": "chevrolet"}.get(m.group(1), m.group(1)) if m else ""
+    """ยี่ห้อรถในข้อความ (ค่าของแถวยี่ห้อ = ชื่ออังกฤษตัวเล็ก) — ยี่ห้อที่อยู่ก่อนในข้อความชนะ · ไม่มี = ค่าว่าง"""
+    from . import kwdb
+    hits = kwdb.brands_in(text)
+    return (hits[0][0].get("value") or kwdb.nw(hits[0][0]["name"])) if hits else ""
 
 
 def car_in(text: str):
@@ -2820,12 +2828,30 @@ def deal_events(msgs) -> list:
             for m in (msgs or []) if isinstance(m, dict)]
 
 
+def ad_buy(lead, auto: dict | None = None) -> str:
+    """ลูกค้ามาจากโฆษณารับซื้อไหม (ช่อง ADS / การ์ดโฆษณา / ชื่อโฆษณา ตรงคำในหมวด "ลีดรับซื้อ" บทบาท "โฆษณารับซื้อ")
+    → เหตุผล ("โฆษณา: รับซื้อ CRV") หรือ \"\" """
+    from . import kwdb
+    from .lead_keywords import norm
+    auto = auto if auto is not None else (lead.auto or {})
+    ad = auto.get("_ad") or {}
+    for t in (getattr(lead, "ads", "") or "", ad.get("subtitle"), ad.get("title"), ad.get("ad_name"), ad.get("campaign_name")):
+        t = str(t or "").strip()
+        if t and kwdb.rx("deal", "ad").search(norm(t)):
+            return "โฆษณา: %s" % t[:60]
+    return ""
+
+
 def apply_deal_kind(lead, auto: dict, texts_in, texts_out=(), events=None) -> bool:
     """จับว่าเป็นลีดรับซื้อ/มีรถเทิร์นจากแชท → แก้ `auto` (ยังไม่ save) · คืนว่าเปลี่ยนไหม
     · มีเลขลีดขายแล้ว / คนยืนยันว่าเป็นลีดขาย / แอดมินติ๊กรับ lead (ห้องพักขาย) = ไม่จัดเป็นรับซื้อ
     · ระบบจัดเป็นรับซื้อไว้ แล้วลูกค้าพูดถึงรถเทิร์นทีหลัง = กลับเป็นลีดขาย (คนตั้งไว้ = ไม่แตะ)"""
     from . import lead_keywords as K
-    r = K.deal_kind(texts_in, texts_out, events)
+    r = dict(K.deal_kind(texts_in, texts_out, events))
+    if r["kind"] != "buy" and not r["trade"]:
+        why = ad_buy(lead, auto)                  # ★ 21 ต.ค.69 มาจากโฆษณา "รับซื้อ …" = ลีดรับซื้อ (ลูกค้าเล่าสภาพรถ ไม่พิมพ์คำว่าขาย)
+        if why:
+            r.update(kind="buy", why=why)
     changed = False
     now = _iso(timezone.now())
     if r["trade"] and TRADE_KEY not in auto:
@@ -2991,14 +3017,32 @@ def buy_slip_text(o, lead=None) -> str:
 # ── ช่องทางติดต่อที่ลูกค้าให้มาในแชท (เบอร์ / ID LINE) — ตัวตัดสินว่าเข้าห้องพัก Lead หรือยัง ──
 #   ID LINE: ต้องมี "ป้าย" (ไอดีไลน์ xxx · line id: xxx) **หรือ** ส่งมาเป็นคำเดียวหลังเราขอไอดี/ไลน์
 #   ไม่เดาจากคำอังกฤษลอยๆ — ข้อความอย่าง "ok55" / "civic" จะกลายเป็นไอดีปลอมแล้วลีดเข้าห้องพักทั้งที่ยังไม่ได้ช่องทางติดต่อ
-_LINE_ID_LABEL = re.compile(r"(?<![A-Za-z])(?:ไอดี\s*ไลน์|ไอดีไลน|ไลน์\s*ไอดี|ไลน์ไอดี|line\s*id|id\s*line|lineid|ไอดี|line|ไลน์|ไลร์)"
-                            r"\s*(?:คือ|ครับ|ค่ะ|นะ)?\s*[:：=]?\s*(@?[A-Za-z0-9][A-Za-z0-9._-]{2,29})", re.I)
-_ASK_ID = re.compile(r"ไอดี|ไลน์|line|\bid\b", re.I)
+#   ★ 21 ต.ค.69 คำป้าย/คำขอไอดีอยู่ในฐานข้อมูล (หมวด contact · แก้ได้ที่ /crm/?p=auto) — โครง regex รอบๆ อยู่ที่นี่
+def _line_id_label():
+    from . import kwdb
+    return kwdb.rx("contact", "label",
+                   r"(?<![A-Za-z])(?:{})\s*(?:คือ|ครับ|ค่ะ|นะ)?\s*[:：=]?\s*(@?[A-Za-z0-9][A-Za-z0-9._-]{2,29})", re.I)
+
+
+def _ask_id():
+    from . import kwdb
+    return kwdb.rx("contact", "ask", "{}", re.I)
+
+
+def _id_tail():
+    """ป้ายตามหลังไอดี ("abc12345 ไอดีไลน์" · "nokky ไลน์ค่ะ" · "0812345678 ไลน์") — คำป้ายชุดเดียวกับป้ายนำหน้า"""
+    from . import kwdb
+    return kwdb.rx("contact", "label", r"^(@?[A-Za-z0-9][A-Za-z0-9._-]{2,29})\s*(?:คือ|เป็น|นะ|นี่)?\s*(?:{})\s*(?:นะ|ครับ|ค่ะ)?$",
+                   re.I)
+
+
 _BARE_ID = re.compile(r"^[@.]?[A-Za-z0-9][A-Za-z0-9._-]{2,29}$")
 _NOT_ID = {"ok", "okay", "line", "id", "thanks", "thank", "yes", "no", "hello", "hi"}
 # ★ 20 ต.ค.69 คำลงท้ายหลังไอดี ("somchai.k ครับ" · "Ab2468 ค่ะ") — เดิมทำให้ไม่นับเป็นไอดีเลย (เฟิร์นบ่นในกลุ่มทดสอบ)
 _POLITE_END = re.compile(r"\s*(?:นะ)?(?:ครับผม|ครับพี่|ค่ะพี่|คะพี่|ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ่ะ)\s*$")
 _LAUGH = re.compile(r"^(?:ok|okay|oke|55+|ha+|haha+|lol|thx|thank\w*)\d*$", re.I)
+# ★ 21 ต.ค.69 ป้ายตามหลังไอดี (`_id_tail`) — เดิมรับแค่ป้ายนำหน้า
+#   เจอจริงบน prod 20 ต.ค.: ลูกค้าเพจพิมพ์แบบนี้ ระบบไม่จับ แอดมินจ่ายเบอร์เองแต่ใบเก็บลีดไม่ขึ้น
 
 
 def _id_ok(tok: str, allow_phone: bool = False) -> str:
@@ -3035,6 +3079,10 @@ def bare_ids(text: str, asked: bool = False) -> list:
     · ข้อความที่มีเบอร์ + ส่วนที่หน้าตาเป็นไอดีชัด ("สมชาย / 0812345670 / Johnsmith27") → นับส่วนนั้น"""
     text = text or ""
     core = _POLITE_END.sub("", text.strip()).strip()
+    mt = _id_tail().match(core)
+    if mt:                                         # มีป้ายตามหลัง = ลูกค้าบอกเองว่าเป็นไอดีไลน์ (เหมือนป้ายนำหน้า)
+        v, i = _id_ok(mt.group(1), allow_phone=True), text.find(mt.group(1))
+        return [(i, i + len(mt.group(1)), v)] if (v and i >= 0) else []
     if core and _BARE_ID.match(core):
         v = _id_ok(core)
         i = text.find(core)
@@ -3060,9 +3108,9 @@ def contacts_in(msgs) -> tuple:
         if (m.get("dir") or "in") == "out":
             # เราขอไอดี/ไลน์ตั้งแต่ข้อความลูกค้าครั้งก่อน → ข้อความถัดไปที่เป็นคำเดียวคือไอดี
             # ★ 20 ต.ค.69 ข้อความขาออกอื่น (การ์ดโฆษณา/ข้อความระบบของเพจ) ไม่ล้างสถานะ "เพิ่งขอ" แล้ว
-            asked = asked or bool(_ASK_ID.search(t))
+            asked = asked or bool(_ask_id().search(t))
             continue
-        for mm in _LINE_ID_LABEL.finditer(t):
+        for mm in _line_id_label().finditer(t):
             v = _id_ok(mm.group(1), allow_phone=True)
             if v and v not in ids:
                 ids.append(v)
@@ -3084,6 +3132,14 @@ def contacts_in(msgs) -> tuple:
 #   ส่งเป็น m["hl"] = [[เริ่ม, จบ, ช่อง]] ตำแหน่งในข้อความที่ลูกค้าพิมพ์จริง · หน้าเว็บระบายสีตามหมวด กดแล้วไปช่องนั้น
 _SPANS = {}                       # (id ข้อความ, เราเพิ่งขอไอดีไหม) → spans · ข้อความไม่เปลี่ยน คิดครั้งเดียวต่อ process
 _SPANS_MAX = 20000
+
+
+def _kw_changed():
+    _SPANS.clear()                    # ★ 21 ต.ค.69 มีคนแก้คำในหน้า "ระบบอัตโนมัติ" → ไฮไลต์ที่จำไว้ใช้ไม่ได้แล้ว
+
+
+from . import kwdb as _kwdb  # noqa: E402
+_kwdb.on_change(_kw_changed)
 
 
 def _merge_spans(sp, text) -> list:
@@ -3125,7 +3181,7 @@ def msg_spans(text: str, asked: bool = False, outbound: bool = False) -> list:
     for m in _PHONE_RE.finditer(text):
         if phones_in([m.group(0)]):
             sp.append((m.start(), m.end(), "phone"))
-    for mm in _LINE_ID_LABEL.finditer(text):
+    for mm in _line_id_label().finditer(text):
         if _id_ok(mm.group(1), allow_phone=True):
             sp.append((mm.start(1), mm.end(1), "line_id"))
     from .lead_qr import _LINK, line_contact
@@ -3164,7 +3220,7 @@ def add_spans(msgs, lead=None) -> list:
         t = m.get("text") or ""
         out = m.get("dir") == "out"
         if out:
-            asked = asked or bool(_ASK_ID.search(t))
+            asked = asked or bool(_ask_id().search(t))
             if deal != "buy" or not t:
                 continue
         elif not t.strip() or t.startswith("["):
@@ -3404,12 +3460,12 @@ def _capture_profile(o, allm, texts, outs) -> bool:
     from . import autotag as AT
     from . import lead_keywords as K
     evs = deal_events(allm)
-    # ★ 20 ต.ค.69 กฎแท็กที่แอดมินตั้งเองในหน้า "ระบบอัตโนมัติ" (CRM) — ติดเพิ่มอย่างเดียวตอนข้อความเข้า
+    # ★ 20 ต.ค.69 แท็กอัตโนมัติ (หน้า "ระบบอัตโนมัติ" ของ CRM) — ★ 21 ต.ค.69 + ยี่ห้อ/รุ่นรถ/ช่วงรายได้ ฯลฯ (autotag.found_for)
+    #   ข้อความเข้า = ติดเพิ่มอย่างเดียว (ยกเว้นแท็กจากช่องข้อมูลลูกค้า เช่นช่วงรายได้ ที่เปลี่ยนตามค่าปัจจุบัน)
     try:
-        rs = AT.active()
-        found = AT.tags_for(rs, allm) if rs else {}
+        found = AT.found_for(allm, lead)
     except Exception:
-        rs, found = [], {}
+        found = {}
     if not lead:
         dk = K.deal_kind(texts, outs, evs)
         if not K.extract(texts) and not dk["kind"] and not dk["trade"] and not found:
@@ -3420,11 +3476,11 @@ def _capture_profile(o, allm, texts, outs) -> bool:
     # ★ 11 ต.ค.69 ลีดรับซื้อ (ลูกค้าอยากขายรถให้เรา) / มีรถเทิร์น — จับตอนข้อความเข้า ลีดแยกแท็บทันที
     deal = apply_deal_kind(lead, auto, texts, outs, evs)
     tagged = False
-    if found:
-        try:
-            tagged = AT.apply_lead(lead, auto, found, rs)
-        except Exception:
-            tagged = False
+    try:
+        found = AT.found_for(allm, lead)          # หลังเติมช่อง (รายได้/สถานะที่เพิ่งจับได้ ได้แท็กทันที)
+        tagged = AT.apply_lead(lead, auto, found, AT.tag_rows())
+    except Exception:
+        tagged = False
     if got or deal or tagged:
         lead.auto = auto
         # got อาจมี SUGG_KEY (คำแนะนำค่าใหม่ — อยู่ใน auto) ซึ่งไม่ใช่ช่องของตาราง

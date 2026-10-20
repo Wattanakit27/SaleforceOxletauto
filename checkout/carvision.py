@@ -135,7 +135,10 @@ def _row_of(mid: str):
     from .models import FbChat, GroupChat
     if not mid or mid[0] not in "lf" or not mid[1:].isdigit():
         return None, None
-    M, src = (GroupChat, "line") if mid[0] == "l" else (FbChat, "fb")
+    from . import chatmedia as CM
+    # ★ 21 ต.ค.69 แก้: เดิมคืน "line"/"fb" แต่ chatmedia ใช้ "l"/"f" → รูปแชท LINE ถูกโหลดแบบ Facebook
+    #   แล้วเขียนสถานะลงตาราง FbChat แถวที่ id ตรงกัน (ผิดตาราง)
+    M, src = (GroupChat, CM.LINE) if mid[0] == "l" else (FbChat, CM.FB)
     return src, M.objects.filter(pk=int(mid[1:])).first()
 
 
