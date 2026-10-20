@@ -26,7 +26,7 @@ MSG_PREFIX = "auto-buy-"
 WHAT = "เคสรับซื้อ (กลุ่มทดสอบ)"
 DEFAULT_GROUP_NAME = "TestBot02"
 BACKFILL_N = 5
-PHOTO_MAX = 4                      # + ใบ 1 ข้อความ = 5 ข้อความ (LINE push ได้ไม่เกิน 5 ต่อครั้ง)
+PHOTO_MAX = 6                      # ★ ส่งเป็นอัลบัม (Flex ข้อความเดียว · ช่องรูปขนาดเท่ากัน) ไม่ใช่รูปทีละข้อความ
 UPDATE_HOURS, UPDATE_MAX, UPDATE_QUIET_SEC = 6, 3, 45
 RETRY_MIN, MAX_TRIES, MAX_PER_RUN = 5, 5, 10
 MORE_MAX_MSGS, MORE_MAX, MSG_MAX = 5, 400, 120
@@ -227,14 +227,25 @@ def fields(o, lead, msgs=None) -> dict:
             notes.append(c[:MSG_MAX])
     more = notes[-MORE_MAX_MSGS:]
     imgs = [m for m in ins if _is_img(m)]
-    if imgs:
-        more.append("ลูกค้าส่งรูปมา %d รูป" % len(imgs))
+    n_img = img_total(imgs)
+    if n_img:
+        more.append("ลูกค้าส่งรูปมา %d รูป" % n_img)
     p, fb = C.cust(o), C.is_fb(o)
     ch = C.dd_pick("channel", lead.channel) or lead.channel or ("เพจ Facebook" if fb else "LINE@")
     return {"ads": lead.ads or "", "car": lead.car_text or lead.car_model or "", "mile": mile, "plate": plate,
             "phone": lead.phone or "", "has_line": bool(lead.line_id),
             "name": lead.customer_name or getattr(p, "display_name", "") or "", "channel": ch,
-            "more": " / ".join(more)[:MORE_MAX], "reason": reason, "img_ids": [m.get("id") for m in imgs]}
+            "more": " / ".join(more)[:MORE_MAX], "reason": reason, "img_ids": [m.get("id") for m in imgs],
+            "img_total": n_img}
+
+
+def img_total(imgs: list) -> int:
+    """จำนวนรูปจริง — ข้อความ Facebook ข้อความเดียวแนบได้หลายรูป (เดิมนับเป็นข้อความ = ใบบอก 1 รูป แต่ส่งไป 4)"""
+    n = 0
+    for m in imgs or []:
+        k = sum(1 for f in (m.get("files") or []) if (f or {}).get("kind") == "image")
+        n += k or 1
+    return n
 
 
 def slip(f: dict) -> str:
@@ -296,12 +307,13 @@ def _photo_bytes(msg_ids: list) -> list:
     return out
 
 
-def _photo_msgs(msg_ids: list) -> tuple:
-    """รูป → สำเนาสาธารณะ (ชื่อสุ่ม · ตัด EXIF · ย่อ) → (ข้อความรูปของ LINE, [path ที่สร้าง]) · ไม่ใช่ https = ไม่ส่งรูป"""
+def _photo_urls(msg_ids: list) -> tuple:
+    """รูป → สำเนาสาธารณะ (ชื่อสุ่ม · ตัด EXIF · ย่อ) → ([(ลิงก์รูปเต็ม, ลิงก์รูปตัวอย่าง)], [path ที่สร้าง])
+    · ไม่ใช่ https = ไม่ส่งรูป"""
     from . import chatplus as CP
     if not CP._public_base().startswith("https://"):
         return [], []
-    msgs, rels = [], []
+    urls, rels = [], []
     for raw in _photo_bytes(msg_ids):
         try:
             full, prev = CP._encode(raw)
@@ -309,8 +321,40 @@ def _photo_msgs(msg_ids: list) -> tuple:
             continue
         rf, rp = CP._save_out(full, prev)
         rels += [rf, rp]
-        msgs.append({"type": "image", "originalContentUrl": CP._media_url(rf), "previewImageUrl": CP._media_url(rp)})
-    return msgs, rels
+        urls.append((CP._media_url(rf), CP._media_url(rp)))
+    return urls, rels
+
+
+# แถวของอัลบัม (จำนวนรูปต่อแถว) ตามจำนวนรูป — แบบเดียวกับอัลบัมในแชท LINE
+_ALBUM_ROWS = {1: (1,), 2: (2,), 3: (1, 2), 4: (2, 2), 5: (2, 3), 6: (3, 3)}
+
+
+def album(urls: list, total: int = 0) -> dict | None:
+    """[(รูปเต็ม, รูปตัวอย่าง)] → Flex ข้อความเดียว: ช่องรูปขนาดเท่ากันเป็นตาราง (ตัดขอบให้พอดีช่อง) · แตะ = เปิดรูปเต็ม
+    LINE Messaging API ส่ง "อัลบัม" จริงไม่ได้ (รูปทีละข้อความ = ขนาดไม่เท่ากัน เรียงยาว) → ใช้ Flex แทน"""
+    urls = [u for u in (urls or []) if u and u[0] and u[1]][:PHOTO_MAX]
+    if not urls:
+        return None
+    rows, i, body = _ALBUM_ROWS[len(urls)], 0, []
+    for k in rows:
+        ar = "1:1" if k > 1 else ("4:3" if len(rows) == 1 else "2:1")
+        cells = []
+        for full, prev in urls[i:i + k]:
+            cells.append({"type": "image", "url": prev, "size": "full", "aspectRatio": ar, "aspectMode": "cover",
+                          "flex": 1, "action": {"type": "uri", "label": "ดูรูป", "uri": full}})
+        i += k
+        body.append({"type": "box", "layout": "horizontal", "spacing": "xs", "contents": cells})
+    total = max(int(total or 0), len(urls))
+    note = "รูปรถจากแชทลูกค้า %d รูป" % len(urls)
+    if total > len(urls):
+        note += " (ลูกค้าส่งมาทั้งหมด %d รูป)" % total
+    return {"type": "flex", "altText": "รูปรถ %d รูป (ใบเคสรับซื้อ)" % len(urls),
+            "contents": {"type": "bubble", "size": "giga",
+                         "body": {"type": "box", "layout": "vertical", "spacing": "xs", "paddingAll": "0px",
+                                  "contents": body},
+                         "footer": {"type": "box", "layout": "vertical", "paddingAll": "10px",
+                                    "contents": [{"type": "text", "text": note + " · แตะรูปเพื่อดูเต็ม",
+                                                  "size": "xs", "color": "#888888", "wrap": True}]}}}
 
 
 # ── ส่งเข้ากลุ่มทดสอบ ──────────────────────────────────────────────────
@@ -356,13 +400,14 @@ def _send(c: dict, o, lead, prev: dict | None = None, photos: bool = True) -> di
     from . import chatplus as CP
     f = fields(o, lead)
     text = slip(f)
-    pics, rels = _photo_msgs(f["img_ids"]) if photos else ([], [])
-    ok, err, line_mid, qt = _push(c["group"], [{"type": "text", "text": text[:4800]}] + pics)
+    urls, rels = _photo_urls(f["img_ids"]) if photos else ([], [])
+    alb = album(urls, f.get("img_total") or 0)
+    ok, err, line_mid, qt = _push(c["group"], [{"type": "text", "text": text[:4800]}] + ([alb] if alb else []))
     if not ok or err:
         CP._drop(*rels)                           # รูปไม่ถึงกลุ่ม = ไม่ทิ้งสำเนาสาธารณะไว้บนดิสก์
     res = dict(prev or {})
     res.update(ok=ok, error=err, tries=int(res.get("tries") or 0) + 1, tried=timezone.now().isoformat(timespec="seconds"),
-               photos=(len(pics) if ok and not err else 0))
+               photos=(len(urls) if alb and ok and not err else 0))
     if ok:
         AL._store_out(c["group"], c["group_name"], "%s%s-%s" % (MSG_PREFIX, lead.pk, uuid.uuid4().hex[:6]), text,
                       {"chat": o.pk, "buy": True, "photos": res["photos"]}, line_mid)
