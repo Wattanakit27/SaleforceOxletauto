@@ -121,6 +121,9 @@ bands = KW.rows("income_band")
 ok(len(bands) == 5 and bands[0]["extra"] == {"min": 0, "max": 15000} and bands[-1]["extra"]["max"] is None,
    "ช่วงรายได้ 5 ช่วงเดียวกับแดชบอร์ด", [b["name"] for b in bands])
 ok(all(r["system"] and not r["edited"] for r in KW.all_rows()), "ทุกแถวเป็นของระบบ ยังไม่มีใครแก้")
+_lim = {f.name: f.max_length for f in KeywordRule._meta.fields if getattr(f, "max_length", None)}
+_long = [(r["key"], f, len(r[f])) for r in KW.defaults() for f, m in _lim.items() if isinstance(r.get(f), str) and len(r[f]) > m]
+ok(not _long, "★ ค่าตั้งต้นทุกแถวสั้นพอดีช่องฐานข้อมูล (SQLite ไม่ตรวจ แต่ Postgres ตรวจ — deploy 21 ต.ค.69 ล้มเพราะเรื่องนี้)", _long)
 ok(all(not r["tag"] for r in KW.rows("occupation")) and all(r["tag"] for r in KW.rows("brand")),
    "อาชีพไม่ติดแท็ก · ยี่ห้อติดแท็กโดยปริยาย")
 

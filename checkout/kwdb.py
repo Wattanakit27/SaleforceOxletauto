@@ -507,7 +507,10 @@ def sync_defaults(model=None, apply: bool = True) -> dict:
         from .models import KeywordRule as model
     have = {o.key: o for o in model.objects.all()}
     added = updated = 0
+    # ★ SQLite ไม่ตรวจความยาวช่อง แต่ Postgres ตรวจ (deploy 21 ต.ค.69 ล้มเพราะชื่อยาวเกิน 60) → ตัดให้พอดีช่องเสมอ
+    lim = {f.name: f.max_length for f in model._meta.fields if getattr(f, "max_length", None)}
     for d in defaults():
+        d = {k: (v[:lim[k]] if k in lim and isinstance(v, str) else v) for k, v in d.items()}
         o = have.get(d["key"])
         if o is None:
             added += 1
