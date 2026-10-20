@@ -2609,9 +2609,18 @@ def save_lead_field(o, field: str, value, by: str = ""):
             t = str(t or "").strip()[:30]
             if t and t not in tags:
                 tags.append(t)
-        lead.tags = tags[:12]
+        tags = tags[:12]
+        # ★ 20 ต.ค.69 แท็กที่ระบบอัตโนมัติติดให้แล้วคนเอาออก = ไม่ติดกลับ (autotag)
+        auto = dict(lead.auto or {})
+        try:
+            from . import autotag
+            autotag.human_edit(lead, auto, tags)
+        except Exception:
+            pass
+        lead.tags = tags
+        lead.auto = auto
         lead.updated_by = (by or "")[:80]
-        lead.save(update_fields=["tags", "updated_by", "updated_at"])
+        lead.save(update_fields=["tags", "auto", "updated_by", "updated_at"])
         return True, "บันทึกแท็กแล้ว"
     if field not in LEAD_FIELDS:
         return False, "ไม่รู้จักช่อง %s" % field
@@ -3379,22 +3388,35 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
              if m.get("dir") == "in" and m.get("text") and not m["text"].startswith("[")]
     outs = [m["text"] for m in allm if m.get("dir") == "out" and m.get("text")]
     lead = lead_of(o, create=False)
+    from . import autotag as AT
     from . import lead_keywords as K
     evs = deal_events(allm)
+    # ★ 20 ต.ค.69 กฎแท็กที่แอดมินตั้งเองในหน้า "ระบบอัตโนมัติ" (CRM) — ติดเพิ่มอย่างเดียวตอนข้อความเข้า
+    try:
+        rs = AT.active()
+        found = AT.tags_for(rs, allm) if rs else {}
+    except Exception:
+        rs, found = [], {}
     if not lead:
         dk = K.deal_kind(texts, outs, evs)
-        if not K.extract(texts) and not dk["kind"] and not dk["trade"]:
+        if not K.extract(texts) and not dk["kind"] and not dk["trade"] and not found:
             return False
     lead = lead or lead_of(o)
     auto = dict(lead.auto or {})
     got = apply_keywords(lead, auto, texts, _lead_notes(lead))
     # ★ 11 ต.ค.69 ลีดรับซื้อ (ลูกค้าอยากขายรถให้เรา) / มีรถเทิร์น — จับตอนข้อความเข้า ลีดแยกแท็บทันที
     deal = apply_deal_kind(lead, auto, texts, outs, evs)
-    if got or deal:
+    tagged = False
+    if found:
+        try:
+            tagged = AT.apply_lead(lead, auto, found, rs)
+        except Exception:
+            tagged = False
+    if got or deal or tagged:
         lead.auto = auto
         # got อาจมี SUGG_KEY (คำแนะนำค่าใหม่ — อยู่ใน auto) ซึ่งไม่ใช่ช่องของตาราง
-        lead.save(update_fields=[f for f in got if f in LEAD_FIELDS] + ["auto", "updated_at"])
-    return bool(got or deal)
+        lead.save(update_fields=[f for f in got if f in LEAD_FIELDS] + (["tags"] if tagged else []) + ["auto", "updated_at"])
+    return bool(got or deal or tagged)
 
 
 CSCAN_KEY = "connect_cscan"        # KV {chat id: เวลาข้อความล่าสุดที่สแกนแล้ว} — จำข้าม worker/รีสตาร์ท

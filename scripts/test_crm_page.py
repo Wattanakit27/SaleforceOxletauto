@@ -203,7 +203,8 @@ ok("{{" not in body and "{%" not in body, "template ไม่มีแท็ก�
 ok(r.cookies.get("csrftoken") is not None, "หน้าตั้งคุกกี้ CSRF (ใช้ POST ไป Connect)")
 r = client(U_ADMIN).get("/crm/?seller=นวล", secure=True)
 boot = json.loads(re.search(r'id="crm-boot" type="application/json">(.*?)</script>', r.content.decode(), re.S).group(1))
-ok(boot["seller"] == "นวล" and boot["admin"] and len(boot["roster"]) >= 3, "แอดมินเลือกดูของนวลได้ + ได้รายชื่อเซลล์")
+ok(boot["seller"] == "นวล" and boot["admin"] and "roster" not in boot,
+   "แอดมินดูของนวลได้ทางลิงก์ · ไม่มีตัวเลือก \"ดูของเซลล์\" แล้ว (20 ต.ค.69 เจ้าของสั่งเอาออก)")
 r = client(U_ADMIN).get("/crm/?seller=ใครก็ไม่รู้", secure=True)
 boot = json.loads(re.search(r'id="crm-boot" type="application/json">(.*?)</script>', r.content.decode(), re.S).group(1))
 ok(boot["seller"] in ("มัท", "โอ๊ต", "นวล", "ADMIN"), "ชื่อมั่ว = ตกไปคนแรกในรายชื่อ ไม่พัง", boot["seller"])

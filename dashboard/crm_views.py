@@ -89,12 +89,7 @@ def page(request):
                    "own": _own_seller(user) if user else ""},
             "selfView": bool(seller) and seller == _own_seller(user),
             "error": "บัญชีนี้ยังไม่ได้ผูกกับชื่อเซลล์ — แจ้งผู้ดูแลระบบให้ตั้งชื่อเล่นในหน้าพนักงาน" if why == "noname" else ""}
-    if admin:
-        try:
-            from .services import crm_page
-            boot["roster"] = crm_page.roster()
-        except Exception:
-            boot["roster"] = []
+    # ★ 20 ต.ค.69 เจ้าของสั่งเอาตัวเลือก "ดูของเซลล์" ออก — ไม่ส่งรายชื่อเซลล์ให้หน้าเว็บแล้ว (`?seller=` ยังใช้ได้ทางลิงก์)
     return render(request, "dashboard/crm.html", {"boot": boot}, status=404 if why == "noname" else 200)
 
 
@@ -189,3 +184,51 @@ def api_lead_status(request):
     except Exception:
         pass
     return _j({"ok": True, "stage": stage, "value": value, "tab": res.get("tab", ""), "cell": res.get("cell", "")})
+
+
+@require_http_methods(["GET", "POST"])
+def api_auto(request):
+    """หน้า **ระบบอัตโนมัติ** (★ 20 ต.ค.69 · แอดมินเท่านั้น) — กฎแท็กลูกค้าจากคำในแชท (`checkout/autotag.py`)
+
+    GET = กฎทั้งหมด (+ ติดแท็กอยู่กี่ราย) · ระบบจับในตัว (ดูอย่างเดียว) · ผลอ่านย้อนหลังล่าสุด
+    POST `{action: "save", rule}` เพิ่ม/แก้ · `{action: "delete", id}` · `{action: "toggle", id, on}` ·
+    `{action: "preview", rule}` ทดสอบกับแชทย้อนหลัง (ยังไม่ติดแท็กใคร)
+    """
+    user, _seller, admin, why = _who(request)
+    if why == "login":
+        return _j({"ok": False, "error": "ต้องเข้าสู่ระบบก่อน"}, 401)
+    if why or not admin:
+        return _j({"ok": False, "error": "หน้านี้สำหรับแอดมินเท่านั้น"}, 403)
+    from checkout import autotag as AT
+    by = (user.get("nickname") or user.get("display_name") or "แอดมิน")[:80]
+    if request.method == "GET":
+        cnt = AT.rule_counts()
+        rs = [dict(r, count=cnt.get(r["id"], 0)) for r in AT.rules(cache=False)]
+        return _j({"ok": True, "rules": rs, "builtin": AT.builtin_stats(), "scopes": AT.SCOPES,
+                   "scanDays": AT.SCAN_DAYS, "last": AT.last_run(), "busy": bool(AT._RUN.get("busy")),
+                   "limits": {"rules": AT.RULE_MAX, "words": AT.WORDS_MAX, "tag": AT.TAG_LEN, "wordMin": AT.WORD_MIN}})
+    try:
+        body = json.loads(request.body or b"{}")
+    except Exception:
+        return _j({"ok": False, "error": "ข้อมูลไม่ถูกต้อง"}, 400)
+    act = str(body.get("action") or "")
+    if act == "preview":
+        res = AT.preview(body.get("rule") or {})
+        return _j(res, 200 if res.get("ok") else 400)
+    if act == "save":
+        ok, msg, rule = AT.save_rule(body.get("rule") or {}, by=by)
+    elif act == "delete":
+        ok, msg = AT.delete_rule(body.get("id"), by=by)
+        rule = None
+    elif act == "toggle":
+        ok, msg = AT.toggle(body.get("id"), bool(body.get("on")), by=by)
+        rule = None
+    else:
+        return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
+    if ok:
+        try:
+            from .services import eventlog
+            eventlog.log("crm", name="ระบบอัตโนมัติ: " + act, target=by, ok=True, rule=(rule or {}).get("tag") or body.get("id"))
+        except Exception:
+            pass
+    return _j({"ok": ok, "message": msg if ok else "", "error": "" if ok else msg, "rule": rule}, 200 if ok else 400)

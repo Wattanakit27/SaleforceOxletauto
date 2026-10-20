@@ -12,6 +12,7 @@ urlpatterns = [
     path("crm/api/data", crm_views.api_data, name="crm_api_data"),
     path("crm/api/customer", crm_views.api_customer, name="crm_api_customer"),
     path("crm/api/lead_status", crm_views.api_lead_status, name="crm_api_lead_status"),
+    path("crm/api/auto", crm_views.api_auto, name="crm_api_auto"),         # ★ 20 ต.ค.69 หน้าระบบอัตโนมัติ (แท็กลูกค้า)
     # ★ 9 ต.ค.69 — แอปมือถือ (demo): login ผ่าน LINE Login ตัวเดิม → token · ดู mobile_views.py
     path("m/login", mobile_views.m_login, name="m_login"),
     path("m/handoff/<str:pid>", mobile_views.m_handoff, name="m_handoff"),
