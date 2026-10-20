@@ -2981,18 +2981,63 @@ def buy_slip_text(o, lead=None) -> str:
 # ── ช่องทางติดต่อที่ลูกค้าให้มาในแชท (เบอร์ / ID LINE) — ตัวตัดสินว่าเข้าห้องพัก Lead หรือยัง ──
 #   ID LINE: ต้องมี "ป้าย" (ไอดีไลน์ xxx · line id: xxx) **หรือ** ส่งมาเป็นคำเดียวหลังเราขอไอดี/ไลน์
 #   ไม่เดาจากคำอังกฤษลอยๆ — ข้อความอย่าง "ok55" / "civic" จะกลายเป็นไอดีปลอมแล้วลีดเข้าห้องพักทั้งที่ยังไม่ได้ช่องทางติดต่อ
-_LINE_ID_LABEL = re.compile(r"(?<![A-Za-z])(?:ไอดี\s*ไลน์|ไอดีไลน|ไลน์\s*ไอดี|ไลน์ไอดี|line\s*id|id\s*line|lineid|ไอดี|line|ไลน์)"
+_LINE_ID_LABEL = re.compile(r"(?<![A-Za-z])(?:ไอดี\s*ไลน์|ไอดีไลน|ไลน์\s*ไอดี|ไลน์ไอดี|line\s*id|id\s*line|lineid|ไอดี|line|ไลน์|ไลร์)"
                             r"\s*(?:คือ|ครับ|ค่ะ|นะ)?\s*[:：=]?\s*(@?[A-Za-z0-9][A-Za-z0-9._-]{2,29})", re.I)
 _ASK_ID = re.compile(r"ไอดี|ไลน์|line|\bid\b", re.I)
-_BARE_ID = re.compile(r"^@?[A-Za-z0-9][A-Za-z0-9._-]{3,29}$")
+_BARE_ID = re.compile(r"^[@.]?[A-Za-z0-9][A-Za-z0-9._-]{2,29}$")
 _NOT_ID = {"ok", "okay", "line", "id", "thanks", "thank", "yes", "no", "hello", "hi"}
+# ★ 20 ต.ค.69 คำลงท้ายหลังไอดี ("somchai.k ครับ" · "Ab2468 ค่ะ") — เดิมทำให้ไม่นับเป็นไอดีเลย (เฟิร์นบ่นในกลุ่มทดสอบ)
+_POLITE_END = re.compile(r"\s*(?:นะ)?(?:ครับผม|ครับพี่|ค่ะพี่|คะพี่|ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ่ะ)\s*$")
+_LAUGH = re.compile(r"^(?:ok|okay|oke|55+|ha+|haha+|lol|thx|thank\w*)\d*$", re.I)
 
 
-def _id_ok(tok: str) -> str:
+def _id_ok(tok: str, allow_phone: bool = False) -> str:
     t = (tok or "").strip().lstrip("@")
+    if allow_phone and t.isdigit() and phones_in([t]):
+        return t[:80]                              # "ไลน์ 0812345671" = ไอดีไลน์เป็นเบอร์ (แอดมินลงช่อง ID LINE ด้วย)
     if not t or t.isdigit() or t.lower() in _NOT_ID or not re.search(r"[A-Za-z]", t):
         return ""                                  # ตัวเลขล้วน = เบอร์ (จับอีกทาง) · ไม่มีตัวอักษรเลย = ไม่ใช่ไอดี
     return t[:80]
+
+
+def _strong_id(tok: str) -> bool:
+    """หน้าตาเป็นไอดีชัด (ไม่ต้องมีคำว่าไลน์/ไม่ต้องรอเราขอ) — มีตัวอักษร + (ตัวเลข หรือ . _) · ยาว ≥5 · ไม่ใช่ชื่อรถ/หัวเราะ
+    ("Ab2468" · "nokky2520" · "somchai.k" · ".ploynam") — คำอังกฤษล้วนอย่าง "civic" / "mark" ไม่นับ"""
+    t = (tok or "").lstrip("@")
+    if len(t.lstrip(".")) < 5 or not re.search(r"[A-Za-z]", t) or _LAUGH.match(t):
+        return False
+    if not re.search(r"[0-9._]", t):
+        return False
+    if re.search(r"\d\.\d", t) and len(re.sub(r"[^A-Za-z]", "", t)) <= 3:
+        return False                               # fc1.8 / 1.5e = รุ่น/เครื่องยนต์
+    try:
+        letters = re.sub(r"[^A-Za-z]+", " ", t).strip()      # "civic2019" → "civic" (ชื่อรุ่นติดปี)
+        if car_in(letters) is not None or car_in(t) is not None or brand_in(letters):
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def bare_ids(text: str, asked: bool = False) -> list:
+    """ไอดีไลน์ที่ลูกค้าพิมพ์ "ลอยๆ" ไม่มีป้าย → [(เริ่ม, จบ, ไอดี)]
+    · ข้อความทั้งข้อความเป็นไอดี (+ คำลงท้าย) → นับเมื่อเราเพิ่งขอไอดี/ไลน์ หรือหน้าตาเป็นไอดีชัด
+    · ข้อความที่มีเบอร์ + ส่วนที่หน้าตาเป็นไอดีชัด ("สมชาย / 0812345670 / Johnsmith27") → นับส่วนนั้น"""
+    text = text or ""
+    core = _POLITE_END.sub("", text.strip()).strip()
+    if core and _BARE_ID.match(core):
+        v = _id_ok(core)
+        i = text.find(core)
+        return [(i, i + len(core), v)] if (v and i >= 0 and (asked or _strong_id(core))) else []
+    out = []
+    if phones_in([text]):
+        for part in re.split(r"[/\n,|]+", text):
+            p = _POLITE_END.sub("", part.strip()).strip()
+            if p and _BARE_ID.match(p) and _strong_id(p):
+                v, i = _id_ok(p), text.find(p)
+                if v and i >= 0:
+                    out.append((i, i + len(p), v))
+    return out
 
 
 def contacts_in(msgs) -> tuple:
@@ -3003,14 +3048,15 @@ def contacts_in(msgs) -> tuple:
     for m in (msgs or []):
         t = (m.get("text") or "").strip()
         if (m.get("dir") or "in") == "out":
-            asked = bool(_ASK_ID.search(t))          # เราเพิ่งขอไอดี/ไลน์ → ข้อความคำเดียวถัดไปคือไอดี
+            # เราขอไอดี/ไลน์ตั้งแต่ข้อความลูกค้าครั้งก่อน → ข้อความถัดไปที่เป็นคำเดียวคือไอดี
+            # ★ 20 ต.ค.69 ข้อความขาออกอื่น (การ์ดโฆษณา/ข้อความระบบของเพจ) ไม่ล้างสถานะ "เพิ่งขอ" แล้ว
+            asked = asked or bool(_ASK_ID.search(t))
             continue
         for mm in _LINE_ID_LABEL.finditer(t):
-            v = _id_ok(mm.group(1))
+            v = _id_ok(mm.group(1), allow_phone=True)
             if v and v not in ids:
                 ids.append(v)
-        if asked and _BARE_ID.match(t):
-            v = _id_ok(t)
+        for _s, _e, v in bare_ids(t, asked):
             if v and v not in ids:
                 ids.append(v)
         # ★ 11 ต.ค.69 ลิงก์เพิ่มเพื่อน LINE ("ส่งข้อความและโทรฟรีด้วย LINE กันเถอะ https://line.me/ti/p/…")
@@ -3070,16 +3116,14 @@ def msg_spans(text: str, asked: bool = False, outbound: bool = False) -> list:
         if phones_in([m.group(0)]):
             sp.append((m.start(), m.end(), "phone"))
     for mm in _LINE_ID_LABEL.finditer(text):
-        if _id_ok(mm.group(1)):
+        if _id_ok(mm.group(1), allow_phone=True):
             sp.append((mm.start(1), mm.end(1), "line_id"))
     from .lead_qr import _LINK, line_contact
     for mm in _LINK.finditer(text):
         if line_contact(mm.group(0)):
             sp.append((mm.start(), mm.end(), "line_id"))
-    st = text.strip()
-    if asked and _BARE_ID.match(st) and _id_ok(st):
-        i = text.find(st)
-        sp.append((i, i + len(st), "line_id"))
+    for s, e, _v in bare_ids(text, asked):
+        sp.append((s, e, "line_id"))
     try:
         sp += _car_spans(text)
     except Exception:
@@ -3110,7 +3154,7 @@ def add_spans(msgs, lead=None) -> list:
         t = m.get("text") or ""
         out = m.get("dir") == "out"
         if out:
-            asked = bool(_ASK_ID.search(t))
+            asked = asked or bool(_ASK_ID.search(t))
             if deal != "buy" or not t:
                 continue
         elif not t.strip() or t.startswith("["):

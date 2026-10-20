@@ -11,6 +11,8 @@
     manage.py autolead --test-chat 2213,2231 แชทของบัญชีทดสอบ (เลข ChatOwner · ใบไปกลุ่มทดสอบ · off = ล้าง)
     manage.py autolead --test-reset          ล้างเลขทดสอบทั้งหมด (= พิมพ์ "ล้างทดสอบ" ในกลุ่มทดสอบ)
     manage.py autolead --show on|off         ซ้อม: ตอนพักการรันเลข ลูกค้าจริงที่ให้เบอร์ = ใบไม่มีเลข (NLD10-) เข้ากลุ่มทดสอบเท่านั้น
+    manage.py autolead --show-resend         ส่งใบซ้อมของทุกเคสวันนี้ใหม่ (ตัวจับล่าสุด) เข้ากลุ่มทดสอบ · --dry = ดูอย่างเดียว
+                                             · --since "2026-10-20 00:00" = นับตั้งแต่เวลานั้น
     manage.py autolead --preview             แชทไหนจะได้เลขอะไร (ไม่จองเลข ไม่ส่ง LINE)
     manage.py autolead --run                 ทำรอบเดียวเดี๋ยวนี้ (แชท + ข้อความกลุ่มที่ค้าง + ใบอัปเดต)
 """
@@ -63,6 +65,9 @@ class Command(BaseCommand):
         p.add_argument("--test-chat", dest="test_chat", default="")
         p.add_argument("--test-reset", dest="test_reset", action="store_true")
         p.add_argument("--show", default="")
+        p.add_argument("--show-resend", dest="show_resend", action="store_true")
+        p.add_argument("--dry", action="store_true")
+        p.add_argument("--since", default="")
         p.add_argument("--preview", action="store_true")
         p.add_argument("--run", action="store_true")
         p.add_argument("--out", default="")
@@ -127,6 +132,25 @@ class Command(BaseCommand):
         ptr = AL._kv(AL.PTR_KEY)
         lines.append("  อ่านข้อความกลุ่มถึง: %s" % (("#%s (%s)" % (ptr.get("last_id"), ptr.get("at") or "-"))
                                                  if ptr else "ยังไม่เริ่ม (เริ่มจากข้อความล่าสุดตอนรอบแรก)"))
+        if o["show_resend"]:
+            since = None
+            if o["since"]:
+                from django.utils import timezone
+                from django.utils.dateparse import parse_datetime
+                since = parse_datetime(o["since"].strip().replace(" ", "T"))
+                if not since:
+                    raise CommandError("--since ใส่แบบ \"2026-10-20 00:00\"")
+                if timezone.is_naive(since):
+                    since = timezone.make_aware(since)
+            r = AL.show_resend(since=since, dry=o["dry"])
+            if r.get("error"):
+                raise CommandError(r["error"])
+            lines.append("%s ตั้งแต่ %s: ส่ง %d · ไม่สำเร็จ %d · จะส่ง %d" % ("ดูอย่างเดียว" if o["dry"] else "ส่งใบซ้อมใหม่",
+                         r["since"], r["sent"], r["failed"], r["would"]))
+            for x in r["rows"]:
+                lines.append("  แชท #%s · %s · %s%s" % (x["chat"], x.get("code") or "-", x["d"],
+                             (" · เบอร์ %s · ไอดีไลน์ %s · เพิ่มเติม %s" % tuple("มี" if x.get(k) else "-" for k in ("phone", "lineId", "notes")))
+                             if "code" in x else (" · " + x.get("why", ""))))
         if o["preview"]:
             r = AL.run(dry=True)
             lines.append("ดูก่อน (ไม่จองเลข ไม่ส่ง): %s" % json.dumps(r, ensure_ascii=False))

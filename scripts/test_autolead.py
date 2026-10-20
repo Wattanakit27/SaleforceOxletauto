@@ -1020,6 +1020,68 @@ try:
     ck("เปิดรันเลขจริง → ซ้อมหยุดเอง", not AL.show_on(), AL.cfg())
     AL.set_show(False)
 
+    # ═════════════════════════════════════════════════════════════════════
+    print("[17] ไอดีไลน์ที่ลูกค้าพิมพ์ลอยๆ + ช่องเพิ่มเติม = ข้อมูลลูกค้า (เฟิร์นในกลุ่มทดสอบ 20 ต.ค.69)")
+    I = lambda t: {"dir": "in", "text": t}   # noqa: E731
+    O = lambda t: {"dir": "out", "text": t}  # noqa: E731
+    ids = lambda ms: C.contacts_in(ms)[1]    # noqa: E731
+    ck("★ ไอดี + คำลงท้าย (ครับ/ค่ะ) หลังเราขอไลน์ — ข้อความต้อนรับ/การ์ดที่มาคั่นไม่ล้างสถานะ",
+       ids([O("รบกวนขอเบอร์ หรือ ไอดี LINE ครับ"), O(""), O("สวัสดีค่ะ เรามี Mazda 3"), I("somchai.k ครับ")]) == ["somchai.k"],
+       ids([O("รบกวนขอเบอร์ หรือ ไอดี LINE ครับ"), O(""), I("somchai.k ครับ")]))
+    ck("★ ไอดีหน้าตาชัด (ตัวอักษร+ตัวเลข) ไม่ต้องรอเราขอ — แชท LINE ที่แอดมินตอบในแอป (ระบบไม่เห็นฝั่งเรา)",
+       ids([I("เป็นพนักงานประจำร้านอาหารค่ะ"), I("Ab2468 ค่ะ")]) == ["Ab2468"], ids([I("Ab2468 ค่ะ")]))
+    ck("ไอดีขึ้นต้นด้วยจุด (.ploynam) หลังเราขอ", ids([O("ขอเบอร์ติดต่อ หรือ ไอดีไลน์"), I(".ploynam ค่ะ")]) == [".ploynam"],
+       ids([O("ขอเบอร์ติดต่อ หรือ ไอดีไลน์"), I(".ploynam ค่ะ")]))
+    ck("★ บล็อก ชื่อ / เบอร์ / ไอดี ในข้อความเดียว", ids([I("สมชาย / 0812345670 / Johnsmith27")]) == ["Johnsmith27"],
+       ids([I("สมชาย / 0812345670 / Johnsmith27")]))
+    ck("★ \"ไลร์0812345671\" = ไอดีไลน์เป็นเบอร์ (ลงช่อง ID LINE ด้วย · เบอร์ยังอยู่)",
+       C.contacts_in([I("สมหญิง / 0812345671 / ไลร์0812345671")]) == (["0812345671"], ["0812345671"]),
+       C.contacts_in([I("สมหญิง / 0812345671 / ไลร์0812345671")]))
+    ck("ไม่เดา: ชื่อรุ่น/หัวเราะ/ชื่อคนอังกฤษล้วน/ขนาดเครื่อง",
+       not ids([I("civic")]) and not ids([I("civic2019")]) and not ids([I("ok55")]) and not ids([I("Fc1.8")])
+       and not ids([I("Mark / 0812345678")]) and not ids([I("สวัสดีครับ")]),
+       [ids([I(x)]) for x in ("civic", "civic2019", "ok55", "Fc1.8", "Mark / 0812345678")])
+    notes = AL.customer_notes(None, msgs=[I("สวัสดีครับ"), I("ผ่อน7000ดาวน์เท่าไหร่ครับ"), O("ขอเบอร์ครับ"),
+                                          I("พนักงานประจำตำแหน่งช่างซ่อมบำรุง/รายได้24000-25000บาท/อายุงาน8ปี"),
+                                          I("0861234567"), I("[รูป]"), I("ต้นปีหน้าค่ะ")])
+    ck("★ เพิ่มเติม = ข้อความลูกค้าที่บอกดาวน์/ผ่อน/เงินเดือน/แผนออกรถ (ไม่เอาคำทักทาย/เบอร์ล้วน/รูป/ฝั่งเรา)",
+       "ดาวน์" in notes and "รายได้24000" in notes and "ต้นปีหน้า" in notes and "สวัสดี" not in notes
+       and "0861234567" not in notes and "ขอเบอร์" not in notes, notes)
+    # ใบซ้อมมีเพิ่มเติม
+    c = AL.cfg()
+    c.update(enabled=False, show=True, show_since=(timezone.now() - timedelta(minutes=10)).isoformat(timespec="seconds"))
+    AL.save_cfg(c)
+    o17 = chat("ลูกค้าบอกเงินเดือน", phone="", contact_ago=None, ago_min=0)
+    o17 = umsg(o17, "จัดไฟแนนซ์ค่ะ ดาวน์2แสน เงินเดือน 25,000", 200)
+    o17 = umsg(o17, "0881117001", 120)
+    C.capture_contact(o17)
+    n0 = len(PUSHES)
+    AL.kick_chat(fresh(o17), "0881117001")
+    tp = [t for to, t in PUSHES[n0:] if to == TG]
+    ck("★ ใบซ้อม: บรรทัดเพิ่มเติมมีข้อมูลลูกค้า", len(tp) == 1 and "เพิ่มเติม : จัดไฟแนนซ์ค่ะ ดาวน์2แสน เงินเดือน 25,000" in tp[0], tp)
+
+    # ═════════════════════════════════════════════════════════════════════
+    print("[18] --show-resend: ส่งใบซ้อมของทุกเคสวันนี้ใหม่ด้วยตัวจับล่าสุด (กลุ่มทดสอบเท่านั้น)")
+    o18 = chat("เคยหลุดเพราะไอดีลอยๆ", phone="", contact_ago=None, ago_min=0)
+    o18 = umsg(o18, "สนใจ city งบ 4 แสนค่ะ", 300)
+    o18 = umsg(o18, "nokky2520 ค่ะ", 200)
+    o18y = chat("ให้เบอร์ไว้เมื่อวาน", phone="0881118888", contact_ago=60 * 30, ago_min=0)
+    o18y = umsg(o18y, "ยังสนใจอยู่ค่ะ", 100)
+    n0 = len(PUSHES)
+    rd = AL.show_resend(dry=True)
+    ck("ดูอย่างเดียว (--dry) → ไม่ส่งอะไร · เคสที่เคยหลุดอยู่ในรายการ", len(PUSHES) == n0
+       and any(r.get("chat") == o18.id and r.get("lineId") for r in rd["rows"]), rd)
+    r18 = AL.show_resend()
+    new = PUSHES[n0:]
+    ck("★ ส่งเข้ากลุ่มทดสอบเท่านั้น (หัวข้อ 1 ข้อความ + ใบ) · ไม่แตะกลุ่มจริง", new and all(to == TG for to, _ in new)
+       and "ส่งเคสวันนี้ใหม่" in new[0][1] and r18["sent"] == len(new) - 1, (r18, new[:2]))
+    ck("★ เคสที่เคยหลุด (ไอดีไลน์ลอยๆ) ได้ใบ + ไอดีอยู่ในใบ + เพิ่มเติมมีงบ",
+       any("ID LINE : nokky2520" in t and "งบ 4 แสน" in t for _, t in new), [t for _, t in new if "nokky" in t])
+    ck("ลูกค้าที่ให้ช่องทางติดต่อก่อนวันนี้ → ไม่ส่ง", not any("0881118888" in t for _, t in new))
+    ck("ใบซ้อมใหม่ไม่มีเลขรัน · เลขรันจริงไม่ขยับ", all(re.match(r"Ac Lead No\. [A-Z]+\d{1,2}-\n", t) for _, t in new[1:])
+       and C.last_running() == real0, C.last_running())
+    AL.set_show(False)
+
 finally:
     _runner.teardown_databases(_old)
 

@@ -523,6 +523,47 @@ def _already_posted(o, lead) -> str:
     return ""
 
 
+# ★ 20 ต.ค.69 ช่อง "เพิ่มเติม" ของใบ = ข้อความลูกค้าที่บอกข้อมูลตัวเอง (เฟิร์นในกลุ่มทดสอบ: "มันไม่เห็นเก็บข้อมูลลูกค้าเลย
+#   เลยวางดาวน์ เงินเดือนไรงี้") — ระบบจับอาชีพ/รายได้ลงฐานข้อมูลอยู่แล้วแต่ใบไม่มีช่องให้ · ใช้คำของลูกค้าเอง ไม่สรุปแทน (ไม่เพี้ยน)
+_INFO_RE = re.compile(r"ดาวน์|ดาว\s*\d|ผ่อน|งบ|เงินเดือน|รายได้|บาท|แสน|หมื่น|\d\s?[kK]\b|\d,\d{3}|ซื้อสด|เงินสด|ไฟแนนซ์|จัดไฟ|"
+                      r"อาชีพ|พนักงาน|ทำงาน|อายุงาน|ราชการ|ธุรกิจ|ค้าขาย|ฟรีแลน|เกษตร|รับจ้าง|"
+                      r"เครดิต|บูโร|แบล็ค|ล่าช้า|ค้างชำระ|เทิร์น|เทริน|แลกรถ|ค้ำ|"
+                      r"เดือนหน้า|ปีหน้า|ต้นปี|ปลายปี|สิ้นปี|สิ้นเดือน|ต้นเดือน|พรุ่งนี้|มะรืน|เสาร์|อาทิตย์|นัด|"
+                      r"เข้าไปดู|เข้ามาดู|ดูรถ|ลองขับ|ทดลองขับ|อยู่แถว|อยู่จังหวัด|อายุ\s*\d")
+NOTE_MAX_MSGS = 6
+NOTE_MAX_CHARS = 450
+
+
+def customer_notes(o, msgs=None) -> str:
+    """ข้อความลูกค้าที่มีข้อมูล (ดาวน์/ผ่อน/เงินเดือน/อาชีพ/เครดิต/เทิร์น/แผนออกรถ/นัด) → บรรทัดเดียว คั่น " / " · ไม่มี = \"\"
+    ตัดเบอร์/ไอดีออกก่อนดู (ข้อความที่มีแต่ช่องทางติดต่อไม่นับ) · ล่าสุด NOTE_MAX_MSGS ข้อความ เรียงตามเวลา"""
+    from . import connect as C
+    from . import lead_keywords as K
+    if msgs is None:
+        try:
+            msgs = C.messages(o, limit=80)
+        except Exception:
+            return ""
+    out = []
+    for m in msgs:
+        if (m.get("dir") or "in") != "in":
+            continue
+        t = re.sub(r"\s+", " ", m.get("text") or "").strip()
+        if not t or t.startswith("["):
+            continue
+        bare = C._PHONE_RE.sub(" ", t)
+        hit = bool(_INFO_RE.search(bare))
+        if not hit:
+            try:
+                hit = any(s[2] in ("occupation", "income", "job_tenure", "pay_history") for s in K.spans(bare))
+            except Exception:
+                hit = False
+        if hit and t not in out:
+            out.append(t[:120])
+    text = " / ".join(out[-NOTE_MAX_MSGS:])
+    return text[:NOTE_MAX_CHARS]
+
+
 def _fields(o, lead, code: str) -> dict:
     from . import connect as C
     f = C.slip_fields(o, lead)
@@ -531,6 +572,10 @@ def _fields(o, lead, code: str) -> dict:
         f["channel"] = C._line_channel()          # ★ 20 ต.ค.69 ตามตัวเลือกชีต · FB = ตามเพจ (autofill `_fb_channel`) ไม่มีตัวเลือก = "-"
     if not f.get("account"):
         f["account"] = getattr(C.cust(o), "display_name", "") or ""
+    notes = customer_notes(o)
+    if notes:
+        more = (f.get("more") or "").strip()
+        f["more"] = notes if (not more or more == "-") else "%s / %s" % (more, notes)
     return f
 
 
@@ -667,6 +712,69 @@ def show_one(o) -> dict:
     sh = _show_post(o, lead, {"code": code, "base": sg["base"], "at": now, "up": 0})
     _save(lead, sh, SHOW_KEY)
     return {"d": "posted" if sh.get("ok") else "failed", "why": sh.get("error") or "", "code": code}
+
+
+def show_resend(since=None, dry: bool = False, limit: int = 300, pause: float = 0.4) -> dict:
+    """★ 20 ต.ค.69 เจ้าของสั่ง "ส่งเคสทั้งหมดลงกลุ่มทดสอบโดยวันนี้ หลังจากที่แก้" — ส่งใบซ้อมของทุกแชทที่ลูกค้าให้ช่องทางติดต่อ
+    ตั้งแต่ `since` (ค่าตั้งต้น = เที่ยงคืนวันนี้) ใหม่ด้วยตัวจับล่าสุด → กลุ่มทดสอบเท่านั้น · รวมเคสที่แอดมินจ่ายเลขไปแล้ว (ไว้เทียบ)
+    · จับช่องทางติดต่อจากแชทใหม่ก่อน (เคสที่เคยหลุดเพราะจับไอดีไม่ได้ก็ได้ใบ) · ไม่จองเลข · ข้ามลีดรับซื้อ/ไม่ต้องจ่ายเบอร์/พนักงาน/บัญชีทดสอบ
+    → {sent, failed, would, rows:[{chat, code, phone, lineId, notes, d}]} (ไม่มีชื่อ/เบอร์ลูกค้าในผล)"""
+    from . import connect as C
+    from .models import ChatOwner
+    c = cfg()
+    if not c["test_group"]:
+        return {"error": "ยังไม่ได้ตั้งกลุ่มทดสอบ (--test-group TestBot)"}
+    now = timezone.now()
+    since = since or timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    todo, rows = [], []
+    for o in (ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
+              .filter(last_in_at__gte=since).order_by("last_in_at")[:limit]):
+        if o.pk in c["test_chats"] or C.is_sim_row(o) or getattr(C.cust(o), "is_employee", False):
+            continue
+        try:
+            C.capture_contact(o)
+            _ensure_ad(o)
+            lead = C.autofill(o)
+        except Exception as e:
+            rows.append({"chat": o.id, "d": "failed", "why": "อ่านแชทไม่ได้: %s" % str(e)[:120]})
+            continue
+        at = _contact_at(lead)
+        if not (lead.phone or lead.line_id) or not at or at < since:
+            continue                                  # ยังไม่ได้ให้ช่องทางติดต่อ / ให้ไว้ก่อนวันนี้
+        auto = lead.auto or {}
+        if C.BUY_KEY in auto or C.BUYLEAD_KEY in auto or C.NOCODE_KEY in auto:
+            rows.append({"chat": o.id, "d": "skip", "why": "ไม่ใช่ลีดขาย"})
+            continue
+        sg = C.suggest_prefix(lead, o=o)
+        code = "%s%d-" % (C.build_prefix(sg["base"], bool(sg.get("admin")), False), timezone.localdate().month)
+        todo.append((at, o, lead, code, sg["base"]))
+    todo.sort(key=lambda x: x[0])
+    out = {"sent": 0, "failed": 0, "would": 0}
+    if todo and not dry:
+        _push_ex(c["test_group"], "🔁 ส่งเคสวันนี้ใหม่หลังแก้ (ไอดีไลน์ + ข้อมูลลูกค้าในบรรทัดเพิ่มเติม) · %d ใบ" % len(todo), "",
+                 what=WHAT_SHOW)
+    for at, o, lead, code, base in todo:
+        f = _fields(o, lead, code)
+        row = {"chat": o.id, "code": code, "phone": bool(f.get("phone")), "lineId": bool(f.get("line_id")),
+               "notes": bool((f.get("more") or "").strip("- "))}
+        if dry:
+            row["d"] = "would"
+            out["would"] += 1
+        else:
+            prev = (lead.auto or {}).get(SHOW_KEY) or {}
+            sh = _show_post(o, lead, {"code": code, "base": base, "at": now.isoformat(timespec="seconds"), "up": 0,
+                                      "resent": True, "first": prev.get("at") or ""})
+            _save(lead, sh, SHOW_KEY)
+            row["d"] = "posted" if sh.get("ok") else "failed"
+            out["sent" if sh.get("ok") else "failed"] += 1
+            if sh.get("error"):
+                row["why"] = sh["error"]
+            if BG and pause:
+                time.sleep(pause)
+        rows.append(row)
+    out["rows"] = rows
+    out["since"] = timezone.localtime(since).isoformat(timespec="minutes")
+    return out
 
 
 def _retry_show(now, out: list):
