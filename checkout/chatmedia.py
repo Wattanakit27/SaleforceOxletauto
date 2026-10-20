@@ -407,7 +407,9 @@ def ensure(src: str, row, refresh: bool = False, now: float | None = None) -> st
     row.media_token = tok
     # ★ 11 ต.ค.69 รูปที่เพิ่งโหลดเป็น QR ของ LINE ลูกค้าไหม → นับเป็นช่องทางติดต่อ (lead_qr · อ่านในเครื่อง)
     #   แยก try — อ่าน QR พังต้องไม่ทำให้การโหลดรูปพัง
-    if any(e in IMAGE_EXT for e in parse(tok)[1]):
+    # ★ 20 ต.ค.69 เฉพาะรูปที่ลูกค้าส่ง — รูปที่ร้านส่ง (ถูกโหลดตอนวิเคราะห์รูปรถ · carvision) อาจมี QR LINE ของแอดมิน
+    #   ถ้าอ่านด้วย จะกลายเป็น "ID LINE ของลูกค้า"
+    if any(e in IMAGE_EXT for e in parse(tok)[1]) and getattr(row, "direction", "in") != "out":
         try:
             from .lead_qr import scan_row
             scan_row(src, row)

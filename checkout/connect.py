@@ -3387,6 +3387,19 @@ def capture_profile(o, msgs=None, extra=None) -> bool:
     texts = [m["text"] for m in allm
              if m.get("dir") == "in" and m.get("text") and not m["text"].startswith("[")]
     outs = [m["text"] for m in allm if m.get("dir") == "out" and m.get("text")]
+    try:
+        return _capture_profile(o, allm, texts, outs)
+    finally:
+        # ★ 20 ต.ค.69 ลูกค้าอ้างรถในรูป ("สนใจคันล่างสุด") + มีรูปในแชท → AI ดูรูปบอกยี่ห้อ/รุ่น (thread · carvision.py)
+        #   เรียกหลังเซฟโปรไฟล์ — ไม่ให้การเซฟข้างบนไปทับผลที่ thread เขียน
+        try:
+            from . import carvision
+            carvision.maybe(o, allm)
+        except Exception:
+            pass
+
+
+def _capture_profile(o, allm, texts, outs) -> bool:
     lead = lead_of(o, create=False)
     from . import autotag as AT
     from . import lead_keywords as K
