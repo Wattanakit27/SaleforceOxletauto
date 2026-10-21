@@ -1103,6 +1103,13 @@ def tick(now=None) -> dict:
             out["crm"] = r
     except Exception as e:
         out["crmError"] = str(e)[:120]
+    try:                                     # ★ 21 ต.ค.69 บรอดแคสต์ส่งทีละคน (มีลิงก์ติดตาม) ที่ค้างเพราะเซิร์ฟเวอร์รีสตาร์ท → ทำต่อ
+        from .broadcast import resume_stale
+        r = resume_stale(now)
+        if r:
+            out["broadcastResumed"] = r
+    except Exception as e:
+        out["broadcastError"] = str(e)[:120]
     try:                                     # ★ 21 ต.ค.69 แท็กอัตโนมัติ: อ่านแชทย้อนหลังวันละครั้ง (ตี 3 · thread แยก)
         from .autotag import maybe_daily
         r = maybe_daily(now)

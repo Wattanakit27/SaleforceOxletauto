@@ -78,6 +78,7 @@ CALLS = []
 QUOTA = {"type": "none"}
 USED = {"totalUsage": 0}
 MC_STATUS = {"code": 200}
+PUSH_FAIL = set()
 
 
 class _R:
@@ -99,6 +100,8 @@ def fake_post(url, *a, **k):
     CALLS.append({"url": url, "json": k.get("json"), "headers": k.get("headers") or {}})
     if "multicast" in url:
         return _R(MC_STATUS["code"], {} if MC_STATUS["code"] == 200 else {"message": "Invalid to"})
+    if url.endswith("/push") and (k.get("json") or {}).get("to") in PUSH_FAIL:
+        return _R(400, {"message": "Invalid to"})
     return _R(200, {})
 
 
@@ -250,7 +253,8 @@ ok(push and [m["type"] for m in push[0]["json"]["messages"]] == ["text", "image"
    and push[0]["json"]["messages"][1]["originalContentUrl"].startswith("https://example.test/media/chat_out/"),
    "เนื้อหา = ข้อความ + รูป (ลิงก์ https ของเรา)")
 s, d = post(client({"user_id": "admin", "nickname": "ไม่มีไลน์", "position": "admin"}), {"action": "test", "content": CONTENT})
-ok(s == 400 and "ไม่พบ LINE ของคุณ" in d.get("error", ""), "ไม่มี LINE ของแอดมินในระบบ = บอกวิธีแก้", d)
+ok(s == 400 and "ยังไม่มี LINE" in d.get("error", "") and "แอดบัญชี LINE OA" in d.get("error", ""),
+   "ไม่มี LINE ของแอดมินในระบบ = บอกวิธีแก้", d)
 
 print("\n[6] ส่งจริง — ด่าน")
 cache_store.set_kv("checkout_line_config", {"reply_customer": False})
@@ -333,16 +337,17 @@ car = Car.objects.create(code="CS9901", brand="Honda", model="City", year=2014, 
 car.photo.name = "cars/c1.png"
 Car.objects.filter(pk=car.pk).update(photo="cars/c1.png")
 sold = Car.objects.create(code="CS9902", brand="Toyota", model="Vios", stage="sold", status="sold")
-msgs, infos, store = B.build({"text": "", "images": [], "cars": ["CS9901", "CS9902"]})
+msgs, infos, store, clinks = B.build({"text": "", "images": [], "cars": ["CS9901", "CS9902"]})
 fl = msgs[0] if msgs else {}
 ok(len(msgs) == 1 and fl.get("type") == "flex" and len(infos) == 1, "รถที่ขายแล้วไม่ส่ง · การ์ดรถ 1 ใบ", [m.get("type") for m in msgs])
 bub = fl.get("contents", {})
 ok(bub.get("hero", {}).get("url", "").startswith("https://example.test/media/chat_out/"), "รูปรถเป็นสำเนา https ของเรา", bub.get("hero"))
-ok(bub.get("footer", {}).get("contents", [{}])[0].get("action", {}).get("uri") == "https://web.example.test/stock/CS9901/",
-   "ปุ่มลิงก์หน้ารถบนเว็บโชว์รูม (รถที่ขึ้นเว็บอยู่)", bub.get("footer"))
+ok(bub.get("footer", {}).get("contents", [{}])[0].get("action", {}).get("uri") == B.PH % 0
+   and clinks and clinks[0]["url"] == "https://web.example.test/stock/CS9901/",
+   "ปุ่มลิงก์หน้ารถบนเว็บโชว์รูม (รถที่ขึ้นเว็บอยู่ · เป็นลิงก์ติดตาม)", (bub.get("footer"), clinks))
 ok("฿259,000" in json.dumps(bub, ensure_ascii=False) and "Honda City" in fl.get("altText", ""), "ราคา + ชื่อรุ่นในการ์ด")
 Car.objects.filter(pk="CS9901").update(web_listed=False)
-msgs2, _, _ = B.build({"text": "x", "images": [], "cars": ["CS9901"]})
+msgs2, _, _, _ = B.build({"text": "x", "images": [], "cars": ["CS9901"]})
 ok("footer" not in msgs2[1]["contents"], "รถยังไม่ขึ้นเว็บ = ไม่มีปุ่มลิงก์ (กันลิงก์เปิดแล้วไม่เจอ)")
 settings.SITE_URL = "http://127.0.0.1:8000"
 try:
@@ -359,6 +364,235 @@ r = A.get("/crm/api/broadcast", secure=True)
 h = r.json().get("history", [])
 ok(r.status_code == 200 and len(h) == 3 and h[0]["status"] == "failed", "ประวัติการส่ง (ใหม่สุดก่อน)", [x["status"] for x in h])
 ok(not re.search(r"U[0-9a-f]{32}", r.content.decode()), "ประวัติไม่มี LINE userId")
+
+print("\n[12] ค้นหาเงื่อนไข — อาชีพ · รายได้ · ยี่ห้อ · ไม่เอา")
+ok(B.income_range("22,000") == (22000, 22000) and B.income_range("2หมื่น") == (20000, 20000)
+   and B.income_range("20000-25000") == (20000, 25000) and B.income_range("15k") == (15000, 15000)
+   and B.income_range("ไม่ทราบ") is None, "อ่านช่องรายได้ที่พิมพ์อิสระได้ (22,000 · 2หมื่น · ช่วง · 15k)")
+for o, occ, inc in [(L1, "พนักงานบริษัท", "22,000"), (L4, "พนักงานโรงงาน", "15000-18000"), (L5, "ค้าขาย", "3หมื่น"),
+                    (F1, "พนักงานบริษัท", "")]:
+    ChatLead.objects.filter(chat=o).update(occupation=occ, income=inc)
+ALL = {"days": 0}
+
+
+def ids_of(**kw):
+    return {r["id"] for r in B.audience(B.clean_filters(dict(ALL, **kw)))["rows"]}
+
+
+ok(ids_of(conds=[{"f": "occupation", "v": "พนักงาน"}]) == {L1.id, L4.id, F1.id}, "อาชีพ \"มีคำว่า พนักงาน\" = ทุกแบบพนักงาน")
+ok(ids_of(conds=[{"f": "occupation", "v": "พนักงานบริษัท"}, {"f": "occupation", "v": "ค้าขาย"}]) == {L1.id, F1.id, L5.id},
+   "หัวข้อเดียวกันหลายค่า = อย่างใดอย่างหนึ่ง")
+ok(ids_of(conds=[{"f": "occupation", "v": "พนักงาน"}, {"f": "brand", "v": "Honda"}]) == set(),
+   "ต่างหัวข้อ = ต้องตรงทุกข้อ (พนักงาน + Honda ไม่มีใครตรง)")
+ok(ids_of(conds=[{"f": "brand", "v": "Honda"}]) == {L5.id}, "ยี่ห้อจากแท็ก (เทียบทั้งคำ)")
+ok(ids_of(conds=[{"f": "occupation", "v": "พนักงาน", "neg": True}]) == {L5.id}, "ไม่เอา = ตัดคนที่ตรงออก",
+   ids_of(conds=[{"f": "occupation", "v": "พนักงาน", "neg": True}]))
+ok(ids_of(conds=[{"f": "text", "v": "โรงงาน"}]) == {L4.id}, "คำค้นค้นในข้อมูลลูกค้าด้วย (อาชีพ)")
+ok(ids_of(imin=20000) == {L1.id, L5.id}, "รายได้ตั้งแต่ 20,000 (ช่วง 15-18k ไม่นับ · 3หมื่นนับ)")
+ok(ids_of(imin=16000, imax=21000) == {L4.id}, "ช่วงรายได้ซ้อนกัน = นับ (15,000-18,000 อยู่ในช่วง 16,000-21,000)")
+a12 = B.audience(B.clean_filters(dict(ALL, imin=20000)))
+ok(a12["noinc"] == 1, "ลูกค้าที่ไม่รู้รายได้ไม่ถูกนับ และนับแยกให้หน้าเว็บบอก", a12["noinc"])
+ok("อาชีพ พนักงาน" in B.describe(B.clean_filters({"conds": [{"f": "occupation", "v": "พนักงาน"}], "imin": 20000}))
+   and "รายได้ 20,000" in B.describe(B.clean_filters({"imin": 20000})), "สรุปเงื่อนไขในประวัติอ่านออก")
+bad = B.clean_filters({"conds": [{"f": "boom", "v": "x"}, {"f": "occupation", "v": ""}, "x"], "imin": "abc"})
+ok(bad["conds"] == [] and bad["imin"] == 0, "เงื่อนไขมั่ว = ไม่ใช้")
+s, d = post(A, {"action": "preview", "filters": dict(ALL, conds=[{"f": "occupation", "v": "พนักงาน"}])})
+fac = {g["f"]: [x["v"] for x in g["items"]] for g in d.get("facets", [])}
+ok(s == 200 and d.get("total") == 3 and "พนักงานบริษัท" in fac.get("occupation", []) and "Honda" in fac.get("brand", [])
+   and "Honda" not in fac.get("tag", []), "ตัวเลือกแยกหัวข้อ (อาชีพ · ยี่ห้อไม่ปนกับแท็กทั่วไป)", fac)
+ok(any(r["occupation"] == "พนักงานบริษัท" and r["income"] == "22,000" for r in d.get("rows", [])), "ตารางผลลัพธ์มีอาชีพ/รายได้")
+r = A.get("/crm/api/broadcast", {"export": "csv", "f": json.dumps(dict(ALL, imin=20000))}, secure=True)
+body = r.content.decode("utf-8")
+ok("อาชีพ" in body.splitlines()[0] and "ค้าขาย" in body and "พนักงานโรงงาน" not in body, "CSV มีคอลัมน์อาชีพ/รายได้ และกรองตามรายได้")
+
+print("\n[13] ลิงก์ติดตาม + ส่งทดสอบหาทีม (แบบ MAAC)")
+B.BG = False
+from checkout.models import BroadcastClick  # noqa: E402
+UA_PHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari Line/13.18.0"
+UA_BOT = "facebookexternalhit/1.1;line-poker/1.0"
+LK = [{"label": "ดูโปรเดือนนี้", "url": "https://shop.example.test/promo?a=1", "mode": "button", "tag": "สนใจโปร"},
+      {"label": "เว็บร้าน", "url": "https://shop.example.test/", "mode": "text", "tagOn": False}]
+for bad, why in [({"links": [{"label": "x", "url": "javascript:alert(1)"}]}, "ไม่ถูกต้อง"),
+                 ({"links": [{"label": "", "url": "https://a.test/"}]}, "ยังไม่มีชื่อปุ่ม"),
+                 ({"links": [{"label": "ก" * 21, "url": "https://a.test/"}]}, "ยาวเกินไป"),
+                 ({"links": [{"label": "a", "url": "https://a.test/x y"}]}, "ไม่ถูกต้อง"),
+                 ({"links": [{"label": "a%d" % i, "url": "https://a.test/%d" % i} for i in range(4)]}, "ไม่เกิน 3")]:
+    try:
+        B.clean_content(bad)
+        ok(False, "ปฏิเสธลิงก์: " + why)
+    except B.BError as e:
+        ok(why in str(e), "ปฏิเสธลิงก์: " + why, str(e))
+cc = B.clean_content({"links": [{"label": "ดูรถ", "url": "https://a.test/"}, {"label": "", "url": ""}]})
+ok(len(cc["links"]) == 1 and cc["links"][0]["tag"] == "กดลิงก์ ดูรถ" and cc["links"][0]["mode"] == "button",
+   "แถวว่างข้าม · แท็กตั้งต้น = \"กดลิงก์ <ชื่อปุ่ม>\" · ลิงก์อย่างเดียวส่งได้", cc["links"])
+cc = B.clean_content({"text": "x", "links": LK, "link_title": "  โปรพิเศษ  "})
+ok(cc["links"][1]["tag"] == "" and cc["link_title"] == "โปรพิเศษ", "ปิดติดแท็ก = ไม่ติด · หัวการ์ดตัดช่องว่าง")
+ok(B.content_hash(cc) != B.content_hash(dict(cc, links=cc["links"][:1])), "แก้ลิงก์ = เนื้อหาเปลี่ยน (ต้องทดสอบใหม่)")
+msgs, infos, store, links = B.build(cc)
+ok([m["type"] for m in msgs] == ["text", "flex"] and len(links) == 2, "ข้อความ (+ลิงก์แนบ) + การ์ดปุ่มลิงก์", [m["type"] for m in msgs])
+ok("เว็บร้าน: __OXBCL01__" in msgs[0]["text"] and "shop.example.test" not in json.dumps(msgs),
+   "ลิงก์ในข้อความที่ส่ง = ตัวแทน (แทนเป็นลิงก์ของแต่ละคนตอนส่ง)", msgs[0]["text"])
+btn = msgs[1]["contents"]["footer"]["contents"]
+ok(len(btn) == 1 and btn[0]["action"] == {"type": "uri", "label": "ดูโปรเดือนนี้", "uri": "__OXBCL00__"}
+   and msgs[1]["contents"]["body"]["contents"][0]["text"] == "โปรพิเศษ", "ซ่อนลิงก์หลังปุ่ม (Flex) + หัวการ์ด", btn)
+ok("https://shop.example.test/" in store[0]["text"] and "[ปุ่มลิงก์] โปรพิเศษ" in store[1]["text"],
+   "ที่เก็บลงแชทของลูกค้า = ลิงก์จริง (เซลล์อ่านออก)", store)
+UPS = [B.upload(SimpleUploadedFile("p%d.png" % i, png((40 * i, 10, 10)), "image/png")) for i in range(3)]
+try:
+    B.build(B.clean_content({"text": "x", "images": [{"full": u["full"]} for u in UPS], "cars": ["CS9901"], "links": LK[:1]}))
+    six = False
+except B.BError as e:
+    six = "ไม่เกิน 5 ชิ้น" in str(e)
+Car.objects.filter(pk="CS9901").update(web_listed=True)
+m5, _i5, _s5, l5 = B.build(B.clean_content({"text": "x", "cars": ["CS9901"], "links": LK[:1]}))
+car_link = [x for x in l5 if x["mode"] == "car"]
+ok(six, "ข้อความ+รูป 3+การ์ดรถ+การ์ดลิงก์ = 6 ชิ้น เกิน LINE = บอกวิธีแก้")
+ok(len(car_link) == 1 and car_link[0]["url"] == "https://web.example.test/stock/CS9901/"
+   and car_link[0]["tag"] == "กดดูรถ Honda City"
+   and m5[1]["contents"]["footer"]["contents"][0]["action"]["uri"] == "__OXBCL01__",
+   "ปุ่ม \"ดูรายละเอียดรถ\" ก็เป็นลิงก์ติดตาม (แท็ก กดดูรถ <รุ่น>)", car_link)
+m5b, _i, _s, l5b = B.build(B.clean_content({"text": "x", "cars": ["CS9901"], "car_tag": False}))
+ok(l5b and l5b[0]["tag"] == "", "ปิดติดแท็กคนกดดูรถได้")
+
+print("\n[14] รายชื่อคนในทีมที่ส่งทดสอบได้")
+emp2 = Employee.objects.create(nickname="นวลทดสอบ")
+NUAN = "U" + "a" * 32
+LineProfile.objects.create(user_id=NUAN, display_name="Nuan", employee=emp2, is_employee=True, channel="crm")
+emp3 = Employee.objects.create(nickname="ไม่มีไลน์")
+s, d = post(A, {"action": "testers"})
+names = [x["name"] for x in d.get("testers", [])]
+ok(s == 200 and names[:1] == ["แอดมินบี"] and "นวลทดสอบ" in names and "ไม่มีไลน์" not in names,
+   "ตัวเองขึ้นก่อน · เฉพาะคนที่มี LINE กับบัญชีของร้าน", names)
+ok(not re.search(r"U[0-9a-f]{32}", json.dumps(d)), "รายชื่อคนทดสอบไม่มี LINE userId")
+s, d = post(client(U_SELLER), {"action": "testers"})
+ok(s == 403, "เซลล์ดูรายชื่อไม่ได้")
+
+print("\n[15] ส่งทดสอบหาทีม + ลิงก์ทดสอบ")
+CONT = {"text": "โปรเดือนนี้ ดาวน์ 0 บาท", "links": LK, "link_title": "โปรพิเศษ"}
+CALLS.clear()
+s, d = post(A, {"action": "test", "content": CONT, "account": "crm", "testers": [emp.pk, emp2.pk, emp3.pk]})
+push = [c for c in CALLS if c["url"].endswith("/push")]
+ok(s == 200 and d.get("ok") and {c["json"]["to"] for c in push} == {ME, NUAN}, "ส่งทดสอบถึงคนที่เลือก (2 คนที่มี LINE)", d)
+ok("ส่งไม่ถึง: ไม่มีไลน์" in d.get("message", "") and [r["ok"] for r in d.get("results", [])] == [True, True, False],
+   "บอกรายคนว่าใครส่งไม่ถึง", d.get("message"))
+u1 = re.findall(r"https://example\.test/b/(t-[0-9a-z-]+)", json.dumps(push[0]["json"]))
+u2 = re.findall(r"https://example\.test/b/(t-[0-9a-z-]+)", json.dumps(push[1]["json"]))
+ok(len(u1) == 2 and len(u2) == 2 and set(u1).isdisjoint(u2), "ลิงก์ทดสอบของแต่ละคนไม่ซ้ำกัน", (u1, u2))
+ok(cache_store.get_kv("bcast_testers")["data"] == [emp.pk, emp2.pk, emp3.pk], "จำรายชื่อคนทดสอบไว้ครั้งหน้า")
+tok_nuan_btn = [t for t in u2 if t.endswith("-0-" + t.split("-")[-1])][0]
+r = client().get("/b/" + tok_nuan_btn, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(r.status_code == 302 and r["Location"] == "https://shop.example.test/promo?a=1" and r["Cache-Control"] == "no-store",
+   "กดลิงก์ทดสอบ = พาไปหน้าจริง", (r.status_code, r.get("Location")))
+s, d = post(A, {"action": "teststate", "hash": B.content_hash(B.clean_content(CONT))})
+ok(s == 200 and [x["name"] for x in d.get("clicks", [])] == ["นวลทดสอบ"] and d["clicks"][0]["links"][0]["label"] == "ดูโปรเดือนนี้",
+   "หน้าเว็บรู้ว่าใครในทีมกดลิงก์ทดสอบแล้ว", d)
+ok(not BroadcastClick.objects.exists() and "สนใจโปร" not in (ChatLead.objects.get(chat=L1).tags or []),
+   "ลิงก์ทดสอบไม่นับเป็นลูกค้ากด · ไม่ติดแท็กใคร")
+r = client().get("/b/" + u1[0], secure=True, HTTP_USER_AGENT=UA_BOT)
+s, d = post(A, {"action": "teststate", "hash": B.content_hash(B.clean_content(CONT))})
+ok(r.status_code == 302 and len(d.get("clicks", [])) == 1, "ตัวดึงลิงก์ทำตัวอย่าง (LINE preview) ไม่นับว่ากด")
+
+print("\n[16] ส่งจริงแบบมีลิงก์ = ส่งทีละคน (ลิงก์ของแต่ละคนไม่ซ้ำ)")
+CALLS.clear()
+s, d = post(A, {"action": "send", "content": CONT, "filters": BASE, "confirm": 3, "client_id": "cid-link-0001"})
+push = [c for c in CALLS if c["url"].endswith("/push")]
+mc = [c for c in CALLS if "multicast" in c["url"]]
+bl = Broadcast.objects.get(client_id="cid-link-0001")
+ok(s == 200 and d.get("ok") and bl.mode == "push" and bl.status == "done" and bl.sent == 3 and not mc,
+   "ไม่ใช้ multicast · ส่งครบ 3 ราย", (d, bl.status, bl.sent))
+ok({c["json"]["to"] for c in push} == {L1.profile.user_id, L4.profile.user_id, L5.profile.user_id}
+   and {c["headers"]["Authorization"] for c in push if c["json"]["to"] == L5.profile.user_id} == {"Bearer tok-push"},
+   "ส่งหาลูกค้าแต่ละคนด้วยบัญชีที่เขาคุยอยู่")
+urls = {}
+for c in push:
+    urls[c["json"]["to"]] = re.findall(r"https://example\.test/b/([0-9a-z]+-[0-9a-z]+-\d-[0-9a-f]+)", json.dumps(c["json"]))
+ok(all(len(v) == 2 for v in urls.values()) and len({x for v in urls.values() for x in v}) == 6,
+   "ลูกค้า 3 คน × 2 ลิงก์ = ลิงก์ไม่ซ้ำกัน 6 อัน", urls)
+ok(len({c["headers"].get("X-Line-Retry-Key") for c in push}) == 3, "Retry-Key ต่อคน (ส่งซ้ำคนเดิม LINE ไม่ส่งซ้ำ)")
+ok(GroupChat.objects.filter(message_id__startswith="bc:%d:" % bl.pk, text__contains="เว็บร้าน: https://shop.example.test/").count() == 3,
+   "เก็บลงแชทของลูกค้าแต่ละคน (ลิงก์จริง ไม่ใช่ลิงก์ติดตาม)")
+ok(len(bl.links) == 2 and bl.links[0]["tag"] == "สนใจโปร", "บันทึกลิงก์ + แท็กไว้กับบรอดแคสต์")
+
+print("\n[17] ลูกค้ากดลิงก์ → จดว่าใครกด + ติดแท็ก")
+tok1 = [t for t in urls[L1.profile.user_id] if "-0-" in t][0]
+r = client().get("/b/" + tok1, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(r.status_code == 302 and r["Location"] == "https://shop.example.test/promo?a=1" and r["Referrer-Policy"] == "no-referrer",
+   "กดแล้วพาไปปลายทาง (ไม่ส่ง referrer)", (r.status_code, r.get("Location")))
+ck = BroadcastClick.objects.get(broadcast=bl, chat=L1, link=0)
+ld1 = ChatLead.objects.get(chat=L1)
+ok(ck.count == 1 and ck.tagged == "สนใจโปร" and "สนใจโปร" in ld1.tags and (ld1.auto or {}).get("_btags", {}).get("สนใจโปร", {}).get("b") == bl.pk,
+   "จดคนกด + ติดแท็กของลิงก์ (จดว่าติดจากบรอดแคสต์ไหน)", (ck.count, ck.tagged, ld1.tags))
+ok(ChatOwnerLog.objects.filter(chat_id=L1.pk, action=ChatOwnerLog.BCAST, note__contains="ลูกค้ากด").exists(), "ประวัติลูกค้า: กดลิงก์")
+client().get("/b/" + tok1, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ck.refresh_from_db()
+ok(ck.count == 2 and ChatLead.objects.get(chat=L1).tags.count("สนใจโปร") == 1, "กดซ้ำ = นับเพิ่ม · แท็กไม่ซ้ำ")
+client().get("/b/" + tok1, secure=True, HTTP_USER_AGENT=UA_BOT)
+client().head("/b/" + tok1, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ck.refresh_from_db()
+ok(ck.count == 2, "ตัวดึงลิงก์ทำตัวอย่าง / HEAD ไม่นับ")
+tok_txt = [t for t in urls[L4.profile.user_id] if "-1-" in t][0]
+r = client().get("/b/" + tok_txt, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(r.status_code == 302 and r["Location"] == "https://shop.example.test/" and BroadcastClick.objects.get(chat=L4, link=1).tagged == ""
+   and "กดลิงก์ เว็บร้าน" not in (ChatLead.objects.get(chat=L4).tags or []), "ลิงก์ที่ปิดติดแท็ก = จดคนกดอย่างเดียว")
+ld5 = ChatLead.objects.get(chat=L5)
+ld5.auto = {"_tag_no": ["สนใจโปร"]}
+ld5.save()
+tok5 = [t for t in urls[L5.profile.user_id] if "-0-" in t][0]
+client().get("/b/" + tok5, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(BroadcastClick.objects.get(chat=L5, link=0).tagged == "" and "สนใจโปร" not in ChatLead.objects.get(chat=L5).tags,
+   "แท็กที่คนเคยเอาออกเอง = ไม่ติดกลับ")
+bad = tok1[:-1] + ("0" if tok1[-1] != "0" else "1")
+r = client().get("/b/" + bad, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(r.status_code == 404 and "Location" not in r, "ลายเซ็นผิด = ไม่พาไปไหน (กันปลอมลิงก์คนอื่น)")
+fake = tok1.replace("-0-", "-7-")
+r = client().get("/b/" + fake, secure=True, HTTP_USER_AGENT=UA_PHONE)
+ok(r.status_code == 404, "ลิงก์ลำดับที่ไม่มีจริง = 404")
+r = client().get("/b/../../etc", secure=True)
+ok(r.status_code == 404, "ค่ามั่ว = 404")
+
+print("\n[18] ประวัติ + ดาวน์โหลดคนกด")
+r = A.get("/crm/api/broadcast", secure=True)
+hb = [x for x in r.json().get("history", []) if x["id"] == bl.pk][0]
+ok(hb["mode"] == "push" and hb["clickPeople"] == 3 and hb["clickTagged"] == 1 and hb["links"][0]["people"] == 2
+   and hb["links"][0]["clicks"] == 3 and hb["links"][1]["people"] == 1, "ประวัติบอกคนกด (รวม/รายลิงก์/ติดแท็ก)", hb)
+r = A.get("/crm/api/broadcast", {"export": "clicks", "id": bl.pk}, secure=True)
+body = r.content.decode("utf-8")
+ok(r.status_code == 200 and body.startswith("﻿") and "ลูกค้าหนึ่ง" in body and "สนใจโปร" in body and "'0812345678" in body
+   and len(body.strip().splitlines()) == 4, "CSV คนกด 3 คน (ชื่อ · เบอร์ · ลิงก์ที่กด · แท็กที่ติด)", body[:300])
+ok(client(U_SELLER).get("/crm/api/broadcast", {"export": "clicks", "id": bl.pk}, secure=True).status_code == 403,
+   "เซลล์ดาวน์โหลดคนกดไม่ได้")
+ok(A.get("/crm/api/broadcast", {"export": "clicks", "id": 99999}, secure=True).status_code == 404, "บรอดแคสต์ไม่มีจริง = 404")
+
+print("\n[19] ส่งไม่ถึงบางคน + งานค้างทำต่อ")
+PUSH_FAIL.add(L4.profile.user_id)
+post(A, {"action": "test", "content": dict(CONT, text="รอบสอง"), "account": "crm"})
+s, d = post(A, {"action": "send", "content": dict(CONT, text="รอบสอง"), "filters": BASE, "confirm": 3, "client_id": "cid-link-0002"})
+b2 = Broadcast.objects.get(client_id="cid-link-0002")
+ok(b2.status == "partial" and b2.sent == 2 and b2.failed == 1 and "บล็อก" in b2.error, "บางคนส่งไม่ถึง = ส่งได้บางส่วน + เหตุผล", b2.error)
+ok(not GroupChat.objects.filter(message_id="bc:%d:%d:0" % (b2.pk, L4.pk)).exists(), "คนที่ส่งไม่ถึงไม่ถูกเก็บลงแชท")
+PUSH_FAIL.clear()
+b3 = Broadcast.objects.create(client_id="cid-link-0003", text="ค้าง", links=bl.links, mode="push", status="sending",
+                              total=3, sent=1, recipients=[L1.pk],
+                              accounts={"crm": {"name": "x", "n": 2, "ok": 1, "fail": 0, "error": ""},
+                                        "push": {"name": "y", "n": 1, "ok": 0, "fail": 0, "error": ""}})
+tpl = json.dumps([{"type": "text", "text": "ค้าง " + B.PH % 0}])
+cache_store.set_kv(B.JOB_KEY % b3.pk, {"tpl": tpl, "n": 1, "store": [{"type": "text", "text": "ค้าง"}],
+                                       "plan": [[L1.pk, L1.profile.user_id, "crm"], [L4.pk, L4.profile.user_id, "crm"],
+                                                [L5.pk, L5.profile.user_id, "push"]], "cid": "cid-link-0003", "who": "แอดมินบี"})
+cache_store.set_kv(B.JOBST_KEY % b3.pk, {"at": (timezone.now() - timedelta(minutes=10)).isoformat(), "failed": {}})
+CALLS.clear()
+res = B.resume_stale()
+b3.refresh_from_db()
+tos = [c["json"]["to"] for c in CALLS if c["url"].endswith("/push")]
+ok(res == [b3.pk] and b3.status == "done" and b3.sent == 3 and sorted(tos) == sorted([L4.profile.user_id, L5.profile.user_id]),
+   "เซิร์ฟเวอร์รีสตาร์ทกลางทาง = ทำต่อเฉพาะคนที่ยังไม่ได้ (ไม่ส่งซ้ำคนเดิม)", (res, b3.status, tos))
+cache_store.set_kv(B.JOBST_KEY % b3.pk, {"at": timezone.now().isoformat(), "failed": {}})
+Broadcast.objects.filter(pk=b3.pk).update(status="sending")
+ok(B.resume_stale() == [], "งานที่ยังขยับอยู่ = ไม่แตะ")
+Broadcast.objects.filter(pk=b3.pk).update(created_at=timezone.now() - timedelta(hours=21))
+B.resume_stale()
+ok(Broadcast.objects.get(pk=b3.pk).status == "partial", "ค้างเกิน 20 ชม. = ปิดงาน ไม่ส่งต่อ (retry key หมดอายุ)")
+B.BG = True
 
 requests.post, requests.get = _real_post, _real_get
 shutil.rmtree(TMP, ignore_errors=True)

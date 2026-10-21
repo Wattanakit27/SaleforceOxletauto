@@ -1354,6 +1354,10 @@ class Broadcast(models.Model):
     text = models.TextField("ข้อความ", blank=True)
     images = models.JSONField("รูปที่แนบ (path ใต้ media/chat_out)", default=list, blank=True)
     cars = models.JSONField("รถจากสต็อก (รหัสรถ)", default=list, blank=True)
+    # ★ 21 ต.ค.69 ลิงก์ติดตาม (แบบ MAAC) — [{url, label, tag, mode(button|text|car)}] · มีลิงก์ = ส่งทีละคน (ลิงก์ของแต่ละคนไม่ซ้ำกัน)
+    links = models.JSONField("ลิงก์ติดตาม", default=list, blank=True)
+    link_title = models.CharField("หัวข้อการ์ดปุ่มลิงก์", max_length=80, blank=True)
+    mode = models.CharField("วิธีส่ง", max_length=10, blank=True)   # multicast / push (ทีละคน)
     filters = models.JSONField("เงื่อนไขกลุ่มลูกค้า", default=dict, blank=True)
     audience = models.CharField("กลุ่มลูกค้า (อ่านง่าย)", max_length=300, blank=True)
     total = models.PositiveIntegerField("ผู้รับ LINE", default=0)
@@ -1376,4 +1380,22 @@ class Broadcast(models.Model):
 
     def __str__(self):
         return "บรอดแคสต์ #%s (%s ราย)" % (self.pk, self.total)
+
+
+class BroadcastClick(models.Model):
+    """ลูกค้ากดลิงก์ในบรอดแคสต์ (★ 21 ต.ค.69 · ลิงก์ติดตาม /b/<token>) — 1 แถว = ลูกค้า 1 คน × ลิงก์ 1 อัน
+    กดครั้งแรก = ติดแท็กของลิงก์นั้นให้ลูกค้า (ถ้าตั้งไว้) · กดซ้ำ = นับเพิ่ม"""
+    broadcast = models.ForeignKey(Broadcast, verbose_name="บรอดแคสต์", on_delete=models.CASCADE, related_name="clicks")
+    chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="broadcast_clicks")
+    link = models.PositiveSmallIntegerField("ลิงก์ที่ (ลำดับ)", default=0)
+    count = models.PositiveIntegerField("กดกี่ครั้ง", default=1)
+    first_at = models.DateTimeField("กดครั้งแรก", default=timezone.now)
+    last_at = models.DateTimeField("กดล่าสุด", default=timezone.now)
+    tagged = models.CharField("แท็กที่ติดให้", max_length=40, blank=True)
+
+    class Meta:
+        verbose_name = "บรอดแคสต์ — คนที่กดลิงก์"
+        verbose_name_plural = "บรอดแคสต์ — คนที่กดลิงก์"
+        constraints = [models.UniqueConstraint(fields=["broadcast", "chat", "link"], name="uniq_bcast_click")]
 

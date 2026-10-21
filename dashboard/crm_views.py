@@ -269,12 +269,36 @@ def api_auto(request):
 
 
 @require_http_methods(["GET", "POST"])
+def bcast_click(request, tok):
+    """ลิงก์ติดตามในบรอดแคสต์ (★ 21 ต.ค.69 · สาธารณะ — ลูกค้ากดจาก LINE) → จดว่าใครกด + ติดแท็ก แล้วพาไปปลายทาง
+    ลายเซ็นไม่ผ่าน/ลิงก์หมดอายุ = หน้าแจ้งสั้นๆ (ไม่พาไปไหน) · ตัวดึงลิงก์ทำตัวอย่าง (LINE/Facebook) ไม่ถูกนับ"""
+    from django.http import HttpResponse, HttpResponseRedirect
+    from checkout import broadcast as B
+    url = ""
+    try:
+        url = B.click(tok, request.META.get("HTTP_USER_AGENT", ""), request.method)
+    except Exception:
+        url = ""
+    if not url:
+        resp = HttpResponse("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+                            "<title>ลิงก์ไม่ถูกต้อง</title><p style='font-family:sans-serif;padding:24px'>"
+                            "ลิงก์นี้ใช้ไม่ได้แล้ว — ทักแชทร้านเพื่อสอบถามได้เลยครับ</p>", status=404)
+    else:
+        resp = HttpResponseRedirect(url)
+    resp["Cache-Control"] = "no-store"
+    resp["Referrer-Policy"] = "no-referrer"
+    resp["X-Robots-Tag"] = "noindex"
+    return resp
+
+
 def api_broadcast(request):
     """หน้า **บรอดแคสต์** (★ 21 ต.ค.69 · แอดมินเท่านั้น) — ค้นหากลุ่มลูกค้า → ดาวน์โหลดรายชื่อ / ส่ง LINE · `checkout/broadcast.py`
 
     GET = ประวัติการส่ง · `?export=csv&f=<JSON เงื่อนไข>` = ไฟล์รายชื่อ (CSV) · `?export=ids&account=crm&f=…` = LINE userId (.txt)
     POST multipart `file` = อัปรูป · JSON `{action:"preview", filters, quota?}` · `{action:"cars", codes}` ·
-    `{action:"test", content, account}` (ส่งหาตัวเอง) · `{action:"send", content, filters, confirm, client_id}`
+    `{action:"test", content, account, testers}` (ส่งทดสอบหาคนในทีม ≤10 คน) · `{action:"testers"}` (คนในทีมที่ส่งทดสอบหาได้) ·
+    `{action:"teststate", hash}` (ใครกดลิงก์ในข้อความทดสอบแล้ว) · `{action:"send", content, filters, confirm, client_id}`
+    · GET `?export=clicks&id=<บรอดแคสต์>` = รายชื่อคนกดลิงก์ (CSV)
     """
     user, _seller, admin, why = _who(request)
     if why == "login":
@@ -286,6 +310,21 @@ def api_broadcast(request):
     who = (user.get("nickname") or user.get("display_name") or "แอดมิน")[:80]
     if request.method == "GET":
         exp = request.GET.get("export", "")
+        if exp == "clicks":
+            try:
+                name, data, n = B.export_clicks(request.GET.get("id"))
+            except B.BError as e:
+                return _j({"ok": False, "error": str(e)}, 404)
+            try:
+                eventlog.log("export", name="บรอดแคสต์ — ดาวน์โหลดคนกดลิงก์", target=who, ok=True, rows=n,
+                             broadcast=request.GET.get("id"))
+            except Exception:
+                pass
+            from django.http import HttpResponse
+            from cars.views import _attachment
+            resp = HttpResponse(data, content_type="text/csv; charset=utf-8")
+            resp["Cache-Control"] = "no-store"
+            return _attachment(resp, name)
         if exp in ("csv", "ids"):
             try:
                 f = json.loads(request.GET.get("f") or "{}")
@@ -325,6 +364,10 @@ def api_broadcast(request):
             return _j({"ok": True, "cars": B.card_preview(body.get("codes") or [])})
         if act == "test":
             return _j(B.test_send(body, user))
+        if act == "testers":
+            return _j(B.testers(user))
+        if act == "teststate":
+            return _j(B.test_state(body.get("hash")))
         if act == "send":
             res = B.send(body, user)
             return _j(res, 200 if res.get("ok") or res.get("needConfirm") else 502)

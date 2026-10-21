@@ -14,6 +14,7 @@ urlpatterns = [
     path("crm/api/lead_status", crm_views.api_lead_status, name="crm_api_lead_status"),
     path("crm/api/auto", crm_views.api_auto, name="crm_api_auto"),         # ★ 20 ต.ค.69 หน้าระบบอัตโนมัติ (แท็กลูกค้า)
     path("crm/api/broadcast", crm_views.api_broadcast, name="crm_api_broadcast"),   # ★ 21 ต.ค.69 บรอดแคสต์ลูกค้า (แอดมิน)
+    path("b/<str:tok>", crm_views.bcast_click, name="bcast_click"),   # ★ 21 ต.ค.69 ลิงก์ติดตามในบรอดแคสต์ (สาธารณะ · ลูกค้ากด)
     # ★ 9 ต.ค.69 — แอปมือถือ (demo): login ผ่าน LINE Login ตัวเดิม → token · ดู mobile_views.py
     path("m/login", mobile_views.m_login, name="m_login"),
     path("m/handoff/<str:pid>", mobile_views.m_handoff, name="m_handoff"),

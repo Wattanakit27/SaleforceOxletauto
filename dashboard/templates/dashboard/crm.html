@@ -253,12 +253,72 @@ html[data-theme="dark"]{ --sb-bg:#0f0c19; }
 .bc-h{font-weight:700;font-size:var(--fs-sub)}
 .bc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .bc-l{min-width:78px;font-size:12px;color:var(--ink3);font-weight:600}
-.bc-l2{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);font-weight:600;margin-top:6px}
+.bc-l2{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;font-size:13px;color:var(--ink2);font-weight:700;margin:6px 0 -2px}
+.bc-l2 .mini{font-weight:400}
+.bc-big{display:flex;align-items:baseline;gap:8px}
+.bc-num{font-size:34px;font-weight:800;line-height:1;color:var(--brand-d)}
+.bc-acc{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.bc-acc>div{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;padding:8px 12px;font-size:13px}
+.bc-acc>div+div{border-top:1px solid var(--line)}
+.bc-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bc-acts .btn{justify-content:center}
+.bc-steps{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.bc-steps div{display:flex;align-items:center;gap:8px}
+.bc-steps i{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;font-weight:700;background:var(--soft);color:var(--ink3);border:1px solid var(--line2);flex-shrink:0}
+.bc-steps .ok i{background:var(--ok-s);color:var(--ok);border-color:var(--ok)}
+.bc-steps .ok{color:var(--ok)}
+.bc-foot{font-size:12px;color:var(--ink3);line-height:1.5;padding-top:10px;border-top:1px solid var(--line)}
+.g2.bc-g{align-items:start}
 .bc-ck{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-body)}
 .bc-ck input{width:17px;height:17px;accent-color:var(--brand)}
-.chip.bc-tg{height:32px;display:inline-flex;align-items:center;gap:5px}
-.chip.bc-tg.inc{background:var(--brand-s);border-color:var(--brand);color:var(--brand-d);font-weight:700}
-.chip.bc-tg.exc{background:var(--card);border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+.bc-form{display:grid;grid-template-columns:118px minmax(0,1fr);gap:16px 18px;align-items:start}
+.bc-k{font-size:13px;font-weight:700;color:var(--ink2);padding-top:5px;display:flex;flex-direction:column;gap:3px}
+.bc-k span{font-size:11.5px;font-weight:400;color:var(--ink3);line-height:1.4}
+.bc-v{min-width:0;display:flex;flex-direction:column;gap:8px}
+.bc-inl{flex-direction:row;flex-wrap:wrap;align-items:flex-end;gap:10px 12px}
+.bc-f2{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--ink3);font-weight:600}
+.bc-f2.grow{flex:1 1 220px;max-width:380px}
+.bc-s{height:36px;border:1px solid var(--line2);border-radius:8px;padding:0 8px;background:var(--card);color:var(--ink);font-size:13.5px;min-width:128px}
+.bc-f2 input{height:36px;border:1px solid var(--line2);border-radius:8px;padding:0 10px;background:var(--card);color:var(--ink);width:100%;font-size:13.5px}
+.bc-s:focus,.bc-f2 input:focus{outline:none;border-color:var(--brand)}
+.bc-cs{display:flex;flex-wrap:wrap;gap:6px}
+.bc-c{height:30px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);background:var(--card);color:var(--ink);font-size:13px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.bc-c:hover{border-color:var(--brand)}
+.bc-c .n{font-size:11.5px;color:var(--ink3);font-weight:600}
+.bc-c.on,.bc-c.inc{background:var(--brand-s);border-color:var(--brand);color:var(--brand-d);font-weight:700}
+.bc-c.on .n,.bc-c.inc .n{color:var(--brand-d)}
+.bc-c.exc{border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+.bc-c.more{border-style:dashed;color:var(--ink3)}
+.bc-sub{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3)}
+.bc-qwrap{position:relative}
+.bc-qbox{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:44px;padding:6px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--card);cursor:text}
+.bc-qbox:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-s)}
+.bc-qbox>svg{color:var(--ink3);margin-left:2px;flex-shrink:0}
+.bc-qbox input{flex:1 1 220px;min-width:150px;border:0;outline:0;background:none;color:var(--ink);font-size:14px;height:30px;padding:0 4px}
+.bc-cd{display:inline-flex;align-items:center;height:30px;border-radius:7px;background:var(--brand-s);border:1px solid var(--brand);color:var(--brand-d);font-size:13px;overflow:hidden;max-width:100%}
+.bc-cd button{border:0;background:none;color:inherit;height:100%;padding:0 4px 0 10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-cd .f{font-weight:400;opacity:.8}
+.bc-cd button.x{padding:0 8px 0 4px}
+.bc-cd.neg{background:var(--card);border-color:var(--bad);color:var(--bad)}
+.bc-dd{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:40;max-height:390px;overflow:auto;background:var(--card);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);padding:6px}
+.bc-dd[hidden]{display:none}
+.bc-dg{padding:4px 0}
+.bc-dg+.bc-dg{border-top:1px solid var(--line)}
+.bc-dh{font-size:11.5px;font-weight:700;color:var(--ink3);padding:4px 10px}
+.bc-sg{display:flex;width:100%;align-items:center;gap:8px;text-align:left;border:0;background:none;color:var(--ink);padding:7px 10px;border-radius:7px;font-size:13.5px}
+.bc-sg:hover,.bc-sg.hl{background:var(--soft)}
+.bc-sg.on{color:var(--brand-d);font-weight:700}
+.bc-sg .t{min-width:0;overflow-wrap:anywhere}
+.bc-sg>svg{flex-shrink:0}
+.bc-sg .n{margin-left:auto;font-size:12px;color:var(--ink3);font-weight:400;white-space:nowrap}
+.bc-num-in{width:130px;height:36px;border:1px solid var(--line2);border-radius:8px;padding:0 10px;background:var(--card);color:var(--ink);font-size:13.5px}
+.bc-num-in:focus{outline:none;border-color:var(--brand)}
+.bc-sub .bc-s{height:30px;min-width:0;font-size:12.5px}
+@media (max-width:640px){
+  .bc-form{grid-template-columns:minmax(0,1fr);gap:6px}
+  .bc-k{padding-top:12px;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:8px}
+  .bc-f2{flex:1 1 140px} .bc-f2.grow{flex-basis:100%;max-width:none} .bc-f2 .bc-s{width:100%}
+}
 .bc-sum{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 b.big{font-size:22px}
 .bc-ta{height:auto;min-height:130px;padding:10px;resize:vertical;font:inherit;line-height:1.5}
@@ -286,6 +346,51 @@ b.big{font-size:22px}
 .bc-card .sub{font-size:12px;color:#6b6280}
 .bc-card .pr{color:#7c3aed;font-size:15px}
 .bc-btn{margin-top:6px;background:#7c3aed;color:#fff;border-radius:6px;text-align:center;padding:6px;font-size:12px;font-weight:700}
+.bc-btn.sec{background:#f0eef6;color:#3b3355}
+.bc-lcard{flex:0 0 auto;width:210px}
+.bc-u{color:#2f6fed;text-decoration:underline;word-break:break-all}
+.bc-lks{display:flex;flex-direction:column;gap:10px}
+.bc-lk{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.bc-lkr{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bc-lkr .bc-s{flex:0 0 auto;min-width:0}
+.bc-lkr .in{flex:1 1 180px}
+.bc-lk .in{height:36px;background:var(--card)}
+.bc-x{width:32px;height:32px;border-radius:7px;border:1px solid var(--line2);background:var(--card);color:var(--ink3);display:inline-flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+.bc-x:hover{border-color:var(--bad);color:var(--bad)}
+.bc-tb{display:flex;flex-direction:column;gap:6px}
+.bc-tr{display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.bc-tr .y{color:var(--ok)} .bc-tr .n2{color:var(--bad)}
+.bc-tr .ck{background:var(--ok-s);color:var(--ok);border-radius:8px;padding:6px 10px}
+.bc-trk{display:flex;gap:6px;align-items:flex-start;font-size:12.5px;color:var(--ink2);background:var(--brand-s);border-radius:8px;padding:8px 10px;line-height:1.5}
+.bc-trk svg{flex-shrink:0;margin-top:2px;color:var(--brand-d)}
+.bc-ckl{display:flex;flex-direction:column;gap:2px;margin-top:3px}
+.bc-tb{margin-top:4px}
+.bc-msel{position:relative;max-width:460px}
+.bc-mbtn{width:100%;height:40px;display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:8px;background:var(--card);color:var(--ink);padding:0 10px 0 12px;font-size:13.5px;text-align:left}
+.bc-mbtn:hover{border-color:var(--brand)}
+.bc-mbtn[aria-expanded="true"]{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-s)}
+.bc-mbtn .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bc-mbtn .t.ph{color:var(--ink3)}
+.bc-mbtn .c{font-size:12px;color:var(--ink3);white-space:nowrap}
+.bc-mbtn svg{flex-shrink:0;color:var(--ink3);transition:transform .15s}
+.bc-mbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.bc-mdd{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:45;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:8px;display:flex;flex-direction:column;gap:6px}
+.bc-mdd[hidden]{display:none}
+.bc-mq{position:relative}
+.bc-mq svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink3);pointer-events:none}
+.bc-mq input{height:36px;width:100%;border:1px solid var(--line2);border-radius:8px;padding:0 10px 0 32px;background:var(--card);color:var(--ink);font-size:13.5px}
+.bc-mq input:focus{outline:none;border-color:var(--brand)}
+.bc-mlist{max-height:248px;overflow:auto;display:flex;flex-direction:column}
+.bc-mi{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:7px;font-size:13.5px;cursor:pointer;user-select:none}
+.bc-mi:hover{background:var(--soft)}
+.bc-mi input{width:17px;height:17px;accent-color:var(--brand);flex-shrink:0;margin:0}
+.bc-mi .s{margin-left:auto;font-size:11.5px;color:var(--ink3);white-space:nowrap}
+.bc-mi.off{opacity:.45;cursor:not-allowed}
+.bc-mft{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3);border-top:1px solid var(--line);padding-top:7px}
+.bc-mft .grow{flex:1}
+.bc-mft button{height:30px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);background:var(--card);color:var(--ink);font-size:12.5px}
+.bc-mft button.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.tbl.bct th,.tbl.bct td{display:table-cell!important}   /* ตารางของหน้าบรอดแคสต์เลื่อนแนวนอนได้ — ไม่ซ่อนคอลัมน์ 4/5 แบบตารางลูกค้า */
 .tbl table{width:100%;border-collapse:collapse}
 .tbl th{font-size:12px;font-weight:600;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
 .tbl td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -441,6 +546,8 @@ const ICON = {
   dl:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',
   send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
   img:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>',
+  link:'<path d="M10 14a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.2 1.2"/><path d="M14 10a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.2-1.2"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
 };
 const ic = (k, s) => `<svg aria-hidden="true" width="${s||16}" height="${s||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]||''}</svg>`;
 const COLC = {new:'var(--c-new)', contacted:'var(--c-contacted)', viewing:'var(--c-viewing)', finance:'var(--c-finance)', booked:'var(--c-booked)'};
@@ -597,7 +704,7 @@ function render(){
   if (S.page === 'bcast'){                      // ★ 21 ต.ค.69 ไม่ใช้ข้อมูลยอดขาย · ไม่วาดทับตอนกำลังพิมพ์ (ข้อมูลชีตโหลดเสร็จทีหลังจะเรียก render)
     if (bcBusy() && document.getElementById('bc-f')) return;
     try { el.innerHTML = pageBcast(); } catch(e){ console.error(e); el.innerHTML = `<div class="err">หน้านี้แสดงผลไม่ได้: ${h(e.message)}</div>`; }
-    const b = bcState(); if (!b.res && !b.loading) bcLoad(); if (!b.hist) bcHist();
+    const b = bcState(); if (!b.res && !b.loading) bcLoad(); if (!b.hist) bcHist(); else bcHistPoll(); if (!b.testers) bcTesters();
     if (b.cars.length && !Object.keys(b.carInfo).length) bcCarInfo(); if (b.pick && !S.stock) loadStock(); return; }
   if (S.err && !S.D){ el.innerHTML = `<div class="err">${h(S.err)}</div>`; return; }
   if (!S.D){ el.innerHTML = '<div class="load">กำลังโหลดข้อมูลจริงจากชีตและ Connect…</div>'; return; }
@@ -1236,52 +1343,140 @@ const BC_DAYS = [{k:0, l:'ทุกช่วง'}, {k:7, l:'7 วัน'}, {k:14
 const BC_STAGES = [['new','ลีดใหม่'],['waiting','รอติดต่อ'],['contacted','ติดต่อแล้ว'],['viewing','นัดดูรถ'],['finance','ยื่นไฟแนนซ์'],['pool','คืนกองกลาง'],['won','ปิดการขาย'],['lost','ไม่สนใจ/ลูกค้าผี']];
 function bcState(){ if (!S.bc) S.bc = {inc:[], exc:[], mode:'any', src:'', days:30, stages:[], closed:true, deal:'', owner:'', q:'', contact:false,
   res:null, loading:false, hist:null, text:'', images:[], cars:[], carInfo:{}, pick:false, pickQ:'', testedKey:'', testMsg:'', sending:false,
-  quota:null, tagMore:false, rowsMore:false, cid:''}; return S.bc; }
+  quota:null, tagMore:false, rowsMore:false, cid:'', conds:[], imin:'', imax:'', cq:'', ddOpen:false,
+  links:[], linkTitle:'', carTag:true, testers:null, testersLoading:false, tsel:null, testRes:null, testHash:'', tclick:null}; return S.bc; }
 function bcFilters(){ const b = bcState();
   return {any: b.mode === 'any' ? b.inc : [], all: b.mode === 'all' ? b.inc : [], not: b.exc, src: b.src, days: b.days, stages: b.stages,
-    closed: b.closed, deal: b.deal, owner: b.owner, q: b.q, contact: b.contact}; }
-function bcContent(){ const b = bcState(); return {text: b.text.trim(), images: b.images.map(x => ({full: x.full})), cars: b.cars.slice()}; }
-function bcKey(){ const b = bcState(); return JSON.stringify({t: b.text.trim(), i: b.images.map(x => x.full), c: b.cars}); }
-function bcHasContent(){ const b = bcState(); return !!(b.text.trim() || b.images.length || b.cars.length); }
+    closed: b.closed, deal: b.deal, owner: b.owner, q: b.q, contact: b.contact, conds: b.conds, imin: b.imin, imax: b.imax}; }
+/* ลิงก์ติดตาม (★ 21 ต.ค.69 แบบ MAAC) — แถวที่ว่างทั้งแถวไม่ส่ง · เซิร์ฟเวอร์ตรวจ/ตั้งแท็กตั้งต้นเอง */
+function bcLinksOut(){ return bcState().links.filter(l => (l.url || '').trim() || (l.label || '').trim())
+  .map(l => ({label: (l.label || '').trim(), url: (l.url || '').trim(), mode: l.mode === 'text' ? 'text' : 'button', tag: (l.tag || '').trim(), tagOn: l.tagOn !== false})); }
+function bcContent(){ const b = bcState(); return {text: b.text.trim(), images: b.images.map(x => ({full: x.full})), cars: b.cars.slice(),
+  links: bcLinksOut(), link_title: b.linkTitle.trim(), car_tag: b.carTag}; }
+function bcKey(){ const b = bcState(); return JSON.stringify({t: b.text.trim(), i: b.images.map(x => x.full), c: b.cars, l: bcLinksOut(), lt: b.linkTitle.trim(), ct: b.carTag}); }
+function bcHasContent(){ const b = bcState(); return !!(b.text.trim() || b.images.length || b.cars.length || bcLinksOut().length); }
+function bcTracked(){ const b = bcState(); return bcLinksOut().some(l => l.url) || b.cars.some(c => (b.carInfo[c] || {}).link); }
+function bcEta(n){ const s = Math.max(5, Math.round((n || 0) / 40)); return s < 90 ? s + ' วินาที' : Math.round(s / 60) + ' นาที'; }
 let _bcT = null, _bcSeq = 0;
 function bcLoadSoon(){ clearTimeout(_bcT); _bcT = setTimeout(bcLoad, 300); }
 async function bcLoad(){ const b = bcState(); const seq = ++_bcSeq; b.loading = true; bcPaint('r');
   const d = await api('/crm/api/broadcast', {action:'preview', filters: bcFilters(), quota: !b.quota});
   if (seq !== _bcSeq || S.page !== 'bcast') return;
   b.loading = false; b.res = d.ok ? d : {error: d.error || 'โหลดไม่ได้'}; if (d.ok && d.quota) b.quota = d.quota;
-  bcPaint('o'); bcPaint('t'); bcPaint('r'); bcPaint('s'); }
+  bcPaint('o'); bcPaint('t'); bcPaint('r'); bcPaint('s'); if (b.ddOpen) bcPaint('d');
+  const ni = document.getElementById('bc-noinc'); if (ni) ni.textContent = (b.imin || b.imax) && b.res && b.res.noinc ? '· ลูกค้าที่ไม่รู้รายได้ไม่ถูกนับ (' + n0(b.res.noinc) + ' ราย)' : ''; }
 async function bcHist(){ const b = bcState(); if (b.histLoading) return; b.histLoading = true;
-  const d = await api('/crm/api/broadcast'); b.histLoading = false; b.hist = d.ok ? (d.history || []) : []; bcPaint('h'); }
+  const d = await api('/crm/api/broadcast'); b.histLoading = false; b.hist = d.ok ? (d.history || []) : []; bcPaint('h'); bcHistPoll(); }
+let _bcHP = null, _bcTP = null;
+function bcHistPoll(){ clearTimeout(_bcHP); const b = bcState();
+  if (S.page !== 'bcast' || !(b.hist || []).some(x => x.status === 'sending')) return;
+  _bcHP = setTimeout(() => { if (S.page === 'bcast') bcHist(); }, 4000); }
+/* ส่งทดสอบหาทีม — รายชื่อคนในทีม (ชื่อเล่นเท่านั้น) · จำคนที่เลือกไว้ครั้งก่อน */
+async function bcTesters(){ const b = bcState(); if (b.testersLoading) return; b.testersLoading = true;
+  const d = await api('/crm/api/broadcast', {action:'testers'}); b.testersLoading = false;
+  b.testers = d.ok ? (d.testers || []) : []; b.testersMax = d.max || 10;
+  if (!b.tsel){ const self = b.testers.find(x => x.self); b.tsel = (d.saved && d.saved.length) ? d.saved.slice() : (self ? [self.id] : []); }
+  bcPaint('y'); bcPaint('s'); }
+function bcTPoll(n){ clearTimeout(_bcTP); if (n <= 0) return;
+  _bcTP = setTimeout(async () => { const b = bcState(); if (S.page !== 'bcast' || !b.testHash) return;
+    const d = await api('/crm/api/broadcast', {action:'teststate', hash: b.testHash});
+    if (d.ok){ b.tclick = d; bcPaint('x'); } bcTPoll(n - 1); }, 5000); }
 async function bcCarInfo(){ const b = bcState(); if (!b.cars.length) return;
   const d = await api('/crm/api/broadcast', {action:'cars', codes: b.cars});
   if (d.ok) (d.cars || []).forEach(c => b.carInfo[c.code] = c); bcPaint('v'); bcPaint('e'); }
 function bcPaint(part){
-  const ids = {o:'bc-o', t:'bc-t', r:'bc-r', c:'bc-cars', e:'bc-sel', v:'bc-pv', i:'bc-imgs', s:'bc-s', h:'bc-h', l:'bc-pl'};
-  const fns = {o: bcOwnerHtml, t: bcTagsHtml, r: bcResHtml, c: bcCarsHtml, e: bcSelHtml, v: bcPvHtml, i: bcImgsHtml, s: bcSendHtml, h: bcHistHtml, l: bcPickList};
-  const el = document.getElementById(ids[part]); if (el) el.innerHTML = fns[part](); }
-function bcChip(act, k, on, label, n){ return `<button class="chip ${on ? 'on' : ''}" data-act="${act}" data-k="${h(k)}">${h(label)}${n !== undefined ? `<span class="n">${n0(n)}</span>` : ''}</button>`; }
+  const ids = {o:'bc-o', t:'bc-t', r:'bc-r', c:'bc-cars', e:'bc-sel', v:'bc-pv', i:'bc-imgs', s:'bc-s', h:'bc-h', l:'bc-pl', d:'bc-dd', k:'bc-cl',
+    n:'bc-links', x:'bc-tr', y:'bc-ts'};
+  const fns = {o: bcOwnerHtml, t: bcTagsHtml, r: bcResHtml, c: bcCarsHtml, e: bcSelHtml, v: bcPvHtml, i: bcImgsHtml, s: bcSendHtml, h: bcHistHtml, l: bcPickList, d: bcDdHtml, k: bcCondsHtml,
+    n: bcLinksHtml, x: bcTestResHtml, y: bcTestersHtml};
+  const a = document.activeElement, keep = a && a.id === 'bc-tq' && (part === 's' || part === 'y') ? [a.selectionStart, a.selectionEnd] : null;
+  const el = document.getElementById(ids[part]); if (el) el.innerHTML = fns[part]();
+  if (keep){ const i = document.getElementById('bc-tq'); if (i){ i.focus(); try { i.setSelectionRange(keep[0], keep[1]); } catch(x){} } } }
+function bcChip(act, k, on, label, n){ return `<button class="bc-c ${on ? 'on' : ''}" data-act="${act}" data-k="${h(k)}">${h(label)}${n !== undefined ? `<span class="n">${n0(n)}</span>` : ''}</button>`; }
+function bcSel(id, opts, cur){ return `<select class="bc-s" id="${id}">${opts.map(o => `<option value="${h(o[0])}" ${String(cur) === String(o[0]) ? 'selected' : ''}>${h(o[1])}</option>`).join('')}</select>`; }
 function bcTagsHtml(){ const b = bcState(); const tags = ((b.res || {}).tags || []).slice();
   b.inc.concat(b.exc).forEach(t => { if (!tags.some(x => x.t === t)) tags.unshift({t, n:0}); });
   if (!tags.length) return `<div class="mini">${b.res ? 'ยังไม่มีลูกค้าที่ติดแท็ก — ใส่แท็กได้ในหน้า Connect (ข้อมูลลูกค้า) หรือตั้งกฎแท็กอัตโนมัติที่หน้า "ระบบอัตโนมัติ"' : 'กำลังโหลดแท็ก…'}</div>`;
-  const show = b.tagMore ? tags : tags.slice(0, 36);
-  return `<div class="chips">${show.map(x => { const st = b.inc.includes(x.t) ? 'inc' : b.exc.includes(x.t) ? 'exc' : '';
-      return `<button class="chip bc-tg ${st}" data-act="bcTag" data-k="${h(x.t)}" title="${st === 'inc' ? 'เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ไม่เอา)' : st === 'exc' ? 'ไม่เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ยกเลิก)' : 'กดเพื่อเลือก'}">${st === 'inc' ? ic('plus',12) : st === 'exc' ? ic('close',12) : ''}${h(x.t)}<span class="n">${n0(x.n)}</span></button>`; }).join('')}
-    ${tags.length > 36 ? `<button class="chip" data-act="bcTagMore">${b.tagMore ? 'ย่อ' : 'ดูแท็กทั้งหมด ' + n0(tags.length)}</button>` : ''}</div>`; }
+  const show = b.tagMore ? tags : tags.slice(0, 30);
+  return `<div class="bc-cs">${show.map(x => { const st = b.inc.includes(x.t) ? 'inc' : b.exc.includes(x.t) ? 'exc' : '';
+      return `<button class="bc-c ${st}" data-act="bcTag" data-k="${h(x.t)}" title="${st === 'inc' ? 'เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ไม่เอา)' : st === 'exc' ? 'ไม่เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ยกเลิก)' : 'กดเพื่อเลือก'}">${st === 'inc' ? ic('plus',12) : st === 'exc' ? ic('close',12) : ''}${h(x.t)}<span class="n">${n0(x.n)}</span></button>`; }).join('')}
+    ${tags.length > 30 ? `<button class="bc-c more" data-act="bcTagMore">${b.tagMore ? 'ย่อ' : 'ดูแท็กทั้งหมด ' + n0(tags.length)}</button>` : ''}</div>`; }
 function bcOwnerHtml(){ const b = bcState(); const owners = (b.res || {}).owners || [];
-  return `<select class="in" id="bc-owner" style="max-width:220px"><option value="">ผู้ดูแล: ทุกคน</option><option value="__none__" ${b.owner === '__none__' ? 'selected' : ''}>ยังไม่มีผู้ดูแล</option>
-    ${owners.concat(b.owner && b.owner !== '__none__' && !owners.includes(b.owner) ? [b.owner] : []).map(o => `<option value="${h(o)}" ${b.owner === o ? 'selected' : ''}>${h(sname(o))}</option>`).join('')}</select>`; }
+  const list = owners.concat(b.owner && b.owner !== '__none__' && !owners.includes(b.owner) ? [b.owner] : []);
+  return bcSel('bc-owner', [['', 'ทุกคน'], ['__none__', 'ยังไม่มีผู้ดูแล']].concat(list.map(o => [o, sname(o)])), b.owner); }
+/* ── ช่องค้นหาเงื่อนไข (★ 21 ต.ค.69 เจ้าของ "ค้นหากลุ่มลูกค้าตามเงินเดือนหรือตามอาชีพ และอื่นๆ") ──
+   ตัวเลือกมาจาก facets ที่เซิร์ฟเวอร์ส่งมากับ preview (ค่าที่มีจริง + จำนวนลูกค้า) — กรองฝั่งหน้าเว็บ ไม่ยิงเซิร์ฟเวอร์ทุกตัวอักษร */
+const BC_FL = {occupation:'อาชีพ', band:'ช่วงรายได้', ctype:'ประเภทลูกค้า', brand:'ยี่ห้อที่สนใจ', model:'รุ่นที่สนใจ', tag:'แท็ก',
+  cstatus:'สถานะลูกค้า', pay:'ประวัติผ่อน', tenure:'อายุงาน', text:'คำค้น'};
+const BC_CONTAINS = ['occupation', 'ctype', 'cstatus', 'pay', 'tenure'];   // ช่องข้อความอิสระ — มี "มีคำว่า …" ให้เลือก
+function bcNv(v){ return String(v || '').replace(/เเ/g, 'แ').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function bcMoney(t){ const s = String(t || '').replace(/,/g, '').trim(); const m = s.match(/^(\d+(?:\.\d+)?)\s*(k|K|พัน|หมื่น|แสน)?$/); if (!m) return 0;
+  const n = parseFloat(m[1]) * ({k:1e3, K:1e3, 'พัน':1e3, 'หมื่น':1e4, 'แสน':1e5}[m[2]] || 1); return n >= 1000 && n <= 1e7 ? Math.round(n) : 0; }
+function bcCondsHtml(){ return bcState().conds.map((c, i) => `<span class="bc-cd ${c.neg ? 'neg' : ''}"><button data-act="bcCondNeg" data-i="${i}" title="${c.neg ? 'ตอนนี้: ไม่เอาลูกค้ากลุ่มนี้ — กดเพื่อเปลี่ยนเป็น เอา' : 'ตอนนี้: เอาลูกค้ากลุ่มนี้ — กดเพื่อเปลี่ยนเป็น ไม่เอา'}">${c.neg ? 'ไม่เอา · ' : ''}<span class="f">${h(BC_FL[c.f] || c.f)}</span>${h(c.v)}</button><button class="x" data-act="bcCondDel" data-i="${i}" title="เอาเงื่อนไขนี้ออก" aria-label="เอาเงื่อนไขนี้ออก">${ic('close',12)}</button></span>`).join(''); }
+function bcSgHtml(f, v, n, contains){ const on = bcState().conds.some(c => c.f === f && c.v === v);
+  return `<button class="bc-sg ${on ? 'on' : ''}" data-act="bcSug" data-f="${f}" data-v="${h(v)}">${on ? ic('close',13) : ''}<span class="t">${contains ? 'มีคำว่า "<b>' + h(v) + '</b>"' : h(v)}</span>${n !== undefined ? `<span class="n">${contains ? 'ประมาณ ' : ''}${n0(n)} ราย</span>` : ''}</button>`; }
+function bcDdHtml(){ const b = bcState(), fac = ((b.res || {}).facets || []), raw = (b.cq || '').trim(), q = bcNv(raw);
+  if (!b.res) return '<div class="bc-dg"><div class="mini" style="padding:8px 10px">กำลังโหลดตัวเลือก…</div></div>';
+  const secs = [];
+  if (!q){
+    fac.forEach(g => secs.push(`<div class="bc-dg"><div class="bc-dh">${h(g.label)}</div>${g.items.slice(0, 8).map(x => bcSgHtml(g.f, x.v, x.n)).join('')}
+      ${g.items.length > 8 ? `<div class="mini" style="padding:2px 10px 4px">พิมพ์เพื่อค้นหาค่าอื่น (มี ${n0(g.items.length)} ค่า)</div>` : ''}</div>`));
+    return secs.join('') || '<div class="bc-dg"><div class="mini" style="padding:8px 10px">ยังไม่มีข้อมูลลูกค้าให้เลือก — พิมพ์คำค้นได้</div></div>'; }
+  const money = bcMoney(raw);
+  if (money) secs.push(`<div class="bc-dg"><div class="bc-dh">รายได้ต่อเดือน</div>
+      <button class="bc-sg" data-act="bcSugInc" data-k="imin" data-v="${money}"><span class="t">รายได้ตั้งแต่ <b>${n0(money)}</b> บาท</span></button>
+      <button class="bc-sg" data-act="bcSugInc" data-k="imax" data-v="${money}"><span class="t">รายได้ไม่เกิน <b>${n0(money)}</b> บาท</span></button></div>`);
+  fac.forEach(g => { const items = g.items.filter(x => bcNv(x.v).includes(q)); if (!items.length) return;
+    let html = items.slice(0, 6).map(x => bcSgHtml(g.f, x.v, x.n)).join('');
+    if (BC_CONTAINS.includes(g.f) && items.length > 1 && !items.some(x => bcNv(x.v) === q)) html += bcSgHtml(g.f, raw, items.reduce((s, x) => s + x.n, 0), true);
+    secs.push(`<div class="bc-dg"><div class="bc-dh">${h(g.label)}</div>${html}</div>`); });
+  secs.push(`<div class="bc-dg"><button class="bc-sg" data-act="bcSug" data-f="text" data-v="${h(raw)}">${ic('search',14)}<span class="t">ค้นหาคำว่า "<b>${h(raw)}</b>" ในชื่อ เบอร์ รถ และข้อมูลลูกค้า</span></button></div>`);
+  return secs.join(''); }
+function bcDdShow(){ const el = document.getElementById('bc-dd'); if (!el) return; el.innerHTML = bcDdHtml(); el.hidden = false;
+  const f = el.querySelector('.bc-sg'); el.querySelectorAll('.bc-sg.hl').forEach(x => x.classList.remove('hl')); if (f && (bcState().cq || '').trim()) f.classList.add('hl'); }
+function bcDdClose(){ const b = bcState(); b.ddOpen = false; const el = document.getElementById('bc-dd'); if (el){ el.hidden = true; el.innerHTML = ''; } }
+function bcAddCond(f, v){ const b = bcState(); v = String(v || '').trim(); if (!f || !v) return;
+  const i = b.conds.findIndex(c => c.f === f && c.v === v);
+  if (i >= 0) b.conds.splice(i, 1); else b.conds.push({f, v, neg:false});
+  b.cq = ''; const inp = document.getElementById('bc-cq'); if (inp){ inp.value = ''; inp.focus(); }
+  bcPaint('k'); if (b.ddOpen) bcDdShow(); bcLoadSoon(); }
+document.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('#bc-dd')) e.preventDefault(); });
+document.addEventListener('click', e => { if (!S.bc || !S.bc.ddOpen) return; if (e.target.closest && e.target.closest('.bc-qwrap')) return; bcDdClose(); });
+document.addEventListener('focusin', e => { if (e.target && e.target.id === 'bc-cq'){ bcState().ddOpen = true; bcDdShow(); } });
+document.addEventListener('keydown', e => { const t = e.target; if (!t || t.id !== 'bc-cq') return; const b = bcState(), dd = document.getElementById('bc-dd');
+  if (e.key === 'Escape'){ bcDdClose(); return; }
+  if (e.key === 'Backspace' && !t.value && b.conds.length){ b.conds.pop(); bcPaint('k'); if (b.ddOpen) bcDdShow(); bcLoadSoon(); return; }
+  if (!dd || dd.hidden) return;
+  const items = [...dd.querySelectorAll('.bc-sg')]; if (!items.length) return;
+  let i = items.findIndex(x => x.classList.contains('hl'));
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); if (i >= 0) items[i].classList.remove('hl');
+    i = e.key === 'ArrowDown' ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1); items[i].classList.add('hl'); items[i].scrollIntoView({block:'nearest'}); return; }
+  if (e.key === 'Enter'){ e.preventDefault(); if (i < 0 && !t.value.trim()) return; (items[i >= 0 ? i : 0]).click(); } });
+document.addEventListener('click', e => { const q = e.target.closest && e.target.closest('.bc-qbox'); if (q && !e.target.closest('button')){ const i = document.getElementById('bc-cq'); if (i) i.focus(); } });
 function bcFilterHtml(){ const b = bcState();
-  return `<div class="bc-row"><span class="bc-l">แท็ก</span><div class="segc">${[['any','มีแท็กใดแท็กหนึ่ง'],['all','ต้องมีครบทุกแท็ก']].map(x => `<button class="${b.mode === x[0] ? 'on' : ''}" data-act="bcMode" data-k="${x[0]}">${h(x[1])}</button>`).join('')}</div>
-      <span class="mini">กดแท็ก 1 ครั้ง = เอา · 2 ครั้ง = ไม่เอา · 3 ครั้ง = ยกเลิก</span></div>
-    <div id="bc-t">${bcTagsHtml()}</div>
-    <div class="bc-row"><span class="bc-l">ช่องทาง</span><div class="chips">${[['','ทั้งหมด'],['line','LINE'],['fb','Facebook']].map(x => bcChip('bcSrc', x[0], b.src === x[0], x[1])).join('')}</div></div>
-    <div class="bc-row"><span class="bc-l">คุยล่าสุด</span><div class="chips">${BC_DAYS.map(x => bcChip('bcDays', x.k, b.days === x.k, x.l)).join('')}</div></div>
-    <div class="bc-row"><span class="bc-l">ลีด</span><div class="chips">${[['','ทั้งหมด'],['sell','ลีดขาย (ลูกค้าซื้อรถ)'],['buy','ลีดรับซื้อ (ลูกค้าขายรถ)']].map(x => bcChip('bcDeal', x[0], b.deal === x[0], x[1])).join('')}</div></div>
-    <div class="bc-row"><span class="bc-l">ขั้นของลีด</span><div class="chips">${BC_STAGES.map(x => bcChip('bcStage', x[0], b.stages.includes(x[0]), x[1])).join('')}</div>${b.stages.length ? '' : '<span class="mini">ไม่เลือก = ทุกขั้น</span>'}</div>
-    <div class="bc-row"><span class="bc-l">อื่นๆ</span><span id="bc-o">${bcOwnerHtml()}</span>
-      <label class="bc-ck"><input type="checkbox" data-bc="closed" ${b.closed ? 'checked' : ''}> ไม่รวมลูกค้าที่ปิดการขาย / ไม่สนใจแล้ว</label>
-      <label class="bc-ck"><input type="checkbox" data-bc="contact" ${b.contact ? 'checked' : ''}> เฉพาะที่ให้เบอร์ / ไลน์แล้ว</label></div>
-    <div class="bc-row"><span class="bc-l">ค้นหา</span><div class="srch" style="flex:1 1 260px;max-width:420px"><input id="bc-q" type="search" placeholder="ชื่อ เบอร์ รุ่นรถ แท็ก" value="${h(b.q)}"></div></div>`; }
+  return `<div class="bc-form">
+    <div class="bc-k">ค้นหาลูกค้า<span>พิมพ์ หรือกดที่ช่องเพื่อดูตัวเลือกทั้งหมด</span></div>
+    <div class="bc-v"><div class="bc-qwrap"><div class="bc-qbox">${ic('search',16)}<span id="bc-cl" style="display:contents">${bcCondsHtml()}</span>
+        <input id="bc-cq" type="text" autocomplete="off" spellcheck="false" placeholder="อาชีพ · รายได้ · รุ่นรถ · ยี่ห้อ · แท็ก · ประเภทลูกค้า · ชื่อ · เบอร์ …" value="${h(b.cq)}"></div>
+        <div class="bc-dd" id="bc-dd" ${b.ddOpen ? '' : 'hidden'}>${b.ddOpen ? bcDdHtml() : ''}</div></div>
+      <div class="bc-sub">เลือกหลายค่าในหัวข้อเดียวกัน = อย่างใดอย่างหนึ่ง · ต่างหัวข้อ = ต้องตรงทุกข้อ · กดที่เงื่อนไขเพื่อสลับ "เอา / ไม่เอา"</div></div>
+    <div class="bc-k">รายได้ / เดือน</div>
+    <div class="bc-v bc-inl" style="align-items:center"><input class="bc-num-in" id="bc-imin" type="number" min="0" step="1000" inputmode="numeric" placeholder="ตั้งแต่" value="${h(b.imin)}">
+      <span class="mini">ถึง</span><input class="bc-num-in" id="bc-imax" type="number" min="0" step="1000" inputmode="numeric" placeholder="ไม่จำกัด" value="${h(b.imax)}">
+      <span class="mini">บาท</span><span class="mini" id="bc-noinc"></span></div>
+    <div class="bc-k">ตัวกรอง</div>
+    <div class="bc-v bc-inl">
+      <label class="bc-f2">ช่องทาง${bcSel('bc-src', [['', 'ทั้งหมด'], ['line', 'LINE'], ['fb', 'Facebook']], b.src)}</label>
+      <label class="bc-f2">คุยล่าสุด${bcSel('bc-days', BC_DAYS.map(x => [x.k, x.k ? 'ภายใน ' + x.l : 'ทุกช่วงเวลา']), b.days)}</label>
+      <label class="bc-f2">ลีด${bcSel('bc-deal', [['', 'ทั้งหมด'], ['sell', 'ลีดขาย (ลูกค้าซื้อรถ)'], ['buy', 'ลีดรับซื้อ (ลูกค้าขายรถ)']], b.deal)}</label>
+      <label class="bc-f2">ผู้ดูแล<span id="bc-o">${bcOwnerHtml()}</span></label></div>
+    <div class="bc-k">ขั้นของลีด<span>ไม่เลือก = ทุกขั้น</span></div>
+    <div class="bc-v"><div class="bc-cs">${BC_STAGES.map(x => bcChip('bcStage', x[0], b.stages.includes(x[0]), x[1])).join('')}</div></div>
+    <div class="bc-k">ตัดออก</div>
+    <div class="bc-v bc-inl" style="align-items:center">
+      <label class="bc-ck"><input type="checkbox" data-bc="closed" ${b.closed ? 'checked' : ''}> ลูกค้าที่ปิดการขาย / ไม่สนใจแล้ว</label>
+      <label class="bc-ck"><input type="checkbox" data-bc="contact" ${b.contact ? 'checked' : ''}> ลูกค้าที่ยังไม่ให้เบอร์ / ไลน์</label></div>
+  </div>`; }
 function bcDl(kind, extra){ return '/crm/api/broadcast?export=' + kind + (extra || '') + '&f=' + encodeURIComponent(JSON.stringify(bcFilters())); }
 function bcResHtml(){ const b = bcState(), r = b.res;
   if (!r) return '<div class="load">กำลังค้นหาลูกค้า…</div>';
@@ -1296,9 +1491,10 @@ function bcResHtml(){ const b = bcState(), r = b.res;
     ${not.length ? `<div class="mini">ไม่นับ: ${not.join(' · ')}</div>` : ''}`;
   if (!r.total) return sum + '<div class="empty">ไม่มีลูกค้าที่ตรงเงื่อนไข — ลองเลือกแท็ก/ช่วงเวลาให้กว้างขึ้น</div>';
   const rows = (b.rowsMore ? r.rows : r.rows.slice(0, 25));
-  return sum + `<div class="tbl" style="margin-top:10px"><div style="overflow-x:auto"><table><thead><tr><th>ลูกค้า</th><th>ช่องทาง</th><th>แท็ก</th><th>รถที่สนใจ</th><th>ขั้น</th><th>ผู้ดูแล</th><th>คุยล่าสุด</th></tr></thead><tbody>
+  return sum + `<div class="tbl bct" style="margin-top:10px"><div style="overflow-x:auto"><table><thead><tr><th>ลูกค้า</th><th>ช่องทาง</th><th>อาชีพ / รายได้</th><th>แท็ก</th><th>รถที่สนใจ</th><th>ขั้น</th><th>ผู้ดูแล</th><th>คุยล่าสุด</th></tr></thead><tbody>
     ${rows.map(x => `<tr data-act="autoOpen" data-id="${x.id}" title="เปิดแชท"><td><b>${h(x.name || 'ลูกค้า #' + x.id)}</b>${x.phone ? `<div class="mini">${h(phoneFmt(x.phone))}</div>` : ''}</td>
       <td><span class="pill ${x.src === 'fb' ? 'p-br' : 'p-ok'}">${x.src === 'fb' ? 'Facebook' : 'LINE'}</span></td>
+      <td>${h(x.occupation || '–')}${x.income ? `<div class="mini">รายได้ ${h(x.income)}</div>` : ''}</td>
       <td>${(x.tags || []).map(t => `<span class="kw">${h(t)}</span>`).join('') || '<span class="mini">–</span>'}</td>
       <td>${h(x.car || '–')}</td><td><span class="mini">${h(x.stageLabel)}${x.deal === 'buy' ? ' · รับซื้อ' : ''}</span></td>
       <td>${h(sname(x.owner) || '–')}</td><td class="mini">${h(shortDate(x.last))}</td></tr>`).join('')}</tbody></table></div></div>
@@ -1312,7 +1508,8 @@ function bcSelHtml(){ const b = bcState();
   const sel = b.cars.map(c => { const i = b.carInfo[c] || {}, s = stockCar(c) || {};
     return `<span class="kw bc-car">${h(i.title || s.name || c)}${i.priceText ? ' · ' + h(i.priceText) : ''}<span class="mini">${i.code ? (i.link ? ' · มีปุ่มลิงก์หน้ารถ' : ' · ยังไม่ขึ้นเว็บ (ไม่มีปุ่มลิงก์)') : ''}</span>
       <button data-act="bcCarDel" data-k="${h(c)}" title="เอาออก" aria-label="เอาออก">${ic('close',12)}</button></span>`; }).join('');
-  return `${sel || '<span class="mini">ยังไม่ได้เลือกรถ</span>'}<button class="btn sm" data-act="bcPick">${ic('car',15)}${b.pick ? 'ปิดรายการรถ' : 'เลือกรถจากสต็อก'}</button>`; }
+  return `${sel || '<span class="mini">ยังไม่ได้เลือกรถ</span>'}<button class="btn sm" data-act="bcPick">${ic('car',15)}${b.pick ? 'ปิดรายการรถ' : 'เลือกรถจากสต็อก'}</button>
+    ${b.cars.length ? `<label class="bc-ck" title="ลูกค้าที่กดปุ่ม &quot;ดูรายละเอียดรถ&quot; จะได้แท็ก &quot;กดดูรถ <รุ่น>&quot;"><input type="checkbox" data-bcx="carTag" ${b.carTag ? 'checked' : ''}> ติดแท็กลูกค้าที่กดดูรถ</label>` : ''}`; }
 function bcCarsHtml(){ const b = bcState();
   return `<div class="bc-row" id="bc-sel">${bcSelHtml()}</div>
     ${b.pick ? `<div class="bc-pick"><div class="srch"><input id="bc-pq" type="search" placeholder="รุ่น ทะเบียน รหัสรถ" value="${h(b.pickQ)}"></div><div id="bc-pl" class="bc-pl">${bcPickList()}</div></div>` : ''}`; }
@@ -1327,51 +1524,122 @@ function bcPickList(){ const b = bcState(), st = S.stock;
     return `<button class="bc-pi ${on ? 'on' : ''}" data-act="${on ? 'bcCarDel' : 'bcCarAdd'}" data-k="${h(c.code)}">${c.photo ? `<img src="${h(c.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ic('car',28)}
       <span><b>${h(c.name || c.title)}</b><span class="mini" style="display:block">${h(c.plate || c.code)} · ${h(c.stageName || '')}</span></span><span class="grow"></span><b class="pr2">${c.priceNum ? baht(c.priceNum) : ''}</b>${on ? ic('close',14) : ic('plus',14)}</button>`; }).join('')
     + (list.length > 60 ? `<div class="mini">แสดง 60 จาก ${n0(list.length)} คัน — พิมพ์ค้นหาเพื่อหาคันที่ต้องการ</div>` : ''); }
-function bcPvHtml(){ const b = bcState(); const parts = [];
-  if (b.text.trim()) parts.push(`<div class="bc-bub">${h(b.text.trim())}</div>`);
+function bcPvHtml(){ const b = bcState(); const parts = [], L = bcLinksOut();
+  const tl = L.filter(l => l.mode === 'text' && l.url), txt = b.text.trim();
+  if (txt || tl.length) parts.push(`<div class="bc-bub">${h(txt)}${txt && tl.length ? '\n\n' : ''}${tl.map(l => h(l.label || 'ลิงก์') + ': <span class="bc-u">' + h(l.url) + '</span>').join('\n')}</div>`);
   b.images.forEach(im => parts.push(`<img class="bc-pimg" src="${h(im.url)}" alt="">`));
   if (b.cars.length) parts.push(`<div class="bc-cards">${b.cars.map(c => { const i = b.carInfo[c] || {}, s = stockCar(c) || {}; const img = i.img || s.photo;
       return `<div class="bc-card"><div class="im">${ic('car',32)}${img ? `<img src="${h(img)}" alt="" onerror="this.remove()">` : ''}</div><div class="bd"><b>${h(i.title || s.name || c)}</b>
         ${i.sub ? `<span class="sub">${h(i.sub)}</span>` : ''}${i.priceText ? `<b class="pr">${h(i.priceText)}</b>` : ''}${i.link ? '<span class="bc-btn">ดูรายละเอียดรถ</span>' : ''}</div></div>`; }).join('')}</div>`);
+  const bl = L.filter(l => l.mode !== 'text');
+  if (bl.length) parts.push(`<div class="bc-card bc-lcard"><div class="bd"><b>${h(b.linkTitle.trim() || 'รายละเอียดเพิ่มเติม')}</b>${bl.map((l, k) => `<span class="bc-btn ${k ? 'sec' : ''}">${h(l.label || 'ชื่อปุ่ม')}</span>`).join('')}</div></div>`);
   return parts.length ? `<div class="mini" style="margin-bottom:6px">ตัวอย่างใน LINE ของลูกค้า</div><div class="bc-pv">${parts.join('')}</div>` : '<div class="mini">ตัวอย่างข้อความจะขึ้นตรงนี้</div>'; }
+function bcLinksHtml(){ const b = bcState();
+  const rows = b.links.map((l, i) => `<div class="bc-lk">
+      <div class="bc-lkr"><select class="bc-s" data-lk="mode" data-i="${i}" title="ซ่อนหลังปุ่ม = ลูกค้าเห็นปุ่มในการ์ด · แนบในข้อความ = ลิงก์ต่อท้ายข้อความ">
+          <option value="button" ${l.mode !== 'text' ? 'selected' : ''}>ซ่อนลิงก์หลังปุ่ม</option><option value="text" ${l.mode === 'text' ? 'selected' : ''}>แนบลิงก์ในข้อความ</option></select>
+        <input class="in" data-lk="label" data-i="${i}" maxlength="20" placeholder="${l.mode === 'text' ? 'ข้อความหน้าลิงก์ เช่น ดูรถคันนี้' : 'ชื่อปุ่ม เช่น ดูโปรเดือนนี้'}" value="${h(l.label)}">
+        <button class="bc-x" data-act="bcLinkDel" data-i="${i}" title="เอาลิงก์นี้ออก" aria-label="เอาลิงก์นี้ออก">${ic('close',14)}</button></div>
+      <input class="in" data-lk="url" data-i="${i}" type="url" inputmode="url" spellcheck="false" placeholder="https://… ที่อยู่ลิงก์ (หน้ารถบนเว็บ · แบบฟอร์ม · โปรโมชัน)" value="${h(l.url)}">
+      <div class="bc-lkr"><label class="bc-ck"><input type="checkbox" data-lk="tagOn" data-i="${i}" ${l.tagOn !== false ? 'checked' : ''}> ติดแท็กลูกค้าที่กด</label>
+        <input class="in" data-lk="tag" data-i="${i}" maxlength="30" placeholder="${h('กดลิงก์ ' + (l.label || '<ชื่อปุ่ม>'))}" value="${h(l.tag)}" ${l.tagOn === false ? 'disabled' : ''}></div></div>`).join('');
+  const hasBtn = b.links.some(l => l.mode !== 'text');
+  return `<div class="bc-lks">${rows}
+    ${b.links.length < 3 ? `<div><button class="btn sm" data-act="bcLinkAdd">${ic('plus',14)}เพิ่มลิงก์</button></div>` : ''}
+    ${hasBtn ? `<label class="bc-f2" style="max-width:440px">หัวการ์ดปุ่มลิงก์ (ข้อความเหนือปุ่ม)<input id="bc-ltitle" maxlength="80" placeholder="รายละเอียดเพิ่มเติม" value="${h(b.linkTitle)}"></label>` : ''}</div>`; }
 function bcCompHtml(){ const b = bcState(), L = ((b.res || {}).limits || {text:2000, images:3, cars:6});
-  return `<label class="bc-l2">ข้อความ <span class="mini" id="bc-cnt">${n0(b.text.length)} / ${n0(L.text)}</span></label>
+  return `<label class="bc-l2" for="bc-text">ข้อความ <span class="mini" id="bc-cnt">${n0(b.text.length)} / ${n0(L.text)}</span></label>
     <textarea class="in bc-ta" id="bc-text" maxlength="${L.text}" placeholder="เช่น รถเข้าใหม่ Honda City ปี 2014 ราคาพิเศษ ผ่อนเริ่มต้น 4,xxx บาท สนใจทักกลับมาได้เลยครับ">${h(b.text)}</textarea>
     <label class="bc-l2">รูป <span class="mini">ไม่เกิน ${L.images} รูป</span></label><div class="bc-imgs" id="bc-imgs">${bcImgsHtml()}</div>
     <label class="bc-l2">รถจากสต็อก <span class="mini">ไม่เกิน ${L.cars} คัน · ส่งเป็นการ์ดรูปรถ + ราคา + ปุ่มลิงก์หน้ารถบนเว็บโชว์รูม</span></label><div id="bc-cars">${bcCarsHtml()}</div>
-    <div id="bc-pv" style="margin-top:6px">${bcPvHtml()}</div>`; }
+    <label class="bc-l2">${ic('link',14)}ลิงก์ <span class="mini">ไม่เกิน 3 ลิงก์ · ลูกค้าแต่ละคนได้ลิงก์ของตัวเอง → รู้ว่าใครกด แล้วติดแท็กให้คนที่กดเอง</span></label><div id="bc-links">${bcLinksHtml()}</div>
+    <div id="bc-pv" style="margin-top:6px;padding-top:12px;border-top:1px solid var(--line)">${bcPvHtml()}</div>`; }
 function bcSendHtml(){ const b = bcState(), r = b.res || {};
   const out = [];
   if (r.ok && !r.replyOn) out.push('<div class="note">ยังปิดการส่งหาลูกค้าอยู่ (ตั้งใจล็อกไว้) — ดาวน์โหลดรายชื่อได้ตามปกติ · เปิดส่งด้วย <code>manage.py checkout_config --reply on</code></div>');
-  if ((b.images.length || b.cars.length) && r.ok && !r.https) out.push('<div class="note">ส่งรูป/การ์ดรถได้เฉพาะบนเซิร์ฟเวอร์จริง (LINE ต้องดึงรูปจากลิงก์ https)</div>');
-  out.push(`<div>ส่งหาลูกค้า LINE <b class="big">${n0(r.line || 0)}</b> ราย</div>`);
-  (r.accounts || []).forEach(a => { const q = (b.quota || {})[a.key];
-    const qt = !q ? '' : q.error ? `<span class="mini">· ${h(q.error)}</span>` : q.limit === null ? '<span class="mini">· โควต้าไม่จำกัด</span>'
-      : `<span class="${q.left < a.n ? 'pill p-bad' : 'mini'}">· โควต้าเดือนนี้เหลือ ${n0(q.left)} จาก ${n0(q.limit)}</span>`;
-    out.push(`<div class="mini">${h(a.name)} ${n0(a.n)} ราย ${qt}</div>`); });
-  if (r.fb) out.push(`<div class="mini">Facebook ${n0(r.fb)} ราย — ส่งผ่านระบบไม่ได้ (Facebook ไม่ให้เพจส่งข่าวหาคนที่ไม่ได้ทักมาภายใน 24 ชม.) · ดาวน์โหลดรายชื่อไปใช้แทน</div>`);
-  const has = bcHasContent(), tested = has && b.testedKey === bcKey();
-  const why = !r.ok ? 'รอนับลูกค้า' : !r.replyOn ? 'ยังปิดการส่ง' : !r.line ? 'ไม่มีลูกค้า LINE ในกลุ่มนี้' : !has ? 'ยังไม่มีเนื้อหา' : !tested ? 'ต้องส่งทดสอบหาตัวเองก่อน' : b.loading ? 'กำลังนับลูกค้าใหม่' : '';
-  out.push(`<div class="bc-row" style="margin-top:8px"><button class="btn" data-act="bcTest" ${has && !b.sending ? '' : 'disabled'}>${ic('send',15)}ส่งทดสอบหาตัวเอง</button>
-      <button class="btn pri" data-act="bcSend" ${why || b.sending ? 'disabled' : ''}>${ic('mega',16)}${b.sending ? 'กำลังส่ง…' : 'ส่งจริงหา ' + n0(r.line || 0) + ' ราย'}</button></div>`);
-  if (b.testMsg && tested) out.push(`<div class="mini" style="color:var(--ok)">${h(b.testMsg)}</div>`);
-  if (why && !b.sending) out.push(`<div class="mini">${h(why)}${why === 'ต้องส่งทดสอบหาตัวเองก่อน' ? ' — แก้ข้อความ/รูป/รถแล้วต้องทดสอบใหม่' : ''}</div>`);
-  out.push('<div class="mini">ส่งแล้วข้อความจะขึ้นในแชทของลูกค้าแต่ละคนใน Connect (เซลล์เห็นว่าส่งอะไรไป) · เรียกคืนไม่ได้ · ลูกค้าขอไม่รับข่าว ให้ใส่แท็ก "' + h(r.optoutTag || 'ไม่รับข่าวสาร') + '" ในหน้า Connect</div>');
+  if ((b.images.length || b.cars.length || bcLinksOut().length) && r.ok && !r.https) out.push('<div class="note">ส่งรูป/การ์ดรถ/ลิงก์ได้เฉพาะบนเซิร์ฟเวอร์จริง (LINE ต้องดึงรูปและเปิดลิงก์ผ่าน https)</div>');
+  out.push(`<div class="bc-big"><span class="bc-num">${n0(r.line || 0)}</span><span>ราย จะได้รับทาง LINE</span></div>`);
+  if ((r.accounts || []).length){
+    out.push(`<div class="bc-acc">${r.accounts.map(a => { const q = (b.quota || {})[a.key];
+      const qt = !q ? '' : q.error ? `<span class="mini">${h(q.error)}</span>` : q.limit === null ? '<span class="mini">โควต้าไม่จำกัด</span>'
+        : `<span class="${q.left < a.n ? 'pill p-bad' : 'mini'}">โควต้าเดือนนี้เหลือ ${n0(q.left)} / ${n0(q.limit)}</span>`;
+      return `<div><span><b>${h(a.name)}</b> · ${n0(a.n)} ราย</span>${qt}</div>`; }).join('')}</div>`); }
+  if (r.fb) out.push(`<div class="mini">Facebook ${n0(r.fb)} ราย ส่งผ่านระบบไม่ได้ (Facebook ไม่ให้เพจส่งข่าวหาคนที่ไม่ได้ทักมาภายใน 24 ชม.) — ดาวน์โหลดรายชื่อไปใช้แทน</div>`);
+  if (bcTracked() && r.line) out.push(`<div class="bc-trk">${ic('link',14)}<span>มีลิงก์ → ส่งทีละคน (ลิงก์ของแต่ละคนไม่ซ้ำกัน เพื่อรู้ว่าใครกด) ประมาณ ${bcEta(r.line)} · ดูคนกดได้ในประวัติด้านล่าง</span></div>`);
+  const has = bcHasContent(), tested = has && b.testedKey === bcKey(), nsel = (b.tsel || []).length;
+  const why = !r.ok ? 'รอนับลูกค้า' : !r.replyOn ? 'ยังปิดการส่ง' : !r.line ? 'ไม่มีลูกค้า LINE ในกลุ่มนี้' : !has ? 'ยังไม่มีเนื้อหา' : !tested ? 'ต้องส่งทดสอบก่อน' : b.loading ? 'กำลังนับลูกค้าใหม่' : '';
+  out.push(`<div class="bc-steps">
+      <div class="${has ? 'ok' : ''}"><i>1</i>เขียนข้อความ / แนบรูป / เลือกรถ / ใส่ลิงก์${has ? '' : ' <span class="mini">— ยังไม่มีเนื้อหา</span>'}</div>
+      <div class="${tested ? 'ok' : ''}"><i>2</i>ส่งทดสอบหาทีม แล้วเปิดดูใน LINE (กดลิงก์ลองได้)${has && !tested ? ' <span class="mini">— แก้เนื้อหาแล้วต้องทดสอบใหม่</span>' : ''}</div>
+      <div><i>3</i>กดส่งจริง</div></div>`);
+  out.push(`<div class="bc-tb"><div class="bc-l2" style="margin:0">ส่งทดสอบหา <span class="mini">ไม่เกิน ${b.testersMax || 10} คน · เฉพาะคนในทีมที่แอดบัญชี LINE ของร้านไว้</span></div><div id="bc-ts">${bcTestersHtml()}</div></div>`);
+  out.push(`<div class="bc-acts"><button class="btn" id="bc-testbtn" data-act="bcTest" ${has && !b.sending && nsel ? '' : 'disabled'}>${ic('send',15)}ส่งทดสอบ${nsel ? ' (' + nsel + ' คน)' : ''}</button>
+      <button class="btn pri" data-act="bcSend" ${why || b.sending ? 'disabled' : ''} title="${h(why)}">${ic('mega',16)}${b.sending ? 'กำลังส่ง…' : 'ส่งจริง ' + n0(r.line || 0) + ' ราย'}</button></div>`);
+  out.push(`<div id="bc-tr">${bcTestResHtml()}</div>`);
+  if (!(b.testMsg && tested) && why && !b.sending && why !== 'ต้องส่งทดสอบก่อน' && why !== 'ยังไม่มีเนื้อหา') out.push(`<div class="mini">ส่งจริงไม่ได้: ${h(why)}</div>`);
+  out.push('<div class="bc-foot">ข้อความจะขึ้นในแชทของลูกค้าแต่ละคนใน Connect (เซลล์เห็นว่าส่งอะไรไป) · ส่งแล้วเรียกคืนไม่ได้<br>ลูกค้าขอไม่รับข่าว ให้ใส่แท็ก "' + h(r.optoutTag || 'ไม่รับข่าวสาร') + '" ในหน้า Connect</div>');
+  return out.join(''); }
+function bcTestersHtml(){ const b = bcState();
+  if (!b.testers) return '<span class="mini">กำลังโหลดรายชื่อทีม…</span>';
+  if (!b.testers.length) return '<span class="mini">ยังไม่มีคนในทีมที่ส่งทดสอบหาได้ — ให้แอดบัญชี LINE OA ของร้านเป็นเพื่อนแล้วทักมา 1 ข้อความ</span>';
+  return `<div class="bc-msel"><button type="button" class="bc-mbtn" id="bc-mbtn" data-act="bcTsOpen" aria-haspopup="listbox" aria-expanded="${b.tsOpen ? 'true' : 'false'}">${bcTsBtnInner()}</button>
+    <div class="bc-mdd" id="bc-mdd" ${b.tsOpen ? '' : 'hidden'}>
+      <div class="bc-mq">${ic('search',15)}<input id="bc-tq" type="search" autocomplete="off" spellcheck="false" placeholder="ค้นหาชื่อคนในทีม" value="${h(b.tq || '')}"></div>
+      <div class="bc-mlist" id="bc-mlist" role="listbox" aria-multiselectable="true">${bcTsListHtml()}</div>
+      <div class="bc-mft"><span id="bc-mcount">เลือกแล้ว ${(b.tsel || []).length} / ${b.testersMax || 10} คน</span><span class="grow"></span>
+        <button type="button" data-act="bcTsClear">ล้าง</button><button type="button" class="pri" data-act="bcTsDone">เสร็จ</button></div></div></div>`; }
+/* dropdown เลือกคนทดสอบ — ติ๊กได้หลายคน + ค้นหา (★ 21 ต.ค.69 เจ้าของ "เอาดรอปดาวเป็นเช็คบอกซ์ เลือกได้หลายคน ค้นหาได้") */
+function bcTsBtnInner(){ const b = bcState(), sel = (b.testers || []).filter(x => (b.tsel || []).includes(x.id));
+  const names = sel.map(x => x.name + (x.self ? ' (ฉัน)' : ''));
+  const t = !names.length ? '<span class="t ph">เลือกคนในทีมที่จะส่งทดสอบ</span>'
+    : `<span class="t">${h(names.slice(0, 3).join(', '))}${names.length > 3 ? ' +' + (names.length - 3) : ''}</span>`;
+  return t + `<span class="c">${sel.length} / ${b.testersMax || 10}</span>` + `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`; }
+function bcTsListHtml(){ const b = bcState(), q = bcNv(b.tq || ''), sel = b.tsel || [], full = sel.length >= (b.testersMax || 10);
+  const list = (b.testers || []).filter(x => !q || bcNv(x.name).includes(q));
+  if (!list.length) return '<div class="mini" style="padding:8px">ไม่พบชื่อที่ค้นหา</div>';
+  return list.map(x => { const on = sel.includes(x.id), off = full && !on;
+    return `<label class="bc-mi ${off ? 'off' : ''}" title="${h((x.accounts || []).join(' · '))}"><input type="checkbox" data-ts="${x.id}" ${on ? 'checked' : ''} ${off ? 'disabled' : ''}>
+      <span>${h(x.name)}</span>${x.self ? '<span class="s">ฉัน</span>' : ''}</label>`; }).join(''); }
+function bcTsSync(){ const b = bcState(), n = (b.tsel || []).length;
+  const bt = document.getElementById('bc-mbtn'); if (bt) bt.innerHTML = bcTsBtnInner();
+  const c = document.getElementById('bc-mcount'); if (c) c.textContent = 'เลือกแล้ว ' + n + ' / ' + (b.testersMax || 10) + ' คน';
+  const l = document.getElementById('bc-mlist'); if (l){ const top = l.scrollTop; l.innerHTML = bcTsListHtml(); l.scrollTop = top; }
+  const tb = document.getElementById('bc-testbtn');
+  if (tb){ const has = bcHasContent(); tb.disabled = !(has && !b.sending && n); tb.innerHTML = ic('send',15) + 'ส่งทดสอบ' + (n ? ' (' + n + ' คน)' : ''); } }
+function bcTsClose(){ const b = bcState(); if (!b.tsOpen) return; b.tsOpen = false;
+  const d = document.getElementById('bc-mdd'); if (d) d.hidden = true;
+  const bt = document.getElementById('bc-mbtn'); if (bt) bt.setAttribute('aria-expanded', 'false'); }
+document.addEventListener('click', e => { if (!S.bc || !S.bc.tsOpen) return; if (e.target.closest && e.target.closest('.bc-msel')) return; bcTsClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.bc && S.bc.tsOpen){ bcTsClose(); const bt = document.getElementById('bc-mbtn'); if (bt) bt.focus(); } });
+function bcTestResHtml(){ const b = bcState();
+  if (!b.testRes || b.testedKey !== bcKey()) return '';
+  const out = [`<div class="bc-tr">${b.testRes.map(x => x.ok ? `<span class="y">${ic('check',12)} ${h(x.name)} — ส่งแล้ว${x.account ? ' · ' + h(x.account) : ''}</span>`
+    : `<span class="n2">${ic('close',12)} ${h(x.name)} — ${h(x.error || 'ส่งไม่ถึง')}</span>`).join('')}</div>`];
+  const nl = bcLinksOut().filter(l => l.url).length + b.cars.filter(c => (b.carInfo[c] || {}).link).length;
+  if (nl){ const cl = (b.tclick || {}).clicks || [];
+    out.push(cl.length ? `<div class="bc-tr"><div class="ck"><b>กดลิงก์ทดสอบแล้ว</b><div class="bc-ckl">${cl.map(c => `<span>${h(c.name)}: ${c.links.map(x => h(x.label) + (x.tag ? ' <span class="mini">(ลูกค้าจะได้แท็ก ' + h(x.tag) + ')</span>' : '')).join(' · ')}</span>`).join('')}</div></div></div>`
+      : '<div class="mini">ลองกดลิงก์ในข้อความทดสอบ — ระบบจะขึ้นตรงนี้ว่าใครกดแล้ว (ลิงก์ทดสอบพาไปหน้าจริง แต่ไม่ติดแท็กใคร)</div>'); }
   return out.join(''); }
 function bcHistHtml(){ const b = bcState(), H = b.hist;
   if (!H) return '<div class="load">กำลังโหลด…</div>';
   if (!H.length) return '<div class="mini">ยังไม่เคยส่ง</div>';
   const pc = {done:'p-ok', partial:'p-warn', failed:'p-bad', sending:'p-br'};
-  return `<div class="tbl"><div style="overflow-x:auto"><table><thead><tr><th>เมื่อ</th><th>โดย</th><th>กลุ่มลูกค้า</th><th>ข้อความ</th><th>ผล</th></tr></thead><tbody>
+  const ckCell = x => !(x.links || []).length ? '<span class="mini">–</span>'
+    : `<b>${n0(x.clickPeople)}</b> คน${x.sent ? ` <span class="mini">(${Math.round(x.clickPeople * 100 / x.sent)}%)</span>` : ''}
+      <div class="mini">${x.links.map(l => `${h(l.mode === 'car' ? l.label : l.label)} ${n0(l.people)} คน`).join(' · ')}</div>
+      ${x.clickTagged ? `<div class="mini">ติดแท็กให้ ${n0(x.clickTagged)} คน</div>` : ''}
+      ${x.clickPeople ? `<a class="btn sm" style="margin-top:4px" href="/crm/api/broadcast?export=clicks&id=${x.id}">${ic('dl',13)}รายชื่อคนกด</a>` : ''}`;
+  return `<div class="tbl bct"><div style="overflow-x:auto"><table><thead><tr><th>เมื่อ</th><th>โดย</th><th>กลุ่มลูกค้า</th><th>ข้อความ</th><th>ผล</th><th>คนกดลิงก์</th></tr></thead><tbody>
     ${H.map(x => `<tr style="cursor:default"><td class="mini">${h(whenLabel(x.at))}</td><td>${h(x.by)}</td><td class="mini">${h(x.audience)}</td>
-      <td>${h((x.text || '').slice(0, 80))}${(x.text || '').length > 80 ? '…' : ''}${x.images.length ? ` <span class="mini">+ รูป ${x.images.length}</span>` : ''}${x.cars.length ? ` <span class="mini">+ รถ ${x.cars.length} คัน</span>` : ''}</td>
-      <td><span class="pill ${pc[x.status] || 'p-br'}">${h(x.statusLabel)}</span> <span class="mini">${n0(x.sent)} / ${n0(x.total)}${x.failed ? ' · ไม่สำเร็จ ' + n0(x.failed) : ''}</span>${x.error ? `<div class="mini" style="color:var(--bad)">${h(x.error)}</div>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`; }
+      <td>${h((x.text || '').slice(0, 80))}${(x.text || '').length > 80 ? '…' : ''}${x.images.length ? ` <span class="mini">+ รูป ${x.images.length}</span>` : ''}${x.cars.length ? ` <span class="mini">+ รถ ${x.cars.length} คัน</span>` : ''}${(x.links || []).filter(l => l.mode !== 'car').length ? ` <span class="mini">+ ลิงก์ ${x.links.filter(l => l.mode !== 'car').length}</span>` : ''}</td>
+      <td><span class="pill ${pc[x.status] || 'p-br'}">${h(x.statusLabel)}</span> <span class="mini">${n0(x.sent)} / ${n0(x.total)}${x.failed ? ' · ไม่สำเร็จ ' + n0(x.failed) : ''}${x.mode === 'push' ? ' · ส่งทีละคน' : ''}</span>${x.error ? `<div class="mini" style="color:var(--bad)">${h(x.error)}</div>` : ''}</td>
+      <td>${ckCell(x)}</td></tr>`).join('')}</tbody></table></div></div>`; }
 function pageBcast(){
   const head = header('งานขาย · บรอดแคสต์', 'บรอดแคสต์',
-    'เลือกกลุ่มลูกค้าจากแท็ก / ช่องทาง / ช่วงเวลา → ดาวน์โหลดรายชื่อ หรือส่งข้อความ LINE หาทุกคนในกลุ่ม · ลูกค้าที่มีแท็ก "ไม่รับข่าวสาร" ไม่ได้รับเสมอ', '');
+    'เลือกกลุ่มลูกค้า → ดาวน์โหลดรายชื่อ หรือส่งข้อความ LINE หาทุกคนในกลุ่ม · ใส่ลิงก์ได้ (รู้ว่าใครกด + ติดแท็กให้เอง) · ส่งทดสอบหาทีมก่อนส่งจริง · ลูกค้าที่มีแท็ก "ไม่รับข่าวสาร" ไม่ได้รับเสมอ', '');
   return head + `<div class="card"><div class="bc-h">1. เลือกกลุ่มลูกค้า</div><div id="bc-f">${bcFilterHtml()}</div></div>
     <div class="card" id="bc-r">${bcResHtml()}</div>
-    <div class="g2"><div class="card"><div class="bc-h">2. เขียนข้อความ</div>${bcCompHtml()}</div>
+    <div class="g2 bc-g"><div class="card"><div class="bc-h">2. เขียนข้อความ</div>${bcCompHtml()}</div>
       <div class="card"><div class="bc-h">3. ส่ง</div><div id="bc-s">${bcSendHtml()}</div></div></div>
     <div class="card"><div class="bc-h">ประวัติการส่ง</div><div id="bc-h">${bcHistHtml()}</div></div>`; }
 async function bcUpload(files){ const b = bcState(), L = ((b.res || {}).limits || {images:3});
@@ -1384,10 +1652,11 @@ async function bcUpload(files){ const b = bcState(), L = ((b.res || {}).limits |
 async function bcTest(btn){ const b = bcState(); btn.disabled = true; b.testMsg = '';
   const acc = ((b.res || {}).accounts || [])[0];
   const key = bcKey();
-  const d = await api('/crm/api/broadcast', {action:'test', content: bcContent(), account: acc ? acc.key : ''});
+  const d = await api('/crm/api/broadcast', {action:'test', content: bcContent(), account: acc ? acc.key : '', testers: b.tsel || []});
   if (!d.ok){ toast(d.error || 'ส่งทดสอบไม่ได้', true); bcPaint('s'); return; }
   (d.cars || []).forEach(c => b.carInfo[c.code] = c);
-  b.testedKey = key; b.testMsg = d.message || 'ส่งทดสอบแล้ว'; toast(b.testMsg); bcPaint('v'); bcPaint('e'); bcPaint('s'); }
+  b.testedKey = key; b.testMsg = d.message || 'ส่งทดสอบแล้ว'; b.testRes = d.results || []; b.testHash = d.hash || ''; b.tclick = null;
+  toast(b.testMsg); bcPaint('v'); bcPaint('e'); bcPaint('s'); if (d.links) bcTPoll(36); }
 async function bcSend(){ const b = bcState(), r = b.res || {};
   if (!confirm('ส่งข้อความ LINE หาลูกค้า ' + n0(r.line) + ' ราย\nกลุ่ม: ' + (r.summary || '') + '\n\nส่งแล้วเรียกคืนไม่ได้ — ยืนยันส่ง?')) return;
   if (!b.cid) b.cid = 'bc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -1399,7 +1668,7 @@ async function bcSend(){ const b = bcState(), r = b.res || {};
   if (d.needConfirm){ if (b.res) b.res.line = d.count; toast(d.error, true); bcPaint('s'); bcLoad(); return; }
   if (!d.net) b.cid = '';
   if (!d.ok){ toast(d.error || 'ส่งไม่สำเร็จ', true); bcPaint('s'); bcHist(); return; }
-  toast(d.message || 'ส่งแล้ว'); b.testedKey = ''; b.testMsg = ''; bcPaint('s'); bcHist(); }
+  toast(d.message || 'ส่งแล้ว'); b.testedKey = ''; b.testMsg = ''; b.testRes = null; b.testHash = ''; clearTimeout(_bcTP); bcPaint('s'); bcHist(); }
 function bcRefilter(){ const el = document.getElementById('bc-f'); if (el) el.innerHTML = bcFilterHtml(); bcLoadSoon(); }
 function bcBusy(){ const a = document.activeElement; return !!(a && a.closest && a.closest('#main') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
 let _bcPv = null;
@@ -1419,6 +1688,11 @@ document.addEventListener('click', async e => {
   if (a === 'bcTagMore'){ const b = bcState(); b.tagMore = !b.tagMore; bcPaint('t'); return; }
   if (a === 'bcSrc' || a === 'bcDays' || a === 'bcDeal'){ const b = bcState();
     if (a === 'bcSrc') b.src = t.dataset.k; else if (a === 'bcDays') b.days = +t.dataset.k; else b.deal = t.dataset.k; bcRefilter(); return; }
+  if (a === 'bcSug'){ bcAddCond(t.dataset.f, t.dataset.v); return; }
+  if (a === 'bcSugInc'){ const b = bcState(); b[t.dataset.k] = t.dataset.v; const el = document.getElementById('bc-' + t.dataset.k); if (el) el.value = t.dataset.v;
+    b.cq = ''; const i = document.getElementById('bc-cq'); if (i) i.value = ''; bcDdClose(); bcLoadSoon(); return; }
+  if (a === 'bcCondNeg'){ const c = bcState().conds[+t.dataset.i]; if (c){ c.neg = !c.neg; bcPaint('k'); bcLoadSoon(); } return; }
+  if (a === 'bcCondDel'){ bcState().conds.splice(+t.dataset.i, 1); bcPaint('k'); if (bcState().ddOpen) bcPaint('d'); bcLoadSoon(); return; }
   if (a === 'bcStage'){ const b = bcState(), k = t.dataset.k; b.stages = b.stages.includes(k) ? b.stages.filter(x => x !== k) : b.stages.concat([k]); bcRefilter(); return; }
   if (a === 'bcRowsMore'){ bcState().rowsMore = true; bcPaint('r'); return; }
   if (a === 'bcImgDel'){ bcState().images.splice(+t.dataset.i, 1); bcPaint('i'); bcPaint('v'); bcPaint('s'); return; }
@@ -1428,6 +1702,14 @@ document.addEventListener('click', async e => {
     if (!b.cars.includes(t.dataset.k)) b.cars.push(t.dataset.k); bcPaint('e'); bcPaint('l'); bcPaint('v'); bcPaint('s'); bcCarInfo(); return; }
   if (a === 'bcCarDel'){ const b = bcState(); b.cars = b.cars.filter(x => x !== t.dataset.k); bcPaint('e'); bcPaint('l'); bcPaint('v'); bcPaint('s'); return; }
   if (a === 'bcTest'){ await bcTest(t); return; }
+  if (a === 'bcLinkAdd'){ const b = bcState(); if (b.links.length < 3) b.links.push({label:'', url:'', mode:'button', tag:'', tagOn:true});
+    bcPaint('n'); bcPaint('v'); bcPaint('s'); const ins = document.querySelectorAll('#bc-links [data-lk="label"]'); if (ins.length) ins[ins.length - 1].focus(); return; }
+  if (a === 'bcLinkDel'){ bcState().links.splice(+t.dataset.i, 1); bcPaint('n'); bcPaint('v'); bcPaint('s'); return; }
+  if (a === 'bcTsOpen'){ const b = bcState(); b.tsOpen = !b.tsOpen;
+    const d = document.getElementById('bc-mdd'); if (d) d.hidden = !b.tsOpen; t.setAttribute('aria-expanded', b.tsOpen ? 'true' : 'false');
+    if (b.tsOpen){ const i = document.getElementById('bc-tq'); if (i) i.focus(); } return; }
+  if (a === 'bcTsClear'){ bcState().tsel = []; bcTsSync(); return; }
+  if (a === 'bcTsDone'){ bcTsClose(); return; }
   if (a === 'bcSend'){ await bcSend(); return; }
   if (a === 'kwNew'){ S.kf = kfFrom(null, t.dataset.g, t.dataset.parent || ''); S.kfPrev = null; render();
     const i = document.getElementById('kf-name'); if (i){ i.focus(); i.scrollIntoView({behavior:'smooth', block:'center'}); } return; }
@@ -1486,15 +1768,33 @@ document.addEventListener('change', async e => { const t = e.target; if (!t || !
   if (t.dataset.kt){ t.disabled = true; await autoPost({action:'toggle', key: t.dataset.key, field: t.dataset.kt, on: t.checked}); return; }
   if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.type === 'checkbox' ? t.checked : t.value; }
   if (t.dataset.bc && S.bc){ S.bc[t.dataset.bc] = t.checked; bcLoadSoon(); return; }
+  if (t.dataset.bcx && S.bc){ S.bc[t.dataset.bcx] = t.checked; bcPaint('s'); return; }
+  if (t.dataset.ts !== undefined && S.bc){ const b = S.bc, id = +t.dataset.ts; b.tsel = (b.tsel || []).filter(x => x !== id);
+    if (t.checked){ if (b.tsel.length >= (b.testersMax || 10)){ t.checked = false; toast('เลือกได้ไม่เกิน ' + (b.testersMax || 10) + ' คน', true); }
+      else b.tsel.push(id); }
+    bcTsSync(); return; }
+  if (t.dataset.lk !== undefined && S.bc){ const l = S.bc.links[+t.dataset.i]; if (!l) return;
+    if (t.dataset.lk === 'mode') l.mode = t.value; else if (t.dataset.lk === 'tagOn') l.tagOn = t.checked;
+    if (t.dataset.lk === 'mode' || t.dataset.lk === 'tagOn'){ bcPaint('n'); bcPaint('v'); bcPaint('s'); } return; }
   if (t.id === 'bc-owner'){ bcState().owner = t.value; bcLoadSoon(); return; }
+  if (t.id === 'bc-src' || t.id === 'bc-days' || t.id === 'bc-deal'){ const b = bcState();
+    if (t.id === 'bc-src') b.src = t.value; else if (t.id === 'bc-days') b.days = +t.value; else b.deal = t.value; bcLoadSoon(); return; }
+  if (t.id === 'bc-mode'){ const b = bcState(); b.mode = t.value; if (b.inc.length) bcLoadSoon(); return; }
   if (t.id === 'bc-file'){ await bcUpload(t.files); return; } });
 let _qt = null;
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return;
-  if (t.id === 'bc-q'){ clearTimeout(_qt); const v = t.value; _qt = setTimeout(() => { bcState().q = v; bcLoad(); }, 300); return; }
+  if (t.id === 'bc-cq'){ const b = bcState(); b.cq = t.value; b.ddOpen = true; bcDdShow(); return; }
+  if (t.id === 'bc-imin' || t.id === 'bc-imax'){ bcState()[t.id.slice(3)] = t.value.replace(/[^\d]/g, ''); bcLoadSoon(); return; }
   if (t.id === 'bc-text'){ const b = bcState(); b.text = t.value; const c = document.getElementById('bc-cnt');
     if (c) c.textContent = n0(t.value.length) + ' / ' + n0(((b.res || {}).limits || {text:2000}).text);
     clearTimeout(_bcPv); _bcPv = setTimeout(() => { bcPaint('v'); bcPaint('s'); }, 200); return; }
   if (t.id === 'bc-pq'){ bcState().pickQ = t.value; bcPaint('l'); return; }
+  if (t.dataset.lk !== undefined && S.bc && t.tagName === 'INPUT' && t.type !== 'checkbox'){ const l = S.bc.links[+t.dataset.i]; if (!l) return;
+    l[t.dataset.lk] = t.value;
+    if (t.dataset.lk === 'label'){ const tg = document.querySelector('#bc-links [data-lk="tag"][data-i="' + t.dataset.i + '"]'); if (tg) tg.placeholder = 'กดลิงก์ ' + (t.value.trim() || '<ชื่อปุ่ม>'); }
+    clearTimeout(_bcPv); _bcPv = setTimeout(() => { bcPaint('v'); bcPaint('s'); }, 200); return; }
+  if (t.id === 'bc-tq'){ bcState().tq = t.value; const l = document.getElementById('bc-mlist'); if (l) l.innerHTML = bcTsListHtml(); return; }
+  if (t.id === 'bc-ltitle'){ bcState().linkTitle = t.value; clearTimeout(_bcPv); _bcPv = setTimeout(() => { bcPaint('v'); bcPaint('s'); }, 200); return; }
   if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.value; return; }
   if (t.id === 'kw-test-in'){ S.kwTest = Object.assign(S.kwTest || {}, {text: t.value}); return; }
   if (t.dataset.act === 'kwQ'){ clearTimeout(_qt); const v = t.value;
