@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import io
 import re
 import time
 import uuid
@@ -26,7 +27,8 @@ MSG_PREFIX = "auto-buy-"
 WHAT = "เคสรับซื้อ (กลุ่มทดสอบ)"
 DEFAULT_GROUP_NAME = "TestBot02"
 BACKFILL_N = 5
-PHOTO_MAX = 10                     # ★ ส่งเป็นอัลบัม (Flex ข้อความเดียว · 2 คอลัมน์ ช่องเท่ากัน) ไม่ใช่รูปทีละข้อความ
+FIRST_PUSH_IMAGES = 4               # ใบ + 4 รูป = 5 ข้อความ (เพดานต่อครั้งของ LINE)
+PHOTO_MAX = 10                     # รูปจริงที่ส่งต่อ (ใบ + 4 รูป ครั้งแรก · ที่เหลือครั้งละ 5 — LINE push ได้ไม่เกิน 5 ข้อความ/ครั้ง)
 UPDATE_HOURS, UPDATE_MAX, UPDATE_QUIET_SEC = 6, 3, 45
 RETRY_MIN, MAX_TRIES, MAX_PER_RUN = 5, 5, 10
 MORE_MAX_MSGS, MORE_MAX, MSG_MAX = 5, 400, 120
@@ -307,57 +309,39 @@ def _photo_bytes(msg_ids: list) -> list:
     return out
 
 
-def _photo_urls(msg_ids: list) -> tuple:
-    """รูป → สำเนาสาธารณะ (ชื่อสุ่ม · ตัด EXIF · ย่อ) → ([(ลิงก์รูปเต็ม, ลิงก์รูปตัวอย่าง)], [path ที่สร้าง])
-    · ไม่ใช่ https = ไม่ส่งรูป"""
+def _square(full: bytes, side: int = 640) -> bytes:
+    """รูปตัวอย่าง (ที่ LINE โชว์ในแชท) = ครอปกลางเป็นสี่เหลี่ยมจัตุรัส → ทุกรูปในแชทขนาดเท่ากัน
+    · รูปเต็ม (แตะดู/บันทึก) ยังเป็นรูปเดิมทั้งรูป ไม่ถูกครอป"""
+    from PIL import Image, ImageOps
+    im = Image.open(io.BytesIO(full)).convert("RGB")
+    sq = ImageOps.fit(im, (side, side), method=Image.LANCZOS, centering=(0.5, 0.5))
+    b = io.BytesIO()
+    sq.save(b, "JPEG", quality=78, optimize=True)
+    return b.getvalue()
+
+
+def _photo_urls(msg_ids: list) -> list:
+    """รูปที่ลูกค้าส่ง → สำเนาสาธารณะให้ LINE ดึงไป (ชื่อสุ่ม · ตัด EXIF/GPS · ย่อให้ผ่านเพดาน LINE)
+    → [(ลิงก์รูปเต็ม, ลิงก์รูปตัวอย่างสี่เหลี่ยม, [path ที่สร้าง])] · ไม่ใช่ https = ไม่ส่งรูป
+    เว็บเราเป็นแค่ทางผ่าน: ดาวน์โหลดรูปจากแชทลูกค้า (Facebook/LINE) → ส่งต่อเป็นรูปจริงเข้ากลุ่ม LINE"""
     from . import chatplus as CP
     if not CP._public_base().startswith("https://"):
-        return [], []
-    urls, rels = [], []
+        return []
+    out = []
     for raw in _photo_bytes(msg_ids):
         try:
-            full, prev = CP._encode(raw)
+            full, _p = CP._encode(raw)
+            prev = _square(full)
         except Exception:
             continue
         rf, rp = CP._save_out(full, prev)
-        rels += [rf, rp]
-        urls.append((CP._media_url(rf), CP._media_url(rp)))
-    return urls, rels
+        out.append((CP._media_url(rf), CP._media_url(rp), [rf, rp]))
+    return out
 
 
-GAP = "2px"                         # ช่องไฟระหว่างรูป (บางเหมือนอัลบัมในแชท LINE)
-
-
-def album(urls: list, total: int = 0) -> dict | None:
-    """[(รูปเต็ม, รูปตัวอย่าง)] → Flex ข้อความเดียว หน้าตาแบบอัลบัมในแชท LINE: 2 คอลัมน์ ช่องสี่เหลี่ยมจัตุรัสเท่ากัน
-    (ตัดขอบให้พอดีช่อง) · จำนวนคี่ = แถวสุดท้ายรูปเดียวเต็มความกว้าง · แตะ = เปิดรูปเต็ม
-    LINE Messaging API ส่งอัลบัมจริงไม่ได้ (อัลบัมเกิดเฉพาะตอนคนเลือกหลายรูปส่งจากแอป · บอทส่งรูป = ทีละข้อความ
-    ขนาดไม่เท่ากัน) → ทำ Flex ให้หน้าตาเหมือน"""
-    urls = [u for u in (urls or []) if u and u[0] and u[1]][:PHOTO_MAX]
-    if not urls:
-        return None
-
-    def cell(u, ar):
-        return {"type": "image", "url": u[1], "size": "full", "aspectRatio": ar, "aspectMode": "cover", "flex": 1,
-                "action": {"type": "uri", "label": "ดูรูป", "uri": u[0]}}
-
-    body = []
-    for i in range(0, len(urls), 2):
-        pair = urls[i:i + 2]
-        if len(pair) == 2:
-            body.append({"type": "box", "layout": "horizontal", "spacing": GAP,
-                         "contents": [cell(pair[0], "1:1"), cell(pair[1], "1:1")]})
-        else:                                     # รูปเดียว / เศษท้าย = เต็มความกว้าง
-            body.append({"type": "box", "layout": "horizontal",
-                         "contents": [cell(pair[0], "4:3" if len(urls) == 1 else "2:1")]})
-    bubble = {"type": "bubble", "size": "giga",
-              "body": {"type": "box", "layout": "vertical", "spacing": GAP, "paddingAll": "0px", "contents": body}}
-    total = max(int(total or 0), len(urls))
-    if total > len(urls):                         # ส่งไม่ครบทุกรูป = บอกไว้ (ดูรูปที่เหลือในหน้า Connect)
-        bubble["footer"] = {"type": "box", "layout": "vertical", "paddingAll": "8px",
-                            "contents": [{"type": "text", "size": "xs", "color": "#888888", "wrap": True,
-                                          "text": "ลูกค้าส่งมาทั้งหมด %d รูป (แสดง %d รูปแรก)" % (total, len(urls))}]}
-    return {"type": "flex", "altText": "รูปรถ %d รูป (ใบเคสรับซื้อ)" % len(urls), "contents": bubble}
+def image_msgs(photos: list) -> list:
+    """[(รูปเต็ม, รูปตัวอย่าง, …)] → ข้อความรูปของ LINE (รูปจริง · แตะดู/บันทึกในแอป LINE ได้)"""
+    return [{"type": "image", "originalContentUrl": p[0], "previewImageUrl": p[1]} for p in photos or []]
 
 
 # ── ส่งเข้ากลุ่มทดสอบ ──────────────────────────────────────────────────
@@ -398,22 +382,45 @@ def _push(gid: str, messages: list, quote: str = "") -> tuple:
         return False, "ต่อ LINE ไม่ได้: %s" % str(e)[:120], "", ""
 
 
+def _push_more(gid: str, messages: list) -> bool:
+    """รูปที่เหลือ (ครั้งละไม่เกิน 5 ข้อความ) · ไม่ใส่ quote"""
+    from dashboard.services.line_channels import push_token
+    from dashboard.services.line_notify import push_line_message
+    token = push_token()
+    if not token:
+        return False
+    try:
+        sc, _r = push_line_message(gid, messages, token, what=WHAT)
+        return sc == 200
+    except Exception:
+        return False
+
+
 def _send(c: dict, o, lead, prev: dict | None = None, photos: bool = True) -> dict:
     from . import autolead as AL
     from . import chatplus as CP
     f = fields(o, lead)
     text = slip(f)
-    urls, rels = _photo_urls(f["img_ids"]) if photos else ([], [])
-    alb = album(urls, f.get("img_total") or 0)
-    ok, err, line_mid, qt = _push(c["group"], [{"type": "text", "text": text[:4800]}] + ([alb] if alb else []))
-    if not ok or err:
-        CP._drop(*rels)                           # รูปไม่ถึงกลุ่ม = ไม่ทิ้งสำเนาสาธารณะไว้บนดิสก์
+    pics = _photo_urls(f["img_ids"]) if photos else []
+    msgs = image_msgs(pics)
+    head = msgs[:FIRST_PUSH_IMAGES]
+    ok, err, line_mid, qt = _push(c["group"], [{"type": "text", "text": text[:4800]}] + head)
+    sent = len(head) if ok and not err else 0
+    if ok and not err:                            # รูปที่เหลือ ครั้งละ 5 (LINE push ได้ไม่เกิน 5 ข้อความต่อครั้ง)
+        rest = msgs[FIRST_PUSH_IMAGES:]
+        for k in range(0, len(rest), 5):
+            if not _push_more(c["group"], rest[k:k + 5]):
+                err = "ส่งรูปได้ไม่ครบ (%d จาก %d รูป)" % (sent, len(msgs))
+                break
+            sent += len(rest[k:k + 5])
+    for p in pics[sent:]:                         # รูปที่ไม่ถึงกลุ่ม = ไม่ทิ้งสำเนาสาธารณะไว้บนดิสก์
+        CP._drop(*p[2])
     res = dict(prev or {})
     res.update(ok=ok, error=err, tries=int(res.get("tries") or 0) + 1, tried=timezone.now().isoformat(timespec="seconds"),
-               photos=(len(urls) if alb and ok and not err else 0))
+               photos=sent)
     if ok:
         AL._store_out(c["group"], c["group_name"], "%s%s-%s" % (MSG_PREFIX, lead.pk, uuid.uuid4().hex[:6]), text,
-                      {"chat": o.pk, "buy": True, "photos": res["photos"]}, line_mid)
+                      {"chat": o.pk, "buy": True, "photos": sent}, line_mid)
         res.update(sent=_snap(f), qt=qt or res.get("qt") or "")
     return res
 

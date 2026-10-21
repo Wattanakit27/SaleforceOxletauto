@@ -79,16 +79,11 @@ def _post(url, *a, **k):
     if "/message/push" in url:
         js = k.get("json") or {}
         ms = js.get("messages") or []
-        if REJECT_IMAGES[0] and any(m.get("type") in ("image", "flex") for m in ms):
+        if REJECT_IMAGES[0] and any(m.get("type") == "image" for m in ms):
             return _R(400, {"message": "Invalid image url"})
         PUSHES.append((js.get("to"), ms))
         return _R(200, {"sentMessages": [{"id": "sm-%d" % len(PUSHES), "quoteToken": "qt-%d" % len(PUSHES)}]})
     return _R(200, {})
-
-
-def tiles(m):
-    """ช่องรูปในอัลบัม (Flex)"""
-    return [c for r in m["contents"]["body"]["contents"] for c in r["contents"] if c.get("type") == "image"]
 
 
 def _get(url, *a, **k):
@@ -237,20 +232,19 @@ try:
     sent_chats = BS.cfg()["backfill"].get("chats") or []
     ck("เคสที่มีรูปมาก่อน (3 เคสที่มีรูปถูกเลือกครบ)", {o1.id, cases[1].id, cases[2].id} <= set(sent_chats), sent_chats)
     ck("ไม่เอาเคสเมื่อวาน / พนักงาน", old.id not in sent_chats and emp.id not in sent_chats, sent_chats)
-    ck("★ ไม่ส่งรูปทีละข้อความแล้ว (เป็นอัลบัม)", not any(m.get("type") == "image" for to, ms in PUSHES for m in ms))
-    imgs = [t for to, ms in PUSHES if to == T02 for m in ms if m.get("type") == "flex" for t in tiles(m)]
-    ck("★ รูปไปพร้อมใบ (3+1+1 = 5 รูป) ลิงก์ https · แตะเปิดรูปเต็ม", len(imgs) == 5 and all(
-        t["url"].startswith("https://oxlet.test/") and t["action"]["uri"].startswith("https://oxlet.test/")
-        and t["url"].endswith("_p.jpg") and not t["action"]["uri"].endswith("_p.jpg") for t in imgs), imgs[:1])
+    ck("★ ส่งต่อเป็นรูปจริง (ข้อความรูปของ LINE ไม่ใช่การ์ด)", not any(m.get("type") == "flex" for to, ms in PUSHES for m in ms))
+    imgs = [m for to, ms in PUSHES if to == T02 for m in ms if m.get("type") == "image"]
+    ck("★ รูปไปพร้อมใบ (3+1+1 = 5 รูป) ลิงก์ https", len(imgs) == 5 and all(
+        m["originalContentUrl"].startswith("https://oxlet.test/") and m["previewImageUrl"].startswith("https://")
+        for m in imgs), imgs[:1])
     first = next(ms for to, ms in PUSHES if to == T02 and ms[0].get("text", "").startswith("โค้ด : OC-\nADS : รับซื้อ CRV"))
-    ck("★ ใบของเคสที่มี 3 รูป = ใบ + อัลบัม 1 ข้อความ", len(first) == 2 and first[0]["type"] == "text"
-       and first[1]["type"] == "flex", [m["type"] for m in first])
-    rows = first[1]["contents"]["body"]["contents"]
-    ck("★ อัลบัม 3 รูป = 2 คอลัมน์แบบอัลบัม LINE: แถวบน 2 ช่อง (1:1) + เศษท้ายเต็มแถว (2:1) · ตัดขอบพอดีช่อง",
-       [len(r["contents"]) for r in rows] == [2, 1] and rows[1]["contents"][0]["aspectRatio"] == "2:1"
-       and all(c["aspectRatio"] == "1:1" for c in rows[0]["contents"])
-       and all(c["aspectMode"] == "cover" for r in rows for c in r["contents"]), rows)
-    ck("ส่งครบทุกรูป = ไม่มีบรรทัดท้ายอัลบัม (หน้าตาเหมือนอัลบัม)", "footer" not in first[1]["contents"])
+    ck("ใบของเคสที่มี 3 รูป = ใบ + 3 รูปในข้อความเดียว", len(first) == 4 and first[0]["type"] == "text", len(first))
+
+    def _local(url):
+        return os.path.join(settings.MEDIA_ROOT, url.split("/media/", 1)[1])
+    with Image.open(_local(first[1]["previewImageUrl"])) as pv, Image.open(_local(first[1]["originalContentUrl"])) as fu:
+        ck("★ รูปตัวอย่างในแชท = สี่เหลี่ยมจัตุรัส (ทุกรูปขนาดเท่ากัน) · รูปเต็มไม่ถูกครอป",
+           pv.size[0] == pv.size[1] and fu.size == (900, 600), (pv.size, fu.size))
     out_dir = os.path.join(settings.MEDIA_ROOT, "chat_out")
     saved = [os.path.join(out_dir, x) for x in os.listdir(out_dir)] if os.path.isdir(out_dir) else []
     ck("สำเนารูป (เต็ม + ตัวอย่าง) อยู่ใน media/chat_out", len(saved) == 10, len(saved))
@@ -292,20 +286,18 @@ try:
        and "เลขไมล์" in up[0][0]["text"] and "98000 กม" in up[0][0]["text"], (r4, up[:1]))
     ck("ใบอัปเดตไม่ส่งรูปซ้ำ", up and len(up[0]) == 1)
 
-    print("\n[6b] อัลบัม + นับรูปจริง (ข้อความ Facebook 1 ข้อความแนบได้หลายรูป)")
+    print("\n[6b] นับรูปจริง + รูปเกิน 4 รูปส่งต่อเป็นชุดถัดไป")
     ck("ข้อความ FB แนบ 4 รูป = 4 รูป (เดิมนับเป็น 1)",
        BS.img_total([{"files": [{"kind": "image"}] * 4}, {"type": "image", "files": []}]) == 5)
-    ck("ไม่มีรูป = ไม่มีอัลบัม", BS.album([]) is None)
-    u = [("https://x.test/m/%d.jpg" % i, "https://x.test/m/%d_p.jpg" % i) for i in range(12)]
-    a8 = BS.album(u, total=14)
-    r8 = a8["contents"]["body"]["contents"]
-    ck("เกิน 10 รูป = 10 ช่อง (2×5) + บอกว่าลูกค้าส่งทั้งหมด 14 รูป", [len(r["contents"]) for r in r8] == [2] * 5
-       and "ทั้งหมด 14 รูป" in a8["contents"]["footer"]["contents"][0]["text"], a8["contents"]["footer"])
-    ck("1 รูป = ช่องเดียว 4:3", BS.album(u[:1])["contents"]["body"]["contents"][0]["contents"][0]["aspectRatio"] == "4:3")
-    ck("ทุกช่องในแถวเดียวกันขนาดเท่ากัน (2/4/5 รูป)", all(
-        len({c["aspectRatio"] for c in r["contents"]}) == 1
-        for n in (2, 4, 5, 9, 10) for r in BS.album(u[:n])["contents"]["body"]["contents"]))
-    ck("altText บอกจำนวนรูป (ข้อความแจ้งเตือนบนมือถือ)", "4 รูป" in BS.album(u[:4])["altText"])
+    o7 = chat("ลูกค้า 7 รูป", [("in", "อยากขายรถ city ครับ")], phone="0814444444", photos=7, hours_ago=0.01)
+    PUSHES.clear()
+    r7 = BS.post_one(ChatOwner.objects.get(pk=o7.pk))
+    p7 = [ms for to, ms in PUSHES if to == T02]
+    ck("★ 7 รูป = ใบ + 4 รูป แล้วอีก 3 รูป (LINE push ได้ไม่เกิน 5 ข้อความต่อครั้ง)",
+       r7["d"] == "posted" and [len(x) for x in p7] == [5, 3] and p7[0][0]["type"] == "text"
+       and all(m["type"] == "image" for m in p7[0][1:] + p7[1]), [len(x) for x in p7])
+    st7 = (ChatLead.objects.get(chat=o7).auto or {}).get(BS.KEY) or {}
+    ck("จดว่าส่งรูป 7 รูป", st7.get("photos") == 7 and not st7.get("error"), st7)
 
     print("\n[7] รูปถูก LINE ปฏิเสธ → ส่งใบอย่างเดียว ไม่ทิ้งสำเนารูป")
     o_rej = chat("ลูกค้ารูปเสีย", [("in", "อยากขายรถครับ")], phone="0813333333", photos=2, hours_ago=0.02)
