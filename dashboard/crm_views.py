@@ -266,3 +266,69 @@ def api_auto(request):
         except Exception:
             pass
     return _j(dict(out, ok=ok, message=msg if ok else "", error="" if ok else msg), 200 if ok else 400)
+
+
+@require_http_methods(["GET", "POST"])
+def api_broadcast(request):
+    """หน้า **บรอดแคสต์** (★ 21 ต.ค.69 · แอดมินเท่านั้น) — ค้นหากลุ่มลูกค้า → ดาวน์โหลดรายชื่อ / ส่ง LINE · `checkout/broadcast.py`
+
+    GET = ประวัติการส่ง · `?export=csv&f=<JSON เงื่อนไข>` = ไฟล์รายชื่อ (CSV) · `?export=ids&account=crm&f=…` = LINE userId (.txt)
+    POST multipart `file` = อัปรูป · JSON `{action:"preview", filters, quota?}` · `{action:"cars", codes}` ·
+    `{action:"test", content, account}` (ส่งหาตัวเอง) · `{action:"send", content, filters, confirm, client_id}`
+    """
+    user, _seller, admin, why = _who(request)
+    if why == "login":
+        return _j({"ok": False, "error": "ต้องเข้าสู่ระบบก่อน"}, 401)
+    if why or not admin:
+        return _j({"ok": False, "error": "หน้านี้สำหรับแอดมินเท่านั้น"}, 403)
+    from checkout import broadcast as B
+    from dashboard.services import eventlog
+    who = (user.get("nickname") or user.get("display_name") or "แอดมิน")[:80]
+    if request.method == "GET":
+        exp = request.GET.get("export", "")
+        if exp in ("csv", "ids"):
+            try:
+                f = json.loads(request.GET.get("f") or "{}")
+            except Exception:
+                f = {}
+            if exp == "csv":
+                name, data, n = B.export_csv(f)
+                ctype = "text/csv; charset=utf-8"
+            else:
+                name, data, n = B.export_ids(f, request.GET.get("account", ""))
+                ctype = "text/plain; charset=utf-8"
+            try:
+                eventlog.log("export", name="บรอดแคสต์ — ดาวน์โหลดรายชื่อ (%s)" % exp, target=who, ok=True, rows=n,
+                             audience=B.describe(B.clean_filters(f)))
+            except Exception:
+                pass
+            from django.http import HttpResponse
+            from cars.views import _attachment
+            resp = HttpResponse(data, content_type=ctype)
+            resp["Cache-Control"] = "no-store"
+            return _attachment(resp, name)
+        return _j({"ok": True, "history": B.history()})
+    if (request.content_type or "").startswith("multipart/"):
+        try:
+            return _j(dict(B.upload(request.FILES.get("file")), ok=True))
+        except B.BError as e:
+            return _j({"ok": False, "error": str(e)}, 400)
+    try:
+        body = json.loads(request.body or b"{}")
+    except Exception:
+        return _j({"ok": False, "error": "ข้อมูลไม่ถูกต้อง"}, 400)
+    act = str(body.get("action") or "")
+    try:
+        if act == "preview":
+            return _j(B.preview(body.get("filters") or {}, with_quota=bool(body.get("quota"))))
+        if act == "cars":
+            return _j({"ok": True, "cars": B.card_preview(body.get("codes") or [])})
+        if act == "test":
+            return _j(B.test_send(body, user))
+        if act == "send":
+            res = B.send(body, user)
+            return _j(res, 200 if res.get("ok") or res.get("needConfirm") else 502)
+    except B.BError as e:
+        return _j({"ok": False, "error": str(e)}, 400)
+    return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
+

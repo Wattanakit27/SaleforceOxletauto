@@ -4133,8 +4133,16 @@ def _files(o, src: str, m) -> list:
         return []
 
 
-def messages(o, limit: int = 200, since=None) -> list:
-    """บทสนทนาทั้ง 2 ฝั่ง เก่า→ใหม่ · `since` = เฉพาะข้อความลูกค้าตั้งแต่เวลานั้น (คิวรอรับ)"""
+BCAST_PREFIX = "bc:"      # message_id ของข้อความบรอดแคสต์ (checkout/broadcast.py)
+
+
+def messages(o, limit: int = 200, since=None, bc: bool = False) -> list:
+    """บทสนทนาทั้ง 2 ฝั่ง เก่า→ใหม่ · `since` = เฉพาะข้อความลูกค้าตั้งแต่เวลานั้น (คิวรอรับ)
+
+    ★ 21 ต.ค.69 `bc` — ข้อความบรอดแคสต์ (ส่งหาลูกค้าทีละหลายร้อยคน) **ไม่ส่งออกโดยปริยาย**
+      ตัวจับคำทุกตัวอ่านแชทผ่านฟังก์ชันนี้ (ไอดีหลังเราขอ · ลีดรับซื้อจากคำของเรา · ราคาที่เราแจ้ง · วันนัด)
+      ถ้าเห็นข้อความบรอดแคสต์ด้วย ประโยคเดียวจะไปเปลี่ยนข้อมูลลีดของลูกค้าทุกคนที่ได้รับ
+      · หน้าแชท (`api_chat`) ขอ `bc=True` เพื่อโชว์ให้เซลล์เห็นว่าส่งอะไรไป (ติด `bc: True` ในแถว)"""
     if is_fb(o):
         fp = o.fb_profile
         fq = FbChat.objects.filter(thread_id=fp.thread_id) if fp.thread_id else FbChat.objects.none()
@@ -4162,6 +4170,8 @@ def messages(o, limit: int = 200, since=None) -> list:
     qs = GroupChat.objects.filter(sender_id=o.profile.user_id).exclude(chat_type=GroupChat.GROUP)
     if since:
         qs = qs.filter(sent_at__gte=since, direction=GroupChat.IN)
+    if not bc:
+        qs = qs.exclude(message_id__startswith=BCAST_PREFIX)
     rows = list(qs.order_by("-sent_at", "-id")[:limit])
     rows.reverse()
     return [{
@@ -4173,6 +4183,7 @@ def messages(o, limit: int = 200, since=None) -> list:
         "by": g.sent_by_name or "",
         "files": _files(o, "l", g),
         "id": "l%d" % g.pk,                       # ★ 12 ต.ค.69 อ้างข้อความ (ไฮไลต์ · ป้ายที่มาของช่องข้อมูล) — ไม่ใช่ LINE id
+        **({"bc": True} if (g.message_id or "").startswith(BCAST_PREFIX) else {}),
     } for g in rows]
 
 

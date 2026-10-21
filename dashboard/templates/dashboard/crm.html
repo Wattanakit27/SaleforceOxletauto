@@ -249,6 +249,43 @@ html[data-theme="dark"]{ --sb-bg:#0f0c19; }
 /* ลูกค้า */
 .cust{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
 .tbl{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+/* ★ 21 ต.ค.69 บรอดแคสต์ */
+.bc-h{font-weight:700;font-size:var(--fs-sub)}
+.bc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bc-l{min-width:78px;font-size:12px;color:var(--ink3);font-weight:600}
+.bc-l2{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);font-weight:600;margin-top:6px}
+.bc-ck{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-body)}
+.bc-ck input{width:17px;height:17px;accent-color:var(--brand)}
+.chip.bc-tg{height:32px;display:inline-flex;align-items:center;gap:5px}
+.chip.bc-tg.inc{background:var(--brand-s);border-color:var(--brand);color:var(--brand-d);font-weight:700}
+.chip.bc-tg.exc{background:var(--card);border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+.bc-sum{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+b.big{font-size:22px}
+.bc-ta{height:auto;min-height:130px;padding:10px;resize:vertical;font:inherit;line-height:1.5}
+.bc-imgs{display:flex;gap:8px;flex-wrap:wrap}
+.bc-th{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.bc-th img{width:100%;height:100%;object-fit:cover;display:block}
+.bc-th button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:6px;border:0;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;padding:0}
+.bc-add{width:84px;height:84px;border-radius:8px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--ink3);font-size:12px;cursor:pointer}
+.bc-add:hover{border-color:var(--brand);color:var(--brand)}
+.kw.bc-car{display:inline-flex;align-items:center;gap:4px;padding:4px 6px 4px 9px}
+.kw.bc-car button{border:0;background:none;color:var(--ink3);padding:2px;display:flex}
+.bc-pick{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.bc-pl{max-height:330px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.bc-pi{display:flex;gap:10px;align-items:center;padding:6px 10px 6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);text-align:left;width:100%}
+.bc-pi.on{border-color:var(--brand);background:var(--brand-s)}
+.bc-pi img{width:60px;height:45px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.bc-pv{background:#b8c8e4;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.bc-bub{background:#fff;color:#111;border-radius:14px;padding:9px 12px;max-width:88%;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}
+.bc-pimg{max-width:62%;max-height:220px;border-radius:12px;display:block}
+.bc-cards{display:flex;gap:8px;overflow-x:auto;max-width:100%;padding-bottom:2px}
+.bc-card{flex:0 0 190px;background:#fff;color:#111;border-radius:12px;overflow:hidden}
+.bc-card .im{position:relative;height:126px;background:#eceaf3;display:flex;align-items:center;justify-content:center;color:#a39dbb}
+.bc-card .im img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.bc-card .bd{padding:9px 10px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.bc-card .sub{font-size:12px;color:#6b6280}
+.bc-card .pr{color:#7c3aed;font-size:15px}
+.bc-btn{margin-top:6px;background:#7c3aed;color:#fff;border-radius:6px;text-align:center;padding:6px;font-size:12px;font-weight:700}
 .tbl table{width:100%;border-collapse:collapse}
 .tbl th{font-size:12px;font-weight:600;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
 .tbl td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -373,6 +410,7 @@ const PAGES = [
   {k:'stock', l:'สต็อกรถ', i:'car'},
   {k:'report', l:'รายงาน', i:'chart'},
   {k:'auto', l:'ระบบอัตโนมัติ', i:'bolt', admin:true},   // ★ 20 ต.ค.69 กฎแท็กลูกค้าจากคำในแชท (แอดมิน)
+  {k:'bcast', l:'บรอดแคสต์', i:'mega', admin:true},      // ★ 21 ต.ค.69 ค้นหากลุ่มลูกค้า → ดาวน์โหลดรายชื่อ / ส่ง LINE (แอดมิน)
 ].filter(p => !p.admin || BOOT.admin);
 const ICON = {
   dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
@@ -399,6 +437,10 @@ const ICON = {
   chevR:'<path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/>',
   close:'<path d="M18 6L6 18M6 6l12 12"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  mega:'<path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/>',
+  dl:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',
+  send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
+  img:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>',
 };
 const ic = (k, s) => `<svg aria-hidden="true" width="${s||16}" height="${s||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]||''}</svg>`;
 const COLC = {new:'var(--c-new)', contacted:'var(--c-contacted)', viewing:'var(--c-viewing)', finance:'var(--c-finance)', booked:'var(--c-booked)'};
@@ -552,6 +594,11 @@ function render(){
   // หน้าระบบอัตโนมัติไม่ใช้ข้อมูลยอดขาย — เปิดได้ทันทีไม่ต้องรอชีต
   if (S.page === 'auto'){ try { el.innerHTML = pageAuto(); } catch(e){ console.error(e); el.innerHTML = `<div class="err">หน้านี้แสดงผลไม่ได้: ${h(e.message)}</div>`; }
     if (!S.auto && !S.autoLoading) loadAuto(); return; }
+  if (S.page === 'bcast'){                      // ★ 21 ต.ค.69 ไม่ใช้ข้อมูลยอดขาย · ไม่วาดทับตอนกำลังพิมพ์ (ข้อมูลชีตโหลดเสร็จทีหลังจะเรียก render)
+    if (bcBusy() && document.getElementById('bc-f')) return;
+    try { el.innerHTML = pageBcast(); } catch(e){ console.error(e); el.innerHTML = `<div class="err">หน้านี้แสดงผลไม่ได้: ${h(e.message)}</div>`; }
+    const b = bcState(); if (!b.res && !b.loading) bcLoad(); if (!b.hist) bcHist();
+    if (b.cars.length && !Object.keys(b.carInfo).length) bcCarInfo(); if (b.pick && !S.stock) loadStock(); return; }
   if (S.err && !S.D){ el.innerHTML = `<div class="err">${h(S.err)}</div>`; return; }
   if (!S.D){ el.innerHTML = '<div class="load">กำลังโหลดข้อมูลจริงจากชีตและ Connect…</div>'; return; }
   try {
@@ -894,7 +941,8 @@ async function loadStock(){
   S.stock = 'loading';
   const d = await api('/track/api/cars');
   S.stock = d && d.cars ? d : {error: d.error || 'โหลดสต็อกไม่ได้ (ต้องมีสิทธิ์ระบบติดตามรถ)'};
-  if (S.page === 'stock') render(); }
+  if (S.page === 'stock') render();
+  if (S.page === 'bcast') bcPaint('l'); }
 const STOCK_F = [{k:'show', l:'พร้อมขาย'}, {k:'deal', l:'จอง / ไฟแนนซ์'}, {k:'prep', l:'กำลังทำสภาพ'}, {k:'all', l:'ทั้งหมด'}];
 const DEAL_ST = ['reserve', 'finance', 'transport_check', 'closing'];
 function stockMatch(c, f){ if (c.sold) return false; if (f === 'all') return true; if (f === 'show') return c.stage === 'show'; if (f === 'deal') return DEAL_ST.includes(c.stage); if (f === 'prep') return c.stage !== 'show' && !DEAL_ST.includes(c.stage) && !['qc_release','release'].includes(c.stage); return true; }
@@ -1182,6 +1230,180 @@ function pageAuto(){
   const body = tab.k === 'car' ? kwCarHtml() : tab.g.map(kwGroupHtml).join('');
   return head + src + status + kwTestHtml() + tabs + search + body; }
 
+/* ════════ บรอดแคสต์ (★ 21 ต.ค.69 · แอดมิน) — ค้นหากลุ่มลูกค้า → ดาวน์โหลดรายชื่อ / ส่ง LINE
+   checkout/broadcast.py · API /crm/api/broadcast ════════ */
+const BC_DAYS = [{k:0, l:'ทุกช่วง'}, {k:7, l:'7 วัน'}, {k:14, l:'14 วัน'}, {k:30, l:'30 วัน'}, {k:60, l:'60 วัน'}];
+const BC_STAGES = [['new','ลีดใหม่'],['waiting','รอติดต่อ'],['contacted','ติดต่อแล้ว'],['viewing','นัดดูรถ'],['finance','ยื่นไฟแนนซ์'],['pool','คืนกองกลาง'],['won','ปิดการขาย'],['lost','ไม่สนใจ/ลูกค้าผี']];
+function bcState(){ if (!S.bc) S.bc = {inc:[], exc:[], mode:'any', src:'', days:30, stages:[], closed:true, deal:'', owner:'', q:'', contact:false,
+  res:null, loading:false, hist:null, text:'', images:[], cars:[], carInfo:{}, pick:false, pickQ:'', testedKey:'', testMsg:'', sending:false,
+  quota:null, tagMore:false, rowsMore:false, cid:''}; return S.bc; }
+function bcFilters(){ const b = bcState();
+  return {any: b.mode === 'any' ? b.inc : [], all: b.mode === 'all' ? b.inc : [], not: b.exc, src: b.src, days: b.days, stages: b.stages,
+    closed: b.closed, deal: b.deal, owner: b.owner, q: b.q, contact: b.contact}; }
+function bcContent(){ const b = bcState(); return {text: b.text.trim(), images: b.images.map(x => ({full: x.full})), cars: b.cars.slice()}; }
+function bcKey(){ const b = bcState(); return JSON.stringify({t: b.text.trim(), i: b.images.map(x => x.full), c: b.cars}); }
+function bcHasContent(){ const b = bcState(); return !!(b.text.trim() || b.images.length || b.cars.length); }
+let _bcT = null, _bcSeq = 0;
+function bcLoadSoon(){ clearTimeout(_bcT); _bcT = setTimeout(bcLoad, 300); }
+async function bcLoad(){ const b = bcState(); const seq = ++_bcSeq; b.loading = true; bcPaint('r');
+  const d = await api('/crm/api/broadcast', {action:'preview', filters: bcFilters(), quota: !b.quota});
+  if (seq !== _bcSeq || S.page !== 'bcast') return;
+  b.loading = false; b.res = d.ok ? d : {error: d.error || 'โหลดไม่ได้'}; if (d.ok && d.quota) b.quota = d.quota;
+  bcPaint('o'); bcPaint('t'); bcPaint('r'); bcPaint('s'); }
+async function bcHist(){ const b = bcState(); if (b.histLoading) return; b.histLoading = true;
+  const d = await api('/crm/api/broadcast'); b.histLoading = false; b.hist = d.ok ? (d.history || []) : []; bcPaint('h'); }
+async function bcCarInfo(){ const b = bcState(); if (!b.cars.length) return;
+  const d = await api('/crm/api/broadcast', {action:'cars', codes: b.cars});
+  if (d.ok) (d.cars || []).forEach(c => b.carInfo[c.code] = c); bcPaint('v'); bcPaint('e'); }
+function bcPaint(part){
+  const ids = {o:'bc-o', t:'bc-t', r:'bc-r', c:'bc-cars', e:'bc-sel', v:'bc-pv', i:'bc-imgs', s:'bc-s', h:'bc-h', l:'bc-pl'};
+  const fns = {o: bcOwnerHtml, t: bcTagsHtml, r: bcResHtml, c: bcCarsHtml, e: bcSelHtml, v: bcPvHtml, i: bcImgsHtml, s: bcSendHtml, h: bcHistHtml, l: bcPickList};
+  const el = document.getElementById(ids[part]); if (el) el.innerHTML = fns[part](); }
+function bcChip(act, k, on, label, n){ return `<button class="chip ${on ? 'on' : ''}" data-act="${act}" data-k="${h(k)}">${h(label)}${n !== undefined ? `<span class="n">${n0(n)}</span>` : ''}</button>`; }
+function bcTagsHtml(){ const b = bcState(); const tags = ((b.res || {}).tags || []).slice();
+  b.inc.concat(b.exc).forEach(t => { if (!tags.some(x => x.t === t)) tags.unshift({t, n:0}); });
+  if (!tags.length) return `<div class="mini">${b.res ? 'ยังไม่มีลูกค้าที่ติดแท็ก — ใส่แท็กได้ในหน้า Connect (ข้อมูลลูกค้า) หรือตั้งกฎแท็กอัตโนมัติที่หน้า "ระบบอัตโนมัติ"' : 'กำลังโหลดแท็ก…'}</div>`;
+  const show = b.tagMore ? tags : tags.slice(0, 36);
+  return `<div class="chips">${show.map(x => { const st = b.inc.includes(x.t) ? 'inc' : b.exc.includes(x.t) ? 'exc' : '';
+      return `<button class="chip bc-tg ${st}" data-act="bcTag" data-k="${h(x.t)}" title="${st === 'inc' ? 'เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ไม่เอา)' : st === 'exc' ? 'ไม่เอาลูกค้าที่มีแท็กนี้ (กดอีกครั้ง = ยกเลิก)' : 'กดเพื่อเลือก'}">${st === 'inc' ? ic('plus',12) : st === 'exc' ? ic('close',12) : ''}${h(x.t)}<span class="n">${n0(x.n)}</span></button>`; }).join('')}
+    ${tags.length > 36 ? `<button class="chip" data-act="bcTagMore">${b.tagMore ? 'ย่อ' : 'ดูแท็กทั้งหมด ' + n0(tags.length)}</button>` : ''}</div>`; }
+function bcOwnerHtml(){ const b = bcState(); const owners = (b.res || {}).owners || [];
+  return `<select class="in" id="bc-owner" style="max-width:220px"><option value="">ผู้ดูแล: ทุกคน</option><option value="__none__" ${b.owner === '__none__' ? 'selected' : ''}>ยังไม่มีผู้ดูแล</option>
+    ${owners.concat(b.owner && b.owner !== '__none__' && !owners.includes(b.owner) ? [b.owner] : []).map(o => `<option value="${h(o)}" ${b.owner === o ? 'selected' : ''}>${h(sname(o))}</option>`).join('')}</select>`; }
+function bcFilterHtml(){ const b = bcState();
+  return `<div class="bc-row"><span class="bc-l">แท็ก</span><div class="segc">${[['any','มีแท็กใดแท็กหนึ่ง'],['all','ต้องมีครบทุกแท็ก']].map(x => `<button class="${b.mode === x[0] ? 'on' : ''}" data-act="bcMode" data-k="${x[0]}">${h(x[1])}</button>`).join('')}</div>
+      <span class="mini">กดแท็ก 1 ครั้ง = เอา · 2 ครั้ง = ไม่เอา · 3 ครั้ง = ยกเลิก</span></div>
+    <div id="bc-t">${bcTagsHtml()}</div>
+    <div class="bc-row"><span class="bc-l">ช่องทาง</span><div class="chips">${[['','ทั้งหมด'],['line','LINE'],['fb','Facebook']].map(x => bcChip('bcSrc', x[0], b.src === x[0], x[1])).join('')}</div></div>
+    <div class="bc-row"><span class="bc-l">คุยล่าสุด</span><div class="chips">${BC_DAYS.map(x => bcChip('bcDays', x.k, b.days === x.k, x.l)).join('')}</div></div>
+    <div class="bc-row"><span class="bc-l">ลีด</span><div class="chips">${[['','ทั้งหมด'],['sell','ลีดขาย (ลูกค้าซื้อรถ)'],['buy','ลีดรับซื้อ (ลูกค้าขายรถ)']].map(x => bcChip('bcDeal', x[0], b.deal === x[0], x[1])).join('')}</div></div>
+    <div class="bc-row"><span class="bc-l">ขั้นของลีด</span><div class="chips">${BC_STAGES.map(x => bcChip('bcStage', x[0], b.stages.includes(x[0]), x[1])).join('')}</div>${b.stages.length ? '' : '<span class="mini">ไม่เลือก = ทุกขั้น</span>'}</div>
+    <div class="bc-row"><span class="bc-l">อื่นๆ</span><span id="bc-o">${bcOwnerHtml()}</span>
+      <label class="bc-ck"><input type="checkbox" data-bc="closed" ${b.closed ? 'checked' : ''}> ไม่รวมลูกค้าที่ปิดการขาย / ไม่สนใจแล้ว</label>
+      <label class="bc-ck"><input type="checkbox" data-bc="contact" ${b.contact ? 'checked' : ''}> เฉพาะที่ให้เบอร์ / ไลน์แล้ว</label></div>
+    <div class="bc-row"><span class="bc-l">ค้นหา</span><div class="srch" style="flex:1 1 260px;max-width:420px"><input id="bc-q" type="search" placeholder="ชื่อ เบอร์ รุ่นรถ แท็ก" value="${h(b.q)}"></div></div>`; }
+function bcDl(kind, extra){ return '/crm/api/broadcast?export=' + kind + (extra || '') + '&f=' + encodeURIComponent(JSON.stringify(bcFilters())); }
+function bcResHtml(){ const b = bcState(), r = b.res;
+  if (!r) return '<div class="load">กำลังค้นหาลูกค้า…</div>';
+  if (r.error) return `<div class="err">${h(r.error)}</div>`;
+  const not = [];
+  if (r.optout) not.push(`มีแท็ก "${h(r.optoutTag)}" ${n0(r.optout)} ราย`);
+  if (b.closed && r.closed) not.push(`ปิดการขาย/ไม่สนใจ ${n0(r.closed)} ราย`);
+  const sum = `<div class="bc-sum"><span>ตรงเงื่อนไข <b class="big">${n0(r.total)}</b> ราย</span><span class="pill p-ok">LINE ${n0(r.line)}</span><span class="pill p-br">Facebook ${n0(r.fb)}</span>
+      ${b.loading ? '<span class="mini">กำลังนับใหม่…</span>' : ''}<div class="grow"></div>
+      <a class="btn sm" href="${bcDl('csv')}" ${r.total ? '' : 'aria-disabled="true" style="pointer-events:none;opacity:.5"'}>${ic('dl',15)}ดาวน์โหลดรายชื่อ (CSV)</a>
+      ${(r.accounts || []).map(a => `<a class="btn sm" href="${bcDl('ids', '&account=' + encodeURIComponent(a.key))}" title="LINE userId บรรทัดละคน — อัปโหลดสร้างกลุ่มเป้าหมายใน LINE OA Manager ของบัญชีนี้">${ic('dl',15)}userId · ${h(a.name)} (${n0(a.n)})</a>`).join('')}</div>
+    ${not.length ? `<div class="mini">ไม่นับ: ${not.join(' · ')}</div>` : ''}`;
+  if (!r.total) return sum + '<div class="empty">ไม่มีลูกค้าที่ตรงเงื่อนไข — ลองเลือกแท็ก/ช่วงเวลาให้กว้างขึ้น</div>';
+  const rows = (b.rowsMore ? r.rows : r.rows.slice(0, 25));
+  return sum + `<div class="tbl" style="margin-top:10px"><div style="overflow-x:auto"><table><thead><tr><th>ลูกค้า</th><th>ช่องทาง</th><th>แท็ก</th><th>รถที่สนใจ</th><th>ขั้น</th><th>ผู้ดูแล</th><th>คุยล่าสุด</th></tr></thead><tbody>
+    ${rows.map(x => `<tr data-act="autoOpen" data-id="${x.id}" title="เปิดแชท"><td><b>${h(x.name || 'ลูกค้า #' + x.id)}</b>${x.phone ? `<div class="mini">${h(phoneFmt(x.phone))}</div>` : ''}</td>
+      <td><span class="pill ${x.src === 'fb' ? 'p-br' : 'p-ok'}">${x.src === 'fb' ? 'Facebook' : 'LINE'}</span></td>
+      <td>${(x.tags || []).map(t => `<span class="kw">${h(t)}</span>`).join('') || '<span class="mini">–</span>'}</td>
+      <td>${h(x.car || '–')}</td><td><span class="mini">${h(x.stageLabel)}${x.deal === 'buy' ? ' · รับซื้อ' : ''}</span></td>
+      <td>${h(sname(x.owner) || '–')}</td><td class="mini">${h(shortDate(x.last))}</td></tr>`).join('')}</tbody></table></div></div>
+    ${r.rows.length > 25 && !b.rowsMore ? `<button class="btn sm" data-act="bcRowsMore" style="margin-top:8px">ดูเพิ่ม (แสดง 25 จาก ${n0(r.total)})</button>` : ''}
+    ${r.total > r.rows.length && (b.rowsMore || r.rows.length <= 25) ? `<div class="mini" style="margin-top:6px">แสดง ${n0(r.rows.length)} จาก ${n0(r.total)} ราย — ดาวน์โหลดเพื่อดูทั้งหมด</div>` : ''}`; }
+function bcImgsHtml(){ const b = bcState(), L = ((b.res || {}).limits || {images:3});
+  return b.images.map((im, i) => `<div class="bc-th"><img src="${h(im.url)}" alt=""><button data-act="bcImgDel" data-i="${i}" title="เอารูปนี้ออก" aria-label="เอารูปนี้ออก">${ic('close',14)}</button></div>`).join('')
+    + (b.images.length < L.images ? `<label class="bc-add">${ic('img',20)}<span>แนบรูป</span><input type="file" id="bc-file" accept="image/*" multiple hidden></label>` : ''); }
+function stockCar(code){ const st = S.stock; return st && st.cars ? st.cars.find(c => c.code === code) : null; }
+function bcSelHtml(){ const b = bcState();
+  const sel = b.cars.map(c => { const i = b.carInfo[c] || {}, s = stockCar(c) || {};
+    return `<span class="kw bc-car">${h(i.title || s.name || c)}${i.priceText ? ' · ' + h(i.priceText) : ''}<span class="mini">${i.code ? (i.link ? ' · มีปุ่มลิงก์หน้ารถ' : ' · ยังไม่ขึ้นเว็บ (ไม่มีปุ่มลิงก์)') : ''}</span>
+      <button data-act="bcCarDel" data-k="${h(c)}" title="เอาออก" aria-label="เอาออก">${ic('close',12)}</button></span>`; }).join('');
+  return `${sel || '<span class="mini">ยังไม่ได้เลือกรถ</span>'}<button class="btn sm" data-act="bcPick">${ic('car',15)}${b.pick ? 'ปิดรายการรถ' : 'เลือกรถจากสต็อก'}</button>`; }
+function bcCarsHtml(){ const b = bcState();
+  return `<div class="bc-row" id="bc-sel">${bcSelHtml()}</div>
+    ${b.pick ? `<div class="bc-pick"><div class="srch"><input id="bc-pq" type="search" placeholder="รุ่น ทะเบียน รหัสรถ" value="${h(b.pickQ)}"></div><div id="bc-pl" class="bc-pl">${bcPickList()}</div></div>` : ''}`; }
+function bcPickList(){ const b = bcState(), st = S.stock;
+  if (!st || st === 'loading') return '<div class="load">กำลังโหลดสต็อก…</div>';
+  if (st.error) return `<div class="err">${h(st.error)}</div>`;
+  const q = b.pickQ.trim().toLowerCase();
+  const list = (st.cars || []).filter(c => !c.sold && ['show','reserve'].includes(c.stage)
+    && (!q || [c.name, c.title, c.plate, c.code, c.brand, c.model].some(v => String(v||'').toLowerCase().includes(q))));
+  if (!list.length) return '<div class="empty">ไม่มีรถพร้อมขายที่ตรงกับคำค้น</div>';
+  return list.slice(0, 60).map(c => { const on = b.cars.includes(c.code);
+    return `<button class="bc-pi ${on ? 'on' : ''}" data-act="${on ? 'bcCarDel' : 'bcCarAdd'}" data-k="${h(c.code)}">${c.photo ? `<img src="${h(c.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ic('car',28)}
+      <span><b>${h(c.name || c.title)}</b><span class="mini" style="display:block">${h(c.plate || c.code)} · ${h(c.stageName || '')}</span></span><span class="grow"></span><b class="pr2">${c.priceNum ? baht(c.priceNum) : ''}</b>${on ? ic('close',14) : ic('plus',14)}</button>`; }).join('')
+    + (list.length > 60 ? `<div class="mini">แสดง 60 จาก ${n0(list.length)} คัน — พิมพ์ค้นหาเพื่อหาคันที่ต้องการ</div>` : ''); }
+function bcPvHtml(){ const b = bcState(); const parts = [];
+  if (b.text.trim()) parts.push(`<div class="bc-bub">${h(b.text.trim())}</div>`);
+  b.images.forEach(im => parts.push(`<img class="bc-pimg" src="${h(im.url)}" alt="">`));
+  if (b.cars.length) parts.push(`<div class="bc-cards">${b.cars.map(c => { const i = b.carInfo[c] || {}, s = stockCar(c) || {}; const img = i.img || s.photo;
+      return `<div class="bc-card"><div class="im">${ic('car',32)}${img ? `<img src="${h(img)}" alt="" onerror="this.remove()">` : ''}</div><div class="bd"><b>${h(i.title || s.name || c)}</b>
+        ${i.sub ? `<span class="sub">${h(i.sub)}</span>` : ''}${i.priceText ? `<b class="pr">${h(i.priceText)}</b>` : ''}${i.link ? '<span class="bc-btn">ดูรายละเอียดรถ</span>' : ''}</div></div>`; }).join('')}</div>`);
+  return parts.length ? `<div class="mini" style="margin-bottom:6px">ตัวอย่างใน LINE ของลูกค้า</div><div class="bc-pv">${parts.join('')}</div>` : '<div class="mini">ตัวอย่างข้อความจะขึ้นตรงนี้</div>'; }
+function bcCompHtml(){ const b = bcState(), L = ((b.res || {}).limits || {text:2000, images:3, cars:6});
+  return `<label class="bc-l2">ข้อความ <span class="mini" id="bc-cnt">${n0(b.text.length)} / ${n0(L.text)}</span></label>
+    <textarea class="in bc-ta" id="bc-text" maxlength="${L.text}" placeholder="เช่น รถเข้าใหม่ Honda City ปี 2014 ราคาพิเศษ ผ่อนเริ่มต้น 4,xxx บาท สนใจทักกลับมาได้เลยครับ">${h(b.text)}</textarea>
+    <label class="bc-l2">รูป <span class="mini">ไม่เกิน ${L.images} รูป</span></label><div class="bc-imgs" id="bc-imgs">${bcImgsHtml()}</div>
+    <label class="bc-l2">รถจากสต็อก <span class="mini">ไม่เกิน ${L.cars} คัน · ส่งเป็นการ์ดรูปรถ + ราคา + ปุ่มลิงก์หน้ารถบนเว็บโชว์รูม</span></label><div id="bc-cars">${bcCarsHtml()}</div>
+    <div id="bc-pv" style="margin-top:6px">${bcPvHtml()}</div>`; }
+function bcSendHtml(){ const b = bcState(), r = b.res || {};
+  const out = [];
+  if (r.ok && !r.replyOn) out.push('<div class="note">ยังปิดการส่งหาลูกค้าอยู่ (ตั้งใจล็อกไว้) — ดาวน์โหลดรายชื่อได้ตามปกติ · เปิดส่งด้วย <code>manage.py checkout_config --reply on</code></div>');
+  if ((b.images.length || b.cars.length) && r.ok && !r.https) out.push('<div class="note">ส่งรูป/การ์ดรถได้เฉพาะบนเซิร์ฟเวอร์จริง (LINE ต้องดึงรูปจากลิงก์ https)</div>');
+  out.push(`<div>ส่งหาลูกค้า LINE <b class="big">${n0(r.line || 0)}</b> ราย</div>`);
+  (r.accounts || []).forEach(a => { const q = (b.quota || {})[a.key];
+    const qt = !q ? '' : q.error ? `<span class="mini">· ${h(q.error)}</span>` : q.limit === null ? '<span class="mini">· โควต้าไม่จำกัด</span>'
+      : `<span class="${q.left < a.n ? 'pill p-bad' : 'mini'}">· โควต้าเดือนนี้เหลือ ${n0(q.left)} จาก ${n0(q.limit)}</span>`;
+    out.push(`<div class="mini">${h(a.name)} ${n0(a.n)} ราย ${qt}</div>`); });
+  if (r.fb) out.push(`<div class="mini">Facebook ${n0(r.fb)} ราย — ส่งผ่านระบบไม่ได้ (Facebook ไม่ให้เพจส่งข่าวหาคนที่ไม่ได้ทักมาภายใน 24 ชม.) · ดาวน์โหลดรายชื่อไปใช้แทน</div>`);
+  const has = bcHasContent(), tested = has && b.testedKey === bcKey();
+  const why = !r.ok ? 'รอนับลูกค้า' : !r.replyOn ? 'ยังปิดการส่ง' : !r.line ? 'ไม่มีลูกค้า LINE ในกลุ่มนี้' : !has ? 'ยังไม่มีเนื้อหา' : !tested ? 'ต้องส่งทดสอบหาตัวเองก่อน' : b.loading ? 'กำลังนับลูกค้าใหม่' : '';
+  out.push(`<div class="bc-row" style="margin-top:8px"><button class="btn" data-act="bcTest" ${has && !b.sending ? '' : 'disabled'}>${ic('send',15)}ส่งทดสอบหาตัวเอง</button>
+      <button class="btn pri" data-act="bcSend" ${why || b.sending ? 'disabled' : ''}>${ic('mega',16)}${b.sending ? 'กำลังส่ง…' : 'ส่งจริงหา ' + n0(r.line || 0) + ' ราย'}</button></div>`);
+  if (b.testMsg && tested) out.push(`<div class="mini" style="color:var(--ok)">${h(b.testMsg)}</div>`);
+  if (why && !b.sending) out.push(`<div class="mini">${h(why)}${why === 'ต้องส่งทดสอบหาตัวเองก่อน' ? ' — แก้ข้อความ/รูป/รถแล้วต้องทดสอบใหม่' : ''}</div>`);
+  out.push('<div class="mini">ส่งแล้วข้อความจะขึ้นในแชทของลูกค้าแต่ละคนใน Connect (เซลล์เห็นว่าส่งอะไรไป) · เรียกคืนไม่ได้ · ลูกค้าขอไม่รับข่าว ให้ใส่แท็ก "' + h(r.optoutTag || 'ไม่รับข่าวสาร') + '" ในหน้า Connect</div>');
+  return out.join(''); }
+function bcHistHtml(){ const b = bcState(), H = b.hist;
+  if (!H) return '<div class="load">กำลังโหลด…</div>';
+  if (!H.length) return '<div class="mini">ยังไม่เคยส่ง</div>';
+  const pc = {done:'p-ok', partial:'p-warn', failed:'p-bad', sending:'p-br'};
+  return `<div class="tbl"><div style="overflow-x:auto"><table><thead><tr><th>เมื่อ</th><th>โดย</th><th>กลุ่มลูกค้า</th><th>ข้อความ</th><th>ผล</th></tr></thead><tbody>
+    ${H.map(x => `<tr style="cursor:default"><td class="mini">${h(whenLabel(x.at))}</td><td>${h(x.by)}</td><td class="mini">${h(x.audience)}</td>
+      <td>${h((x.text || '').slice(0, 80))}${(x.text || '').length > 80 ? '…' : ''}${x.images.length ? ` <span class="mini">+ รูป ${x.images.length}</span>` : ''}${x.cars.length ? ` <span class="mini">+ รถ ${x.cars.length} คัน</span>` : ''}</td>
+      <td><span class="pill ${pc[x.status] || 'p-br'}">${h(x.statusLabel)}</span> <span class="mini">${n0(x.sent)} / ${n0(x.total)}${x.failed ? ' · ไม่สำเร็จ ' + n0(x.failed) : ''}</span>${x.error ? `<div class="mini" style="color:var(--bad)">${h(x.error)}</div>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`; }
+function pageBcast(){
+  const head = header('งานขาย · บรอดแคสต์', 'บรอดแคสต์',
+    'เลือกกลุ่มลูกค้าจากแท็ก / ช่องทาง / ช่วงเวลา → ดาวน์โหลดรายชื่อ หรือส่งข้อความ LINE หาทุกคนในกลุ่ม · ลูกค้าที่มีแท็ก "ไม่รับข่าวสาร" ไม่ได้รับเสมอ', '');
+  return head + `<div class="card"><div class="bc-h">1. เลือกกลุ่มลูกค้า</div><div id="bc-f">${bcFilterHtml()}</div></div>
+    <div class="card" id="bc-r">${bcResHtml()}</div>
+    <div class="g2"><div class="card"><div class="bc-h">2. เขียนข้อความ</div>${bcCompHtml()}</div>
+      <div class="card"><div class="bc-h">3. ส่ง</div><div id="bc-s">${bcSendHtml()}</div></div></div>
+    <div class="card"><div class="bc-h">ประวัติการส่ง</div><div id="bc-h">${bcHistHtml()}</div></div>`; }
+async function bcUpload(files){ const b = bcState(), L = ((b.res || {}).limits || {images:3});
+  for (const f of Array.from(files || [])){
+    if (b.images.length >= L.images){ toast('แนบรูปได้ไม่เกิน ' + L.images + ' รูป', true); break; }
+    const fd = new FormData(); fd.append('file', f);
+    let d = {}; try { const r = await fetch('/crm/api/broadcast', {method:'POST', credentials:'same-origin', headers:{'X-CSRFToken': csrf()}, body: fd}); d = await r.json(); } catch(e){ d = {error:'อัปรูปไม่ได้ (เน็ต)'}; }
+    if (!d.ok){ toast(d.error || 'อัปรูปไม่ได้', true); continue; }
+    b.images.push({full: d.full, prev: d.prev, url: d.url}); bcPaint('i'); bcPaint('v'); bcPaint('s'); } }
+async function bcTest(btn){ const b = bcState(); btn.disabled = true; b.testMsg = '';
+  const acc = ((b.res || {}).accounts || [])[0];
+  const key = bcKey();
+  const d = await api('/crm/api/broadcast', {action:'test', content: bcContent(), account: acc ? acc.key : ''});
+  if (!d.ok){ toast(d.error || 'ส่งทดสอบไม่ได้', true); bcPaint('s'); return; }
+  (d.cars || []).forEach(c => b.carInfo[c.code] = c);
+  b.testedKey = key; b.testMsg = d.message || 'ส่งทดสอบแล้ว'; toast(b.testMsg); bcPaint('v'); bcPaint('e'); bcPaint('s'); }
+async function bcSend(){ const b = bcState(), r = b.res || {};
+  if (!confirm('ส่งข้อความ LINE หาลูกค้า ' + n0(r.line) + ' ราย\nกลุ่ม: ' + (r.summary || '') + '\n\nส่งแล้วเรียกคืนไม่ได้ — ยืนยันส่ง?')) return;
+  if (!b.cid) b.cid = 'bc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  b.sending = true; bcPaint('s');
+  let d;
+  try { d = await api('/crm/api/broadcast', {action:'send', content: bcContent(), filters: bcFilters(), confirm: r.line, client_id: b.cid}); }
+  catch(e){ d = {ok:false, error:'เน็ตหลุดระหว่างส่ง — กดส่งอีกครั้งได้ (ระบบไม่ส่งซ้ำ)', net:true}; }
+  b.sending = false;
+  if (d.needConfirm){ if (b.res) b.res.line = d.count; toast(d.error, true); bcPaint('s'); bcLoad(); return; }
+  if (!d.net) b.cid = '';
+  if (!d.ok){ toast(d.error || 'ส่งไม่สำเร็จ', true); bcPaint('s'); bcHist(); return; }
+  toast(d.message || 'ส่งแล้ว'); b.testedKey = ''; b.testMsg = ''; bcPaint('s'); bcHist(); }
+function bcRefilter(){ const el = document.getElementById('bc-f'); if (el) el.innerHTML = bcFilterHtml(); bcLoadSoon(); }
+function bcBusy(){ const a = document.activeElement; return !!(a && a.closest && a.closest('#main') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
+let _bcPv = null;
+
 /* ── กดปุ่ม (ผูกที่เดียว) ── */
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
@@ -1190,6 +1412,23 @@ document.addEventListener('click', async e => {
   if (a === 'navClose'){ navClose(); return; }
   if (a === 'nav'){ if (t.tagName === 'A'){ if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); } navClose(); S.page = t.dataset.k; S.form = null; setUrl(); render(); window.scrollTo(0, 0); return; }
   if (a === 'kwTab'){ S.kwTab = t.dataset.k; S.kf = null; S.kfPrev = null; render(); return; }
+  if (a === 'bcMode'){ const b = bcState(); b.mode = t.dataset.k; const el = document.getElementById('bc-f'); if (el) el.innerHTML = bcFilterHtml(); if (b.inc.length) bcLoadSoon(); return; }
+  if (a === 'bcTag'){ const b = bcState(), k = t.dataset.k;
+    if (b.inc.includes(k)){ b.inc = b.inc.filter(x => x !== k); b.exc.push(k); } else if (b.exc.includes(k)) b.exc = b.exc.filter(x => x !== k); else b.inc.push(k);
+    bcPaint('t'); bcLoadSoon(); return; }
+  if (a === 'bcTagMore'){ const b = bcState(); b.tagMore = !b.tagMore; bcPaint('t'); return; }
+  if (a === 'bcSrc' || a === 'bcDays' || a === 'bcDeal'){ const b = bcState();
+    if (a === 'bcSrc') b.src = t.dataset.k; else if (a === 'bcDays') b.days = +t.dataset.k; else b.deal = t.dataset.k; bcRefilter(); return; }
+  if (a === 'bcStage'){ const b = bcState(), k = t.dataset.k; b.stages = b.stages.includes(k) ? b.stages.filter(x => x !== k) : b.stages.concat([k]); bcRefilter(); return; }
+  if (a === 'bcRowsMore'){ bcState().rowsMore = true; bcPaint('r'); return; }
+  if (a === 'bcImgDel'){ bcState().images.splice(+t.dataset.i, 1); bcPaint('i'); bcPaint('v'); bcPaint('s'); return; }
+  if (a === 'bcPick'){ const b = bcState(); b.pick = !b.pick; bcPaint('c'); if (b.pick && !S.stock) loadStock(); if (b.pick){ const i = document.getElementById('bc-pq'); if (i) i.focus(); } return; }
+  if (a === 'bcCarAdd'){ const b = bcState(), L = ((b.res || {}).limits || {cars:6});
+    if (b.cars.length >= L.cars){ toast('เลือกรถได้ไม่เกิน ' + L.cars + ' คัน', true); return; }
+    if (!b.cars.includes(t.dataset.k)) b.cars.push(t.dataset.k); bcPaint('e'); bcPaint('l'); bcPaint('v'); bcPaint('s'); bcCarInfo(); return; }
+  if (a === 'bcCarDel'){ const b = bcState(); b.cars = b.cars.filter(x => x !== t.dataset.k); bcPaint('e'); bcPaint('l'); bcPaint('v'); bcPaint('s'); return; }
+  if (a === 'bcTest'){ await bcTest(t); return; }
+  if (a === 'bcSend'){ await bcSend(); return; }
   if (a === 'kwNew'){ S.kf = kfFrom(null, t.dataset.g, t.dataset.parent || ''); S.kfPrev = null; render();
     const i = document.getElementById('kf-name'); if (i){ i.focus(); i.scrollIntoView({behavior:'smooth', block:'center'}); } return; }
   if (a === 'kwEdit'){ const r = kwRow(t.dataset.key); if (!r) return; S.kf = kfFrom(r); S.kfPrev = null; render();
@@ -1245,9 +1484,17 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('change', async e => { const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.kt){ t.disabled = true; await autoPost({action:'toggle', key: t.dataset.key, field: t.dataset.kt, on: t.checked}); return; }
-  if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.type === 'checkbox' ? t.checked : t.value; } });
+  if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.type === 'checkbox' ? t.checked : t.value; }
+  if (t.dataset.bc && S.bc){ S.bc[t.dataset.bc] = t.checked; bcLoadSoon(); return; }
+  if (t.id === 'bc-owner'){ bcState().owner = t.value; bcLoadSoon(); return; }
+  if (t.id === 'bc-file'){ await bcUpload(t.files); return; } });
 let _qt = null;
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return;
+  if (t.id === 'bc-q'){ clearTimeout(_qt); const v = t.value; _qt = setTimeout(() => { bcState().q = v; bcLoad(); }, 300); return; }
+  if (t.id === 'bc-text'){ const b = bcState(); b.text = t.value; const c = document.getElementById('bc-cnt');
+    if (c) c.textContent = n0(t.value.length) + ' / ' + n0(((b.res || {}).limits || {text:2000}).text);
+    clearTimeout(_bcPv); _bcPv = setTimeout(() => { bcPaint('v'); bcPaint('s'); }, 200); return; }
+  if (t.id === 'bc-pq'){ bcState().pickQ = t.value; bcPaint('l'); return; }
   if (t.dataset.kf && S.kf){ S.kf[t.dataset.kf] = t.value; return; }
   if (t.id === 'kw-test-in'){ S.kwTest = Object.assign(S.kwTest || {}, {text: t.value}); return; }
   if (t.dataset.act === 'kwQ'){ clearTimeout(_qt); const v = t.value;
@@ -1290,7 +1537,7 @@ async function checkPhone(){
 /* ── เริ่ม ── */
 setUrl(); render(); load(); loadSummary();
 setInterval(() => { if (document.hidden) return; loadSummary(); }, 60000);
-setInterval(() => { if (document.hidden || paneBusy()) return; const a = document.activeElement; if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return; if (S.page !== 'chat' && S.page !== 'auto') load(); }, 180000);
+setInterval(() => { if (document.hidden || paneBusy()) return; const a = document.activeElement; if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return; if (S.page !== 'chat' && S.page !== 'auto' && S.page !== 'bcast') load(); }, 180000);
 })();
 </script>
 </body>

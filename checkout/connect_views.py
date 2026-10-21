@@ -394,18 +394,20 @@ def api_chat(request):
     if acc == "preview":
         msgs = C.messages(o, limit=10, since=o.awaiting_since)
     else:
-        msgs = C.messages(o)
+        msgs = C.messages(o, bc=True)              # ★ 21 ต.ค.69 รวมข้อความบรอดแคสต์ (เซลล์เห็นว่าส่งอะไรไป)
         try:                                       # เปิดเห็นแชทเต็ม = อ่านแล้ว (คิวรอรับแบบดูตัวอย่างไม่นับ)
             C.mark_read(o)
         except Exception:
             pass
+    # ตัวจับคำ/ข้อมูลลีดไม่เห็นข้อความบรอดแคสต์ (ประโยคเดียวส่งหาหลายร้อยคน — ห้ามกลายเป็นข้อมูลลีดของทุกคน)
+    det = [m for m in msgs if not m.get("bc")]
     out = {
         "ok": True,
         "row": C.row_json(o, emp),
         "access": acc,
         "messages": msgs,
         # โปรไฟล์ลูกค้า — เบอร์โทรดึงจากข้อความที่ลูกค้าพิมพ์ (เฉพาะคนที่เห็นแชทเต็ม)
-        "profile": C.profile_json(o, acc, [m["text"] for m in msgs if m["dir"] == "in"]),
+        "profile": C.profile_json(o, acc, [m["text"] for m in det if m["dir"] == "in"]),
         "canClaim": not o.owner_id and bool(emp) and (admin or acc == "preview"),
         "canReply": acc == "full" and (admin or mine),
         # ★ 6 ต.ค.69 — ลูกค้า Facebook: เซลล์ได้สิทธิ์ "เก็บข้อมูลเท่านั้น" → ปิดรอบรอ/ตอบไม่ได้ (แอดมินยังทำได้)
@@ -432,10 +434,10 @@ def api_chat(request):
     # ข้อมูลลีด (ช่องเดียวกับชีตลีด) — เฉพาะคนที่เห็นแชทเต็ม · เติมอัตโนมัติก่อนส่ง (ไม่ทับที่คนพิมพ์)
     if acc == "full":
         try:
-            C.capture_contact(o, msgs)                # เบอร์/ID LINE ที่ลูกค้าให้ (รวมไอดีที่ส่งหลังเราขอ)
-            lead = C.autofill(o, [m["text"] for m in msgs if m["dir"] == "in"], events=msgs)
+            C.capture_contact(o, det)                 # เบอร์/ID LINE ที่ลูกค้าให้ (รวมไอดีที่ส่งหลังเราขอ)
+            lead = C.autofill(o, [m["text"] for m in det if m["dir"] == "in"], events=det)
             try:                                  # ★ 12 ต.ค.69 ไฮไลต์คำที่ระบบจับได้ (m["hl"]) — พังต้องไม่ทำให้แชทเปิดไม่ได้
-                C.add_spans(msgs, lead)
+                C.add_spans(det, lead)
             except Exception:
                 pass
             out["lead"] = C.lead_json(o, lead)
@@ -445,13 +447,13 @@ def api_chat(request):
                 from . import crm
                 out["crm"] = crm.detail_json(o, lead)
                 try:                              # ★ 17 ต.ค.69 แผงขวา "นัดดูรถ" — ลูกค้าพูดถึงวันมาดูรถในแชท (เสนอให้คนกดใส่ฟอร์ม)
-                    out["crm"]["apptHint"] = crm.appt_hint(o, msgs)
+                    out["crm"]["apptHint"] = crm.appt_hint(o, det)
                 except Exception:
                     out["crm"]["apptHint"] = None
             except Exception as e:
                 out["crmError"] = str(e)[:120]
             if admin:                             # ปุ่ม "จ่ายเบอร์" (โหมดทดลอง) — เฉพาะแอดมิน
-                out["codeHelp"] = C.code_help(o, lead, msgs)
+                out["codeHelp"] = C.code_help(o, lead, det)
                 try:                              # ★ 10 ต.ค.69 เบอร์ซ้ำ · คิวจ่ายวน · ส่งต่อไม้ 2 · นาฬิกาโทร
                     from . import leadflow as LF
                     ch = out["codeHelp"]

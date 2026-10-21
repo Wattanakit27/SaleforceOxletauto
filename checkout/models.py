@@ -910,10 +910,11 @@ class ChatOwnerLog(models.Model):
         "claim", "assign", "release", "escalate", "reply", "dismiss")
     # ★ 11 ต.ค.69 หน้ารวมแชท (Chat Inbox) — เปลี่ยนขั้นลีด · นัดหมาย · บันทึกการโทร ก็จดลงประวัติเดียวกัน
     STAGE, APPT, CALL, SUMMARY = "stage", "appt", "call", "summary"
+    BCAST = "bcast"                       # ★ 21 ต.ค.69 ส่งบรอดแคสต์ถึงลูกค้ารายนี้ (checkout/broadcast.py)
     ACTION_CHOICES = [(CLAIM, "รับลูกค้า"), (ASSIGN, "แอดมินโอนให้"), (RELEASE, "ปล่อยคืนคิว"),
                       (ESCALATE, "เลยเวลา แจ้งแอดมิน"), (REPLY, "ตอบลูกค้า"),
                       (DISMISS, "ไม่ต้องตอบ"), (STAGE, "เปลี่ยนขั้นลีด"), (APPT, "นัดหมาย"),
-                      (CALL, "บันทึกการโทร"), (SUMMARY, "บันทึกสรุปลูกค้า")]
+                      (CALL, "บันทึกการโทร"), (SUMMARY, "บันทึกสรุปลูกค้า"), (BCAST, "ส่งบรอดแคสต์")]
 
     chat = models.ForeignKey(ChatOwner, verbose_name="ลูกค้า", on_delete=models.CASCADE,
                              related_name="logs")
@@ -1336,3 +1337,43 @@ class KeywordRule(models.Model):
 
     def __str__(self):
         return "%s:%s" % (self.group, self.name)
+
+
+class Broadcast(models.Model):
+    """บรอดแคสต์ LINE หาลูกค้ากลุ่มที่เลือก (★ 21 ต.ค.69 · หน้า /crm/?p=bcast · แอดมินเท่านั้น)
+
+    1 แถว = การกดส่งจริง 1 ครั้ง (ส่งทดสอบ/ดาวน์โหลดรายชื่อไม่สร้างแถว — จดใน `dash_event_log`)
+    ส่งด้วย LINE multicast ของบัญชีที่ลูกค้าแต่ละคนคุยอยู่ · ลูกค้า Facebook ส่งผ่านระบบไม่ได้ (นับไว้เฉยๆ)
+    ตัวส่ง = `checkout/broadcast.py`
+    """
+    SENDING, DONE, PARTIAL, FAILED = "sending", "done", "partial", "failed"
+    STATUS_CHOICES = [(SENDING, "กำลังส่ง"), (DONE, "ส่งครบ"), (PARTIAL, "ส่งได้บางส่วน"), (FAILED, "ส่งไม่สำเร็จ")]
+
+    client_id = models.CharField("รหัสกันกดซ้ำ", max_length=40, unique=True, null=True, blank=True)
+    status = models.CharField("สถานะ", max_length=10, choices=STATUS_CHOICES, default=SENDING, db_index=True)
+    text = models.TextField("ข้อความ", blank=True)
+    images = models.JSONField("รูปที่แนบ (path ใต้ media/chat_out)", default=list, blank=True)
+    cars = models.JSONField("รถจากสต็อก (รหัสรถ)", default=list, blank=True)
+    filters = models.JSONField("เงื่อนไขกลุ่มลูกค้า", default=dict, blank=True)
+    audience = models.CharField("กลุ่มลูกค้า (อ่านง่าย)", max_length=300, blank=True)
+    total = models.PositiveIntegerField("ผู้รับ LINE", default=0)
+    sent = models.PositiveIntegerField("ส่งสำเร็จ", default=0)
+    failed = models.PositiveIntegerField("ส่งไม่สำเร็จ", default=0)
+    fb_skipped = models.PositiveIntegerField("ลูกค้า Facebook (ส่งผ่านระบบไม่ได้)", default=0)
+    accounts = models.JSONField("ผลแยกบัญชี LINE OA", default=dict, blank=True)
+    recipients = models.JSONField("ลูกค้าที่ส่งถึง (ChatOwner.id)", default=list, blank=True)
+    error = models.CharField("เหตุผลที่ส่งไม่สำเร็จ", max_length=300, blank=True)
+    created_by = models.CharField("ส่งโดย", max_length=80, blank=True)
+    tested_by = models.CharField("ส่งทดสอบโดย", max_length=80, blank=True)
+    tested_at = models.DateTimeField("ส่งทดสอบเมื่อ", null=True, blank=True)
+    created_at = models.DateTimeField("กดส่งเมื่อ", default=timezone.now, db_index=True)
+    finished_at = models.DateTimeField("ส่งเสร็จเมื่อ", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "บรอดแคสต์ลูกค้า"
+        verbose_name_plural = "บรอดแคสต์ลูกค้า"
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return "บรอดแคสต์ #%s (%s ราย)" % (self.pk, self.total)
+

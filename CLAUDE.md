@@ -5674,7 +5674,7 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
 และไปป์ไลน์ใช้ **"แชท + ลีดจากชีต"** · ไฟล์: [crm_views.py](dashboard/crm_views.py) · [services/crm_page.py](dashboard/services/crm_page.py) ·
 [crm.html](dashboard/templates/dashboard/crm.html) (**CSS/JS ฝังในหน้า — ไม่ต้อง collectstatic** · ไม่มี migration)
 - **6 เมนู** (แถบซ้ายสีม่วงเข้ม · จอ ≤900px เป็นแถบบน) — แดชบอร์ด · ไปป์ไลน์ลีด · ลูกค้า · แชทลูกค้า (iframe `/connect/?embed=1`) ·
-  สต็อกรถ (`/track/api/cars` · พร้อมขาย/จอง/ทำสภาพ) · รายงาน · ธีมสว่างเป็นค่าเริ่มต้น สลับเข้มได้ (คีย์ `oxlet_theme` ชุดเดียวกับหน้าอื่น)
+  สต็อกรถ (`/track/api/cars` · พร้อมขาย/จอง/ทำสภาพ) · รายงาน · (แอดมิน: ระบบอัตโนมัติ · **บรอดแคสต์** — ดูหัวข้อ "บรอดแคสต์ลูกค้า") · ธีมสว่างเป็นค่าเริ่มต้น สลับเข้มได้ (คีย์ `oxlet_theme` ชุดเดียวกับหน้าอื่น)
 - **★ 21 ต.ค.69 แถบเมนูซ้ายหน้าตาเดียวกับแดชบอร์ด** (เจ้าของ "ไม่อยากให้แปลกแยก" + ส่งรูปแถบเมนูของแดชบอร์ดมา "แถบนี้อะ"):
   ค่าสี/ขนาด/แคปซูล gradient/หัวแถบ (โลโก้ + ชื่อ) / ท้ายแถบ (จุดเขียว + ชื่อ + ปุ่มธีม + ออกจากระบบ) **คัดจาก globals.css `#nav-slide` +
   `.nav-mini` ใน index.html** มาไว้ใน `<style>` ของ crm.html (โหลด globals.css ตรงไม่ได้ — มีกฎ `.card .chip .g2 .g3 .av .dot` ชนกับของ CRM)
@@ -5805,6 +5805,42 @@ cd /opt/oxlet && .venv/bin/python manage.py sync_carspend --photos
   และเขียน `media_token` ลงตาราง `FbChat` แถวที่ id ตรงกัน · ตอนนี้ใช้ `chatmedia.LINE/FB`
 - **เทสต์**: `python scripts/test_buyshow.py` (42 ข้อ · ปลอมที่ `requests` · รูปจริงในโฟลเดอร์ชั่วคราว · ตรวจว่าไม่มีเบอร์เต็ม/LINE id ในข้อความที่ส่ง ·
   EXIF/GPS ถูกตัด · รูปไม่ผ่าน = ไม่ทิ้งไฟล์)
+
+#### 📣 บรอดแคสต์ลูกค้า — ค้นหากลุ่ม → ดาวน์โหลดรายชื่อ / ส่ง LINE · [broadcast.py](checkout/broadcast.py) · 21 ต.ค.69
+เจ้าของ *"มันจะมีกรณีที่นำไปใช้งานอย่าง Broadcast ซึ่งควรมีตัวค้นหา แล้วก็ Export รายชื่อหรือ Broadcast ภายในแอปได้เลยยิ่งดี
+เช่น เรามีรถรุ่นปีเก่าเข้ามาใหม่ … Broadcast ไปหากลุ่มลูกค้าที่เราแท็กไว้ว่า "สนใจรถปีเก่าๆ""* · เลือก: ค้นหา + Export + ส่ง LINE ·
+**แอดมินเท่านั้น** · เนื้อหา = ข้อความพิมพ์เอง + รูปที่อัปเอง + การ์ดรถจากสต็อก + ลิงก์หน้ารถบนเว็บโชว์รูม
+- **หน้า** `/crm/?p=bcast` (เมนูซ้ายของ CRM · แอดมิน) · **API** `/crm/api/broadcast` (`crm_views.api_broadcast` · CSRF จริง · เซลล์ 403 · ไม่ login 401)
+  · GET = ประวัติ · `?export=csv&f=<JSON>` = รายชื่อ CSV (BOM · เบอร์ใส่ `'` · รวม Facebook) · `?export=ids&account=crm&f=` = LINE userId บรรทัดละคน
+    แยกบัญชี OA (อัปโหลดสร้างกลุ่มเป้าหมายใน LINE OA Manager — userId ใช้ได้เฉพาะบัญชีของ provider ที่ได้ยินลูกค้า) · จด `dash_event_log` kind=`export`
+  · POST multipart `file` = อัปรูป (→ `chatplus._encode/_save_out` · media/chat_out · ตัด EXIF/GPS · ลบเองเกิน 60 วัน) ·
+    `{action:"preview", filters, quota?}` · `{action:"cars", codes}` · `{action:"test", content, account}` · `{action:"send", content, filters, confirm, client_id}`
+- **กลุ่มลูกค้า** = `ChatOwner` LINE + Facebook (ไม่รวมพนักงาน/ลูกค้าจำลอง) · กรอง: แท็ก (`ChatLead.tags` = คนใส่ใน Connect + แท็กจากระบบอัตโนมัติ
+  ยี่ห้อ/รุ่น/ช่วงรายได้ · มีแท็กใดก็ได้ / ต้องครบทุกแท็ก / ไม่เอาแท็ก) · ช่องทาง · คุยล่าสุดภายในกี่วัน (`last_in_at` · ค่าตั้งต้น 30) · ลีดขาย/รับซื้อ ·
+  ขั้นของลีด · ผู้ดูแล · เฉพาะที่ให้เบอร์/ไลน์ · คำค้น · **ไม่รวมลูกค้าที่ปิดการขาย/ไม่สนใจ โดยปริยาย** ·
+  **แท็กขึ้นต้น "ไม่รับข่าวสาร" (`_OPTOUT`) ไม่ได้รับเสมอ** — ลูกค้าขอเลิกรับ ให้ใส่แท็กนี้ในหน้า Connect · หน้าเว็บนับแยกว่าไม่ได้รับเพราะอะไร
+- **ส่ง** = LINE multicast (`/v2/bot/message/multicast`) ของ **บัญชีที่ลูกค้าแต่ละคนคุยอยู่** (`_channels` = กติกาเดียวกับ `chat._channel_for`
+  ทำทีเดียวทั้งกลุ่ม) · ชุดละ `BATCH`=500 · `X-Line-Retry-Key` = uuid5(client_id + บัญชี + ชุด) · 5xx/429 ลองซ้ำ 1 ครั้ง · 409 = รับไปแล้ว
+  · **ด่าน (เซิร์ฟเวอร์)**: สวิตช์ `chat.reply_on()` · **ต้องส่งทดสอบหาตัวเองด้วยเนื้อหาเดียวกันก่อน** (KV `bcast_test` · `TEST_VALID_H`=6 ชม. ·
+    แก้ข้อความ/รูป/รถ = ทดสอบใหม่) · จำนวนที่หน้าเว็บยืนยัน (`confirm`) ต้องตรงกับที่นับได้ตอนกดส่ง (ไม่ตรง = `needConfirm` ไม่ส่ง) ·
+    ไม่เกิน `MAX_RECIPIENTS`=3000 · โควต้าเดือนนี้ของบัญชีต้องพอ (`/v2/bot/message/quota` + `/consumption` · จำ 2 นาที) ·
+    กดซ้ำ client_id เดิม = คืนผลเดิม (`Broadcast.client_id` unique)
+  · ส่งทดสอบ = หา LINE ของแอดมินคนที่กด (`LineProfile` ที่ผูกทะเบียนพนักงาน · ฝั่งบัญชีเดียวกับลูกค้าก่อน) · ไม่มี = บอกให้แอดบัญชี OA แล้วทักมา
+  · **ลูกค้า Facebook ส่งผ่านระบบไม่ได้** (นับไว้ใน `fb_skipped` · ดาวน์โหลดรายชื่อไปใช้)
+  · เนื้อหา ≤5 ชิ้น: ข้อความ (≤2000) + รูป ≤3 + การ์ดรถ (Flex 1 ใบ/carousel ≤6 คัน · รูปรถ = สำเนา JPEG ใน media/chat_out (`_car_image`) ·
+    ราคา `showroom_sync.sale_price` · **ปุ่มลิงก์หน้ารถเฉพาะรถที่ `web_listed`** (ไม่งั้นลิงก์เปิดแล้วไม่เจอ) · รถขายแล้วไม่ส่ง) ·
+    รูป/การ์ดต้องมี `SITE_URL` https
+- **ส่งสำเร็จ** = แถว `GroupChat` ขาออกต่อผู้รับ (message_id **`bc:<id>:<ChatOwner.id>:<n>`** · `sent_by_name` "บรอดแคสต์ · ชื่อ" · รูปใช้ `extra.out_file`)
+  + `ChatOwnerLog` action **`bcast`** "ส่งบรอดแคสต์" · ส่งไม่ถึง = ไม่เก็บลงแชท · **ไม่แตะนาฬิกาตอบ/ข้อความล่าสุด/ยังไม่อ่าน**
+  · **★ `connect.messages(o)` ไม่ส่งแถว `bc:` ออกโดยปริยาย** (`bc=False`) — ตัวจับคำทุกตัวอ่านแชทผ่านฟังก์ชันนี้ (ไอดีหลังเราขอ · ลีดรับซื้อจากคำของเรา ·
+    ราคาที่เราแจ้ง · วันนัด) ประโยคเดียวส่งหาหลายร้อยคนห้ามกลายเป็นข้อมูลลีดของทุกคน (เทสต์พิสูจน์: ปล่อยรั่ว = ลีดขายถูกเปลี่ยนเป็นลีดรับซื้อ)
+    · หน้าแชท (`connect_views.api_chat`) ขอ `bc=True` ให้เซลล์เห็นว่าส่งอะไรไป (แถวติด `bc: True`) แต่ส่งให้ตัวจับคำ/autofill/ไฮไลต์/นัด เฉพาะ `det` (ไม่มี bc)
+    · **โค้ดใหม่ที่อ่านแชทลูกค้า ให้ใช้ `messages(o)` หรือกรอง `message_id` ขึ้นต้น `bc:` ออก**
+- **ตาราง `checkout_broadcast`** (`Broadcast` · checkout migration **0047** + เพิ่ม action `bcast` ใน ChatOwnerLog) — ข้อความ · รูป · รหัสรถ · เงื่อนไข ·
+  ผู้รับ/สำเร็จ/ไม่สำเร็จ แยกบัญชี · เลขแชทผู้รับ · คนส่ง/คนทดสอบ · เติม `db_inventory.TABLES` แล้ว · ผลส่งแต่ละชุดจด `dash_event_log` kind=`line_send`
+- **ยังไม่ได้ทำ**: ส่งตามเวลา · จับคำ "ไม่ต้องส่งมาแล้ว" ติดแท็กไม่รับข่าวสารเอง · ส่งหา Facebook ในช่วง 24 ชม. · แอปมือถือ
+- **Deploy**: `migrate` (checkout **0047**) + restart · ไม่ต้อง collectstatic · **เทสต์** `python scripts/test_broadcast.py` (61 ข้อ · ปลอมแค่ `requests` ·
+  รูปในโฟลเดอร์ชั่วคราว) · ตรวจ UI ใน Chrome (เลือกแท็ก/นับ · อัปรูป · เลือกรถ · ตัวอย่าง · จอ 1400/375 ไม่ล้น)
 
 ### 🔖 ป้ายเวอร์ชันมุมขวาล่าง (ส.ค.69)
 ทุกหน้า (login/index/seller/track base) โชว์เวอร์ชันมุมขวาล่าง — **สูตร: จำนวน git commit ÷ 10** (100 commits = v10.0 · เจ้าของกำหนด) · `app_version()` ใน [cars/context.py](cars/context.py) (git rev-list --count HEAD · cache ต่อ process · ไม่มี .git = ป้ายซ่อน) → `APP_VERSION` ผ่าน context processor `cars.context.nav` · ใช้เช็คว่า deploy ล่าสุดติดหรือยัง (ดูได้ตั้งแต่หน้า login)
