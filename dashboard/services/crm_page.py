@@ -600,18 +600,22 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
            "now": timezone.localtime().isoformat(timespec="seconds"), "cols": [{"key": k, "label": v} for k, v in COLS],
            "colStage": COL_STAGE, "pipeDays": PIPE_DAYS, "custDays": CUST_DAYS, "hasEmp": bool(emp)}
     stats, data, leads, chats = {}, {}, [], []
-    try:
-        stats = fetch_seller_stats(seller)
-    except Exception as e:
-        out.setdefault("errors", {})["stats"] = "อ่านยอดของเซลล์ไม่ได้: %s" % str(e)[:120]
+    # ★ 21 ต.ค.69 seller ว่าง = แอดมินที่ไม่ได้เป็นเซลล์ → ไม่อ่านข้อมูลรายคนเลย (ชื่อว่างไปจับแถวที่ช่องเซลล์ว่างได้)
+    #   หน้าเว็บขึ้นชื่อตัวเอง · ส่วนรายคนเป็นศูนย์/ว่าง · ส่วนของทีม (อันดับในรายงาน) ยังอ่านจากผลรวมแดชบอร์ด
+    if seller:
+        try:
+            stats = fetch_seller_stats(seller)
+        except Exception as e:
+            out.setdefault("errors", {})["stats"] = "อ่านยอดของเซลล์ไม่ได้: %s" % str(e)[:120]
     try:
         data = fetch_dashboard_data() or {}
     except Exception as e:
         out.setdefault("errors", {})["dashboard"] = "อ่านผลรวมแดชบอร์ดไม่ได้: %s" % str(e)[:120]
-    try:
-        leads = sheet_leads(seller)
-    except Exception as e:
-        out.setdefault("errors", {})["leads"] = "อ่านลีดจากชีตไม่ได้: %s" % str(e)[:120]
+    if seller:
+        try:
+            leads = sheet_leads(seller)
+        except Exception as e:
+            out.setdefault("errors", {})["leads"] = "อ่านลีดจากชีตไม่ได้: %s" % str(e)[:120]
     try:
         chats = chat_cards(emp)
     except Exception as e:
@@ -641,16 +645,22 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
     _part(out, "deals", lambda: deal_cards(stats))
     _part(out, "kpi", lambda: kpi(stats, seller))
     _part(out, "week", lambda: week_leads(stats))
-    _part(out, "teamTargets", lambda: team_targets(seller, data))
+    _part(out, "teamTargets", lambda: team_targets(seller, data) if seller else
+          {"team": "", "month": TH_MON[today.month], "rows": [], "pipelineValue": 0})
     _part(out, "appts", lambda: appts(emp, seller, chats))
     _part(out, "report", lambda: report(stats, seller, leads, chats, data))
     _part(out, "zOptions", _z_options)
-    try:
-        from . import mobile_home as MH
-        _part(out, "tasks", lambda: MH._tasks(seller))
-        _part(out, "follow", lambda: MH._follow(seller, emp))
-    except Exception:
-        pass
+    if seller:
+        try:
+            from . import mobile_home as MH
+            _part(out, "tasks", lambda: MH._tasks(seller))
+            _part(out, "follow", lambda: MH._follow(seller, emp))
+        except Exception:
+            pass
+    else:
+        out["tasks"] = {"total": 0, "open": 0, "late": 0, "rows": [], "callMin": 0}
+        out["follow"] = {"follow": 0, "notCalled": 0, "noStatus": 0, "stale": 0, "windowDays": 14,
+                         "zOptions": [], "urgent": [], "deals": []}
     _cache[seller] = (time.time(), out)
     return out
 

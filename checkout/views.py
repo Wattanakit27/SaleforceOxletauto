@@ -1081,8 +1081,8 @@ def api_checkins(request):
     except ValueError:
         day = today
 
-    # ชื่อวันภาษาไทย — ใช้เทียบกับช่อง "วันหยุด" ในทะเบียน (เก็บเป็นคำ เช่น "อาทิตย์")
-    THAI_DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+    # ชื่อวันภาษาไทยไว้โชว์ · เทียบช่อง "วันหยุด" ด้วย is_day_off (รับ "พฤหัส" ย่อด้วย — ★ 15 ต.ค.69)
+    from .checkin_report import THAI_DAYS, is_day_off
     day_name = THAI_DAYS[day.weekday()]
 
     from . import checkin_app as CA
@@ -1116,7 +1116,7 @@ def api_checkins(request):
         item = {"name": e.nickname, "position": e.position, "workStart": e.work_start,
                 "dayOff": e.day_off, "note": e.note,
                 "rawName": bool(e.display_name) and e.nickname == e.display_name}
-        (dayoff if (e.day_off and day_name in e.day_off) else missing).append(item)
+        (dayoff if is_day_off(e.day_off, day) else missing).append(item)
 
     n = {"ontime": sum(1 for r in rows if r["status"] == "ontime"),
          "late": sum(1 for r in rows if r["status"] == "late"),

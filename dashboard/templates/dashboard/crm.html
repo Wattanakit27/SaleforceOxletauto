@@ -48,32 +48,61 @@ body{font-family:'Noto Sans Thai','Segoe UI',sans-serif;font-size:var(--fs-body)
 a{color:var(--brand-d);text-decoration:none}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
-.crm{display:flex;min-height:100vh;background:linear-gradient(90deg,var(--side) 0 232px,var(--bg) 232px)}
-/* ── แถบซ้าย ── */
-.side{width:232px;flex:none;background:var(--side);color:var(--side-ink);padding:20px 14px 14px;display:flex;flex-direction:column;gap:4px;
-  position:sticky;top:0;height:100vh;overflow-y:auto}
-.side .logo{width:150px;height:auto;margin:0 0 4px 6px;border-radius:6px}
-.side .tag{font-size:12px;color:var(--side-mute);margin:0 0 14px 10px;letter-spacing:.04em}
-.nv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--side-ink);font-size:var(--fs-sub);border:0;background:none;width:100%;text-align:left}
-.nv:hover{background:var(--side-hi)}
-.nv.on{background:var(--brand);color:#fff;font-weight:600}
-.nv svg{flex:none}
-.nv .bd{margin-left:auto;font-size:12px;padding:1px 8px;border-radius:6px;background:var(--brand-d);color:#fff;font-weight:600}
-.nv:not(.on) .bd{background:#3b2a66;color:#ddd6fe}
-.nv .bd.pink{background:var(--pink);color:#fff}
+/* ── แถบเมนูซ้าย: หน้าตาเดียวกับแดชบอร์ด (globals.css #nav-slide + .nav-mini ใน index.html) · ★ 21 ต.ค.69 เจ้าของ "แถบนี้อะ"
+   สีแถบ/ขนาด/แคปซูล gradient/ปุ่ม « ย่อเหลือไอคอน คัดค่ามาจากแดชบอร์ด · จำการย่อใน localStorage 'sbMini' คีย์เดียวกับแดชบอร์ด ── */
+:root{ --sb-bg:#1c1631; --sb-t1:#eeeaf8; --sb-t2:#b7afd0; --sb-t3:#8a81a8; --sb-bd:rgba(255,255,255,.08); --sb-w:252px;
+  --grad:linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
+html[data-theme="dark"]{ --sb-bg:#0f0c19; }
+.crm{display:flex;min-height:100vh;background:linear-gradient(90deg,var(--sb-bg) 0 var(--sb-w),var(--bg) var(--sb-w))}
+.side{width:var(--sb-w);flex:none;background:var(--sb-bg);color:var(--sb-t1);padding:16px 12px 12px;display:flex;flex-direction:column;gap:2px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;
+  transition:width .18s ease,padding .18s ease}
+.nav-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:2px 0 14px 2px;margin-bottom:8px;border-bottom:.5px solid var(--sb-bd)}
+.nav-brand{display:flex;align-items:center;gap:7px;min-width:0;color:inherit}
+.nav-logo{height:28px;width:auto;border-radius:8px;display:block;flex-shrink:0}
+.nav-brand-t{display:flex;flex-direction:column;line-height:1.2;min-width:0;white-space:nowrap;overflow:hidden}
+.nav-head-t{font-size:var(--fs-sub);font-weight:800;color:#fff;letter-spacing:-.2px}
+.nav-head-s{font-size:var(--fs-body);color:var(--sb-t3);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.nav-mini{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;border:.5px solid var(--sb-bd);
+  background:rgba(255,255,255,.06);color:var(--sb-t2);flex-shrink:0;padding:0}
+.nav-mini:hover{background:rgba(255,255,255,.15);color:#fff}
+.nav-sec{flex-shrink:0;padding:6px 12px 6px;font-size:var(--fs-body);font-weight:800;letter-spacing:.6px;color:var(--sb-t3)}
+.ntab{display:flex;align-items:center;gap:10px;flex-shrink:0;padding:9px 14px;border-radius:12px;font-size:var(--fs-sub);color:var(--sb-t2);
+  white-space:nowrap;text-decoration:none;transition:background .18s ease,color .18s ease}
+.ntab:hover{color:#fff;background:rgba(255,255,255,.06)}
+.ntab.on{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 3px 10px rgba(124,58,237,.35)}
+.ntab svg{flex:none}
+.ntab .bd{margin-left:auto;font-size:12px;padding:1px 8px;border-radius:6px;background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+.ntab.on .bd{background:rgba(255,255,255,.22)}
+.ntab .bd.pink{background:var(--pink);color:#fff}
 .side .sp{flex-grow:1;min-height:18px}
-.foot{display:flex;align-items:center;gap:10px;padding:12px 6px 4px;border-top:1px solid var(--side-line)}
+.nav-foot{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:12px 8px 4px;border-top:.5px solid var(--sb-bd);font-size:var(--fs-body);color:var(--sb-t2)}
+.nav-foot b{color:#fff;font-weight:700}
+.nav-foot-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);flex-shrink:0}
+.nav-foot-u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-foot-out{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;border:.5px solid var(--sb-bd);
+  background:rgba(255,255,255,.05);color:var(--sb-t2);flex-shrink:0;padding:0}
+.nav-foot-out:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-foot-out.out:hover{background:rgba(239,68,68,.18);color:#fca5a5}
+.nav-close{display:none;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:.5px solid var(--sb-bd);
+  background:rgba(255,255,255,.06);color:var(--sb-t2);flex-shrink:0;padding:0}
+.nav-close:hover{background:rgba(239,68,68,.18);color:#fca5a5}
+.mhdr{display:none}
+.nav-backdrop{display:none}
+.links{display:flex;gap:10px;flex-wrap:wrap;padding:8px 8px 0;font-size:12px}
+.links a{color:var(--sb-t3)}
+.links a:hover{color:#fff}
 .av{width:34px;height:34px;border-radius:50%;background:var(--brand-s);color:var(--brand-d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;overflow:hidden}
 .av img{width:100%;height:100%;object-fit:cover}
-.foot .who{line-height:1.3;min-width:0}
-.foot .who b{color:#fff;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.foot .who span{font-size:12px;color:var(--side-mute)}
-.foot .ib{margin-left:auto;display:flex;gap:4px}
-.ibtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--side-line);background:transparent;color:var(--side-ink);display:flex;align-items:center;justify-content:center}
-.ibtn:hover{background:var(--side-hi)}
-.links{display:flex;gap:10px;flex-wrap:wrap;padding:8px 8px 0;font-size:12px}
-.links a{color:var(--side-mute)}
-.links a:hover{color:#fff}
+@media (min-width:1100px){
+  body.sb-mini{--sb-w:68px}
+  body.sb-mini .side{padding:14px 8px 10px}
+  body.sb-mini .nav-head{justify-content:center;padding:2px 0 12px}
+  body.sb-mini .nav-brand,body.sb-mini .ntab-l,body.sb-mini .nav-sec,body.sb-mini .nav-foot-u,body.sb-mini .nav-foot-dot,body.sb-mini .links{display:none}
+  body.sb-mini .ntab{justify-content:center;gap:0;padding:10px 0;position:relative}
+  body.sb-mini .ntab .bd{position:absolute;top:1px;right:3px;margin:0;font-size:10px;padding:0 4px;min-width:15px;text-align:center;background:var(--pink)}
+  body.sb-mini .nav-foot{flex-direction:column;padding:10px 0 4px;gap:6px}
+}
 /* ── ส่วนหลัก ── */
 .main{flex:1 1 auto;min-width:0;padding:22px 28px 36px;display:flex;flex-direction:column;gap:16px}
 .ph{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
@@ -292,15 +321,27 @@ svg text{fill:var(--ink3);font-size:11px;font-family:inherit}
 .toast.bad{background:var(--bad);color:#fff}
 @media (max-width:1320px){ .cust{grid-template-columns:minmax(0,1fr) 320px} .tbl th:nth-child(4),.tbl td:nth-child(4){display:none} .tbl td,.tbl th{padding-left:12px;padding-right:12px} }
 @media (max-width:1000px){ .cust{grid-template-columns:minmax(0,1fr)} .pane{position:static;max-height:none} }
+/* ★ 21 ต.ค.69 จอแคบกว่า 1100px = ปุ่ม ☰ เปิดแถบเมนูเลื่อนออกจากด้านซ้าย (เหมือนแดชบอร์ด · เจ้าของ "ทำไมแถบไปอยู่ด้านบน") */
+@media (max-width:1099px){
+  .crm{display:block;background:var(--bg)}
+  .mhdr{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:30;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+  .mhdr .burger{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--line2);background:var(--card);color:var(--ink);flex-shrink:0;padding:0}
+  .mhdr .burger:hover{border-color:var(--brand-l)}
+  .mhdr img{height:30px;width:auto;border-radius:7px;display:block}
+  .mhdr .mt{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .mhdr .mt b{font-size:var(--fs-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mhdr .mt span{font-size:12px;color:var(--ink3)}
+  .side{position:fixed;top:0;left:0;height:100vh;height:100dvh;width:256px;z-index:1260;padding:14px 10px;
+    transform:translateX(-104%);transition:transform .3s cubic-bezier(.22,.61,.36,1);border-radius:0 18px 18px 0;box-shadow:6px 0 28px rgba(0,0,0,.18)}
+  body.nav-open .side{transform:none}
+  .nav-backdrop{display:block;position:fixed;inset:0;z-index:1250;background:rgba(20,12,40,.42);opacity:0;pointer-events:none;transition:opacity .25s ease}
+  body.nav-open .nav-backdrop{opacity:1;pointer-events:auto}
+  .nav-mini{display:none}
+  .nav-close{display:inline-flex}
+  .pane{top:72px;max-height:calc(100vh - 88px)}
+}
+@media (prefers-reduced-motion:reduce){ .side,.nav-backdrop{transition:none} }
 @media (max-width:900px){
-  .crm{flex-direction:column;background:var(--bg)}
-  .side{width:auto;height:auto;position:sticky;top:0;z-index:20;flex-direction:row;align-items:center;padding:8px 10px;overflow-x:auto;gap:2px}
-  .side .logo{width:84px;margin:0 6px 0 0}
-  .side .tag,.side .sp,.picker label,.links,.foot .who{display:none}
-  .nv{width:auto;flex:none;padding:8px 10px;white-space:nowrap}
-  .picker{margin:0 4px;padding:0;background:none;flex:none}
-  .picker select{width:120px;height:34px}
-  .foot{border:0;padding:0 0 0 6px;flex:none}
   .main{padding:16px 14px 28px}
   .ph h1{font-size:24px}
   .big{font-size:36px}
@@ -310,8 +351,12 @@ svg text{fill:var(--ink3);font-size:11px;font-family:inherit}
 </style>
 </head>
 <body>
+<script>try{if(localStorage.getItem('sbMini')==='1')document.body.classList.add('sb-mini');}catch(e){}</script>
 {{ boot|json_script:"crm-boot" }}
 <div class="crm">
+  <header class="mhdr"><button class="burger" data-act="navOpen" title="เมนู" aria-label="เปิดเมนู" aria-controls="side"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <img src="{% static 'dashboard/image/be5ed0ab0a42c5a16bb363accb14c1d8.png' %}" alt="Oxlet"><span class="mt"><b id="mh-page">Oxlet CRM</b><span>Oxlet CRM</span></span></header>
+  <div class="nav-backdrop" data-act="navClose"></div>
   <nav class="side" id="side" aria-label="เมนูหลัก"></nav>
   <main class="main" id="main"><div class="load">กำลังโหลด…</div></main>
 </div>
@@ -350,6 +395,9 @@ const ICON = {
   bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>',
+  chevL:'<path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/>',
+  chevR:'<path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/>',
+  close:'<path d="M18 6L6 18M6 6l12 12"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
 };
 const ic = (k, s) => `<svg aria-hidden="true" width="${s||16}" height="${s||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]||''}</svg>`;
@@ -409,7 +457,10 @@ const S = {
   auto: null, kwTab: 'car', kwQ: '', kwMore: {}, kf: null, kfPrev: null, kwTest: null,
 };
 (function(){ const p = new URLSearchParams(location.search); if (p.get('sel')) S.sel = p.get('sel'); if (p.get('id')) S.chatId = p.get('id'); })();
-function setUrl(){ const p = new URLSearchParams(); if (BOOT.admin && S.seller) p.set('seller', S.seller); if (S.page !== 'dash') p.set('p', S.page);
+// ★ 21 ต.ค.69 (เจ้าของแจ้ง "?seller=%E0%B8%A1… มันบัค") — ตัวเลือกเซลล์ของแอดมินถูกเอาออกแล้ว (20 ต.ค.) แต่ตรงนี้ยัง
+//   เขียนเซลล์ที่ระบบเลือกให้แอดมิน (คนแรกในรายชื่อ) ลง URL ทุกครั้ง → ใส่เฉพาะตอนเปิดมาด้วยลิงก์ที่ระบุ ?seller= เอง
+const URL_SELLER = new URLSearchParams(location.search).get('seller') || '';
+function setUrl(){ const p = new URLSearchParams(); if (BOOT.admin && URL_SELLER && S.seller) p.set('seller', S.seller); if (S.page !== 'dash') p.set('p', S.page);
   if (S.page === 'cust' && S.sel) p.set('sel', S.sel); if (S.page === 'chat' && S.chatId) p.set('id', S.chatId);
   const q = p.toString(); history.replaceState(null, '', '/crm/' + (q ? '?' + q : '')); }
 
@@ -465,9 +516,9 @@ function buildIndex(){
   rows.sort((a,b) => (b.lastSort||0) - (a.lastSort||0));
   IDX = {cards, rows, byKey}; }
 
-/* ── แถบซ้าย ── */
+/* ── แถบเมนูซ้าย (หน้าตาเดียวกับแดชบอร์ด) ── */
 function renderSide(){
-  const D = S.D || {}; const el = document.getElementById('side');
+  const D = S.D || {}; const el = document.getElementById('side'); if (!el) return;
   const pipeN = IDX.cards.length;
   let chatN = 0, chatPink = false;
   if (S.sum && S.sum.counts){ const c = S.sum.counts; chatN = BOOT.admin ? (c.queue||0) : ((c.mineWaiting||0) + (S.sum.onDuty ? (c.queue||0) : 0)); chatPink = (c.mineOverdue||0) > 0 || chatN > 0; }
@@ -475,17 +526,24 @@ function renderSide(){
     let bd = '';
     if (p.k === 'pipe' && pipeN) bd = `<span class="bd">${n0(pipeN)}</span>`;
     if (p.k === 'chat' && chatN) bd = `<span class="bd ${chatPink ? 'pink' : ''}">${n0(chatN)}</span>`;
-    return `<button class="nv ${S.page === p.k ? 'on' : ''}" data-act="nav" data-k="${p.k}">${ic(p.i,18)}${h(p.l)}${bd}</button>`; }).join('');
+    return `<a class="ntab ${S.page === p.k ? 'on' : ''}" href="/crm/${p.k === 'dash' ? '' : '?p=' + p.k}" data-act="nav" data-k="${p.k}" title="${h(p.l)}">${ic(p.i,16)}<span class="ntab-l">${h(p.l)}</span>${bd}</a>`; }).join('');
   // ★ 20 ต.ค.69 เจ้าของสั่งเอาตัวเลือกเซลล์ของแอดมินออก ("มันไม่จำเป็น")
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const mini = document.body.classList.contains('sb-mini');
   const me = BOOT.admin ? (BOOT.me.nickname || 'แอดมิน') : sname(S.seller);
   const role = BOOT.admin ? 'แอดมิน' : ((D.teamName ? D.teamName + ' · ' : '') + 'เซลล์');
-  el.innerHTML = `<img class="logo" src="${LOGO}" alt="อ๊อกเล็ตธ์ ออโต้"><div class="tag">CRM ทีมขาย</div>${nav}
+  el.innerHTML = `<div class="nav-head"><a class="nav-brand" href="/crm/"><img class="nav-logo" src="${LOGO}" alt="Oxlet"><span class="nav-brand-t"><span class="nav-head-t">Oxlet CRM</span><span class="nav-head-s">CRM ทีมขาย</span></span></a>
+      <button class="nav-close" data-act="navClose" title="ปิดเมนู" aria-label="ปิดเมนู">${ic('close',16)}</button>
+      <button class="nav-mini" data-act="mini" title="${mini ? 'กางเมนู' : 'ย่อเมนู (เหลือแค่ไอคอน — หน้าจอกว้างขึ้น)'}" aria-label="${mini ? 'กางเมนู' : 'ย่อเมนู'}" aria-expanded="${!mini}">${ic(mini ? 'chevR' : 'chevL',18)}</button></div>
+    <div class="nav-sec"><span>เมนู CRM</span></div>${nav}
     <div class="sp"></div>
-    <div class="foot"><div class="av">${h(initials(me))}</div><div class="who"><b>${h(me)}</b><span>${h(role)}</span></div>
-      <div class="ib"><button class="ibtn" data-act="theme" title="สลับธีม">${ic(dark ? 'sun' : 'moon',16)}</button>
-      <a class="ibtn" href="/logout/" title="ออกจากระบบ">${ic('out',16)}</a></div></div>
-    <div class="links"><a href="${BOOT.admin ? '/dashboard/' : '/me/'}">หน้าเดิม</a><a href="/connect/">Connect</a></div>`; }
+    <div class="nav-foot" title="${h(me)} · ${h(role)}"><span class="nav-foot-dot"></span><span class="nav-foot-u"><b>${h(me)}</b> · ${h(role)}</span>
+      <button class="nav-foot-out" data-act="theme" title="สลับธีม">${ic(dark ? 'sun' : 'moon',16)}</button>
+      <a class="nav-foot-out out" href="/logout/" title="ออกจากระบบ">${ic('out',16)}</a></div>
+    <div class="links"><a href="${BOOT.admin ? '/dashboard/' : '/me/'}">หน้าเดิม</a><a href="/connect/">Connect</a></div>`;
+  const cur = PAGES.find(p => p.k === S.page); const mh = document.getElementById('mh-page'); if (mh && cur) mh.textContent = cur.l; }
+function navClose(){ document.body.classList.remove('nav-open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('nav-open')) navClose(); });
 
 /* ── หน้า ── */
 function render(){
@@ -509,13 +567,17 @@ function header(eb, title, sub, acts){ return `<div class="ph"><div class="t"><d
 function refreshBtn(){ return `<button class="btn" data-act="refresh" title="ดึงข้อมูลใหม่">${ic('refresh',16)}รีเฟรช</button>`; }
 
 /* ════════ แดชบอร์ด ════════ */
+function ownName(){ return (BOOT.me && BOOT.me.nickname) || 'แอดมิน'; }
 function greet(){ const hr = new Date().getHours(); return hr < 12 ? 'สวัสดีตอนเช้า' : hr < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น'; }
 function colCounts(){ const n = {}; (S.D.cols||[]).forEach(c => n[c.key] = 0); IDX.cards.forEach(it => { if (n[it.col] !== undefined) n[it.col]++; }); return n; }
 function pageDash(){
   const D = S.D, k = D.kpi || {}, self = D.selfView;
-  const title = self || !BOOT.admin ? greet() + ' คุณ' + sname(S.seller) : 'ภาพรวมของ ' + sname(S.seller);
+  // ★ 21 ต.ค.69 แอดมินที่ไม่ได้เป็นเซลล์ (S.seller ว่าง) = ทักด้วยชื่อตัวเอง · ไม่เอาชื่อเซลล์คนอื่นมาแสดงแทน
+  const title = !S.seller ? greet() + ' คุณ' + ownName()
+    : self || !BOOT.admin ? greet() + ' คุณ' + sname(S.seller) : 'ภาพรวมของ ' + sname(S.seller);
   const acts = `${self ? '<button class="btn" data-act="checkphone">เช็คเบอร์ซ้ำ</button>' : ''}${refreshBtn()}<button class="btn pri" data-act="nav" data-k="pipe">${ic('pipe',16)}เปิดไปป์ไลน์</button>`;
   return header(D.period || '', title, 'ยอดขายไตรมาสนี้ ลีดที่กำลังตาม และงานที่ต้องทำวันนี้ — ตัวเลขชุดเดียวกับหน้าเซลล์', acts)
+    + (!S.seller ? '<div class="mini" style="margin:-6px 0 12px">บัญชีนี้ไม่ได้เป็นเซลล์ — ยอด ลีด และลูกค้ารายคนจึงว่าง · แชทลูกค้า สต็อกรถ และระบบอัตโนมัติใช้ได้ตามปกติ</div>' : '')
     + (S.checkPhone ? phoneBox() : '')
     + `<div class="g2">${heroCard(k)}${followCard()}</div>`
     + `<div class="g3">${weekCard()}${hotCard()}${apptCard()}</div>`
@@ -558,7 +620,7 @@ function hotCard(){
   return `<section class="card" style="gap:2px"><div class="ch" style="margin-bottom:8px"><h2>ลีดร้อน</h2><button class="lk" data-act="pipeHot">ดูทั้งหมด</button></div>
     ${hot.length ? hot.map(it => `<button class="row" data-act="open" data-key="${h(it.key)}"><span class="ic">${h(initials(it.car || it.name))}</span>
       <span class="tx"><b>${h(it.name)}</b><span>${h(it.car || 'ไม่ระบุรุ่น')} · ${h(stageText(it))}</span></span>
-      <span class="rt"><b style="display:block">${it.code ? h(it.code) : ''}</b><span class="mini" style="color:var(--ok)">คะแนน ${n0(it.score)}</span></span></button>`).join('')
+      <span class="rt"><b style="display:block">${it.code ? h(it.code) : ''}</b><span class="mini" style="color:var(--ok-t)">คะแนน ${n0(it.score)}</span></span></button>`).join('')
       : '<div class="empty">ยังไม่มีลีดร้อนในกระดาน</div>'}</section>`; }
 function stageText(it){
   if (it.kind === 'chat') return it.c.stageLabel + (it.c.z ? ' · ' + it.c.z : '');
@@ -823,7 +885,7 @@ function paneDeal(it){
 /* ════════ แชท ════════ */
 function pageChat(){
   const src = '/connect/?embed=1' + (S.chatId ? '&id=' + encodeURIComponent(S.chatId) : '');
-  const note = BOOT.admin && !S.D.selfView ? '<div class="mini">แอดมินเห็นแชทของทุกคน (Connect ของบัญชีที่ login) — ไม่ได้กรองเฉพาะ ' + h(sname(S.seller)) + '</div>' : '';
+  const note = BOOT.admin && !S.D.selfView ? '<div class="mini">แอดมินเห็นแชทของทุกคน (Connect ของบัญชีที่ login)' + (S.seller ? ' — ไม่ได้กรองเฉพาะ ' + h(sname(S.seller)) : '') + '</div>' : '';
   return `<div class="ph"><div class="t"><div class="eb">งานขาย · แชท</div><h1 style="font-size:22px">แชทลูกค้า</h1></div><a class="btn sm" href="${h(src.replace('embed=1&','').replace('?embed=1',''))}" target="_blank" rel="noopener">${ic('ext',14)}เปิดเต็มจอ</a></div>${note}
     <div class="chatwrap" style="height:calc(100vh - 150px)"><iframe src="${h(src)}" title="แชทลูกค้า (Connect)"></iframe></div>`; }
 
@@ -871,7 +933,7 @@ function pageReport(){
     <div class="kp"><span class="muted">ปล่อยรถ</span><span class="v">${n0(c.done)} คัน</span><div class="dl">${delta(c.done, p && p.done, n0)}</div></div>
     <div class="kp"><span class="muted" title="วันจอง → วันปล่อย ของเคสที่ปล่อยในช่วงนี้">จองถึงปล่อย เฉลี่ย</span><span class="v">${c.b2r === null || c.b2r === undefined ? '–' : c.b2r + ' วัน'}</span><div class="dl">${c.b2r !== null && c.b2r !== undefined && p && p.b2r !== null && p.b2r !== undefined ? delta(c.b2r, p.b2r, v => v.toFixed(1) + ' วัน', true) : '<span class="mini">นับเฉพาะเคสที่ลงวันปล่อยไว้</span>'}</div></div>
     <div class="kp"><span class="muted" title="ปล่อย ÷ ลีดปกติ (ไม่รวม RJ)">ลีด → ปล่อย</span><span class="v">${c.lead ? c.conv + '%' : '–'}</span><div class="dl">${p ? delta(c.conv, p.conv, v => v.toFixed(1) + ' pt') : '<span class="mini">ลีดปกติ ' + n0(c.lead) + '</span>'}</div></div></div>`;
-  return header('ภาพรวม · รายงาน', 'รายงาน', `ยอดปล่อย อัตราปิด และลีดที่ปิดได้มาจากช่องทางไหน — ของ ${h(sname(S.seller))} · ${h(rng)}${g.clipped ? ' (ข้อมูลเริ่มต้นปี — แดชบอร์ดเก็บปีเดียว)' : ''}`, seg)
+  return header('ภาพรวม · รายงาน', 'รายงาน', `ยอดปล่อย อัตราปิด และลีดที่ปิดได้มาจากช่องทางไหน — ของ ${h(S.seller ? sname(S.seller) : ownName())} · ${h(rng)}${g.clipped ? ' (ข้อมูลเริ่มต้นปี — แดชบอร์ดเก็บปีเดียว)' : ''}`, seg)
     + kp + `<div class="g2">${lineCard(R)}${funnelCard(g)}</div><div class="g2">${donutCard(g)}${rankCard(g)}</div>`; }
 function lineCard(R){
   const pts = R.monthly || [], cur = pts.filter(x => !x.future);
@@ -1124,7 +1186,9 @@ function pageAuto(){
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   const a = t.dataset.act;
-  if (a === 'nav'){ S.page = t.dataset.k; S.form = null; setUrl(); render(); window.scrollTo(0, 0); return; }
+  if (a === 'navOpen'){ document.body.classList.add('nav-open'); return; }
+  if (a === 'navClose'){ navClose(); return; }
+  if (a === 'nav'){ if (t.tagName === 'A'){ if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); } navClose(); S.page = t.dataset.k; S.form = null; setUrl(); render(); window.scrollTo(0, 0); return; }
   if (a === 'kwTab'){ S.kwTab = t.dataset.k; S.kf = null; S.kfPrev = null; render(); return; }
   if (a === 'kwNew'){ S.kf = kfFrom(null, t.dataset.g, t.dataset.parent || ''); S.kfPrev = null; render();
     const i = document.getElementById('kf-name'); if (i){ i.focus(); i.scrollIntoView({behavior:'smooth', block:'center'}); } return; }
@@ -1145,8 +1209,9 @@ document.addEventListener('click', async e => {
     S.kwTest = {text, res:{loading:true}}; const el = document.getElementById('kw-test-res'); if (el) el.innerHTML = kwTestRes(S.kwTest.res);
     const d = await api('/crm/api/auto', {action:'test', text}); S.kwTest.res = d.ok ? d : {fields:[], tags:[]};
     const el2 = document.getElementById('kw-test-res'); if (el2) el2.innerHTML = kwTestRes(S.kwTest.res); return; }
-  if (a === 'autoOpen'){ S.chatId = t.dataset.id; S.page = 'chat'; setUrl(); render(); window.scrollTo(0, 0); return; }
+  if (a === 'mini'){ const on = document.body.classList.toggle('sb-mini'); try { localStorage.setItem('sbMini', on ? '1' : '0'); } catch(x){} renderSide(); return; }
   if (a === 'theme'){ const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', cur); try { localStorage.setItem('oxlet_theme', cur); } catch(x){} renderSide(); return; }
+  if (a === 'autoOpen'){ S.chatId = t.dataset.id; S.page = 'chat'; setUrl(); render(); window.scrollTo(0, 0); return; }
   if (a === 'refresh'){ t.disabled = true; S.cust = {}; S.stock = null; await load(true); toast('ดึงข้อมูลใหม่แล้ว'); return; }
   if (a === 'pipeF'){ S.pipeF = t.dataset.k; S.pipeMore = {}; render(); return; }
   if (a === 'pipeHot'){ S.page = 'pipe'; S.pipeF = 'hot'; setUrl(); render(); return; }
@@ -1219,7 +1284,7 @@ async function checkPhone(){
   const r = await fetch('/api/seller/check_phone', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({phone: i.value})});
   let d = {}; try { d = await r.json(); } catch(x){}
   if (!r.ok || d.error){ out.textContent = d.error || 'เช็คไม่ได้'; return; }
-  out.innerHTML = !d.found ? '<b style="color:var(--ok)">ยังไม่เคยเป็นลีดของใคร</b>' : d.mine ? `<b style="color:var(--brand-d)">เป็นลีดของคุณเอง${d.code ? ' (' + h(d.code) + ')' : ''}</b>${d.month ? ' · ' + h(d.month) : ''}`
+  out.innerHTML = !d.found ? '<b style="color:var(--ok-t)">ยังไม่เคยเป็นลีดของใคร</b>' : d.mine ? `<b style="color:var(--brand-d)">เป็นลีดของคุณเอง${d.code ? ' (' + h(d.code) + ')' : ''}</b>${d.month ? ' · ' + h(d.month) : ''}`
     : `<b style="color:var(--bad)">เคยเป็นลีดของ ${h(sname(d.seller))}</b>${d.month ? ' · ' + h(d.month) : ''}`; }
 
 /* ── เริ่ม ── */

@@ -325,6 +325,58 @@ try:
        "my_checkin: เวลาแรก 8:40 · ทางกลุ่ม LINE · บอกว่าเช็คนอกสถานที่ได้")
     summ = mobile_home.checkin_summary(day)
     ok(summ["late"] == 0, "สรุปทั้งบริษัทไม่นับแถวที่ 2 (สาย 9:30) ของมัท")
+
+    print("\n[12] ออกงานในแอป (★ 21 ต.ค.69) — เก็บใน raw['out'] ของแถวแรกของวัน")
+
+    def app_out(tk, ll, acc=15, as_json=False):
+        data = {"lat": str(ll[0]), "lng": str(ll[1]), "acc": str(acc)}
+        if as_json:
+            return Client().post("/api/m/checkout", json.dumps(data), content_type="application/json",
+                                 HTTP_AUTHORIZATION="Bearer " + tk, secure=True)
+        return Client().post("/api/m/checkout", data, HTTP_AUTHORIZATION="Bearer " + tk, secure=True)
+
+    j = app_get(tok).json()
+    ok(isinstance(j.get("siteList"), list) and len(j["siteList"]) == 2
+       and {"name", "lat", "lng", "radius"} <= set(j["siteList"][0]), "GET ส่งพิกัดสาขา (siteList) ให้แผนที่")
+    ok("outTime" not in j, "ยังไม่ออกงาน = ไม่มี outTime")
+    first_pk = CA.first_per_employee(CheckIn.objects.filter(employee=mat, date_iso=day))[0].pk
+    n_rows = CheckIn.objects.filter(employee=mat, date_iso=day).count()
+    real = at(17, 31)
+    try:
+        r = app_out(tok, NEAR)
+    finally:
+        timezone.localtime = real
+    j = r.json()
+    ok(r.status_code == 200 and j.get("updated") is False and "17:31" in j.get("message", ""), "ออกงาน 17:31")
+    ok(j.get("info", {}).get("outTime") == "17:31", "info ส่ง outTime กลับมา")
+    c = CheckIn.objects.get(pk=first_pk)
+    ok((c.raw or {}).get("out", {}).get("hm") == "17:31", "เก็บใน raw['out'] ของแถวแรกของวัน")
+    ok(CheckIn.objects.filter(employee=mat, date_iso=day).count() == n_rows, "ไม่สร้างแถวเช็คชื่อใหม่")
+    ok(c.time_hm == "8:40", "เวลาเข้างานเดิมไม่ถูกแตะ")
+    real = at(18, 5)
+    try:
+        r = app_out(tok, NEAR, as_json=True)
+    finally:
+        timezone.localtime = real
+    j = r.json()
+    ok(r.status_code == 200 and j.get("updated") is True and "18:05" in j["message"] and "17:31" in j["message"],
+       "กดซ้ำ (ส่ง JSON) = บันทึกเวลาใหม่ + บอกเวลาเดิม")
+    ok(app_get(tok).json().get("outTime") == "18:05", "GET เห็นเวลาออกล่าสุด")
+    r = app_out(tok_boss, NEAR)
+    ok(r.status_code == 400, "คนที่ไม่ต้องเช็คชื่อ → 400")
+    r = app_out(tok_no, NEAR)
+    ok(r.status_code == 403, "ไม่ผูกทะเบียน → 403")
+    r = Client().post("/api/m/checkout", {"lat": "x", "lng": "1"}, HTTP_AUTHORIZATION="Bearer " + tok, secure=True)
+    ok(r.status_code == 400, "พิกัดอ่านไม่ได้ → 400")
+    r = Client().post("/api/m/checkout", {"lat": "13.4", "lng": "101"}, secure=True)
+    ok(r.status_code in (401, 403), "ไม่มี token → ปฏิเสธ")
+    nobody_today = Employee.objects.create(nickname="ใหม่", position="ทีม A", work_start="9:00", track_checkin=True)
+    ok(CA.check_out(nobody_today, {}, NEAR[0], NEAR[1], 10)[0] == 400, "ยังไม่ได้เข้างานวันนี้ → 400")
+    far_emp = Employee.objects.create(nickname="ไกล", position="ทีม A", work_start="9:00", track_checkin=True)
+    CheckIn.objects.create(employee=far_emp, user_id="app:%d" % far_emp.pk, display_name="ไกล", date_iso=day,
+                           checkin_at=timezone.now(), time_hm="9:00", time_source="app", raw={})
+    st_code, pl = CA.check_out(far_emp, {}, FAR[0] + 0.5, FAR[1] + 0.5, 10)
+    ok(st_code == 403 and "ออกงาน" in pl.get("error", ""), "อยู่นอกรัศมีสาขา (ไม่ได้ติ๊กนอกสถานที่) → 403 บอกเหตุผล")
 finally:
     shutil.rmtree(TMP, ignore_errors=True)
     _runner.teardown_databases(_old)

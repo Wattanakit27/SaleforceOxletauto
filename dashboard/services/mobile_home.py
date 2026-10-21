@@ -20,7 +20,8 @@ from django.utils import timezone
 log = logging.getLogger(__name__)
 
 TH_MON = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
-THAI_DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+THAI_DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]   # ไว้โชว์
+from checkout.checkin_report import is_day_off as _is_day_off  # noqa: E402  เทียบช่อง "วันหยุด" (รับ "พฤหัส" ย่อด้วย)
 EXEC_POSITIONS = {"admin", "executive", "ผู้บริหาร", "manager", "exec"}
 
 MAX_URGENT = 8          # ตามด่วนในหน้าแรก (ข้อความ LINE ส่ง 5)
@@ -110,7 +111,7 @@ def my_checkin(emp, day=None) -> dict | None:
             late = a - b
         out.update(status=c.status or "abnormal", time=c.time_hm or "", lateMin=late,
                    source="app" if c.time_source == SOURCE else "line")
-    elif emp.day_off and dname in emp.day_off:
+    elif _is_day_off(emp.day_off, day):
         out["status"] = "dayoff"
     else:
         out["status"] = "none"
@@ -331,7 +332,6 @@ def checkin_summary(day=None) -> dict:
     from checkout.models import CheckIn, Employee
     today = timezone.localdate()
     day = day or today
-    dname = THAI_DAYS[day.weekday()]
     seen, n = set(), {"ontime": 0, "late": 0, "abnormal": 0}
     late_rows = []
     from checkout.checkin_app import first_per_employee   # คนเดียววันละแถว (แอป + กลุ่ม LINE)
@@ -349,7 +349,7 @@ def checkin_summary(day=None) -> dict:
     for e in Employee.objects.filter(active=True, track_checkin=True).order_by("nickname"):
         if e.id in seen:
             continue
-        if e.day_off and dname in e.day_off:
+        if _is_day_off(e.day_off, day):
             dayoff += 1
             continue
         ws = _hm(e.work_start)

@@ -616,10 +616,10 @@ def _month_summary(data, m):
 def team(now=None) -> dict:
     from dashboard.services.fetch_dashboard import fetch_dashboard_data
     from . import connect as C
-    from .checkin_report import THAI_DAYS
+    from .checkin_report import THAI_DAYS, is_day_off
     from .models import ChatLead, ChatOwner, ChatOwnerLog, LeadTask
     now = now or timezone.now()
-    today = timezone.localdate()
+    today = timezone.localdate(now)          # ส่ง now มา = ตรึงวันได้ (เทสต์วันหยุด) · ไม่ส่ง = วันนี้เหมือนเดิม
     t0 = timezone.make_aware(datetime.combine(today, datetime.min.time()))
     m0 = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
     data = fetch_dashboard_data() or {}
@@ -674,7 +674,7 @@ def team(now=None) -> dict:
         e = emps.get(s["id"])
         mine = by_emp.get(s["id"], [])
         rp = rep_by.get(s["id"]) or {}
-        stat = "หยุดวันนี้" if (e and e.day_off and dname in e.day_off) else \
+        stat = "หยุดวันนี้" if (e and is_day_off(e.day_off, today)) else \
                ("เวรรับแชทวันนี้" if s["team"] == duty else "รับลีดอยู่")
         mm = msel.get(s["name"]) or {}
         sellers.append({"id": s["id"], "name": s["name"], "team": s["team"], "leadsToday": len(mine),

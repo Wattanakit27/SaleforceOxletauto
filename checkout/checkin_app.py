@@ -34,6 +34,7 @@ MAX_PHOTO_MB = 10
 PHOTO_KEEP_DAYS = 60
 GRACE_MIN = 5                 # เผื่อสาย 5 นาที — กติกาเดียวกับตารางเช็คชื่อ (checkin_report.GRACE_MIN)
 SOURCE = "app"                # CheckIn.time_source ของแถวที่มาจากแอป
+OUT_KEY = "out"               # ★ 21 ต.ค.69 เวลาออกงาน เก็บใน CheckIn.raw["out"] ของแถวแรกของวัน (ไม่ต้องเพิ่มตาราง)
 _IMG_TYPES = {"image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/heic": ".heic",
               "image/heif": ".heic", "image/webp": ".webp"}
 
@@ -183,13 +184,20 @@ def today_info(emp, day=None) -> dict:
     day = day or timezone.localdate()
     rows = first_per_employee(CheckIn.objects.filter(employee=emp, date_iso=day))
     c = rows[0] if rows else None
+    rows_s = sites()
     out = {"done": bool(c), "anywhere": bool(emp.checkin_anywhere), "track": bool(emp.track_checkin),
-           "workStart": emp.work_start or "", "sites": [s["name"] for s in sites()]}
+           "workStart": emp.work_start or "", "sites": [s["name"] for s in rows_s],
+           # ★ 21 ต.ค.69 พิกัดสาขาให้แผนที่หน้าหลักของแอปปักหมุด (ตั้งในหน้าตั้งค่าเช็คชื่อ)
+           "siteList": [{"name": s.get("name", ""), "lat": s.get("lat"), "lng": s.get("lng"),
+                         "radius": s.get("radius", DEFAULT_RADIUS)} for s in rows_s]}
     if c:
         st, late = status_for(c.time_hm, c.work_start or emp.work_start)
         out.update(time=c.time_hm, status=c.status or st, lateMin=late if (c.status or st) == "late" else 0,
                    source="แอป" if c.time_source == SOURCE else "รูปในกลุ่ม LINE",
                    site=(c.raw or {}).get("site", "") if c.time_source == SOURCE else "")
+        o = (c.raw or {}).get(OUT_KEY) or {}
+        if isinstance(o, dict) and o.get("hm"):
+            out.update(outTime=o.get("hm", ""), outSite=o.get("site", ""))
     return out
 
 
@@ -289,6 +297,62 @@ def check_in(emp, user: dict, lat, lng, acc, photo) -> tuple:
     if place["note"] and not emp.checkin_anywhere:
         msg += " · " + place["note"]
     return 200, {"ok": True, "already": False, "id": c.pk, "message": msg, "info": today_info(emp, day)}
+
+
+def check_out(emp, user: dict, lat, lng, acc) -> tuple:
+    """กด "ออกงาน" ในแอป (★ 21 ต.ค.69 · เจ้าของสั่ง) → (http_status, payload)
+
+    เก็บที่ `CheckIn.raw["out"]` ของแถวเช็คชื่อแรกของวันนี้ (แถวจากแอปหรือจากรูปในกลุ่ม LINE ก็ได้)
+    · ต้องเช็คชื่อเข้างานก่อน · ตำแหน่งกติกาเดียวกับตอนเข้างาน (นอกสถานที่ได้ / ในรัศมีสาขา)
+    · กดซ้ำ = บันทึกเวลาออกงานใหม่ (ใช้เวลาล่าสุด — กดก่อนเวลาเลิกงานแล้วกลับมาทำต่อได้) · ไม่ต้องถ่ายเซลฟี่
+    · ไม่ส่งอะไรลงกลุ่ม LINE · ตารางเช็คชื่อที่ส่งเข้า LINE ยังไม่แสดงเวลาออก
+    """
+    from .models import CheckIn
+    if not emp:
+        return 403, {"ok": False, "error": "บัญชีนี้ยังไม่ผูกกับทะเบียนพนักงาน — แจ้งแอดมินให้เพิ่มชื่อเล่นในหน้าพนักงาน"}
+    if not emp.track_checkin:
+        return 400, {"ok": False, "error": "บัญชีนี้ตั้งไว้ว่าไม่ต้องเช็คชื่อเข้างาน"}
+    try:
+        lat, lng = float(lat), float(lng)
+        acc = float(acc or 0)
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "error": "อ่านตำแหน่งไม่ได้ — เปิดการเข้าถึงตำแหน่งให้แอปแล้วลองใหม่"}
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180) or (lat == 0 and lng == 0):
+        return 400, {"ok": False, "error": "ตำแหน่งไม่ถูกต้อง — ลองใหม่อีกครั้ง"}
+
+    now = timezone.localtime()
+    day = now.date()
+    rows = first_per_employee(CheckIn.objects.filter(employee=emp, date_iso=day))
+    if not rows:
+        return 400, {"ok": False, "error": "วันนี้ยังไม่ได้เช็คชื่อเข้างาน — กด \"เข้างาน\" ก่อน"}
+
+    place = place_check(emp, lat, lng, acc)
+    if not place["ok"]:
+        err = place["error"].replace("ต้องเช็คชื่อที่สาขา", "ต้องกดออกงานที่สาขา")
+        return 403, {"ok": False, "error": err, "distance": place["distance"], "site": place["site"]}
+
+    hm = "%d:%02d" % (now.hour, now.minute)
+    prev = ""
+    with transaction.atomic():
+        c = CheckIn.objects.select_for_update().get(pk=rows[0].pk)
+        raw = dict(c.raw or {})
+        old = raw.get(OUT_KEY)
+        prev = old.get("hm", "") if isinstance(old, dict) else ""
+        raw[OUT_KEY] = {"at": now.isoformat(timespec="seconds"), "hm": hm, "lat": lat, "lng": lng,
+                        "acc": round(acc), "site": place["site"], "distance": place["distance"],
+                        "place": place["note"], "login": (user or {}).get("user_id", "")[:64]}
+        c.raw = raw
+        c.save(update_fields=["raw"])
+    try:
+        from dashboard.services import eventlog
+        eventlog.log("checkin", name="ออกงานในแอป", target=emp.nickname[:64], ok=True,
+                     time=hm, prev=prev, site=place["site"], distance=place["distance"])
+    except Exception:
+        pass
+    msg = ("บันทึกเวลาออกงานใหม่ %s (เดิม %s)" % (hm, prev)) if prev else ("ออกงานแล้ว %s" % hm)
+    if place["note"] and not emp.checkin_anywhere:
+        msg += " · " + place["note"]
+    return 200, {"ok": True, "updated": bool(prev), "message": msg, "info": today_info(emp, day)}
 
 
 def photo_file(c):

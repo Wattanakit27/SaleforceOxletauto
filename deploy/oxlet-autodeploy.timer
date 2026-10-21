@@ -1,0 +1,10 @@
+[Unit]
+Description=เช็คโค้ดใหม่บน GitHub ทุก 1 นาที (Oxlet auto-deploy)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

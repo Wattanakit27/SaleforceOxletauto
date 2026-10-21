@@ -790,12 +790,24 @@ def line_login_callback(request):
         _prof = pr.json() or {}
         line_user_id = _prof.get("userId", "")
         line_display = _prof.get("displayName", "")
+        line_picture = _prof.get("pictureUrl", "")
     except Exception as e:
         return _render_login(request, error=f"LINE Login error: {str(e)[:200]}")
 
     # ตั้ง session sales (best-effort) — ถ้าเป็นพนักงาน/แอดมิน จะได้ oxlet_user + รู้ position
     sales_target, sales_err = _login_with_line_user_id(request, line_user_id, next_url)
     _ou = request.session.get("oxlet_user") or {}
+    # ★ 21 ต.ค.69 (เจ้าของสั่ง "ชื่อและรูปดึงมาจาก LINE ได้เลย") — โปรไฟล์ที่ LINE ยืนยันแล้ว
+    #   ติดไปกับ session (แอปมือถือได้ผ่าน /m/handoff) + เก็บรูปไว้ที่ทะเบียนพนักงาน · พังไม่ขวางการ login
+    if not sales_err and _ou:
+        try:
+            from checkout import staff_profile
+            _ou = dict(_ou, line_name=(line_display or "")[:120],
+                       picture=staff_profile.clean_url(line_picture))
+            request.session["oxlet_user"] = _ou
+            staff_profile.save_from_login(staff_profile.employee_of(_ou), line_display, line_picture)
+        except Exception:
+            pass
     log_login(request, identity=line_user_id, name=(_ou.get("display_name") or line_display or ""),
               method="line", success=not sales_err, role=_ou.get("position", ""),
               reason=("" if not sales_err else (sales_err or "")[:200]))

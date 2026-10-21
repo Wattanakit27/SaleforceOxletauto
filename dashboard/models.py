@@ -828,3 +828,43 @@ class DevRequest(models.Model):
 
     def __str__(self):
         return "%s %s" % (self.created_at, self.title)
+
+
+class LeaveRequest(models.Model):
+    """คำขอลา — ★ 21 ต.ค.69 (เจ้าของสั่ง · แอปมือถือ หมวดหน้าหลัก → ลา) · 1 แถวต่อคำขอ
+
+    พนักงานยื่นในแอป → แอดมิน/ผู้บริหารอนุมัติ/ไม่อนุมัติในแอป (dashboard/services/leave.py)
+    · `days` = จำนวนวันลาจริง (ตัดวันหยุดประจำสัปดาห์ของคนนั้น + วันหยุดบริษัท · ครึ่งวัน = 0.5)
+    · ปฏิทินในแอปแสดงวันลาแทน "ขาด" · ⚠️ ตารางเช็คชื่อที่ส่งเข้า LINE ยังไม่อ่านตารางนี้
+    · เก็บชื่อเล่นไว้ในแถว — ลบพนักงานแล้วประวัติการลายังอ่านได้
+    """
+    PENDING, APPROVED, REJECTED, CANCELLED = "pending", "approved", "rejected", "cancelled"
+    STATUSES = [(PENDING, "รออนุมัติ"), (APPROVED, "อนุมัติ"), (REJECTED, "ไม่อนุมัติ"), (CANCELLED, "ยกเลิก")]
+    KINDS = [("sick", "ลาป่วย"), ("personal", "ลากิจ"), ("vacation", "ลาพักร้อน"), ("other", "ลาอื่นๆ")]
+    HALVES = [("", "เต็มวัน"), ("am", "ครึ่งวันเช้า"), ("pm", "ครึ่งวันบ่าย")]
+
+    employee = models.ForeignKey("checkout.Employee", null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="leave_requests", verbose_name="พนักงาน")
+    nickname = models.CharField("ชื่อเล่น", max_length=80, db_index=True)
+    kind = models.CharField("ประเภทการลา", max_length=12, choices=KINDS)
+    start_date = models.DateField("ลาตั้งแต่", db_index=True)
+    end_date = models.DateField("ลาถึง", db_index=True)
+    half = models.CharField("ครึ่งวัน", max_length=2, choices=HALVES, blank=True)
+    days = models.DecimalField("จำนวนวันลา", max_digits=5, decimal_places=1, default=0)
+    reason = models.TextField("เหตุผล", blank=True)
+    status = models.CharField("สถานะ", max_length=10, choices=STATUSES, default=PENDING, db_index=True)
+    decided_by = models.CharField("อนุมัติ/ไม่อนุมัติโดย", max_length=80, blank=True)
+    decided_at = models.DateTimeField("ตัดสินเมื่อ", null=True, blank=True)
+    decide_note = models.CharField("หมายเหตุจากผู้อนุมัติ", max_length=300, blank=True)
+    created_by = models.CharField("ยื่นโดย", max_length=80, blank=True)
+    created_at = models.DateTimeField("ยื่นเมื่อ", auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField("แก้ล่าสุด", auto_now=True)
+
+    class Meta:
+        db_table = "dash_leave_request"
+        verbose_name = "คำขอลา"
+        verbose_name_plural = "คำขอลา"
+        ordering = ["-start_date", "-id"]
+
+    def __str__(self):
+        return "%s %s %s–%s" % (self.nickname, self.kind, self.start_date, self.end_date)

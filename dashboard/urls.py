@@ -21,6 +21,9 @@ urlpatterns = [
     path("api/m/home", mobile_views.m_home, name="m_home"),
     path("api/m/charts", mobile_views.m_charts, name="m_charts"),   # กราฟหน้าภาพรวมของแอป (★ 18 ต.ค.69)
     path("api/m/checkin", mobile_views.m_checkin, name="m_checkin"),   # เช็คชื่อในแอป (★ 14 ต.ค.69)
+    path("api/m/checkout", mobile_views.m_checkout, name="m_checkout"),   # ออกงานในแอป (★ 21 ต.ค.69)
+    path("api/m/calendar", mobile_views.m_calendar, name="m_calendar"),   # ปฏิทินเข้างาน (★ 21 ต.ค.69)
+    path("api/m/leave", mobile_views.m_leave, name="m_leave"),   # ลา (★ 21 ต.ค.69)
     path("api/m/logout", mobile_views.m_logout, name="m_logout"),
     path("", views.index),
     path("dashboard/", views.dashboard_page, name="dashboard"),

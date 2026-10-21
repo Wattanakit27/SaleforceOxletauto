@@ -183,6 +183,16 @@ def api_summary(request):
             cnt["parked"] = board()["stats"]["waiting"]
         except Exception:
             pass
+        try:                                    # ★ 21 ต.ค.69 คอมเมนต์รอตอบ 7 วัน (ป้ายแท็บ "คอมเมนต์" ของแอป · นับแถวเดียว)
+            from . import comments as CM
+            cnt["comments"] = CM.wait_count()
+        except Exception:
+            pass
+        try:                                    # ★ 21 ต.ค.69 คำขอลารออนุมัติ (ป้ายเมนู "ลา" ของแอป)
+            from dashboard.models import LeaveRequest
+            cnt["leaves"] = LeaveRequest.objects.filter(status=LeaveRequest.PENDING).count()
+        except Exception:
+            pass
     return _j({"ok": True, "counts": cnt, "duty": duty, "onDuty": on_duty,
                "admin": ctx["admin"]})
 

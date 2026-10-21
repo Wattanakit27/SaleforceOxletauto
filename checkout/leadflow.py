@@ -264,10 +264,9 @@ def rr_candidates(c=None, exclude=(), day=None) -> list:
     คืน `[{id, name, team, today, emp}]` · ทุกคนถูกตัด = ลิสต์ว่าง (ผู้เรียกต้องบอกเหตุผล)
     """
     from . import connect as C
-    from .checkin_report import THAI_DAYS
+    from .checkin_report import is_day_off
     c = c or cfg()
     day = day or timezone.localdate()
-    dname = THAI_DAYS[day.weekday()]
     checked = set()
     if c["need_checkin"]:
         try:
@@ -284,7 +283,7 @@ def rr_candidates(c=None, exclude=(), day=None) -> list:
         t = C.team_of(e)
         if t not in c["rr_teams"] or e.id in ex or C.is_test_seller(e):
             continue
-        if e.day_off and dname in e.day_off:
+        if is_day_off(e.day_off, day):
             continue
         if c["need_checkin"] and e.id not in checked:
             continue
@@ -300,10 +299,9 @@ def rr_board(c=None, day=None) -> list:
     """"มือเซลล์วันนี้" — ทุกคนในทีมของคิวจ่ายวน: วันนี้ได้กี่ใบ / เพดาน · อยู่ในคิวไหม · ถ้าไม่อยู่เพราะอะไร
     เรียงตามคิว (คนที่อยู่ในคิวก่อน ตามลำดับที่จะได้ใบ) แล้วค่อยคนที่หลุดคิว · ไม่มี LINE id"""
     from . import connect as C
-    from .checkin_report import THAI_DAYS
+    from .checkin_report import is_day_off
     c = c or cfg()
     day = day or timezone.localdate()
-    dname = THAI_DAYS[day.weekday()]
     order = {r["id"]: i for i, r in enumerate(rr_candidates(c, day=day))}
     counts = _today_counts(day)
     checked = None
@@ -321,7 +319,7 @@ def rr_board(c=None, day=None) -> list:
             continue
         n = counts.get(e.id, (0, None))[0]
         why = ""
-        if e.day_off and dname in e.day_off:
+        if is_day_off(e.day_off, day):
             why = "หยุดวันนี้"
         elif checked is not None and e.id not in checked:
             why = "ยังไม่เช็คชื่อ"

@@ -56,11 +56,11 @@ def _who(request, want: str = ""):
         if want and (want in ALL_SELLERS or want == "ADMIN"):
             return user, want, True, ""
         own = _own_seller(user)
-        if own in ALL_SELLERS:
+        if own and (own in ALL_SELLERS or own == "ADMIN"):
             return user, own, True, ""
-        from .services import crm_page
-        r = crm_page.roster()
-        return user, (r[0]["name"] if r else ""), True, ""
+        # ★ 21 ต.ค.69 (เจ้าของสั่ง "สะอาดไปเลย ไม่ต้องมีชื่อคนอื่น อย่างน้อยก็เป็นชื่อตัวเอง") — แอดมินที่ไม่ได้เป็นเซลล์
+        #   ไม่ดึงข้อมูลเซลล์คนแรกในรายชื่อมาแสดงแทนแล้ว (เดิม roster()[0] = "มัท" บน prod) → seller ว่าง = หน้าของตัวเอง
+        return user, "", True, ""
     try:
         from .services import mobile_home
         if mobile_home.role_of(user) == "buyer":

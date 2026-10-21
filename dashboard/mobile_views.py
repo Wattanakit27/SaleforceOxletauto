@@ -76,10 +76,18 @@ def _me(user: dict) -> dict:
     """ข้อมูลคนที่ login ที่ส่งให้แอป — **ไม่ส่ง LINE user id ออก** (กติกาเดิมทั้งโปรเจกต์)"""
     from .services.mobile_home import role_of
     pos = (user.get("position") or "").strip().lower()
-    return {"nickname": user.get("nickname") or user.get("display_name") or "",
-            "position": pos, "admin": pos in ("admin", "executive", "ผู้บริหาร", "manager", "exec"),
-            # admin · seller · worker · buyer — แอปใช้จัดแท็บ (★ 11 ต.ค.69)
-            "role": role_of(user)}
+    me = {"nickname": user.get("nickname") or user.get("display_name") or "",
+          "position": pos, "admin": pos in ("admin", "executive", "ผู้บริหาร", "manager", "exec"),
+          # admin · seller · worker · buyer — แอปใช้จัดแท็บ (★ 11 ต.ค.69)
+          "role": role_of(user)}
+    # ★ 21 ต.ค.69 — ชื่อ+รูปจาก LINE · แผนก/ตำแหน่ง/เวลาเข้างาน/วันหยุดจากทะเบียน (แอดมินกรอก) · checkout/staff_profile.py
+    try:
+        from checkout import staff_profile
+        p = staff_profile.profile(user)
+        me.update({"name": p["lineName"] or me["nickname"], "picture": p["picture"], "profile": p})
+    except Exception:
+        pass
+    return me
 
 
 @csrf_exempt
@@ -188,6 +196,81 @@ def m_checkin(request):
                                   request.POST.get("acc"), request.FILES.get("photo"))
     return _j(payload, status)
 
+
+
+@csrf_exempt
+@require_POST
+def m_checkout(request):
+    """ออกงานจากแอป — ★ 21 ต.ค.69 (checkout/checkin_app.check_out) · POST {lat, lng, acc} (form หรือ JSON)
+    เก็บเวลาออกงานในแถวเช็คชื่อของวันนี้ · ไม่ต้องถ่ายรูป · ไม่ส่งอะไรลงกลุ่ม LINE"""
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from checkout import checkin_app as CA
+    from checkout import connect as CN
+    user = dict(tok.user)
+    emp = CN.employee_of(user)
+    d = request.POST
+    if not d and request.body:
+        try:
+            d = json.loads(request.body.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            d = {}
+    status, payload = CA.check_out(emp, user, d.get("lat"), d.get("lng"), d.get("acc"))
+    return _j(payload, status)
+
+
+def _m_admin(user: dict) -> bool:
+    return (user or {}).get("position") == "admin"
+
+
+@require_GET
+def m_calendar(request):
+    """ปฏิทินเข้างานของฉัน — ★ 21 ต.ค.69 (dashboard/services/leave.month_view) · `?month=YYYY-MM`
+    แอดมินได้ `team` = ใครลาวันไหนทั้งบริษัทด้วย"""
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from checkout import connect as CN
+    from .services import leave as LV
+    user = dict(tok.user)
+    return _j(LV.month_view(CN.employee_of(user), request.GET.get("month", ""), admin=_m_admin(user)))
+
+
+@csrf_exempt
+def m_leave(request):
+    """ลา — ★ 21 ต.ค.69 · GET = คำขอของฉัน + สรุปปีนี้ (+ แอดมิน: รออนุมัติ/ลาวันนี้)
+    POST JSON `{action: create, kind, start, end, half, reason}` · `{action: cancel, id}` ·
+    แอดมิน `{action: approve|reject, id, note}` — ไม่ส่งอะไรเข้า LINE"""
+    tok, bad = _need_token(request)
+    if bad:
+        return bad
+    from checkout import connect as CN
+    from .services import leave as LV
+    user = dict(tok.user)
+    emp = CN.employee_of(user)
+    admin = _m_admin(user)
+    who = (emp.nickname if emp else "") or user.get("nickname") or "แอดมิน"
+    if request.method == "GET":
+        return _j(LV.overview(emp, admin))
+    if request.method != "POST":
+        return _j({"ok": False, "error": "method not allowed"}, 405)
+    try:
+        b = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return _j({"ok": False, "error": "ข้อมูลไม่ถูกต้อง"}, 400)
+    act = str(b.get("action") or "").strip()
+    if act == "create":
+        status, payload = LV.create(emp, who, b)
+    elif act == "cancel":
+        status, payload = LV.cancel(emp, who, b.get("id"), admin)
+    elif act in ("approve", "reject"):
+        if not admin:
+            return _j({"ok": False, "error": "อนุมัติการลาได้เฉพาะแอดมิน/ผู้บริหาร"}, 403)
+        status, payload = LV.decide(who, b.get("id"), act == "approve", b.get("note", ""))
+    else:
+        return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
+    return _j(payload, status)
 
 @csrf_exempt
 @require_POST

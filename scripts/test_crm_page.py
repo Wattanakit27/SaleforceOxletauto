@@ -207,7 +207,17 @@ ok(boot["seller"] == "นวล" and boot["admin"] and "roster" not in boot,
    "แอดมินดูของนวลได้ทางลิงก์ · ไม่มีตัวเลือก \"ดูของเซลล์\" แล้ว (20 ต.ค.69 เจ้าของสั่งเอาออก)")
 r = client(U_ADMIN).get("/crm/?seller=ใครก็ไม่รู้", secure=True)
 boot = json.loads(re.search(r'id="crm-boot" type="application/json">(.*?)</script>', r.content.decode(), re.S).group(1))
-ok(boot["seller"] in ("มัท", "โอ๊ต", "นวล", "ADMIN"), "ชื่อมั่ว = ตกไปคนแรกในรายชื่อ ไม่พัง", boot["seller"])
+# ★ 21 ต.ค.69 เจ้าของสั่ง "ไม่ต้องมีชื่อคนอื่น" — แอดมินที่ไม่ได้เป็นเซลล์ไม่ตกไปเซลล์คนแรกในรายชื่อแล้ว
+ok(boot["seller"] == "" and boot["admin"], "ชื่อมั่ว = หน้าของแอดมินเอง (ไม่เอาเซลล์คนอื่นมาแสดงแทน) ไม่พัง", boot["seller"])
+r = client(U_ADMIN).get("/crm/", secure=True)
+boot = json.loads(re.search(r'id="crm-boot" type="application/json">(.*?)</script>', r.content.decode(), re.S).group(1))
+ok(r.status_code == 200 and boot["seller"] == "", "แอดมินที่ไม่ได้เป็นเซลล์เปิด /crm/ = ไม่มีชื่อเซลล์คนอื่น", boot["seller"])
+r = client(U_ADMIN).get("/crm/api/data", secure=True)
+j = r.json()
+ok(r.status_code == 200 and j.get("seller") == "" and j.get("leads") == [] and j.get("chats") == []
+   and (j.get("tasks") or {}).get("rows") == [] and (j.get("follow") or {}).get("urgent") == []
+   and (j.get("teamTargets") or {}).get("rows") == [],
+   "ข้อมูลของแอดมินที่ไม่ได้เป็นเซลล์ = ส่วนรายคนว่างทั้งหมด (ไม่อ่านลีด/งานของใคร)", j.get("errors"))
 
 print("\n[3] ข้อมูลของเซลล์ (GET /crm/api/data)")
 CP.invalidate()

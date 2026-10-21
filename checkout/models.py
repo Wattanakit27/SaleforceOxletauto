@@ -420,6 +420,11 @@ class Employee(models.Model):
     #   → จดวันที่เขียนไว้ แล้วให้หมายเหตุ **มีผลเฉพาะวันนั้น** เว้นแต่ติ๊ก `note_sticky`
     note_date = models.DateField("วันที่เขียนหมายเหตุ", null=True, blank=True)
     note_sticky = models.BooleanField("หมายเหตุค้างไว้จนกว่าจะลบ", default=False)
+    # ★ 21 ต.ค.69 (เจ้าของสั่ง "ชื่อและรูปดึงมาจาก LINE ได้เลย") — รูปโปรไฟล์ LINE ของ "พนักงาน" ไว้โชว์ในแอป
+    #   เก็บแค่ลิงก์ (ไม่โหลดไฟล์) · ได้จาก LINE Login (ยืนยันแล้ว) หรือถาม LINE ด้วยบัญชีที่ผูกไว้ทุก 7 วัน
+    #   ข้อยกเว้นของกติกา "ไม่เก็บรูปโปรไฟล์" (ก.ย.69) ที่ใช้กับ LineProfile — ลูกค้าไม่ถูกเก็บที่นี่ · checkout/staff_profile.py
+    picture_url = models.CharField("รูปโปรไฟล์ LINE (ลิงก์)", max_length=500, blank=True)
+    picture_at = models.DateTimeField("ดึงรูปล่าสุด", null=True, blank=True)
     source = models.CharField("ที่มา", max_length=8, choices=SRC_CHOICES, default=MANUAL)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
