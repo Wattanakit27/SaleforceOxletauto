@@ -386,6 +386,141 @@ try:
     s_, d = J(ADM, "/connect/api/comments?status=all&cat=attack")
     ck("API: กรอง cat ผ่าน GET", s_ == 200 and [r["cat"] for r in d["rows"]] == ["attack"] and d.get("cats"), (s_, d.get("catCounts")))
 
+    print("[9] ห้องคอมเมนต์ — อ่านคำตอบใต้คอมเมนต์ + ตอบในนามเพจ (★ 23 ต.ค.69)")
+    from dashboard.models import EventLog
+    POSTS, THREAD = [], {"p1_c1": [
+        {"id": "p1_r1", "message": "สนใจด้วยครับ", "created_time": iso(NOW - timedelta(hours=2)), "from": {"id": "u7", "name": "คนอื่น"}},
+        {"id": "p1_r2", "message": "ทักแชทเพจได้เลยค่ะ", "created_time": iso(NOW - timedelta(hours=1)), "from": {"id": "111", "name": "เพจทดสอบ"}},
+    ]}
+    POST_ERR = {}
+    _get_base = requests.get
+
+    def _get9(url, params=None, **k):
+        params = params or {}
+        if "googleapis.com/youtube/v3/comments" in url:
+            CALLS.append((url, dict(params)))
+            return _R(200, {"items": [{"id": "t1.r1", "snippet": {"textOriginal": "ยังอยู่ครับ", "authorDisplayName": "@ช่องเรา",
+                                       "authorChannelId": {"value": "UCabc"}, "publishedAt": yiso(NOW - timedelta(hours=1))}}]})
+        if "graph.facebook.com" in url:
+            path = url.split("graph.facebook.com/", 1)[1].split("/", 1)[1]
+            if path.endswith("/comments") and path.split("/")[0] in THREAD:
+                CALLS.append((url, dict(params)))
+                return _R(200, {"data": THREAD[path.split("/")[0]]})
+        return _get_base(url, params=params, **k)
+
+    def _post9(url, params=None, json=None, **k):
+        POSTS.append((url, dict(params or {}), json))
+        if POST_ERR:
+            return _R(400, {"error": dict(POST_ERR)})
+        return _R(200, {"id": "p1_r%d" % (10 + len(POSTS))})
+
+    requests.get, requests.post = _get9, _post9
+    meta._known.clear()
+    meta._PT_CACHE.clear()
+    try:
+        meta.vouch_comment("p1_c1", "111_p1")
+        ck("vouch: คอมเมนต์ใต้โพสต์ของเพจเรา (รูป id) = ผ่าน", "p1_c1" in meta._known)
+    except Exception as e:
+        ck("vouch: คอมเมนต์ใต้โพสต์ของเพจเรา (รูป id) = ผ่าน", False, e)
+    for cid_, pid_, why in (("x9_c1", "111_p1", "เลขโพสต์ไม่ตรง"), ("p1_c1x", "222_p1", "เพจอื่น"),
+                            ("p1_c_1", "111_p1", "รูป id แปลก"), ("p1_c2", "111", "โพสต์ไม่มีเลขโพสต์")):
+        meta._known.pop(cid_, None)
+        try:
+            meta.vouch_comment(cid_, pid_)
+            ck("vouch ปฏิเสธ: " + why, False, "ผ่าน")
+        except meta.ForeignAsset:
+            ck("vouch ปฏิเสธ: " + why, cid_ not in meta._known)
+    meta._known.clear()
+
+    c1 = row("p1_c1")
+    c1.replied, c1.replied_at, c1.reply_count = False, None, 0
+    c1.save(update_fields=["replied", "replied_at", "reply_count"])
+    CM._THREAD.clear()
+    s_, d = J(ADM, "/connect/api/comments?thread=%d" % c1.id)
+    reps = d.get("replies") or []
+    ck("ห้อง: อ่านคำตอบใต้คอมเมนต์ 2 อัน (worker ใหม่ ไม่เคยเห็น id มาก่อน)", s_ == 200 and [x["text"] for x in reps] == ["สนใจด้วยครับ", "ทักแชทเพจได้เลยค่ะ"], (s_, d))
+    ck("ห้อง: คำตอบของเพจ = mine · คนอื่นมีชื่อ", reps and not reps[0]["mine"] and reps[0]["name"] == "คนอื่น" and reps[1]["mine"], reps)
+    c1 = row("p1_c1")
+    ck("ห้อง: เห็นเพจตอบแล้ว = อัปเดตแถวทันที (ตอบแล้ว + จำนวนคำตอบ)", c1.replied and c1.reply_count == 2, (c1.replied, c1.reply_count))
+    ck("ห้อง: ยิงด้วย page token", any("p1_c1/comments" in u and p.get("access_token") == "ptok" for u, p in CALLS), CALLS[-1:])
+    ck("ห้อง: สวิตช์ปิดอยู่ = ตอบไม่ได้ + บอกเหตุผล", d.get("canReply") is False and "ปิดอยู่" in (d.get("why") or "") and d.get("replyOn") is False, d.get("why"))
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "ทักแชทได้เลยครับ", "client_id": "cid-a"})
+    ck("ตอบตอนสวิตช์ปิด = 409 ไม่ยิง Facebook", s_ == 409 and not POSTS, (s_, d, POSTS))
+    s_, d = J(SEL, "/connect/api/comments", {"action": "reply_switch", "on": True})
+    ck("เซลล์เปิดสวิตช์ไม่ได้", s_ == 403 and not CM.reply_on(), s_)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply_switch", "on": True})
+    ck("แอดมินเปิดสวิตช์ (จดคนเปิด)", s_ == 200 and d["reply"]["on"] and d["reply"]["by"] == "admin" and CM.reply_on(), d)
+    s_, d = J(ADM, "/connect/api/comments?status=all")
+    ck("รายการบอกสถานะสวิตช์", (d.get("reply") or {}).get("on") is True, d.get("reply"))
+
+    meta._known.clear()
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "  ทักแชทได้เลยครับ  ", "client_id": "cid-a"})
+    ck("ตอบคอมเมนต์ = ยิง POST /<คอมเมนต์>/comments ด้วย page token", s_ == 200 and d.get("ok") and len(POSTS) == 1
+       and POSTS[0][0].endswith("/p1_c1/comments") and POSTS[0][1].get("access_token") == "ptok"
+       and POSTS[0][2] == {"message": "ทักแชทได้เลยครับ"}, (s_, d, POSTS))
+    c1 = row("p1_c1")
+    ck("ตอบแล้ว: แถว = ตอบแล้ว + จดคนตอบ + คำตอบในบันทึก", c1.replied and c1.replied_by == "admin" and c1.reply_count == 3
+       and c1.reply_log and c1.reply_log[-1]["text"] == "ทักแชทได้เลยครับ" and c1.reply_log[-1]["by"] == "admin", (c1.replied_by, c1.reply_log))
+    ck("ตอบแล้ว: คืนคำตอบให้หน้าเว็บต่อท้ายได้เลย", d.get("reply", {}).get("mine") and d["reply"]["by"] == "admin" and d["row"]["repliedBy"] == "admin", d)
+    ck("ตอบแล้ว: จด dash_event_log", EventLog.objects.filter(kind="comment_reply", ok=True, name="ตอบคอมเมนต์ Facebook").exists())
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "ทักแชทได้เลยครับ", "client_id": "cid-a"})
+    ck("กดส่งซ้ำ client_id เดิม = คืนผลเดิม ไม่ตอบเบิ้ล", s_ == 200 and d.get("dup") and len(POSTS) == 1 and row("p1_c1").reply_count == 3, (s_, d, len(POSTS)))
+    rid = row("p1_c1").reply_log[-1]["id"]
+    THREAD["p1_c1"].append({"id": rid, "message": "ทักแชทได้เลยครับ", "created_time": iso(NOW), "from": {"id": "111", "name": "เพจทดสอบ"}})
+    s_, d = J(ADM, "/connect/api/comments?thread=%d&fresh=1" % c1.id)
+    mine = [x for x in d.get("replies") or [] if x["id"] == rid]
+    ck("ห้อง: คำตอบที่ส่งจากระบบบอกว่าใครกดส่ง", mine and mine[0].get("by") == "admin", d.get("replies"))
+
+    POST_ERR.update({"code": 10, "message": "(#10) Application does not have permission for this action"})
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "ข้อความที่สอง", "client_id": "cid-b"})
+    ck("Facebook ปฏิเสธ = 502 + บอกเหตุผลเป็นภาษาคน", s_ == 502 and "สิทธิ์" in (d.get("error") or ""), (s_, d))
+    ck("ส่งไม่สำเร็จ = ไม่บันทึกอะไร", len(row("p1_c1").reply_log) == 1 and row("p1_c1").reply_count == 3, row("p1_c1").reply_log)
+    ck("ส่งไม่สำเร็จ = จด dash_event_log", EventLog.objects.filter(kind="comment_reply", ok=False).exists())
+    POST_ERR.clear()
+    n0 = len(POSTS)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "ข้อความที่สอง", "client_id": "cid-b"})
+    ck("ส่งไม่สำเร็จแล้วกดส่งอีกครั้ง (client_id เดิม) = ส่งได้", s_ == 200 and len(POSTS) == n0 + 1 and not d.get("dup"), (s_, d))
+    for code, sub, word in ((190, None, "หมดอายุ"), (368, None, "บล็อก"), (100, 33, "ถูกลบ"), (4, None, "โควต้า")):
+        POST_ERR.clear(); POST_ERR.update({"code": code, "message": "x"})
+        if sub:
+            POST_ERR["error_subcode"] = sub
+        s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "x", "client_id": "e%d" % code})
+        ck("แปล error %s → %s" % (code, word), s_ == 502 and word in (d.get("error") or ""), d.get("error"))
+    POST_ERR.clear()
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "   "})
+    ck("ข้อความว่าง = 400", s_ == 400, s_)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "ก" * (CM.REPLY_MAX + 1)})
+    ck("ยาวเกิน = 400", s_ == 400, s_)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": 999999, "text": "x"})
+    ck("ไม่พบคอมเมนต์ = 404", s_ == 404, s_)
+    s_, d = J(SEL, "/connect/api/comments", {"action": "reply", "id": c1.id, "text": "x"})
+    ck("เซลล์ตอบคอมเมนต์ไม่ได้", s_ == 403, s_)
+
+    # คอมเมนต์ที่ยืนยันไม่ได้ว่าอยู่ใต้โพสต์ของเพจเรา (แถวเพี้ยน/ถูกแก้) = ไม่ยิงออกเลย
+    bad = SC.objects.create(platform=SC.FB, ext_id="zz_c1", account_id="111", post_id="999_zz", text="x", created_at=NOW)
+    meta._known.clear()
+    n0, g0 = len(POSTS), len(CALLS)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": bad.id, "text": "สวัสดี"})
+    ck("โพสต์ไม่ใช่ของเพจเรา = ไม่ส่ง + บอกเหตุผล", s_ == 502 and len(POSTS) == n0 and "ยืนยันไม่ได้" in (d.get("error") or ""), (s_, d))
+    ck("ไม่ยิงอะไรไปที่โพสต์ของคนอื่น", not any("999_zz" in u for u, _ in CALLS[g0:]), CALLS[g0:])
+
+    yt = row("t1")
+    n0 = len(POSTS)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply", "id": yt.id, "text": "ยังอยู่ครับ"})
+    ck("YouTube ตอบจากระบบยังไม่ได้ = 400 + บอกวิธี", s_ == 400 and "YouTube" in (d.get("error") or "") and len(POSTS) == n0, (s_, d))
+    s_, d = J(ADM, "/connect/api/comments?thread=%d" % yt.id)
+    ck("YouTube: อ่านคำตอบใต้คอมเมนต์ได้ (ช่องเราตอบ = mine)", s_ == 200 and [x["mine"] for x in d.get("replies") or []] == [True]
+       and d.get("canReply") is False, (s_, d))
+
+    # รอบดึงเห็นคำตอบแค่ 25 อันแรก → ห้ามถอยแถวที่ตอบจากระบบกลับเป็น "รอตอบ"
+    CM.sync_fb()
+    ck("รอบดึงไม่ถอยแถวที่ตอบจากระบบกลับเป็นรอตอบ", row("p1_c1").replied, row("p1_c1").replied)
+    s_, d = J(ADM, "/connect/api/comments", {"action": "reply_switch", "on": False})
+    ck("ปิดสวิตช์ได้", s_ == 200 and not CM.reply_on(), d)
+    s_, d = J(ADM, "/connect/api/comments?thread=999999")
+    ck("ห้อง: ไม่พบ = 404", s_ == 404, s_)
+    requests.get, requests.post = _get_base, _post
+
 finally:
     _runner.teardown_databases(_old)
 

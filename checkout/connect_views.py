@@ -878,6 +878,8 @@ def api_comments(request):
     GET `?platform=fb|yt|tt&status=wait|all|done&cat=greet|interest|attack|complaint|none&q=&limit=` ·
     POST `{action: done, id, on}` = กด "จัดการแล้ว" · `{action: category, id, cat}` = จัดประเภทลูกค้าเอง
     (cat "auto" = คืนให้ระบบจัด · "" = ไม่จัดประเภท) · `{action: sync}` = ดึงตอนนี้ (ห่างกัน ≥2 นาที)
+    ★ 23 ต.ค.69 หน้าคอมเมนต์แบบห้องแชท: GET `?thread=<id>[&fresh=1]` = คอมเมนต์ + คำตอบทั้งหมดใต้คอมเมนต์ (ดึงสด) ·
+    POST `{action: reply, id, text, client_id}` = ตอบในนามเพจ (Facebook) · `{action: reply_switch, on}` = เปิด/ปิดการตอบจากระบบ
     """
     ctx = _ctx(request)
     why = _deny(ctx)
@@ -910,11 +912,29 @@ def api_comments(request):
             if not r:
                 return _j({"ok": False, "error": "ไม่พบคอมเมนต์นี้"}, 404)
             return _j({"ok": True, "row": CM.row_json(r)})
+        if act == "reply":
+            try:
+                cid = int(b.get("id") or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            st, d = CM.reply(cid, b.get("text") or "", ctx["name"], b.get("client_id") or "")
+            return _j(d, st)
+        if act == "reply_switch":
+            return _j({"ok": True, "reply": CM.set_reply_on(bool(b.get("on")), ctx["name"])})
         if act == "sync":
             ok, msg = CM.request_sync(ctx["name"])
             return _j({"ok": ok, "message": msg} if ok else {"ok": False, "error": msg}, 200 if ok else 429)
         return _j({"ok": False, "error": "ไม่รู้จักคำสั่งนี้"}, 400)
     g = request.GET
+    if g.get("thread"):
+        try:
+            tid = int(g.get("thread") or 0)
+        except ValueError:
+            tid = 0
+        d = CM.thread_json(tid, fresh=g.get("fresh") == "1")
+        if not d:
+            return _j({"ok": False, "error": "ไม่พบคอมเมนต์นี้"}, 404)
+        return _j(dict(d, ok=True))
     try:
         limit = int(g.get("limit") or 60)
     except ValueError:

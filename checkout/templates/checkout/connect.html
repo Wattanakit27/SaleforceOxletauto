@@ -572,9 +572,6 @@
      จอกว้างเรียงเป็นการ์ดหลายคอลัมน์ (เดิมแถวเดียวกว้างทั้งจอ เนื้อหาอยู่ซ้าย ป้าย/เวลาไปอยู่สุดขวา)
      ในการ์ด: รูปคน | หัว (ชื่อ ··· ประเภท สถานะ เวลา) · เพจ/ช่อง · ข้อความ · โพสต์ · ปุ่ม (ชิดล่าง การ์ดข้างกันปุ่มตรงกัน)
      ป้ายกว้างตายตัว + ปุ่ม/ช่องเลือกสูงเท่ากัน → ทุกการ์ดตรงกัน (เจ้าของ "เรียงดูแปลกๆ ให้มันเท่ากัน") */
-  #lc-cm-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(560px, 100%), 1fr)); gap: 10px; margin-bottom: 13px; }
-  #lc-cm-rows > .cn-empty, #lc-cm-rows > .cm-tt, #lc-cm-rows > .cm-morewrap { grid-column: 1 / -1; }
-  #lc-cm-rows > .cn-empty { background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; }
   .cm-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; padding: 12px 14px;
             border: .5px solid var(--bd2); border-radius: 10px; background: var(--bg); min-width: 0; }
   .cm-row.done { opacity: .62; }
@@ -629,6 +626,48 @@
   .tag.c-complaint { background: var(--amber-bg); color: var(--amber); }
   .cm-catsel { font-size: 12.5px; padding: 4px 7px; border: .5px solid var(--bd2); border-radius: 7px; background: var(--bg2); color: var(--t1); max-width: 100%; }
   @media (max-width: 600px) { .cm-fl { flex: 1 1 100%; } .cm-fl select { flex: 1; } }
+  /* ★ 23 ต.ค.69 หน้าคอมเมนต์แบบห้องแชท — ซ้ายรายการคอมเมนต์ · ขวาคอมเมนต์ + คำตอบทั้งหมดใต้คอมเมนต์ + ช่องพิมพ์ตอบในนามเพจ
+     (เจ้าของ "ทำในระบบรวมแชทเลย ที่ทำให้มันอ่านคอมเม้นได้ตอบคอมเม้นได้เลยในหน้านี้") · จอแคบ = รายการ → แตะ → ห้องเต็มจอ + ปุ่มกลับ */
+  #lc-page.cm-mode { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+  #lc-page.cm-mode > .lc-card { flex: none; margin-bottom: 10px; }
+  .cm-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 10px; }
+  #lc-cm-rows { overflow-y: auto; min-height: 0; background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; }
+  #lc-cm-rows > .cm-tt { margin: 10px; }
+  .cm-li { display: flex; gap: 10px; padding: 11px 12px; border-bottom: .5px solid var(--bd); cursor: pointer; align-items: flex-start; outline: none; }
+  .cm-li:hover, .cm-li:focus-visible { background: var(--bg2); }
+  .cm-li.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 #DB2777; }
+  .cm-li.done { opacity: .62; }
+  .cm-li .cn-av { width: 36px; height: 36px; }
+  .cm-lb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .cm-lh { display: flex; gap: 8px; align-items: baseline; }
+  .cm-lh b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--t1); }
+  .cm-lt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.45; font-size: 13.5px; color: var(--t1); word-break: break-word; }
+  .cm-ls { display: flex; gap: 5px; align-items: center; min-width: 0; font-size: 12px; color: var(--t2); }
+  .cm-ls .cm-acc { font-size: 12px; }
+  .cm-ls .tag { flex: none; font-size: 11px; padding: 0 6px; }
+  .cm-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--bg); border: .5px solid var(--bd2); border-radius: 12px; overflow: hidden; }
+  .cm-pane > .cn-empty { margin: auto; }
+  .cm-pane .cn-ph { flex: none; }
+  .cm-pane .cm-post { margin-top: 8px; }
+  .cm-pane .cm-hb { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .cm-pane .cm-hb .btn, .cm-pane .cm-hb .cm-catsel { height: 30px; box-sizing: border-box; }
+  .cm-pane .cm-hb .cm-catsel { max-width: 260px; }
+  .cm-back { display: none !important; }
+  .bub .who { font-weight: 800; font-size: 12px; margin-bottom: 2px; }
+  .bub.in.first { border-color: var(--blue); }
+  .bub.sending { opacity: .6; }
+  .cm-note { padding: 0 16px 8px; color: var(--t3); font-size: 12px; background: var(--bg); }
+  .cm-terr { align-self: center; margin-top: 6px; color: var(--red); font-size: 12.5px; text-align: center; }
+  .cm-sw { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 14px 10px; font-size: 12.5px; color: var(--t2); }
+  .cm-sw .on { color: var(--green); } .cm-sw .off { color: var(--amber); }
+  @media (max-width: 900px) {
+    .cm-split { grid-template-columns: minmax(0, 1fr); }
+    .cm-split .cm-pane { display: none; }
+    .cm-split.open .cm-pane { display: flex; }
+    .cm-split.open #lc-cm-rows { display: none; }
+    #lc-page.cm-mode.cm-open > .lc-card { display: none; }
+    .cm-back { display: inline-flex !important; }
+  }
   .lc-dbgrid { display: grid; grid-template-columns: minmax(0,1fr); gap: 13px; align-items: start; }
   .lc-dbgrid.has-prof { grid-template-columns: minmax(0,1fr) 340px; }
   .lc-dbst > div.go { cursor: pointer; border-radius: 7px; padding: 2px 6px; margin: -2px -6px; }
@@ -3023,9 +3062,13 @@
     });
     bindDrop(true);
     paintImgP();
-    CND.open = false; CND.edit = null;                // วาดช่องพิมพ์ใหม่ = กล่องข้อความสำเร็จรูปปิด
-    $('cn-cnd-btn').onclick = cndToggle;
-    const cb = $('cn-cnd');
+    cndBind(CND_CHAT);
+  }
+  // ผูกกล่องข้อความสำเร็จรูปกับช่องพิมพ์ชุดไหน (แชทลูกค้า / ตอบคอมเมนต์) — เปิดได้ทีละกล่อง
+  function cndBind(ids) {
+    CND.ids = ids; CND.open = false; CND.edit = null;   // วาดช่องพิมพ์ใหม่ = กล่องข้อความสำเร็จรูปปิด
+    $(ids.btn).onclick = cndToggle;
+    const cb = $(ids.box);
     cb.onclick = cndClick;
     cb.oninput = e => { if (e.target.dataset.c === 'q') { CND.q = e.target.value; paintCndList(); } };
     cb.onkeydown = e => {
@@ -3037,7 +3080,8 @@
 
   // ★ 17 ต.ค.69 ข้อความสำเร็จรูป (หน้าเว็บ) — ชุดเดียวกับแอป (GET/POST /connect/api/canned · KV connect_canned)
   //   เลือกแล้วไปอยู่ในช่องพิมพ์ (ไม่ส่งเอง) · แอดมินเพิ่ม/แก้/ลบได้ในกล่องเดียวกัน · Esc / คลิกที่อื่น = ปิด
-  const CND = { open: false, items: null, canEdit: false, err: '', q: '', edit: null, busy: false, focusQ: false };
+  const CND_CHAT = { box: 'cn-cnd', btn: 'cn-cnd-btn', ta: 'cn-text', pane: 'cn-pane', wrap: 'cn-comp-wrap' };
+  const CND = { open: false, items: null, canEdit: false, err: '', q: '', edit: null, busy: false, focusQ: false, ids: CND_CHAT };
   const CND_MAX = 60;                               // ตรงกับ chatplus.CANNED_MAX
   function cndFiltered() {
     const q = CND.q.trim().toLowerCase(), all = CND.items || [];
@@ -3045,14 +3089,14 @@
   }
   function cndClose() {
     CND.open = false; CND.edit = null; CND.q = ''; CND.focusQ = false;
-    const b = $('cn-cnd'); if (b) b.innerHTML = '';
-    const k = $('cn-cnd-btn'); if (k) k.classList.remove('on');
+    const b = $(CND.ids.box); if (b) b.innerHTML = '';
+    const k = $(CND.ids.btn); if (k) k.classList.remove('on');
   }
   async function cndToggle() {
     if (CND.open) { cndClose(); return; }
     CND.open = true; CND.edit = null; CND.q = ''; CND.err = '';
     CND.focusQ = !(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);   // มือถือไม่โฟกัสช่องค้น (คีย์บอร์ดเด้งบังรายการ)
-    $('cn-cnd-btn').classList.add('on');
+    $(CND.ids.btn).classList.add('on');
     paintCnd();                                     // โชว์รายการที่จำไว้ก่อน แล้วค่อยดึงใหม่ (แอดมินอาจเพิ่งแก้จากแอป)
     const d = await api('/connect/api/canned');
     if (!CND.open) return;
@@ -3061,7 +3105,7 @@
     if (!CND.edit) paintCnd();
   }
   function paintCnd() {
-    const b = $('cn-cnd'); if (!b) return;
+    const b = $(CND.ids.box); if (!b) return;
     if (!CND.open) { b.innerHTML = ''; return; }
     const head = `<div class="hd"><b>ข้อความสำเร็จรูป</b><button type="button" class="x" data-c="close" title="ปิด (Esc)">${ic('x', 16)}</button></div>`;
     const e = CND.edit;
@@ -3089,7 +3133,7 @@
   }
   // กล่องสูงไม่เกินที่ว่างเหนือช่องพิมพ์ในกรอบแชท (กรอบตัดส่วนที่ล้น — จอเตี้ย/หน้าต่างแคบ หัวกล่องกับปุ่มปิดจะหาย)
   function cndFit() {
-    const box = document.querySelector('.cn-cnd'), pane = $('cn-pane'), wrap = $('cn-comp-wrap');
+    const box = ($(CND.ids.box) || document).querySelector('.cn-cnd'), pane = $(CND.ids.pane), wrap = $(CND.ids.wrap);
     if (!box || !pane || !wrap) return;
     const room = wrap.getBoundingClientRect().top - pane.getBoundingClientRect().top - 8;
     box.style.maxHeight = Math.max(160, Math.min(420, room)) + 'px';
@@ -3120,14 +3164,14 @@
     else if (c === 'del' && it) cndDel(it);
   }
   function cndPick(it) {
-    const ta = $('cn-text'); if (!ta) return;
+    const ta = $(CND.ids.ta); if (!ta) return;
     ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + ' ' + it.text : it.text;
     ta.dispatchEvent(new Event('input'));
     cndClose();
     ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   }
   async function cndSave() {
-    const b = $('cn-cnd'), e = CND.edit; if (!b || !e || CND.busy) return;
+    const b = $(CND.ids.box), e = CND.edit; if (!b || !e || CND.busy) return;
     e.title = b.querySelector('[data-c=title]').value; e.text = b.querySelector('[data-c=text]').value;
     if (!e.text.trim()) { toast('ยังไม่มีข้อความ'); return; }
     CND.busy = true; paintCnd();
@@ -3148,11 +3192,11 @@
   }
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || !CND.open) return;
-    cndClose(); const ta = $('cn-text'); if (ta) ta.focus();
+    cndClose(); const ta = $(CND.ids.ta); if (ta) ta.focus();
   });
   // คลิกที่อื่น = ปิด (ยกเว้นกำลังเพิ่ม/แก้ — กันข้อความที่พิมพ์ค้างหาย)
   document.addEventListener('mousedown', e => {
-    if (!CND.open || CND.edit || (e.target.closest && e.target.closest('#cn-cnd, #cn-cnd-btn'))) return;
+    if (!CND.open || CND.edit || (e.target.closest && e.target.closest('#' + CND.ids.box + ', #' + CND.ids.btn))) return;
     cndClose();
   });
 
@@ -3600,6 +3644,8 @@
     const isInbox = p === 'inbox';
     $('cn-main').hidden = !isInbox;
     $('lc-page').hidden = isInbox;
+    $('lc-page').classList.toggle('cm-mode', p === 'cmt');
+    if (p !== 'cmt') $('lc-page').classList.remove('cm-open');
     if (!isInbox) { hidePane(); }
     try {
       const q = new URLSearchParams();
@@ -4036,7 +4082,8 @@
   let _dbT = null, _dbSeq = 0;
   // ══════════════ ★ 17 ต.ค.69 หน้าคอมเมนต์ — รวมคอมเมนต์ Facebook · TikTok (รออนุมัติ) · YouTube ══════════════
   //   ข้อมูลจาก /connect/api/comments (checkout/comments.py ดึงเป็นรอบ) · เปิดในแพลตฟอร์มเพื่อตอบ · กด "จัดการแล้ว" = ออกจากรายการรอตอบ
-  S.cm = { platform: '', status: 'wait', cat: '', q: '', limit: 60, data: null };
+  S.cm = { platform: '', status: 'wait', cat: '', q: '', limit: 60, data: null,
+           sel: null, th: {}, drafts: {}, cids: {}, compKey: null, okd: false };   // ★ 23 ต.ค.69 ห้องคอมเมนต์
   let _cmSeq = 0, _cmT = null;
   const CM_PF = { fb: ['Facebook', 'fb'], yt: ['YouTube', 'yt'], tt: ['TikTok', 'tiktok'] };
   const CM_TABS = [['', 'ทุกช่องทาง'], ['fb', 'Facebook'], ['tt', 'TikTok'], ['yt', 'YouTube']];
@@ -4046,7 +4093,7 @@
   async function openCmt(keep) {
     const pg = $('lc-page');
     // หัวหน้า (ตัวกรอง/ช่องค้น) วาดครั้งเดียวตอนเข้าหน้า — เปลี่ยนตัวกรองแล้ววาดแค่รายการ ไม่งั้นช่องค้นหลุดโฟกัสระหว่างพิมพ์
-    if (!$('lc-cm-rows')) { pg.innerHTML = cmShell(); bindCmShell(); }
+    if (!$('lc-cm-rows')) { pg.innerHTML = cmShell(); bindCmShell(); paintCmPane(); }
     const seq = ++_cmSeq;
     if (!keep) $('lc-cm-rows').innerHTML = `<div class="cn-empty"><div class="spin"></div>กำลังโหลดคอมเมนต์…</div>`;
     const q = new URLSearchParams({ platform: S.cm.platform, status: S.cm.status, cat: S.cm.cat, q: S.cm.q, limit: S.cm.limit });
@@ -4066,8 +4113,9 @@
         <label class="cm-fl"><span>สถานะ</span><select id="lc-cm-st"><option value="wait">รอตอบ</option><option value="all">ทั้งหมด</option><option value="done">ตอบแล้ว / จัดการแล้ว</option></select></label></div>
       <div class="lc-dbtop" style="border-bottom:0"><label class="lc-dbs">${ic('list')}<input id="lc-cm-q" type="search" autocomplete="off" placeholder="ค้นข้อความ · ชื่อคนคอมเมนต์ · โพสต์/คลิป · เพจ/ช่อง" value="${h(S.cm.q)}"></label></div>
       <div class="cm-src" id="lc-cm-src"></div>
+      <div class="cm-sw" id="lc-cm-sw"></div>
     </div>
-    <div id="lc-cm-rows"></div>`;
+    <div class="cm-split" id="lc-cm-split"><div id="lc-cm-rows"></div><div class="cm-pane" id="cm-pane"></div></div>`;
   }
   function bindCmShell() {
     $('lc-cm-st').value = S.cm.status;
@@ -4077,6 +4125,12 @@
     cmFillSelects();
     const qi = $('lc-cm-q');
     qi.oninput = () => { clearTimeout(_cmT); _cmT = setTimeout(() => { S.cm.q = qi.value.trim(); S.cm.limit = 60; openCmt(); }, 450); };
+    const rowsEl = $('lc-cm-rows');
+    rowsEl.onclick = e => { const b = e.target.closest('[data-cmid]'); if (b) cmOpen(+b.dataset.cmid); };
+    rowsEl.onkeydown = e => { if (e.key !== 'Enter' && e.key !== ' ') return; const b = e.target.closest('[data-cmid]'); if (b) { e.preventDefault(); cmOpen(+b.dataset.cmid); } };
+    const pane = $('cm-pane');
+    pane.onclick = cmAct;
+    pane.onchange = cmCat;
     $('lc-cm-sync').onclick = async () => {
       const b = $('lc-cm-sync'); b.disabled = true;
       const r = await api('/connect/api/comments', { action: 'sync' });
@@ -4117,33 +4171,20 @@
     if (!s.at) return `<span><b>${name}</b> · ยังไม่เคยดึง (ดึงเองทุก ${every} นาที)</span>`;
     return `<span${s.ok === false ? ' class="bad"' : ''}><b>${name}</b> · ดึงล่าสุด ${h(fmtWhen(s.at))} · ทุก ${every} นาที${s.error ? ' · ' + h(s.error) : ''}</span>`;
   }
-  function cmRow(r) {
-    const pf = CM_PF[r.platform] || ['อื่นๆ', 'other'];
-    const who = r.author || (r.platform === 'fb' ? 'ผู้ใช้ Facebook' : 'ไม่ทราบชื่อ');
-    // ป้ายสถานะ/เวลา ความกว้างตายตัว ชิดขวาเสมอ → ทุกแถวตรงกัน (ชื่อคนจัดการแล้วอยู่ใน title)
-    const state = r.done
-      ? `<span class="tag cm-st" title="${h(r.doneBy ? 'จัดการแล้วโดย ' + r.doneBy : 'จัดการแล้ว')}" style="background:var(--bg3);color:var(--t2)">จัดการแล้ว</span>`
-      : (r.replied ? `<span class="tag cm-st" style="background:var(--green-bg);color:var(--green)">ตอบแล้ว</span>`
-                   : `<span class="tag cm-st" style="background:var(--amber-bg);color:var(--amber)">รอตอบ</span>`);
-    const title = r.postTitle || (r.platform === 'yt' ? 'คลิป YouTube' : 'โพสต์');
-    const post = (r.postUrl || r.thumb) ? `<a class="cm-post" href="${h(r.postUrl || r.url)}" target="_blank" rel="noopener" title="เปิด${h(r.platform === 'yt' ? 'คลิป' : 'โพสต์')}">
-      <span class="cm-pth">${ic('image', 16)}${r.thumb ? `<img src="${h(r.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>
-      <span class="cm-ptt">${r.isAd ? '<b class="cm-ad">โฆษณา</b> · ' : ''}${h(title)}</span></a>` : '';
-    const link = r.url || r.postUrl;
-    return `<div class="cm-row${r.done ? ' done' : ''}">${avHtml(who, r.authorPic)}<div class="cm-body">
-      <div class="cm-head"><b class="cm-who" title="${h(who)}">${h(who)}</b>
-        <div class="cm-right">${cmCatTag(r)}${state}<span class="cm-time" title="${h(fmtFull(r.at))}">${h(fmtWhen(r.at))}</span></div></div>
-      <div class="cm-sub">${chTag(pf[1])}<span class="cm-acc" title="${h(r.account)}">${h(r.account)}</span></div>
-      <div class="cm-text">${h(r.text || '')}</div>
-      ${post}
-      <div class="cm-acts">${link ? `<a class="btn sm cm-open" href="${h(link)}" target="_blank" rel="noopener">เปิดใน ${pf[0]} ↗</a>` : ''}
-        <button class="btn sm" data-cmdone="${r.id}" data-on="${r.done ? 0 : 1}">${r.done ? 'ยกเลิก "จัดการแล้ว"' : ic('check', 13) + ' จัดการแล้ว'}</button>
-        <select class="cm-catsel" data-cmcat="${r.id}" title="เปลี่ยนประเภทลูกค้าของคอมเมนต์นี้">
-          <option value="auto"${r.catBy ? '' : ' selected'}>ประเภท: ให้ระบบจัด${!r.catBy && r.cat ? ' (' + h(cmCatName(r.cat)) + ')' : (!r.catBy ? ' (ยังไม่จัด)' : '')}</option>
-          ${CM_CATS.map(([k, l]) => `<option value="${k}"${r.catBy && r.cat === k ? ' selected' : ''}>${h(l)}</option>`).join('')}
-          <option value=""${r.catBy && !r.cat ? ' selected' : ''}>ไม่จัดประเภท</option></select>
-        ${(r.likes || r.replies) ? `<span class="cm-stat">${r.likes ? `ไลก์ ${r.likes}` : ''}${r.likes && r.replies ? ' · ' : ''}${r.replies ? `ตอบใต้คอมเมนต์ ${r.replies}` : ''}</span>` : ''}</div>
-    </div></div>`;
+  const cmWho = r => r.author || (r.platform === 'fb' ? 'ผู้ใช้ Facebook' : 'ไม่ทราบชื่อ');
+  function cmStateTag(r, cls) {
+    const c = cls ? ` class="tag ${cls}"` : ' class="tag"';
+    return r.done
+      ? `<span${c} title="${h(r.doneBy ? 'จัดการแล้วโดย ' + r.doneBy : 'จัดการแล้ว')}" style="background:var(--bg3);color:var(--t2)">จัดการแล้ว</span>`
+      : (r.replied ? `<span${c} title="${h(r.repliedBy ? 'ตอบในระบบล่าสุดโดย ' + r.repliedBy : 'เพจ/ช่องตอบแล้ว')}" style="background:var(--green-bg);color:var(--green)">ตอบแล้ว</span>`
+                   : `<span${c} style="background:var(--amber-bg);color:var(--amber)">รอตอบ</span>`);
+  }
+  function cmItem(r) {
+    const pf = CM_PF[r.platform] || ['อื่นๆ', 'other'], who = cmWho(r);
+    return `<div class="cm-li${r.id === S.cm.sel ? ' sel' : ''}${r.done ? ' done' : ''}" data-cmid="${r.id}" role="button" tabindex="0">${avHtml(who, r.authorPic)}
+      <div class="cm-lb"><div class="cm-lh"><b title="${h(who)}">${h(who)}</b><span class="cm-time" title="${h(fmtFull(r.at))}">${h(fmtWhen(r.at))}</span></div>
+        <div class="cm-lt">${h(r.text || '')}</div>
+        <div class="cm-ls">${chTag(pf[1])}<span class="cm-acc" title="${h(r.account)}">${h(r.account)}</span>${cmStateTag(r)}${cmCatTag(r)}</div></div></div>`;
   }
   function paintCmt() {
     const d = S.cm.data || {};
@@ -4160,8 +4201,7 @@
       return;
     }
     const rows = d.rows || [];
-    // กำลังเลือกประเภทของคอมเมนต์ไหนอยู่ = ไม่วาดทับ (รีเฟรชทุก 60 วิจะปิด dropdown ที่เปิดค้าง)
-    if (document.activeElement && document.activeElement.classList.contains('cm-catsel') && box.contains(document.activeElement)) return;
+    cmSwLine();
     if (!rows.length) {
       const noSrc = !(src.fb && src.fb.on) && !(src.yt && src.yt.on);
       box.innerHTML = `<div class="cn-empty">${noSrc ? 'ยังไม่ได้เชื่อม Facebook / YouTube กับระบบ'
@@ -4170,25 +4210,215 @@
         : (S.cm.status === 'wait' ? `ไม่มีคอมเมนต์รอตอบใน ${d.waitDays || 7} วันล่าสุด` : 'ยังไม่มีคอมเมนต์ในช่วงนี้')))}</div>`;
       return;
     }
-    box.innerHTML = rows.map(cmRow).join('')
-      + (d.more ? `<div class="cm-morewrap" style="padding:4px;text-align:center"><button class="btn sm" id="lc-cm-more">ดูเพิ่ม</button></div>` : '');
+    const top = box.scrollTop;
+    box.innerHTML = rows.map(cmItem).join('')
+      + (d.more ? `<div class="cm-morewrap" style="padding:10px;text-align:center"><button class="btn sm" id="lc-cm-more">ดูเพิ่ม</button></div>` : '');
+    box.scrollTop = top;
     if (d.more) $('lc-cm-more').onclick = () => { S.cm.limit += 60; openCmt(true); };
-    box.querySelectorAll('[data-cmdone]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
-      const r = await api('/connect/api/comments', { action: 'done', id: +b.dataset.cmdone, on: b.dataset.on === '1' });
-      if (!r.ok) { b.disabled = false; toast(r.error || 'ทำไม่สำเร็จ'); return; }
-      openCmt(true);
+  }
+
+  // ★ 23 ต.ค.69 ห้องของคอมเมนต์ 1 อัน — คอมเมนต์ + คำตอบทั้งหมดใต้คอมเมนต์ (ดึงสดจาก Facebook/YouTube) + ช่องพิมพ์ตอบในนามเพจ
+  //   รายการรีเฟรชทุก 60 วิ ไม่แตะห้อง · ห้องรีเฟรชคำตอบทุก 30 วิ (วาดใหม่เฉพาะเมื่อมีอะไรเปลี่ยน · ช่องพิมพ์ไม่ถูกวาดทับ)
+  let _cmThSeq = 0;
+  const CND_CM = { box: 'cm-cnd', btn: 'cm-cnd-btn', ta: 'cm-text', pane: 'cm-pane', wrap: 'cm-comp-wrap' };
+  function cmRowOf(id) {
+    const t = S.cm.th[id];
+    return (t && t.row) || (((S.cm.data && S.cm.data.rows) || []).find(x => x.id === id)) || null;
+  }
+  function cmSwLine() {
+    const el = $('lc-cm-sw'); if (!el) return;
+    const rp = (S.cm.data && S.cm.data.reply) || {};
+    el.innerHTML = rp.on
+      ? `<span>ตอบคอมเมนต์ Facebook จากระบบ: <b class="on">เปิดอยู่</b>${rp.by ? ' · เปิดโดย ' + h(rp.by) : ''}${rp.at ? ' ' + h(fmtWhen(rp.at)) : ''}</span><button class="btn sm" id="lc-cm-swb" data-on="0">ปิด</button>`
+      : `<span>ตอบคอมเมนต์ Facebook จากระบบ: <b class="off">ปิดอยู่</b> — คำตอบจะขึ้นเป็นสาธารณะใต้คอมเมนต์ในนามเพจ</span><button class="btn sm pri" id="lc-cm-swb" data-on="1">เปิดให้ตอบจากระบบ</button>`;
+    $('lc-cm-swb').onclick = () => cmSwitch($('lc-cm-swb').dataset.on === '1');
+  }
+  async function cmSwitch(on) {
+    if (on && !confirm('เปิดให้ตอบคอมเมนต์ Facebook จากหน้านี้?\n\nคำตอบที่ส่งจะขึ้นเป็นสาธารณะใต้คอมเมนต์ในนามเพจทันที — ทุกคนที่เห็นโพสต์อ่านได้')) return;
+    const r = await api('/connect/api/comments', { action: 'reply_switch', on });
+    if (!r.ok) { toast(r.error || 'ทำไม่สำเร็จ'); return; }
+    if (S.cm.data) S.cm.data.reply = r.reply;
+    toast(on ? 'เปิดให้ตอบคอมเมนต์จากระบบแล้ว' : 'ปิดการตอบคอมเมนต์จากระบบแล้ว');
+    cmSwLine();
+    if (S.cm.sel) { delete S.cm.th[S.cm.sel]; S.cm.compKey = null; paintCmComp(); cmLoadThread(S.cm.sel); }
+  }
+  function cmOpen(id) {
+    if (!id) return;
+    if (S.cm.sel !== id && CND.ids === CND_CM) cndClose();
+    S.cm.sel = id;
+    document.querySelectorAll('#lc-cm-rows .cm-li').forEach(el => el.classList.toggle('sel', +el.dataset.cmid === id));
+    $('lc-cm-split').classList.add('open'); $('lc-page').classList.add('cm-open');
+    paintCmPane();
+    cmLoadThread(id);
+  }
+  function cmClose() {
+    if (CND.ids === CND_CM) cndClose();
+    S.cm.sel = null;
+    document.querySelectorAll('#lc-cm-rows .cm-li.sel').forEach(el => el.classList.remove('sel'));
+    $('lc-cm-split').classList.remove('open'); $('lc-page').classList.remove('cm-open');
+    paintCmPane();
+  }
+  async function cmLoadThread(id, fresh) {
+    const seq = ++_cmThSeq;
+    const d = await api('/connect/api/comments?thread=' + id + (fresh ? '&fresh=1' : ''));
+    if (seq !== _cmThSeq || S.cm.sel !== id || S.panel !== 'cmt') return;
+    const pend = ((S.cm.th[id] || {}).replies || []).filter(x => x.pending);
+    if (!d.ok) S.cm.th[id] = Object.assign({}, S.cm.th[id] || {}, { loadErr: d.error || 'โหลดคำตอบไม่สำเร็จ' });
+    else { d.replies = (d.replies || []).concat(pend); S.cm.th[id] = d; cmPatchRow(d.row); }
+    paintCmHead(); paintCmMsgs(); paintCmComp();
+  }
+  function cmPatchRow(row) {
+    if (!row) return;
+    const rows = (S.cm.data && S.cm.data.rows) || [];
+    const i = rows.findIndex(x => x.id === row.id);
+    if (i >= 0) rows[i] = row;
+    if (S.cm.th[row.id]) S.cm.th[row.id].row = row;
+    const el = document.querySelector(`#lc-cm-rows .cm-li[data-cmid="${row.id}"]`);
+    if (el) el.outerHTML = cmItem(row);
+  }
+  function paintCmPane() {
+    const p = $('cm-pane'); if (!p) return;
+    const r = S.cm.sel && cmRowOf(S.cm.sel);
+    S.cm.compKey = null;
+    if (!r) {
+      p.innerHTML = `<div class="cn-empty">${ic('messages', 30)}<br>เลือกคอมเมนต์ทางซ้าย<br>เพื่ออ่านคำตอบทั้งหมดใต้คอมเมนต์ และตอบในนามเพจได้ในหน้านี้</div>`;
+      return;
+    }
+    p.innerHTML = `<div class="cn-ph" id="cm-head"></div><div class="cn-msgs" id="cm-msgs"></div><div id="cm-comp-wrap"></div>`;
+    paintCmHead(); paintCmMsgs(); paintCmComp();
+  }
+  function paintCmHead() {
+    const el = $('cm-head'); const r = S.cm.sel && cmRowOf(S.cm.sel); if (!el || !r) return;
+    if (document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+    const pf = CM_PF[r.platform] || ['อื่นๆ', 'other'], who = cmWho(r), link = r.url || r.postUrl;
+    const title = r.postTitle || (r.platform === 'yt' ? 'คลิป YouTube' : 'โพสต์');
+    const post = (r.postUrl || r.thumb) ? `<a class="cm-post" href="${h(r.postUrl || r.url)}" target="_blank" rel="noopener" title="เปิด${h(r.platform === 'yt' ? 'คลิป' : 'โพสต์')}">
+      <span class="cm-pth">${ic('image', 16)}${r.thumb ? `<img src="${h(r.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>
+      <span class="cm-ptt">${r.isAd ? '<b class="cm-ad">โฆษณา</b> · ' : ''}${h(title)}</span></a>` : '';
+    el.innerHTML = `<div class="cn-ph-row">
+        <button type="button" class="btn sm cm-back" data-cmx="back">${ic('arrow-left', 14)} กลับ</button>
+        <div class="cn-ph-who"><h2>${h(who)}</h2><div class="cn-sub">${chTag(pf[1])} ${h(r.account)} · ${h(fmtFull(r.at))}</div></div>
+        <div class="cn-acts">${cmCatTag(r)}${cmStateTag(r)}</div></div>
+      ${post}
+      <div class="cm-hb">${link ? `<a class="btn sm" href="${h(link)}" target="_blank" rel="noopener">เปิดใน ${pf[0]} ↗</a>` : ''}
+        <button type="button" class="btn sm" data-cmx="done">${r.done ? 'ยกเลิก "จัดการแล้ว"' : ic('check', 13) + ' จัดการแล้ว'}</button>
+        <select class="cm-catsel" data-cmx="cat" title="เปลี่ยนประเภทลูกค้าของคอมเมนต์นี้">
+          <option value="auto"${r.catBy ? '' : ' selected'}>ประเภท: ให้ระบบจัด${!r.catBy && r.cat ? ' (' + h(cmCatName(r.cat)) + ')' : (!r.catBy ? ' (ยังไม่จัด)' : '')}</option>
+          ${CM_CATS.map(([k, l]) => `<option value="${k}"${r.catBy && r.cat === k ? ' selected' : ''}>${h(l)}</option>`).join('')}
+          <option value=""${r.catBy && !r.cat ? ' selected' : ''}>ไม่จัดประเภท</option></select>
+        <button type="button" class="btn sm" data-cmx="reload" title="ดึงคำตอบล่าสุดจาก ${pf[0]}">${ic('repeat', 13)} โหลดคำตอบใหม่</button></div>`;
+  }
+  function paintCmMsgs() {
+    const el = $('cm-msgs'); const id = S.cm.sel; const r = id && cmRowOf(id); if (!el || !r) return;
+    const t = S.cm.th[id] || {};
+    const who = cmWho(r);
+    let html = `<div class="bub in first"><div class="who">${h(who)}</div>${h(r.text || '')}<div class="meta">${h(fmtFull(r.at))}${r.likes ? ' · ไลก์ ' + r.likes : ''} · คอมเมนต์</div></div>`;
+    const reps = t.replies;
+    if (!reps && !t.loadErr) html += `<div class="cn-day">กำลังโหลดคำตอบใต้คอมเมนต์…</div>`;
+    else if (reps && !reps.length && !t.error) html += `<div class="cn-day">ยังไม่มีใครตอบคอมเมนต์นี้</div>`;
+    (reps || []).forEach(x => {
+      html += x.mine
+        ? `<div class="bub out${x.pending ? ' sending' : ''}">${h(x.text)}<div class="meta">${h(x.name || 'เพจ')}${x.by ? ' · ตอบในระบบโดย ' + h(x.by) : ''} · ${x.pending ? 'กำลังส่ง…' : h(fmtWhen(x.at))}</div></div>`
+        : `<div class="bub in"><div class="who">${h(x.name)}</div>${h(x.text)}<div class="meta">${h(fmtWhen(x.at))}${x.likes ? ' · ไลก์ ' + x.likes : ''}</div></div>`;
     });
-    box.querySelectorAll('[data-cmcat]').forEach(sel => sel.onchange = async () => {
-      sel.disabled = true;
-      const r = await api('/connect/api/comments', { action: 'category', id: +sel.dataset.cmcat, cat: sel.value });
-      sel.disabled = false;
-      sel.blur();
-      if (!r.ok) { toast(r.error || 'บันทึกไม่สำเร็จ'); openCmt(true); return; }
-      toast(sel.value === 'auto' ? `ให้ระบบจัดประเภทแล้ว — ${r.row.cat ? cmCatName(r.row.cat) : 'ยังไม่เข้าประเภทไหน'}`
-        : `บันทึกประเภท: ${r.row.cat ? cmCatName(r.row.cat) : 'ไม่จัดประเภท'}`, 2600);
-      openCmt(true);
+    if (t.error || t.loadErr) html += `<div class="cm-terr">${h(t.error || t.loadErr)}</div>`;
+    if (el._sig === html) return;
+    const atBottom = !el._sig || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    el._sig = html;
+    el.innerHTML = html;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+  function paintCmComp() {
+    const w = $('cm-comp-wrap'); const id = S.cm.sel; const r = id && cmRowOf(id); if (!w || !r) return;
+    const t = S.cm.th[id];
+    const on = !!(S.cm.data && S.cm.data.reply && S.cm.data.reply.on);
+    let can, why;
+    if (t && t.canReply != null) { can = t.canReply; why = t.why || ''; }
+    else {
+      can = !!r.canReply && on;
+      why = r.platform === 'yt' ? 'ตอบคอมเมนต์ YouTube จากระบบยังไม่ได้ — ต้องให้เจ้าของแต่ละช่องเชื่อมบัญชี Google กับระบบก่อน · ตอนนี้กด "เปิดใน YouTube" แล้วตอบที่นั่น'
+        : (r.canReply ? 'การตอบคอมเมนต์จากระบบยังปิดอยู่' : 'ช่องทางนี้ยังตอบจากระบบไม่ได้');
+    }
+    const key = (can ? 'can' : 'why:' + why) + '|' + id;
+    if (S.cm.compKey === key) return;                  // ไม่วาดซ้ำ = ข้อความที่กำลังพิมพ์ไม่หาย
+    S.cm.compKey = key;
+    if (!can) {
+      const sw = r.platform === 'fb' && !on ? `<button class="btn sm pri" data-cmx="on">เปิดให้ตอบจากระบบ</button>` : '';
+      w.innerHTML = `<div class="cn-comp-why" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">${h(why)}</span>${sw}</div>`;
+      return;
+    }
+    const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+    w.innerHTML = `<div id="cm-cnd"></div><div class="cn-err" id="cm-err"></div>
+      <div class="cn-comp"><button type="button" class="cn-ibtn" id="cm-cnd-btn" title="ข้อความสำเร็จรูป">${ic('canned', 20)}</button><textarea id="cm-text" rows="1" maxlength="${(t && t.max) || 2000}" placeholder="${coarse ? 'ตอบในนามเพจ…' : 'ตอบในนามเพจ… (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)'}"></textarea>
+      <button class="btn pri" id="cm-send">${ic('send')} ส่ง</button></div>
+      <div class="cm-note">คำตอบจะขึ้นเป็นสาธารณะใต้คอมเมนต์ในนามเพจ "${h(r.account)}" ทันที</div>`;
+    const ta = $('cm-text');
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; };
+    ta.value = S.cm.drafts[id] || ''; if (ta.value) grow();
+    ta.addEventListener('input', () => { S.cm.drafts[id] = ta.value; grow(); });
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.isComposing) { e.preventDefault(); cmSend(); }
     });
+    $('cm-send').onclick = cmSend;
+    cndBind(CND_CM);
+  }
+  async function cmSend() {
+    const id = S.cm.sel, ta = $('cm-text'), btn = $('cm-send'), r = id && cmRowOf(id);
+    if (!ta || !btn || !r || btn.disabled) return;
+    const text = ta.value.trim();
+    if (!text) { ta.focus(); return; }
+    if (!S.cm.okd && !confirm('ตอบคอมเมนต์นี้ในนามเพจ "' + r.account + '"?\n\nคำตอบจะขึ้นเป็นสาธารณะใต้คอมเมนต์ทันที — ทุกคนที่เห็นโพสต์อ่านได้\n(ถามครั้งเดียวต่อการเปิดหน้านี้)')) return;
+    S.cm.okd = true;
+    const cid = S.cm.cids[id] || (S.cm.cids[id] = newCid());     // กดส่งซ้ำ/เน็ตหลุด = client_id เดิม → ไม่ตอบเบิ้ล
+    btn.disabled = true; $('cm-err').textContent = '';
+    const th = S.cm.th[id] = S.cm.th[id] || { row: r };
+    const pend = { id: 'p-' + cid, text, mine: true, pending: true, name: r.account };
+    th.replies = (th.replies || []).filter(x => x.id !== pend.id).concat([pend]);
+    paintCmMsgs();
+    const res = await api('/connect/api/comments', { action: 'reply', id, text, client_id: cid });
+    const t2 = S.cm.th[id];
+    if (t2 && t2.replies) t2.replies = t2.replies.filter(x => x.id !== pend.id);
+    if (!res.ok) {
+      if (S.cm.sel === id) { const b = $('cm-send'); if (b) b.disabled = false; const e = $('cm-err'); if (e) e.textContent = res.error || 'ส่งไม่สำเร็จ'; paintCmMsgs(); }
+      return;                                                 // ข้อความยังค้างในช่องพิมพ์ — กดส่งอีกครั้งได้
+    }
+    delete S.cm.cids[id]; S.cm.drafts[id] = '';
+    if (t2) { t2.replies = (t2.replies || []).concat(res.dup ? [] : [res.reply]); t2.row = res.row; }
+    cmPatchRow(res.row);
+    if (S.cm.sel === id) {
+      const a = $('cm-text'); if (a) { a.value = ''; a.style.height = 'auto'; a.focus(); }
+      const b = $('cm-send'); if (b) b.disabled = false;
+      paintCmHead(); paintCmMsgs();
+    }
+    toast(res.dup ? 'คำตอบนี้ส่งไปแล้ว' : 'ตอบคอมเมนต์แล้ว', 2200);
+    setTimeout(() => { if (S.panel === 'cmt') openCmt(true); }, 1500);
+    if (S.cm.sel === id) setTimeout(() => { if (S.cm.sel === id && S.panel === 'cmt') cmLoadThread(id, true); }, 4000);
+  }
+  async function cmAct(e) {
+    const t = e.target.closest('[data-cmx]'); if (!t) return;
+    const a = t.dataset.cmx, id = S.cm.sel;
+    if (a === 'back') { cmClose(); return; }
+    if (a === 'on') { cmSwitch(true); return; }
+    if (a === 'reload' && id) { t.disabled = true; await cmLoadThread(id, true); const b = document.querySelector('#cm-head [data-cmx=reload]'); if (b) b.disabled = false; return; }
+    if (a === 'done' && id) {
+      const r = cmRowOf(id); t.disabled = true;
+      const res = await api('/connect/api/comments', { action: 'done', id, on: !(r && r.done) });
+      if (!res.ok) { t.disabled = false; toast(res.error || 'ทำไม่สำเร็จ'); return; }
+      cmPatchRow(res.row); paintCmHead();
+      openCmt(true);
+    }
+  }
+  async function cmCat(e) {
+    const sel = e.target.closest('[data-cmx=cat]'); if (!sel || !S.cm.sel) return;
+    const id = S.cm.sel;
+    sel.disabled = true;
+    const r = await api('/connect/api/comments', { action: 'category', id, cat: sel.value });
+    sel.disabled = false; sel.blur();
+    if (!r.ok) { toast(r.error || 'บันทึกไม่สำเร็จ'); paintCmHead(); return; }
+    toast(sel.value === 'auto' ? `ให้ระบบจัดประเภทแล้ว — ${r.row.cat ? cmCatName(r.row.cat) : 'ยังไม่เข้าประเภทไหน'}`
+      : `บันทึกประเภท: ${r.row.cat ? cmCatName(r.row.cat) : 'ไม่จัดประเภท'}`, 2600);
+    cmPatchRow(r.row); paintCmHead();
+    openCmt(true);
   }
 
   async function openDb(keep) {
@@ -4571,6 +4801,7 @@
   loadAlerts();
   setInterval(() => { if (!document.hidden) loadAlerts(); }, 30000);
   setInterval(() => { if (!document.hidden && S.panel === 'cmt' && !(document.activeElement && document.activeElement.id === 'lc-cm-q')) openCmt(true); }, 60000);
+  setInterval(() => { if (!document.hidden && S.panel === 'cmt' && S.cm.sel && !(($('cm-send') || {}).disabled)) cmLoadThread(S.cm.sel); }, 30000);
   if (S.openId) showPane();
   setPanel(ADMIN && PANEL_PANE[BOOT.panel] && !S.openId ? BOOT.panel : 'inbox', true);
 })();

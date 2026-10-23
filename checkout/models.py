@@ -1294,6 +1294,9 @@ class SocialComment(models.Model):
     category_why = models.CharField("จัดจากคำว่า", max_length=60, blank=True)
     category_by = models.CharField("คนจัดประเภท (ว่าง = ระบบจัดเอง)", max_length=80, blank=True)
     category_v = models.PositiveSmallIntegerField("รุ่นตัวจัดประเภท", default=0)
+    # ★ 23 ต.ค.69 ตอบคอมเมนต์จากหน้า Connect (Facebook) — ใครตอบ + คำตอบที่ส่งจากระบบ [{id, text, by, at}]
+    replied_by = models.CharField("ตอบในระบบล่าสุดโดย", max_length=80, blank=True)
+    reply_log = models.JSONField("คำตอบที่ส่งจากระบบ", default=list, blank=True)
 
     class Meta:
         verbose_name = "Connect — คอมเมนต์โซเชียล"

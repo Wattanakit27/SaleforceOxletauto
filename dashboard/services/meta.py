@@ -198,6 +198,26 @@ def _check(node: str) -> None:
         "ปลายทาง %r ไม่รู้จัก และไม่ได้สืบมาจาก asset ของเรา — ปฏิเสธไว้ก่อน" % node[:40])
 
 
+def vouch_comment(comment_id: str, post_id: str) -> None:
+    """อนุญาต id คอมเมนต์ที่เก็บไว้ในฐานข้อมูล (★ 23 ต.ค.69 · ตอบคอมเมนต์จากหน้า Connect)
+
+    id คอมเมนต์ (`<โพสต์>_<คอมเมนต์>`) อยู่ใน `_known` เฉพาะ process ที่เพิ่งดึงมัน — คำขอตอบคอมเมนต์
+    ตกไป worker อื่น / หลังรีสตาร์ท = โดนปฏิเสธ (บทเรียนเดียวกับห้อง Messenger `t_…`)
+    → **พิสูจน์จากรูป id ไม่ใช่ให้ผู้เรียกยืนยันเอง**: โพสต์ต้องเป็น `<เพจใน META_PAGE_IDS>_<โพสต์>` และ
+    คอมเมนต์ต้องขึ้นต้นด้วยเลขโพสต์นั้น (วัดจาก prod 23 ต.ค.69: คอมเมนต์ Facebook 56/56 อันเป็นแบบนี้)
+    ไม่เข้ารูป = ForeignAsset (ผู้เรียกลองหาจากคอมเมนต์ใต้โพสต์ ซึ่งผ่าน `_check` เองได้)
+    """
+    cid, pid = str(comment_id or "").strip(), str(post_id or "").strip()
+    if cid in _known:
+        return
+    page, _, post = pid.partition("_")
+    head, _, tail = cid.partition("_")
+    if page in pages() and post and "_" not in post and head == post and tail and "_" not in tail:
+        _known[cid] = True
+        return
+    raise ForeignAsset("ยืนยันไม่ได้ว่าคอมเมนต์ %s อยู่ใต้โพสต์ของเพจบริษัทนี้" % cid[:40])
+
+
 # ── ตัวยิงคำขอ ───────────────────────────────────────────────────
 def get(path: str, _token: str = "", **params):
     """GET Graph API โดยเช็ค allowlist ก่อน

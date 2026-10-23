@@ -154,6 +154,9 @@ def _upsert(platform: str, items: list) -> dict:
             new.append(r)
             continue
         changed = False
+        if r.replied_by and not x["replied"]:
+            # ตอบจากระบบไปแล้ว แต่รอบดึงเห็นคำตอบใต้คอมเมนต์แค่ 25 อันแรก (เรียงเก่า→ใหม่) — ห้ามถอยกลับเป็น "รอตอบ"
+            x = dict(x, replied=True, replied_at=r.replied_at)
         for k in _UPD:
             if getattr(r, k) != x[k]:
                 setattr(r, k, x[k])
@@ -591,6 +594,7 @@ def row_json(r: SC) -> dict:
         "likes": r.like_count, "replies": r.reply_count, "replied": r.replied,
         "done": bool(r.done_at), "doneBy": r.done_by,
         "cat": r.category, "catWhy": r.category_why, "catBy": r.category_by,
+        "repliedBy": r.replied_by, "canReply": r.platform == SC.FB,
     }
 
 
@@ -639,7 +643,7 @@ def list_json(platform: str = "", status: str = "wait", q: str = "", limit: int 
     counts["all"] = sum(counts[p] for p in PLATFORMS)
     return {"rows": [row_json(r) for r in rows[:limit]], "more": len(rows) > limit, "counts": counts,
             "catCounts": cat_counts, "cats": [list(c) for c in CATS],
-            "sources": sources(), "waitDays": WAIT_DAYS,
+            "sources": sources(), "waitDays": WAIT_DAYS, "reply": reply_state(),
             "every": {SC.FB: FB_EVERY_MIN, SC.YT: YT_EVERY_MIN}}
 
 
@@ -666,3 +670,265 @@ def set_done(cid: int, by: str, on: bool = True) -> SC | None:
     r.done_at, r.done_by = (timezone.now(), (by or "")[:80]) if on else (None, "")
     r.save(update_fields=["done_at", "done_by"])
     return r
+
+
+# ─────────────────────────────────────────────────────────────
+#  ★ 23 ต.ค.69 อ่านคำตอบใต้คอมเมนต์ + ตอบคอมเมนต์จากหน้า Connect (หน้าคอมเมนต์แบบห้องแชท)
+#  เจ้าของสั่ง *"ทำในระบบรวมแชทเลย ที่ทำให้มันอ่านคอมเม้นได้ตอบคอมเม้นได้เลยในหน้านี้"*
+#  - Facebook: อ่านคำตอบทั้งหมดใต้คอมเมนต์ (สด · จำ THREAD_TTL วิ) + ตอบในนามเพจ (POST /<คอมเมนต์>/comments)
+#  - YouTube: อ่านคำตอบได้ (API key) · ตอบยังไม่ได้ — ต้องให้เจ้าของช่องเชื่อมบัญชี Google (OAuth) ก่อน
+#  - สวิตช์ KV `comment_reply` ปิดโดยปริยาย (คำตอบขึ้นเป็นสาธารณะในนามเพจ) · แอดมินเปิดเองในหน้าคอมเมนต์
+#  - กดส่งซ้ำ / เน็ตหลุดแล้วกดอีก = client_id เดิม → คืนผลเดิม ไม่ตอบเบิ้ล (KV `cmt_cid:<แถว>:<client_id>`)
+# ─────────────────────────────────────────────────────────────
+REPLY_KEY = "comment_reply"
+REPLY_MAX = 2000
+THREAD_TTL = 20
+CID_PREFIX = "cmt_cid:"
+CID_STALE_SEC = 90
+_THREAD: dict = {}
+YT_REPLY_NOTE = ("ตอบคอมเมนต์ YouTube จากระบบยังไม่ได้ — ต้องให้เจ้าของแต่ละช่องเชื่อมบัญชี Google กับระบบก่อน"
+                 " · ตอนนี้กด \"เปิดใน YouTube\" แล้วตอบที่นั่น")
+
+
+def reply_state() -> dict:
+    try:
+        d = (_kv().objects.filter(pk=REPLY_KEY).values_list("data", flat=True).first()) or {}
+    except Exception:
+        d = {}
+    return {"on": bool(d.get("on")), "by": d.get("by") or "", "at": d.get("at") or "", "platforms": [SC.FB]}
+
+
+def reply_on() -> bool:
+    return reply_state()["on"]
+
+
+def set_reply_on(on: bool, by: str) -> dict:
+    _kv().objects.update_or_create(key=REPLY_KEY, defaults={"data": {
+        "on": bool(on), "by": (by or "")[:80], "at": timezone.now().isoformat(timespec="seconds")}})
+    _log("เปิด/ปิดการตอบคอมเมนต์จากระบบ", by, True, on=bool(on))
+    return reply_state()
+
+
+def _log(name: str, by: str, ok: bool, **detail) -> None:
+    try:
+        from dashboard.services import eventlog
+        eventlog.log("comment_reply", name=name, target=(by or "")[:80], ok=ok, **detail)
+    except Exception:
+        pass
+
+
+def _explain(e) -> str:
+    """แปลคำตอบของ Meta เป็นภาษาคน"""
+    from dashboard.services import meta
+    if isinstance(e, meta.ForeignAsset):
+        return "ยืนยันไม่ได้ว่าคอมเมนต์นี้อยู่ใต้โพสต์ของเพจเรา — ไม่ส่ง"
+    if isinstance(e, meta.NotConfigured):
+        return "ยังไม่ได้เชื่อม Facebook กับระบบ (META_PAGE_IDS / token)"
+    code, sub = getattr(e, "code", None), getattr(e, "subcode", None)
+    try:
+        code = int(code) if code is not None else None
+    except (TypeError, ValueError):
+        code = None
+    msg = str(e)
+    if code == 190:
+        return "token ของ Facebook หมดอายุหรือถูกยกเลิก — ต้องออก token ใหม่"
+    if code in (10, 3) or (code is not None and 200 <= code < 300):
+        return "เพจยังไม่ได้ให้สิทธิ์ตอบคอมเมนต์กับระบบ (pages_manage_engagement) — ต้องออก token ใหม่ที่ติ๊กสิทธิ์นี้"
+    if code == 368:
+        return "Facebook บล็อกการตอบชั่วคราว (ส่งถี่เกิน หรือข้อความเข้าข่ายสแปม) — รอสักพักแล้วลองใหม่"
+    if code in (4, 17, 32, 613) or (code is not None and 80000 <= code <= 80014):
+        return "ติดโควต้าของ Facebook — รอสักครู่แล้วลองใหม่"
+    if (code == 100 and sub == 33) or "does not exist" in msg or "Unsupported" in msg:
+        return "คอมเมนต์นี้ถูกลบไปแล้ว หรือ Facebook ไม่ให้ตอบแล้ว"
+    return "Facebook ตอบว่า: %s" % msg[:160]
+
+
+def _fb_ready(r: SC) -> str:
+    """→ page token · ยืนยันว่าคอมเมนต์อยู่ใต้โพสต์ของเพจเรา (รูป id) — ไม่เข้ารูป = หาจากคอมเมนต์ใต้โพสต์"""
+    from dashboard.services import meta
+    pt = meta.page_token(r.account_id)
+    try:
+        meta.vouch_comment(r.ext_id, r.post_id)
+    except meta.ForeignAsset:
+        # โพสต์บางชนิด (รูป/วิดีโอ) id คอมเมนต์อาจไม่ขึ้นต้นด้วยเลขโพสต์ — ไล่คอมเมนต์ใต้โพสต์ (ผ่านด่านด้วยตัวโพสต์เอง)
+        for _ in meta.paged("/%s/comments" % r.post_id, _token=pt, max_pages=4, fields="id", limit=100,
+                            order="reverse_chronological"):
+            if r.ext_id in meta._known:
+                break
+        meta.vouch_comment(r.ext_id, r.post_id)          # ยังไม่เจอ = โยน ForeignAsset ต่อ
+    return pt
+
+
+def _iso(d) -> str:
+    return timezone.localtime(d).isoformat(timespec="seconds") if d else ""
+
+
+def _fb_thread(r: SC) -> list:
+    from dashboard.services import meta
+    pt = _fb_ready(r)
+    out = []
+    for d in meta.paged("/%s/comments" % r.ext_id, _token=pt, max_pages=3, limit=100, order="chronological",
+                        fields="id,message,created_time,from,attachment{type},like_count"):
+        for c in d.get("data") or []:
+            frm = c.get("from") or {}
+            mine = str(frm.get("id") or "") == r.account_id
+            text = (c.get("message") or "").strip() or _ATT.get(((c.get("attachment") or {}).get("type") or ""), "[ไฟล์แนบ]")
+            out.append({"id": str(c.get("id") or ""), "text": text, "mine": mine,
+                        "name": (r.account_name or "เพจ") if mine else (frm.get("name") or "ผู้ใช้ Facebook"),
+                        "at": _iso(_dt(c.get("created_time"))), "likes": int(c.get("like_count") or 0)})
+    return out
+
+
+def _yt_thread(r: SC) -> list:
+    from dashboard.services import youtube_sync as Y
+    out = []
+    j = Y._get("comments", part="snippet", parentId=r.ext_id, maxResults=100, textFormat="plainText")
+    for c in j.get("items") or []:
+        sn = c.get("snippet") or {}
+        mine = ((sn.get("authorChannelId") or {}).get("value") or "") == r.account_id
+        out.append({"id": str(c.get("id") or ""), "text": (sn.get("textOriginal") or sn.get("textDisplay") or "").strip(),
+                    "mine": mine, "name": (r.account_name or "ช่อง") if mine else (sn.get("authorDisplayName") or "ผู้ชม"),
+                    "at": _iso(_dt(sn.get("publishedAt"))), "likes": int(sn.get("likeCount") or 0)})
+    out.sort(key=lambda x: x["at"])
+    return out
+
+
+def thread_json(cid: int, fresh: bool = False) -> dict | None:
+    """คอมเมนต์ 1 อัน + คำตอบทั้งหมดใต้คอมเมนต์ (ดึงสดจากต้นทาง · จำ THREAD_TTL วิ) + ตอบได้ไหม/ทำไม"""
+    r = SC.objects.filter(pk=cid).first()
+    if not r:
+        return None
+    hit = _THREAD.get(r.id)
+    if hit and not fresh and time.time() - hit[0] < THREAD_TTL:
+        replies, err = [dict(x) for x in hit[1]], hit[2]
+    else:
+        replies, err = [], ""
+        try:
+            if r.platform == SC.FB:
+                replies = _fb_thread(r)
+            elif r.platform == SC.YT:
+                replies = _yt_thread(r)
+        except Exception as e:
+            err = ("อ่านคำตอบจาก %s ไม่ได้ — " % ("Facebook" if r.platform == SC.FB else "YouTube")) + (
+                _explain(e) if r.platform == SC.FB else str(e)[:160])
+        _THREAD[r.id] = (time.time(), [dict(x) for x in replies], err)
+        if len(_THREAD) > 500:
+            for k in list(_THREAD)[:200]:
+                _THREAD.pop(k, None)
+        if not err:
+            _sync_from_thread(r, replies)
+    # คำตอบที่ส่งจากระบบ → บอกว่าใครกดส่ง (Facebook บอกแค่ชื่อเพจ)
+    by_id = {x.get("id"): x for x in (r.reply_log or []) if x.get("id")}
+    for x in replies:
+        if x["mine"] and x["id"] in by_id:
+            x["by"] = by_id[x["id"]].get("by") or ""
+    ok, why = can_reply(r)
+    return {"row": row_json(r), "replies": replies, "error": err, "canReply": ok, "why": why,
+            "replyOn": reply_on(), "max": REPLY_MAX}
+
+
+def _sync_from_thread(r: SC, replies: list) -> None:
+    """เห็นคำตอบสดแล้ว = อัปเดตแถวทันที (ไม่ต้องรอรอบดึง 10 นาที)"""
+    mine = sorted(x["at"] for x in replies if x["mine"] and x["at"])
+    rep = bool(mine) or bool(r.replied_by)
+    upd = {}
+    if r.reply_count != len(replies):
+        upd["reply_count"] = len(replies)
+    if r.replied != rep:
+        upd["replied"] = rep
+        upd["replied_at"] = (parse_datetime(mine[0]) if mine else r.replied_at) if rep else None
+    if upd:
+        SC.objects.filter(pk=r.pk).update(**upd)
+        for k, v in upd.items():
+            setattr(r, k, v)
+
+
+def can_reply(r: SC) -> tuple[bool, str]:
+    if r.platform == SC.YT:
+        return False, YT_REPLY_NOTE
+    if r.platform != SC.FB:
+        return False, "ช่องทางนี้ยังตอบจากระบบไม่ได้"
+    if not reply_on():
+        return False, "การตอบคอมเมนต์จากระบบยังปิดอยู่ — แอดมินกด \"เปิดให้ตอบจากระบบ\" ก่อน (คำตอบจะขึ้นเป็นสาธารณะในนามเพจ)"
+    return True, ""
+
+
+def _cid_take(row_id: int, client_id: str):
+    """→ ("go", key) · ("done", ผลเดิม) · ("busy", None) — แบบเดียวกับ chatplus.lock_take"""
+    KV = _kv()
+    key = "%s%d:%s" % (CID_PREFIX, int(row_id), client_id)
+    now = timezone.now()
+    for _ in range(2):
+        try:
+            with transaction.atomic():
+                KV.objects.create(key=key, data={"at": now.isoformat()})
+            return "go", key
+        except IntegrityError:
+            pass
+        kv = KV.objects.filter(pk=key).first()
+        if not kv:
+            continue                                    # เพิ่งถูกลบระหว่างทาง (รอบก่อนล้ม) — จองใหม่
+        d = kv.data or {}
+        if d.get("reply"):
+            return "done", d["reply"]
+        if (now - kv.updated_at).total_seconds() < CID_STALE_SEC:
+            return "busy", None
+        KV.objects.filter(pk=key).update(data={"at": now.isoformat()}, updated_at=now)   # ค้างจากรอบที่ตาย → รับช่วงต่อ
+        return "go", key
+    return "busy", None
+
+
+def reply(cid: int, text: str, by: str, client_id: str = "") -> tuple[int, dict]:
+    """ตอบคอมเมนต์ในนามเพจ → (HTTP status, คำตอบ) · ส่งไม่สำเร็จ = ไม่บันทึกอะไร (ข้อความค้างในช่องพิมพ์ให้ส่งอีกครั้ง)"""
+    r = SC.objects.filter(pk=cid).first()
+    if not r:
+        return 404, {"ok": False, "error": "ไม่พบคอมเมนต์นี้"}
+    text = (text or "").strip()
+    if not text:
+        return 400, {"ok": False, "error": "ยังไม่ได้พิมพ์ข้อความ"}
+    if len(text) > REPLY_MAX:
+        return 400, {"ok": False, "error": "ข้อความยาวเกิน %d ตัวอักษร" % REPLY_MAX}
+    ok, why = can_reply(r)
+    if not ok:
+        return (409 if r.platform == SC.FB else 400), {"ok": False, "error": why}
+    client_id = re.sub(r"[^A-Za-z0-9_-]", "", str(client_id or ""))[:36]
+    key = ""
+    if client_id:
+        st, val = _cid_take(r.id, client_id)
+        if st == "done":
+            return 200, {"ok": True, "dup": True, "reply": val, "row": row_json(r)}
+        if st == "busy":
+            return 409, {"ok": False, "error": "กำลังส่งคำตอบนี้อยู่ — รอสักครู่"}
+        key = val
+    from dashboard.services import meta
+    try:
+        pt = _fb_ready(r)
+        res = meta.post("/%s/comments" % r.ext_id, _token=pt, payload={"message": text})
+    except Exception as e:
+        if key:
+            _kv().objects.filter(pk=key).delete()
+        why = _explain(e)
+        _log("ตอบคอมเมนต์ Facebook", by, False, comment=r.id, error=why, code=getattr(e, "code", None))
+        return 502, {"ok": False, "error": why}
+    now = timezone.now()
+    item = {"id": str((res or {}).get("id") or ""), "text": text, "by": (by or "")[:80],
+            "at": _iso(now), "mine": True, "name": r.account_name or "เพจ", "likes": 0}
+    with transaction.atomic():
+        r = SC.objects.select_for_update().get(pk=r.pk)
+        log = list(r.reply_log or [])[-49:]
+        log.append({"id": item["id"], "text": text, "by": item["by"], "at": item["at"]})
+        r.reply_log = log
+        r.replied_by = item["by"]
+        if not r.replied:
+            r.replied, r.replied_at = True, now
+        r.reply_count = (r.reply_count or 0) + 1
+        r.save(update_fields=["reply_log", "replied_by", "replied", "replied_at", "reply_count"])
+    _THREAD.pop(r.id, None)
+    if key:
+        _kv().objects.filter(pk=key).update(data={"reply": item, "at": now.isoformat()}, updated_at=now)
+        try:
+            _kv().objects.filter(key__startswith=CID_PREFIX, updated_at__lt=now - timedelta(days=2)).delete()
+        except Exception:
+            pass
+    _log("ตอบคอมเมนต์ Facebook", by, True, comment=r.id, page=r.account_id, chars=len(text))
+    return 200, {"ok": True, "reply": item, "row": row_json(r)}
