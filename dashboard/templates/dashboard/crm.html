@@ -365,6 +365,9 @@ b.big{font-size:22px}
 .bc-trk svg{flex-shrink:0;margin-top:2px;color:var(--brand-d)}
 .bc-ckl{display:flex;flex-direction:column;gap:2px;margin-top:3px}
 .bc-tb{margin-top:4px}
+.kc .ow{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink3);margin-top:2px}
+.kc .ow svg{flex-shrink:0}
+select.own-f{width:auto;max-width:240px;height:38px}
 .bc-msel{position:relative;max-width:460px}
 .bc-mbtn{width:100%;height:40px;display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:8px;background:var(--card);color:var(--ink);padding:0 10px 0 12px;font-size:13.5px;text-align:left}
 .bc-mbtn:hover{border-color:var(--brand)}
@@ -461,7 +464,9 @@ svg text{fill:var(--ink3);font-size:11px;font-family:inherit}
 .chatwrap iframe{flex:1;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);min-height:520px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--card);padding:10px 16px;border-radius:10px;font-weight:600;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:92vw}
 .toast.bad{background:var(--bad);color:#fff}
-@media (max-width:1320px){ .cust{grid-template-columns:minmax(0,1fr) 320px} .tbl th:nth-child(4),.tbl td:nth-child(4){display:none} .tbl td,.tbl th{padding-left:12px;padding-right:12px} }
+@media (max-width:1320px){ .cust{grid-template-columns:minmax(0,1fr) 320px} .tbl th:nth-child(4),.tbl td:nth-child(4){display:none} .tbl td,.tbl th{padding-left:12px;padding-right:12px}
+  /* ตารางลูกค้าของทุกเซลล์ (มีคอลัมน์ผู้ดูแลเป็นคอลัมน์ 4) — ซ่อนช่องทางแทนผู้ดูแล */
+  .tbl.own th:nth-child(4),.tbl.own td:nth-child(4){display:table-cell} .tbl.own th:nth-child(5),.tbl.own td:nth-child(5){display:none} }
 @media (max-width:1000px){ .cust{grid-template-columns:minmax(0,1fr)} .pane{position:static;max-height:none} }
 /* ★ 21 ต.ค.69 จอแคบกว่า 1100px = ปุ่ม ☰ เปิดแถบเมนูเลื่อนออกจากด้านซ้าย (เหมือนแดชบอร์ด · เจ้าของ "ทำไมแถบไปอยู่ด้านบน") */
 @media (max-width:1099px){
@@ -489,6 +494,7 @@ svg text{fill:var(--ink3);font-size:11px;font-family:inherit}
   .big{font-size:36px}
   .hero .r{border-left:0;padding-left:0;flex-direction:row;flex-wrap:wrap}
   .tbl th:nth-child(4),.tbl td:nth-child(4),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none}
+  .tbl.own th:nth-child(4),.tbl.own td:nth-child(4){display:table-cell} .tbl.own th:nth-child(6),.tbl.own td:nth-child(6){display:none}
 }
 </style>
 </head>
@@ -639,14 +645,14 @@ function buildIndex(){
   (D.chats||[]).forEach(c => {
     const key = 'chat:' + c.id; const deal = c.code ? dealByCode[c.code.toUpperCase()] : null;
     const it = {kind:'chat', key, col: c.col, c, deal, name: c.name, code: c.code, car: c.car, channel: c.channel,
-      hot: c.heat === 'hot', score: c.score || 0, last: c.lastAt, trade: c.trade, phone: c.phone};
+      hot: c.heat === 'hot', score: c.score || 0, last: c.lastAt, trade: c.trade, phone: c.phone, owner: c.owner || ''};
     byKey[key] = it; rows.push(it); if (c.col && c.stage !== 'lost') cards.push(it); });
   (D.leads||[]).forEach(l => {
     const code = (l.code||'').toUpperCase(); if (code && chatCodes.has(code)) return;
     const key = 'lead:' + (l.code || l.phone || Math.random().toString(36).slice(2));
     const deal = code ? dealByCode[code] : null;
     const it = {kind:'lead', key, col: l.stage, l, deal, name: leadName(l, deal), code: l.code, car: l.car, channel: l.channel,
-      hot: /hot/i.test(l.leadTier||''), score: l.leadScore || 0, phone: l.phone};
+      hot: /hot/i.test(l.leadTier||''), score: l.leadScore || 0, phone: l.phone, owner: l.owner || ''};
     it.lastSort = (sdate(l.lastUpdate) || sdate(l.dateIn) || new Date(0)).getTime();
     byKey[key] = it; rows.push(it);
     // มีเคสจองที่ยังไม่ปล่อยแล้ว = ใบเคสจองแทนลีดนี้บนกระดาน (ไม่ขึ้นซ้ำ 2 ใบ)
@@ -655,7 +661,7 @@ function buildIndex(){
   deals.forEach(x => {
     const code = (x.code||'').toUpperCase(); if (code && chatCodes.has(code)) return;
     const key = 'deal:' + x.id; const it = {kind:'deal', key, col:'booked', x, name: x.name || 'ลูกค้าจอง', code: x.code, car: x.car,
-      channel: x.channel, phone: x.phone, score: 0};
+      channel: x.channel, phone: x.phone, score: 0, owner: x.owner || ''};
     it.lastSort = (sdate(x.date) || new Date(0)).getTime();
     cards.push(it);
     const lead = code ? leadByCode[code] : null;
@@ -664,6 +670,15 @@ function buildIndex(){
   rows.forEach(r => { if (r.kind === 'chat') r.lastSort = r.c.lastAt ? new Date(r.c.lastAt).getTime() : 0; });
   rows.sort((a,b) => (b.lastSort||0) - (a.lastSort||0));
   IDX = {cards, rows, byKey}; }
+/* ★ 23 ต.ค.69 แอดมินที่ไม่ได้เป็นเซลล์ เห็นลูกค้าของทุกเซลล์ — ตัวกรอง "ผู้ดูแล" (ใช้ทั้งหน้าลูกค้า/ไปป์ไลน์) */
+function ownMatch(it){ const f = S.ownF || ''; if (!S.D || !S.D.all || !f) return true; return f === '__none__' ? !it.owner : it.owner === f; }
+function ownLabel(o){ return o ? sname(o) : 'ยังไม่มีคนรับ'; }
+function ownSel(list){ if (!S.D || !S.D.all) return ''; list = list || IDX.rows;   /* นับจากรายการของหน้านั้น (ลูกค้า = IDX.rows · ไปป์ไลน์ = IDX.cards) */
+  const cnt = {}; list.forEach(it => { const k = it.owner || '__none__'; cnt[k] = (cnt[k] || 0) + 1; });
+  const keys = Object.keys(cnt).sort((a, b) => (a === '__none__') - (b === '__none__') || cnt[b] - cnt[a] || a.localeCompare(b, 'th'));
+  if (S.ownF && !cnt[S.ownF]) keys.unshift(S.ownF);
+  return `<select class="in own-f" id="own-f" title="ดูเฉพาะลูกค้าของเซลล์คนไหน"><option value="">ผู้ดูแล: ทุกคน (${n0(list.length)})</option>${keys.map(k =>
+    `<option value="${h(k)}" ${S.ownF === k ? 'selected' : ''}>${h(k === '__none__' ? 'ยังไม่มีคนรับ' : sname(k))} (${n0(cnt[k] || 0)})</option>`).join('')}</select>`; }
 
 /* ── แถบเมนูซ้าย (หน้าตาเดียวกับแดชบอร์ด) ── */
 function renderSide(){
@@ -731,7 +746,7 @@ function pageDash(){
     : self || !BOOT.admin ? greet() + ' คุณ' + sname(S.seller) : 'ภาพรวมของ ' + sname(S.seller);
   const acts = `${self ? '<button class="btn" data-act="checkphone">เช็คเบอร์ซ้ำ</button>' : ''}${refreshBtn()}<button class="btn pri" data-act="nav" data-k="pipe">${ic('pipe',16)}เปิดไปป์ไลน์</button>`;
   return header(D.period || '', title, 'ยอดขายไตรมาสนี้ ลีดที่กำลังตาม และงานที่ต้องทำวันนี้ — ตัวเลขชุดเดียวกับหน้าเซลล์', acts)
-    + (!S.seller ? '<div class="mini" style="margin:-6px 0 12px">บัญชีนี้ไม่ได้เป็นเซลล์ — ยอด ลีด และลูกค้ารายคนจึงว่าง · แชทลูกค้า สต็อกรถ และระบบอัตโนมัติใช้ได้ตามปกติ</div>' : '')
+    + (!S.seller ? '<div class="mini" style="margin:-6px 0 12px">บัญชีนี้ไม่ได้เป็นเซลล์ — ยอดและงานรายคนจึงว่าง · หน้าลูกค้า/ไปป์ไลน์แสดงลูกค้าของทุกเซลล์</div>' : '')
     + (S.checkPhone ? phoneBox() : '')
     + `<div class="g2">${heroCard(k)}${followCard()}</div>`
     + `<div class="g3">${weekCard()}${hotCard()}${apptCard()}</div>`
@@ -847,9 +862,9 @@ function cardSort(col){ return (a, b) => {
   return sb - sa || pa - pb; }; }
 function pagePipe(){
   const D = S.D, cols = D.cols || [], f = S.pipeF;
-  const items = IDX.cards.filter(it => pipeMatch(it, f));
+  const base = IDX.cards.filter(ownMatch), items = base.filter(it => pipeMatch(it, f));
   const pv = (D.teamTargets || {}).pipelineValue || 0;
-  const cnt = {}; PIPE_F.forEach(p => cnt[p.k] = IDX.cards.filter(it => pipeMatch(it, p.k)).length);
+  const cnt = {}; PIPE_F.forEach(p => cnt[p.k] = base.filter(it => pipeMatch(it, p.k)).length);
   const chips = PIPE_F.map(p => `<button class="chip ${f === p.k ? 'on' : ''}" data-act="pipeF" data-k="${p.k}">${h(p.l)}<span class="n">${n0(cnt[p.k])}</span></button>`).join('');
   const total = items.length || 1;
   const board = cols.map(c => {
@@ -861,7 +876,7 @@ function pagePipe(){
       ${list.slice(0, lim).map(kcard).join('') || '<div class="empty" style="padding:14px">ว่าง</div>'}
       ${list.length > lim ? `<button class="more" data-act="more" data-col="${c.key}">+ อีก ${n0(list.length - lim)} ลีด</button>` : ''}</section>`; }).join('');
   return header('งานขาย · ลีด', 'ไปป์ไลน์ลีด',
-      'ลากการ์ด <b>ลูกค้าแชท</b> ไปขั้นถัดไปได้เลย · <b>ลีดจากชีต</b> กดการ์ดแล้วเลือกสถานะลูกค้า (เขียนช่อง Z ในชีต)', refreshBtn())
+      (D.all ? '<b>ลูกค้าของทุกเซลล์</b> · ' : '') + 'ลากการ์ด <b>ลูกค้าแชท</b> ไปขั้นถัดไปได้เลย · <b>ลีดจากชีต</b> กดการ์ดแล้วเลือกสถานะลูกค้า (เขียนช่อง Z ในชีต)', ownSel(IDX.cards) + refreshBtn())
     + `<div class="chips">${chips}<div class="grow"></div><span class="muted"><b style="color:var(--ink)">${n0(items.length)} ลีด</b> · ลีดจากชีต ${h(D.pipeDays)} วันล่าสุด${pv ? ' · ดีลกำลังเดินเดือนนี้ ' + baht(pv) : ''}</span></div>`
     + `<div class="board"><div class="cols">${board}</div></div>`
     + `<div class="mini">${ic('chat',12)} = ลูกค้าแชท (ลากได้) · ${ic('sheet',12)} = ลีดจากชีต · เคสจองที่ยังไม่ปล่อยมาจากชีตยอดขาย · เคสเสีย/คืนเคส/ยกเลิก ไม่อยู่บนกระดาน</div>`; }
@@ -880,13 +895,13 @@ function kcard(it){
     if (it.col === 'viewing' || it.col === 'finance') bar = `<div class="bar"><i style="width:${Math.min(100, c.score || 0)}%"></i></div>`;
     return `<article class="kc${hl}" draggable="true" data-act="open" data-key="${h(it.key)}" data-drag="${c.id}" title="ลากไปคอลัมน์อื่นเพื่อเปลี่ยนขั้น">
       <div class="top">${c.code ? `<span class="code">${h(c.code)}</span>` : '<span class="pill p-mute">ยังไม่มีเลข</span>'}<span class="chn">${h(c.src === 'fb' ? 'Facebook' : (c.channel || 'LINE@'))}</span>${flag}</div>
-      <div class="nm">${nm}</div><div class="ds">${ds}</div>${bar}
+      <div class="nm">${nm}</div><div class="ds">${ds}</div>${ownLine(it)}${bar}
       <div class="bt ${btc}"><span>${h(bt)}</span><span class="src" style="background:var(--brand-s);color:var(--brand-d)" title="ลูกค้าแชท">${ic('chat',12)}</span></div></article>`; }
   if (it.kind === 'deal'){
     const x = it.x;
     return `<article class="kc" data-act="open" data-key="${h(it.key)}">
       <div class="top">${x.code ? `<span class="code" style="color:var(--teal);background:var(--teal-s)">${h(x.code)}</span>` : ''}<span class="chn">${h(x.channel || '')}</span><span class="pill p-teal">${h(x.status)}</span></div>
-      <div class="nm">${nm}</div><div class="ds">${h(x.car || '')}${x.price ? ' · ' + baht(x.price) : ''}</div>
+      <div class="nm">${nm}</div><div class="ds">${h(x.car || '')}${x.price ? ' · ' + baht(x.price) : ''}</div>${ownLine(it)}
       <div class="bt"><span>จอง ${h(sheetDayLabel(x.date))}${x.days > 3 ? ' · ค้าง ' + x.days + ' วัน' : ''}</span><span class="src" style="background:var(--teal-s);color:var(--teal)" title="เคสจอง (ชีตยอดขาย)">${ic('sheet',12)}</span></div></article>`; }
   const l = it.l;
   if (it.col === 'new' && !l.updateCount) flag = '<span class="pill p-bad">ยังไม่โทร</span>';
@@ -898,8 +913,9 @@ function kcard(it){
   if (it.col === 'viewing' || it.col === 'finance') bar = `<div class="bar"><i style="width:${Math.min(100, l.leadScore || 0)}%"></i></div>`;
   return `<article class="kc" data-act="open" data-key="${h(it.key)}" title="กดเพื่อเลือกสถานะลูกค้า">
     <div class="top"><span class="code">${h(l.code || '-')}</span><span class="chn">${h(l.channel || '')}</span>${flag}</div>
-    <div class="nm">${nm}</div><div class="ds">${ds}</div>${bar}
+    <div class="nm">${nm}</div><div class="ds">${ds}</div>${ownLine(it)}${bar}
     <div class="bt ${btc}"><span>${h(bt)}</span><span class="src" style="background:var(--soft);color:var(--ink3)" title="ลีดจากชีต">${ic('sheet',12)}</span></div></article>`; }
+function ownLine(it){ return S.D && S.D.all ? `<div class="ow">${ic('users',11)}${h(ownLabel(it.owner))}</div>` : ''; }
 
 /* ── ลากการ์ดลูกค้าแชท ── */
 let _drag = null;
@@ -931,7 +947,7 @@ function custMatch(it, f){
   if (f === 'deal') return it.kind === 'deal' || !!it.deal || it.col === 'booked';
   return true; }
 function custSearch(it, q){ if (!q) return true; q = q.toLowerCase(); const dq = q.replace(/\D/g, '');
-  return [it.name, it.code, it.car, it.channel].some(v => String(v||'').toLowerCase().includes(q)) || (dq.length >= 3 && String(it.phone||'').replace(/\D/g,'').includes(dq)); }
+  return [it.name, it.code, it.car, it.channel, it.owner ? sname(it.owner) : ''].some(v => String(v||'').toLowerCase().includes(q)) || (dq.length >= 3 && String(it.phone||'').replace(/\D/g,'').includes(dq)); }
 function stageChip(it){
   if (it.kind === 'chat') return `<span class="stg" ${it.c.stage === 'lost' ? 'style="background:var(--bad-s);color:var(--bad)"' : it.c.stage === 'won' ? 'style="background:var(--teal-s);color:var(--teal)"' : ''}>${h(it.c.stageLabel)}</span>`;
   if (it.kind === 'deal') return `<span class="stg" style="background:var(--teal-s);color:var(--teal)">${h(it.x.status)}</span>`;
@@ -948,18 +964,19 @@ function avatar(it, cls){
   return `<span class="av ${cls||''}" style="${st}">${it.kind === 'lead' && !it.deal ? ic('sheet', cls ? 26 : 15) : h(initials(it.name))}</span>`; }
 function pageCust(){
   const f = S.custF, q = S.q.trim();
-  const cnt = {}; CUST_F.forEach(c => cnt[c.k] = IDX.rows.filter(it => custMatch(it, c.k)).length);
-  const rows = IDX.rows.filter(it => custMatch(it, f) && custSearch(it, q));
+  const all = !!S.D.all, base = IDX.rows.filter(ownMatch);
+  const cnt = {}; CUST_F.forEach(c => cnt[c.k] = base.filter(it => custMatch(it, c.k)).length);
+  const rows = base.filter(it => custMatch(it, f) && custSearch(it, q));
   if (!S.sel || !IDX.byKey[S.sel]) S.sel = rows.length ? rows[0].key : null;
   const chips = CUST_F.map(c => `<button class="chip ${f === c.k ? 'on' : ''}" data-act="custF" data-k="${c.k}">${h(c.l)}<span class="n">${n0(cnt[c.k])}</span></button>`).join('');
   const list = rows.slice(0, S.custLimit).map(it => `<tr class="${S.sel === it.key ? 'sel' : ''}" data-act="sel" data-key="${h(it.key)}">
       <td><div class="who2">${avatar(it)}<div style="min-width:0"><b>${h(it.name)}</b><span>${h(it.code || (it.kind === 'chat' ? (it.c.src === 'fb' ? 'Facebook' : 'LINE') + ' · ยังไม่มีเลขลีด' : ''))}</span></div></div></td>
-      <td>${h(it.car || '–')}</td><td>${stageChip(it)}</td><td class="muted">${h(it.kind === 'chat' && it.c.src === 'fb' ? 'Facebook' : (it.channel || '–'))}</td><td>${lastText(it)}</td></tr>`).join('');
+      <td>${h(it.car || '–')}</td><td>${stageChip(it)}</td>${all ? `<td class="${it.owner ? '' : 'muted'}">${h(ownLabel(it.owner))}</td>` : ''}<td class="muted">${h(it.kind === 'chat' && it.c.src === 'fb' ? 'Facebook' : (it.channel || '–'))}</td><td>${lastText(it)}</td></tr>`).join('');
   return header('งานขาย · ลูกค้า', 'ลูกค้า',
-      `ลูกค้าแชทที่คุณดูแล + ลีดจากชีต ${h(S.D.custDays)} วันล่าสุด${S.D.deadHidden ? ` · ไม่แสดงเคสเสีย/คืนเคสที่เก่ากว่า ${h(S.D.deadDays)} วัน ${n0(S.D.deadHidden)} ลีด` : ''} (ทั้งปี ${n0(S.D.leadsYear)} ลีด ดูได้ในหน้าเซลล์)`,
-      `<div class="srch"><input id="cust-q" type="search" placeholder="ชื่อ เบอร์ 4 ตัวท้าย หรือเลขลีด" value="${h(S.q)}" data-act="custQ"></div>`)
+      (all ? 'ลูกค้าแชท + ลีดจากชีตของ<b>ทุกเซลล์</b>' : 'ลูกค้าแชทที่คุณดูแล + ลีดจากชีต') + ` ${h(S.D.custDays)} วันล่าสุด${S.D.deadHidden ? ` · ไม่แสดงเคสเสีย/คืนเคสที่เก่ากว่า ${h(S.D.deadDays)} วัน ${n0(S.D.deadHidden)} ลีด` : ''} (ทั้งปี ${n0(S.D.leadsYear)} ลีด ดูได้ในหน้าเซลล์)`,
+      `${ownSel()}<div class="srch"><input id="cust-q" type="search" placeholder="${all ? 'ชื่อ เบอร์ เลขลีด หรือชื่อเซลล์' : 'ชื่อ เบอร์ 4 ตัวท้าย หรือเลขลีด'}" value="${h(S.q)}" data-act="custQ"></div>`)
     + `<div class="chips">${chips}</div>`
-    + `<div class="cust"><div class="tbl">${rows.length ? `<table><thead><tr><th>ลูกค้า</th><th>รถที่สนใจ</th><th>ขั้น</th><th>ช่องทาง</th><th>ติดต่อล่าสุด</th></tr></thead><tbody>${list}</tbody></table>
+    + `<div class="cust"><div class="tbl${all ? ' own' : ''}">${rows.length ? `<table><thead><tr><th>ลูกค้า</th><th>รถที่สนใจ</th><th>ขั้น</th>${all ? '<th>ผู้ดูแล</th>' : ''}<th>ช่องทาง</th><th>ติดต่อล่าสุด</th></tr></thead><tbody>${list}</tbody></table>
         ${rows.length > S.custLimit ? `<div style="padding:12px"><button class="more" data-act="custMore">ดูอีก ${n0(rows.length - S.custLimit)} รายการ</button></div>` : ''}`
         : '<div class="empty" style="margin:16px">ไม่มีลูกค้าที่ตรงกับตัวกรอง</div>'}</div>
       <aside class="pane" id="pane">${paneHtml()}</aside></div>`; }
@@ -1014,7 +1031,7 @@ function paneChat(it){
     + (cr.pastOwners && cr.pastOwners.length > 1 ? `<div class="mini">เคยดูแล: ${cr.pastOwners.map(p => h(p.name)).join(' → ')}</div>` : ''); }
 function paneLead(it){
   const l = it.l, zo = S.D.zOptions || [];
-  const head = `<div class="hdc">${avatar(it, 'avl')}<div class="nmb">${h(it.name)}</div><div class="mini">${h(l.code || '-')} · ${h(l.channel || '-')}${l.type ? ' · ' + h(l.type) : ''} · ลีดจากชีต</div></div>
+  const head = `<div class="hdc">${avatar(it, 'avl')}<div class="nmb">${h(it.name)}</div><div class="mini">${h(l.code || '-')} · ${h(l.channel || '-')}${l.type ? ' · ' + h(l.type) : ''} · ลีดจากชีต${S.D.all ? ' · ดูแลโดย ' + h(ownLabel(l.owner)) : ''}</div></div>
     <div class="acts">${tel(l.phone) ? `<a class="btn pri sm" href="${h(tel(l.phone))}">${ic('phone',14)}โทร</a>` : ''}</div>`;
   const zsel = `<div class="sect">สถานะลูกค้า (คอลัมน์ Z)</div><div class="frm"><select class="in" id="z-sel"><option value="">— ยังไม่มีสถานะ —</option>${
       zo.map(z => `<option ${z === l.customerStatus ? 'selected' : ''}>${h(z)}</option>`).join('')}${l.customerStatus && !zo.includes(l.customerStatus) ? `<option selected>${h(l.customerStatus)}</option>` : ''}</select>
@@ -1777,6 +1794,7 @@ document.addEventListener('change', async e => { const t = e.target; if (!t || !
     if (t.dataset.lk === 'mode') l.mode = t.value; else if (t.dataset.lk === 'tagOn') l.tagOn = t.checked;
     if (t.dataset.lk === 'mode' || t.dataset.lk === 'tagOn'){ bcPaint('n'); bcPaint('v'); bcPaint('s'); } return; }
   if (t.id === 'bc-owner'){ bcState().owner = t.value; bcLoadSoon(); return; }
+  if (t.id === 'own-f'){ S.ownF = t.value; S.custLimit = 60; S.pipeMore = {}; S.sel = null; render(); return; }
   if (t.id === 'bc-src' || t.id === 'bc-days' || t.id === 'bc-deal'){ const b = bcState();
     if (t.id === 'bc-src') b.src = t.value; else if (t.id === 'bc-days') b.days = +t.value; else b.deal = t.value; bcLoadSoon(); return; }
   if (t.id === 'bc-mode'){ const b = bcState(); b.mode = t.value; if (b.inc.length) bcLoadSoon(); return; }
@@ -1819,7 +1837,7 @@ async function saveZ(key, btn){
   const it = IDX.byKey[key]; if (!it || it.kind !== 'lead') return;
   const v = document.getElementById('z-sel').value; const msg = document.getElementById('z-msg');
   btn.disabled = true; if (msg) msg.textContent = 'กำลังเขียนลงชีต…';
-  const d = await api('/crm/api/lead_status', {code: it.l.code, value: v, seller: S.seller});
+  const d = await api('/crm/api/lead_status', {code: it.l.code, value: v, seller: it.l.owner || S.seller});
   btn.disabled = false;
   if (!d.ok){ if (msg) msg.textContent = ''; toast(d.error || 'บันทึกไม่ได้', true); return; }
   it.l.customerStatus = v; it.l.stage = d.stage; it.col = d.stage;

@@ -212,12 +212,33 @@ ok(boot["seller"] == "" and boot["admin"], "ชื่อมั่ว = หน้
 r = client(U_ADMIN).get("/crm/", secure=True)
 boot = json.loads(re.search(r'id="crm-boot" type="application/json">(.*?)</script>', r.content.decode(), re.S).group(1))
 ok(r.status_code == 200 and boot["seller"] == "", "แอดมินที่ไม่ได้เป็นเซลล์เปิด /crm/ = ไม่มีชื่อเซลล์คนอื่น", boot["seller"])
+# ★ 23 ต.ค.69 (เจ้าของเลือก "เห็นลูกค้าทุกคน") — หน้าลูกค้า/ไปป์ไลน์ของแอดมินที่ไม่ได้เป็นเซลล์ = ลูกค้าของทุกเซลล์
+psim = LineProfile.objects.create(user_id="TEST-crm-sim", display_name="ลูกค้าจำลอง")
+csim = ChatOwner.objects.create(profile=psim, last_at=timezone.now())
+ChatLead.objects.create(chat=csim, code="NLD10-9990", phone="0899999999")
+pst = LineProfile.objects.create(user_id="U" + "c" * 32, display_name="พนักงาน", is_employee=True)
+cst = ChatOwner.objects.create(profile=pst, owner=MAT, last_at=timezone.now())
+pq = LineProfile.objects.create(user_id="U" + "d" * 32, display_name="ทักเฉยๆ")
+cq = ChatOwner.objects.create(profile=pq, last_at=timezone.now())
+CP.invalidate()
 r = client(U_ADMIN).get("/crm/api/data", secure=True)
 j = r.json()
-ok(r.status_code == 200 and j.get("seller") == "" and j.get("leads") == [] and j.get("chats") == []
-   and (j.get("tasks") or {}).get("rows") == [] and (j.get("follow") or {}).get("urgent") == []
-   and (j.get("teamTargets") or {}).get("rows") == [],
-   "ข้อมูลของแอดมินที่ไม่ได้เป็นเซลล์ = ส่วนรายคนว่างทั้งหมด (ไม่อ่านลีด/งานของใคร)", j.get("errors"))
+lc = {l["code"]: l.get("owner") for l in j.get("leads", [])}
+cc = {c["id"]: c.get("owner") for c in j.get("chats", [])}
+ok(r.status_code == 200 and j.get("seller") == "" and j.get("all") is True
+   and lc.get("NLD10-9001") == "มัท" and lc.get("NLD10-9900") == "นวล" and "NLD10-9007" not in lc,
+   "แอดมินที่ไม่ได้เป็นเซลล์ = เห็นลีดของทุกเซลล์ + บอกผู้ดูแล (เคสเสียเก่าไม่ส่งเหมือนเดิม)", lc)
+ok(cc.get(chat.id) == "มัท" and cc.get(chat2.id) == "นวล" and csim.id not in cc and cst.id not in cc and cq.id not in cc,
+   "เห็นลูกค้าแชทของทุกคน + ผู้ดูแล · ไม่รวมลูกค้าจำลอง/พนักงาน/คนที่ทักเฉยๆ ยังไม่มีใครรับ", cc)
+ok(j.get("leadsYear") == len(LEADS) and (j.get("tasks") or {}).get("rows") == [] and (j.get("follow") or {}).get("urgent") == []
+   and (j.get("teamTargets") or {}).get("rows") == [], "ยอด/งานรายคนยังว่าง · นับลีดทั้งปีของทุกเซลล์", j.get("leadsYear"))
+ok(any(a.get("owner") == "มัท" for a in j.get("appts", [])), "นัดถัดไปของทุกคน + ผู้ดูแล", j.get("appts"))
+ok(not LEAK.search(r.content.decode()), "ไม่มี LINE userId หลุด")
+r = client(U_MAT).get("/crm/api/data", secure=True)
+ok(r.json().get("all") is False and "NLD10-9900" not in r.content.decode(), "เซลล์ยังเห็นเฉพาะของตัวเอง")
+for o in (csim, cst, cq):
+    o.delete()
+CP.invalidate()
 
 print("\n[3] ข้อมูลของเซลล์ (GET /crm/api/data)")
 CP.invalidate()

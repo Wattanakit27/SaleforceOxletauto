@@ -30,6 +30,7 @@ CUST_DAYS = 90            # ลีดจากชีตที่ส่งให�
 DEAD_DAYS = 14            # เคสเสีย/คืนเคส/ยกเลิก ส่งให้หน้าลูกค้าเฉพาะที่รับมาไม่เกินกี่วัน (เก่ากว่านี้บอกเป็นจำนวน · ~90% ของลีดเป็นแบบนี้)
 DEAL_DAYS = 90            # เคสจองที่ยังไม่ปล่อย นับเฉพาะที่จองไม่เกินกี่วัน (เก่ากว่านี้ = เคสค้าง ไม่ใช่ดีลที่กำลังเดิน)
 CACHE_TTL = 20            # จำผลต่อเซลล์ (วินาที) — กดรีเฟรชถี่ไม่ต้องคำนวณใหม่ · เขียนสถานะแล้วล้าง
+EVERY_CHATS = 600         # ★ 23 ต.ค.69 แอดมินที่ไม่ได้เป็นเซลล์ = เห็นลูกค้าแชทของทุกคน (ล่าสุดกี่ราย)
 
 COLS = [("new", "ลีดใหม่"), ("contacted", "ติดต่อแล้ว"), ("viewing", "นัดดูรถ"),
         ("finance", "ยื่นไฟแนนซ์"), ("booked", "จอง / ปิดการขาย")]
@@ -186,7 +187,9 @@ def sheet_stage(l: dict) -> str:
     return "contacted"
 
 
-def _sheet_leads_impl(seller: str) -> list:
+def _sheet_leads_impl(seller, since: str = "", counter: dict = None) -> list:
+    """ลีดในชีตปีนี้ของเซลล์คนนี้ · `seller=None` = ทุกเซลล์ (แอดมินที่ไม่ได้เป็นเซลล์) — แต่ละแถวมี `owner`
+    `since` (YYYY-MM-DD) = ข้ามแถวที่รับก่อนวันนั้นก่อนคิดคะแนน (ทุกเซลล์ทั้งปีหนักเกิน) · `counter["n"]` = นับลีดปีนี้ทั้งหมด"""
     from .constants import RJ_TYPES, normalize_seller
     from .fetch_dashboard import (compute_lead_score, customer_status_priority, fu_idle, fu_reason,
                                   fu_urgency, is_this_year, prepare_lead_score_context)
@@ -197,16 +200,21 @@ def _sheet_leads_impl(seller: str) -> list:
     today = _today()
     by_code, out = {}, []
     for r in raw_leads:
-        if normalize_seller(cell(r, L.sales_rep)) != seller:
+        nm = normalize_seller(cell(r, L.sales_rep))
+        if seller is not None and nm != seller:
             continue
         din = cell(r, L.received_date)
         if not is_this_year(din):
+            continue
+        if counter is not None:
+            counter["n"] = counter.get("n", 0) + 1
+        d = _pdate(din)
+        if since and (not d or d.isoformat() < since):
             continue
         try:
             ls = compute_lead_score(r, ctx["cfg"])
         except Exception:
             ls = {"score": 0, "tier": "cold"}
-        d = _pdate(din)
         typ = cell(r, L.type)
         l = {
             "code": cell(r, L.lead_code), "phone": cell(r, L.phone), "channel": cell(r, L.channel),
@@ -221,7 +229,7 @@ def _sheet_leads_impl(seller: str) -> list:
             "lastUpdate": cell(r, L.last_updated_at),
             "occupation": cell(r, L.occupation), "income": cell(r, L.income),
             "customerType": cell(r, L.customer_type),
-            "leadScore": ls["score"], "leadTier": ls["tier"],
+            "leadScore": ls["score"], "leadTier": ls["tier"], "owner": nm,
         }
         l["stage"] = sheet_stage(l)
         l["idle"] = fu_idle(l, today)
@@ -249,10 +257,21 @@ def sheet_leads(seller: str) -> list:
     return rows
 
 
+def sheet_leads_all() -> tuple:
+    """(ลีดของทุกเซลล์ที่รับใน CUST_DAYS วัน, จำนวนลีดปีนี้ทั้งหมด) — หน้าลูกค้า/ไปป์ไลน์ของแอดมินที่ไม่ได้เป็นเซลล์"""
+    hit = _cache.get(("leads", "*"))
+    if hit and time.time() - hit[0] < CACHE_TTL:
+        return hit[1]
+    cnt = {"n": 0}
+    rows = _sheet_leads_impl(None, since=(_today() - timedelta(days=CUST_DAYS)).isoformat(), counter=cnt)
+    _cache[("leads", "*")] = (time.time(), (rows, cnt["n"]))
+    return rows, cnt["n"]
+
+
 # ส่งให้หน้าเว็บเฉพาะที่ใช้จริง (สถานะแอดมิน/เซลล์ใช้คิดคอลัมน์ฝั่งเซิร์ฟเวอร์แล้ว ไม่ต้องส่ง)
 _LEAD_KEYS = ("code", "phone", "channel", "type", "car", "dateIn", "timeIn", "date", "updateCount",
               "callProof", "customerStatus", "lastUpdate", "occupation", "income",
-              "leadScore", "leadTier", "stage", "idle", "reason", "urgency")
+              "leadScore", "leadTier", "stage", "idle", "reason", "urgency", "owner")
 
 
 def _slim(l: dict) -> dict:
@@ -262,15 +281,24 @@ def _slim(l: dict) -> dict:
 # ─────────────────────────────────────────────────────────────
 #  ลูกค้าแชท (Connect) ที่เซลล์คนนี้ดูแล
 # ─────────────────────────────────────────────────────────────
-def chat_cards(emp) -> list:
-    if not emp:
+def chat_cards(emp, every: bool = False) -> list:
+    """ลูกค้าแชทที่เซลล์คนนี้ดูแล · `every` = ของทุกคน (แอดมินที่ไม่ได้เป็นเซลล์ — เฉพาะที่มีคนรับแล้ว
+    หรือให้เลขลีด/เบอร์/ไอดีไลน์แล้ว · ไม่รวมพนักงาน/ลูกค้าจำลอง)"""
+    if not emp and not every:
         return []
+    from django.db.models import Q
     from checkout import connect as C
     from checkout import crm
     from checkout.models import ChatOwner
     now = timezone.now()
-    objs = list(ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
-                .filter(owner=emp).order_by("-last_at")[:400])
+    qs = ChatOwner.objects.select_related("profile", "fb_profile", "owner", "lead")
+    if every:
+        qs = (qs.exclude(profile__user_id__startswith=C.SIM_PREFIX)
+              .filter(Q(owner__isnull=False) | Q(lead__code__gt="") | Q(lead__phone__gt="") | Q(lead__line_id__gt=""))
+              .order_by("-last_at")[:EVERY_CHATS])
+    else:
+        qs = qs.filter(owner=emp).order_by("-last_at")[:400]
+    objs = [o for o in qs if not (every and getattr(C.cust(o), "is_employee", False))]
     amap = crm.next_appt_map([o.id for o in objs])
     mm = crm.match_map()
     out = []
@@ -301,6 +329,7 @@ def chat_cards(emp) -> list:
             "carMatch": len(mm.get(code.upper()) or []) if code else 0,
             "lastAt": _iso(o.last_at), "lastIn": _iso(o.last_in_at), "preview": (o.last_preview or "")[:80],
             "lostReason": (ld.lost_reason if ld else "") or "", "stageAt": _iso(ld.stage_at) if ld else "",
+            "owner": o.owner.nickname if o.owner_id else "",
         })
     return out
 
@@ -382,26 +411,31 @@ def team_targets(seller: str, data: dict) -> dict:
 # ─────────────────────────────────────────────────────────────
 #  นัดถัดไป — นัดในแชท (Connect) + นัดที่เซลล์รายงานในห้องจ่ายเบอร์ (LeadReport.appt_at)
 # ─────────────────────────────────────────────────────────────
-def appts(emp, seller: str, chats: list) -> list:
+def appts(emp, seller: str, chats: list, every: bool = False) -> list:
     from checkout.models import ChatFollowup, LeadReport
     now = timezone.now()
     start = now - timedelta(hours=3)
     by_id = {c["id"]: c for c in chats}
     out = []
-    if emp:
-        for f in (ChatFollowup.objects.filter(chat__owner=emp, done_at__isnull=True, due_at__gte=start)
-                  .select_related("chat").order_by("due_at")[:8]):
+    if emp or every:
+        fq = ChatFollowup.objects.filter(done_at__isnull=True, due_at__gte=start)
+        if not every:
+            fq = fq.filter(chat__owner=emp)
+        for f in fq.select_related("chat").order_by("due_at")[:8]:
             c = by_id.get(f.chat_id) or {}
             out.append({"src": "chat", "id": f.chat_id, "fid": f.id, "kind": f.kind, "kindLabel": f.get_kind_display(),
                         "due": _iso(f.due_at), "late": f.due_at < now, "note": f.note,
                         "name": c.get("name") or "", "car": c.get("car") or "", "phone": c.get("phone") or "",
-                        "code": c.get("code") or ""})
-    if seller:
-        for r in (LeadReport.objects.filter(seller_name=seller, appt_at__gte=start).order_by("appt_at")[:8]):
+                        "code": c.get("code") or "", "owner": c.get("owner") or ""})
+    if seller or every:
+        rq = LeadReport.objects.filter(appt_at__gte=start)
+        if not every:
+            rq = rq.filter(seller_name=seller)
+        for r in rq.order_by("appt_at")[:8]:
             out.append({"src": "report", "id": None, "kind": "viewing", "kindLabel": "นัด (จากรายงานผล)",
                         "due": _iso(r.appt_at), "late": r.appt_at < now, "note": (r.text or "")[:120],
                         "name": "", "car": (r.fields or {}).get("car", "") if isinstance(r.fields, dict) else "",
-                        "phone": "", "code": r.code})
+                        "phone": "", "code": r.code, "owner": r.seller_name or ""})
     out.sort(key=lambda a: a["due"])
     return out[:8]
 
@@ -424,7 +458,7 @@ def deal_cards(stats: dict) -> list:
                     "date": b.get("date") or "", "days": (today - d).days, "phone": b.get("phone") or "",
                     "channel": b.get("channel") or "", "signDate": b.get("signDate") or "",
                     "resultDate": b.get("resultDate") or "", "plate": b.get("plate") or "",
-                    "finance": b.get("finance") or "", "isCash": bool(b.get("isCash"))})
+                    "finance": b.get("finance") or "", "isCash": bool(b.get("isCash")), "owner": b.get("seller") or ""})
     out.sort(key=lambda x: x["days"])
     return out
 
@@ -599,9 +633,13 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
            "target": TARGETS.get(seller, 0) or 0, "period": _period_label(today),
            "now": timezone.localtime().isoformat(timespec="seconds"), "cols": [{"key": k, "label": v} for k, v in COLS],
            "colStage": COL_STAGE, "pipeDays": PIPE_DAYS, "custDays": CUST_DAYS, "hasEmp": bool(emp)}
-    stats, data, leads, chats = {}, {}, [], []
+    stats, data, leads, chats, year_n = {}, {}, [], [], 0
     # ★ 21 ต.ค.69 seller ว่าง = แอดมินที่ไม่ได้เป็นเซลล์ → ไม่อ่านข้อมูลรายคนเลย (ชื่อว่างไปจับแถวที่ช่องเซลล์ว่างได้)
     #   หน้าเว็บขึ้นชื่อตัวเอง · ส่วนรายคนเป็นศูนย์/ว่าง · ส่วนของทีม (อันดับในรายงาน) ยังอ่านจากผลรวมแดชบอร์ด
+    # ★ 23 ต.ค.69 (เจ้าของถาม "บัคหรอ" แล้วเลือก "เห็นลูกค้าทุกคน") — หน้าลูกค้า/ไปป์ไลน์ของแอดมินที่ไม่ได้เป็นเซลล์
+    #   = ลูกค้าแชท + ลีดในชีต + เคสจองของทุกเซลล์ (มี `owner` บอกว่าใครดูแล) · ยอด/งานรายคน ยังว่างเหมือนเดิม
+    every = admin and not seller
+    out["all"] = every
     if seller:
         try:
             stats = fetch_seller_stats(seller)
@@ -611,13 +649,17 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
         data = fetch_dashboard_data() or {}
     except Exception as e:
         out.setdefault("errors", {})["dashboard"] = "อ่านผลรวมแดชบอร์ดไม่ได้: %s" % str(e)[:120]
-    if seller:
+    if seller or every:
         try:
-            leads = sheet_leads(seller)
+            if seller:
+                leads = sheet_leads(seller)
+                year_n = len(leads)
+            else:
+                leads, year_n = sheet_leads_all()
         except Exception as e:
             out.setdefault("errors", {})["leads"] = "อ่านลีดจากชีตไม่ได้: %s" % str(e)[:120]
     try:
-        chats = chat_cards(emp)
+        chats = chat_cards(emp, every=every)
     except Exception as e:
         out.setdefault("errors", {})["chats"] = "อ่านลูกค้าแชทไม่ได้: %s" % str(e)[:120]
 
@@ -626,7 +668,7 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
     cut_dead = (today - timedelta(days=DEAD_DAYS)).isoformat()
     keep = [l for l in leads if (l.get("date") or "") >= cut_cust and (l.get("stage") or (l.get("date") or "") >= cut_dead)]
     out["leads"] = [_slim(l) for l in keep]
-    out["leadsYear"] = len(leads)
+    out["leadsYear"] = year_n
     out["deadHidden"] = sum(1 for l in leads if (l.get("date") or "") >= cut_cust and not l.get("stage")
                             and (l.get("date") or "") < cut_dead)
     out["deadDays"] = DEAD_DAYS
@@ -642,13 +684,13 @@ def build(seller: str, emp=None, admin: bool = False) -> dict:
     except Exception:
         pass
     out["pipeCut"] = cut_pipe
-    _part(out, "deals", lambda: deal_cards(stats))
+    _part(out, "deals", lambda: deal_cards(stats if seller else {"bookingCases": data.get("bookingCases") or []}))
     _part(out, "kpi", lambda: kpi(stats, seller))
     _part(out, "week", lambda: week_leads(stats))
     _part(out, "teamTargets", lambda: team_targets(seller, data) if seller else
           {"team": "", "month": TH_MON[today.month], "rows": [], "pipelineValue": 0})
-    _part(out, "appts", lambda: appts(emp, seller, chats))
-    _part(out, "report", lambda: report(stats, seller, leads, chats, data))
+    _part(out, "appts", lambda: appts(emp, seller, chats, every=every))
+    _part(out, "report", lambda: report(stats, seller, leads if seller else [], chats, data))
     _part(out, "zOptions", _z_options)
     if seller:
         try:
