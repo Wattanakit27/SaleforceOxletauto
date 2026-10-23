@@ -377,8 +377,11 @@ try:
             return r.status_code, {}
 
     r = NOB.get("/connect/", secure=True)
-    ck("ไม่ login → ไปหน้า login พร้อม next", r.status_code == 302 and "/login/?next=" in r["Location"],
-       r.status_code)
+    # ★ 23 ต.ค.69 ?next= ไม่โผล่ในที่อยู่แล้ว (เก็บใน session แทน)
+    ck("ไม่ login → ไปหน้า login (ไม่มี ?next=)", r.status_code == 302 and r["Location"] == "/login/",
+       r.get("Location"))
+    r = NOB.get("/login/", secure=True)
+    ck("หน้า login จำว่าต้องพากลับ /connect/", 'name="next" value="/connect/"' in r.content.decode("utf-8"))
     r = WRK.get("/connect/", secure=True)
     ck("คนงาน (worker) เข้าไม่ได้", r.status_code == 403, r.status_code)
     r = GHOST.get("/connect/", secure=True)

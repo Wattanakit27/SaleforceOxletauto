@@ -200,6 +200,13 @@
     let tab = new URLSearchParams(location.search).get('tab') || 'o';
     let curS = new URLSearchParams(location.search).get('seller') || '';
     let showCase = new URLSearchParams(location.search).get('case') || null;
+    // ★ 23 ต.ค.69 เซลล์/เคสที่เลือกใช้เฉพาะแท็บ "เซลล์" — แท็บอื่นไม่รับ ?seller= (ลิงก์เก่าที่ติด seller=มัท ล้างทิ้ง)
+    //   เจ้าของแจ้ง: login ด้วยชื่อตัวเองแต่ URL ขึ้น seller=มัท ทุกแท็บ ดูเหมือนเป็นบัญชีของคนอื่น
+    if (tab !== 's' && (curS || showCase)) {
+      curS = ''; showCase = null;
+      try { const _u = new URLSearchParams(location.search); _u.delete('seller'); _u.delete('case');
+            history.replaceState(null, '', location.pathname + (_u.toString() ? '?' + _u.toString() : '')); } catch (e) {}
+    }
     // ${ic('lucide:calendar',16)} กรองวันที่รับเคส (ช่วงวัน จาก-ถึง · ข้ามเดือนได้) — แทน month/today filter เดิม
     let dfMonth = 0;  // vestige (โค้ดเก่าบางจุดอ้าง — ตั้ง 0 = ไม่ใช้ month filter)
     const _ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -708,8 +715,9 @@
     function updateUrl() {
       const p = new URLSearchParams();
       p.set('tab', tab);
-      if(curS) p.set('seller', curS);
-      if(showCase) p.set('case', showCase);
+      // seller/case มีความหมายเฉพาะแท็บ "เซลล์" — แท็บอื่นไม่ใส่ (ไม่งั้นชื่อเซลล์ที่เคยดูค้างในลิงก์ทุกหน้า)
+      if(tab==='s' && curS) p.set('seller', curS);
+      if(tab==='s' && showCase) p.set('case', showCase);
       history.replaceState(null, '', '/dashboard/?'+p.toString());
     }
 
@@ -4879,7 +4887,8 @@
       // ถ้า curS อยู่ในรายชื่อช่วงนี้ (เลือกเองจาก dropdown แม้ไม่มีไอดี) ยังเคารพการเลือกเสมอ
       const _firstViewable = monthNames.find(_hasTok) || monthNames[0] || '';
       let curSeller = (curS && monthNames.includes(curS)) ? curS : (_firstViewable || '');
-      if (curS !== curSeller) curS = curSeller;
+      // ★ 23 ต.ค.69 ไม่จำเซลล์ที่ "ระบบเลือกให้" ลง curS แล้ว — curS = คนที่ผู้ใช้เลือกเองจาก dropdown เท่านั้น
+      //   (เดิมจำเซลล์คนแรก (มัท) แล้วติดไปใน URL ทุกแท็บ)
       const token = (D.sellerTokens || {})[curSeller] || '';
       const monthLbl = rangeLabelTH();   // 📅 ตามตัวกรองวันที่
       const _ifq = `?from=${encodeURIComponent(dfFrom)}&to=${encodeURIComponent(dfTo)}`;   // ส่งช่วงวันที่เข้า iframe

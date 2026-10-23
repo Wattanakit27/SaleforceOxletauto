@@ -499,7 +499,9 @@ def login_view(request):
     """ADMIN login — รับ username + password.
     GET → แสดงหน้า login. POST → ตรวจสอบ, รองรับทั้ง form submit และ AJAX (JSON).
     """
-    next_url = request.GET.get("next", "/dashboard/")
+    # ★ 23 ต.ค.69 หน้าที่จะพากลับมาจาก session (LoginNextMiddleware ย้าย ?next= มาเก็บ ไม่ให้โผล่ในแถบที่อยู่)
+    from .middleware import login_next as _login_next
+    next_url = request.GET.get("next") or _login_next(request) or "/dashboard/"
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" \
         or "application/json" in request.headers.get("Accept", "")
 
@@ -739,7 +741,8 @@ def _line_callback(request) -> str:
 def line_login_start(request):
     """เริ่ม LINE Login (OAuth) — redirect ไปหน้า authorize ของ LINE."""
     cid = (getattr(settings, "LINE_LOGIN_CHANNEL_ID", "") or "").strip()
-    next_url = request.GET.get("next", "/dashboard/")
+    from .middleware import login_next as _login_next
+    next_url = request.GET.get("next") or _login_next(request) or "/dashboard/"
     if not cid:
         return _render_login(request, error="ยังไม่ได้ตั้ง LINE Login (LINE_LOGIN_CHANNEL_ID)", next_url=next_url)
     import secrets, time as _time

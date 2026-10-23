@@ -61,6 +61,8 @@ MIDDLEWARE = [
     # ผูก session sales → Django auth ให้ /track/ (เข้าแท็บ "สถานะรถ" ไม่ต้อง login ซ้ำ) · ต้องอยู่หลัง AuthenticationMiddleware
     # ★ 9 ต.ค.69 แอปมือถือส่ง Authorization: Bearer แทนคุกกี้ → ทำให้เหมือน login เว็บอยู่ (API เดิมใช้ได้เลย)
     #   ต้องอยู่หลัง AuthenticationMiddleware และก่อน TrackSessionBridgeMiddleware
+    # ★ 23 ต.ค.69 ซ่อน ?next= ของหน้า login (เก็บไว้ใน session แทน) · ต้องอยู่หลัง SessionMiddleware
+    "dashboard.middleware.LoginNextMiddleware",
     "dashboard.middleware.MobileTokenMiddleware",
     "cars.middleware.TrackSessionBridgeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",

@@ -188,8 +188,12 @@ ok(CP.sheet_stage({"customerStatus": "ส่งมอบ", "adminStatus": "", "s
    '"ส่งมอบ" = จอง (ไม่ตกเป็นเคสเสีย ทั้งที่อยู่ในคำ "ไม่ต้องตาม")')
 
 print("\n[2] สิทธิ์เข้าหน้า")
-r = client().get("/crm/", secure=True)
-ok(r.status_code == 302 and "/login/?next=" in r["Location"], "ไม่ login → /login/?next=", r.status_code)
+_c0 = client()
+r = _c0.get("/crm/", secure=True)
+# ★ 23 ต.ค.69 ไม่มี ?next= ในที่อยู่แล้ว (LoginNextMiddleware เก็บไว้ใน session) — หน้า login ยังรู้ว่าต้องพากลับ /crm/
+ok(r.status_code == 302 and r["Location"] == "/login/", "ไม่ login → /login/ (ไม่มี ?next=)", r.get("Location"))
+r = _c0.get("/login/", secure=True)
+ok(r.status_code == 200 and 'name="next" value="/crm/"' in r.content.decode("utf-8"), "หน้า login จำว่าต้องพากลับ /crm/")
 r = client({"user_id": "django_x", "nickname": "ช่าง", "position": "worker"}).get("/crm/", secure=True)
 ok(r.status_code == 302 and r["Location"] == "/track/", "คนงาน → /track/", r.get("Location"))
 r = client({"user_id": "U2", "nickname": "ต๊าด", "position": "จัดซื้อ"}).get("/crm/", secure=True)
