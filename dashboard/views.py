@@ -714,6 +714,27 @@ def _render_login(request, error=None, next_url="/dashboard/"):
     })
 
 
+def _line_callback(request) -> str:
+    """Callback ของ LINE Login ตามชื่อเว็บที่ผู้ใช้เปิดอยู่ (★ 23 ต.ค.69 · portal.oxletauto.co.th + ชื่อเดิม)
+
+    เข้าทางชื่อไหน = กลับมาชื่อนั้น (คุกกี้ session อยู่กับชื่อเว็บ — กลับผิดชื่อ = เหมือนยังไม่ login)
+    ไม่ตรงตัวไหนเลย = ตัวแรก · ตัวที่ใช้ต้องลงทะเบียนไว้ใน LINE Login channel ไม่งั้น LINE ปฏิเสธ (redirect_uri ไม่ตรง)
+    """
+    from urllib.parse import urlparse
+    lst = [u for u in (getattr(settings, "LINE_LOGIN_CALLBACKS", None) or []) if u]
+    main = (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip()
+    if main and main not in lst:
+        lst.insert(0, main)
+    try:
+        host = request.get_host().lower()
+    except Exception:
+        host = ""
+    for u in lst:
+        if urlparse(u).netloc.lower() == host:
+            return u
+    return lst[0] if lst else ""
+
+
 @require_GET
 def line_login_start(request):
     """เริ่ม LINE Login (OAuth) — redirect ไปหน้า authorize ของ LINE."""
@@ -738,7 +759,7 @@ def line_login_start(request):
     params = urlencode({
         "response_type": "code",
         "client_id": cid,
-        "redirect_uri": (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip(),
+        "redirect_uri": _line_callback(request),
         "state": state,
         "scope": "profile openid",
     })
@@ -773,7 +794,7 @@ def line_login_callback(request):
     next_url = server_next or request.session.pop("line_login_next", "/dashboard/")
     request.session.pop("line_login_state", None)
     request.session.pop("line_login_next", None)
-    redirect_uri = (getattr(settings, "LINE_LOGIN_CALLBACK", "") or "").strip()
+    redirect_uri = _line_callback(request)
     try:
         tr = requests.post("https://api.line.me/oauth2/v2.1/token", data={
             "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,

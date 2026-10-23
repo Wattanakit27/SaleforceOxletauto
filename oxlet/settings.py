@@ -26,13 +26,15 @@ _hosts_env = os.getenv("ALLOWED_HOSTS", "").strip()
 if _hosts_env:
     ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 else:
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["srv1793506.hstgr.cloud", ".hstgr.cloud", "localhost", "127.0.0.1"]
+    # ★ 23 ต.ค.69 ชื่อเว็บใหม่ portal.oxletauto.co.th (เจ้าของสั่ง) — ชื่อเดิม srv1793506.hstgr.cloud ยังใช้ต่อ
+    #   (QR ที่ติดรถ · webhook LINE/Meta/TikTok · แอปมือถือ ยังชี้ชื่อเดิม) · ดู deploy/portal_domain.md
+    ALLOWED_HOSTS = ["*"] if DEBUG else ["portal.oxletauto.co.th", "srv1793506.hstgr.cloud", ".hstgr.cloud",
+                                         "localhost", "127.0.0.1"]
 
 # Vercel/proxy ส่ง HTTPS มาเป็น header X-Forwarded-Proto
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
-    "CSRF_TRUSTED_ORIGINS", "https://srv1793506.hstgr.cloud"
-).split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in (os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+    or "https://srv1793506.hstgr.cloud,https://portal.oxletauto.co.th").split(",") if o.strip()]
 
 INSTALLED_APPS = [
     # auth/admin/contenttypes/messages — ต้องมีเพราะแอป cars/ (tracking) ใช้ Django auth + admin
@@ -110,8 +112,13 @@ LINE_PUSH_CHANNEL_SECRET = os.getenv("LINE_PUSH_CHANNEL_SECRET", "")
 # LINE Login (OAuth) — ให้เซลล์เข้าด้วยบัญชี LINE (ยืนยันตัวตน · PDPA). ตั้งจาก LINE Login channel
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")
 LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
-# Callback URL ต้องตรงกับที่ลงทะเบียนใน LINE Login channel (ใช้ canonical URL)
-LINE_LOGIN_CALLBACK = os.getenv("LINE_LOGIN_CALLBACK", "https://srv1793506.hstgr.cloud/auth/line/callback")
+# Callback URL ต้องตรงกับที่ลงทะเบียนใน LINE Login channel
+# ★ 23 ต.ค.69 รับได้หลายตัว (คั่น comma) — ระบบเลือกตัวที่ตรงกับชื่อเว็บที่ผู้ใช้เปิดอยู่ (dashboard.views._line_callback)
+#   ไม่ตรงสักตัว = ตัวแรก · **ทุกตัวต้องลงทะเบียนไว้ใน LINE Developers → LINE Login channel → Callback URL**
+LINE_LOGIN_CALLBACKS = [u.strip() for u in (os.getenv("LINE_LOGIN_CALLBACK", "").strip()
+    or "https://srv1793506.hstgr.cloud/auth/line/callback,https://portal.oxletauto.co.th/auth/line/callback"
+).split(",") if u.strip()]
+LINE_LOGIN_CALLBACK = LINE_LOGIN_CALLBACKS[0] if LINE_LOGIN_CALLBACKS else ""
 
 # ปลายทางทดสอบ Flex "เช็คไฟแนนซ์ก่อนเซ็น" — LINE user_id แอดมิน (ไม่ลับ: เป็นปลายทาง ไม่ใช่ credential)
 FINANCE_TEST_LINE_ID = os.getenv("FINANCE_TEST_LINE_ID", "U6bf1d72cf1d7e237c3a5c9848dde9bf4")

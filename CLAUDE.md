@@ -10,6 +10,13 @@ UI เป็น Thai-language, timezone Asia/Bangkok
 
 **Deploy: VPS Hostinger** (`srv1793506` · gunicorn + nginx · ดู [deploy/DEPLOY.md](deploy/DEPLOY.md)) — _เดิมอยู่บน Vercel ถึง มิ.ย.69 · ลบ vercel.json แล้ว 16 ต.ค.69_
 
+**★ 23 ต.ค.69 ชื่อเว็บใหม่ `portal.oxletauto.co.th`** (เจ้าของสั่ง · แทน `srv1793506.hstgr.cloud` ซึ่ง **ยังใช้ต่อได้** — QR ที่ติดรถ/webhook/แอปยังชี้ชื่อเดิม)
+· DNS: `A portal → 76.13.214.140` เพิ่มแล้วใน Plesk ของ Hostatom (`thsv44.hostatom.com:8443` · โดเมน id 329 · ต้องกด **Update** หลังเพิ่ม) — ระเบียนอื่น 16 รายการ (เว็บ WordPress + อีเมล) ไม่แตะ
+· โค้ด: `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS` ค่าตั้งต้นมีทั้ง 2 ชื่อ (env ว่าง = ใช้ค่าตั้งต้น) · `LINE_LOGIN_CALLBACK` รับหลายตัวคั่น comma →
+  `views._line_callback(request)` เลือกตัวที่ตรงกับชื่อเว็บที่เปิดอยู่ (เข้าทางชื่อไหน กลับชื่อนั้น) · ทุกตัวต้องลงทะเบียนใน LINE Login channel
+· ขั้นบนเซิร์ฟเวอร์ (nginx `server_name` + `certbot --expand`) + LINE callback + `SITE_URL` + ที่ยังชี้ชื่อเดิม: [deploy/portal_domain.md](deploy/portal_domain.md) ·
+  เทสต์ `python scripts/test_portal_domain.py` (11 ข้อ) · เว็บหลัก `oxletauto.co.th` ยังเป็น WordPress (เจ้าของเลือกย้ายไปเว็บโชว์รูมทีหลัง)
+
 ## Stack
 
 - **Backend**: Django 4.2+ ([requirements.txt](requirements.txt))
